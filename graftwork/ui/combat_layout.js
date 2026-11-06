@@ -6,9 +6,9 @@ export const W = 1280, H = 720;
 export const HERO_X = 260, FOOT_Y = 458;
 export const BAR_H = 56;
 export const PLAY_LINE = 420;
-export const DRAW_POS = { x: 74, y: 672 }, DISC_POS = { x: 1206, y: 672 }, EXH_POS = { x: 1124, y: 690 };
+export const DRAW_POS = { x: 74, y: 673 }, DISC_POS = { x: 1206, y: 673 }, EXH_POS = { x: 1124, y: 690 };
 export const PILE_S = 0.3, EXH_S = 0.16;
-export const ORB = { x: 84, y: 580, size: 88 };
+export const ORB = { x: 84, y: 578, size: 88 };
 export const STRAIN_BOX = { x: 14, y: 466, w: 128, h: 44 };
 // Hero plate (hp bar, block, statuses) sits right of the strain box and ends above the resting hand (y 516).
 export const HERO_PLATE = { x: 150, y: 464, w: 220, h: 52 };

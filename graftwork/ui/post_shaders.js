@@ -57,7 +57,7 @@ void main(){
   if (caK > 1e-6){ vec2 off = (u - .5) * caK * live;
     c = vec3(texture(t, u + off).r, texture(t, u).g, texture(t, u - off).b); }
   else c = texture(t, u).rgb;
-  if (bloomK > 0.) c += texture(bloom, u).rgb * bloomK * 3. * (1. - .7 * m);
+  if (bloomK > 0.) c += texture(bloom, u).rgb * bloomK * 1.6 * (1. - .7 * m);
   c = c * gain + lift; c = pow(max(c, 0.), vec3(1. / gamma));
   float L = dot(c, vec3(.299, .587, .114)); c = mix(vec3(L), c, sat);
   // filmic shoulder: untouched below .92, rolls highlights (bloom sums) off towards 1

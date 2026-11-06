@@ -27,3 +27,47 @@ for (const h of ['marrow', 'wick', 'odile', 'unknown']) {
   drawPortrait(ctx, h, 100, 100, 160);
 }
 console.log('graftwork art chars ok', ENEMY_LIST.length, 'enemies', n, 'draws');
+
+// ---- round 4: attack rig, springs, seam pop, new ids, benchmark
+const NEW_IDS = ['suture_wasp', 'ward_clerk', 'knitter', 'surge_tick', 'needle_nanny', 'brine_surgeon', 'scissor_nurse', 'ferric_warden', 'tax_collector', 'stage_manager', 'understudys_shadow', 'locksmith'];
+const bodies = ['wings', 'tall', 'figure', 'tail', 'lamp', 'jar', 'hunched', 'outline', 'patchwork', 'dome'];
+const newDefs = NEW_IDS.map((id, i) => ({ id, name: id, kind: i % 5 === 0 ? 'elite' : 'normal', art: { body: bodies[i % bodies.length], color: '#7a8a6a', notes: 'x' } }));
+const stNew = { poison: 4, stitchedup: 6, weightofdebt: 5, burn: 3 };
+let n2 = 0;
+for (const e of [...ENEMY_LIST, ...newDefs]) {
+  const state = {};
+  let t = 0;
+  for (const hpFrac of [1, 0.5, 0.1]) {
+    for (const [phase, kk] of [['tell', 0], ['tell', 1], ['act', 0.5], ['hold', 0.5], ['rec', 1], [null, 0]]) {
+      t += 1 / 60;
+      drawEnemy(ctx, e, 300 + (phase === 'act' ? 20 : 0), 400, { t, hurt: phase === 'hold' ? 0.8 : 0, atk: phase ? { phase, k: kk } : null, state, hpFrac, st: stNew });
+      drawEnemy(ctx, e, 300, 400, { t, flip: true, scale: 0.9, atk: phase ? { phase, k: kk } : undefined, state, hpFrac });
+      n2 += 2;
+    }
+  }
+  assert.ok(state.seamPopped, e.id + ' seam popped at <= 50%');
+  assert.ok(state.sq && state.hem && state.jel && state.brn && state.fl, e.id + ' springs persist in o.state');
+  assert.ok(state.popT > 0, e.id + ' popT advances');
+  drawEnemy(ctx, e, 300, 400, { t: 0, state: {} }); drawEnemy(ctx, e, 300, 400, { dying: 0.6, state, hpFrac: 0.2 }); drawEnemy(ctx, e, 300, 400, { t: 1, scale: 1.2, hpFrac: 0.3, atk: { phase: 'nope', k: 2 } });
+}
+{ // a hit squashes the victim, then the spring settles back
+  const e = ENEMY_LIST[0], state = {};
+  drawEnemy(ctx, e, 300, 400, { t: 1, hurt: 0, state });
+  drawEnemy(ctx, e, 300, 400, { t: 1.016, hurt: 1, state });
+  assert.ok(state.sq.x < -0.15, 'hit squash starts near 0.8, got ' + state.sq.x);
+  for (let i = 1; i < 90; i++) drawEnemy(ctx, e, 300, 400, { t: 1.016 + i / 60, hurt: 0, state });
+  assert.ok(Math.abs(state.sq.x) < 0.02, 'squash springs back');
+  const s2 = {}; drawEnemy(ctx, e, 300, 400, { t: 1, hpFrac: 0.9, state: s2 }); assert.ok(!s2.seamPopped, 'no pop above 50%');
+  drawEnemy(ctx, e, 300, 400, { t: 1.1, hpFrac: 0.49, state: s2 }); assert.ok(s2.seamPopped, 'pop below 50%');
+}
+{ // benchmark: 6 enemies + hero per frame (fake ctx, so JS cost only; real canvas cost is measured in the browser screenshot script)
+  const six = ENEMY_LIST.slice(0, 6), sts = six.map(() => ({}));
+  let tt = 0;
+  for (let w = 0; w < 30; w++) { tt += 1 / 60; six.forEach((e, i) => drawEnemy(ctx, e, 100 + i * 150, 500, { t: tt, state: sts[i], hpFrac: 0.6, atk: i === 2 ? { phase: 'act', k: 0.5 } : null })); drawHero(ctx, 'marrow', 80, 500, { t: tt }); }
+  const t0 = performance.now(), N = 120;
+  for (let f = 0; f < N; f++) { tt += 1 / 60; six.forEach((e, i) => drawEnemy(ctx, e, 100 + i * 150, 500, { t: tt, state: sts[i], hpFrac: 0.6, atk: i === 2 ? { phase: 'act', k: 0.5 } : null })); drawHero(ctx, 'marrow', 80, 500, { t: tt }); }
+  const per = (performance.now() - t0) / N;
+  console.log('bench ms/frame (6 enemies + hero, fake ctx):', per.toFixed(2));
+  assert.ok(per < 3, 'frame cost ' + per);
+}
+console.log('graftwork art chars round 4 ok', n2, 'draws');

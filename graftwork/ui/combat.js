@@ -14,9 +14,11 @@ import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
-import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName } from './combat_hud.js';
+import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
+import { queueTip, flushTips, cardTipStack } from './tooltips.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
+const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const WHY = { energy: 'Not enough energy', unplayable: 'Unplayable', gold: 'Not enough gold', limit: 'Play limit reached', needsAttack: 'Play an Attack first', target: 'Pick a target', blocked: 'Not now' };
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -39,7 +41,7 @@ function tickEnt(en, d) {
 function mkEd(e) {
   const b = L.enemySlots([e.def])[0];
   const ed = mkEnt(e.maxHp, e.maxHp, 0, e.st);
-  Object.assign(ed, { e, id: e.uid, visible: false, reserve: false, spawnT: 0, x: 0, scale: b.scale, w: b.w, h: b.h, placed: false, move: null, intentT: 0, intentOut: 0, atk: 0, atkT: -1, dying: 0, dyingOn: false, gone: false, phase: Math.random() * 6, callout: null, stunT: 0, drop: 0 });
+  Object.assign(ed, { e, id: e.uid, visible: false, reserve: false, spawnT: 0, x: 0, scale: b.scale, w: b.w, h: b.h, sw: b.sw, placed: false, move: null, intentT: 0, intentOut: 0, atk: 0, atkT: -1, dying: 0, dyingOn: false, gone: false, phase: Math.random() * 6, callout: null, stunT: 0, drop: 0 });
   return ed;
 }
 function syncEds() {
@@ -51,7 +53,7 @@ function ent(who) { return who === 'player' || who === undefined || who === null
 function entPos(who) {
   if (who === 'player' || who == null) return { x: HERO_X, y: FOOT_Y - 95 };
   const ed = S.edBy.get(who); if (!ed) return { x: 900, y: FOOT_Y - 80 };
-  return { x: ed.x, y: FOOT_Y - ed.h * 0.55 };
+  return { x: ed.x, y: EF - ed.h * 0.55 };
 }
 const liveEds = () => S.eds.filter((ed) => ed.visible && !ed.e.dead);
 
@@ -102,7 +104,7 @@ function handle(ev) {
     case 'spawn': {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
       ed.visible = true; ed.reserve = true; ed.spawnT = 0; ed.drop = ev.silent ? 0 : 1;
-      if (!ev.silent) { fx.shake(0.25); sfx('junkAdd', { pitch: 0.8 }); fx.burst(ed.x || 900, FOOT_Y, 'dust'); return 260; }
+      if (!ev.silent) { fx.shake(0.25); sfx('junkAdd', { pitch: 0.8 }); fx.burst(ed.x || 900, EF, 'dust'); return 260; }
       return 130;
     }
     case 'start': {
@@ -308,7 +310,7 @@ function onPlay(ev) {
   const tgtEd = ev.target ? S.edBy.get(ev.target) : null;
   let tp;
   if (tgtEd) tp = entPos(ev.target);
-  else if (spec.target === 'all') { const l = liveEds(); tp = l.length ? { x: l.reduce((a, e) => a + e.x, 0) / l.length, y: FOOT_Y - 90 } : { x: 900, y: 380 }; }
+  else if (spec.target === 'all') { const l = liveEds(); tp = l.length ? { x: l.reduce((a, e) => a + e.x, 0) / l.length, y: EF - 90 } : { x: 900, y: 380 }; }
   else tp = { x: HERO_X + 40, y: FOOT_Y - 110 };
   sp.tp = tp; S.lastTarget = tp;
   sp.toEnemy = !!tgtEd || spec.target === 'all';
@@ -381,7 +383,7 @@ function onKill(ev) {
   ed.hp = 0; ed.dyingOn = true; ed.dying = 0.0001; ed.intentOut = 0.0001; ed.reserve = true;
   if (ev.silent) { ed.quick = true; return 0; }
   const art = (ed.e.def.art && ed.e.def.art.color) || '#999';
-  fx.emit({ x: ed.x, y: FOOT_Y - ed.h * 0.5, n: 20, colors: [art, '#e8dcc4', '#1a1614'], speed: 280, size: 7, gravity: 700, life: 0.9, shape: 'shard', spin: 12, jitter: ed.w * 0.6 });
+  fx.emit({ x: ed.x, y: EF - ed.h * 0.5, n: 20, colors: [art, '#e8dcc4', '#1a1614'], speed: 280, size: 7, gravity: 700, life: 0.9, shape: 'shard', spin: 12, jitter: ed.w * 0.6 });
   sfx('kill'); sfx('enemyDeath');
   const last = S.c.over === 'win' && !S.q.some((e) => e.t === 'kill' && !e.silent);
   if (last) { fx.slowmo(0.3, 700); fx.hitstop(110); fx.flash('#fff', 0.4, 0.35); fx.shake(0.5); S.finalBlow = true; return 480; }
@@ -719,7 +721,7 @@ function enemyAt(x, y) {
   for (const ed of S.eds) {
     if (!ed.visible || ed.e.dead) continue;
     const hw = Math.max(ed.w / 2 + 6, 40);
-    if (L.inRectXY(x, y, ed.x - hw, FOOT_Y - ed.h - 14, hw * 2, ed.h + 90)) { if (!best || Math.abs(ed.x - x) < Math.abs(best.x - x)) best = ed; }
+    if (L.inRectXY(x, y, ed.x - hw, EF - ed.h - 14, hw * 2, ed.h + 90)) { if (!best || Math.abs(ed.x - x) < Math.abs(best.x - x)) best = ed; }
   }
   return best;
 }
@@ -744,7 +746,7 @@ function cancelDrag(keepSel) {
 }
 function snapTarget(p) {
   let best = null, bd = 90;
-  for (const ed of liveEds()) { const dd = Math.hypot(ed.x - p.x, FOOT_Y - ed.h * 0.55 - p.y); if (dd < bd) { bd = dd; best = ed; } }
+  for (const ed of liveEds()) { const dd = Math.hypot(ed.x - p.x, EF - ed.h * 0.55 - p.y); if (dd < bd) { bd = dd; best = ed; } }
   return best || enemyAt(p.x, p.y);
 }
 // hover candidate: the visible strip of each resting card (never the lifted card), plus the column above the card that is already lifted
@@ -1007,7 +1009,7 @@ function drawPendingModal(app) {
 function fixLayout(snap) {
   const res = S.eds.filter((ed) => ed.reserve && !ed.gone);
   const sl = L.enemySlots(res.map((ed) => ed.e.def));
-  res.forEach((ed, i) => { ed.tx = sl[i].x; ed.tscale = sl[i].scale; ed.w = sl[i].w; ed.h = sl[i].h; if (snap || !ed.placed) { ed.x = ed.tx; ed.scale = ed.tscale; ed.placed = true; } });
+  res.forEach((ed, i) => { ed.tx = sl[i].x; ed.tscale = sl[i].scale; ed.w = sl[i].w; ed.h = sl[i].h; ed.sw = sl[i].sw; if (snap || !ed.placed) { ed.x = ed.tx; ed.scale = ed.tscale; ed.placed = true; } });
 }
 
 // ---------------------------------------------------------------- update
@@ -1156,7 +1158,7 @@ function draw(app) {
 }
 
 function bracketEd(ctx, ed, a, fill) {
-  const x = ed.x - ed.w / 2 - 6, y = FOOT_Y - ed.h - 10, w = ed.w + 12, h = ed.h + 22, l = 16;
+  const x = ed.x - ed.w / 2 - 6, y = EF - ed.h - 10, w = ed.w + 12, h = ed.h + 22, l = 16;
   ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = COL.lamp; ctx.lineWidth = 4; ctx.lineCap = 'square';
   if (fill) { ctx.fillStyle = 'rgba(242,193,78,.08)'; ctx.fillRect(x, y, w, h); }
   ctx.beginPath();
@@ -1193,16 +1195,7 @@ function drawHeroAndHud(app) {
   if (dying) ctx.globalAlpha = 1 - dying * 0.6;
   drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: 1, t: S.t, hurt: P.hurt, attack: lunge, dying });
   ctx.restore();
-  // hud
-  const bw = 190, bx = HERO_X - bw / 2, by = FOOT_Y + 24;
-  drawBar(app, bx, by, bw, 16, P.shown, P.trail, P.maxHp, '#b3263a', `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`);
-  if (P.block > 0) {
-    const sc = 1 + P.bpulse * 0.35;
-    ctx.save(); ctx.translate(bx - 6, by + 8); ctx.scale(sc, sc); drawShield(ctx, 0, 0, 34, P.block); ctx.restore();
-    if (app.inRect(bx - 24, by - 10, 36, 36)) app.tooltip('Block ' + P.block, 'Absorbs damage until your next turn.', { color: '#bcd0d8' });
-  }
-  drawStatusRow(app, P, HERO_X, by + 24, 220, 24, S.t);
-  if (app.inRect(bx, by, bw, 16)) app.tooltip(HEROES[S.run.hero].name, `HP ${P.hp} / ${P.maxHp}`, { color: COL.bad });
+  drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
 }
 
 function drawEnemies(app, tgtMode) {
@@ -1223,15 +1216,15 @@ function drawEnemies(app, tgtMode) {
     if (tgtMode && !ed.e.dead) {
       const hot = hoverEd === ed;
       ctx.save(); ctx.strokeStyle = hot ? COL.lamp : 'rgba(242,193,78,.45)'; ctx.lineWidth = hot ? 4 : 2.5; ctx.shadowColor = COL.lamp; ctx.shadowBlur = hot ? 18 : 6;
-      ctx.beginPath(); ctx.ellipse(ed.x, FOOT_Y + 6, ed.w * 0.55 + (hot ? 10 : 0) + Math.sin(S.t * 6) * 2, 16, 0, 0, 6.283); ctx.stroke();
-      if (hot) { ctx.fillStyle = 'rgba(242,193,78,.1)'; ctx.fillRect(ed.x - ed.w / 2 - 8, FOOT_Y - ed.h - 8, ed.w + 16, ed.h + 20); }
+      ctx.beginPath(); ctx.ellipse(ed.x, EF + 6, ed.w * 0.55 + (hot ? 10 : 0) + Math.sin(S.t * 6) * 2, 16, 0, 0, 6.283); ctx.stroke();
+      if (hot) { ctx.fillStyle = 'rgba(242,193,78,.1)'; ctx.fillRect(ed.x - ed.w / 2 - 8, EF - ed.h - 8, ed.w + 16, ed.h + 20); }
       ctx.restore();
     }
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(ed.x, FOOT_Y + 4, ed.w * 0.42, 10, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(ed.x, EF + 4, ed.w * 0.42, 10, 0, 0, 6.283); ctx.fill();
     const stun = ed.stunT > 0 ? Math.sin(S.t * 60) * 4 * ed.stunT : 0;
     const x = ed.x - ed.atk * 46 * ed.scale + ed.kick * 12 + stun;
-    drawEnemy(ctx, def, x, FOOT_Y + drop, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.atk, st: ed.st });
+    drawEnemy(ctx, def, x, EF + drop, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.atk, st: ed.st });
     ctx.restore();
     if (ed.dyingOn) continue;
     drawEnemyHud(app, ed, alpha, hoverEd === ed);
@@ -1239,41 +1232,14 @@ function drawEnemies(app, tgtMode) {
 }
 
 function drawEnemyHud(app, ed, alpha, hot) {
-  const ctx = app.ctx, def = ed.e.def;
-  const hudW = clamp(ed.w * 0.95, 96, 170);
-  const nameY = FOOT_Y + 18;
-  const col = def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum;
-  ctx.save(); ctx.globalAlpha = alpha;
-  app.text(ed.e.name, ed.x, nameY, { size: ed.scale < 0.8 ? 14 : 17, bold: true, align: 'center', color: col, shadow: true });
-  const by = nameY + 24;
-  drawBar(app, ed.x - hudW / 2, by, hudW, 14, ed.shown, ed.trail, ed.maxHp, '#a8412f', `${Math.max(0, Math.ceil(ed.hp))}/${ed.maxHp}`);
-  if (ed.block > 0) {
-    const sc = 1 + ed.bpulse * 0.35;
-    ctx.save(); ctx.translate(ed.x - hudW / 2 - 6, by + 7); ctx.scale(sc, sc); drawShield(ctx, 0, 0, 30, ed.block); ctx.restore();
-    if (app.inRect(ed.x - hudW / 2 - 22, by - 8, 32, 32)) app.tooltip('Block ' + ed.block, 'Absorbs damage until this enemy acts.', { color: '#bcd0d8' });
-  }
-  drawStatusRow(app, ed, ed.x, by + 20, Math.max(hudW + 20, 110), ed.scale < 0.8 ? 20 : 22, S.t);
-  ctx.restore();
-  // intent bubble
   const info = ed.move ? intentWith(ed, ed.move) : null;
-  const iy = FOOT_Y - ed.h - 34 + Math.sin(S.t * 2.4 + ed.phase) * 3;
-  if (info && ed.intentOut < 1) {
-    const r = drawIntentBubble(app, info, ed.x, iy, ed.intentT, (1 - ed.intentOut) * alpha);
-    if (r.w && ed.intentOut === 0 && !S.banner && !S.modal && app.inRect(ed.x - r.w / 2, iy - r.h / 2, r.w, r.h)) app.tooltip(info.hidden ? 'Hidden intent' : moveName(info), intentText(info), { color: COL.vellum });
-  }
+  drawEnemyPlate(app, ed, { alpha, hot, info, many: liveEds().length, moveName: info ? moveName(info) : '', suppress: !!(S.banner || S.modal) || app.blocked || ed.intentOut > 0, tgt: targeting(), c: S.c });
   if (ed.callout && ed.callout.text) {
-    const k = ed.callout.t; ctx.save(); ctx.globalAlpha = clamp(1 - (k - 0.6) / 0.4, 0, 1) * alpha;
-    app.text(ed.callout.text, ed.x, iy - 10 - k * 16, { size: 22, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 5, baseline: 'middle' }); ctx.restore();
-  }
-  // hover tooltip on the body
-  if (hot && !app.blocked && !S.banner && !S.modal) {
-    const ents = Object.keys(ed.st).length;
-    if (!targeting() && app.inRect(ed.x - ed.w / 2, FOOT_Y - ed.h, ed.w, ed.h)) {
-      const kindTxt = def.kind === 'boss' ? 'Boss' : def.kind === 'elite' ? 'Elite' : '';
-      app.tooltip(ed.e.name + (kindTxt ? `  (${kindTxt})` : ''), (info ? intentText(info) + '\n' : '') + `HP ${ed.hp}/${ed.maxHp}` + (ents ? '' : ''), { color: col2(def) });
-    }
+    const k = ed.callout.t; const ctx = app.ctx; ctx.save(); ctx.globalAlpha = clamp(1 - (k - 0.6) / 0.4, 0, 1) * alpha;
+    app.text(ed.callout.text, ed.x, EF - ed.h * 0.6 - k * 30, { size: 22, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 5, baseline: 'middle' }); ctx.restore();
   }
 }
+
 const col2 = (def) => (def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum);
 
 function drawCoins(app) {
@@ -1293,13 +1259,13 @@ function drawAimArrow(app) {
   if (dr) {
     if (!dr.aim || !dc) { if (dc) drawTargetBrackets(app, null, false); return; }
     from = { x: dc.x, y: dc.y - CARD_H * dc.s / 2 }; snap = dr.snap;
-    const p = dragPt(); to = snap ? { x: snap.x, y: FOOT_Y - snap.h * 0.55 } : p;
+    const p = dragPt(); to = snap ? { x: snap.x, y: EF - snap.h * 0.55 } : p;
   } else {
     from = dc ? { x: dc.x, y: dc.y - CARD_H * dc.s / 2 } : (S.potSel != null ? { x: potionPos(S.potSel).x, y: 56 } : null);
     if (!from) return;
     const l = liveEds();
     snap = S.kbTarget && l.length ? l[S.tgt % l.length] : snapTarget(m);
-    to = snap ? { x: snap.x, y: FOOT_Y - snap.h * 0.55 } : { x: m.x, y: m.y };
+    to = snap ? { x: snap.x, y: EF - snap.h * 0.55 } : { x: m.x, y: m.y };
   }
   drawTargetBrackets(app, snap, false);
   const cx = (from.x + to.x) / 2, cy = Math.min(from.y, to.y) - 120;
@@ -1319,41 +1285,40 @@ function drawTopBar(app) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, L.BAR_H);
   ctx.fillStyle = 'rgba(232,220,196,.25)'; ctx.fillRect(0, L.BAR_H - 1, W, 1);
   ctx.restore();
+  // hero block 0..365: portrait, name, hp, gold (the right 144 px of the bar belong to the global Pause / Fullscreen buttons)
   drawPortrait(ctx, run.hero, 32, 28, 40);
-  app.text(hero.name, 60, 7, { size: 19, bold: true, color: COL.vellum });
-  app.text(hero.title || '', 60, 30, { size: 12, ui: true, color: 'rgba(232,220,196,.6)' });
+  const hn = fitText(app, hero.name, 118, 19, 14, { bold: true });
+  app.text(hn.str, 60, 6, { size: hn.size, bold: true, color: COL.vellum });
+  const ht = fitText(app, hero.title || '', 118, 14, 14, { ui: true });
+  app.text(ht.str, 60, 29, { size: ht.size, ui: true, color: COL.vellum2 });
   drawHeart(ctx, 192, 28, 26);
   app.text(`${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`, 210, 17, { size: 19, bold: true, ui: true, color: COL.bad });
   const gp = 1 + S.goldPulse * 0.25;
   ctx.save(); ctx.translate(L.GOLD_POS.x - 10, L.GOLD_POS.y); ctx.scale(gp, gp); drawCoin(ctx, 0, 0, 24); ctx.restore();
   app.text(String(S.gold), L.GOLD_POS.x + 8, 17, { size: 19, bold: true, ui: true, color: COL.gold });
-  // potions
-  const slots = RUN.potionSlots(run);
+  app.reg('topHero', 0, 0, 365, L.BAR_H, {});
+  // potions: 3 slots 38 px step 44 (shrinks only if the run has more slots)
+  const slots = RUN.potionSlots(run), P0 = L.POTION0;
+  const pstep = Math.min(P0.step, P0.max / Math.max(1, slots)), psz = Math.min(P0.size, pstep - 4);
   for (let i = 0; i < slots; i++) {
-    const x = L.POTION0.x + i * L.POTION0.step, y = L.POTION0.y, sz = L.POTION0.size;
+    const x = P0.x + i * pstep, y = P0.y + (P0.size - psz) / 2, sz = psz;
     const id = S.potions[i];
     app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
+    app.reg('potion' + i, x, y, sz, sz, {});
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);
       const p = POTIONS[id];
       if (app.inRect(x, y, sz, sz)) {
-        app.cursor = 'pointer'; app.tooltip(p.name, p.text + (canAct() ? '\n(click to use)' : ''), { color: COL.energy });
+        app.cursor = 'pointer'; queueTip(app, 'pot:' + id, [[{ title: p.name, text: p.text + (canAct() ? '\n(click to use)' : ''), color: COL.energy, glyph: 'diamond' }]], { x, y, w: sz, h: sz });
         if (canAct() && app.clicked(x, y, sz, sz)) { if (S.potSel === i) S.potSel = null; else tryPotion(S.run.potions.indexOf(id) >= 0 ? i : i, null); }
       }
     }
   }
-  // relics
-  const rl = run.relics || [];
-  const step = Math.min(L.RELIC0.size + 4, (L.RELIC0.x1 - L.RELIC0.x) / Math.max(1, rl.length));
-  rl.forEach((id, i) => {
-    const x = L.RELIC0.x + i * step + L.RELIC0.size / 2, y = L.RELIC0.y;
-    drawRelic(ctx, id, x, y, L.RELIC0.size);
-    const r = RELICS[id];
-    if (r && app.inRect(x - L.RELIC0.size / 2, y - L.RELIC0.size / 2, L.RELIC0.size, L.RELIC0.size)) app.tooltip(r.name, r.text, { color: COL.lamp });
-  });
-  app.text(`Turn ${Math.max(1, S.turn)}`, 972, 15, { size: 20, bold: true, align: 'center', color: COL.vellum });
+  drawRelicStrip(app, run.relics || []); // 9 relics then a '+N' chip opening a list
+  app.text(`Turn ${Math.max(1, S.turn)}`, L.TURN_POS.x, L.TURN_POS.y, { size: 20, bold: true, align: 'center', color: COL.vellum });
+  app.reg('topTurn', L.TURN_POS.x - 38, L.TURN_POS.y - 2, 76, 28, {});
+  app.reg('topDeck', L.DECK_BTN.x, L.DECK_BTN.y, L.DECK_BTN.w, L.DECK_BTN.h, {});
   if (app.button('Deck', L.DECK_BTN.x, L.DECK_BTN.y, L.DECK_BTN.w, L.DECK_BTN.h, { size: 18 })) { const f = app.shared.flow; if (f && f.openDeck) f.openDeck(); }
-  if (app.button('', L.GEAR_BTN.x, L.GEAR_BTN.y, L.GEAR_BTN.w, L.GEAR_BTN.h, { icon: gearIcon })) { const f = app.shared.flow; if (f && f.openSettings) f.openSettings(); }
 }
 
 function pileStack(app, pos, count, s, label, key, onClick) {
@@ -1365,12 +1330,15 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   else for (let i = layers - 1; i >= 0; i--) drawCardBack(ctx, -i * 2, -i * 2.5, { scale: s });
   ctx.restore();
   const bw = CARD_W * s, bh = CARD_H * s;
-  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.9)'; ctx.strokeStyle = COL.vellum; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(pos.x + bw / 2 - 2, pos.y + bh / 2 - 6, 15, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
-  app.text(String(count), pos.x + bw / 2 - 2, pos.y + bh / 2 - 15, { size: 17, bold: true, ui: true, align: 'center' });
-  const over = app.inRect(pos.x - bw / 2, pos.y - bh / 2, bw, bh);
-  if (over) {
-    app.cursor = 'pointer'; app.tooltip(label, `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`);
-    if (onClick && app.clicked(pos.x - bw / 2, pos.y - bh / 2, bw, bh) && !S.modal && !S.ending) onClick();
+  // count badge on the top right corner of the pile (inside the registered rect, clear of the screen edge)
+  const bx = pos.x + bw / 2 - 1, by = pos.y - bh / 2 + 11;
+  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.strokeStyle = COL.vellum; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bx, by, 14, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
+  app.text(String(count), bx, by - 8, { size: 15, bold: true, ui: true, align: 'center', fixed: true });
+  const R = { x: pos.x - bw / 2 - 2, y: pos.y - bh / 2 - 3, w: bw + 20, h: bh + 3 };
+  app.reg('pile_' + key, R.x, R.y, R.w, R.h, {});
+  if (app.inRect(R.x, R.y, R.w, R.h)) {
+    app.cursor = 'pointer'; queueTip(app, 'pile' + key + count, [[{ title: label, text: `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`, color: COL.vellum, glyph: 'square' }]], R);
+    if (onClick && app.clicked(R.x, R.y, R.w, R.h) && !S.modal && !S.ending) onClick();
   }
 }
 
@@ -1385,11 +1353,13 @@ function drawHudBottom(app) {
   // energy orb
   const O = L.ORB, pulse = 1 + S.orbPulse * 0.22;
   ctx.save(); ctx.translate(O.x, O.y); ctx.scale(pulse, pulse); drawEnergyOrb(ctx, 0, 0, O.size, S.energy, S.maxEnergy); ctx.restore();
-  if (app.inRect(O.x - O.size / 2, O.y - O.size / 2, O.size, O.size)) app.tooltip('Energy', `${S.energy} / ${S.maxEnergy}. Refills each turn.`, { color: COL.energy });
+  app.reg('orb', O.x - O.size / 2, O.y - O.size / 2, O.size, O.size, {});
+  if (app.inRect(O.x - O.size / 2, O.y - O.size / 2, O.size, O.size)) queueTip(app, 'orb' + S.energy, [[{ title: 'Energy', text: `${S.energy} / ${S.maxEnergy}. Refills each turn.`, color: COL.energy, glyph: 'diamond' }]], { x: O.x - O.size / 2, y: O.y - O.size / 2, w: O.size, h: O.size });
   // strain readout
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
   app.panel(B.x, B.y, B.w, B.h, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
+  app.reg('strain', B.x, B.y, B.w, B.h, {});
   app.text(`Budget ${st.weight}/${st.budget}`, B.x + 10, B.y + 5, { size: 15, ui: true, bold: true, color: COL.vellum });
   app.text(`Strain ${st.strain}`, B.x + 10, B.y + 24, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
   if (app.inRect(B.x, B.y, B.w, B.h)) {
@@ -1402,28 +1372,31 @@ function drawHudBottom(app) {
       for (const w of tithed.slice(0, 8)) lines.push(' - ' + (CARDS[w.inst.id] ? CARDS[w.inst.id].name : w.inst.id));
       if (st.backfire > 0) lines.push(`Backfire ${st.backfire}: grafted cards in your opening hand jam each turn.`);
     }
-    app.tooltip('Strain', lines.join('\n'), { color: over ? COL.bad : COL.good });
+    queueTip(app, 'strain' + st.strain + ':' + tithed.length, [[{ title: 'Strain', text: lines.join('\n'), color: over ? COL.bad : COL.good, glyph: 'cross' }], [{ title: 'Tithe', text: 'A Bare card taken by Strain. It fights at 75% numbers this combat.', color: '#b3263a', glyph: 'cross' }]], B);
   }
 
   // end turn
   const E = L.END_BTN;
   const noPlays = idle && !c.over && !c.pending && !c.hand.some((_, i) => canPlay(c, i).ok);
   const can = canAct();
+  app.reg('endTurn', E.x, E.y, E.w, E.h, {});
   if (can && noPlays) { ctx.save(); ctx.shadowColor = COL.lamp; ctx.shadowBlur = 16 + Math.sin(S.t * 5) * 8; app.rr(E.x, E.y, E.w, E.h, 10); ctx.strokeStyle = COL.lamp; ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); }
   if (app.button('END TURN', E.x, E.y, E.w, E.h, { size: 22, fill: can && noPlays ? '#6b4a1a' : COL.slab2, disabled: !can }) && can) doEndTurn();
 }
 
 function drawCardInfo(app) {
-  if (S.modal || S.ending || S.drag || S.c.pending) return;
-  const dc = S.hand.find((d) => d.uid === S.hov);
-  if (!dc || dc.alpha < 0.8) return;
-  const spec = dcSpec(dc);
-  const secs = cardSections(spec, dc.w, dc);
-  if (!secs.length) return;
-  const w = 250;
-  const right = dc.x + CARD_W * dc.s / 2 + 10;
-  const x = right + w < W - 6 ? right : dc.x - CARD_W * dc.s / 2 - 10 - w;
-  drawSections(app, secs, x, Math.max(64, dc.y - CARD_H * dc.s / 2), w, 520);
+  if (!S.modal && !S.ending && !S.drag && !S.c.pending) {
+    const dc = S.hand.find((d) => d.uid === S.hov);
+    if (dc && dc.alpha >= 0.8) {
+      const spec = dcSpec(dc), l = liveEds();
+      const stack = cardTipStack(spec, S.c, { tithed: !!dc.w.tithed, target: l.length === 1 ? l[0].e : null });
+      const extra = cardSections(spec, dc.w, dc).filter((x) => /weight|^Price|^Jammed/.test(x.title)).map((x) => ({ title: x.title, text: x.text, color: x.color, glyph: 'hex' }));
+      if (extra.length) { if (stack.length < 2) stack.push(extra.slice(0, 3)); else stack[1] = stack[1].concat(extra).slice(0, 4); }
+      if (stack.length) { const r = dcRect(dc); queueTip(app, 'card:' + dc.uid + ':' + (dc.w.tithed ? 1 : 0), stack, { x: r.x, y: r.y, w: r.w, h: r.h }); }
+    }
+  }
+  drawPopovers(app);
+  flushTips(app);
 }
 
 // first-run tips: one at a time, only while the player can act, never over a modal
@@ -1434,7 +1407,7 @@ function drawTips(app) {
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
     if (tip('energy', L.ORB.x + 46, L.ORB.y - 50, { side: 'right', w: 280 })) return;
-    if (tip('intent', first.x, FOOT_Y - first.h - 8, { side: 'below', w: 290 })) return;
+    if (tip('intent', first.x, EF - first.h - 8, { side: 'below', w: 290 })) return;
     if (S.hand.length && tip('playcard', L.HAND_CX, L.HAND_Y - 120, { side: 'above', w: 330 }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
     if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280 })) return;
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280 })) return;
@@ -1483,7 +1456,7 @@ function api() {
   return {
     c: S.c, busy: busy(), canAct: canAct(), ending: !!S.ending, modal: !!S.modal,
     handPos: (i) => { const s = L.handSlot(i, n); return { x: s.x, y: s.y }; },
-    enemyPos: (i) => { const ed = S.edBy.get(S.c.enemies[i].uid); return { x: ed.x, y: FOOT_Y - ed.h * 0.5 }; },
+    enemyPos: (i) => { const ed = S.edBy.get(S.c.enemies[i].uid); return { x: ed.x, y: EF - ed.h * 0.5 }; },
     endTurn: { x: L.END_BTN.x + L.END_BTN.w / 2, y: L.END_BTN.y + L.END_BTN.h / 2 },
     pending: S.c.pending ? { need: pendingNeed(), pool: pendPool().map((w) => w.uid), confirm: { x: W / 2, y: 666 } } : null,
     queueLen: S.q.length, sel: S.sel, state: () => S,

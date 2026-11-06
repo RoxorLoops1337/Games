@@ -114,7 +114,7 @@ window.__ready = true;
         const r1 = await page.evaluate(() => { const T = window.T; T.app.post.setGrade('neutral', 1); T.app.post.update(1); T.app.post.setBloom(0); T.frame('nb'); T.app.post.setBloom(0.8); T.plain('plain'); T.frame('hi');
           return { lamp: T.cmp('nb', 'hi', 840, 140, 960, 260), all: T.cmp('plain', 'hi', 0, 0, 1280, 720), text: T.cmp('plain', 'hi', 100, 100, 300, 150) }; });
         assert.ok(r1.all.diff > 0.2, 'processed canvas differs from plain: ' + JSON.stringify(r1.all));
-        assert.ok(r1.lamp.lumaGain > 2, 'bloom brightens the lamp neighbourhood: ' + JSON.stringify(r1.lamp));
+        assert.ok(r1.lamp.lumaGain > 1, 'bloom brightens the lamp neighbourhood: ' + JSON.stringify(r1.lamp));
         assert.ok(r1.text.diff < 22, 'text stays crisp (no bloom smear): ' + JSON.stringify(r1.text));
         // 2. mask rect: warp is zeroed inside it, present outside it
         const r2 = await page.evaluate(() => { const T = window.T, p = T.app.post; p.setQuality('low'); p.setBloom(0); p.setGrade('neutral', 1); p.update(1); T.frame('A');

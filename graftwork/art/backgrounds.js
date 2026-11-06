@@ -636,7 +636,7 @@ function drawThemed(ctx, theme, c, t, o) {
   }
   ctx.restore();
   // dust motes crossing the shafts (bright inside, faint outside) + floating particles
-  drawMotes(ctx, t, 211, 36, '#fff6dc', 0.7, (x, y) => { let k = 0.12; for (let i = 0; i < sn; i++) { const bx = (i + 0.5) * (W / sn) + sway * 220, cx = bx - Math.tan(ang) * y * 0.9 * -1 * -1, hw = (sw * 0.5) * (0.15 + y / 640); const d = Math.abs(x - (bx - Math.sin(ang) * y)); if (d < hw) k = Math.max(k, 1 - d / hw); } return k; });
+  drawMotes(ctx, t, 211, 36, '#fff6dc', 0.7, (x, y) => { let k = 0.12; for (let i = 0; i < sn; i++) { const bx = (i + 0.5) * (W / sn) + sway * 220, hw = (sw * 0.5) * (0.15 + y / 640); const d = Math.abs(x - (bx - Math.sin(ang) * y)); if (d < hw) k = Math.max(k, 1 - d / hw); } return k; });
   drawMotes(ctx, t, 307, 22, c.part[0], c.part[1], null, c.part[2]);
   // fog in the lower third
   const fg = fogLayer(c.fog[0]);

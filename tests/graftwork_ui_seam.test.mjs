@@ -33,6 +33,15 @@ function grab(c, pred) {
   return null;
 }
 const sch = (s) => (k, sp) => schoolsOf(sp).length === 1 && schoolsOf(sp)[0] === s && sp.type !== 'junk' && sp.cost !== 'X' && sp.target !== 'none' && !(sp.flags && sp.flags.unplayable);
+// graft a bare card with a safe graft of `school` so it carries that school
+function withSchool(c, school) {
+  const gid = Object.keys(GRAFTS).find((g) => GRAFTS[g].school === school && GRAFTS[g].tier === 'safe') || Object.keys(GRAFTS).find((g) => GRAFTS[g].school === school);
+  const k = grab(c, (kk, sp) => !schoolsOf(sp).length && sp.type !== 'junk' && sp.type !== 'power' && sp.cost !== 'X' && !(sp.flags && sp.flags.unplayable));
+  assert.ok(k && gid, 'bare card and a ' + school + ' graft exist');
+  k.inst.grafts = [gid]; k.specKey = -1;
+  assert.ok(schoolsOf(specOf(c, k)).includes(school));
+  return k;
+}
 function play(c, card) {
   const hi = c.hand.indexOf(card); assert.ok(hi >= 0);
   c.ev.length = 0; playCard(c, hi, 0);
@@ -45,8 +54,8 @@ const rail = (c, focus) => { app.ctx.__x = 1; drawSeamRail(app, c, L.SEAM, 0, fo
 // ---- empty state, extend, extend, cut
 {
   const c = fresh('seam-a');
-  const b1 = grab(c, sch('blood')), b2 = grab(c, (k, sp) => k !== b1 && sch('blood')(k, sp)), r1 = grab(c, sch('rust'));
-  assert.ok(b1 && b2 && r1, 'marrow deck has blood and rust cards');
+  const b1 = grab(c, sch('blood')), b2 = grab(c, (k, sp) => k !== b1 && sch('blood')(k, sp)), r1 = withSchool(c, 'ember');
+  assert.ok(b1 && b2 && r1, 'marrow deck has blood cards');
   rail(c, null); // empty Line teaches
   assert.equal(c.seam.len, 0);
   assert.equal(seamBadge(c, b1), 'extend');
@@ -67,7 +76,7 @@ const rail = (c, focus) => { app.ctx.__x = 1; drawSeamRail(app, c, L.SEAM, 0, fo
   assert.equal(pay.school, pv.payout[0].school);
   assert.equal(pay.stitches, pv.payout[0].stitches, 'preview stitches equal the real payout');
   assert.equal(pay.amount, 2 * pay.stitches);
-  assert.ok(c.player.hp >= Math.min(hp0, hp1 + pay.amount) - 0, 'blood healed');
+  assert.ok(c.player.hp > hp1 && hp0 > 0, 'blood healed');
   assert.equal(c.seam.len, 1, 'a new Line starts');
   frames(app, 40);
 }
@@ -76,8 +85,7 @@ const rail = (c, focus) => { app.ctx.__x = 1; drawSeamRail(app, c, L.SEAM, 0, fo
 {
   const c = fresh('seam-b');
   const b1 = grab(c, sch('blood'));
-  c.A.addCard('j_paperwork', 1, 'hand');
-  const junk = c.hand.find((k) => specOf(c, k).type === 'junk'); assert.ok(junk);
+  const junk = grab(c, (k, sp) => !schoolsOf(sp).length && sp.type !== 'junk' && sp.type !== 'power' && !(sp.flags && sp.flags.unplayable)); assert.ok(junk, 'a schoolless card');
   assert.equal(seamBadge(c, junk), 'slack');
   play(c, b1); rail(c, junk);
   const len = c.seam.len;

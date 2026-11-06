@@ -82,9 +82,9 @@ export const atkTotal = (tm) => tm.tell + tm.act + tm.hold + tm.rec;
 // ms since the act began -> { phase, k, lunge }. lunge is the old 0..1 scalar (1 at contact) for bodies that still read o.attack.
 export function atkPhase(tm, ms) {
   const q = (a, b) => Math.max(0, Math.min(1, b > 0 ? a / b : 1));
-  if (ms < tm.tell) return { phase: 'tell', k: q(ms, tm.tell), lunge: 0 };
+  if (ms < tm.tell) { const k = q(ms, tm.tell); return { phase: 'tell', k, lunge: -0.2 * k }; }
   const a = ms - tm.tell;
-  if (a < tm.act) { const k = q(a, tm.act); return { phase: 'act', k, lunge: k * k * (3 - 2 * k) }; }
+  if (a < tm.act) { const k = q(a, tm.act); return { phase: 'act', k, lunge: -0.2 + 1.2 * k * k * (3 - 2 * k) }; }
   const h = a - tm.act;
   if (h < tm.hold) return { phase: 'hold', k: q(h, tm.hold), lunge: 1 };
   const r = h - tm.hold;

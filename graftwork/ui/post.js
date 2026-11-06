@@ -216,7 +216,7 @@ export function installPost(app) {
         const o = nUser * 4; userRects[o] = r[0] / W; userRects[o + 1] = r[1] / H; userRects[o + 2] = (r[0] + r[2]) / W; userRects[o + 3] = (r[1] + r[3]) / H; nUser++;
       }
     },
-    stats, _R: R,
+    stats,
     // advance effect timers by dt seconds (render() calls this with the real frame time)
     update(dt) {
       const ms = dt * 1000;
