@@ -212,7 +212,7 @@ export function dealDamage(c, src, tgt, base, o = {}) {
   if (!o.pierce && tgt.block > 0) { absorbed = Math.min(tgt.block, n); tgt.block -= absorbed; n -= absorbed; }
   if (n > 0 && tgt.st.stitchedup > 0) n = afflAbsorb(c, tgt, n); // Stitched Up (engine/afflictions.js)
   if (n > 0) tgt.hp -= n;
-  if (tgt.kind === 'player') { c.damageTakenThisCombat += n; if (src && src.kind === 'enemy') c.lastHitBy = src.name; }
+  if (tgt.kind === 'player') { c.damageTakenThisCombat += n; if (src && src.kind === 'enemy') c.lastHitBy = src.name; if (n > 0) c.lastHit = { status: o.status || null, enemy: src && src.kind === 'enemy' ? src.id : null, move: src && src.kind === 'enemy' ? src.move : null }; } // lastHit feeds the defeat advice (meta2.deathAdvice)
   c.ev.push({ t: 'dmg', src: src ? (src.uid || 'player') : null, who: tgt.uid || 'player', raw, n, absorbed, hit: !o.status, thorns: !!o.thorns, broke: absorbed > 0 && tgt.block === 0 });
   if (absorbed > 0 && tgt.block === 0) eachStatus(tgt, (d, v) => { if (d.hooks && d.hooks.blockBroken) d.hooks.blockBroken(c.A, tgt, v, { amount: absorbed, src }); });
   if (src && o.card && c.currentCard) c.currentCard.dealt = (c.currentCard.dealt || 0) + n;
@@ -748,7 +748,7 @@ export function finishCombat(c) {
     run.stats.maxHit = Math.max(run.stats.maxHit || 0, c.maxHit || 0);
   }
   fire(c, 'combatEnd', {});
-  return { win: c.over === 'win', killedBy: c.lastHitBy || null, shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
+  return { win: c.over === 'win', killedBy: c.lastHitBy || null, cause: c.lastHit ? { ...c.lastHit, strain: c.strain ? c.strain.strain : 0, backfire: c.strain ? c.strain.backfire : 0 } : null, shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
 }
 
 // Infection adds to Strain mid-combat: recompute it and move the Tithe onto the right cards in every zone.

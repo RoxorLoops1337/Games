@@ -1817,10 +1817,10 @@ function drawTips(app) {
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   // the card-play tip shows right away once a card is selected, and otherwise right after the energy tip (before the intent tip)
-  if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
+  if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { pos: QUIET, w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
   if (first && !S.hov) {
     if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM }, `Energy pays for cards. You get ${c.maxEnergy} each turn and it does not carry over. Spend it.`)) return;
-    if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
+    if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { pos: QUIET, w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
     if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 60, FOOT_Y - 230, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280, maxBottom: TIP_BOTTOM })) return;

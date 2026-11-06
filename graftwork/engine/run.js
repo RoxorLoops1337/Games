@@ -476,12 +476,12 @@ export function resolveFight(run, result) {
   }
   if (run.practice) { // a practice fight ends the session: win or lose, nothing else follows
     run.phase = result.win && run.hp > 0 ? 'won' : 'dead'; run.pending = null;
-    if (run.phase === 'dead') run.killedBy = result.killedBy || null;
+    if (run.phase === 'dead') { run.killedBy = result.killedBy || null; run.deathCause = result.cause || null; }
     return run.phase;
   }
   if (result.damageTaken) run.stats.damageTaken += result.damageTaken;
   run.stats.shatters += result.shattered.length;
-  if (!result.win || run.hp <= 0) { run.killedBy = result.killedBy || null; run.phase = 'dead'; run.pending = null; return 'dead'; }
+  if (!result.win || run.hp <= 0) { run.killedBy = result.killedBy || null; run.deathCause = result.cause || null; run.phase = 'dead'; run.pending = null; return 'dead'; }
   if (kind === 'elite') run.stats.elites++;
   if (kind === 'boss') run.stats.bosses++;
   const hero = HEROES[run.hero];

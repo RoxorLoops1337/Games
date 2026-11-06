@@ -1,5 +1,5 @@
 // End-of-run screen (run.phase 'dead' or 'won'): recap, the deck as you left it, unlocks, next steps.
-import { titleName } from '../engine/meta2.js';
+import { titleName, deathAdvice } from '../engine/meta2.js';
 import { tscale } from './graft_parts.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { Fx } from './fx.js';
@@ -50,6 +50,7 @@ export default {
     this.news = [...this.caseNews, ...this.unlocks, ...this.achs];
     const kb = run.killedBy && (ENEMIES[run.killedBy] ? ENEMIES[run.killedBy].name : String(run.killedBy));
     this.killer = kb || null;
+    this.advice = this.won || run.abandoned ? null : deathAdvice(run);
     const a = app.shared.audio;
     if (!calm(app)) {
       if (this.won) { this.fx.flash('#ffe6a0', 0.5, 0.9); this.fx.slowmo(0.5, 500); }
@@ -77,14 +78,15 @@ export default {
     const k = EASE.out(clamp(t / 0.8, 0, 1));
     const title = run.practice ? (this.won ? 'PRACTICE CLEARED' : 'PRACTICE OVER') : this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
     const tcol = this.won ? '#f7dc8a' : '#d9606c';
-    app.reg('end-title', 240, 14, 800, 108, { group: 'title' });
+    app.reg('end-title', 240, 14, 800, 114, { group: 'title' });
     g.save(); g.globalAlpha = k;
     app.text(title, 640, 22 + (1 - k) * -14, { size: this.won ? 50 : 62, bold: true, align: 'center', color: tcol, shadow: true, stroke: 'rgba(8,6,5,.85)', strokeW: 8 });
     let sub;
     if (this.won) sub = run.loop ? `The Grafter, again. Loop ${run.loop} stands on the floor behind you.` : 'You walk out into the dawn, mostly yourself.';
     else if (run.abandoned) sub = 'The procedure was left unfinished. The ward remembers.';
     else sub = this.killer ? `${this.killer} closed the file. Act ${run.act}, floor ${run.stats.floors}.` : `The ward closed over you on floor ${run.stats.floors} of act ${run.act}.`;
-    app.text(sub, 640, this.won ? 84 : 92, { size: 18, italic: true, align: 'center', color: '#e0d4b8', shadow: true });
+    app.text(sub, 640, 84, { size: 18, italic: true, align: 'center', color: '#e0d4b8', shadow: true });
+    if (!this.won && !run.abandoned && this.advice) app.text(this.advice.text, 640, 104, { size: 15, ui: true, align: 'center', color: COL.lamp, shadow: true, maxW: 1000 });
     g.restore();
 
     this.drawRecap(app, 30, 128, 300, 520, hero);
