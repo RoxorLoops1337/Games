@@ -63,7 +63,7 @@ const stepAfter = (A, e) => { e.data.step = (e.data.step || 0) + 1; };
 
 // ---------- NORMALS ----------
 const usher = {
-  id: 'usher', name: 'Usher', act: 3, kind: 'normal', start: { strength: 1 }, hp: [78, 85],
+  id: 'usher', name: 'Usher', act: 3, kind: 'normal', start: { strength: 1 }, hp: [66, 72],
   pattern: ['spot', 'strike', 'lead'],
   moves: {
     spot: { name: 'Pick Your Seat', fx: [D(12), ST('marked', 2), ST('cadencelock', 1)] },
@@ -101,7 +101,7 @@ const gildedCherub = {
 };
 
 const puppet = {
-  id: 'puppet', name: 'Puppet', act: 3, kind: 'normal', hp: [78, 87],
+  id: 'puppet', name: 'Puppet', act: 3, kind: 'normal', hp: [66, 74],
   start: { strength: 1, strings: 2 },
   pattern: ['yank', 'dance', 'tangle', 'reknit'],
   moves: {
@@ -121,7 +121,7 @@ const puppet = {
 };
 
 const spotlight = {
-  id: 'spotlight', name: 'Spotlight', act: 3, kind: 'normal', start: { strength: 1 }, hp: [76, 83],
+  id: 'spotlight', name: 'Spotlight', act: 3, kind: 'normal', start: { strength: 1 }, hp: [65, 71],
   pattern: ['glare', 'focus', 'glare'],
   moves: {
     glare: { name: 'Glare', fx: [D(18), ST('costup', 1)] },
@@ -174,7 +174,7 @@ const velvetCurtain = {
 };
 
 const applause = {
-  id: 'applause', name: 'Applause', act: 3, kind: 'normal', start: { strength: 1 }, hp: [76, 85],
+  id: 'applause', name: 'Applause', act: 3, kind: 'normal', start: { strength: 1 }, hp: [65, 72],
   pattern: ['clap', 'clap', 'roar'],
   moves: {
     clap: { name: 'Polite Clapping', fx: [D(5, { hits: 3 })] },
@@ -217,7 +217,7 @@ const understudy = {
 };
 
 const critic = {
-  id: 'critic', name: 'Critic', act: 3, kind: 'normal', start: { strength: 1 }, hp: [80, 88],
+  id: 'critic', name: 'Critic', act: 3, kind: 'normal', start: { strength: 1 }, hp: [68, 75],
   pattern: ['review', 'scathe'],
   moves: {
     review: { name: 'Review', fx: [D(16), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 25 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1)), ST('dread', 2)] }] },
@@ -245,7 +245,7 @@ const heckler = {
 
 // ---------- ELITES ----------
 const diva = {
-  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 1 }, hp: [148, 154],
+  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 1 }, hp: [126, 131],
   pattern: ['vibrato', 'high_c', 'aria', 'encore'],
   moves: {
     vibrato: { name: 'Vibrato', fx: [D(9, { hits: 3 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
@@ -269,7 +269,7 @@ const stagehands = {
 };
 
 const goldLeafGolem = {
-  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [152, 158],
+  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [129, 134],
   pattern: ['gild', 'slam', 'flake'],
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 2)] },
@@ -294,7 +294,7 @@ function impresarioPick(A, e) {
   return PHASES[ph - 1][(e.data.step || 0) % 3];
 }
 const impresario = {
-  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', start: { strength: 1 }, hp: 150,
+  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', start: { strength: 1 }, hp: 96,
   pick: impresarioPick,
   moves: {
     downbeat: { name: 'Downbeat', fx: [D(19), { op: 'block', n: 10 }] },
@@ -303,7 +303,7 @@ const impresario = {
     staccato: { name: 'Staccato', fx: [D(6, { hits: 5 })] },
     cut_time: { name: 'Cut Time', fx: [D(17), ST('drawdown', 1), CUSTOM('debuff', 'Cuts 2 cards from your next draw into the discard', (A) => cutDraw(A, 2))] },
     conduct: { name: 'Conduct the Pit', fx: [D(14), ST('rejection', 1), SELF('strength', 3), { op: 'addCard', card: 'j_ringing', n: 2, to: 'discard' }] },
-    fortissimo: { name: 'Fortissimo', fx: [D(28), ST('weak', 1)] },
+    fortissimo: { name: 'Fortissimo', fx: [D(24), ST('weak', 1)] },
     da_capo: { name: 'Da Capo', fx: [D(9, { hits: 4 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
     finale: { name: 'Finale', fx: [D(19), ST('vulnerable', 2), ST('costup', 1), ST('drawdown', 1)] },
   },
@@ -382,10 +382,10 @@ function reknit(A, e) {
 const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread payout';
 
 const grafter = {
-  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 260,
+  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 200,
   pattern: ['stitch', 'splice', 'mirror'],
   moves: {
-    stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 52 } }] },
+    stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 36 } }] },
     splice: { name: 'Splice', intent: ['attack', 'debuff'], tip: 'If your most grafted school is Echo (or it copies an Echo payout), it hits a second time for 6 plus half your graft count. The number shown includes that second hit.',
       fx: [{ op: 'dmg', n: { base: 8, per: 'grafts', mul: 0.5, max: 28 } }, { ...CUSTOM('debuff', SPLICE_TEXT, spliceEffect), intentDmg: (c, e) => ((e.data.mirror || e.data.school) === 'echo' ? 6 + Math.floor((e.data.count || 0) / 2) : 0) }] },
     mirror: { name: 'Your Best Card', fx: [D(14)] }, // replaced per fight in combatStart

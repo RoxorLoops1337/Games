@@ -8,10 +8,10 @@ const titheGold = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const n = Mat
 export const CARDS_ODILE = [
   // ---- starters ----
   { id: 'o_swipe', name: 'Swipe', hero: 'odile', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'Not stealing. Collecting.' },
-  { id: 'o_cover', name: 'Cover Charge', hero: 'odile', type: 'skill', cost: 1, rarity: 'starter', target: 'self', fx: [{ op: 'block', n: 5 }], up: { fx: [{ op: 'block', n: 8 }] }, flavor: 'Entry is not free.' },
+  { id: 'o_cover', name: 'Cover Charge', hero: 'odile', type: 'skill', cost: 1, rarity: 'starter', target: 'self', fx: [{ op: 'block', n: 6 }], up: { fx: [{ op: 'block', n: 9 }] }, flavor: 'Entry is not free.' },
   { id: 'o_appraise', name: 'Appraise', hero: 'odile', type: 'skill', cost: 1, rarity: 'starter', target: 'self', fx: [{ op: 'draw', n: 2 }], up: { fx: [{ op: 'draw', n: 3 }] }, flavor: 'Hm. Hm. Yes.' },
-  { id: 'o_gilt_strike', name: 'Gilt Strike', hero: 'odile', type: 'attack', cost: 1, rarity: 'starter', school: 'gilded', fx: [{ op: 'dmg', n: 5 }, { op: 'gold', n: 3 }], up: { fx: [{ op: 'dmg', n: 7 }, { op: 'gold', n: 5 }] }, flavor: 'Pays for itself.' },
-  { id: 'o_collect', name: 'Collect', hero: 'odile', type: 'skill', cost: 0, rarity: 'starter', school: 'gilded', target: 'self', fx: [{ op: 'gold', n: 4 }, { op: 'block', n: 2 }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: 7 }, { op: 'block', n: 4 }] }, flavor: 'A small tip.' },
+  { id: 'o_gilt_strike', name: 'Gilt Strike', hero: 'odile', type: 'attack', cost: 1, rarity: 'starter', school: 'gilded', fx: [{ op: 'dmg', n: 7 }, { op: 'gold', n: 3 }], up: { fx: [{ op: 'dmg', n: 10 }, { op: 'gold', n: 5 }] }, flavor: 'Pays for itself.' },
+  { id: 'o_collect', name: 'Collect', hero: 'odile', type: 'skill', cost: 0, rarity: 'starter', school: 'gilded', target: 'self', fx: [{ op: 'gold', n: 4 }, { op: 'block', n: 5 }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: 7 }, { op: 'block', n: 8 }] }, flavor: 'A small tip.' },
   { id: 'o_encore', name: 'Encore', hero: 'odile', type: 'skill', cost: 1, rarity: 'starter', school: 'echo', target: 'self', fx: [{ op: 'status', s: 'echo', n: 1, to: 'self' }], flags: { exhaust: true }, up: { fx: [{ op: 'status', s: 'echo', n: 1, to: 'self' }], cost: 0 }, flavor: 'Again, from the top.' },
 
   // ---- common (11) ----
