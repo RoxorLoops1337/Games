@@ -78,7 +78,7 @@ export default {
     // No relic choice: the short list would hang in the top third of the screen, so centre it between the header and the notes.
     if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0) + (st.buildInit ? 162 : 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
     rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
-    if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 128 : 150, st) + (compact ? 8 : 12); // Ward mode: building plan pick
+    if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 112 : 150, st) + (compact ? 6 : 12); // Ward mode: building plan pick
 
     // forfeit notes (footer zone above the button)
     const notes = [];
@@ -87,6 +87,8 @@ export default {
     if (rw.relic) notes.push('The relic will be left behind.');
     if (rw.relicChoices && rw.relicChoices.length) notes.push('Choose a relic, or leave them all.');
     if (st.buildInit && st.build === undefined) notes.push('The building plans will be left behind.');
+    // a full boss reward (rows, plans and the relic cards) has no room for a stack of notes: one line says it all
+    if (st.init.choices && notes.length > 1) notes.splice(0, notes.length, notes.length > 2 || rw.relicChoices ? 'Whatever you leave is left behind.' : notes[0]);
     const nl = Math.max(Math.round(15 * Math.min(S, 1.25) * 1.22), Math.ceil(app.sz(Math.round(15 * Math.min(S, 1.25)), { ui: true, fixed: true }) * 1.2)), shown = notes.slice(0, S > 1.2 ? 1 : 2);
     if (shown.length) app.reg('reward-notes', 340, 640 - 8 - shown.length * nl, 600, shown.length * nl, { group: 'notes' });
     shown.forEach((n, i) => app.text(n, 640, 640 - 8 - (shown.length - i) * nl, { ...K(15), ui: true, align: 'center', color: '#ffb36b', fit: { w: 590, h: nl }, lineH: nl }));
@@ -136,7 +138,7 @@ function drawRow(app, r, i, y, compact, K) {
   const dO = { ...K(15), ui: true, fit: { w: tw, lines: maxLines } };
   const hL = app.layoutText(info.head.toUpperCase(), hO), tL = app.layoutText(info.title, tO), dL = app.layoutText(info.line, dO);
   const lh = dL.lineH, headH = Math.max(Math.round(13 * k * 1.22), Math.ceil(hL.size * 1.2)), titleH = Math.max(Math.round(26 * k * 1.22), Math.ceil(tL.size * 1.2));
-  const h = Math.max(compact ? 72 : r.id === 'relic' ? 96 : 80, 12 + headH + titleH + dL.lines.length * lh + 10);
+  const h = Math.max(compact ? 60 : r.id === 'relic' ? 96 : 80, 12 + headH + titleH + dL.lines.length * lh + 10);
   const slide = EASE.out(clamp((st.t - 0.15 - i * 0.12) / 0.45, 0, 1));
   const x = PX + (1 - slide) * 60;
   const full = r.id === 'potion' && !r.taken && run.potions.length >= RUN.potionSlots(run);
@@ -179,7 +181,7 @@ function drawRow(app, r, i, y, compact, K) {
     else if (info.tip) app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor, gloss: [info.line] }); // adds information only: the row already shows the name and text
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
-  return y + h + (compact ? 8 : 12);
+  return y + h + (compact ? 6 : 12);
 }
 // wrapLimit at an exact (already capped) pixel size
 function wrapLimitK(app, str, maxW, px, maxLines) { return wrapLimit(app, str, maxW, px, maxLines, { ui: true, fixed: true }); }
@@ -193,7 +195,7 @@ function drawChoices(app, y, K, bottom) {
   const picked = st.taken.boss;
   const hh = app.text(picked ? 'Relic claimed.' : 'Choose ONE relic', 640, y, { ...K(20), bold: true, align: 'center', color: picked ? COL.good : '#c58bff', shadow: true, maxW: 500 });
   app.reg('reward-choose', 440, y, 400, hh, { group: 'choose' });
-  const h = clamp(Math.floor(bottom - (y + hh + 8)), 150, 232); // never lower than the forfeit notes, so phones' bigger text gets the room it needs
+  const h = clamp(Math.floor(bottom - (y + hh + 8)), 104, 232); // never lower than the forfeit notes: the cards shrink to fit (text is fitted into what is left), the old fixed 150 floor ran under the notes on a full boss reward
   init.choices.forEach((id, i) => {
     const rl = RELICS[id]; if (!rl) return;
     const r2 = RARITY[rl.rarity] || RARITY.boss;

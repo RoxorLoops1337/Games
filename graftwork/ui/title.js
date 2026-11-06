@@ -272,7 +272,7 @@ export default {
         const label = played ? 'Daily Run (played)' : 'Daily Run';
         if (app.inRect(x, yy, bw, bh)) {
           const mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
-          app.tooltip(mod.name, `${hn}, seed ${seed}.\n${mod.text}`, { color: COL.lamp });
+          app.tooltip(mod.name, `${hn}, seed ${seed}.\nMode: ${modeOf(meta) === 'ward' ? 'The Ward' : 'Classic map'} (change it on the New Run screen).\n${mod.text}`, { color: COL.lamp });
         }
         if (app.button(label, x, yy, bw, bh, { size: 22, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
           this.startDaily(app);
@@ -304,7 +304,9 @@ export default {
     const meta = app.shared.meta, flow = app.shared.flow;
     const seed = todaySeed(), hero = RUN.dailyHero(seed);
     meta.daily = meta.daily || {}; meta.daily.lastPlayed = seed; flow.saveMeta();
-    this.begin(app, { hero, ascension: 0, seed, daily: seed });
+    const opts = { hero, ascension: 0, seed, daily: seed };
+    if (modeOf(meta) === 'ward') opts.mode = 'ward'; // same seeded case, played in the Ward; classic keeps the exact old options
+    this.begin(app, opts);
   },
   drawDailyCard(app, x, y) {
     const g = app.ctx, meta = app.shared.meta;
@@ -314,8 +316,8 @@ export default {
     g.save(); g.globalAlpha = k; g.translate((1 - k) * 40, 0);
     const ph = app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; // phones: the inflated rules text needs the extra rows
     app.panel(x, y, 300, ph, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
-    app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp });
-    app.text(seed.replace('daily-', ''), x + 284, y + 12, { size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
+    app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp, fit: { w: 140, lines: 1 } });
+    app.text((modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC'), x + 284, y + 12, { fit: { w: 120, lines: 1 }, bold: true, size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
     drawPortrait(g, hero, x + 16 + 32, y + 66, 64);
     app.text(h.name, x + 100, y + 38, { size: 22, bold: true });
     app.text(h.title, x + 100, y + 64, { size: 14, italic: true, color: '#cdbf9d' });

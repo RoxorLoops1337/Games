@@ -270,7 +270,7 @@ export default {
   limit() { return this.o.multi ? (this.o.multi === true ? 99 : this.o.multi) : 1; },
   key(app, e) {
     if (app.top() !== this) return false;
-    if (e.key === 'Escape') { this.close(app, true); return true; }
+    if (e.key === 'Escape') { const q = app.pressedKeys, i = q.indexOf(e); if (i >= 0) q.splice(i, 1); this.close(app, true); return true; } // consume it: Pause under the Deck would read the same keydown and close too
     return gridKey(this.st, e, this.count || 0);
   },
   list(run) {

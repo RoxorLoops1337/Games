@@ -102,6 +102,29 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   click(app, 1245, 675); assert.equal(meta.settings.muted, true, 'mute corner toggle'); assert.equal(log.muted, true);
 }
 
+// ---- daily run honours the Ward mode (default) and the card says which mode it is ----
+{
+  const texts = (app) => { const out = [], raw = app.text; app.text = (str, ...r) => { out.push(String(str)); return raw(str, ...r); }; return out; };
+  // default settings: the Ward
+  let r = await rig(); clearRun();
+  r.app.go('title'); frames(r.app, 30);
+  let tx = texts(r.app); frames(r.app, 3);
+  assert.ok(tx.some((s) => /^WARD$/.test(s)), 'the Daily card names the Ward: ' + tx.filter((s) => /CASE|WARD/.test(s)));
+  click(r.app, 640, 386);
+  assert.equal(r.log.started[0].mode, 'ward', 'default Daily is a Ward run');
+  assert.equal(r.log.started[0].daily, RUN.dailySeed());
+  const wr = RUN.newRun(r.log.started[0]);
+  assert.equal(wr.mode, 'ward'); assert.ok(wr.ward, 'ward state exists'); assert.equal(wr.dailyMod.id, RUN.newRun({ ...r.log.started[0], mode: undefined }).dailyMod.id, 'same seeded case');
+  // classic chosen: byte-identical options and a Classic label
+  r = await rig(); clearRun(); r.meta.settings.mode = 'classic';
+  r.app.go('title'); frames(r.app, 30);
+  tx = texts(r.app); frames(r.app, 3);
+  assert.ok(tx.some((s) => /^CLASSIC$/.test(s)), 'the Daily card says Classic');
+  click(r.app, 640, 386);
+  assert.deepEqual(r.log.started[0], { hero: RUN.dailyHero(RUN.dailySeed()), ascension: 0, seed: RUN.dailySeed(), daily: RUN.dailySeed() }, 'classic daily options unchanged');
+  assert.equal(RUN.newRun(r.log.started[0]).mode, undefined);
+}
+
 // ---- settings: toggles + sliders persist ----
 {
   const { app, meta, log } = await rig();
