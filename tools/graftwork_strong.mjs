@@ -6,7 +6,8 @@
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf } from '../graftwork/engine/combat.js';
 import { seamPreview } from '../graftwork/engine/seam.js';
-import { cardSpec, canGraft, schoolsOf } from '../graftwork/engine/cards.js';
+import { hashSeed } from '../graftwork/engine/rng.js';
+import { cardSpec, canGraft, canTemper, schoolsOf } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, CARDS } from '../graftwork/data/index.js';
 import { POLICIES, cardValue, graftScore, playRun } from './graftwork_sim.mjs';
 
@@ -108,13 +109,31 @@ export function strongPickGraft(run, pol) {
       let s = r.s;
       const g = GRAFTS[gid];
       if (top && g.school === top[0]) s += 1.5; else if (top && (focus[g.school] || 0) >= 2) s += 0.7;
+      // one deliberate Overload per run (on some runs) while Strain is still low: x1.5 numbers, 25% Shatter on first play
+      if (inst.grafts.length === 2 && r.strain === 0 && runRoll(run, 'over') < (pol.overloadP ?? OVERLOAD_P) && !run.flags.gwOverloaded) s += 3.5;
       if (s > bs) { bs = s; best = [uid, gid]; }
     }
   }
-  return best && bs >= +(process.env.GW_FLOOR ?? 1.5) ? best : null;
+  const pick = best && bs >= +(process.env.GW_FLOOR ?? 1.5) ? best : null;
+  if (pick && RUN.findInst(run, pick[0]).grafts.length === 2) run.flags.gwOverloaded = true;
+  return pick;
 }
 
-POLICIES.strong = { buyCards: +(process.env.GW_BUY ?? 0), maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft };
+// Per-run deterministic dice so the same seed makes the same choice in baseline and relic runs.
+const OVERLOAD_P = +(process.env.GW_OVERLOAD_P ?? 0.35), TEMPER_P = +(process.env.GW_TEMPER_P ?? 0.4);
+const runRoll = (run, tag) => (hashSeed(run.seed + ':' + tag) % 1000) / 1000;
+
+// Forge: on some runs hammer (Temper) the best grafted card instead of resting/refining. An Overload comes first (it stops the Shatter roll);
+// otherwise the grafted card with the most plays. Needs HP above 70 percent, as the forge heal is the default use.
+export function strongForge(run, pol, hpF) {
+  if (hpF < 0.7 || runRoll(run, 'temper') >= (pol.temperP ?? TEMPER_P)) return false;
+  const c = run.deck.filter((i) => canTemper(i));
+  if (!c.length) return false;
+  c.sort((a, b) => (b.grafts.length > 2) - (a.grafts.length > 2) || b.grafts.length - a.grafts.length || (b.plays || 0) - (a.plays || 0));
+  return RUN.forgeAct(run, 'temper', c[0].uid).ok;
+}
+
+POLICIES.strong = { buyCards: +(process.env.GW_BUY ?? 0), maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
   const N = +process.argv[2] || 40, asc = +process.argv[3] || 0, only = process.argv[4];

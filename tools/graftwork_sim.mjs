@@ -358,6 +358,7 @@ function doShop(run, pol, log) {
 
 function doForge(run, pol) {
   const hpF = run.hp / run.maxHp;
+  if (pol.forge && pol.forge(run, pol, hpF)) { RUN.advance(run); return; } // policy hook: true when it spent the forge action itself
   if (hpF < 0.7) RUN.forgeAct(run, 'rest');
   else {
     const ups = run.deck.filter((x) => !x.up && CARDS[x.id].up && CARDS[x.id].type !== 'junk');
