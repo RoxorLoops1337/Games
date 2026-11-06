@@ -27,14 +27,15 @@ let st = null;
 const trn = (app) => (app.shared && app.shared.transitions) || null;
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) { try { a.sfx(name, o); } catch (e) { /* audio is optional */ } } };
 
-function layout(offer) {
+function layout(offer, small) {
   const n = offer.cards.length, m = offer.grafts.length;
   const startX = 412 - ((n - 1) * 257) / 2;
   const cards = offer.cards.map((uid, i) => ({ uid, cx: startX + i * 257, cy: CARD_Y, x: startX + i * 257 - CW / 2, y: CARD_Y - CH / 2, w: CW, h: CH }));
-  const ph = m > 3 ? 84 : 108, gap = m > 3 ? 8 : 9;
+  // phones: the text floor inflates every label ~1.4x, so the tiles get taller and the hover panel is dropped
+  const ph = small ? (m > 3 ? 108 : 136) : m > 3 ? 84 : 108, gap = small ? 6 : m > 3 ? 8 : 9;
   const patches = offer.grafts.map((gid, j) => ({ gid, x: TRAY_X, y: 80 + j * (ph + gap), w: TRAY_W, h: ph }));
   const end = 80 + m * (ph + gap);
-  return { cards, patches, infoY: end + 2, infoH: 548 - (end + 2) - 6 };
+  return { cards, patches, infoY: end + 2, infoH: small ? 0 : 548 - (end + 2) - 6 };
 }
 
 function skipLimit(run) { return RUN.perk(run, 'extraSkipChoice') ? 2 : 1; }
@@ -49,7 +50,7 @@ export default {
       menu: false, skipPick: [], fx: new Fx(), mode: 'pick', anim: null, snap: null, lift: {}, note: null, ending: false,
       reduce: !!(meta.settings && meta.settings.reducedMotion), done: false,
     };
-    st.rects = layout(st.offer);
+    st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small);
     this.st = st;
   },
   leave() { st = null; },
@@ -75,6 +76,7 @@ export default {
   },
   drawTable(app) {
     if (!st) return;
+    if (st.small !== (app.scale < 0.95)) { st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small); }
     const ctx = app.ctx, run = st.run;
     const live = st.mode === 'pick';
     const interactive = live && !st.menu && !app.blocked;
@@ -360,15 +362,19 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   // name
   app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
   // boon + price
-  const lines = compact ? 1 : 2;
-  const boonL = wrapLimit(app, g.boon, tw - 40, 14, lines, { ui: true });
-  const priceL = wrapLimit(app, g.price, tw - 40, 14, lines, { ui: true });
-  let yy = y + (compact ? 30 : 34);
+  // phones inflate small text (SMALL floor): scale label column, line height and the lines budget by the real size
+  const bk = app.sz(14, { ui: true }) / 14, lk = app.sz(13, { ui: true, bold: true }) / 13;
+  const lo = Math.round(40 * lk), lh = Math.round(16 * bk);
+  const nameBot = y + 7 + app.sz(compact ? 18 : 20) * 1.2;
+  let yy = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
+  const lines = clamp(Math.floor((y + h - 8 - yy - 3) / (2 * lh)), 1, compact ? 1 : 2);
+  const boonL = wrapLimit(app, g.boon, tw - lo, 14, lines, { ui: true });
+  const priceL = wrapLimit(app, g.price, tw - lo, 14, lines, { ui: true });
   app.text('Boon', tx, yy, { size: 13, ui: true, bold: true, color: COL.good });
-  boonL.forEach((ln, i) => app.text(ln, tx + 40, yy + i * 16, { size: 14, ui: true, color: COL.vellum }));
-  yy += lines * 16 + 3;
+  boonL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: 14, ui: true, color: COL.vellum }));
+  yy += lines * lh + 3;
   app.text('Price', tx, yy, { size: 13, ui: true, bold: true, color: COL.bad });
-  priceL.forEach((ln, i) => app.text(ln, tx + 40, yy + i * 16, { size: 14, ui: true, color: '#ff7a7a' }));
+  priceL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: 14, ui: true, color: '#ff7a7a' }));
   const hp = g.mods.find((m) => m.k === 'maxHp');
   if (hp) {
     const label = `MAX HP ${hp.n}`;
@@ -380,6 +386,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 }
 
 function drawInfoPanel(app, R, counts) {
+  if (R.infoH < 60) return;
   const ctx = app.ctx;
   const x = TRAY_X, y = R.infoY, w = TRAY_W, h = R.infoH;
   app.reg('graft-info', x, y, w, h, { group: 'info' });
@@ -410,7 +417,9 @@ function drawAfter(app, c) {
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
   const sub = st.note ? st.note.text : pair ? `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.` : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
-  app.text(sub, x + (pair ? 134 : 196), y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM, maxW: w - (pair ? 150 : 212) });
+  const subX = x + (pair ? 134 : 196), subW = w - (pair ? 150 : 212);
+  const subL = wrapLimit(app, sub, subW, 14, 1, { ui: true });
+  app.text(subL[0], subX, y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM });
 
   // rows
   const lx = x + 16;
@@ -502,7 +511,7 @@ function drawButtons(app, c) {
   const sub = locked ? 'Locked (Ascension 8)' : rerollFree ? 'Free' : `${cost} gold`;
   if (app.button('Reroll offer', TRAY_X, 556, 208, 46, { size: 19, sub, disabled: !can, subColor: poor && !locked ? '#ff9aa6' : undefined }) && can) {
     if (RUN.rerollGraftOffer(run)) {
-      st.offer = run.pending.offer; st.rects = layout(st.offer); st.selCard = null; st.selGraft = null; st.dealT = 0; st.morphT = 1; st.pvKey = '';
+      st.offer = run.pending.offer; st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small); st.selCard = null; st.selGraft = null; st.dealT = 0; st.morphT = 1; st.pvKey = '';
       sfx(app, 'shuffle'); if (!rerollFree) sfx(app, 'coin', { vol: 0.5 });
     } else sfx(app, 'error');
   }

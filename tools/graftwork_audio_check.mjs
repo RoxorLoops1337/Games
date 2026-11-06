@@ -102,9 +102,15 @@ function pageSetup() {
     const A = await import('/graftwork/ui/audio.js?r=' + (++seq));
     const ok = A.initAudio(); if (!ok) throw new Error('initAudio failed');
     const ctx = window.__ctx, pump = () => cbs.forEach(f => f());
-    const at = (t, f) => ctx.suspend(t).then(() => { f(); ctx.resume(); });
+    // suspends must be unique and land on render quanta (128 frames): collect callbacks per frame, one suspend each
+    const sched = new Map();
+    const at = (t, f) => { const fr = Math.round(t * SR / 128) * 128; if (!sched.has(fr)) sched.set(fr, []); sched.get(fr).push(f); };
     const api = { A, at, pump, nodes: () => nodes, cbs };
     setup(api);
+    for (const fr of [...sched.keys()].sort((a, b) => a - b)) {
+      if (fr <= 0 || fr >= window.__len) { sched.get(fr).forEach(f => f()); continue; }
+      ctx.suspend(fr / SR).then(() => { sched.get(fr).forEach(f => f()); ctx.resume(); });
+    }
     const buf = await ctx.startRendering();
     return { buf, api };
   }
@@ -150,7 +156,8 @@ export async function runAudioCheck() {
   try { browser = await chromium.launch(); } catch (e) { srv.close(); return { skipped: 'chromium cannot launch: ' + String(e.message).split('\n')[0] }; }
   try {
     const page = await browser.newPage();
-    page.on('pageerror', e => { console.error('pageerror', e.message); });
+    const errors = [];
+    page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.message); });
     await page.goto(`http://127.0.0.1:${port}/__blank.html`);
     await page.evaluate(pageSetup);
     const { sfx, modes } = await page.evaluate(() => window.__ac.names());
@@ -162,7 +169,7 @@ export async function runAudioCheck() {
     out.stack.spam = await page.evaluate(n => window.__ac.stack(n), Array.from({ length: 30 }, () => 'hitCrush'));
     out.stack.crush5 = await page.evaluate(n => window.__ac.stack(n), ['hitCrush', 'hitHeavy', 'bossIntro', 'overload', 'bossKillThud']);
     out.muted = await page.evaluate(() => window.__ac.muted('boss'));
-    out.modes = modes; out.names = sfx;
+    out.modes = modes; out.names = sfx; out.errors = errors;
     return out;
   } finally { await browser.close(); srv.close(); }
 }

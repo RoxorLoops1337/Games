@@ -45,7 +45,7 @@ export function installTransitions(app) {
   const T = state(app); T.installed = true;
   const orig = app.go;
   app.go = (name, params) => {
-    try { beginWipe(app, app.current, name, params); } catch (e) { T.wipe = null; }
+    try { beginWipe(app, app.current, name, params); } catch (e) { T.wipe = null; T.err = String(e && e.stack); }
     return orig(name, params);
   };
   return T;
