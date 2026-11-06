@@ -126,8 +126,10 @@ export default {
     if (st.menu) drawSkipMenu(app);
     else if (st.mode === 'pick') {
       const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
-      (T('graftpick', 640, AFTER.y + 2, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
-        (strain.strain > 0 && T('strain', 200, 62, { side: 'below', w: 300 })) || T('skipping', TRAY_X + 326, 556, { side: 'above', w: 300 }));
+      // Bubbles sit in the hover-hint box (right, above the buttons): quiet, and it never hides the cards, the table bill or the grafts.
+      const HB = { pos: { x: 826, y: 440 }, w: 430 };
+      (T('graftpick', 520, AFTER.y - 6, HB) || T('boonprice', TRAY_X + 4, 200, HB) || T('budget', 200, 62, HB) ||
+        (strain.strain > 0 && T('strain', 200, 62, HB)) || T('skipping', TRAY_X + 326, 556, HB));
     }
     // click anywhere skips the attach animation
     if (st.mode === 'attach' && app.mouse.released) finishAnim(app);

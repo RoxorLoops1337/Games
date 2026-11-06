@@ -88,7 +88,7 @@ export default {
 
     if (!st) return;
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
-    maybeTip(app, 'rewardspoils', 640, 640, 'Click a reward to claim it. Anything you leave is forfeited when you continue. Then you graft one of your own cards.', { side: 'above', w: 330 });
+    maybeTip(app, 'rewardspoils', 288, 230, 'Click a reward to claim it. Anything you leave is forfeited when you continue. Then you graft one of your own cards.', { pos: { x: 12, y: 330 }, w: 206 });
   },
 };
 
