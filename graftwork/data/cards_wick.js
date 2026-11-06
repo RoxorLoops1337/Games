@@ -10,6 +10,8 @@ const jamHit = (per) => ({ op: 'custom', fn: (A, ctx) => hurt(A, ctx, per * A.c.
 // Burn per Tithed card in the deck
 const tithePyre = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const t = ctx.target && !ctx.target.dead ? ctx.target : A.alive()[0]; const n = Math.min(max, per * A.c.strain.tithed.length); if (t && n > 0) A.status(t, 'burn', n); }, text: `Apply ${per} Burn per Tithed card in your deck (max ${max}).` });
 
+const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
+const EMBER_STATIC = (c) => !!c.seam && (c.seam.counts.ember || 0) > 0 && (c.seam.counts.static || 0) > 0; // the Line holds both schools
 export const CARDS_WICK = [
   { id: 'w_spark', name: 'Spark', hero: 'wick', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'It only needs one.' },
   { id: 'w_snuff', name: 'Snuff', hero: 'wick', type: 'skill', cost: 1, rarity: 'starter', target: 'self', fx: [{ op: 'block', n: 6 }], up: { fx: [{ op: 'block', n: 9 }] }, flavor: 'Fingers wet, flame gone.' },
@@ -30,7 +32,7 @@ export const CARDS_WICK = [
   { id: 'w_quick_flick', name: 'Quick Flick', hero: 'wick', type: 'attack', cost: 0, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 2 }, burnT(2)], up: { fx: [{ op: 'dmg', n: 4 }, burnT(3)] }, flavor: 'Thumbnail, flint, hope.' },
   { id: 'w_blowtorch', name: 'Blowtorch', hero: 'wick', type: 'attack', cost: 2, rarity: 'common', school: 'ember', fx: [{ op: 'dmg', n: 14 }, burnT(3)], up: { fx: [{ op: 'dmg', n: 18 }, burnT(4)] }, flavor: 'Borrowed from the pipe fitter.' },
   { id: 'w_tinder_stack', name: 'Tinder Stack', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', target: 'self', fx: [{ op: 'draw', n: 2 }, { op: 'hp', n: 2 }], up: { fx: [{ op: 'draw', n: 3 }, { op: 'hp', n: 2 }] }, flavor: 'Carried against the chest.' },
-  { id: 'w_spark_gap', name: 'Spark Gap', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'static', fx: [{ op: 'dmg', n: 6 }, charge(2)], up: { fx: [{ op: 'dmg', n: 8 }, charge(3)] }, flavor: 'Two wires and a bad idea.' },
+  { id: 'w_spark_gap', name: 'Spark Gap', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', school: 'static', fx: [{ op: 'dmg', n: 7 }, charge(2)], up: { fx: [{ op: 'dmg', n: 9 }, charge(3)] }, flavor: 'Two wires and a bad idea.' },
 
   // ---------------- uncommon ----------------
   { id: 'w_flashpoint', name: 'Flashpoint', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'ember', fx: [{ op: 'detonate', s: 'burn' }], up: { fx: [{ op: 'detonate', s: 'burn', mul: 1.5 }] }, flavor: 'All the heat, all at once.' },
@@ -57,4 +59,21 @@ export const CARDS_WICK = [
   { id: 'w_bare_wire', name: 'Bare Wire', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'static', fx: [{ op: 'dmg', n: 6 }, charge(2), { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 8 }] }], up: { fx: [{ op: 'dmg', n: 8 }, charge(3), { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 11 }] }] }, flavor: 'Insulation is for the timid.' },
   { id: 'w_overcurrent', name: 'Overcurrent', hero: 'wick', type: 'attack', cost: 2, rarity: 'rare', school: 'static', fx: [{ op: 'dmg', n: 14 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 14, to: 'all' }, charge(3)] }], up: { fx: [{ op: 'dmg', n: 18 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 18, to: 'all' }, charge(4)] }] }, flavor: 'Rated for two seams. Used with three.' },
   { id: 'w_graft_furnace', name: 'Graft Furnace', hero: 'wick', type: 'power', cost: 2, rarity: 'rare', school: 'ember', target: 'self', fx: [{ op: 'status', s: 'smolder', n: { base: 1, per: 'grafts', mul: 0.25, max: 4 }, to: 'self' }], up: { cost: 1, fx: [{ op: 'status', s: 'smolder', n: { base: 1, per: 'grafts', mul: 0.34, max: 5 }, to: 'self' }] }, flavor: 'Fed on other people\'s improvements.' },
+
+  // ---------------- H3: Thread / Temper / Static combos ----------------
+  { id: 'w_static_seam', name: 'Static Seam', hero: 'wick', type: 'attack', cost: 0, rarity: 'uncommon', school: 'static', art: 'bolt', target: 'enemy',
+    fx: [{ op: 'dmg', n: { base: 2, per: 'knots', mul: 2, max: 12 } }, charge(1)], up: { fx: [{ op: 'dmg', n: { base: 3, per: 'knots', mul: 2, max: 14 } }, charge(2)] }, flavor: 'Every knot is a small shock.' },
+  { id: 'w_earth_wire', name: 'Earth Wire', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', school: 'static', art: 'shield', target: 'self',
+    fx: [{ op: 'block', n: 6 }, charge(2), { op: 'if', cond: { src: 'knots', gte: 3 }, ifText: 'the Line holds 3 or more knots', then: [charge(2)] }],
+    up: { fx: [{ op: 'block', n: 8 }, charge(3), { op: 'if', cond: { src: 'knots', gte: 3 }, ifText: 'the Line holds 3 or more knots', then: [charge(2)] }] }, flavor: 'Grounded, mostly.' },
+  { id: 'w_conductive_thread', name: 'Conductive Thread', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'static', art: 'needle', target: 'enemy',
+    fx: [{ op: 'dmg', n: chargeVal(4, 1) }, charge(1)], up: { fx: [{ op: 'dmg', n: chargeVal(6, 1) }, charge(1)] }, flavor: 'It remembers every current.' },
+  { id: 'w_fuse_bridge', name: 'Fuse Bridge', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', school: 'ember', art: 'flame', target: 'enemy',
+    fx: [{ op: 'dmg', n: 4 }, burnT(2), { op: 'if', cond: EMBER_STATIC, ifText: 'the Line holds Ember and Static', then: [{ op: 'dmg', n: 3 }, burnT(4), charge(1)] }],
+    up: { fx: [{ op: 'dmg', n: 6 }, burnT(3), { op: 'if', cond: EMBER_STATIC, ifText: 'the Line holds Ember and Static', then: [{ op: 'dmg', n: 4 }, burnT(5), charge(2)] }] }, flavor: 'Wax and wire, joined at the hip.' },
+  { id: 'w_tempered_wick', name: 'Tempered Wick', hero: 'wick', type: 'skill', cost: 1, rarity: 'common', school: 'ember', art: 'hammerrivet', target: 'enemy',
+    fx: [burnT(3), { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [burnAll(2), { op: 'block', n: 6, to: 'self' }] }],
+    up: { fx: [burnT(4), { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [burnAll(3), { op: 'block', n: 8, to: 'self' }] }] }, flavor: 'Set hard. Burns slow.' },
+  { id: 'w_substation', name: 'Substation', hero: 'wick', type: 'power', cost: 1, rarity: 'rare', school: 'static', art: 'bolt', target: 'self',
+    fx: [{ op: 'status', s: 'dynamo', n: 1, to: 'self' }, charge(2)], up: { fx: [{ op: 'status', s: 'dynamo', n: 2, to: 'self' }, charge(2)] }, flavor: 'A small building with large opinions.' },
 ];

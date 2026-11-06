@@ -1502,7 +1502,7 @@ function drawPlayZone(app) {
 const HERO_SCALE = 1.12;
 // soft ground shadow: a radial gradient squashed into an ellipse (no hard edge), rx = half width
 function groundShadow(ctx, x, y, rx, a) {
-  const ry = Math.max(8, rx * 0.2);
+  const ry = Math.max(10, rx * 0.26);
   ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
   const g = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
   g.addColorStop(0, `rgba(0,0,0,${0.55 * a})`); g.addColorStop(0.6, `rgba(0,0,0,${0.28 * a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1511,7 +1511,7 @@ function groundShadow(ctx, x, y, rx, a) {
 function drawHeroAndHud(app) {
   const ctx = app.ctx, P = S.P;
   // shadow
-  groundShadow(ctx, HERO_X, FOOT_Y + 4, 84, 1);
+  groundShadow(ctx, HERO_X, FOOT_Y - 2, 90, 1.25);
   const lunge = P.attack > 0 ? Math.sin(Math.min(1, P.attack / 2) * Math.PI) : 0;
   const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
   const dying = S.ending && !S.ending.win ? P.dying : 0;
@@ -1545,7 +1545,7 @@ function drawEnemies(app, tgtMode) {
       ctx.restore();
     }
     ctx.save(); ctx.globalAlpha = alpha;
-    groundShadow(ctx, ed.x, EF + 4, Math.max(46, ed.w * 0.62), 1);
+    groundShadow(ctx, ed.x, EF - 2, Math.max(50, ed.w * 0.68), 1.25);
     const stun = ed.stunT > 0 ? Math.sin(S.t * 60) * 4 * ed.stunT : 0;
     const x = ed.x - ed.lunge * 46 * ed.scale + ed.kick * 12 + stun;
     drawEnemyJ(ctx, ed, def, x, EF + drop);

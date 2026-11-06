@@ -5,6 +5,14 @@ const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this car
 // gold per Tithed card in the deck
 const titheGold = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const n = Math.min(max, per * A.c.strain.tithed.length); if (n > 0 && !ctx.replay) A.gold(n); }, text: `Gain ${per} gold per Tithed card in your deck (max ${max}).` });
 
+const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
+const LINE2 = (c) => !!c.seam && Object.keys(c.seam.counts || {}).filter((k) => c.seam.counts[k] > 0).length >= 2; // the Line bridges 2+ schools
+const addKnot = (A) => {
+  const s = A.c.seam; if (!s || s.len < 1 || s.len >= 5) return;
+  const top = Object.keys(s.counts || {}).sort((a, b) => (s.counts[b] || 0) - (s.counts[a] || 0))[0];
+  if (!top) return;
+  s.len += 1; s.counts[top] = (s.counts[top] || 0) + 1;
+};
 export const CARDS_ODILE = [
   // ---- starters ----
   { id: 'o_swipe', name: 'Swipe', hero: 'odile', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 7 }], up: { fx: [{ op: 'dmg', n: 10 }] }, flavor: 'Not stealing. Collecting.' },
@@ -19,7 +27,7 @@ export const CARDS_ODILE = [
   { id: 'o_pocket_change', name: 'Pocket Change', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'hoard', fx: [{ op: 'dmg', n: G(5, 0.1, 12) }], up: { fx: [{ op: 'dmg', n: G(7, 0.1, 15) }] }, flavor: 'It adds up. Quite sharply.' },
   { id: 'o_heavy_purse', name: 'Heavy Purse', hero: 'odile', type: 'attack', cost: 2, rarity: 'common', school: 'hoard', fx: [{ op: 'dmg', n: G(9, 0.1, 18) }], up: { fx: [{ op: 'dmg', n: G(12, 0.1, 22) }] }, flavor: 'Swung by the strap, with regret.' },
   { id: 'o_levy', name: 'Levy', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'gilded', fx: [{ op: 'dmg', n: 7 }, { op: 'gold', n: 2 }], up: { fx: [{ op: 'dmg', n: 9 }, { op: 'gold', n: 4 }] }, flavor: 'A modest fee for the inconvenience.' },
-  { id: 'o_double_bill', name: 'Double Bill', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'echo', fx: [{ op: 'dmg', n: 4, hits: 2 }], up: { fx: [{ op: 'dmg', n: 5, hits: 2 }] }, flavor: 'Itemised, as requested.' },
+  { id: 'o_double_bill', name: 'Double Bill', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'echo', fx: [{ op: 'dmg', n: 5, hits: 2 }], up: { fx: [{ op: 'dmg', n: 6, hits: 2 }] }, flavor: 'Itemised, as requested.' },
   { id: 'o_loose_change', name: 'Loose Change', hero: 'odile', type: 'attack', cost: 0, rarity: 'common', fx: [{ op: 'dmg', n: 3 }, { op: 'gold', n: 1 }], up: { fx: [{ op: 'dmg', n: 5 }, { op: 'gold', n: 2 }] }, flavor: 'Found it. Mine now.' },
   { id: 'o_browse', name: 'Browse', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', school: 'hoard', target: 'self', fx: [{ op: 'draw', n: 3 }, { op: 'discard', n: 1 }], up: { fx: [{ op: 'draw', n: 3 }, { op: 'discard', n: 1 }], cost: 0 }, flavor: 'Just looking. For everything.' },
   { id: 'o_layaway', name: 'Layaway', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', target: 'self', fx: [{ op: 'block', n: 8 }], flags: { retain: true }, up: { fx: [{ op: 'block', n: 11 }] }, flavor: 'Held for you. Indefinitely.' },
@@ -58,4 +66,21 @@ export const CARDS_ODILE = [
   { id: 'o_heirloom', name: 'Heirloom', hero: 'odile', type: 'attack', cost: 1, rarity: 'uncommon', flags: { retain: true }, fx: [{ op: 'dmg', n: { base: 6, per: 'cardGrafts', mul: 5 } }], up: { fx: [{ op: 'dmg', n: { base: 8, per: 'cardGrafts', mul: 6 } }] }, flavor: 'Passed down. Added to. Never sold.' },
   { id: 'o_overdraft', name: 'Overdraft', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [{ op: 'gold', n: { base: 0, per: 'strain', mul: 4, max: 20 } }, { op: 'block', n: { base: 4, per: 'strain', mul: 3, max: 16 } }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: { base: 3, per: 'strain', mul: 5, max: 25 } }, { op: 'block', n: { base: 6, per: 'strain', mul: 4, max: 20 } }] }, flavor: 'Strain is only debt that has not been named.' },
   { id: 'o_triple_threat', name: 'Triple Threat', hero: 'odile', type: 'attack', cost: 2, rarity: 'rare', school: 'echo', fx: [{ op: 'dmg', n: 12 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 12 }, { op: 'gold', n: 10 }] }], up: { fx: [{ op: 'dmg', n: 16 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 16 }, { op: 'gold', n: 15 }] }] }, flavor: 'Three seams. Two encores. One invoice.' },
+
+  // ---- H3: Thread / Temper / Echo combos ----
+  { id: 'o_reprint', name: 'Reprint', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', school: 'echo', art: 'spiral', target: 'self',
+    fx: [{ op: 'block', n: { base: 3, per: 'knots', mul: 2, max: 11 } }, fxOn('echo', 1)], up: { fx: [{ op: 'block', n: { base: 4, per: 'knots', mul: 2, max: 13 } }, fxOn('echo', 1)] }, flavor: 'Same plate, fresh ink, higher fee.' },
+  { id: 'o_choir_loft', name: 'Choir Loft', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'echo', art: 'bell', target: 'enemy',
+    fx: [{ op: 'dmg', n: 4, hits: { base: 2, per: 'knots', mul: 0.5, max: 4 } }], up: { fx: [{ op: 'dmg', n: 5, hits: { base: 2, per: 'knots', mul: 0.5, max: 4 } }] }, flavor: 'Sung in rounds, billed in rounds.' },
+  { id: 'o_mirror_sale', name: 'Mirror Sale', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'echo', art: 'eye', target: 'self', flags: { exhaust: true },
+    fx: [fxOn('echo', 1), { op: 'custom', fn: addKnot, text: 'Add a knot to the Line\'s top school.' }], up: { cost: 0, fx: [fxOn('echo', 1), { op: 'custom', fn: addKnot, text: 'Add a knot to the Line\'s top school.' }] }, flavor: 'Every item sold twice, once in reverse.' },
+  { id: 'o_cross_listing', name: 'Cross-Listing', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', school: 'hoard', art: 'ledger', target: 'self',
+    fx: [{ op: 'block', n: 5 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'draw', n: 1 }, { op: 'gold', n: 3 }] }],
+    up: { fx: [{ op: 'block', n: 7 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'draw', n: 1 }, { op: 'gold', n: 4 }] }] }, flavor: 'Listed under two headings, owed under both.' },
+  { id: 'o_hardened_purse', name: 'Hardened Purse', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', school: 'gilded', art: 'coins', target: 'self',
+    fx: [{ op: 'block', n: 6 }, { op: 'gold', n: 3 }, { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [fxOn('gilt', 3)] }],
+    up: { fx: [{ op: 'block', n: 8 }, { op: 'gold', n: 4 }, { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [fxOn('gilt', 4)] }] }, flavor: 'Beaten flat. Holds more that way.' },
+  { id: 'o_overbooked', name: 'Overbooked', hero: 'odile', type: 'attack', cost: 2, rarity: 'rare', school: 'echo', art: 'chain', target: 'enemy',
+    fx: [{ op: 'dmg', n: 10 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 6 }, fxOn('echo', 1)] }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [fxOn('echo', 1)] }],
+    up: { fx: [{ op: 'dmg', n: 13 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 8 }, fxOn('echo', 1)] }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [fxOn('echo', 1)] }] }, flavor: 'Three of you were booked into one seat.' },
 ];

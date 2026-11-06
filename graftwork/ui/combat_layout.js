@@ -60,8 +60,8 @@ export function enemySlots(defs) {
   const regionW = ENEMY_REGION.x1 - ENEMY_REGION.x0;
   const maxH = Math.max(...bs.map((b) => b.h));
   // Art height budget: a lone enemy or a duo stands big (bosses and elites bigger still), 3+ keep the clear 195 lane.
-  const tallest = Math.max(...defs.map((d) => (d.kind === 'boss' ? 1.06 : d.kind === 'elite' ? 1.04 : 1) * 1));
-  const budget = n === 1 ? 222 : n === 2 ? 212 : n === 3 ? 200 : ENEMY_ART_H;
+  const tallest = Math.max(...defs.map((d) => (d.kind === 'boss' ? 0.94 : d.kind === 'elite' ? 1 : 1) * 1));
+  const budget = n === 1 ? 212 : n === 2 ? 206 : n === 3 ? 200 : ENEMY_ART_H;
   let sc = Math.min(2.1, (budget * tallest) / maxH);
   const widths = (k) => bs.map((b) => Math.max(ENEMY_SLOT_MIN, b.w * k + 34));
   const total = (k) => widths(k).reduce((a, w) => a + w, 0) + gap * (n - 1);
