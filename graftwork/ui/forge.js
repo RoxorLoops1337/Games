@@ -102,8 +102,8 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t); g.globalAlpha = 1;
   app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
-  app.text(o.short || o.desc, x + OW / 2, y + 196, { size: 15, ui: true, align: 'center', maxW: OW - 34, lineH: 19, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
-  if (disabledWhy) app.text(disabledWhy, x + OW / 2, y + OH - 64, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true });
+  app.text(o.short || o.desc, x + OW / 2, y + 196, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
+  if (disabledWhy) app.text(disabledWhy, x + OW / 2, y + OH - 54, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true });
   else if (!usedUp) { const d = detailFor(run, o.id); app.text(d.t, x + OW / 2, y + OH - 46, { size: 15, ui: true, bold: true, align: 'center', maxW: OW - 24, color: d.c }); }
   g.restore();
 }

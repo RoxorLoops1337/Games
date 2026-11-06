@@ -18,6 +18,8 @@ export const TIP_TEXTS = {
   forge: 'The Forge heals you, strips a graft, upgrades a card or Expands your Budget. One service per visit.',
   shop: 'Cards, grafts, relics and potions for gold. Removing a card is the cheapest way to improve your deck.',
   resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip at the bottom of the deck view tracks it.',
+  thread_chain: 'Two cards of one school: you tied a knot. Keep sharing a school to grow the Line, up to 5 knots.',
+  thread_cut: 'A card of another school cut the Line and cashed it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
   jam: 'Backfire jams grafted cards in your opening hand. A jammed card costs 1 more this turn.',
 };
 
@@ -80,3 +82,20 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   }
   return true;
 }
+
+// The Thread lesson: two one-time callouts driven by the seam events (ui/seam_ui.js calls threadLesson from onSeamEvent).
+// 'thread_chain' waits for the first extend that makes a Line of 2+; 'thread_cut' for the first cut that pays.
+// Both are stored in meta.tips like every other tip, so they show once, and a click skips them for good.
+// A player who already dismissed the old single 'thread' tip is treated as having seen the chain lesson.
+export const THREAD_LESSONS = ['thread_chain', 'thread_cut'];
+export function threadLesson(app, ev) {
+  const meta = app.shared && app.shared.meta;
+  if (!meta || !tipsActive(meta)) return null;
+  let key = null;
+  if (ev.t === 'seamExtend' && (ev.len | 0) >= 2) key = 'thread_chain';
+  else if (ev.t === 'seamCut' && (ev.paid | 0) > 0) key = 'thread_cut';
+  if (!key || tipSeen(meta, key)) return null;
+  if (key === 'thread_chain' && tipSeen(meta, 'thread')) return null;
+  return key;
+}
+export function skipThreadLesson(app) { for (const k of THREAD_LESSONS) dismissTip(app, k); }

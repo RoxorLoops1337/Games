@@ -37,9 +37,14 @@ export const KEYWORDS = {
   Innate: K('#7fcf8a', 'hex', 'Starts in your opening hand.'),
   Ethereal: K('#a79bb5', 'hex', 'Exhausts if it is still in your hand at end of turn.'),
   Unplayable: K('#9aa0a6', 'cross', 'Cannot be played.'),
-  Thread: K('#e8dcc4', 'diamond', 'Cards of one school played in a row extend the Thread. Cutting it cashes the chain.'),
-  Knot: K('#e8dcc4', 'circle', 'One link in the Thread. Some cards scale with the knots you hold.'),
-  Cut: K('#e8dcc4', 'tri', 'Ends the Thread and pays out its chain.'),
+  Thread: K('#e8dcc4', 'diamond', 'Your hand is a thread. Cards that share a school extend the Line. Break the Line to cash it in.'),
+  Line: K('#e8dcc4', 'diamond', 'The chain of cards played this turn that share a school. Max 5 knots. It cashes in when cut or at turn end.'),
+  Knot: K('#e8dcc4', 'circle', 'One link in the Line. Some cards and grafts scale per knot.'),
+  Stitch: K('#e8dcc4', 'circle', 'What a cut pays out: knots minus 1, up to 4. Each stitch pays in the Line\'s top school.'),
+  Cut: K('#e8dcc4', 'tri', 'A card of a new school ends the Line and pays its stitches. A new Line starts at 1 knot.'),
+  Slack: K('#b9b09a', 'square', 'A card with no school. It changes nothing: the Line neither grows nor breaks.'),
+  Tied: K('#e8dcc4', 'hex', 'A Tied Line carries over to the next turn at full value. A Tempered card is Tied: it acts as Slack and never cuts.'),
+  Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed. It acts as Slack this turn.'),
   Weight: K('#d6c7a6', 'square', 'What a graft counts against your Budget (1 to 3).'),
   Budget: K('#d6c7a6', 'square', 'How much graft Weight the deck carries without Strain.'),
   Resonance: K('#7fd1e0', 'star', 'A bonus for playing cards of matching schools together.'),
@@ -47,7 +52,22 @@ export const KEYWORDS = {
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),
 };
-const NAMES = Object.keys(KEYWORDS);
+// Every status (player afflictions included) is a glossary word too, so card text and tooltips can name it.
+export const THREAD_TERMS = ['Thread', 'Line', 'Knot', 'Stitch', 'Cut', 'Slack', 'Tied', 'Frayed'];
+for (const d of Object.values(STATUSES)) {
+  if (!d || !d.name || KEYWORDS[d.name]) continue;
+  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
+  KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', text);
+}
+// glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
+export function glossaryEntry(term) {
+  const name = Object.keys(KEYWORDS).find((n) => n.toLowerCase() === String(term).toLowerCase());
+  if (name) { const k = KEYWORDS[name]; return { title: name, text: k.text, color: k.color, glyph: k.glyph }; }
+  const d = STATUSES[term]; if (!d) return null;
+  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
+  return { title: d.name, text, color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
+}
+const NAMES = Object.keys(KEYWORDS).sort((a, b) => b.length - a.length);
 const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed)?\\b', 'g');
 
 export function keywordsIn(lines) {

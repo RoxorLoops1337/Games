@@ -25,6 +25,7 @@ function runOwns(run, kind, id) {
   return false;
 }
 export function isSeen(app, kind, id) {
+  if (kind === 'statuses') return true; // statuses are rules, not secrets: every one has a readable glossary entry
   const m = app.shared.meta, s = m && m.seen && m.seen[kind];
   return !!((s && s[id]) || runOwns(app.shared.run, kind, id));
 }
@@ -154,7 +155,9 @@ const RULES = [
   ['Weight and Budget', 'Each graft weighs 1 to 3. Your Budget, 6 to start, is the Weight your deck carries for free.'],
   ['Strain Tithes your plain cards', 'Weight over Budget is Strain. Each point Tithes a plain card: it fights at 75 percent. With no plain card left, grafted cards jam.'],
   ['Overload and Shatter', 'A card holds 2 grafts. The 3rd Overloads it: +1 Weight, numbers x1.5, and a 25 percent chance to Shatter on its first play each combat.'],
-  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],  ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school cuts it and cashes the knots in. Cut a longer Line for more.'],
+  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
+  ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school Cuts it and pays one Stitch per knot after the first. A longer Line pays more.'],
+  ['Slack, Tied, Frayed', 'Slack: a card with no school changes nothing. Tied: a Tempered card never cuts, and a Tied Line carries over a turn. Frayed: a jammed card acts as Slack.'],
 ];
 function ruleArt(app, i, cx, cy, w, h) {
   const ctx = app.ctx, t = app.t;
@@ -183,7 +186,7 @@ function ruleArt(app, i, cx, cy, w, h) {
       gaugeCells(app, cx - w / 2 + 28, cy - 44, { budget: 6, weight: 4, strain: 0 }, { cell: 22, maxW: 300 });
       app.text('4 of 6', cx - w / 2 + 28 + 175, cy - 40, { size: 13, ui: true, color: COL.good });
       gaugeCells(app, cx - w / 2 + 28, cy + 8, { budget: 6, weight: 8, strain: 2 }, { cell: 22, maxW: 300 });
-      app.text('8 of 6', cx - w / 2 + 28 + 230, cy + 12, { size: 13, ui: true, color: COL.bad });
+      app.text('8 of 6', cx - w / 2 + 28 + 175, cy - 14, { size: 13, ui: true, color: COL.bad });
       break;
     }
     case 3: {
@@ -210,6 +213,13 @@ function ruleArt(app, i, cx, cy, w, h) {
       ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 72, cy); ctx.lineTo(cx + 48, cy); ctx.stroke();
       ['ember', 'ember', 'echo'].forEach((sc, k) => { const bx = cx - 60 + k * 40; ctx.beginPath(); ctx.arc(bx, cy, 15, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 3.4; ctx.strokeStyle = '#C9A227'; ctx.stroke(); drawSchoolGlyph(ctx, sc, bx, cy, 10, (SCHOOLS[sc] || {}).color); });
       drawSeamBadge(app, 'cut', cx + 78, cy, 0.9, 'echo');
+      break;
+    }
+    case 7: { // Slack, Tied, Frayed: a loose thread, a locked knot, a fraying end
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 80, cy); ctx.lineTo(cx + 80, cy); ctx.stroke();
+      ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.beginPath(); ctx.arc(cx - 56, cy, 16, 0, 6.283); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#C9A227'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 40, cy); for (let k = 1; k <= 5; k++) ctx.lineTo(cx + 40 + k * 7, cy + (k % 2 ? -7 : 7) * Math.sin(t * 3 + k)); ctx.strokeStyle = '#d8a066'; ctx.lineWidth = 2; ctx.stroke();
       break;
     }
     default: {
@@ -392,7 +402,7 @@ export default {
       ctx.restore();
       ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 174, 14, 0, 6.283); ctx.fill(); ctx.restore();
       app.text(String(i + 1), cx + 26, cy + 174 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });
-      app.text(title, cx + 48, cy + 162, { size: 18, bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
+      app.text(title, cx + 48, cy + 162, { size: title.length > 30 ? 15 : 18, bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
       app.text(text, cx + 16, cy + 192, { size: 14, ui: true, maxW: cw - 32, lineH: 17, color: COL.vellum });
     });
   },

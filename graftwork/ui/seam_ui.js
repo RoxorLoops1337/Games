@@ -12,7 +12,7 @@ import { drawSchoolGlyph } from '../art/cards.js';
 import { schoolsOf } from '../engine/cards.js';
 import { specOf } from '../engine/combat.js';
 import * as SEAM from '../engine/seam.js';
-import { maybeTip } from './tutorial.js';
+import { maybeTip, threadLesson, tipSeen, TIP_TEXTS } from './tutorial.js';
 import * as L from './combat_layout.js';
 
 const BRASS = '#C9A227', BRASS_D = '#7a5f16', BRASS_L = '#ecd27a', INK = '#0E0E0E', PAPER = '#f3ead4';
@@ -38,7 +38,7 @@ const payLine = (pay) => pay.map((p) => payShort(p.school, p.stitches)).join(' a
 
 // ---------------------------------------------------------------- module state (one combat at a time)
 const M = { lastSchool: null, c: null, rect: null, beads: [], fly: [], sigs: [], puffs: [], nx: null, nxT: 0, pullT: -9, snipT: -9, snipX: 0, payIdx: 0, fx: null };
-function reset(c) { M.c = c; M.beads = []; M.fly = []; M.sigs = []; M.puffs = []; M.nx = null; M.pullT = -9; M.snipT = -9; M.payIdx = 0; }
+function reset(c) { M.lesson = null; M.c = c; M.beads = []; M.fly = []; M.sigs = []; M.puffs = []; M.nx = null; M.pullT = -9; M.snipT = -9; M.payIdx = 0; }
 const reduced = (app) => !!((app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion) || FX_OPTS.reduced);
 const lx0 = (r) => r.x + LEFT_W;
 const lx1 = (r) => r.x + r.w - CHIP_W - 10;
@@ -390,6 +390,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
   if (c && M.c !== c) reset(c);
   M.fx = fx || M.fx;
   const now = app.t, red = reduced(app), rect = M.rect || L.SEAM, cy = rect.y + rect.h / 2;
+  { const lesson = threadLesson(app, ev); if (lesson && !(lesson === 'thread_chain' && M.lesson === 'thread_cut')) M.lesson = lesson; }
   switch (ev.t) {
     case 'seamExtend': {
       if (ev.start) M.beads.length = 0;
@@ -521,7 +522,12 @@ function signature(app, school, ev, o) {
 
 // ---------------------------------------------------------------- teaching
 export function seamTip(app, c, rect) {
-  if (!c || !c.seam || c.seam.len < 1) return false;
+  const key = M.lesson;
+  if (!key) return false;
+  const meta = app.shared && app.shared.meta;
+  if (tipSeen(meta, key)) { M.lesson = null; return false; }
   rect = rect || L.SEAM;
-  return maybeTip(app, 'thread', rect.x + rect.w / 2, rect.y, 'Your hand is a seam. Cards that share a school tie knots into the Line. A card of another school cuts it and cashes the knots in. Share a school with the last card to tie a knot. Break the line to cash it in.', { side: 'above', w: 360 });
+  const shown = maybeTip(app, key, rect.x + rect.w / 2, rect.y, TIP_TEXTS[key], { side: 'above', w: 360 });
+  if (!shown && tipSeen(meta, key)) M.lesson = null; // clicked away this frame
+  return shown;
 }
