@@ -51,8 +51,8 @@ export const GRAFTS_WEIRD = [
 
   // ---------- common ----------
   { id: 'g_ratchet_gear', name: 'Ratchet Gear', school: 'rust', weight: 1, tier: 'weird', rarity: 'common', types: AB, ok: dmgOrBlock,
-    boon: 'Each time this is discarded unplayed, it gains +6 numbers for the rest of the combat.', price: 'Costs 1 more.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'custom', hooks: {
+    boon: 'Each time this is discarded unplayed, it gains +6 numbers for the rest of the combat.', price: 'Its numbers are 10% lower.',
+    mods: [{ k: 'pct', pct: -10 }, { k: 'custom', hooks: {
       onDiscard(A, { card }) { card.bonus = Math.min(36, (card.bonus || 0) + 6); },
       onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.bonus || 0); },
     } }] },

@@ -127,8 +127,8 @@ export const GRAFTS_EXTRA = [
       if (junk.length) A.draw(Math.min(3, junk.length));
     })] }),
   G({ id: 'g_corroded_lattice', name: 'Corroded Lattice', school: 'rust', weight: 3, tier: 'greedy', rarity: 'rare', types: AB, ok: (s) => dmgOrBlock(s) && num(s),
-    boon: '+5 numbers per Rust graft in your deck (max 25).', price: 'Costs 1 more. Shuffle 1 Clot into your deck each combat.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'junk', card: 'j_clot', n: 1, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(25, 5 * stack(A, 'rust'))))] }),
+    boon: '+5 numbers per Rust graft in your deck (max 25).', price: 'Shuffle 1 Clot into your deck each combat.',
+    mods: [{ k: 'junk', card: 'j_clot', n: 1, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(25, 5 * stack(A, 'rust'))))] }),
 
   // ================= STATIC =================
   G({ id: 'g_phase_lock', name: 'Phase Lock', school: 'static', weight: 1, tier: 'safe', rarity: 'common', types: AB,
