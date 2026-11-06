@@ -93,7 +93,7 @@ window.__ready = true;
       const buf = await readFile(p); rs.setHeader('content-type', p.endsWith('.js') || p.endsWith('.mjs') ? 'text/javascript' : 'text/plain'); rs.end(buf);
     } catch (e) { rs.statusCode = 404; rs.end('nf'); }
   });
-  await new Promise((r) => server.listen(PORT, r));
+  const port = await new Promise((r) => { server.once('error', () => server.listen(0, () => r(server.address().port))); server.listen(PORT, () => r(PORT)); });
   let browser = null;
   try {
     browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -102,7 +102,7 @@ window.__ready = true;
     try {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
       const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(`http://localhost:${PORT}/__post_test.html`);
+      await page.goto(`http://localhost:${port}/__post_test.html`);
       await page.waitForFunction(() => window.__ready === true, null, { timeout: 15000 });
       const info = await page.evaluate(() => { window.T.app.tick(1 / 60); return window.T.glInfo(); });
       if (!info || !info.on) { console.log('post: WebGL2 unavailable in this chromium, skipping rendering checks'); }

@@ -69,7 +69,7 @@ const MATRON_P1 = ['scar', 'rap', 'smother'];
 
 export const ENEMIES_1 = [
   // ================= NORMALS =================
-  { id: 'bedpan_slime', name: 'Bedpan Slime', act: 1, kind: 'normal', start: { strength: 2 }, hp: [38, 42],
+  { id: 'bedpan_slime', name: 'Bedpan Slime', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 42],
     pattern: ['slap', 'slap', 'goo'],
     moves: { slap: { name: 'Slap', fx: [dmg(8)] }, goo: { name: 'Goo', fx: [debuff('weak', 1), debuff('poison', 1), blk(6)] } },
     on: { damaged: (A, e) => { if (e.hp > 0 && e.hp <= e.maxHp / 2) split(A, e); }, death: (A, e) => split(A, e) },
@@ -79,7 +79,7 @@ export const ENEMIES_1 = [
     moves: { nip: { name: 'Nip', fx: [dmg(4)] }, dribble: { name: 'Dribble', fx: [blk(4), dmg(2)] } },
     art: { body: 'dome', color: '#a8d27f', scale: 0.55, notes: 'Small pale green dome, half the size of the parent.' } },
 
-  { id: 'orderly', name: 'Orderly', act: 1, kind: 'normal', start: { strength: 2 }, hp: [40, 44],
+  { id: 'orderly', name: 'Orderly', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['clipboard', 'stamp', 'stamp'],
     moves: { clipboard: { name: 'Clipboard', fx: [paperwork(2), blk(5)] }, stamp: { name: 'Stamp (+4 if 3+ junk)', note: 'Hits for 15 instead of 11 while you hold 3 or more junk cards in your deck.', fx: [dmg({ base: 3, per: 'junk', mul: 4, min: 11, max: 15 })] } },
     art: { body: 'tall', color: '#9fb8c9', notes: 'Tall narrow rect in scrubs, small round head, a rect clipboard held in one polyline arm.' } },
@@ -102,7 +102,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'stilts', color: '#c9b48a', notes: 'Triangle torso balanced on two long thin polyline crutch legs, ending in small round feet. Leans forward.' } },
 
-  { id: 'fever_moth', name: 'Fever Moth', act: 1, kind: 'normal', start: { strength: 2 }, hp: [38, 40],
+  { id: 'fever_moth', name: 'Fever Moth', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 40],
     pattern: ['flutter', 'flutter', 'dive'],
     moves: { flutter: { name: 'Flutter', fx: [dmg(5), debuff('burn', 2)] }, dive: { name: 'Dive', fx: [dmg(10), debuff('brittle', 1)] } },
     art: { body: 'wings', color: '#e8a24a', notes: 'Small oval body, two large oval wings with glowing orange spots, short feeler polylines. Hovers.' } },
@@ -120,7 +120,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'capsules', color: '#d96a8a', count: 5, notes: 'Five two-tone capsule shapes (rounded rects) orbiting each other in a loose cluster, tiny dot eyes on each.' } },
 
-  { id: 'iron_lung', name: 'Iron Lung', act: 1, kind: 'normal', start: { strength: 2 }, hp: [40, 44],
+  { id: 'iron_lung', name: 'Iron Lung', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['wheeze', 'inhale', 'blow'],
     moves: {
       wheeze: { name: 'Wheeze', fx: [dmg(8)] },
@@ -130,7 +130,7 @@ export const ENEMIES_1 = [
     on: { afterMove: (A, e, m) => { if (m === 'blow') A.setStatus(e, 'charging', 0); } },
     art: { body: 'bellows', color: '#8da0a8', notes: 'Large circle with ribbed ring lines like a bellows, a hose polyline looping out, expands and contracts when charging.' } },
 
-  { id: 'stitch_rat', name: 'Stitch Rat', act: 1, kind: 'normal', start: { strength: 2 }, hp: [36, 40],
+  { id: 'stitch_rat', name: 'Stitch Rat', act: 1, kind: 'normal', start: { strength: 1 }, hp: [36, 40],
     opening: ['snip'], pattern: ['bite', 'bite', 'snip'],
     moves: {
       snip: { name: 'Snip', fx: [dmg(5), debuff('unpicked', 1), { op: 'custom', fn: stealGraft, text: 'Steals the grafts of one card until it dies.', intent: 'debuff' }] },

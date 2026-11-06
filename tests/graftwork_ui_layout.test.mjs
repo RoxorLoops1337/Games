@@ -157,6 +157,21 @@ for (const scale of [100, 125, 150]) for (const four of [false, true]) {
   hoverAt(h, 300, 280); look(h, 2, tag + '/hovercard'); hoverAt(h, 1000, 150); look(h, 2, tag + '/hoverpatch');
   key(h.app, 'Escape'); look(h, 10, tag + '/skip'); key(h.app, '1'); look(h, 5, tag + '/skip1');
 }
+
+// ---- SHOP -----------------------------------------------------------------------------------------------------------
+const addCards = (run, n) => { const ids = Object.keys(CARDS).filter((id) => CARDS[id].type !== 'junk' && (CARDS[id].hero === run.hero || CARDS[id].hero === 'any')); for (let i = 0; i < n; i++) RUN.R.addCard(run, ids[i % ids.length]); };
+for (const scale of [100, 125, 150]) for (const hero of ['marrow', 'wick']) {
+  const h = await make({ scale, hero, seed: 'shop' });
+  flowFor(h); h.run.gold = 9999; h.run.act = 3; graftHeavy(h.run, 4);
+  h.run.phase = 'shop'; h.run.pending = RUN.makeShop(h.run); h.run.potions = [];
+  go(h, 'shop');
+  const tag = `shop/s${scale}/${hero}`;
+  look(h, 60, tag);
+  for (const [x, y] of [[347, 190], [545, 190], [780, 392], [380, 540], [1000, 400], [1000, 520]]) { hoverAt(h, x, y); look(h, 3, tag + '/hover'); }
+  h.app.mouse.x = 0; h.app.mouse.y = 0;
+  click(h.app, 270 + 100, 400); look(h, 30, tag + '/graftpicker'); key(h.app, 'Escape'); look(h, 30, tag + '/back');
+  if (scale === 100) { addCards(h.run, 25); click(h.app, 400, 645); look(h, 30, tag + '/removepicker'); h.app.mouse.wheel = 400; look(h, 10, tag + '/removepicker2'); key(h.app, 'Escape'); }
+}
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft', 'shop']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad);
