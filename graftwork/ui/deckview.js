@@ -3,6 +3,7 @@
 // Pick mode: the clicked inst goes to opts.onPick AFTER the view has closed (so the caller can flow.route() cleanly).
 // Also exports reusable helpers: scrollArea, cardGrid, gaugeCells, resonanceStrip, pill.
 import { tscale } from './graft_parts.js';
+import { cardGlossTip } from './tooltips.js';
 import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
@@ -10,7 +11,6 @@ import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMA
 import { resonanceOf } from '../engine/resonance.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
 import { lnw } from '../art/linework.js';
-import { cardGlossTip } from './tooltips.js';
 
 const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 const plural = (n, w) => (n === 1 ? w : w + 's');

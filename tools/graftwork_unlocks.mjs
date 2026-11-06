@@ -11,18 +11,19 @@ import './graftwork_strong.mjs'; // adds POLICIES.strong
 import { makeRng } from '../graftwork/engine/rng.js';
 import { TOTAL_COST, UP } from '../graftwork/data/unlocks.js';
 
-const TIERS = { strong: POLICIES.strong, careful: POLICIES.careful, sloppy: POLICIES.none };
+// The bots all play far better than real beginners, so skill is emulated by handicap: ascension level (harder game) per tier.
+const TIERS = { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 8] };
 const HEROES = ['marrow', 'wick', 'odile'];
 const MAX_RUNS = 220;
 
 export function buildPools(perHero = 40, quiet = false) {
   const pools = {};
-  for (const [tier, pol] of Object.entries(TIERS)) {
+  for (const [tier, [pol, asc]] of Object.entries(TIERS)) {
     pools[tier] = {};
     for (const h of HEROES) {
       const arr = [];
       for (let i = 0; i < perHero; i++) {
-        const r = playRun(h, `unl-${tier}-${h}-${i}`, pol, 0, { unlocked: process.env.GW_POOL || 'all' });
+        const r = playRun(h, `unl-${tier}-${h}-${i}`, pol, asc, { unlocked: process.env.GW_POOL || 'all' });
         arr.push({ json: RUN.serializeRun(r.run), outcome: r.outcome });
       }
       pools[tier][h] = arr;

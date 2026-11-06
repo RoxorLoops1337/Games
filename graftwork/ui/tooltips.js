@@ -129,7 +129,7 @@ export function keywordsIn(lines) {
 // 'Gain 4 Gilt' resolves with the live number (4): "Gain 4 gold at the end of combat." Most important first: statuses and rules words,
 // then schools, then card types and basics (Block, Attack...). Each term once.
 const BASIC = new Set(['Block', 'Attack', 'Skill', 'Power', 'Junk', 'Energy']);
-const TAGS = new Set(['Safe', 'Greedy', 'Weird', 'After']);
+const TAGS = new Set(['Safe', 'Greedy', 'Weird', 'After', 'Weight', 'Budget']);
 const rank = (name) => (BASIC.has(name) ? 3 : SCHOOLS_BY_NAME[name] ? 2 : TAGS.has(name) ? 1 : 0);
 const SCHOOLS_BY_NAME = {}; for (const sc of Object.values(SCHOOLS)) SCHOOLS_BY_NAME[sc.name] = sc;
 export function defineTerm(name, n) {
@@ -355,12 +355,13 @@ function measurePanel(app, sections) {
 // such as a graft's Boon and Price). Words already titled in the tip are not repeated. tip.o.glossOnly: the glossary IS the tip.
 const GLOSS_MAX = 3;
 function sectionsText(stack) { const out = []; for (const p of stack) for (const s of p) { out.push(s.text || ''); for (const w of s.why || []) out.push(w); } return out; }
-function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) sk.add(h.name); return sk; }
+function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
 function glossPanel(stack, tip) {
   const o = tip.o || tip;
-  const gl = glossaryFor([sectionsText(stack), o.gloss || []], { max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
+  const gl = glossaryFor([o.gloss || [], sectionsText(stack)], { max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
   return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
 }
+export { toStack as tipSections }; // tests read the panels a tip would draw
 function toStack(tip) {
   const o = tip.o || tip;
   if (o.glossOnly && !tip.stack) {
