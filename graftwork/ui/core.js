@@ -85,7 +85,7 @@ export function createApp(canvas, opts = {}) {
   let pan = null;
   const isTouchEv = (e) => !!e.pointerType && e.pointerType !== 'mouse';
   canvas.addEventListener('pointermove', (e) => {
-    if (e.isPrimary === false) return;
+    if (e.isPrimary === false) { if (app.mouse.second) app.mouse.p2 = toLogical(e); return; } // the second finger (pinch zoom on the Ward map)
     const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y;
     if (pan && app.mouse.down && isTouchEv(e)) {
       if (!pan.moved && Math.abs(p.y - pan.y0) > PAN_START) { pan.moved = true; pan.last = pan.y0 + Math.sign(p.y - pan.y0) * PAN_START; }
@@ -93,13 +93,13 @@ export function createApp(canvas, opts = {}) {
     }
   });
   canvas.addEventListener('pointerdown', (e) => {
-    if (e.isPrimary === false) { app.mouse.second = true; return; }
+    if (e.isPrimary === false) { app.mouse.second = true; app.mouse.p2 = toLogical(e); return; }
     const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = true; app.mouse.pressed = true; app.mouse.button = e.button;
     app.mouse.touch = isTouchEv(e); pan = { y0: p.y, last: p.y, moved: false };
     canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointerup', (e) => {
-    if (e.isPrimary === false) return;
+    if (e.isPrimary === false) { app.mouse.p2 = null; return; }
     const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false;
     if (!(pan && pan.moved && app.touchPan !== false)) app.mouse.released = true; // a scroll gesture ends without a click
     app.mouse.touchUp = isTouchEv(e); pan = null;
