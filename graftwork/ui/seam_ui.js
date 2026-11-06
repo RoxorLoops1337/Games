@@ -247,9 +247,9 @@ export function drawSeamRail(app, c, rect, t, focus, idle) {
 
   // teaching text when the Line is empty or short
   if (!pv) {
-    if (s.len === 0) fitText(app, 'Share a school with the last card to tie a knot.', a0 + 66, cy - 8, 14, { maxW: a1 - a0 - 70, color: 'rgba(232,220,196,.8)' });
+    if (s.len === 0) fitText(app, 'Share a school with the last card to tie a knot.', a0 + 66, cy - 8, 14, { maxW: a1 - a0 - 70, color: 'rgba(232,220,196,.9)' });
     else if (s.len === 1) {
-      fitText(app, 'Play a card with the same school to tie a knot.', lastX + 96, cy - 8, 13, { maxW: a1 - lastX - 96, color: 'rgba(232,220,196,.7)' });
+      fitText(app, 'Play a card with the same school to tie a knot.', lastX + 96, cy - 8, 14, { maxW: a1 - lastX - 96, color: 'rgba(232,220,196,.88)' });
     }
   }
   ctx.restore();

@@ -770,7 +770,9 @@ function dragPt() { const m = APP.mouse, dr = S.drag; return dr && dr.touch ? { 
 function stepDrag(dc, dr, d, m, rm) {
   dr.t += d;
   dr.lift = Math.min(1, dr.lift + d / (rm ? 0.016 : 0.09));
-  dc.s = lerp(dr.s0, 0.95, EASE.out(dr.lift));
+  // while aiming at a target the card shrinks so it never hides the enemy it is aimed at (name, intent, HP)
+  dr.k = (dr.k || 0) + ((dr.aim ? 1 : 0) - (dr.k || 0)) * (rm ? 1 : 1 - Math.exp(-d * 16));
+  dc.s = lerp(dr.s0, 0.95, EASE.out(dr.lift)) * (1 - 0.36 * dr.k);
   const tp = dragTarget(m, dr);
   const K = rm ? 1200 : 520, C = rm ? 69.3 : 45.6;
   const steps = clamp(Math.ceil(d / 0.004), 1, 12), h = d / steps;
