@@ -263,16 +263,19 @@ export default {
     const k = 1 - Math.pow(1 - this.anim, 3);
     ctx.save(); ctx.fillStyle = `rgba(6,4,3,${0.82 * k})`; ctx.fillRect(0, 0, W, H); ctx.restore();
     ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * 14);
+    app.reg('codex-panel', 14, 10, W - 28, H - 20, { overlay: true });
     app.panel(14, 10, W - 28, H - 20, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
     app.text('Codex', 36, 18, { size: 28, bold: true, color: COL.lamp });
     app.text('Everything you have met. The rest waits in silhouette.', 150, 30, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)' });
-    if (app.button('X', W - 62, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
+    app.reg('codex-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
+    if (app.button('X', 1080, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
     // tabs
     const tw = 160, ty = 62;
     TABS.forEach((name, i) => {
       const kind = KINDS[i];
       const label = kind ? `${name} ${seenCount(app, kind)}/${Object.keys(KEYS[kind]).length}` : name;
       const on = this.tab === i;
+      app.reg('codex-tab' + i, 30 + i * (tw + 6), ty, tw, 34, { group: 'tab' + i });
       if (app.button(label, 30 + i * (tw + 6), ty, tw, 34, { size: 15, ui: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);
     });
     const kind = KINDS[this.tab];

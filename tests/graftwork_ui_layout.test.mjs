@@ -225,6 +225,35 @@ for (const scale of [100, 125, 150]) {
     delete EVENTS.e_layout;
   }
 }
+
+// ---- DECK VIEW, CODEX, END ------------------------------------------------------------------------------------------
+for (const scale of [100, 125, 150]) {
+  for (const n of [0, 15, 45]) {
+    const h = await make({ scale, seed: 'dv' + n });
+    flowFor(h); go(h, 'base', {}); h.app.go('base');
+    graftHeavy(h.run, n ? 8 : 0);
+    if (n === 0) h.run.deck = []; else if (n === 45) addCards(h.run, 45 - h.run.deck.length); else h.run.deck = h.run.deck.slice(0, 15);
+    h.app.push('deckview', {});
+    const tag = `deck/s${scale}/${n}`;
+    look(h, 40, tag);
+    for (const [x, y] of [[40, 124], [110, 124], [180, 124], [250, 124], [330, 124], [430, 124], [560, 124], [660, 124], [760, 124], [860, 124], [960, 124]]) { click(h.app, x, y); look(h, 3, tag + '/filter'); }
+    h.app.mouse.x = 300; h.app.mouse.y = 300; h.app.mouse.wheel = 600; look(h, 5, tag + '/scroll');
+    hoverAt(h, 200, 300); look(h, 3, tag + '/hover');
+  }
+  const hp = await make({ scale, seed: 'dvp' }); flowFor(hp); hp.app.go('base');
+  hp.app.push('deckview', { mode: 'pick', filter: (i) => i.id === 'm_cut', title: 'Choose a card', onPick() {} }); look(hp, 40, `deck/s${scale}/pick`);
+  const hc = await make({ scale, seed: 'cx' }); flowFor(hc); hc.app.go('base');
+  hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).slice(0, 30).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.slice(0, 10).map((g) => [g.id, 1])), enemies: {}, relics: {}, statuses: {} };
+  hc.app.push('codex', {});
+  for (let i = 0; i < 7; i++) { hc.app.top().setTab(i); look(hc, 20, `codex/s${scale}/tab${i}`); hc.app.mouse.x = 400; hc.app.mouse.y = 300; hc.app.mouse.wheel = 400; look(hc, 5, `codex/s${scale}/tab${i}/scroll`); }
+  for (const won of [true, false]) {
+    const he = await make({ scale, seed: 'end' + won, hero: won ? 'odile' : 'wick' });
+    flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.killedBy = 'the_grafter';
+    he.run.flags = he.run.flags || {}; go(he, 'end');
+    look(he, 200, `end/s${scale}/${won ? 'won' : 'dead'}`);
+    hoverAt(he, 500, 300); look(he, 3, `end/s${scale}/${won ? 'won' : 'dead'}/hover`);
+  }
+}
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad);

@@ -239,6 +239,7 @@ const SORTS = [['order', 'Order'], ['name', 'Name'], ['cost', 'Cost'], ['weight'
 const costKey = (c) => (c === 'X' ? 9 : c);
 
 function chip(app, label, x, y, w, active, o = {}) {
+  app.reg('deck-chip-' + label, x, y, w, 28, { group: 'chip-' + label });
   return app.button(label, x, y, w, 28, { size: 14, ui: true, fill: active ? '#5a4720' : COL.slab2, stroke: active ? COL.lamp : 'rgba(232,220,196,.4)', color: active ? COL.lamp : COL.vellum, r: 6, ...o });
 }
 
@@ -288,6 +289,7 @@ export default {
     ctx.save(); ctx.fillStyle = `rgba(6,4,3,${0.8 * k})`; ctx.fillRect(0, 0, W, H); ctx.restore();
     ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * 14);
     const PX = 14, PY = 10, PW = W - 28, PH = H - 20;
+    app.reg('deck-panel', PX, PY, PW, PH, { overlay: true });
     app.panel(PX, PY, PW, PH, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
     if (app.mouse.pressed && !app.inRect(PX, PY, PW, PH) && !this.pick && !app.blocked) this.pending = () => this.close(app, false);
     if (!run) { app.text('No run in progress.', W / 2, 340, { size: 24, align: 'center' }); ctx.restore(); return; }
@@ -326,7 +328,8 @@ export default {
       app.text(left > 0 ? `${left} Weight to spare before your plain cards start paying.` : 'Budget is full. One more Weight and a plain card is Tithed.', sx, 42, { size: 15, ui: true, maxW: sw, lineH: 17 });
       app.text('Every card fights at full strength.', sx, 77, { size: 15, ui: true, color: 'rgba(232,220,196,.6)' });
     }
-    if (this.pending === null && app.button('X', W - 62, 20, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
+    app.reg('deck-x', 1080, 18, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
+    if (this.pending === null && app.button('X', 1080, 18, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
 
     // ---- tabs row
     let tx = 36; const ty = 110;

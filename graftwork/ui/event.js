@@ -265,7 +265,7 @@ export default {
     // choices
     const choices = RUN.eventChoices(run);
     const room = P.y + P.h - 16 - y, many = choices.length;
-    const mk = (lim) => choices.map((c) => { const sub = c.text ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((22 + 28) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
+    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((22 + 28) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);

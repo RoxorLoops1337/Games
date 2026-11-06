@@ -109,7 +109,7 @@ function step(dt = 1 / 60) {
   if (key === stuckKey) stuckN++; else { stuckKey = key; stuckN = 0; }
   const exempt = app.current === 'map' || app.current === 'title' || (run && run.phase === 'combat');
   if (!exempt && stuckN > STUCK) fail(`stuck ${STUCK} ticks in state ${key}`);
-  combatTicks = run && run.phase === 'combat' && app.current === 'combat' ? combatTicks + 1 : 0;
+  combatTicks = run && run.phase === 'combat' ? combatTicks + 1 : 0; // counts while the pause overlay quit to title leaves the combat run parked
 }
 
 // ---- actions ----
