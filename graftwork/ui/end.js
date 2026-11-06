@@ -139,6 +139,7 @@ export default {
     { const lt = titleName(app.shared.meta); if (lt) app.text(`"${lt}"`, x + w - 18, y + 12, { size: 12, ui: true, italic: true, align: 'right', color: COL.lamp, maxW: w - 100 }); }
     app.text(hero.name, x + 18, y + 32, { size: 26, bold: true, color: hero.color === '#9E0F2E' ? '#e66a7c' : hero.color });
     app.text(hero.title, x + 18, y + 62, { size: 14, italic: true, color: '#cdbf9d' });
+    if (run.assist) app.text('Assisted run', x + w - 18, y + 62, { size: 14, ui: true, bold: true, align: 'right', color: '#8fe0a0' });
     const rows = [
       ['Ascension', run.ascension || 0], ['Seed', String(run.seed).length > 16 ? String(run.seed).slice(0, 15) + '...' : run.seed],
       ['Floors climbed', st.floors], ['Fights won', st.fights - (this.won ? 0 : (run.phase === 'dead' && !run.abandoned ? 1 : 0))], ['Elites', st.elites],
@@ -272,7 +273,7 @@ export default {
       app.reg('end-btn-' + id, x, y, bw, bh, { group: 'btn' + id });
       const fitSub = sub ? fitSize(app, sub, bw - 20, 12) : 12;
       if (app.button(label, x, y, bw, bh, { size: 18, fill, stroke, sub: sub ? ' ' : undefined })) {
-        if (id === 'new') flow.start({ hero: run.hero, ascension: run.ascension || 0 });
+        if (id === 'new') flow.start({ hero: run.hero, ascension: run.ascension || 0, ...(run.assist ? { assist: run.assist } : {}) });
         else if (id === 'endless') { RUN.startLoop(run); run.phase = 'map'; run.ended = false; delete run.endInfo; flow.route(); }
         else if (id === 'copy') this.copySeed(app);
         else flow.toTitle();

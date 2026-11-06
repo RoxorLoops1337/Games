@@ -7,9 +7,9 @@ import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf } from '../graftwork/engine/combat.js';
 import { seamPreview } from '../graftwork/engine/seam.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
-import { cardSpec, canGraft, canTemper, schoolsOf } from '../graftwork/engine/cards.js';
+import { cardSpec, canGraft, canTemper, schoolsOf, newInst } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, CARDS } from '../graftwork/data/index.js';
-import { POLICIES, cardValue, graftScore, playRun } from './graftwork_sim.mjs';
+import { POLICIES, cardValue, graftScore, playRun, cardV as fxValueOf } from './graftwork_sim.mjs';
 
 // rough value of one stitch of each school payout
 const STITCH_VAL = { ember: 3.2, echo: 4, hoard: 3, blood: 1.6, rust: 3.5, static: 2.5, gilded: 0.5 };
@@ -133,7 +133,46 @@ export function strongForge(run, pol, hpF) {
   return RUN.forgeAct(run, 'temper', c[0].uid).ok;
 }
 
-POLICIES.strong = { buyCards: +(process.env.GW_BUY ?? 0), maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+// ---------- card pick / shop buy policy (GW_PICK) ----------
+// Cards only enter a run through the shop (5 per visit). Policy: score every shelf card, buy the best while it beats skipping by a margin.
+// score = static value gain over the deck's median card (cardValue ratio via sim fxValue) + audit forced-win delta (wins per 200 runs / 20)
+//         + school bonus (shares the school of the deck's grafts) - dead-pick penalty (cards the audit measured as rarely played).
+// Gold budget: keep GW_RESERVE gold back for junk removal; at most GW_MAXBUY cards per run.
+// forced-card sweep (tools/graftwork_cardsweep.mjs, 2 copies in the starter deck, 200 runs, A0, no-pick bot): wins versus control, mean over heroes that can use the card
+const AUDIT_DELTA = { o_thread_doublehem: 63, m_secondwind: 58, m_restraints: 53, o_tip_the_usher: 52, w_burnout: 47, m_stitchwork: 45, x_plate: 45, m_desperate: 43, o_liquidate: 43, m_cauterize: 42, m_hemostatic_snip: 38, o_golden_parachute: 36, m_exsang: 35, w_bare_wire: 34, m_thread_stitchup: 33, w_wax_drip: 33, w_quick_flick: 29, o_mirror_sale: 29, x_adrenal: 28, m_hacksaw: 25, w_wax_armor: 25, m_mirrored_wound: 24, w_hot_seam: 24, m_flick: 23, m_blank_chart: 23, o_thread_sparespool: 23, m_thread_longsuture: 22, w_ember_toss: 22, o_market_crash: 48, w_blowtorch: 19, w_thread_trail: 18, o_pocket_change: 15, m_tailored_cut: 14, m_thread_bloodline: 14, w_pyre_dance: 14, o_double_bill: 14, w_thread_fusewire: 13, o_heirloom: 13, m_triage: 12, x_lunge: 11, o_second_helping: 10, w_capacitor_bank: 9, m_epidemic: 8, o_bulk_order: 8, o_clean_book: 8, w_thread_arcstitch: 7, m_stitch_count: 6, m_light_packing: 6, w_spark_gap: 6, o_levy: 6, o_bidding_war: 6, m_suture: 5, x_thread_basting: 5, w_earth_wire: 5, o_standing_order: 4, x_barbs: 3, w_scald: 3, w_fuse_bridge: 3, x_recall: 2, w_static_seam: 2, m_biohazard: 1, m_fever_chart: 1, w_leather_apron: 1, w_tempered_wick: 1, m_hemostat: 0, m_stress_test: -1, m_hammered_plate: -1, x_hold: -1, o_ledger_line: -1, m_scabover: -2, w_overcurrent: -2, o_loose_change: -2, m_lancet: -3, x_second: -3, x_thread_snip: -3, o_pawn_ticket: -3, o_patronage: -3, m_swab: -4, x_cleave: -4, w_tithe_pyre: -4, o_hostile_takeover: -4, w_arc_flash: -5, o_choir_loft: -5, m_flakeoff: -6, m_scrap_splint: -6, m_sweep: -7, m_thread_rustseam: -7, w_cinder_rain: -7, m_sewn_shut: -8, x_thread_cross: -8, w_slow_match: -8, w_dynamo: -8, o_overdraft: -8, m_scarpower: -9, x_gauze: -9, x_poise: -9, w_static_cling: -9, w_thread_conflagration: -9, o_triple_threat: -9, o_layaway: -10, o_dividend: -10, x_shrug: -11, o_heavy_purse: -11, x_jab: -12, o_reprint: -12, o_cross_listing: -12, m_hemorrhage: -13, w_conductive_thread: -13, o_hardened_purse: -13, w_backdraft: -14, m_drawblood: -15, x_brace: -15, w_tinder_stack: -15, x_haymaker: -16, x_thread_shears: -16, o_tithe_ledger: -16, m_reopen: -18, m_laybare: -18, o_gilded_age: -18, m_vivisect: -19, x_thread_tieoff: -19, o_browse: -19, x_thread_unpick: -21, m_bloodrite: -22, w_substation: -22, m_anticoag: -23, w_ringing_ears: -23, o_receipt: -24, o_inventory: -24, o_audit: -2, x_thread_pinking: -25, w_graft_furnace: 9, m_rustplate: -27, x_sweep: -27, x_flatline: 6, w_discharge: -28, m_amputate: -29, w_powder_keg: -30, w_wildfire_spread: -31, w_pilot_light: -31, o_overbooked: -31, o_keepsake: -32, w_flashpoint: -33, x_resolve: 30, x_thread_loom: -35, o_prepaid: -35, o_thread_embroidered: -35, w_wildfire: -37, w_chain_reaction: -7, o_thread_tapestry: -60 };
+const PICK_ON = () => (process.env.GW_PICK ?? '1') !== '0';
+export function auditDelta(id) { return AUDIT_DELTA[id] || 0; }
+export function strongShopCards(run, shop, pol) {
+  const margin = +(process.env.GW_MARGIN ?? 1.0), maxBuy = +(process.env.GW_MAXBUY ?? 4), reserve = +(process.env.GW_RESERVE ?? 0);
+  const real = run.deck.filter((x) => CARDS[x.id].type !== 'junk');
+  const vals = real.map((x) => cardValueStatic(x)).sort((x, y) => x - y);
+  const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+  const focus = {};
+  for (const inst of run.deck) for (const g of inst.grafts) { const s = GRAFTS[g].school; focus[s] = (focus[s] || 0) + 1; }
+  const top = Object.entries(focus).sort((a, b) => b[1] - a[1])[0];
+  const junkRemoval = run.deck.some((x) => CARDS[x.id].type === 'junk') ? RUN.servicePrice(run, 'remove') : 0;
+  run.flags.gwBought = run.flags.gwBought || 0;
+  for (let n = 0; n < 4 && run.flags.gwBought < maxBuy; n++) {
+    let best = -1, bs = +(process.env.GW_THRESH ?? 3);
+    shop.cards.forEach((k, i) => {
+      if (k.sold || run.gold - k.price < Math.max(reserve, junkRemoval)) return;
+      const def = CARDS[k.id];
+      let s = cardValueStatic(newInst(k.id, () => -1)) - med * margin * 0.5 - med * 0.5;
+      s += auditDelta(k.id) / 20;
+      if (top && def.school === top[0]) s += 1.5; else if (top && (focus[def.school] || 0) >= 2 && def.school) s += 0.7;
+      if (def.type === 'power' && real.length < 9) s -= 1;
+      if (s > bs) { bs = s; best = i; }
+    });
+    if (best < 0) break;
+    if (RUN.shopBuy(run, 'card', best).ok) run.flags.gwBought++; else break;
+  }
+}
+function cardValueStatic(inst) { return fxValueOf(inst); }
+
+const STRONG = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+POLICIES.strongNoPick = { ...STRONG, buyCards: +(process.env.GW_BUY ?? 0) };
+POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards, cardsFirst: (process.env.GW_FIRST ?? '1') === '1' };
+POLICIES.strong = PICK_ON() ? POLICIES.strongPick : POLICIES.strongNoPick;
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
   const N = +process.argv[2] || 40, asc = +process.argv[3] || 0, only = process.argv[4];

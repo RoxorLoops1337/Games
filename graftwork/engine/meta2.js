@@ -58,7 +58,7 @@ export function caseFile(run, won, firsts = {}) {
   for (const m of MILESTONES) {
     let ok = false; try { ok = !!m.check(s); } catch { ok = false; }
     if (!ok) continue;
-    const first = !firsts[m.id];
+    const first = !run.assist && !firsts[m.id]; // Assist runs never get the first-time doubling
     items.push({ id: m.id, name: m.name, text: m.text, value: m.value ? m.value(s) : null, first, credit: m.credit * (first ? FIRST_BONUS : 1) });
   }
   if (won) items.push({ id: 'win', name: 'Discharged', text: 'The file closes in your favour.', value: null, first: false, credit: WIN_CREDIT + ASC_CREDIT * (run.ascension || 0) });
@@ -68,7 +68,7 @@ export function caseFile(run, won, firsts = {}) {
 // Applies the case file to meta (once per run: caller guards with run.metaDone). Returns the file.
 export function awardCaseFile(m, run, won) {
   const f = caseFile(run, won, m.firsts);
-  for (const it of f.items) m.firsts[it.id] = 1;
+  if (!run.assist) for (const it of f.items) m.firsts[it.id] = 1; // ...and do not use up a lifetime first
   m.credit.bal += f.total; m.credit.total += f.total;
   return f;
 }
