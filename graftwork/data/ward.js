@@ -101,9 +101,9 @@ export const PHASE_ORDER = ['morning', 'midday', 'evening', 'night'];
 
 // Floors per act. days = the act's day limit (boss on the last night; early boss from days - 2).
 export const FLOOR = {
-  1: { w: 9, h: 6, days: 6, rubble: [3, 5], name: 'The Ward' },
-  2: { w: 9, h: 6, days: 7, rubble: [4, 6], name: 'The Market Wing' },
-  3: { w: 9, h: 6, days: 7, rubble: [4, 6], name: 'The Theatre' },
+  1: { w: 9, h: 6, days: 8, rubble: [3, 5], name: 'The Ward' },
+  2: { w: 9, h: 6, days: 8, rubble: [4, 6], name: 'The Market Wing' },
+  3: { w: 9, h: 6, days: 8, rubble: [4, 6], name: 'The Theatre' },
 };
 export const START_RES = { wood: 4, stone: 3, power: 6 };
 export const PREBUILT = ['rm_ward', 'rm_chapel', 'rm_sawmill'];
@@ -113,9 +113,10 @@ export const WARD_TUNE = {
   move: 4, hand: 5, offHp: 3, waitHeal: 5, morningHeal: 0, carry: 0.5,
   boardMax: 3,                  // monsters on the board at once; the rest wait as reinforcements
   goldPerExtra: 0.3,            // ward fight gold +30% per monster beyond 2 (1 monster pays 75%)
-  bigFight: 4,                  // 4+ monsters: one more graft pick
+  bigFight: 2,                  // bigFight+ monsters: one more graft pick
   eliteAge: 3, eliteL2: { hpMul: 1.3, str: 2, relic: 1 },
   earlyBossHp: 0.85, earlyBossGold: 60, earlyDays: 2,
   resPerMonster: 1, resPerElite: 2,
+  bossIdle: { need: 6, per: 2 }, // the boss gets +1 Strength per 2 fights (of 6) you skipped on this floor
   buildRemovePrice: 50, kitchenDraw: 2, morgueStone: 1, libraryChance: 0.25, pharmacyGold: 15, otPayPer: 5, otPayMax: 50, quarantineDays: 2, fireDoorCap: 3, buildPrice: { common: 35, uncommon: 55, rare: 85 },
 };

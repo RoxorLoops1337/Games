@@ -212,3 +212,19 @@ Hover shows the next step as a ghost on the thread; an illegal room explains why
 
 Balance (tools/graftwork_ward_sim.mjs plans routes of up to the roll; N=40, A0): see design/WARD_PLAYTEST.md for the table. Average roll 2.5
 against the old fixed 4 means about 1.5 fewer fights per act; the knobs are the days per floor, ward spawn rates, waitHeal and resource per monster.
+
+## 10. Balance pass on the dice walk (Z3)
+
+Why the dice walk lost wins: an average roll of 2.5 rooms visits fewer rooms than MOVE 4, so a floor gives fewer graft picks and the strong bot reached Act 2 and 3 with a thinner deck (A0 17 to 20 percent). Levers tried at N=50 to 60 per hero (strong bot, A0): morning heal 6 or 10 (no effect: HP is not what kills the bot), waitHeal 8, Ward cap 4, board size 2, softer night and Level 2 elites (all within noise), longer floors alone (more Act 1 deaths). What worked was more graft picks and a longer floor together.
+
+Shipped numbers (data/ward.js): FLOOR days 8 / 8 / 8 (was 6 / 7 / 7), `bigFight` 2 (a Ward fight of 2 or more monsters queues one more graft pick, was 4), `bossIdle` (the boss gets +1 Strength per 2 fights below 6 fought on the floor, so hiding loses), `morningHeal` 0 (hook kept, unused). The Ward test asserts the day counts.
+
+| A0, strong bot, N=60 per hero | marrow | wick | odile |
+|---|---|---|---|
+| start pool | 33% | 30% | 37% |
+| all pool | 18% | 20% | 18% |
+| start pool, A5 (N=40) | 15% | 25% | 25% |
+
+random 0/120, sloppy 0/120, passive 1/180 (odile). Per act the strong bot fights 9 to 11 normal fights and about 2 elites in Act 1 to 3. The all pool is still 12 to 18 points below the start pool (same as before the dice; no single content kind explains it, N=120 ablations are noise at about 4 points). Spread is 7 points in the start pool and 2 in the all pool. The early boss is still never taken by the bot (needs a route-planning rule, a bot issue); its bonus was left at HP x0.85, 60 gold, one more graft pick.
+
+Unlock pacing (GW_MODE=ward, 200 players, 30 runs per hero pool): UP per boss 4.5 to 4.8, per elite 0.8 to 0.9, Act 3 reached 6 to 7, and Ward trigger rooms now count as floors (stats.floors). Ward strong median 40 runs to unlock all, careful 47; classic strong 39, careful 52. The "sloppy" unlock tier is the classic never-graft bot and is not meaningful in Ward mode.

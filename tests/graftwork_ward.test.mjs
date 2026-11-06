@@ -48,7 +48,7 @@ t('floor generation: deterministic, 9 x 6, Entrance and Theatre far apart, pre-b
     const a = mk('gen' + i), b = mk('gen' + i);
     assert.equal(JSON.stringify(a.ward), JSON.stringify(b.ward));
     const w = a.ward;
-    assert.equal(a.phase, 'ward'); assert.equal(w.phase, 'morning'); assert.equal(w.day, 1); assert.equal(w.dayLimit, 6);
+    assert.equal(a.phase, 'ward'); assert.equal(w.phase, 'morning'); assert.equal(w.day, 1); assert.equal(w.dayLimit, 8);
     assert.equal(w.grid.length, 6); assert.equal(w.grid[0].length, 9);
     const ent = W.entranceOf(a), th = W.theatreOf(a);
     assert.ok(Math.abs(ent.x - th.x) + Math.abs(ent.y - th.y) >= 8, 'far apart');
@@ -205,7 +205,7 @@ t('reinforcements: 5 monsters = 3 on the board, the rest step up as each dies; b
   RUN.resolveFight(run, win());
   assert.equal(run.ward.res.wood + run.ward.res.stone, wood0 + 5, '+1 wood or stone per monster');
   assert.ok(Math.abs(run.pending.ward.goldMul - 1.1 * (1 + 3 * WARD_TUNE.goldPerExtra)) < 1e-9);
-  assert.equal(run.flags.queueGraft, 1, '4+ monsters: one more graft pick');
+  assert.equal(run.flags.queueGraft, 1, '2+ monsters: one more graft pick');
 });
 
 t('off rooms: crossing a dark room costs 3 HP (never kills), Lamp Oil saves it, dark contents sleep', () => {
@@ -235,7 +235,7 @@ t('boss: forced on the last night, early from day (last - 2) at x0.9 HP with a c
   const rw = run.pending; assert.ok(rw.buildChoice.length >= 1); assert.equal(rw.wardBonus.gold, WARD_TUNE.earlyBossGold); assert.equal(run.gold, gold0 + WARD_TUNE.earlyBossGold); assert.equal(run.flags.queueGraft, 1, 'early boss: one more graft pick');
   assert.equal(W.buildDeckList(run).length, deckN + 1, 'the free building card');
   RUN.claimGold(run, rw); W.takeBuildChoice(run, null); RUN.afterReward(run); while (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); }
-  assert.equal(run.act, 2); assert.equal(run.phase, 'ward'); assert.equal(run.ward.act, 2); assert.equal(run.ward.dayLimit, 7);
+  assert.equal(run.act, 2); assert.equal(run.phase, 'ward'); assert.equal(run.ward.act, 2); assert.equal(run.ward.dayLimit, 8);
   const saw = Object.values(run.ward.rooms).filter((r) => r.type === 'rm_sawmill').length; // the new floor's first morning already produced
   assert.deepEqual(run.ward.res, { wood: 4 + 5 + 2 * saw, stone: 3 + 3 }, '50 percent carries');
   assert.equal(W.buildDeckList(run).length, deckN + 1, 'building deck carries in full');

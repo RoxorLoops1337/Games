@@ -312,7 +312,7 @@ await t('z4: the title Continue line of a Ward run reads the day, not Floor 0', 
   const { run } = await setup({ seed: 'z4title' });
   const { saveRun } = await import('../graftwork/engine/save.js'); saveRun(run);
   const info = SCR.title.readSave({});
-  assert.ok(info && info.day === 1 && info.dayLimit === 6, JSON.stringify(info));
+  assert.ok(info && info.day === 1 && info.dayLimit === 8, JSON.stringify(info));
   delete globalThis.localStorage;
 });
 

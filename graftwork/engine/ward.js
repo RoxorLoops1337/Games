@@ -436,6 +436,7 @@ export function phaseMods(run, room, kind, level = 1) {
   const ns = quiet ? 0 : room && room.upgrades.includes('b_night_shift') && night ? 2 : 1;
   const m = { phase: w.phase };
   if (kind === 'normal' && ph.enemyStr) m.enemyStr = ph.enemyStr * ns;
+  if (kind === 'boss') { const idle = Math.max(0, T.bossIdle.need - (w.fought || 0)); if (idle) m.enemyStr = Math.floor(idle / T.bossIdle.per); if (!m.enemyStr) delete m.enemyStr; } // hiding is punished: the boss grows restless
   if (kind === 'elite') { const s = (ph.eliteStr || 0) * ns + (level >= 2 ? T.eliteL2.str : 0); if (s) m.enemyStr = s; if (level >= 2) m.hpMul = T.eliteL2.hpMul; }
   if (ph.firstTurnDraw) m.firstTurnDraw = lit(run, 'rm_kitchen').length ? T.kitchenDraw : ph.firstTurnDraw;
   const r = effectN(run, 'rations'); if (r) m.handAdd = r;
@@ -444,17 +445,18 @@ export function phaseMods(run, room, kind, level = 1) {
 }
 function launch(run, room, t) {
   const w = W(run);
+  run.stats.floors++; // every room that opens something counts like a map node (unlock points, history)
   const every = everyOf(room);
   switch (t.kind) {
     case 'fight': {
-      const ids = room.contents.map((c) => c.id); room.contents = [];
+      const ids = room.contents.map((c) => c.id); room.contents = []; w.fought = (w.fought || 0) + 1;
       run.phase = 'combat';
       run.pending = { kind: 'combat', fightKind: 'normal', enemies: ids.slice(0, T.boardMax), reinforce: ids.slice(T.boardMax), mods: phaseMods(run, room, 'normal'), ward: { room: room.id, count: ids.length } };
       log(run, `${ids.length} in the ${def(room).name}.`);
       return run.pending;
     }
     case 'elite': {
-      const e = room.contents.shift(); room.timers.spawn = every;
+      const e = room.contents.shift(); room.timers.spawn = every; w.fought = (w.fought || 0) + 1;
       run.phase = 'combat';
       const m = phaseMods(run, room, 'elite', e.level);
       run.pending = { kind: 'combat', fightKind: 'elite', enemies: [e.id], reinforce: [], mods: m, ward: { room: room.id, count: 1, elite: true, level: e.level, night: w.phase === 'night' && m.goldMul > 1, ns: room.upgrades.includes('b_night_shift') } };

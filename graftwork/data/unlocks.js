@@ -9,9 +9,9 @@ import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from './i
 export const UP = {
   FLOOR: 2,            // even an instant death pays this (abandoned runs under ABANDON_MIN_FLOORS floors pay 0)
   PER_FLOOR: 0.04,      // per map node cleared
-  ELITE: 0.8, ELITE_MAX: 6,
-  BOSS: 4.5,           // per Act boss killed (the final boss is the win)
-  ACT: { 1: 0, 2: 2, 3: 6 }, // UP for the deepest Act reached
+  ELITE: 0.9, ELITE_MAX: 6,
+  BOSS: 4.8,           // per Act boss killed (the final boss is the win)
+  ACT: { 1: 0, 2: 2, 3: 7 }, // UP for the deepest Act reached
   WIN: 14, PER_ASC: 0.8,      // a win, plus per ascension level of that win
   FIRST_KILL: 0.5, FIRST_KILL_MAX: 8, // first lifetime kill of an enemy type (count capped per run)
   ACHIEVEMENT: 2.5, ACHIEVEMENT_MAX: 3, // new achievements this run (count capped)
