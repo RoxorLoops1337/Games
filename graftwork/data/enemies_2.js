@@ -218,7 +218,7 @@ export const ENEMIES_2 = [
     moves: {
       sour: { name: 'Sour Crown', tip: 'Thirst: he heals 1 for every 4 Block you gain (up to 6 a turn). Race him with damage, not walls.', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
       decree: { name: 'Brined Decree', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 12, to: 'self' }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
-      crush: { name: 'Lid Crush', fx: [{ op: 'dmg', n: 28 }] },
+      crush: { name: 'Lid Crush', tip: 'The lid falls for 28 plus his Strength. While he is Brined, no single hit of yours deals more than the Brined number: use several small hits, not one big one. Thirst feeds on your Block.', fx: [{ op: 'dmg', n: 28 }] },
       rotcrush: { name: 'Rotted Crush', tip: 'Because you carry Infection the lid finds the rot: this hit ignores your Block.', fx: [{ op: 'dmg', n: 28, pierce: true }] },
     },
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },

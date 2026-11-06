@@ -1008,6 +1008,13 @@ function drawCostOrb(g, spec, o, L) {
   const txt = unplay && cost === undefined ? '-' : String(cost === undefined || cost === null ? '-' : cost);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(txt.length > 1 ? (cp ? 26 : 20) : (cp ? 32 : 25), { bold: true }); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(txt, ox + 1, oy + 2);
   g.fillStyle = tint === '#7a1c2c' ? '#ffd6d6' : tint === '#2b6a3a' ? '#d6ffd9' : '#f6ecd2'; g.fillText(txt, ox, oy + 1);
+  // "+N cost" badge: a small red orb with an up arrow on the cost orb whenever the effective cost is above the printed one (Heavy Hands, Leaden, jams, Costup)
+  if (typeof cost === 'number' && base !== null && cost > base) {
+    const br = r * 0.52, bx = ox + r * 0.78, by = oy + r * 0.82;
+    g.beginPath(); g.arc(bx, by, br + 1.8, 0, 6.3); g.fillStyle = INK; g.fill();
+    g.beginPath(); g.arc(bx, by, br, 0, 6.3); g.fillStyle = '#e0453a'; g.fill(); g.lineWidth = 1.6; g.strokeStyle = '#ffd6d6'; g.stroke();
+    g.beginPath(); g.moveTo(bx, by - br * 0.62); g.lineTo(bx + br * 0.5, by + br * 0.02); g.lineTo(bx + br * 0.17, by + br * 0.02); g.lineTo(bx + br * 0.17, by + br * 0.6); g.lineTo(bx - br * 0.17, by + br * 0.6); g.lineTo(bx - br * 0.17, by + br * 0.02); g.lineTo(bx - br * 0.5, by + br * 0.02); g.closePath(); g.fillStyle = '#fff'; g.fill();
+  }
   g.restore();
 }
 

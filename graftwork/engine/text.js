@@ -32,7 +32,7 @@ const sName = (s) => (STATUSES[s] ? STATUSES[s].name : s);
 const plural = (n, w) => (n === 1 ? w : w + 's');
 const toWord = { all: ' to ALL enemies', random: ' to a random enemy', allEnemies: ' to ALL enemies' };
 
-export function opText(op, m) {
+export function opText(op, m, seen) {
   if (op.t) return op.t;
   const nn = op.n;
   const one = typeof nn === 'number' && nn === 1;
@@ -53,13 +53,16 @@ export function opText(op, m) {
     case 'heal': return scaled('Heal', nn, '', 0);
     case 'hp': return scaled('Lose', nn, 'HP', 0);
     case 'maxhp': return `Gain ${num(nn)} Max HP.`;
-    case 'gold': return scaled('Gain', nn, 'gold', 0);
+    case 'gold': return typeof nn === 'number' && nn < 0 ? `Pay ${-nn} gold.` : scaled('Gain', nn, 'gold', 0);
     case 'addCard': { const c = CARDS[op.card]; const z = { hand: 'your hand', draw: 'your draw pile', drawTop: 'the top of your draw pile', discard: 'your discard pile' }[op.to || 'discard']; return `Add ${num(nn || 1)} ${c ? c.name : op.card} to ${z}.`; }
     case 'summon': return `Summon ${op.n > 1 ? op.n + ' ' : 'a '}minion.`;
     case 'discard': return `Discard ${num(nn)} ${plural(one ? 1 : 2, 'card')}.`;
     case 'exhaustHand': return op.n === 'all' ? 'Exhaust your hand.' : `Exhaust ${num(nn)} ${plural(one ? 1 : 2, 'card')}.`;
     case 'fetch': return `Return ${num(nn || 1)} card from your ${op.from || 'discard pile'} to your hand.`;
-    case 'if': return `${op.ifText || 'If the condition holds'}: ${(op.then || []).map((o) => opText(o, m)).join(' ')}${op.else ? ' Otherwise: ' + op.else.map((o) => opText(o, m)).join(' ') : ''}`;
+    case 'if': { // a branch that repeats a sentence the card already printed says "again" instead of the same sentence twice
+      const br = (list) => list.map((o) => { const t = opText(o, m); return seen && seen.has(t) ? t.replace(/^Deal (.+)\.$/, 'Deal $1 again.').replace(/^(Apply|Gain|Draw) (\d+) (.+)\.$/, '$1 $2 more $3.').replace(/^Heal (\d+)\.$/, 'Heal $1 more.') : t; }).join(' ');
+      return `${op.ifText || 'If the condition holds'}: ${br(op.then || [])}${op.else ? ' Otherwise: ' + br(op.else) : ''}`;
+    }
     case 'repeat': return `${op.fx.map((o) => opText(o, m)).join(' ')} (x${num(nn)})`;
     case 'custom': return op.text || '...';
     default: return '';
@@ -72,7 +75,26 @@ export function cardLines(spec, tithed = false) {
   const m = mult(spec, tithed);
   const lines = [];
   if (spec.text) lines.push(spec.text);
-  else for (const op of spec.fx) { const t = opText(op, op.op === 'dmg' || op.op === 'block' ? m : 0); if (t) lines.push(t); }
+  else {
+    // Same-effect ops (a graft that adds Block to a Block card, two Bleed lines) read as ONE line with the summed number: "Gain 11 Block.", never "Gain 5 Block. Gain 6 Block."
+    // Only plain numeric ops of one kind merge (Block, Energy, Draw, Heal, Gold, and a status with the same target). Damage stays per hit.
+    const seen = new Set(), slot = new Map();
+    for (const op of spec.fx) {
+      const mergeable = !op.t && typeof op.n === 'number' && ((op.op === 'block' && (!op.to || op.to === 'self')) || (op.op === 'status' && op.s) || ['draw', 'energy', 'heal', 'gold'].includes(op.op)) && !(op.op === 'gold' && op.n < 0);
+      const key = mergeable ? [op.op, op.s || '', op.op === 'block' || op.to === 'player' ? 'self' : (op.to || 'enemy')].join('|') : null;
+      const sc = (op.op === 'block' ? scaleNum(op.n, m) : op.n);
+      if (key && slot.has(key)) { const it = slot.get(key); it.sum += sc; it.op = { ...it.op, n: it.sum }; continue; }
+      const it = { op, sum: sc, text: null }; if (key) { it.op = { ...op, n: sc }; slot.set(key, it); }
+      lines.push(it);
+    }
+    const isMerged = (it) => [...slot.values()].includes(it), txt = (it) => (isMerged(it) ? opText(it.op, 0) : opText(it.op, it.op.op === 'dmg' || it.op.op === 'block' ? m : 0, seen));
+    for (const it of lines) if (it.op.op !== 'if') { const t0 = txt(it); if (t0) seen.add(t0); } // what the unconditional lines say; a branch that repeats one says 'again' / 'more'
+    for (let i = 0; i < lines.length; i++) {
+      const it = lines[i]; if (typeof it === 'string') continue;
+      lines[i] = txt(it);
+    }
+    for (let i = lines.length - 1; i >= 0; i--) if (!lines[i]) lines.splice(i, 1);
+  }
   if (spec.repeat > 0) lines.push(spec.repeat === 1 ? 'Plays twice.' : `Plays ${spec.repeat + 1} times.`);
   if (spec.lifesteal) lines.push('Heal for damage dealt.');
   for (const f of Object.keys(spec.flags)) if (FLAG_TEXT[f] && spec.flags[f]) lines.push(FLAG_TEXT[f]);

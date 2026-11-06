@@ -4,7 +4,7 @@
 import { COL, EASE, FONT, W, H, rgba, clamp, lerp } from './core.js';
 import { Fx, FX_OPTS } from './fx.js';
 import * as J from './juice.js';
-import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, resolvePending, usePotion, finishCombat, HAND_CAP } from '../engine/combat.js';
+import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, lethalIncoming, resolvePending, usePotion, finishCombat, HAND_CAP } from '../engine/combat.js';
 import * as RUN from '../engine/run.js';
 import { CARDS, STATUSES, RELICS, POTIONS, HEROES } from '../data/index.js';
 import { drawCard, drawCardBack, CARD_W, CARD_H } from '../art/cards.js';
@@ -58,6 +58,8 @@ function entPos(who) {
   const ed = S.edBy.get(who); if (!ed) return { x: 900, y: FOOT_Y - 80 };
   return { x: ed.x, y: EF - ed.h * 0.55 };
 }
+// Enemy floats stay below the move name and intent plate (plate bottom y 156): a float meant for the body never lands on the telegraph.
+const fyE = (who, p, dy) => (who === 'player' || who == null ? p.y + dy : Math.max(p.y + dy, L.ENEMY_LANE_TOP + 64 + 22 + 36)); // 192: a float drifts up ~30 px
 const liveEds = () => S.eds.filter((ed) => ed.visible && !ed.e.dead);
 
 // ---------------------------------------------------------------- zones
@@ -221,7 +223,7 @@ function handle(ev) {
     case 'stunned': {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
       ed.stunT = 1; ed.intentOut = 0.0001; const p = entPos(ev.e);
-      fx.float('Stunned', p.x, p.y - 60, { color: COL.lamp, size: 24 }); fx.ring(p.x, p.y - 60, COL.lamp, 60, 0.5); sfx('debuff', { vol: 0.6 });
+      fx.float('Stunned', p.x, fyE(ev.e, p, -60), { color: COL.lamp, size: 24 }); fx.ring(p.x, p.y - 60, COL.lamp, 60, 0.5); sfx('debuff', { vol: 0.6 });
       return 320;
     }
     case 'potion': {
@@ -374,11 +376,11 @@ function onDmg(ev) {
       fx.hitstop(70); kick(dirx, 0, 9, 7, 0);
       fx.emit({ x: p.x, y: p.y, n: 14, colors: ['#9aa7ad', '#cfd8dc', '#6b7a82'], speed: 300, size: 4, gravity: 800, life: 0.7 });
       fx.emit({ x: p.x, y: p.y, n: 4, colors: ['#cfd8dc', '#9aa7ad'], speed: 220, size: 9, gravity: 900, life: 0.8, shape: 'shard', spin: 10 });
-      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, p.y - 104, { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
+      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, fyE(ev.who, p, -104), { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
     } else {
       fx.hitstop(20); kick(dirx, 0, 3, 8, 0);
       fx.float(String(ev.absorbed), p.x - 46, p.y - 18, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
-      if (!(ev.n > 0)) fx.float('Blocked', p.x, p.y - 62, { color: '#bcd0d8', size: 22, life: 1.0 });
+      if (!(ev.n > 0)) fx.float('Blocked', p.x, fyE(ev.who, p, -62), { color: '#bcd0d8', size: 22, life: 1.0 });
     }
     wait = ev.broke ? 120 : 90;
   }
@@ -410,7 +412,7 @@ function onDmg(ev) {
       if (T.slow) fx.slowmo(T.slow, T.slowMs);
       if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x + dxo, p.y - 20 - (dxo ? 14 : 0), ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
       else if (!multi) fx.float(String(ev.n), p.x + dxo + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
-      if (k.overkill) fx.float(`+${k.over} OVERKILL`, p.x, p.y - 84, { color: COL.gold, size: 18, life: 1.3 });
+      if (k.overkill) fx.float(`+${k.over} OVERKILL`, p.x, fyE(ev.who, p, -84), { color: COL.gold, size: 18, life: 1.3 });
       const hopt = { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol };
       if (typeof (jau() || {}).hit === 'function') audioCall('hit', slam ? Math.max(ev.n, en.maxHp * 0.2) : ev.n, en.maxHp, hopt); else sfx(slam ? 'hitBig' : T.body, hopt);
       if (isP) {
@@ -455,13 +457,13 @@ function onStatus(ev) {
   if (ev.n) en.st[ev.s] = ev.n; else delete en.st[ev.s];
   const gained = ev.d !== undefined ? ev.d > 0 : false;
   if (!gained) {
-    if (ev.d < 0 && (en.st[ev.s] || 0) < prev) { const q = entPos(ev.who); en.pop[ev.s] = 1; S.fx.float(`${stName(ev.s)} ${ev.d}`, q.x, q.y - 56, { color: '#aaa', size: 18, life: 0.9 }); return 60; }
+    if (ev.d < 0 && (en.st[ev.s] || 0) < prev) { const q = entPos(ev.who); en.pop[ev.s] = 1; S.fx.float(`${stName(ev.s)} ${ev.d}`, q.x, fyE(ev.who, q, -56), { color: '#aaa', size: 18, life: 0.9 }); return 60; }
     return 0;
   }
   const good = !(STATUSES[ev.s] && STATUSES[ev.s].good === false);
   en.pop[ev.s] = 1;
   const p = entPos(ev.who);
-  S.fx.float(`${stName(ev.s)} +${ev.d}`, p.x, p.y - 56, { color: stCol(ev.s), size: 20, life: 1.0 });
+  S.fx.float(`${stName(ev.s)} +${ev.d}`, p.x, fyE(ev.who, p, -56), { color: stCol(ev.s), size: 20, life: 1.0 });
   S.fx.ring(p.x, p.y - 20, stCol(ev.s), 60, 0.4); statusFx(ev, p);
   sfx(sfxForStatus(ev.s, good));
   return prev === 0 ? 110 : 80;
@@ -1566,7 +1568,8 @@ function drawHeroAndHud(app) {
   if (dying) ctx.globalAlpha = 1 - dying * 0.6;
   drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying });
   ctx.restore();
-  drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t, S.dgr && S.dgr.on ? { pulse: S.dgr.pulse, level: S.dgr.level, rm: FX_OPTS.reduced || rmotion() } : null); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
+  const lethal = !S.ending && !S.modal && canAct() ? { ...lethalIncoming(S.c), rm: FX_OPTS.reduced || rmotion() } : null; // intents this turn >= your HP after Block: pulse the bar, show the chip
+  drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t, S.dgr && S.dgr.on ? { pulse: S.dgr.pulse, level: S.dgr.level, rm: FX_OPTS.reduced || rmotion() } : null, lethal); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
 }
 
 function drawEnemies(app, tgtMode) {
@@ -1817,7 +1820,9 @@ function drawTips(app) {
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   // narrow bubbles grow tall on small screens (boosted text): when one would reach the hero's head, it widens instead (still the quiet wall)
-  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o.pos === QUIET && !o.fallback ? { ...o, fitBottom: 236, fallback: { w: 430 } } : o);
+  // no bubble ever covers an enemy's name, move or intent plate (y 70..160): the first telegraph stays readable while a tip is up
+  const avoid = l.map((ed) => ({ x: ed.x - Math.max(L.ENEMY_SLOT_MIN, ed.sw || 130) / 2, y: L.ENEMY_LANE_TOP - 2, w: Math.max(L.ENEMY_SLOT_MIN, ed.sw || 130), h: 92 }));
+  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, { ...(o.pos === QUIET && !o.fallback ? { ...o, fitBottom: 236, fallback: { w: 430 } } : o), avoid });
   // the card-play tip shows right away once a card is selected, and otherwise right after the energy tip (before the intent tip)
   if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { pos: QUIET, w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
   if (first && !S.hov) {
@@ -1839,7 +1844,7 @@ function drawTips(app) {
   const rc = S.hand.find((d) => dcSpec(d).id === 'j_ringing');
   if (rc && tip('ringing', rc.x, rc.y - CARD_H * rc.s / 2, { side: 'above', w: 300 })) return;
   const cl = liveEds().find((d) => { const mv = d.e.move && d.e.def.moves[d.e.move]; return mv && (mv.fx || []).some((op) => /\bClaim/.test(op.text || '')); });
-  if (cl) tip('claim', cl.x, L.ENEMY_LANE_TOP + 64, { side: 'left', w: 300 });
+  if (cl) tip('claim', cl.x, L.ENEMY_LANE_TOP + 64, { pos: QUIET, w: 300, maxBottom: TIP_BOTTOM });
 }
 
 function drawBanner(app) {

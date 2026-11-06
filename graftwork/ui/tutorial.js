@@ -64,6 +64,13 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   bx = clamp(bx, 8, W - bw - 8); by = clamp(by, 8, H - bh - 8);
   // o.maxBottom keeps the bubble clear of the hero plate, the Thread rail and the hand (the arrow just reaches further).
   if (o.maxBottom !== undefined && by + bh > o.maxBottom) by = Math.max(8, o.maxBottom - bh);
+  // o.avoid: rects (enemy name, move and intent plates) the bubble must never cover: slide it below them, else left of them.
+  for (const r of o.avoid || []) {
+    if (bx < r.x + r.w && bx + bw > r.x && by < r.y + r.h && by + bh > r.y) {
+      const lim = o.maxBottom !== undefined ? o.maxBottom : H - 8;
+      if (r.y + r.h + 8 + bh <= lim) by = r.y + r.h + 8; else if (r.x - bw - 8 >= 8) bx = r.x - bw - 8; else by = Math.max(8, lim - bh);
+    }
+  }
   // The bubble never eats clicks: only the small Got it button does, so cards, End Turn and the rail stay playable under it.
   const dbw = Math.max(78, Math.round(app.measure('Got it', 14, { ui: true, bold: true }) + 28)), dbh = btnH, dbx = bx + bw - pad - dbw + 4, dby = by + bh - dbh - 8;
   const inside = x >= bx && x <= bx + bw && y >= by && y <= by + bh;

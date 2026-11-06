@@ -225,7 +225,8 @@ function plan(files) {
       const users = CHECK_SUITES.filter((s) => suiteFiles(s).has(f));
       // Helpers loaded by a computed path (hocus_vocus_player.mjs) belong to the
       // game whose name they start with.
-      const game = Object.keys(GAME_SUITES).find((g) => rest[0].startsWith(`${g}_`));
+      // Fixtures under tests/fixtures/<game>_*.json belong to that game too.
+      const game = Object.keys(GAME_SUITES).find((g) => rest.at(-1).startsWith(`${g}_`));
       if (!users.length && game) users.push(...GAME_SUITES[game]);
       if (users.length) { users.forEach((s) => suites.add(s)); continue; }
     }

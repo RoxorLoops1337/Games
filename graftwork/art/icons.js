@@ -267,6 +267,8 @@ G.clasp = (c, k, a) => {
   rr(c, -0.13, -0.66, 0.26, 0.4, 0.05); fs(c, k, 0.05); ci(c, 0, 0.08, 0.12); fs(c, a, 0.04);
 };
 G.multiblade = (c, k, a) => { sub(c, G.sword, -0.2, 0.04, 0.8, -0.38, '#9aa2a8', a); sub(c, G.sword, 0.2, 0.04, 0.8, 0.38, '#9aa2a8', a); sub(c, G.sword, 0, -0.02, 0.9, 0, k, a); };
+// crescent slash with a small blade: an attack that hits everything (all of you / every target)
+G.sweepblade = (c, k, a) => { c.beginPath(); c.arc(0, 0.1, 0.72, Math.PI * 1.08, Math.PI * 1.92); c.arc(0, 0.34, 0.52, Math.PI * 1.88, Math.PI * 1.12, true); c.closePath(); fs(c, k); sub(c, G.sword, 0, 0.2, 0.55, 0, a, k); };
 G.heavysword = (c, k, a) => { sub(c, G.sword, 0, 0, 1.08, 0, k, a); };
 G.asterisk = (c, k, a) => { for (let i = 0; i < 3; i++) { const an = (i / 3) * Math.PI; seg(c, -Math.cos(an) * 0.55, -Math.sin(an) * 0.55, Math.cos(an) * 0.55, Math.sin(an) * 0.55, D, 0.34); } for (let i = 0; i < 3; i++) { const an = (i / 3) * Math.PI; seg(c, -Math.cos(an) * 0.52, -Math.sin(an) * 0.52, Math.cos(an) * 0.52, Math.sin(an) * 0.52, k, 0.2); } };
 const GR = '#bfe5c1', RD = '#ffb0a8', GO = '#F2C14E', OR = '#ff8a3c', CY = '#7FD1E0', VI = '#c9a8ff', SL = '#c8d2d8';
@@ -331,18 +333,19 @@ export function drawStatus(ctx, id, x, y, size, good = true, opt) {
 // INTENTS (bare glyphs with a soft glow)
 // ======================================================================================
 const INT = {
-  attack: ['sword', '#ffb0a0', '#8a5f3a', '#ff5a4a'], multi: ['multiblade', '#ffb0a0', '#8a5f3a', '#ff5a4a'], heavy: ['heavysword', '#ffb0a0', '#8a5f3a', '#e0453a'],
+  attack: ['sword', '#ffd2c4', '#c9a06a', '#ff5a4a'], sweep: ['sweepblade', '#ffd2c4', '#c9a06a', '#ff5a4a'], multi: ['multiblade', '#ffd2c4', '#c9a06a', '#ff5a4a'], heavy: ['heavysword', '#ffd2c4', '#c9a06a', '#e0453a'],
   defend: ['shieldg', '#9ec8e8', '#e8f4ff', '#6aa8e0'], buff: ['arrowup', '#8fe29a', '#fff', '#5ac86a'],
   debuff: ['debuff', '#c9a8ff', '#ff9a8a', '#9a6aff'], poison: ['poison', '#6fcf4a', '#f0ffd0', '#6acf4a'], junk: ['paper', '#e8dcc4', '#b3a58a', '#cfc6a8'], summon: ['summon', '#c9a8ff', '#7a5ac8', '#a07aff'],
   unknown: ['question', '#e8dcc4', '#fff', '#cfc6a8'], stun: ['stars', '#ffe55a', '#8fa0ff', '#ffe55a'], sleep: ['question', '#9ec8e8', '#fff', '#6aa8e0'],
   heal: ['cross', '#8fe29a', '#fff', '#5ac86a'], flee: ['swerve', '#d8f0ff', CY, CY], special: ['sparkle', GO, '#fff', GO], conditional: ['asterisk', GO, '#fff', GO],
 };
 // drawIntent(ctx, kind, x, y, size, opt?) opt: { hits (>1 = stacked blades), heavy (bigger, red ring), conditional (asterisk badge: a tooltip-listed bonus) }
-// kind may also be 'multi' | 'heavy' | 'conditional' | 'poison', or an array (first non-'conditional' entry is drawn; 'conditional' adds the badge).
+// kind may also be 'multi' | 'sweep' | 'heavy' | 'conditional' | 'poison', or an array (first non-'conditional' entry is drawn; 'conditional' adds the badge).
 export function drawIntent(ctx, kind, x, y, size, opt) {
   let cond = !!(opt && opt.conditional); const hits = opt && opt.hits;
   if (Array.isArray(kind)) { cond = cond || kind.includes('conditional'); kind = kind.find((q) => q !== 'conditional') || 'conditional'; }
   if (kind === 'attack') { if (opt && opt.heavy) kind = 'heavy'; else if (hits > 1) kind = 'multi'; }
+  else if (kind === 'sweep' && opt && opt.heavy) kind = 'sweep';
   const e = INT[kind] || INT.unknown; const heavy = kind === 'heavy';
   const r = (size / 2) * (heavy ? 1.12 : 1); const gc = e[3].length === 7 ? e[3] : '#ffffff';
   ctx.save();
@@ -353,7 +356,7 @@ export function drawIntent(ctx, kind, x, y, size, opt) {
   disc(ctx, r * 0.98, 'rgba(26,20,17,.7)');
   ctx.beginPath(); ctx.arc(0, 0, r * 0.93, 0, TAU); ctx.lineWidth = heavy ? Math.max(2, r * 0.16) : Math.max(1, r * 0.07); ctx.strokeStyle = heavy ? '#e0453a' : rgba(gc, 0.75); ctx.stroke();
   ctx.restore();
-  withGlyph(ctx, x, y, r * 2, e[1], e[2], e[0], 0.9);
+  withGlyph(ctx, x, y, r * 2, e[1], e[2], e[0], kind === 'attack' || kind === 'heavy' ? 1.3 : kind === 'multi' || kind === 'sweep' ? 1.1 : 0.9); // the blade glyphs are thin: draw them bigger so the sword reads at 28 px
   if (cond && kind !== 'conditional') {
     const br = r * 0.36; ctx.save(); ctx.translate(x + r * 0.64, y + r * 0.64); disc(ctx, br * 1.1, D); disc(ctx, br, '#F2C14E');
     const p = PX; PX = br; hatchDisc(ctx, br, 0.3); PX = p; ctx.restore();
