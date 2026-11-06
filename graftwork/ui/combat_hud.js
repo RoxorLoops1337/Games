@@ -228,7 +228,7 @@ export function drawEnemyPlate(app, ed, o) {
   // intent plate
   let ir = null;
   if (info && ed.intentOut < 1) {
-    ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 20 + 38, ed.intentT, (1 - ed.intentOut), sw - 2);
+    ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 57, ed.intentT, (1 - ed.intentOut), sw - 2);
     if (ir.w) app.reg(grp + ':intent', ir.x, ir.y, ir.w, ir.h, { group: grp });
   }
   // hp bar + block

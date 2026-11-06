@@ -6,6 +6,7 @@ import { drawStatus, drawRelic } from '../art/icons.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, SCHOOLS, HEROES, GRAFT_LIST } from '../data/index.js';
 import { cardSpec } from '../engine/cards.js';
+import { drawSeamBadge } from './seam_ui.js';
 import { statusText } from '../engine/text.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, clampText, gaugeCells } from './deckview.js';
 
@@ -152,7 +153,7 @@ const RULES = [
   ['Weight and Budget', 'Each graft weighs 1 to 3. Your Budget, 6 to start, is the Weight your deck carries for free.'],
   ['Strain Tithes your plain cards', 'Weight over Budget is Strain. Each point Tithes a plain card: it fights at 75 percent. With no plain card left, grafted cards jam.'],
   ['Overload and Shatter', 'A card holds 2 grafts. The 3rd Overloads it: +1 Weight, numbers x1.5, and a 25 percent chance to Shatter on its first play each combat.'],
-  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
+  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],  ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school cuts it and cashes the knots in. Cut a longer Line for more.'],
 ];
 function ruleArt(app, i, cx, cy, w, h) {
   const ctx = app.ctx, t = app.t;
@@ -202,6 +203,12 @@ function ruleArt(app, i, cx, cy, w, h) {
       ctx.save(); ctx.fillStyle = COL.gold;
       for (let k = 0; k < 6; k++) { const a = k * 1.1 + 0.4, r = 14 + ((t * 18 + k * 9) % 30); ctx.save(); ctx.translate(cx + 60 + Math.cos(a) * r, cy + 50 + Math.sin(a) * r * 0.6); ctx.rotate(a + t); ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(4, 4); ctx.lineTo(-4, 3); ctx.closePath(); ctx.fill(); ctx.restore(); }
       ctx.restore();
+      break;
+    }
+    case 6: { // the Thread: three knots, then the scissors
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 72, cy); ctx.lineTo(cx + 48, cy); ctx.stroke();
+      ['ember', 'ember', 'echo'].forEach((sc, k) => { const bx = cx - 60 + k * 40; ctx.beginPath(); ctx.arc(bx, cy, 15, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 3.4; ctx.strokeStyle = '#C9A227'; ctx.stroke(); drawSchoolGlyph(ctx, sc, bx, cy, 10, (SCHOOLS[sc] || {}).color); });
+      drawSeamBadge(app, 'cut', cx + 78, cy, 0.9, 'echo');
       break;
     }
     default: {
@@ -365,9 +372,9 @@ export default {
     });
   },
   drawRules(app, x, y, w, h) {
-    const ctx = app.ctx, gap = 14, cw = Math.floor((w - gap * 2) / 3), ch = Math.floor((h - gap) / 2);
+    const ctx = app.ctx, gap = 14, cols = RULES.length > 6 ? 4 : 3, cw = Math.floor((w - gap * (cols - 1)) / cols), ch = Math.floor((h - gap) / 2);
     RULES.forEach(([title, text], i) => {
-      const cx = x + (i % 3) * (cw + gap), cy = y + Math.floor(i / 3) * (ch + gap);
+      const cx = x + (i % cols) * (cw + gap), cy = y + Math.floor(i / cols) * (ch + gap);
       app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
       ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
       app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();

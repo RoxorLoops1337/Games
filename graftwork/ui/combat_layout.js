@@ -13,7 +13,7 @@ export const STRAIN_BOX = { x: 14, y: 466, w: 128, h: 44 };
 // Hero plate (hp bar, block, statuses) sits right of the strain box and ends above the resting hand (y 516).
 export const HERO_PLATE = { x: 150, y: 464, w: 220, h: 52 };
 // Enemy lane (x 500..1252, y 70..400): nameplate+move y70..104, intent 104..134, art above the foot, hp bar + status rows below it.
-export const ENEMY_FOOT = 340, ENEMY_ART_H = 204, ENEMY_SLOT_MIN = 110, ENEMY_LANE_TOP = 70;
+export const ENEMY_FOOT = 340, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LANE_TOP = 70;
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
 export const SEAM = { x: 380, y: 468, w: 696, h: 50 }; // the thread rail (ui/seam_ui.js): right of the hero plate, above the hand, left of End Turn
 export const HAND_CX = 622, HAND_Y = 626, HAND_SPREAD = 940;

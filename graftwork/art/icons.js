@@ -17,7 +17,7 @@ function hatchLines(c, a = 0.3, from = 0.1) {
   if (PX < 6) return;
   const pitch = Math.max(0.17, 2.6 / PX);
   c.beginPath(); for (let s = from; s < 1.5; s += pitch) { c.moveTo(s / 2 - 1.2, s / 2 + 1.2); c.lineTo(s / 2 + 1.2, s / 2 - 1.2); }
-  c.lineWidth = Math.max(0.025, 0.9 / PX); c.strokeStyle = `rgba(43,30,26,${a})`; c.lineCap = 'butt'; c.stroke();
+  c.lineWidth = Math.min(0.05, Math.max(0.025, 0.9 / PX)); c.strokeStyle = `rgba(43,30,26,${a})`; c.lineCap = 'butt'; c.stroke();
 }
 // pixel-space version for discs centred on the origin
 function hatchDisc(c, rad, a = 0.3) {
@@ -35,7 +35,7 @@ function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.leng
 const path = (c, p, close = true) => { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); if (close) c.closePath(); };
 const fs = (c, k, w = 0.06) => {
   c.fillStyle = k; c.fill(); if (!w) return;
-  const ow = Math.max(w, 1 / PX), hl = 1 / PX;
+  const ow = Math.min(Math.max(w, 1 / PX), 0.12), hl = Math.min(1 / PX, 0.05);
   c.save(); c.clip(); c.lineJoin = 'round';
   c.lineWidth = 2 * (ow + hl); c.strokeStyle = litGrad(c); c.stroke(); // 1 px highlight on the lit edge
   c.lineWidth = 2 * ow; c.strokeStyle = D; c.stroke(); // single sepia contour
