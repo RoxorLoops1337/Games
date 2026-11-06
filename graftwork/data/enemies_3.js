@@ -272,8 +272,8 @@ const goldLeafGolem = {
   id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [129, 134],
   pattern: ['gild', 'slam', 'flake'],
   moves: {
-    gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 2)] },
-    slam: { name: 'Gilt Slam', fx: [D({ base: 30, per: 'gold', mul: 1 / 15, max: 40 })] },
+    gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 1)] },
+    slam: { name: 'Gilt Slam', fx: [D({ base: 24, per: 'gold', mul: 1 / 15, max: 32 })] },
     flake: { name: 'Peel Off Your Gold', fx: [D(20), CUSTOM('debuff', 'Steals up to 12 gold and plates itself with it', (A, ctx) => {
       const take = Math.min(12, A.c.run.gold || 0);
       if (take > 0) { A.gold(-take); A.block(ctx.srcEnt, take); }
@@ -382,7 +382,7 @@ function reknit(A, e) {
 const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread payout';
 
 const grafter = {
-  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 200,
+  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 165,
   pattern: ['stitch', 'splice', 'mirror'],
   moves: {
     stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 36 } }] },

@@ -184,7 +184,7 @@ export const ENEMIES_2 = [
       death: (A) => clearMarks(A),
     },
     art: { body: 'loupe', color: '#c9a86a', notes: 'Tall thin coat rect with a huge round monocle circle for a head, a tag on a string in one hand.' } },
-  { id: 'auction_house', name: 'Auction House', act: 2, kind: 'elite', start: { strength: 2 }, hp: [114, 120],
+  { id: 'auction_house', name: 'Auction House', act: 2, kind: 'elite', start: { strength: 1 }, hp: [114, 120],
     pick: (A, e) => {
       const bidders = A.alive().filter((x) => x.id === 'bidder').length;
       const t = e.data.t = (e.data.t || 0) + 1;
@@ -217,7 +217,7 @@ export const ENEMIES_2 = [
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 96, start: { strength: 1, interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 90, start: { strength: 1, interest: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';

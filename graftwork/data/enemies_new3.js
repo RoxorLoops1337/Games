@@ -86,7 +86,7 @@ function fray(A, e) {
   if (k) { k.jam = true; A.ev({ t: 'jam', card: k.uid }); }
 }
 const locksmith = {
-  id: 'locksmith', name: 'Locksmith', act: 3, kind: 'normal', start: { strength: 1 }, hp: [78, 85],
+  id: 'locksmith', name: 'Locksmith', act: 3, kind: 'normal', start: { strength: 1 }, hp: [66, 72],
   pattern: ['tumbler', 'bolt', 'rake'],
   moves: {
     tumbler: { name: 'Turn the Tumbler', fx: [D(14), { op: 'block', n: 8 }] },
