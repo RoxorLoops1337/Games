@@ -4,6 +4,7 @@ import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from
 import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
+import { runAllows, snapshotFor } from './unlock.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
@@ -37,6 +38,7 @@ export function newRun(opts = {}) {
   const perks = hero.perks || {};
   const asc = opts.ascension || 0;
   let uid = 1;
+  const snap = snapshotFor(opts.daily ? 'start' : opts.unlocked); // content gating: undefined = everything (tools, old tests)
   const run = {
     v: 1, seed: seedStr, hero: hero.id, ascension: asc, daily: opts.daily || null, loop: 0,
     rng, uidNext: 1,
@@ -44,6 +46,7 @@ export function newRun(opts = {}) {
     hp: perks.hp || 70, maxHp: perks.hp || 70, gold: perks.gold || 99,
     deck: hero.deck.map((id) => newInst(id, () => uid++)),
     relics: [], potions: [], budgetBonus: 0, flags: {}, stats: { fights: 0, elites: 0, grafts: 0, shatters: 0, goldEarned: 0, damageTaken: 0, skips: 0, floors: 0, bosses: 0 },
+    ...(snap ? { unlockedAtStart: snap } : {}),
     seenEvents: [], rerolls: 0, shopUses: { remove: 0, strip: 0 }, pending: null,
   };
   run.uidNext = uid;
@@ -80,7 +83,7 @@ export function addPotion(run, id) {
   run.potions.push(id); return true;
 }
 function relicPool(run, rarities) {
-  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && (!r.hero || r.hero === run.hero));
+  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && runAllows(run, r.id) && (!r.hero || r.hero === run.hero));
 }
 export function rollRelic(run, rarity) {
   const order = { common: ['common'], uncommon: ['uncommon'], rare: ['rare'], boss: ['boss'], shop: ['shop', 'uncommon'] };
@@ -94,7 +97,8 @@ export function rollRelicByAct(run) {
   return rollRelic(run, rarity);
 }
 export function rollPotion(run) {
-  const list = Object.values(POTIONS);
+  let list = Object.values(POTIONS).filter((p) => runAllows(run, p.id));
+  if (!list.length) list = Object.values(POTIONS);
   const w = { common: 6, uncommon: 3, rare: 1 };
   return run.rng.weighted(list, (p) => w[p.rarity] || 1).id;
 }
@@ -230,6 +234,8 @@ export function claimGold(run, rw) {
 
 // ---------- THE GRAFT OFFER ----------
 const RARITY_W = { 1: { common: 8, uncommon: 3, rare: 0.4 }, 2: { common: 5, uncommon: 4, rare: 1.2 }, 3: { common: 3, uncommon: 4, rare: 2.2 } };
+// Grafts this run may roll (the unlocked set; never empty).
+function gpool(run) { const l = Object.values(GRAFTS).filter((g) => runAllows(run, g.id)); return l.length ? l : Object.values(GRAFTS); }
 export function graftableCards(run) {
   return run.deck.filter((i) => CARDS[i.id].type !== 'junk' && i.grafts.length < MAX_GRAFTS);
 }
@@ -254,13 +260,13 @@ export function makeGraftOffer(run, o = {}) {
   const picked = [];
   const w = RARITY_W[run.act] || RARITY_W[3];
   for (let t = 0; t < tiers.length; t++) {
-    let pool = Object.values(GRAFTS).filter((g) => g.tier === tiers[t] && !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
-    if (!pool.length) pool = Object.values(GRAFTS).filter((g) => !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
+    let pool = gpool(run).filter((g) => g.tier === tiers[t] && !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
+    if (!pool.length) pool = gpool(run).filter((g) => !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
     if (!pool.length) continue;
     picked.push(rng.weighted(pool, (g) => (w[g.rarity] || 1) * (o.bias && g.school === o.bias ? 2 : 1)).id);
   }
   while (picked.length < count) {
-    const pool = Object.values(GRAFTS).filter((g) => !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
+    const pool = gpool(run).filter((g) => !picked.includes(g.id) && cards.some((c) => canGraft(c, g.id)));
     if (!pool.length) break;
     picked.push(rng.weighted(pool, (g) => w[g.rarity] || 1).id);
   }
@@ -327,7 +333,7 @@ export function priceMult(run) {
 export function makeShop(run) {
   const rng = run.rng;
   const hero = run.hero;
-  const pool = Object.values(CARDS).filter((c) => (c.hero === hero || c.hero === 'any') && c.rarity !== 'starter' && c.rarity !== 'junk');
+  const pool = Object.values(CARDS).filter((c) => (c.hero === hero || c.hero === 'any') && c.rarity !== 'starter' && c.rarity !== 'junk' && runAllows(run, c.id));
   const cw = { common: 6, uncommon: 3, rare: 1 };
   const cards = [];
   let guard = 0;
@@ -336,7 +342,7 @@ export function makeShop(run) {
     if (!cards.some((k) => k.id === c.id)) cards.push({ id: c.id, price: Math.round({ common: 45, uncommon: 75, rare: 150 }[c.rarity] * (0.9 + rng.next() * 0.2)), sold: false });
   }
   const gids = [];
-  for (const tier of ['safe', 'greedy', 'weird']) { const p = Object.values(GRAFTS).filter((g) => g.tier === tier); if (p.length) gids.push(rng.pick(p).id); }
+  for (const tier of ['safe', 'greedy', 'weird']) { let p = gpool(run).filter((g) => g.tier === tier); if (!p.length) p = gpool(run); if (p.length) gids.push(rng.pick(p).id); }
   const grafts = gids.map((id) => ({ id, price: 70, sold: false }));
   const relics = [rollRelicByAct(run), rollRelic(run, 'shop')].filter((x, i, a) => x && a.indexOf(x) === i).map((id) => ({ id, price: { common: 150, uncommon: 200, rare: 280, shop: 180, boss: 300 }[RELICS[id].rarity] || 200, sold: false }));
   const potions = [0, 1, 2].map(() => ({ id: rollPotion(run), price: 50, sold: false }));
@@ -429,13 +435,15 @@ export const R = {
   queueGraftPick: (run) => { run.flags.queueGraft = (run.flags.queueGraft || 0) + 1; },
   queueFight: (run, enemies, o = {}) => { run.flags.queueFight = { enemies, elite: !!o.elite }; },
   rng: (run) => run.rng,
-  addGraftRandom: (run, uid) => { const inst = findInst(run, uid); if (!inst) return null; const pool = Object.values(GRAFTS).filter((g) => canGraft(inst, g.id)); if (!pool.length) return null; const g = run.rng.pick(pool); applyGraft(run, uid, g.id, { keepPhase: true }); return g.id; },
+  addGraftRandom: (run, uid) => { const inst = findInst(run, uid); if (!inst) return null; const pool = gpool(run).filter((g) => canGraft(inst, g.id)); if (!pool.length) return null; const g = run.rng.pick(pool); applyGraft(run, uid, g.id, { keepPhase: true }); return g.id; },
   moveGraft: (run, from, to, gid) => { const a = findInst(run, from), b = findInst(run, to); if (!a || !b || a === b || !a.grafts.includes(gid) || !canGraft(b, gid)) return false; a.grafts.splice(a.grafts.indexOf(gid), 1); b.grafts.push(gid); return true; },
   shatter: (run, uid) => { run.deck = run.deck.filter((i) => i.uid !== uid); run.stats.shatters++; },
   strainOf: (run) => strainInfo(run),
 };
 export function startEvent(run) {
   const pool = Object.values(EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id));
+  const open = pool.filter((e) => runAllows(run, e.id));
+  if (open.length) pool.splice(0, pool.length, ...open);
   const ev = pool.length ? run.rng.pick(pool) : null;
   if (!ev) { run.phase = 'map'; return null; }
   run.seenEvents.push(ev.id);
@@ -482,6 +490,8 @@ export function resolveFight(run, result) {
   if (result.damageTaken) run.stats.damageTaken += result.damageTaken;
   run.stats.shatters += result.shattered.length;
   if (!result.win || run.hp <= 0) { run.killedBy = result.killedBy || null; run.deathCause = result.cause || null; run.phase = 'dead'; run.pending = null; return 'dead'; }
+  run.killedEnemies = run.killedEnemies || []; // first-kill bonus (engine/unlock.js)
+  for (const id of met) if (!run.killedEnemies.includes(id)) run.killedEnemies.push(id);
   if (kind === 'elite') run.stats.elites++;
   if (kind === 'boss') run.stats.bosses++;
   const hero = HEROES[run.hero];

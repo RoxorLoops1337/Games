@@ -41,11 +41,11 @@ export function boot(canvas) {
   const flow = {
     app, audio, RUN, META,
     start(opts) {
-      const run = RUN.newRun(opts);
+      const run = RUN.newRun(META.withUnlocks(app.shared.meta, opts)); // content gating: the player's unlocked set (Daily: starting pool)
       app.shared.run = run; META.onRunStart && META.onRunStart(app.shared.meta, run); saveRun(run);
       flow.route();
     },
-    startPractice(snap) { const run = META.newPracticeRun(snap); app.shared.run = run; saveRun(run); flow.route(); },
+    startPractice(snap) { const run = META.newPracticeRun(snap, app.shared.meta); app.shared.run = run; saveRun(run); flow.route(); },
     resume() { const run = loadRun(); if (!run) return false; app.shared.run = run; flow.route(); return true; },
     hasSave: () => hasRun(),
     abandon() { const run = app.shared.run; if (run) { run.phase = 'dead'; run.abandoned = true; } flow.route(); },

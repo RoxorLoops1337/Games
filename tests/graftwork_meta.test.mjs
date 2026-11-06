@@ -46,13 +46,21 @@ t('onRunStart counts runs and daily', () => {
   const m = fresh(); M.onRunStart(m, mk()); assert.equal(m.stats.runs, 1); assert.equal(m.daily.lastPlayed, null);
   const d = mk('marrow', { daily: 'daily-2026-01-02' }); M.onRunStart(m, d); assert.equal(m.daily.lastPlayed, 'daily-2026-01-02'); assert.ok(M.dailyPlayed(m, 'daily-2026-01-02'));
 });
-t('hero unlock: wick on Act 2, odile on win', () => {
+t('hero unlock: wick after 5 runs incl. Act 2, odile after 11 runs incl. a win (count fallbacks 7 and 15)', () => {
   const m = fresh(); assert.ok(!M.heroUnlocked(m, 'wick')); assert.ok(!M.heroUnlocked(m, 'odile'));
   let r = M.recordRunEnd(m, finish(mk(), 'dead', 1), 'dead'); assert.equal(r.newUnlocks.length, 0); assert.ok(!M.heroUnlocked(m, 'wick'));
-  r = M.recordRunEnd(m, finish(mk(), 'dead', 2), 'dead'); assert.ok(M.heroUnlocked(m, 'wick')); assert.ok(!M.heroUnlocked(m, 'odile'));
+  r = M.recordRunEnd(m, finish(mk(), 'dead', 2), 'dead'); assert.ok(!M.heroUnlocked(m, 'wick'), 'Act 2 alone is not enough before run 5');
+  for (let i = 0; i < 2; i++) M.recordRunEnd(m, finish(mk(), 'dead', 1), 'dead');
+  assert.ok(!M.heroUnlocked(m, 'wick'));
+  r = M.recordRunEnd(m, finish(mk(), 'dead', 1), 'dead'); assert.ok(M.heroUnlocked(m, 'wick'), 'run 5 with Act 2 seen'); assert.ok(!M.heroUnlocked(m, 'odile'));
   assert.deepEqual(r.newUnlocks.map((u) => [u.kind, u.id]), [['hero', 'wick']]);
-  r = M.recordRunEnd(m, finish(mk('wick'), 'won'), 'won'); assert.ok(M.heroUnlocked(m, 'odile'));
+  for (let i = 0; i < 5; i++) M.recordRunEnd(m, finish(mk('wick'), 'dead', 1), 'dead');
+  assert.ok(!M.heroUnlocked(m, 'odile'), 'no win yet at run 10');
+  r = M.recordRunEnd(m, finish(mk('wick'), 'won'), 'won'); assert.ok(M.heroUnlocked(m, 'odile'), 'run 11 with a win');
   assert.ok(r.newUnlocks.some((u) => u.id === 'odile'));
+  const f = fresh(); for (let i = 0; i < 7; i++) M.recordRunEnd(f, finish(mk(), 'dead', 1), 'dead');
+  assert.ok(M.heroUnlocked(f, 'wick'), 'fallback at run 7'); for (let i = 0; i < 8; i++) M.recordRunEnd(f, finish(mk(), 'dead', 1), 'dead');
+  assert.ok(M.heroUnlocked(f, 'odile'), 'fallback at run 15');
 });
 t('ascension chain', () => {
   const m = fresh();

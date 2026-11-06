@@ -374,7 +374,7 @@ function doForge(run, pol) {
 }
 
 export function playRun(heroId, seed, pol = POLICIES.careful, asc = 0, o = {}) {
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' }) // GW_UNLOCK=all|start;
   const log = { fights: [], grafts: 0, skips: 0, shatters: 0, events: 0, shops: 0 };
   let guard = 0;
   while (guard++ < 600 && run.phase !== 'dead' && run.phase !== 'won') {
@@ -393,7 +393,7 @@ export function playRun(heroId, seed, pol = POLICIES.careful, asc = 0, o = {}) {
         const rw = run.pending;
         RUN.claimGold(run, rw);
         if (rw.relic) RUN.addRelic(run, rw.relic);
-        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, rw.relicChoices[0]);
+        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, (o.forceBoss && rw.relicChoices.includes(o.forceBoss)) ? o.forceBoss : (pol.pickRelic ? pol.pickRelic(rw.relicChoices) : rw.relicChoices[0]));
         if (rw.potion) RUN.addPotion(run, rw.potion);
         RUN.afterReward(run); break;
       }
