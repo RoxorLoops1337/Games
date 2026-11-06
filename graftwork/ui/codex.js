@@ -177,6 +177,7 @@ const CELLS = {
 };
 
 // ---------------------------------------------------------------- rules illustrations
+
 const RULES = [
   ['Pick a card and a graft', 'After a fight you never add cards. You pick one of your own cards and one graft to sew onto it.'],
   ['Every graft has a boon and a price', 'The boon helps. The price is always paid. Read both before you stitch.'],
@@ -186,7 +187,11 @@ const RULES = [
   ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
   ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school Cuts it and pays one Stitch per knot after the first. A longer Line pays more.'],
   ['Slack, Tied, Frayed', 'Slack: a card with no school changes nothing. Tied: a Tempered card never cuts, and a Tied Line carries over a turn. Frayed: a jammed card acts as Slack.'],
+  ['The Ward: build, then walk', 'In Ward mode each floor is a hospital you build. Mornings you play building plans: rooms spawn fights, events, shops and forges on timers. Lit rooms use power.'],
+  ['The die and the route', 'Each walk (midday, evening, night) starts with a die roll. Plan a route of that many rooms next to each other, then Go. Every room on the route triggers in order. G goes, R rests the day.'],
+  ['Days, nights and the boss', 'Night pays best and hits hardest. The boss waits in the Theatre: walk in early for a bonus, or be pulled in on the last night. Beat the third floor to win.'],
 ];
+export const CODEX_RULES = RULES; // tests
 function ruleArt(app, i, cx, cy, w, h) {
   const ctx = app.ctx, t = app.t;
   const demoGraft = GRAFT_LIST.find((g) => g.tier === 'safe') || GRAFT_LIST[0];
@@ -248,6 +253,17 @@ function ruleArt(app, i, cx, cy, w, h) {
       ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.beginPath(); ctx.arc(cx - 56, cy, 16, 0, 6.283); ctx.stroke(); ctx.restore();
       ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = lnw(4); ctx.strokeStyle = '#C9A227'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx + 40, cy); for (let k = 1; k <= 5; k++) ctx.lineTo(cx + 40 + k * 7, cy + (k % 2 ? -7 : 7) * Math.sin(t * 3 + k)); ctx.strokeStyle = '#d8a066'; ctx.lineWidth = lnw(2); ctx.stroke();
+      break;
+    }
+    case 8: case 9: case 10: { // the Ward rules: a floor plan with the hero, the die with a route, the day clock
+      ctx.save();
+      if (i === 8) { for (let k = 0; k < 6; k++) { const rx = cx - 78 + (k % 3) * 54, ry = cy - 34 + Math.floor(k / 3) * 54; app.rr(rx, ry, 46, 46, 6); ctx.fillStyle = k === 4 ? 'rgba(232,220,196,.04)' : '#d8c79d'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = '#3a2a14'; ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(cx - 78 + 6, cy - 34 + 6, 7, 0, 6.283); ctx.fillStyle = COL.lamp; ctx.fill(); }
+      else if (i === 9) { app.rr(cx - 82, cy - 22, 44, 44, 8); ctx.fillStyle = '#f0e4c4'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = '#3a2a14'; ctx.stroke(); app.text('3', cx - 60, cy - 14, { size: 26, bold: true, align: 'center', color: '#2a1c0c' });
+        ctx.setLineDash([5, 4]); ctx.strokeStyle = COL.scar; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.moveTo(cx - 20, cy); ctx.lineTo(cx + 10, cy); ctx.lineTo(cx + 10, cy - 24); ctx.lineTo(cx + 50, cy - 24); ctx.stroke(); ctx.setLineDash([]);
+        for (const [dx, dy] of [[-20, 0], [10, 0], [10, -24], [50, -24]]) { ctx.beginPath(); ctx.arc(cx + dx, cy + dy, 6, 0, 6.283); ctx.fillStyle = '#d8c79d'; ctx.fill(); ctx.stroke(); } }
+      else { for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(cx - 66 + k * 44, cy, 17, 0, 6.283); ctx.fillStyle = k === 3 ? '#26304a' : '#d8c79d'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = k === 3 ? COL.scar : '#3a2a14'; ctx.stroke(); } }
+      ctx.restore();
       break;
     }
     default: {

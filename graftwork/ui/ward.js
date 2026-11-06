@@ -190,7 +190,7 @@ export default {
     if (params && params.then && !S.walk) app.after(1, () => app.shared.flow.route()); // nothing to show: on to the trigger's screen
   },
   leave() { },
-  key() { return false; },
+  key(app, e) { return !!(S && S.run && S.run.ward && e.key === 'Tab' && app.top() === this); }, // Tab walks the rooms (kbItems): keep the browser focus on the page
   update(app, dt) {
     if (!S || !S.run.ward) return;
     app.touchPan = !!S.plans; // a finger drag on the Ward is a plan drag (core.js turns a vertical touch move into a scroll otherwise, and the drop never happened); only the plans overlay scrolls
@@ -243,6 +243,7 @@ export default {
     this.drawRooms(app, inter);
     this.drawTint(app);
     if (inter.path) this.drawPath(app, inter.path, inter.dest);
+    this.drawKb(app);
     this.drawHero(app);
     S.fx.draw(g);
     g.restore();
@@ -544,13 +545,64 @@ export default {
   },
   toast(text) { S.toast = text; S.toastT = 2.6; },
 
+  // keyboard play: Tab / Shift+Tab move a focus ring over the cells that can take the next action (the targets of the selected plan, or the
+  // rooms in the morning; the legal route steps on a walk, the Theatre on the last night), Enter acts on it, Backspace takes a step back
+  kbItems() {
+    const run = S.run, w = run.ward, out = [], at = (x, y, rid, what) => out.push({ x, y, rid, what });
+    if (w.phase === 'morning') {
+      const inst = S.sel !== null && S.sel !== undefined ? w.deck.hand.find((c) => c.uid === S.sel) : null, card = inst && BUILD_CARDS[inst.id];
+      if (card) { const lg = this.legalTargets(run, inst, card); for (const [x, y] of lg.cells) at(x, y, null, 'build here'); for (const id of lg.rooms) at(w.rooms[id].x, w.rooms[id].y, id, ROOMS[w.rooms[id].type].name); }
+      else for (const r of Object.values(w.rooms)) if (ROOMS[r.type].power > 0) at(r.x, r.y, r.id, `${ROOMS[r.type].name}, switch power`);
+    } else if (WD.bossForced(run)) { const th = WD.theatreOf(run); if (th) at(th.x, th.y, th.id, 'the Theatre'); }
+    else {
+      const rt = w.route || [];
+      for (const id of WD.legalSteps(run)) { const r = w.rooms[id]; at(r.x, r.y, id, ROOMS[r.type].name); }
+      if (rt.length) { const r = w.rooms[rt[rt.length - 1]]; at(r.x, r.y, r.id, `${ROOMS[r.type].name}, take the step back`); }
+    }
+    return out.sort((a, b) => a.y - b.y || a.x - b.x);
+  },
+  kbMove(app, dir) {
+    const items = this.kbItems(); if (!items.length) { S.kb = -1; return; }
+    S.kb = S.kb === undefined || S.kb < 0 ? (dir > 0 ? 0 : items.length - 1) : (S.kb + dir + items.length) % items.length;
+    const it = items[S.kb]; sfx(app, 'uiClick', { vol: 0.5 });
+    if (app.announce) app.announce(`${it.what}, ${'ABCDEFGHI'[it.x]}${it.y + 1}. ${S.kb + 1} of ${items.length}.`);
+  },
+  kbActivate(app) {
+    const run = S.run, w = run.ward, items = this.kbItems(), it = items[S.kb];
+    if (!it) return false;
+    if (w.phase === 'morning') {
+      const inst = S.sel !== null && S.sel !== undefined ? w.deck.hand.find((c) => c.uid === S.sel) : null, card = inst && BUILD_CARDS[inst.id];
+      if (card) { const tgt = this.targetAt(run, card, it.x, it.y); if (tgt !== undefined && this.darkGuard(app, card, inst.uid, tgt)) this.play(app, inst.uid, tgt); }
+      else if (it.rid) this.power(app, w.rooms[it.rid]);
+    } else if (WD.bossForced(run)) this.walkTo(app, it.rid, 0);
+    else {
+      const rt = w.route || [];
+      if (S.dieRolling) return true;
+      if (rt.length && rt[rt.length - 1] === it.rid) { WD.undoRoute(run); sfx(app, 'uiClick'); }
+      else { const r = WD.extendRoute(run, it.rid); if (r.ok) sfx(app, 'mapStep'); else { sfx(app, 'error'); this.toast(whyText(run, r.why)); } }
+      save(run);
+    }
+    return true;
+  },
+  drawKb(app) {
+    if (S.kb === undefined || S.kb < 0 || S.walk || S.banner) return;
+    const items = this.kbItems(); if (!items.length) { S.kb = -1; return; }
+    if (S.kb >= items.length) S.kb = items.length - 1;
+    const it = items[S.kb], c = cellXY(it.x, it.y), g = app.ctx;
+    g.save(); g.lineWidth = lnw('bold'); g.strokeStyle = '#ffffff'; app.rr(c.x + 2, c.y + 2, CELL - 4, CELL - 4, 9); g.stroke();
+    g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 20; g.strokeStyle = COL.scar; app.rr(c.x + 2, c.y + 2, CELL - 4, CELL - 4, 9); g.stroke(); g.restore();
+  },
   onKey(app, e) {
     if (app.blocked || S.walk || S.banner) return;
     const run = S.run, w = run.ward, k = e.key;
+    if (k === 'Tab') { this.kbMove(app, e.shiftKey ? -1 : 1); return; }
+    if (k === 'Enter' && S.kb >= 0) { if (this.kbActivate(app)) return; }
+    if ((k === 'Backspace' || k === 'z' || k === 'Z') && w.phase !== 'morning' && !WD.bossForced(run) && (w.route || []).length) { WD.undoRoute(run); sfx(app, 'uiClick'); save(run); return; }
+    if (k === 'Escape' && S.kb >= 0 && S.sel === null && !S.selRoom && !S.drag) { S.kb = -1; app.escBusy = true; return; }
     if (k === 'Escape' && (S.sel !== null || S.selRoom || S.drag)) { S.sel = null; S.selRoom = null; S.drag = null; app.escBusy = true; }
     else if (k === 'Enter' && w.phase === 'morning') this.endMorning(app);
     else if (k === 'Enter' && S.selRoom) this.walkTo(app, S.selRoom, S.alt);
-    else if (k >= '1' && k <= '5' && w.phase === 'morning') { const c = w.deck.hand[+k - 1]; if (c) S.sel = S.sel === c.uid ? null : c.uid; }
+    else if (k >= '1' && k <= '5' && w.phase === 'morning') { const c = w.deck.hand[+k - 1]; if (c) { S.sel = S.sel === c.uid ? null : c.uid; S.kb = -1; } }
     else if ((k === 'p' || k === 'P') && !S.plans) S.plans = true;
   },
 

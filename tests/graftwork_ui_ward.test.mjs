@@ -13,7 +13,7 @@ import { BUILD_CARDS } from '../graftwork/data/ward.js';
 const wardMod = await import('../graftwork/ui/ward.js');
 const ward = wardMod.default, { cellCenter, handRects, resetWardMem, wardInterlude, whyText, walkSummary } = wardMod;
 const SCR = {};
-for (const n of ['combat', 'reward', 'graft', 'shop', 'event', 'title']) SCR[n] = (await import(`../graftwork/ui/${n}.js`)).default;
+for (const n of ['combat', 'reward', 'graft', 'shop', 'event', 'title', 'end']) SCR[n] = (await import(`../graftwork/ui/${n}.js`)).default;
 const KIT = await import('../graftwork/ui/ward_kit.js');
 
 let n = 0;
@@ -287,6 +287,31 @@ for (const ps of [0, 0.64, 0.54, 0.46]) await t('layout sweep ' + (ps ? 'phone '
   assert.equal(mine.length, 0, 'layout problems');
 });
 
+// the first-time tutorial tips (tips ON, nothing seen yet) are part of the sweep: the bubble and its text stay on the stage, inside the left panel,
+// at every phone scale and text size, for every Ward tip, with the hero at the left edge (the Entrance is column 0)
+const TIP_KEYS = { morning: ['ward_build', 'ward_power', 'ward_timers'], midday: ['ward_walk', 'ward_phases'] };
+for (const ps of [0, 0.64, 0.54, 0.46]) await t('layout sweep: tutorial tips ' + (ps ? 'phone ' + ps : 'desktop'), async () => {
+  const bad = [];
+  for (const ts of [100, 125, 150, 175]) for (const phase of ['morning', 'midday']) for (const key of TIP_KEYS[phase]) {
+    const { app, run, flow, meta } = await setup({ seed: 'tipsweep', pscale: ps });
+    run.relics = Object.keys((await import('../graftwork/data/index.js')).RELICS).slice(0, 9); for (let i = 0; i < 30; i++) run.ward.log.push(`D1 morning: A long log line number ${i} about the Isolation elite.`);
+    meta.settings.tips = true; meta.settings.textScale = ts; app.textScale = ts / 100; meta.tips = {};
+    for (const k of Object.values(TIP_KEYS).flat()) if (k !== key && TIP_KEYS[phase].indexOf(k) < TIP_KEYS[phase].indexOf(key)) meta.tips[k] = true; else if (!TIP_KEYS[phase].includes(k)) meta.tips[k] = true;
+    if (phase === 'midday') { WD.endMorning(run); run.ward.hero.room = Object.values(run.ward.rooms).find((r) => r.type === 'rm_entrance').id; }
+    const texts = watchTexts(app);
+    flow.route(); frames(app, 230); texts.length = 0;
+    app.afterFrame = () => { app.afterFrame = null; analyse(app, texts, `tips/${ps}/${ts}/${key}`); };
+    frames(app, 1);
+    const box = app._tipBox, tip = LAYOUT.getAll().find((r) => r.id === 'tutorial-tip');
+    if (app._tipKey !== key || !box || !tip) { bad.push(`${ts}/${key}: tip not shown (${app._tipKey})`); continue; }
+    if (box.x < 8 - 0.5 || box.y < 8 - 0.5 || box.x + box.w > 1272.5 || box.y + box.h > 712.5) bad.push(`${ts}/${key}: bubble off the stage ${JSON.stringify(box)}`);
+    if (box.x + box.w > 12 + 260 + 0.5) bad.push(`${ts}/${key}: bubble leaves the left panel ${JSON.stringify(box)}`);
+  }
+  const mine = problems.filter((p) => p.startsWith('tips/' + ps + '/'));
+  if (mine.length) console.log(mine.map((p) => '  ' + p).join('\n'));
+  assert.deepEqual(bad.concat(mine), [], 'tutorial tip layout problems');
+});
+
 await t('z4: re-entering the Ward after a fight drops stale build stamps (rooms built in the morning stayed invisible until the old clock caught up)', async () => {
   const { app, run, flow } = await setup({ seed: 'z4stamp' });
   layout(run, [['rm_entrance', 0, 2]]);
@@ -462,6 +487,131 @@ await t('z5: a walk resumed after a reload (no step plan in memory) still walks 
   frames(app, 120);
   assert.ok(seen.includes('ward(walk)'), 'the token walked the corridor step: ' + seen.join(' '));
   assert.equal(run.phase, 'combat'); assert.equal(run.ward.hero.room, w2);
+});
+
+await t('item6: the Ward plays from the keyboard alone: 1 picks a plan, Tab walks the legal cells, Enter builds, Enter ends the morning, Tab and Enter plan a route, G goes, Backspace undoes, R rests the day', async () => {
+  const { app, run, flow, seen } = await setup({ seed: 'kb1' });
+  const m = () => [{ kind: 'monster', id: NORMAL1[0] }];
+  const [ent, w1, c1] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, m()], ['rm_corridor', 2, 2]]);
+  run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = []; give(run, 'b_corridor');
+  flow.route(); frames(app, 220);
+  const before = Object.keys(run.ward.rooms).length;
+  key(app, '1'); assert.ok(app.screens.ward.st.sel !== null, '1 selects the plan');
+  key(app, 'Tab'); const items = app.screens.ward.kbItems();
+  assert.ok(items.length > 0 && app.screens.ward.st.kb === 0, 'Tab focuses the first legal cell of the plan');
+  if (items.length > 1) { key(app, 'Tab'); assert.equal(app.screens.ward.st.kb, 1); app.pressedKeys.push({ key: 'Tab', shiftKey: true, preventDefault() {} }); app.tick(1 / 60); assert.equal(app.screens.ward.st.kb, 0, 'Shift+Tab goes back'); }
+  key(app, 'Enter'); frames(app, 3);
+  assert.equal(Object.keys(run.ward.rooms).length, before + 1, 'Enter built a room on the focused cell');
+  // no plan selected and no focus: Enter ends the morning
+  app.screens.ward.st.kb = -1; run.ward.deck.hand = []; key(app, 'Enter'); frames(app, 3);
+  assert.equal(run.ward.phase, 'midday', 'Enter with nothing focused ends the morning');
+  frames(app, 120); run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 }; frames(app, 30);
+  const st = app.screens.ward.st; st.dieRolling = 0;
+  key(app, 'Tab'); const legal = app.screens.ward.kbItems();
+  assert.ok(legal.some((i) => i.rid === w1), 'the first step is among the focusable rooms');
+  while (app.screens.ward.kbItems()[st.kb].rid !== w1) key(app, 'Tab');
+  key(app, 'Enter'); assert.deepEqual(run.ward.route, [w1], 'Enter adds the focused room to the route');
+  key(app, 'Backspace'); assert.deepEqual(run.ward.route, [], 'Backspace undoes the step');
+  key(app, 'Tab'); while (app.screens.ward.kbItems()[st.kb].rid !== w1) key(app, 'Tab'); key(app, 'Enter');
+  assert.deepEqual(run.ward.route, [w1]);
+  key(app, 'g'); frames(app, 60);
+  assert.equal(run.phase, 'combat', 'G walks the route into the fight'); assert.equal(run.ward.hero.room, w1);
+  // R rests the rest of the day
+  const r2 = (await setup({ seed: 'kb2' })); layout(r2.run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]); r2.run.ward.deck.hand = [];
+  r2.flow.route(); frames(r2.app, 200); WD.endMorning(r2.run); frames(r2.app, 120); r2.app.screens.ward.st.dieRolling = 0;
+  key(r2.app, 'r'); frames(r2.app, 400);
+  assert.equal(r2.run.ward.phase, 'morning', 'R waits out every walk left today'); assert.equal(r2.run.ward.day, 2);
+});
+
+// ---- item 6: the screens nobody had walked yet ----
+function endFlow(o) { // a flow whose dead / won phases open the real end screen (recorded like main.js does)
+  return (async () => {
+    const r = await setup(o), META = await import('../graftwork/engine/meta.js');
+    const meta = META.migrate(null); meta.settings.reducedMotion = true; meta.settings.tips = false; r.app.shared.meta = meta;
+    const route0 = r.flow.route;
+    r.flow.route = () => {
+      const run = r.run;
+      if ((run.phase === 'dead' || run.phase === 'won') && !run.ended) { run.ended = true; run.endInfo = META.recordRunEnd(meta, run, run.phase === 'won' ? 'won' : 'dead'); }
+      if (run.phase === 'dead' || run.phase === 'won') { r.seen.push('end'); r.app.go('end', { run }); return; }
+      route0();
+    };
+    return r;
+  })();
+}
+await t('item6: boss night, real clicks: Enter the Theatre pulls you in, the boss falls, the reward, the graft, and floor 2 opens in the morning', async () => {
+  const { app, run, flow } = await endFlow({ seed: 'bossnight' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]); run.ward.deck.hand = [];
+  run.ward.day = run.ward.dayLimit; run.ward.phase = 'night'; WD.rollWalk(run);
+  flow.route(); frames(app, 220);
+  const go = reg('ward-act'); assert.ok(go);
+  assert.ok(!reg('ward-die'), 'the forced night shows no die: there is no route to roll for');
+  click(app, go.x + go.w / 2, go.y + 50); frames(app, 80);
+  assert.equal(run.phase, 'combat'); assert.equal(run.pending.fightKind, 'boss'); assert.equal(run.pending.ward.early, false);
+  RUN.resolveFight(run, win()); flow.route(); frames(app, 30);
+  assert.equal(run.phase, 'reward'); assert.ok(run.pending.relicChoices && run.pending.relicChoices.length, 'boss relic pair');
+  RUN.claimGold(run, run.pending); WD.takeBuildChoice(run, null); RUN.addRelic(run, run.pending.relicChoices[0]); RUN.afterReward(run); flow.route(); frames(app, 20);
+  while (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); flow.route(); frames(app, 10); }
+  assert.equal(run.act, 2); assert.equal(run.ward.act, 2); assert.equal(run.ward.phase, 'morning'); assert.equal(run.ward.day, 1);
+  frames(app, 200); assert.equal(app.current, 'ward');
+  assert.ok(run.ward.rooms[run.ward.hero.room], 'the hero stands in a room of the new floor');
+});
+
+await t('item6: death in the Ward (a night fight lost) opens the end screen, which names the day, and draws', async () => {
+  const { app, run, flow } = await endFlow({ seed: 'deathw' });
+  const [, w1] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, [{ kind: 'monster', id: NORMAL1[0] }]]]);
+  run.ward.deck.hand = []; run.ward.day = 3; run.ward.phase = 'night'; WD.rollWalk(run);
+  flow.route(); frames(app, 200);
+  WD.extendRoute(run, w1); WD.startRoute(run); assert.equal(run.phase, 'combat');
+  RUN.resolveFight(run, { win: false, shattered: [], damageTaken: 50, turns: 4, killedBy: 'The Orderly' }); flow.route(); frames(app, 60);
+  assert.equal(app.current, 'end'); assert.equal(run.phase, 'dead');
+  const texts = []; const raw = app.text; app.text = (str, ...r) => { texts.push(String(str)); return raw(str, ...r); }; frames(app, 90);
+  assert.ok(texts.some((x) => /day 3 of 8/.test(x)), 'the end line names the Ward day: ' + texts.filter((x) => /closed|ward/i.test(x)).join(' | '));
+  assert.ok(!texts.some((x) => /floor \d+ of act/.test(x)), 'not the classic floor line');
+});
+
+await t('item6: win after the boss on floor 3: the Grafter fight follows, and winning it opens the victory end screen', async () => {
+  const { app, run, flow } = await endFlow({ seed: 'win3' });
+  RUN.startAct(run, 3); layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]); run.ward.deck.hand = [];
+  run.ward.day = run.ward.dayLimit; run.ward.phase = 'night'; WD.rollWalk(run);
+  flow.route(); frames(app, 200);
+  WD.startWalk(run, WD.theatreOf(run).id); assert.equal(run.pending.fightKind, 'boss');
+  RUN.resolveFight(run, win()); flow.route(); frames(app, 20); assert.equal(run.phase, 'reward');
+  RUN.claimGold(run, run.pending); WD.takeBuildChoice(run, null); RUN.afterReward(run); flow.route(); frames(app, 20);
+  while (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); flow.route(); frames(app, 10); }
+  assert.equal(run.phase, 'combat'); assert.equal(run.pending.fightKind, 'final', 'after the floor 3 boss the Grafter fight starts at once');
+  RUN.resolveFight(run, win()); flow.route(); frames(app, 120);
+  assert.equal(run.phase, 'won'); assert.equal(app.current, 'end');
+  const texts = []; const raw = app.text; app.text = (str, ...r) => { texts.push(String(str)); return raw(str, ...r); }; frames(app, 90);
+  assert.ok(texts.some((x) => /THE GRAFTER IS UNMADE/.test(x)), 'victory title');
+});
+
+await t('item6: reduced motion: the die shows its result at once (no tumble, Go never waits on it); with motion it tumbles then settles on the roll', async () => {
+  for (const reducedMotion of [true, false]) {
+    const { app, run, meta, flow } = await setup({ seed: 'diert' });
+    meta.settings.reducedMotion = reducedMotion; meta.settings.reduceMotion = reducedMotion;
+    layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2]]); run.ward.deck.hand = [];
+    flow.route(); frames(app, 200); WD.endMorning(run); const roll = WD.rollOf(run);
+    frames(app, 3); const st = app.screens.ward.st;
+    if (reducedMotion) { assert.equal(st.dieRolling || 0, 0, 'no tumble with reduced motion'); assert.ok(reg('ward-die'), 'the die is drawn at once'); }
+    else { assert.ok(st.dieRolling > 0, 'the die tumbles'); frames(app, 80); assert.equal(st.dieRolling, 0, 'and settles'); assert.ok(reg('ward-die')); }
+    const shown = []; const raw = app.text; app.text = (str, ...r) => { shown.push(String(str)); return raw(str, ...r); }; frames(app, 2);
+    assert.ok(shown.includes(String(roll.n)), `the die face reads the roll ${roll.n}: ${shown.filter((x) => /^\d$/.test(x))}`);
+  }
+});
+
+await t('item6: the Codex Rules tab teaches the Ward (build, the die and the route, the boss) and draws on the phone', async () => {
+  const { CODEX_RULES } = await import('../graftwork/ui/codex.js');
+  const all = CODEX_RULES.map((r) => r.join(' ')).join('\n');
+  assert.ok(/Ward/.test(all) && /die/.test(all) && /boss/i.test(all) && /\bG\b/.test(all) && /\bR\b/.test(all), 'Ward rules named: ' + all.slice(-400));
+  assert.ok(!/\u2014/.test(all), 'no em dashes');
+  for (const ps of [0, 0.54]) {
+    const { app } = await setup({ seed: 'codexw', pscale: ps });
+    app.register('codex', (await import('../graftwork/ui/codex.js')).default);
+    app.go('base'); app.push('codex', {}); app.top().setTab(6); frames(app, 30);
+    const texts = []; const raw = app.text; app.text = (str, ...r) => { texts.push(String(str)); return raw(str, ...r); };
+    app.top().rulesSt.target = 99999; frames(app, 90);
+    assert.ok(texts.some((x) => /The Ward: build, then walk|Days, nights and the boss|The die and the route/.test(x)), 'the Ward rules are on the sheet (scrolled) at scale ' + ps);
+  }
 });
 
 console.log(`${n} ward UI checks passed`);

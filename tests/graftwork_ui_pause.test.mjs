@@ -157,4 +157,20 @@ for (const webkit of [false, true]) {
   // overlay applies the scale through main.js logic: simple contract check
   assert.ok([100, 125, 150, 175].includes(s.textScale));
 }
+// ---- Esc on the Deck opened from Pause closes only the Deck (the keydown that closed it must not reach Pause as well) ----
+{
+  const deckview = (await import('../graftwork/ui/deckview.js')).default;
+  const { app } = await rig(null);
+  app.register('deckview', deckview);
+  app.shared.flow.openDeck = () => app.push('deckview', {});
+  app.shared.run = run(); app.go('map', {}); frames(app, 3);
+  // the real keydown path of ui/core.js: queue the event for the frame, then give it to the top screen first
+  const realKey = (k) => { const e = { key: k, preventDefault() {} }; app.pressedKeys.push(e); const s = app.top(); if (s && s.key && s.key(app, e)) e.preventDefault(); app.tick(1 / 60); };
+  realKey('Escape'); frames(app, 3); assert.equal(app.top().name, 'pause');
+  pause.sel = 2; realKey('Enter'); frames(app, 3); assert.equal(app.top().name, 'deckview', 'Deck opened over Pause');
+  realKey('Escape'); frames(app, 3);
+  assert.equal(app.top().name, 'pause', 'Esc closed only the Deck: Pause stays'); assert.equal(app.timeScale, 0, 'still paused');
+  realKey('Escape'); frames(app, 3); assert.notEqual(app.top().name, 'pause', 'a second Esc resumes');
+}
+
 console.log('graftwork pause ui ok');

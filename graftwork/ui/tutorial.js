@@ -72,6 +72,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
       if (r.y + r.h + 8 + bh <= lim) by = r.y + r.h + 8; else if (r.x - bw - 8 >= 8) bx = r.x - bw - 8; else by = Math.max(8, lim - bh);
     }
   }
+  if (app.reg) app.reg('tutorial-tip', bx, by, bw, bh, { layer: 'hud', overlay: true }); // the layout sweeps see the bubble (it must stay on the stage)
   // The bubble never eats clicks: only the small Got it button does, so cards, End Turn and the rail stay playable under it.
   const dbw = Math.max(78, Math.round(app.measure('Got it', 14, { ui: true, bold: true }) + 28)), dbh = btnH, dbx = bx + bw - pad - dbw + 4, dby = by + bh - dbh - 8;
   const inside = x >= bx && x <= bx + bw && y >= by && y <= by + bh;
