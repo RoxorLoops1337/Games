@@ -10,6 +10,8 @@ import { saveRun } from '../engine/save.js';
 export const IN_RUN = new Set(['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
 export const PAUSE_BTN = { x: 1136, y: 9, w: 44, h: 38 };
 export const FS_BTN = { x: 1188, y: 9, w: 44, h: 38 };
+// Chrome buttons stay inside the safe corner (notch, home bar, cropped strip): shifted by app.safe, unchanged when it is zero.
+function chromeRect(app, B) { const sf = app.safe || { t: 0, r: 0 }; return { x: B.x - Math.max(0, sf.r - 48), y: Math.max(B.y, sf.t + 4), w: B.w, h: B.h }; }
 const BRASS = '#b08d3c';
 
 const calm = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
@@ -276,11 +278,11 @@ export function drawPauseOverlay(app) {
   const inRun = app.stack.length === 1 && IN_RUN.has(app.current);
   const busy = !!app.escBusy;
   if (inRun) {
-    const P = PAUSE_BTN;
+    const P = chromeRect(app, PAUSE_BTN), F = chromeRect(app, FS_BTN);
     app.reg('pause_btn', P.x, P.y, P.w, P.h, { layer: 'hud' });
     if (app.inRect(P.x, P.y, P.w, P.h)) app.tooltip('Pause', 'Esc');
     if (app.button('', P.x, P.y, P.w, P.h, { icon: pauseIcon, disabled: busy })) openPause(app);
-    fsButton(app, FS_BTN.x, FS_BTN.y, FS_BTN.w, FS_BTN.h, { id: 'fs_btn' });
+    fsButton(app, F.x, F.y, F.w, F.h, { id: 'fs_btn' });
     if (!busy && app.stackAtStart === 1 && app.pressedKeys.some((e) => e.key === 'Escape')) openPause(app);
   }
   app.escBusy = false;

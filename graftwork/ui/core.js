@@ -16,6 +16,9 @@ export const EASE = {
   linear: (t) => t, out: (t) => 1 - Math.pow(1 - t, 3), in: (t) => t * t * t, inOut: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
   back: (t) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }, bounce: (t) => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * t; if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75; if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375; return n * (t -= 2.625 / d) * t + 0.984375; },
 };
+// Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
+// The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
+export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 18, maxHitGrow: 14 };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -29,7 +32,7 @@ export function createApp(canvas, opts = {}) {
     keys: new Set(), pressedKeys: [],
     screens: {}, stack: [], tweens: [], timers: [],
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
-    scale: 1, offX: 0, offY: 0, textCache: new Map(), layout: LAYOUT,
+    scale: 1, offX: 0, offY: 0, cropY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
     chrome: CH,
     navButtons: false, // screens opt in: Tab / Shift-Tab / Enter walk the buttons registered last frame
@@ -39,15 +42,43 @@ export function createApp(canvas, opts = {}) {
   const TO = {}; // scratch text options for the chrome's own labels (read synchronously by app.text)
 
   // ---- stage scaling ----
+  // Safe-area insets in CSS px (notches, home bar). Read from a hidden probe styled with env(safe-area-inset-*); zeros without a DOM.
+  let probe = null;
+  function insets() {
+    const z = { l: 0, t: 0, r: 0, b: 0 };
+    try {
+      if (typeof document === 'undefined' || !document.body || !document.createElement) return z;
+      if (!probe) {
+        probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+        document.body.appendChild(probe);
+      }
+      const cs = getComputedStyle(probe);
+      return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+    } catch { return z; }
+  }
   app.resize = () => {
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
-    app.scale = Math.min(iw / W, ih / H);
+    // Short, wide viewports (phones in landscape): drop SMALL.cropY logical px of the top and bottom margins so the stage scales up ~7%.
+    // The chrome (pause, fullscreen) is moved inside app.safe, so nothing important sits in the cropped strip.
+    const wide = ih < 600 && iw / ih > W / H;
+    const crop = wide ? SMALL.cropY : 0;
+    app.cropY = crop;
+    app.scale = Math.min(iw / W, ih / (H - crop * 2));
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.style.width = W * app.scale + 'px'; canvas.style.height = H * app.scale + 'px';
-    canvas.style.left = (iw - W * app.scale) / 2 + 'px'; canvas.style.top = (ih - H * app.scale) / 2 + 'px';
-    canvas.width = Math.round(W * app.scale * dpr); canvas.height = Math.round(H * app.scale * dpr);
+    const cw = W * app.scale, ch = H * app.scale;
+    app.offX = (iw - cw) / 2; app.offY = (ih - ch) / 2;
+    canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+    canvas.style.left = app.offX + 'px'; canvas.style.top = app.offY + 'px';
+    canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     app.dpr = dpr; app.px = canvas.width / W;
+    // logical margins (from the canvas edges) that are visible AND clear of notches
+    const I = insets(), s = app.scale;
+    app.safe = {
+      l: Math.max(0, (I.l - app.offX) / s), t: Math.max(0, (I.t - app.offY) / s),
+      r: Math.max(0, W - (iw - I.r - app.offX) / s), b: Math.max(0, H - (ih - I.b - app.offY) / s),
+    };
   };
   const toLogical = (e) => { const r = canvas.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return { x: app.mouse.x, y: app.mouse.y }; return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
   canvas.addEventListener('pointermove', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; });
@@ -97,7 +128,14 @@ export function createApp(canvas, opts = {}) {
   const hasLS = 'letterSpacing' in ctx; // canvas letterSpacing (engraved names); skipped where unsupported
   // Text scale: settings may store 1 / 1.25 / 1.5 or 100 / 125 / 150. Public wrap, measure and text all apply it the same way (unless o.fixed).
   const scaleOf = (o) => { if (o.fixed) return 1; const v = app.textScale; return v >= 50 ? v / 100 : v > 0 ? v : 1; };
-  app.sz = (size, o = NO) => Math.round(size * scaleOf(o));
+  // Final font size in logical px: user scale, then the small-screen floor (never more than SMALL.maxBoost x, so layouts still fit).
+  const fin = (size, o) => {
+    const n = Math.round(size * scaleOf(o)), s = app.scale;
+    if (!(s < SMALL.floorBelow) || !(s > 0)) return n;
+    const fl = Math.ceil(app.minPx / s);
+    return n >= fl ? n : Math.min(fl, Math.round(n * SMALL.maxBoost));
+  };
+  app.sz = (size, o = NO) => fin(size, o);
   const spacing = (o) => { if (hasLS && o.engraved) ctx.letterSpacing = '0.5px'; };
   function tabW(ln) { const cell = ctx.measureText('0').width; let w = 0; for (let i = 0; i < ln.length; i++) { const c = ln.charCodeAt(i); w += c >= 48 && c <= 57 ? cell : ctx.measureText(ln[i]).width; } return w; }
   function lineW(ln, o) { return o.tab ? tabW(ln) : ctx.measureText(ln).width; }
@@ -119,7 +157,7 @@ export function createApp(canvas, opts = {}) {
     if (app.textCache.size > 800) app.textCache.clear();
     app.textCache.set(key, out); return out;
   }
-  app.wrap = (str, maxW, size, o = NO) => wrapRaw(str, maxW, Math.round(size * scaleOf(o)), o);
+  app.wrap = (str, maxW, size, o = NO) => wrapRaw(str, maxW, fin(size, o), o);
   const ONE = [''];
   function put(stroke, ln, x, y, o) {
     if (!o.tab) { if (stroke) ctx.strokeText(ln, x, y); else ctx.fillText(ln, x, y); return; }
@@ -137,7 +175,7 @@ export function createApp(canvas, opts = {}) {
   // text(str, x, y, {size, color, align, baseline, bold, italic, ui, maxW, lineH, shadow, alpha, stroke, engraved, tab, fixed}) -> total height
   app.textScale = 1;
   app.text = (str, x, y, o = NO) => {
-    const k = scaleOf(o), size = Math.round((o.size || 18) * k), lineH = o.lineH ? Math.round(o.lineH * k) : Math.round(size * 1.22);
+    const usz = o.size || 18, size = fin(usz, o), lineH = o.lineH ? Math.round(o.lineH * size / usz) : Math.round(size * 1.22);
     ctx.save();
     ctx.font = font(size, o); ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.baseline || 'top';
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
@@ -156,7 +194,7 @@ export function createApp(canvas, opts = {}) {
     ctx.restore();
     return lines.length * lineH;
   };
-  app.measure = (str, size, o = NO) => { ctx.save(); ctx.font = font(Math.round(size * scaleOf(o)), o); spacing(o); const w = lineW(String(str), o); ctx.restore(); return w; };
+  app.measure = (str, size, o = NO) => { ctx.save(); ctx.font = font(fin(size, o), o); spacing(o); const w = lineW(String(str), o); ctx.restore(); return w; };
   app.rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); };
   // panel: brass-framed slab (cached texture). o: {fill, stroke, r, lw, rivets:false, plain:true}
   app.panel = (x, y, w, h, o = NO) => CH.panel(app, x, y, w, h, o);
@@ -177,10 +215,16 @@ export function createApp(canvas, opts = {}) {
   // button: returns true on click. o: {fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
   app.button = (label, x, y, w, h, o = NO) => {
     const dis = !!o.disabled, F = app.focus;
-    const over = !dis && app.inRect(x, y, w, h);
+    // Hit target floor: a button smaller than minTouch CSS px on screen grows its HIT area (not its look), by at most SMALL.maxHitGrow logical px a side.
+    let hx = x, hy = y, hw = w, hh = h;
+    if (app.scale < SMALL.floorBelow && app.scale > 0) {
+      const m = app.minTouch / app.scale, gx = clamp((m - w) / 2, 0, SMALL.maxHitGrow), gy = clamp((m - h) / 2, 0, SMALL.maxHitGrow);
+      hx -= gx; hy -= gy; hw += gx * 2; hh += gy * 2;
+    }
+    const over = !dis && app.inRect(hx, hy, hw, hh);
     const down = over && app.mouse.down;
     if (over) { app.cursor = 'pointer'; if (hotL !== label || hotX !== x || hotY !== y) { hotL = label; hotX = x; hotY = y; app.hot = label + x + y; if (app.onHover) app.onHover(); } }
-    else if (dis && app.inRect(x, y, w, h)) app.cursor = 'not-allowed';
+    else if (dis && app.inRect(hx, hy, hw, hh)) app.cursor = 'not-allowed';
     let fi = -1;
     if (app.navButtons) { // register for keyboard navigation (pooled records, no allocation after warm-up)
       fi = F.curN++; let rec = F.cur[fi]; if (!rec) rec = F.cur[fi] = { x: 0, y: 0, w: 0, h: 0, dis: false, label: '' };
@@ -195,7 +239,7 @@ export function createApp(canvas, opts = {}) {
     if (o.sub) { TO.size = Math.round(size * 0.7); TO.color = o.subColor || 'rgba(232,220,196,.7)'; TO.bold = false; TO.ui = true; TO.shadow = false; app.text(o.sub, x + w / 2, ty + app.sz(size) * 1.15, TO); }
     if (!dis && o.key && keyHit(o.key)) { app.press(x, y, w, h, o.r); return true; }
     if (!dis && fi >= 0 && F.active && F.fire && fi === F.idx) { F.fire = false; app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
-    if (!dis && app.clicked(x, y, w, h)) { app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
+    if (!dis && app.clicked(hx, hy, hw, hh)) { app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
     return false;
   };
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.

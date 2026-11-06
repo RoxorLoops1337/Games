@@ -1420,7 +1420,8 @@ const devScale = (ctx) => { try { const m = ctx.getTransform && ctx.getTransform
 // ---- springs and state (o.state is owned by the caller; fields are created lazily)
 const fbStates = new Map();
 function stateOf(o, id) {
-  if (o.state && typeof o.state === 'object') return o.state;
+  // the caller's state object (ui anim) has its own fields (sq, hold ...): keep our springs in a private sub-object so they never collide
+  if (o.state && typeof o.state === 'object') return o.state.__art || (o.state.__art = {});
   let s = fbStates.get(id);
   if (!s) { if (fbStates.size > 80) fbStates.clear(); s = { __fb: 1 }; fbStates.set(id, s); }
   return s;
