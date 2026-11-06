@@ -450,11 +450,10 @@ await t('z5: a walk resumed after a reload (no step plan in memory) still walks 
   const { app, run, flow, seen } = await setup({ seed: 'z5resume' });
   const m = () => [{ kind: 'monster', id: NORMAL1[0] }];
   const [, w1, c1, w2] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, m()], ['rm_corridor', 2, 2], ['rm_ward', 3, 2, m()]]);
-  run.ward.phase = 'midday'; flow.route(); frames(app, 100);
+  run.ward.phase = 'midday'; flow.route(); frames(app, 200);
   run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 };
   for (const id of [w1, c1, w2]) { const r = run.ward.rooms[id], c = cellCenter(r.x, r.y); click(app, c.x, c.y); frames(app, 2); }
   const go = reg('ward-act'); click(app, go.x + go.w / 2, go.y + 25); frames(app, 40);
-  console.log(JSON.stringify([run.ward.route, run.phase, run.ward.phase, run.ward.hero.room, app.screens.ward.st.toast]));
   assert.equal(run.phase, 'combat'); assert.equal(run.ward.hero.room, w1);
   resetWardMem(); // the page was reloaded and Continue was pressed: only the saved run is left
   RUN.resolveFight(run, win()); flow.route(); frames(app, 40);
