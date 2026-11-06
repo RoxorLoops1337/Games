@@ -7,6 +7,8 @@ import { ENEMIES } from '../graftwork/data/index.js';
 import { timing } from '../graftwork/art/attacks.js';
 import * as J from '../graftwork/ui/juice.js';
 import combat from '../graftwork/ui/combat.js';
+import * as EC from '../graftwork/engine/combat.js';
+import { SEAM_MS } from '../graftwork/ui/seam_ui.js';
 
 const B = J.BUDGET;
 // 1. card choreography
@@ -125,5 +127,64 @@ for (const reduced of [false, true]) {
   const ov = sfx.find((l) => l[0] === 'overload'), cl = sfx.find((l) => l[0] === 'tithe' || l[0] === 'upgrade'), tick1 = sfx.find((l) => l[0] === 'seamExtend');
   assert.ok(tick1 && cl && ov && tick1[1] < cl[1] && cl[1] <= ov[1], 'stitch ticks, then the clunk, then the Overload slam');
   assert.ok(ov[1] >= 0.9 && ov[1] <= 1.3, `Overload sound at ${ov[1].toFixed(2)} s`);
+}
+
+// 8. THE THREAD, a real chain: four same-school cards grow the Line 1..4, a fifth of another school cuts and pays. Beats stay inside the budget
+//    (snap closes fast, beads land as the payout pops, input is free again quickly), in full and in reduced motion.
+for (const reduced of [false, true]) {
+  const { FX_OPTS } = await import('../graftwork/ui/fx.js'); FX_OPTS.reduced = reduced;
+  assert.ok(SEAM_MS.snipClose <= B.seam.snipClose && SEAM_MS.extend <= B.seam.extend && SEAM_MS.cut <= B.seam.cut && SEAM_MS.pay <= B.seam.pay, 'thread waits fit JUICE budget');
+  assert.ok(SEAM_MS.snipClose + SEAM_MS.beadFlight <= SEAM_MS.cut + 10, 'first bead lands as the payout pops, not after');
+  const run = RUN.newRun({ hero: 'marrow', seed: 'mo8' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['orderly'] }; run.hp = 900; run.maxHp = 900; run.potions = [];
+  run.deck = run.deck.slice(0, 1); run.deck[0].id = 'm_flick';
+  const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } });
+  app.register('combat', combat); app.go('combat', { run }); frames(app, 120);
+  const a = combat.api(), c = a.c; c.energy = 20; c.enemies[0].hp = c.enemies[0].maxHp = 900;
+  const uids = [c.hand[0].uid]; for (const id of ['m_incision', 'm_lancet', 'm_reopen', 'm_flakeoff']) uids.push(EC.addCard(c, id, 1, 'hand')[0].uid);
+  frames(app, 100);
+  const lens = [], times = [];
+  for (const uid of uids) {
+    const i = c.hand.findIndex((k) => k.uid === uid), hp = a.handPos(i), ep = a.enemyPos(0);
+    app.mouse.x = hp.x; app.mouse.y = hp.y; frames(app, 4); click(app, hp.x, hp.y); frames(app, 5);
+    app.mouse.x = ep.x; app.mouse.y = ep.y; frames(app, 3); click(app, ep.x, ep.y);
+    let ms = 0; while (ms < 3000) { app.tick(1 / 60); ms += 1000 / 60; if (!combat.api().busy && ms > 100) break; }
+    lens.push(c.seam.len); times.push(ms);
+  }
+  assert.deepEqual(lens, [1, 2, 3, 4, 1], `Line grows 1..4 then the fifth card cuts (reduced=${reduced})`);
+  assert.equal(c.seam.cuts, 1, 'the cut counted');
+  times.slice(1, 4).forEach((t) => assert.ok(t <= 900, `a knot frees input in ${t.toFixed(0)} ms`));
+  assert.ok(times[4] <= B.seam.cutToFree, `cut with payout frees input in ${times[4].toFixed(0)} ms (budget ${B.seam.cutToFree}, reduced=${reduced})`);
+  frames(app, 120); FX_OPTS.reduced = false;
+}
+// 9. OVERLOAD SHATTER: a held card cracks on contact (no leaving the target first), bursts crack + hold later, input comes back, reduced motion runs clean
+for (const reduced of [false, true]) {
+  const { FX_OPTS } = await import('../graftwork/ui/fx.js'); FX_OPTS.reduced = reduced;
+  const run = RUN.newRun({ hero: 'marrow', seed: 'mo9' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['orderly'] }; run.hp = 900; run.maxHp = 900; run.potions = [];
+  run.deck = run.deck.slice(0, 1); run.deck[0].id = 'm_incision';
+  const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } });
+  app.register('combat', combat); app.go('combat', { run }); frames(app, 120);
+  const a = combat.api(), c = a.c; c.energy = 20; c.enemies[0].hp = c.enemies[0].maxHp = 900;
+  const w = c.hand[0]; w.inst.grafts = ['g_ember_pin', 'g_cinder_wrap', 'g_scorch_thread']; c.rng.chance = () => true; frames(app, 10);
+  assert.ok(EC.specOf(c, w).overload, 'three grafts is an Overload');
+  const hp = a.handPos(0), ep = a.enemyPos(0);
+  app.mouse.x = hp.x; app.mouse.y = hp.y; frames(app, 4); click(app, hp.x, hp.y); frames(app, 5);
+  app.mouse.x = ep.x; app.mouse.y = ep.y; frames(app, 3); click(app, ep.x, ep.y);
+  const S = combat.api().state(); let ms = 0, tCrack = -1, tBurst = -1, held = false, tFree = -1;
+  for (let i = 0; i < 240; i++) {
+    app.tick(1 / 60); ms += 1000 / 60;
+    const sp = S.spr.find((s) => s.willShatter);
+    if (sp && sp.shatter && tCrack < 0) { tCrack = ms; held = !sp.done; }
+    if (tCrack > 0 && tBurst < 0 && !S.spr.some((s) => s.willShatter && !s.done)) tBurst = ms;
+    if (tFree < 0 && ms > 100 && !combat.api().busy) tFree = ms;
+  }
+  assert.ok(w.inst.shattered, 'the card is lost for the run');
+  assert.ok(tCrack > 0 && held, 'the card cracks while still held on the target');
+  assert.ok(tCrack <= (J.CARD.lift + J.CARD.wind + J.CARD.flight + J.CARD.impact) * 1000 + 200, `crack starts ${tCrack.toFixed(0)} ms after the click (contact is ${(J.CARD.lift + J.CARD.wind + J.CARD.flight + J.CARD.impact) * 1000})`);
+  const crackToBurst = tBurst - tCrack;
+  assert.ok(crackToBurst >= (J.CARD.crack + J.CARD.hold) * 1000 - 40 && crackToBurst <= B.shatter.crack + B.shatter.hold + 300, // plus the hit-stop of the strike that lands under the crack
+     `crack to burst ${crackToBurst.toFixed(0)} ms (reduced=${reduced})`);
+  assert.ok(tBurst <= B.shatter.toBurst + 400, `burst ${tBurst.toFixed(0)} ms after the click`);
+  assert.ok(tFree > 0 && tFree <= 1800, `input back ${tFree.toFixed(0)} ms after a shatter`);
+  FX_OPTS.reduced = false;
 }
 console.log('graftwork motion ok');

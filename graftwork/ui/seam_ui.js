@@ -17,6 +17,7 @@ import * as L from './combat_layout.js';
 
 const BRASS = '#C9A227', BRASS_D = '#7a5f16', BRASS_L = '#ecd27a', INK = '#0E0E0E', PAPER = '#f3ead4';
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
+export const SEAM_MS = { extendStart: 90, extend: 140, cut: 300, pay: 280, snipClose: 60, beadFlight: 240 }; // waits (ms) the combat queue honours for the Thread beats; tests/graftwork_motion.test.mjs budgets them
 const SNIP_CLOSE = 0.06; // s: the scissors close on the thread, then the snap releases the beads (anticipation before the cut)
 const SPACING = 52, BEAD_R = 15, LEFT_W = 112, CHIP_W = 216;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -406,7 +407,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
       if (fx) { fx.burst(p.x, p.y, 'spark', { n: ev.start ? 4 : 8, speed: 180, life: 0.35, size: 2.5, colors: [schoolCol(school), '#fff6c8', BRASS_L] }); }
       snd(app, 'knotTie', 'uiClick', { pitch: 0.9 + Math.min(0.5, M.beads.length * 0.1), vol: 0.7 });
       if (!ev.start) snd(app, 'needlePull', null, { vol: 0.5 });
-      return red ? 50 : ev.start ? 90 : 140;
+      return red ? 50 : ev.start ? SEAM_MS.extendStart : SEAM_MS.extend;
     }
     case 'seamCut': {
       M.payIdx = 0;
@@ -424,7 +425,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
       snd(app, 'snip', 'hitSmall', { vol: 0.8, pitch: 1.3 });
       snd(app, 'threadCut', null, { vol: 0.8 });
       if (ev.kind === 'break' && fx) fx.float('Snapped', sx, rect.y - 14, { color: '#9a9488', size: 18 });
-      return red ? 80 : grey ? 200 : 300;
+      return red ? 80 : grey ? 200 : SEAM_MS.cut;
     }
     case 'seamPay': {
       const school = ev.school, col = schoolCol(school), amount = ev.amount | 0, idx = M.payIdx++;
@@ -436,7 +437,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
         signature(app, school, ev, { fx, c, rect, cy, targets, tg, red, entPos: ctx.entPos });
       }
       snd(app, PAY_SFX[school] || 'cardPlay', null, { vol: 0.8 });
-      return red ? 90 : 280;
+      return red ? 90 : SEAM_MS.pay;
     }
     case 'seamSlack': {
       const p = { x: (M.nx === null ? lx0(rect) + 24 : M.nx), y: cy - 8 };

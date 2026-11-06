@@ -262,6 +262,7 @@ function handle(ev) {
     case 'power': { setZone(ev.card, 'power'); const f = S.spr.find((s) => s.mode === 'play' && s.w.uid === ev.card); if (f) f.fate = 'power'; return 0; }
     case 'shatter': {
       setZone(ev.card, 'gone');
+      if (S.preShat && S.preShat.delete(ev.card)) return 0; // the held card already cracked and burst on its own clock
       const f = S.spr.find((s) => s.mode === 'play' && s.w.uid === ev.card);
       const p = f ? { x: f.x, y: f.y } : { x: 640, y: 340 };
       if (f) { f.shatter = { t: 0 }; f.out = true; sfx('jam', { pitch: 1.7, vol: 0.5 }); return 420; }
@@ -315,6 +316,8 @@ function onPlay(ev) {
   const from = dc || { x: L.HAND_CX, y: L.HAND_Y, s: 0.6, rot: 0 };
   const sp = addSprite({ w, spec, x: from.x, y: from.y, s: from.s, rot: from.rot || 0, alpha: 1, cost: ev.cost, mode: 'play', pt: 0, fx0: { x: from.x, y: from.y, s: from.s, rot: from.rot || 0 } });
   sp.col = COL[spec.school] || COL[spec.type] || '#fff'; sp.trail = []; sp.sx = 1; sp.sy = 1;
+  // a Shatter is already decided: hold the card on the target and crack it at impact instead of letting it leave and bursting a beat later
+  if (S.q.some((e) => e.t === 'shatter' && e.card === ev.card)) { sp.willShatter = true; (S.preShat = S.preShat || new Set()).add(ev.card); }
   const tgtEd = ev.target ? S.edBy.get(ev.target) : null;
   let tp;
   if (tgtEd) tp = entPos(ev.target);
@@ -575,7 +578,7 @@ function statusFx(ev, p) {
 function shatterBurst(p) {
   const fx = S.fx;
   fx.burst(p.x, p.y, 'shard', { n: 26, speed: 460, size: 8 }); fx.burst(p.x, p.y, 'glass', { n: 12 }); fx.ring(p.x, p.y, COL.gold, 160, 0.6);
-  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.35, 0.3); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y - 80, { color: COL.gold, size: 34, big: true, life: 1.4 });
+  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.22, 0.2); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y + 64, { color: COL.gold, size: 34, big: true, life: 1.4 }); fx.float('Lost for the run', p.x, p.y + 104, { color: COL.vellum, size: 16, life: 1.4 });
   sfx('shatter');
   { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.shatterBeat) trn.shatterBeat(APP, p.x, p.y); }
 }
@@ -705,8 +708,9 @@ function stepSprite(sp, d) {
     const t = sp.t, f0 = sp.fx0, C = { x: 640, y: 350 }, tp = sp.tp, CT = J.CARD;
     const tL = CT.lift, tW = tL + CT.wind, tF = tW + CT.flight, tI = tF + CT.impact;
     const dx = tp.x - C.x, dy = tp.y - C.y, dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl;
+    if (sp.willShatter && !sp.shatter && t >= tI) { sp.shatter = { t: 0 }; sp.out = true; sfx('jam', { pitch: 1.7, vol: 0.5 }); }
     if (sp.shatter) { // crack, hold, burst
-      sp.shatter.t += d; sp.x = tp.x + rnd(-2, 2); sp.y = tp.y + rnd(-2, 2); sp.alpha = 1;
+      const sh = FX_OPTS.reduced ? 0 : 2; sp.shatter.t += d; sp.x = tp.x + rnd(-sh, sh); sp.y = tp.y + rnd(-sh, sh); sp.alpha = 1;
       if (sp.shatter.t >= CT.crack + CT.hold) { shatterBurst({ x: sp.x, y: sp.y }); sp.done = true; }
       return;
     }

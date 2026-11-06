@@ -146,7 +146,8 @@ export const easeOutBack = (t, c = 1.70158) => { const k = Math.max(0, Math.min(
 export const easeInQuad = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k; };
 export const easeInOutCubic = (t) => { const k = Math.max(0, Math.min(1, t)); return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
 // motion budgets in ms from design/JUICE.md; tests/graftwork_motion.test.mjs holds the code to them
-export const BUDGET = { cardToImpact: 310, cardRest: 160, light: { tell: 120, act: 60, hold: 40, rec: 180 }, heavy: { tell: 280, act: 70, hold: 90, rec: 320 }, boss: { tell: 450, act: 90, hold: 140, rec: 400 }, victory: 1800, death: 2800, stillMax: 200 };
+export const BUDGET = { cardToImpact: 310, cardRest: 160, light: { tell: 120, act: 60, hold: 40, rec: 180 }, heavy: { tell: 280, act: 70, hold: 90, rec: 320 }, boss: { tell: 450, act: 90, hold: 140, rec: 400 }, victory: 1800, death: 2800, stillMax: 200,
+  seam: { snipClose: 80, extend: 150, cut: 320, pay: 300, cutToFree: 1400 }, shatter: { crack: 130, hold: 90, toBurst: 560 } };
 export const FINAL = { hold: 0.42, seams: 6, perSeam: 0.06 };
 
 // ---------------------------------------------------------------- drawing helpers
