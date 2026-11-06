@@ -14,6 +14,7 @@ import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
 import { lnw } from '../art/linework.js';
+import { drawModeSwitch, modeOf } from './ward_kit.js';
 
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
@@ -352,6 +353,7 @@ export default {
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
+    drawModeSwitch(app, px0, phone ? 40 : 52, 360, phone ? 46 : 42); // Classic map | The Ward (new), remembered in meta.settings.mode
     const ay = py + ph + 6, ah = phone ? 46 : 32;
     this.drawAssist(app, px0, ay);
     // lower row
@@ -401,6 +403,7 @@ export default {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
       const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
+      if (modeOf(meta) === 'ward') opts.mode = 'ward'; // Classic map | The Ward (ui/ward_kit.js drawModeSwitch)
       const af = assistFlags(this.assistOf(app)); if (af) opts.assist = af; // Assist mode (engine/assist.js)
       this.begin(app, opts);
     }

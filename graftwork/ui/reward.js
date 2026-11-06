@@ -10,6 +10,8 @@ import * as ICONS from '../art/icons.js';
 import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
 import { lnw } from '../art/linework.js';
+import { buildPickRow } from './ward_kit.js';
+import { BUILD_CARDS } from '../data/ward.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const RARITY = {
@@ -29,6 +31,7 @@ export default {
     const rw = run.pending && run.pending.kind !== undefined ? run.pending : (run.pending = { kind: 'normal', gold: 0, graft: true });
     st = {
       run, rw, t: 0, fx: new Fx(), taken: {}, done: false,
+      buildInit: Array.isArray(rw.buildChoice) && rw.buildChoice.length ? rw.buildChoice.slice() : null, // Ward mode: pick 1 of 3 building plans
       init: { gold: rw.gold || 0, potion: rw.potion || null, relic: rw.relic || null, choices: rw.relicChoices ? rw.relicChoices.slice() : null },
     };
     this.st = st;
@@ -59,7 +62,12 @@ export default {
     app.text(`${run.hp}/${run.maxHp}`, 68, 22 + ph, { ...K(26), bold: true, color: '#ffb3bd', shadow: true, maxW: 190 });
 
     const kind = rw.kind === 'elite' || rw.kind === 'boss' ? rw.kind : 'normal';
-    const sub = `${KIND[kind]}. Take what you can carry.`;
+    let sub = `${KIND[kind]}. Take what you can carry.`;
+    if (rw.ward) { // Ward mode: what the rooms gave (wood and stone are already in the store)
+      const wd = rw.ward, got = [wd.wood ? `+${wd.wood} wood` : '', wd.stone ? `+${wd.stone} stone` : ''].filter(Boolean).join(', ');
+      sub = `${KIND[kind]}${wd.count > 1 ? ` (${wd.count} monsters)` : ''}.` + (got ? ` Salvage: ${got}.` : '') + (wd.goldMul && Math.abs(wd.goldMul - 1) > 0.01 ? ` Gold x${Math.round(wd.goldMul * 100) / 100}.` : '');
+      if (rw.wardBonus) sub += ` Early: +${rw.wardBonus.gold} gold, ${BUILD_CARDS[rw.wardBonus.card] ? BUILD_CARDS[rw.wardBonus.card].name : 'a plan'}.`;
+    }
     const th = app.text('Spoils', 640, 16, { size: app.scale < 0.95 && st.init.choices ? 40 : 52, bold: true, align: 'center', color: COL.lamp, shadow: true, fixed: true });
     const sh = app.text(sub, 640, 16 + th + 2, { ...K(19), italic: true, align: 'center', color: DIM, maxW: 560 });
     app.reg('reward-head', 340, 14, 600, th + sh + 6, { group: 'head' });
@@ -70,6 +78,7 @@ export default {
     // No relic choice: the short list would hang in the top third of the screen, so centre it between the header and the notes.
     if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
     rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
+    if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 128 : 150, st) + (compact ? 8 : 12); // Ward mode: building plan pick
 
     // forfeit notes (footer zone above the button)
     const notes = [];
@@ -77,6 +86,7 @@ export default {
     if (rw.potion) notes.push('The potion will be left behind.');
     if (rw.relic) notes.push('The relic will be left behind.');
     if (rw.relicChoices && rw.relicChoices.length) notes.push('Choose a relic, or leave them all.');
+    if (st.buildInit && st.build === undefined) notes.push('The building plans will be left behind.');
     const nl = Math.max(Math.round(15 * Math.min(S, 1.25) * 1.22), Math.ceil(app.sz(Math.round(15 * Math.min(S, 1.25)), { ui: true, fixed: true }) * 1.2)), shown = notes.slice(0, S > 1.2 ? 1 : 2);
     if (shown.length) app.reg('reward-notes', 340, 640 - 8 - shown.length * nl, 600, shown.length * nl, { group: 'notes' });
     shown.forEach((n, i) => app.text(n, 640, 640 - 8 - (shown.length - i) * nl, { ...K(15), ui: true, align: 'center', color: '#ffb36b', fit: { w: 590, h: nl }, lineH: nl }));
