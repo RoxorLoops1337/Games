@@ -297,7 +297,7 @@ function drawOfferCard(app, r, i, c) {
 }
 // The dedicated detail spot for every hover note on this table: the empty right half of the bill panel, clear of the cards and the tray.
 // A hovered patch floats its panel anywhere left of the patch column (it may cover the cards and the AFTER panel, never the patches, the tray buttons or the top bars).
-const PATCH_TIP_REGION = { x0: 6, y0: 68, x1: TRAY_X - 8, y1: 714 };
+const PATCH_TIP_REGION = { x0: 6, y0: 64, x1: TRAY_X - 32, y1: 714 };
 const DETAIL_BAND = { x: 490, y: 574, bottom: 710, dir: 1 };
 const spec2name = (inst) => CARDS[inst.id].name + (inst.up ? '+' : '');
 

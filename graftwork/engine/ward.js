@@ -73,7 +73,7 @@ export function wardInit(run, act) {
   const rng = run.rng, prev = run.ward, F = FLOOR[act] || FLOOR[3];
   const w = {
     act, day: 1, dayLimit: F.days, phase: 'morning', w: F.w, h: F.h,
-    grid: Array.from({ length: F.h }, () => Array(F.w).fill(null)), rooms: {}, nextRoom: 1, cardNext: prev ? prev.cardNext : 1,
+    grid: Array.from({ length: F.h }, () => Array(F.w).fill(null)), rooms: {}, nextRoom: 1, cardNext: prev ? prev.cardNext : 1, dieUp: prev ? prev.dieUp || 0 : 0,
     hero: { room: null }, res: { wood: START_RES.wood + perkN(run, 'startRes'), stone: START_RES.stone + perkN(run, 'startRes') }, power: { base: START_RES.power, cap: START_RES.power, used: 0 },
     deck: { draw: [], hand: [], discard: [] }, effects: [], log: [], walk: null, bossDone: false, why: null,
   };
@@ -217,7 +217,7 @@ export function endMorning(run) {
   const w = W(run);
   if (!w || w.phase !== 'morning' || run.phase !== 'ward') return false;
   w.deck.discard.push(...w.deck.hand.splice(0));
-  w.phase = 'midday';
+  w.phase = 'midday'; rollWalk(run);
   return true;
 }
 
@@ -287,6 +287,8 @@ export function playBuildCard(run, uid, target) {
   else if (card.kind === 'upgrade') { room = w.rooms[target]; if (card.oneShot) room.overtime = 1; else room.upgrades.push(card.id); log(run, `${card.name} on the ${def(room).name}.`); }
   else {
     switch (card.effect) {
+      case 'dieSides': w.dieUp = Math.min(8, (w.dieUp || 0) + (card.n || 2)); break;
+      case 'reroll': case 'dieBonus': w.effects.push({ id: card.effect, n: card.n || 1, until: 'day' }); break;
       case 'move': case 'rations': case 'lamp': case 'flood': case 'nurse': case 'power': w.effects.push({ id: card.effect, n: card.n || 1, until: 'day' }); break;
       case 'bribe': w.effects.push({ id: 'bribe', n: 1, until: 'used' }); break;
       case 'otpay': { const g = Math.min(T.otPayMax, T.otPayPer * Object.values(w.rooms).filter((r) => def(r).power > 0 && r.on).length); run.gold += g; run.stats.goldEarned += g; break; }
@@ -423,7 +425,7 @@ export function advancePhase(run) {
   const w = W(run);
   const i = PHASE_ORDER.indexOf(w.phase);
   if (w.phase === 'night') { w.day++; log(run, `Day ${w.day} of ${w.dayLimit}.`); morningStart(run); }
-  else w.phase = PHASE_ORDER[i + 1];
+  else { w.phase = PHASE_ORDER[i + 1]; rollWalk(run); }
   return w.phase;
 }
 // phase modifiers for a fight in this room (read by engine/combat.js newCombat via run.pending.mods)
@@ -598,4 +600,68 @@ export function wardAdvance(run) {
   }
   afterTrigger(run);
   return run.phase;
+}
+
+// ---------------- dice routes (design/WARD.md, "Dice routes") ----------------
+// Each walk phase (midday, evening, night) the player ROLLS a die (run.ward.dice sides, default 4). The roll N is the longest route: the
+// player plans it one room at a time (orthogonally adjacent, never the same room twice), then every room entered activates in order.
+// extendRoute / undoRoute / clearRoute edit run.ward.route (room ids after the hero); startRoute walks it through afterTrigger.
+export const diceOf = (run) => (T.dice || 4) + (W(run).dieUp || 0) + perkN(run, 'dieSides'); // Loaded Dice (w.dieUp) and Bone Dice (relic) add sides
+export function rollWalk(run) {
+  const w = W(run); if (!w) return null;
+  const sides = diceOf(run), base = run.rng.int(sides) + 1; // 1..sides (rng.int(n) is 0..n-1)
+  const bonus = effectN(run, 'move') + perkN(run, 'move') + effectN(run, 'dieBonus') + (w.phase === 'midday' ? perkN(run, 'dieMidday') : 0); // Morning Rounds, Weighted Die, Noon Dial
+  w.roll = { key: `${w.day}:${w.phase}`, base, sides, bonus, n: base + bonus, lucky: effectN(run, 'reroll') + (w.rerollDay === w.day ? 0 : perkN(run, 'rerollDay')) };
+  w.route = [];
+  log(run, `Roll d${sides}: ${base}${bonus ? ` +${bonus}` : ''}.`);
+  return w.roll;
+}
+// a save made before dice, or a phase reached without rollWalk: roll once, lazily
+export function rollOf(run) {
+  const w = W(run); if (!w || w.phase === 'morning') return null;
+  if (!w.roll || w.roll.key !== `${w.day}:${w.phase}`) rollWalk(run);
+  return w.roll;
+}
+// Lucky Roll (effect 'reroll') or the Lucky Coin (once a day): roll the die again; what allowed it is spent
+export function rerollWalk(run) {
+  const w = W(run), r = rollOf(run);
+  if (!r || w.route.length || !r.lucky) return false;
+  const i = w.effects.findIndex((e) => e.id === 'reroll'); if (i >= 0) w.effects.splice(i, 1); else w.rerollDay = w.day;
+  rollWalk(run); return true;
+}
+export function routeInfo(run, route) {
+  const w = W(run), r = rollOf(run), rt = route || w.route || [];
+  const pv = previewWalk(run, rt, false);
+  return { ok: true, why: null, path: rt.slice(), triggers: pv.triggers, offPenalty: pv.offPenalty, n: r ? r.n : 0, left: r ? Math.max(0, r.n - rt.length) : 0, cost: rt.length, alts: [] };
+}
+// why: phase morning boss (last night: only the Theatre) full (the roll is spent) unreachable (no door) visited (a room once per route) theatre (the route ends in the Theatre) target
+export function routeWhy(run, rid) {
+  const w = W(run);
+  if (!w || run.phase !== 'ward') return 'phase';
+  if (w.phase === 'morning') return 'morning';
+  if (bossForced(run)) return 'boss';
+  const room = w.rooms[rid]; if (!room) return 'target';
+  const r = rollOf(run), rt = w.route, last = rt.length ? rt[rt.length - 1] : w.hero.room;
+  if (rt.length >= r.n) return 'full';
+  if (rt.length && w.rooms[last].type === 'rm_theatre' && bossOpen(run)) return 'theatre';
+  if (rid === w.hero.room || rt.includes(rid)) return 'visited';
+  if (!neighbors(run, last).includes(rid)) return 'unreachable';
+  return null;
+}
+export function extendRoute(run, rid) {
+  const why = routeWhy(run, rid);
+  if (why) { W(run).why = why; return { ok: false, why }; }
+  W(run).why = null; W(run).route.push(rid); return { ok: true, why: null };
+}
+export function undoRoute(run) { const w = W(run); return !!(w && w.route && w.route.pop()); }
+export function clearRoute(run) { const w = W(run); if (w) w.route = []; }
+export const legalSteps = (run) => Object.keys(W(run).rooms).filter((rid) => !routeWhy(run, rid));
+export function startRoute(run) {
+  const w = W(run);
+  if (!w || run.phase !== 'ward' || w.phase === 'morning' || bossForced(run)) { if (w) w.why = w && w.phase === 'morning' ? 'morning' : 'boss'; return false; }
+  if (!w.route || !w.route.length) { w.why = 'empty'; return false; }
+  w.why = null;
+  const path = w.route.slice(); w.route = [];
+  w.walk = { path, i: 0, dest: path[path.length - 1], wait: false, forced: false };
+  return afterTrigger(run);
 }

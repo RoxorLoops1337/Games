@@ -142,15 +142,15 @@ M.generic = (g, t) => { // doorway and a figure
 };
 export const EVENT_MOTIFS = Object.keys(M).filter((k) => k !== 'generic');
 const BY_ID = {
-  chair: ['e_second_hand_surgeon', 'e_dentist_chair', 'e_black_market_clinic', 'e_stray_patient', 'e_scar_reader'],
+  chair: ['e_w_moonlit_surgeon', 'e_second_hand_surgeon', 'e_dentist_chair', 'e_black_market_clinic', 'e_stray_patient', 'e_scar_reader'],
   scales: ['e_back_alley_swap', 'e_relic_trade', 'e_haggler', 'e_loan_shark', 'e_debt_collector', 'e_borrowed_graft', 'e_repossession', 'e_load_balancer'],
-  hooded: ['e_overload_stranger', 'e_patient_returns', 'e_memory_returns', 'e_understudy', 'e_cult_pamphlet', 'e_cult_recruiter'],
-  ledger: ['e_budget_loan', 'e_tithe_collector', 'e_filing_clerk', 'e_actuary', 'e_ward_ledger', 'e_ledger_audit', 'e_compound_interest', 'e_budget_pharmacy', 'e_weigh_in', 'e_proof_house'],
+  hooded: ['e_w_night_porter', 'e_w_wakeful_patient', 'e_overload_stranger', 'e_patient_returns', 'e_memory_returns', 'e_understudy', 'e_cult_pamphlet', 'e_cult_recruiter'],
+  ledger: ['e_w_noon_rounds', 'e_w_shift_change', 'e_budget_loan', 'e_tithe_collector', 'e_filing_clerk', 'e_actuary', 'e_ward_ledger', 'e_ledger_audit', 'e_compound_interest', 'e_budget_pharmacy', 'e_weigh_in', 'e_proof_house'],
   twins: ['e_second_copy', 'e_graft_clone', 'e_cross_loom', 'e_school_mirror'],
-  shelf: ['e_free_polish', 'e_gift_basket', 'e_cure_shelf'],
+  shelf: ['e_free_polish', 'e_gift_basket', 'e_cure_shelf', 'e_w_visiting_hours', 'e_w_lost_property'],
   coin: ['e_coin_flip', 'e_lamp_lottery', 'e_lottery_ward'],
-  machine: ['e_vending_machine'],
-  drawers: ['e_morgue_drawer', 'e_night_shift', 'e_orderly_challenge'],
+  machine: ['e_vending_machine', 'e_w_menu_board'],
+  drawers: ['e_w_laundry_chute', 'e_w_supper_bell', 'e_morgue_drawer', 'e_night_shift', 'e_orderly_challenge'],
   gurney: ['e_gurney_race'],
   jars: ['e_pickled_graft', 'e_jarred_twin', 'e_glassblower'],
   curtain: ['e_costume_rack', 'e_rehearsal', 'e_balcony_seat', 'e_standing_ovation', 'e_cloakroom'],

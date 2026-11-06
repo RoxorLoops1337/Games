@@ -1804,7 +1804,7 @@ function drawCardInfo(app) {
       const spec = dcSpec(dc), l = liveEds();
       const stack = cardTipStack(spec, S.c, { tithed: !!dc.w.tithed, target: l.length === 1 ? l[0].e : null });
       const extra = cardSections(spec, dc.w, dc).filter((x) => /weight|^Price|^Jammed/.test(x.title)).map((x) => ({ title: x.title, text: x.text, color: x.color, glyph: 'hex' }));
-      if (extra.length) { if (stack.length < 2) stack.push(extra.slice(0, 3)); else stack[1] = stack[1].concat(extra).slice(0, 4); }
+      if (extra.length) { if (stack.length) stack[0] = extra.concat(stack[0]); else stack.push(extra); } // the graft Boon / Price lines come first, then every definition (none is dropped)
       if (stack.length) {
         const r = dcRect(dc), right = r.x + r.w + 8 + 320 <= L.END_BTN.x - 6;
         // keyword panels live in the hand band (below the Thread rail, beside the lifted card), never over the rail, End Turn or the enemies

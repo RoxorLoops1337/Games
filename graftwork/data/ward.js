@@ -63,7 +63,7 @@ export const BUILD_CARDS = {
   b_soundproofing: { id: 'b_soundproofing', name: 'Soundproofing', kind: 'upgrade', on: ['rm_ward', 'rm_isolation', 'rm_isolation2'], rarity: 'uncommon', cost: { stone: 2 }, target: 'room', text: 'No night modifiers in this room: no night Strength, no night gold, no night relic.', art: 'ward_doors' },
   b_fire_door: { id: 'b_fire_door', name: 'Fire Door', kind: 'upgrade', on: ['rm_ward'], rarity: 'uncommon', cost: { wood: 1, stone: 2 }, target: 'room', text: 'This Ward holds at most 3 monsters, and each fight here leaves double wood and stone.', art: 'ward_doors' },
   // effects (today, or until used)
-  b_morning_rounds: { id: 'b_morning_rounds', name: 'Morning Rounds', kind: 'effect', effect: 'move', n: 1, rarity: 'common', cost: {}, target: 'none', text: '+1 MOVE for every walk today.', art: 'ward_sun' },
+  b_morning_rounds: { id: 'b_morning_rounds', name: 'Morning Rounds', kind: 'effect', effect: 'move', n: 1, rarity: 'common', cost: {}, target: 'none', text: '+1 to every walk roll today.', art: 'ward_sun' },
   b_rations: { id: 'b_rations', name: 'Rations', kind: 'effect', effect: 'rations', n: 1, rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Draw 1 more card each turn in every fight today.', art: 'ward_bowl' },
   b_lamp_oil: { id: 'b_lamp_oil', name: 'Lamp Oil', kind: 'effect', effect: 'lamp', rarity: 'common', cost: {}, target: 'none', text: 'Dark rooms cost no HP to cross today.', art: 'ward_lamp' },
   b_triage: { id: 'b_triage', name: 'Triage', kind: 'effect', effect: 'heal', n: 8, rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Heal 8.', art: 'ward_cross' },
@@ -79,6 +79,10 @@ export const BUILD_CARDS = {
   b_skeleton_crew: { id: 'b_skeleton_crew', name: 'Skeleton Crew', kind: 'effect', effect: 'power', n: 2, rarity: 'uncommon', cost: { wood: 1 }, target: 'none', text: '+2 power capacity today.', art: 'ward_generator' },
   b_fresh_linens: { id: 'b_fresh_linens', name: 'Fresh Linens', kind: 'effect', effect: 'linens', rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Every lit Linen Room recharges now.', art: 'ward_linen' },
   b_shift_change: { id: 'b_shift_change', name: 'Shift Change', kind: 'effect', effect: 'shift', rarity: 'rare', cost: { wood: 2, stone: 2 }, target: 'none', text: 'Every lit room with a timer ticks once now.', art: 'ward_clock' },
+  // ---- dice cards (the walk die, Z4): the effects only record state; engine/ward.js rollWalk reads w.dieUp, effect 'dieBonus' and effect 'reroll' ----
+  b_loaded_dice: { id: 'b_loaded_dice', name: 'Loaded Dice', kind: 'effect', effect: 'dieSides', n: 2, rarity: 'rare', cost: { wood: 2, stone: 2 }, target: 'none', text: 'Permanent: your walk die gains 2 sides (D4 becomes D6, then D8). Max D12.', art: 'ward_clock' },
+  b_lucky_roll: { id: 'b_lucky_roll', name: 'Lucky Roll', kind: 'effect', effect: 'reroll', rarity: 'uncommon', cost: { wood: 1 }, target: 'none', text: 'Today you may reroll one walk die once.', art: 'ward_coin' },
+  b_weighted_die: { id: 'b_weighted_die', name: 'Weighted Die', kind: 'effect', effect: 'dieBonus', n: 1, rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Add 1 to every walk roll today.', art: 'ward_clock' },
   b_open_ledger: { id: 'b_open_ledger', name: 'Open Ledger', kind: 'effect', effect: 'ledger', n: 2, rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Draw 2 more building cards.', art: 'ward_crate' },
 };
 export const BUILD_LIST = Object.values(BUILD_CARDS);

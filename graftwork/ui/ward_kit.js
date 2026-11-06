@@ -13,6 +13,7 @@
 import { COL, clamp, rgba, EASE } from './core.js';
 import { lnw } from '../art/linework.js';
 import { drawCoin } from '../art/icons.js';
+import { WARD_GLOSSARY } from './tooltips.js';
 import { BUILD_CARDS, ROOMS } from '../data/ward.js';
 import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
@@ -259,6 +260,7 @@ export function termsForCard(card) {
   if (card.id === 'b_lamp_oil') t.push('Dark room');
   if (card.id === 'b_scrub_in') t.push('Level 2 elite');
   for (const r of ['Wood', 'Stone']) if (card.cost && card.cost[r.toLowerCase()]) t.push(r);
+  for (const n of Object.keys(WARD_GLOSSARY)) if (!t.includes(n) && new RegExp('\\b' + n + '\\b').test(card.text || '')) t.push(n); // every Ward word the card's own text names
   return t;
 }
 export const GLOSS_ROOM = { rm_ward: 'Ward', rm_isolation: 'Isolation', rm_chapel: 'Chapel', rm_dispensary: 'Dispensary', rm_workshop: 'Workshop', rm_linen: 'Linen Room', rm_sawmill: 'Sawmill', rm_quarry: 'Quarry', rm_counting: 'Counting House', rm_generator: 'Generator', rm_corridor: 'Corridor' };

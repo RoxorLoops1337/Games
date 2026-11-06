@@ -121,6 +121,9 @@ export const WARD_GLOSSARY = {
   Floodlights: K('#FFE9A0', 'circle', 'No night modifiers anywhere today.'),
   Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next in line from the Ward steps in.'),
   'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP and +2 Strength, and one more relic to choose from.'),
+  Die: K('#e0c27a', 'square', 'Each walk phase you roll your die (D4 to start). Loaded Dice and Bone Dice add sides.'),
+  Roll: K('#e0c27a', 'square', 'The number you rolled is the longest route you can plan this phase. Morning Rounds, Weighted Die and the Noon Dial add to it.'),
+  Route: K('#B3263A', 'tri', 'Click the rooms next to you one by one, up to your roll, never the same room twice. Every room you enter triggers in order. Click the last step to undo it, then Go.'),
   'Dark room': K('#9aa0a6', 'cross', 'A room switched off. Its timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
 };
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
@@ -135,12 +138,12 @@ export function glossaryEntry(term) {
 // 'knot' and 'knots' are written in lower case in boon text ("counts as 2 knots"): they find the Knot entry too
 const canon = (w) => (w === 'knot' ? 'Knot' : w);
 // Loose words are matched in any case, the CAPS tags (tier tags, weight pills, the AFTER panel) only in capitals.
-const LOOSE = { jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
+const LOOSE = { cut: 'Cut', cuts: 'Cut', cutting: 'Cut', jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
 const CAPS = { SAFE: 'Safe', GREEDY: 'Greedy', WEIRD: 'Weird', AFTER: 'After', W1: 'Weight', W2: 'Weight', W3: 'Weight' };
 const NOT_PLAIN = new Set(['Jam', 'Bare', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After']);
 const NAMES = [...Object.keys(KEYWORDS).filter((n) => !NOT_PLAIN.has(n)), 'knot'].sort((a, b) => b.length - a.length);
 const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed|d|ing)?\\b', 'g');
-const LOOSE_RE = /\b(jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
+const LOOSE_RE = /\b(cut(?:s|ting)?|jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
 const CAPS_RE = /\b(SAFE|GREEDY|WEIRD|AFTER|W[123])\b/g;
 // scan(line): every keyword hit in a string, in order, without overlaps: [{ i, len, name, caps }]
 function scan(line) {
@@ -195,7 +198,7 @@ export function glossaryFor(input, o = {}) {
   const found = new Map(); let order = 0;
   const add = (name, n) => { const f = found.get(name); if (f) { if (f.n === undefined && n !== undefined) f.n = n; return; } found.set(name, { name, n, order: order++ }); };
   for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
-  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) if (!TAGS.has(h.name)) add(h.name, numAround(ln, h)); // the tip's own prose: Weight / Budget there are already explained in place
+  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) add(h.name, numAround(ln, h)); // the tip's own prose: its rules words need a definition too (Weight and Budget included)
   for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
   if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
   if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
@@ -364,7 +367,7 @@ export function cardTipStack(spec, c, o = {}) {
   if (spec.overload) extra.push('Overload');
   if (o.tithed) extra.push('Tithe');
   if (spec.cost === 'X') extra.push('X cost');
-  const gl = glossaryFor([lines, extra], { max: GLOSS_MAX, school: spec.school, types: spec.type });
+  const gl = glossaryFor([specGloss(spec), extra], { max: GLOSS_MAX, school: spec.school, types: spec.type }); // the card's lines AND the Boon / Price words of every graft on it
   const kws = gl.map((g) => g.term);
   const p1 = gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
   const p2 = [];
@@ -374,7 +377,7 @@ export function cardTipStack(spec, c, o = {}) {
   walkOps(spec.fx, (op) => { if (op.s && STATUSES[op.s] && !seen.has(op.s) && !kws.includes(STATUSES[op.s].name)) { seen.add(op.s); p2.push(statusSection(op.s, typeof op.n === 'number' ? op.n : undefined)); } });
   const out = [];
   if (p1.length) out.push(p1);
-  if (p2.length) out.push(p2.slice(0, 4));
+  if (p2.length) out.push(p2);
   return out;
 }
 
@@ -399,17 +402,20 @@ function measureSection(app, s, bw, cfg) {
   const wh = why.reduce((a, w) => a + w.L.lines.length * w.L.lineH + 3, 0);
   return { s, gx, title, body, bodyO, why, whyO, th, bh, wh, h: th + cfg.tg + bh + wh };
 }
+// Panels are cut at SECTION boundaries so that each fills what is left of its column (colH = the column's height so far): the block gets as many columns as it needs, never more.
 function buildPanels(app, panels, W, cfg, availH) {
-  const bw = W - PAD * 2, out = [];
+  const pad = cfg.pad || PAD, bw = W - pad * 2, out = []; let colH = 0;
   for (const p of panels) {
     const secs = p.map((s) => measureSection(app, s, bw, cfg));
-    let cur = [], h = PAD * 2;
+    let cur = [], h = pad * 2;
+    const close = () => { out.push({ secs: cur, h, w: W }); colH = (colH ? colH + GAP : 0) + h; cur = []; h = pad * 2; };
     for (const m of secs) {
-      const add = (cur.length ? cfg.gap : 0) + m.h;
-      if (cur.length && h + add > availH) { out.push({ secs: cur, h, w: W }); cur = []; h = PAD * 2; }
+      const room = availH - (colH ? colH + GAP : 0);
+      if (!cur.length && colH && pad * 2 + m.h > room) colH = 0; // the panel starts a new column
+      else if (cur.length && h + cfg.gap + m.h > room) { close(); if (pad * 2 + m.h > availH - colH - GAP) colH = 0; }
       h += (cur.length ? cfg.gap : 0) + m.h; cur.push(m);
     }
-    if (cur.length) out.push({ secs: cur, h, w: W });
+    if (cur.length) close();
   }
   return out;
 }
@@ -425,25 +431,30 @@ function fitBlock(app, panels, availW, availH) {
   const phone = app.scale < 0.95;
   const boost = Math.max(1, app.sz(BO) / BO);
   const W0 = phone ? Math.round(Math.max(MAXW, Math.min(0.40 * 1280, MAXW * boost))) : MAXW;
-  const small = { ti: 16, bo: 15, gap: 4, tg: 2 }, tiny = { ti: 15, bo: 14, gap: 3, tg: 2 };
+  const small = { ti: 16, bo: 15, gap: 4, tg: 2 }, tiny = { ti: 15, bo: 14, gap: 3, tg: 1, pad: 8 };
   const tries = [
     { W: W0, cfg: { ti: TI, bo: BO, gap: GAP, tg: 5 } },
     { W: W0, cfg: small },
     { W: Math.min(Math.round(W0 * 1.4), 520), cfg: small },
+    { W: Math.floor((availW - GAP) / 2), cfg: small }, // two columns, then three, before anything is cut
+    { W: Math.floor((availW - GAP) / 2), cfg: tiny },
+    { W: Math.floor((availW - 2 * GAP) / 3), cfg: tiny },
     { W: Math.min(Math.round(W0 * 1.7), 620), cfg: small },
     { W: Math.min(Math.round(W0 * 2), 760), cfg: tiny },
-  ];
+  ].filter((t) => t.W >= 200);
   const run = (W, cfg, ps) => { W = Math.min(W, Math.max(200, availW)); const bp = buildPanels(app, ps, W, cfg, availH), cols = flowColumns(bp, availH); const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h)); return { cols, w, h, cfg, W, ok: w <= availW + 0.5 && h <= availH + 0.5 }; };
-  let last = null;
-  for (const t of tries) { last = run(t.W, t.cfg, panels); if (last.ok) return last; }
+  let last = null, narrow = null; // narrow: the attempt that fits the width with the least height (where the last resort cuts words)
+  for (const t of tries) { last = run(t.W, t.cfg, panels); if (last.ok) return last; if (last.w <= availW + 0.5 && (!narrow || last.h < narrow.h)) narrow = { h: last.h, t }; }
   // Last resort, never a dropped definition: shorten the longest trailing definition by whole words, with a soft ellipsis (the info card keeps the full text).
+  const two = Math.floor((availW - GAP) / 2), base = (narrow && narrow.t) || { W: two >= 200 ? two : Math.max(200, availW), cfg: tiny };
   let rest = panels.map((p) => p.map((s) => ({ ...s })));
+  last = run(base.W, base.cfg, rest);
   for (let i = 0; i < 80 && !last.ok; i++) {
     let best = null;
     rest.forEach((p, pi) => p.forEach((s, si) => { if ((pi > 0 || si > 0) && s.text && s.text.length > 24 && (!best || s.text.length >= best.s.text.length)) best = { s }; }));
     if (!best) break;
     const words = best.s.text.replace(/…$/, '').split(' '); words.length = Math.max(3, Math.floor(words.length * 0.85)); best.s.text = words.join(' ').replace(/[,.:;]$/, '') + '…';
-    last = run(tries[tries.length - 1].W, tries[tries.length - 1].cfg, rest); last.cut = true;
+    last = run(base.W, base.cfg, rest); last.cut = true;
   }
   return last;
 }
@@ -506,15 +517,16 @@ function drawStack(app, stack, anchor) {
       const first = p.secs[0] && p.secs[0].s, W = p.w, pl = { x: cx, y, w: W, h: p.h, secs: [] };
       app.panel(cx, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
       app.reg('tip' + idx++, cx, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
-      let yy = y + PAD;
+      const pad = blk.cfg.pad || PAD;
+      let yy = y + pad;
       p.secs.forEach((m, si) => {
         const s = m.s, sy = yy;
-        if (s.glyph) drawGlyph(ctx, s.glyph, cx + PAD + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
-        app.text(s.title || ' ', cx + PAD + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - PAD * 2 - m.gx, color: s.color || COL.lamp });
+        if (s.glyph) drawGlyph(ctx, s.glyph, cx + pad + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
+        app.text(s.title || ' ', cx + pad + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - pad * 2 - m.gx, color: s.color || COL.lamp });
         yy += m.th + blk.cfg.tg;
-        if (m.body) { app.text(s.text, cx + PAD, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
-        for (const w of m.why) { app.text(w.str, cx + PAD, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
-        pl.secs.push({ x: cx + PAD, y: sy, w: W - PAD * 2, h: yy - sy, title: s.title, text: s.text || '', why: (s.why || []).slice() }); // text: what was really drawn (tests compare it with the full definition)
+        if (m.body) { app.text(s.text, cx + pad, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
+        for (const w of m.why) { app.text(w.str, cx + pad, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
+        pl.secs.push({ x: cx + pad, y: sy, w: W - pad * 2, h: yy - sy, title: s.title, text: s.text || '', why: (s.why || []).slice() }); // text: what was really drawn (tests compare it with the full definition)
         yy += blk.cfg.gap;
       });
       L.panels.push(pl); y += p.h + GAP;

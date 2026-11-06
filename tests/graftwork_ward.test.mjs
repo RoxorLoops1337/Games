@@ -314,8 +314,8 @@ const NODASH = /[\u2014\u2013]/;
 t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids unique and well formed', () => {
   assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 48, 'building cards ' + BUILD_LIST.length);
   assert.equal(new Set(BUILD_LIST.map((c) => c.id)).size, BUILD_LIST.length);
-  assert.equal(RELICS_WARD.length, 14);
-  assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 14);
+  assert.equal(RELICS_WARD.length, 17);
+  assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 17);
   for (const r of RELICS_WARD) { assert.ok(/^r_w_/.test(r.id) && r.ward && RELICS[r.id] === r); assert.ok(['common', 'uncommon', 'rare', 'boss', 'shop'].includes(r.rarity)); assert.ok(r.text && !NODASH.test(r.text + r.name)); assert.ok(r.perk || r.on, r.id + ' does something'); }
   for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(!NODASH.test(c.name + c.text), 'no em dash ' + c.id); assert.ok(['room', 'upgrade', 'effect'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
   for (const r of Object.values(ROOMS)) assert.ok(!NODASH.test(r.name + r.hint), r.id);
@@ -454,6 +454,63 @@ t('tiers: random 0 wins, sloppy and passive almost never win (smoke)', () => {
   for (let i = 0; i < 8; i++) { if (playWardRun('wick', 'tier-r' + i, 'random').outcome === 'won') rw++; if (playWardRun('odile', 'tier-s' + i, 'sloppy').outcome === 'won') sw++; }
   assert.equal(rw, 0); assert.ok(sw <= 1, 'sloppy wins ' + sw);
   const ps = playWardRun('marrow', 'tier-p', 'passive'); assert.ok(ps.outcome === 'dead' || ps.outcome === 'won'); assert.equal(ps.log.acts[1].fights, 0, 'passive never fights');
+});
+
+t('dice content: Loaded Dice, Lucky Roll, Weighted Die record their state for the walk die; dice relics carry perks', () => {
+  const run = mk('dice'); layout(run, [['rm_entrance', 0, 0]]); run.ward.res = { wood: 9, stone: 9 };
+  const give3 = (id) => W.playBuildCard(run, give(run, id));
+  assert.ok(give3('b_loaded_dice').ok); assert.equal(run.ward.dieUp, 2);
+  assert.ok(give3('b_weighted_die').ok); assert.ok(give3('b_lucky_roll').ok);
+  assert.ok(run.ward.effects.some((e) => e.id === 'dieBonus') && run.ward.effects.some((e) => e.id === 'reroll'));
+  W.morningStart(run); assert.ok(!run.ward.effects.length, 'today-only effects expire'); assert.equal(run.ward.dieUp, 2, 'sides are permanent');
+  for (const id of ['r_w_noon_dial', 'r_w_lucky_coin', 'r_w_bone_dice']) assert.ok(RELICS[id].perk && RELICS[id].ward);
+});
+
+t('dice routes: the roll is deterministic per seed, 1..sides, and re-rolls each walk phase', () => {
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    const a = mk('dice' + i), b = mk('dice' + i);
+    W.endMorning(a); W.endMorning(b);
+    assert.deepEqual(a.ward.roll, b.ward.roll); assert.ok(a.ward.roll.n >= 1 && a.ward.roll.n <= 4); seen.add(a.ward.roll.n);
+    assert.equal(a.ward.roll.key, '1:midday'); assert.deepEqual(a.ward.route, []);
+    W.startWalk(a, a.ward.hero.room); // wait: the phase moves on and the die is rolled again
+    if (a.phase === 'ward') assert.equal(a.ward.roll.key, '1:evening');
+  }
+  assert.deepEqual([...seen].sort(), [1, 2, 3, 4], 'every face comes up');
+});
+
+t('dice routes: legality (adjacent steps, no re-entry, roll length), undo, trigger order, last night, dice upgrades', () => {
+  const run = mk('route');
+  const [ent, c1, wd, ch] = layout(run, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0], ['rm_ward', 2, 0, [mon(), mon()]], ['rm_chapel', 3, 0, [{ kind: 'event' }]]]);
+  W.endMorning(run); run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 };
+  assert.equal(W.routeWhy(run, wd), 'unreachable', 'two rooms away is not a step');
+  assert.equal(W.routeWhy(run, ent), 'visited', 'the room you stand in');
+  assert.deepEqual(W.legalSteps(run), [c1]);
+  assert.ok(W.extendRoute(run, c1).ok); assert.ok(W.extendRoute(run, wd).ok);
+  assert.equal(W.extendRoute(run, c1).why, 'visited', 'never the same room twice'); assert.equal(run.ward.route.length, 2);
+  assert.ok(W.undoRoute(run)); assert.deepEqual(run.ward.route, [c1]);
+  assert.ok(W.extendRoute(run, wd).ok); assert.ok(W.extendRoute(run, ch).ok);
+  assert.equal(W.routeWhy(run, W.theatreOf(run).id), 'full', 'the roll is spent');
+  const info = W.routeInfo(run); assert.equal(info.left, 0); assert.deepEqual(info.triggers.map((x) => x.kind), ['fight', 'event']);
+  const p = W.startRoute(run); assert.equal(p.ward.room, wd, 'the first room that holds something opens first');
+  assert.deepEqual(run.ward.route, []); assert.equal(run.ward.walk.path.length, 3);
+  clearFight(run); assert.equal(run.phase, 'event', 'then the next room activates, in order'); assert.equal(run.ward.hero.room, ch);
+  assert.equal(W.startRoute(mk('empty')), false, 'an empty route does not start');
+  // dice upgrades: Loaded Dice (+2 sides), Weighted Die (+1 to the roll), Morning Rounds (+1), relic dice
+  const r2 = mk('sides'); assert.equal(W.diceOf(r2), 4); r2.ward.dieUp = 2; assert.equal(W.diceOf(r2), 6);
+  W.endMorning(r2); const base = r2.ward.roll.base; r2.ward.phase = 'morning'; r2.phase = 'ward'; r2.ward.effects.push({ id: 'dieBonus', n: 1, until: 'day' }, { id: 'move', n: 1, until: 'day' });
+  const roll = W.rollWalk(r2); assert.equal(roll.sides, 6); assert.equal(roll.bonus, 2); assert.equal(roll.n, roll.base + 2); void base;
+  // the last night: only the Theatre, via the forced walk (no route)
+  const r3 = mk('lastnight'); layout(r3, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0]]); r3.ward.day = r3.ward.dayLimit; r3.ward.phase = 'night';
+  assert.equal(W.routeWhy(r3, 'r2'), 'boss'); assert.equal(W.startRoute(r3), false);
+  assert.equal(W.pathTo(r3, W.theatreOf(r3).id).forced, true);
+});
+
+t('dice routes: a save round trip keeps the roll and the planned route; classic runs carry no dice', () => {
+  const run = mk('rt'); W.endMorning(run);
+  const r = RUN.deserializeRun(RUN.serializeRun ? RUN.serializeRun(run) : JSON.parse(JSON.stringify(run)));
+  assert.deepEqual(r.ward.roll, run.ward.roll); assert.deepEqual(r.ward.route, run.ward.route);
+  const classic = RUN.newRun({ hero: 'marrow', seed: 'cl' }); assert.equal(classic.ward, undefined); assert.equal(RUN.runMode(classic), 'classic');
 });
 
 console.log(n + ' passed');

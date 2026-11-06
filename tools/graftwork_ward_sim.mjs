@@ -107,6 +107,23 @@ function walkScore(run, pv) {
   if (pv.wait) s += 1;
   return s;
 }
+// dice routes: a walk is at most the roll N rooms. pathR is pathTo cut to the roll (the policies score what a route of N steps would trigger),
+// startR plans exactly that route step by step (extendRoute) and walks it (startRoute). Waiting and the forced last night use startWalk.
+function pathR(run, rid, alt = 0) {
+  const p = W.pathTo(run, rid, alt);
+  if (!p.ok || p.wait || p.forced || process.env.GW_OLDWALK) return p; // GW_OLDWALK=1: the pre-dice walker (shortest path within MOVE 4), for comparison
+  const n = W.rollOf(run).n, cut = (path) => path.slice(0, n), info = (path) => W.routeInfo(run, cut(path));
+  const main = info(p.path);
+  return { ...p, path: main.path, triggers: main.triggers, offPenalty: main.offPenalty, cost: main.path.length, alts: p.alts.map((a) => { const i = info(a.path); return { path: i.path, triggers: i.triggers, offPenalty: i.offPenalty }; }), cut: p.path.length > n };
+}
+function startR(run, rid, alt = 0) {
+  const p = pathR(run, rid, alt);
+  if (!p.ok) return W.startWalk(run, rid, alt);
+  if (p.wait || p.forced || process.env.GW_OLDWALK) return W.startWalk(run, rid, alt);
+  W.clearRoute(run);
+  for (const r of p.path) if (!W.extendRoute(run, r).ok) break;
+  return W.startRoute(run);
+}
 function forcedBoss(run) { return W.bossForced(run) ? W.startWalk(run, W.theatreOf(run).id) : undefined; }
 function hideWalk(run) { const f = forcedBoss(run); return f !== undefined ? f : W.startWalk(run, run.ward.hero.room); }
 // SLOPPY: plays one or two random cards, ignores power (rooms may stay dark), walks to the nearest room that holds anything, else the nearest room
@@ -125,21 +142,21 @@ function sloppyMorning(run, R) {
 function nearestWalk(run, R) {
   const f = forcedBoss(run); if (f !== undefined) return f;
   const w = run.ward;
-  const cand = Object.keys(w.rooms).map((rid) => ({ rid, p: W.pathTo(run, rid) })).filter((x) => x.p.ok && !x.p.wait);
+  const cand = Object.keys(w.rooms).map((rid) => ({ rid, p: pathR(run, rid) })).filter((x) => x.p.ok && !x.p.wait);
   const live = cand.filter((x) => x.p.triggers.length && x.p.triggers.every((t) => t.kind !== 'boss'));
   const pool = (live.length ? live : cand).sort((a, b) => a.p.cost - b.p.cost);
-  return W.startWalk(run, pool.length ? pool[0].rid : w.hero.room);
+  return startR(run, pool.length ? pool[0].rid : w.hero.room);
 }
 function strongWalk(run, R, avoid = false) {
   const w = run.ward;
   if (avoid) { avoid = !Object.values(w.rooms).some((r) => r.type === 'rm_ward' && r.contents.length >= 5); }
   let best = null, bs = -1e9;
   for (const rid of Object.keys(w.rooms)) {
-    const p = W.pathTo(run, rid); if (!p.ok) continue;
+    const p = pathR(run, rid); if (!p.ok) continue;
     const variants = [{ ...p, alt: 0 }, ...p.alts.map((a, i) => ({ ...a, alt: i + 1, wait: p.wait }))];
     for (const v of variants) { let s = walkScore(run, v) + R.next() * 0.3; if (avoid && v.triggers.some((t) => !t.bribed && (t.kind === 'fight' || t.kind === 'elite' || (t.kind === 'boss' && t.detail.early)))) s -= 1000; if (s > bs) { bs = s; best = [rid, v.alt]; } }
   }
-  return W.startWalk(run, best[0], best[1]);
+  return startR(run, best[0], best[1]);
 }
 
 // ---------------- random policy ----------------
@@ -158,8 +175,8 @@ function randomMorning(run, R) {
 }
 function randomWalk(run, R) {
   const w = run.ward;
-  const ok = Object.keys(w.rooms).filter((rid) => W.pathTo(run, rid).ok);
-  return W.startWalk(run, R.pick(ok));
+  const ok = Object.keys(w.rooms).filter((rid) => pathR(run, rid).ok);
+  return startR(run, R.pick(ok));
 }
 
 // ---------------- the run ----------------
