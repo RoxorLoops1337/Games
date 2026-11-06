@@ -132,15 +132,15 @@ export default {
     if (run.practice) yy += app.text('Practice pays no points.', lx, yy, { size: 14, ui: true, italic: true, color: '#b7aa8c', fit: { w: lw, lines: 2, soft: true } }) + 6;
     rows.forEach((id, i) => {
       const a = clamp((t - 0.5 - i * 0.08) / 0.25, 0, 1); g.globalAlpha = k * a;
-      app.text(label[id], lx, yy, { size: 13, ui: true, color: '#cdbf9d', fit: { w: lw - 54, lines: 1 } });
-      app.text('+' + f1(parts[id]), lx + lw, yy, { size: 13, ui: true, bold: true, align: 'right', color: COL.lamp, fit: { w: 50, lines: 1 } });
+      app.text(label[id], lx, yy, { size: 13, ui: true, color: '#cdbf9d', fit: { w: lw - 76, lines: 1, soft: true } });
+      app.text('+' + f1(parts[id]), lx + lw, yy, { size: 13, ui: true, bold: true, align: 'right', color: COL.lamp, fit: { w: 72, lines: 1, soft: true } });
       yy += pitch;
     });
     g.globalAlpha = k;
     stitch(g, lx, yy + 3, lx + lw, yy + 3); yy += 8;
     const tot = Math.round(ul.up * clamp((t - 0.6) / 0.8, 0, 1));
-    app.text(`+${still ? ul.up : tot}`, lx, yy, { size: 30, bold: true, color: '#fbe9b0', shadow: true, fit: { w: 90, lines: 1, soft: true } });
-    app.text(ul.capped ? `points, capped at ${UP.RUN_CAP}` : run.assist ? 'points (assist pays half at most)' : 'points this run', lx + 96, yy + 10, { size: 13, ui: true, color: ul.capped ? '#ffb070' : '#e0d4b8', fit: { w: lw - 96, lines: 2, soft: true } });
+    app.text(`+${still ? ul.up : tot}`, lx, yy, { size: 22, bold: true, color: '#fbe9b0', shadow: true });
+    app.text(ul.capped ? `points, capped at ${UP.RUN_CAP}` : run.assist ? 'points (assist pays half at most)' : 'points this run', lx + 124, yy + 8, { size: 13, ui: true, color: ul.capped ? '#ffb070' : '#e0d4b8', fit: { w: lw - 124, lines: 2, soft: true } });
     g.restore();
     // right column: progress, then the stamped items
     const rx = x + 330, rw = w - 330 - 16;

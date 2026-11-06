@@ -85,10 +85,37 @@ for (const d of Object.values(STATUSES)) {
   KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', generic(d));
 }
 KEYWORDS.Charge.text = 'Stored by Static cards. Every 2 Charge adds 1 to each hit you deal (max +3). Static cards spend it.';
+// THE WARD terms (design/WARD.md). Kept apart from KEYWORDS so card and event text never pick them up by accident ('Power' the card type,
+// 'night' in an event): a tip names them explicitly with o.terms (ui/ward.js, ui/ward_kit.js). glossaryEntry resolves them after KEYWORDS.
+export const WARD_GLOSSARY = {
+  Wood: K('#b07a44', 'square', 'A building resource. Sawmills make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
+  Stone: K('#a8a198', 'square', 'A building resource. Quarries make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
+  Power: K('#FFE9A0', 'circle', 'Capacity, not spent. Every lit room uses its power. Generators add 2. Switch a room off in the morning to free its power.'),
+  Morning: K('#F2C14E', 'diamond', 'Build stage. Timers tick and spawns appear, resource rooms produce, you draw 5 building plans. No walking.'),
+  Midday: K('#F5E6A8', 'diamond', 'One walk. Fights pay +10% gold. Chapel events lean to gold and healing.'),
+  Evening: K('#e0a050', 'diamond', 'One walk. Dinner: draw 1 more card on the first turn of every fight.'),
+  Night: K('#8fb4d1', 'diamond', 'One walk. Monsters +1 Strength, elites +2 and one more relic to choose from. Fights pay +25% gold. Events turn strange.'),
+  Ward: K('#B3263A', 'tri', 'Fight room. A monster checks in every day, up to 5. Walk in to fight them all: 3 at once, the rest as Reinforcements.'),
+  Isolation: K('#C9A227', 'tri', 'Elite room. An elite every 2 days. Left 3 days it becomes a Level 2 elite.'),
+  Chapel: K('#3E7C74', 'diamond', 'Event room. An event every 4 days. The phase you walk in at changes how it leans.'),
+  Dispensary: K('#5a8fd8', 'square', 'The shop as a room. Restocks every 3 days. Also sells building plans and strikes one for 50 gold.'),
+  Workshop: K('#E8571F', 'hex', 'The forge as a room. Recharges every 3 days.'),
+  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 25% of your max HP.'),
+  Sawmill: K('#8F4A2A', 'square', '+2 wood each morning while lit.'),
+  Quarry: K('#6f6a60', 'square', '+2 stone each morning while lit.'),
+  'Counting House': K('#B8922A', 'square', '+15 gold each morning while lit.'),
+  Generator: K('#b8c23a', 'star', '+2 power capacity. Uses none.'),
+  Corridor: K('#8a7a5c', 'square', 'A cheap connector. Never spawns anything, never goes dark.'),
+  Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next in line from the Ward steps in.'),
+  'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP and +2 Strength, and one more relic to choose from.'),
+  'Dark room': K('#9aa0a6', 'cross', 'A room switched off. Its timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
+};
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
 export function glossaryEntry(term) {
   const name = Object.keys(KEYWORDS).find((n) => n.toLowerCase() === String(term).toLowerCase());
   if (name) { const k = KEYWORDS[name]; return { title: name, text: k.text, color: k.color, glyph: k.glyph }; }
+  const wn = Object.keys(WARD_GLOSSARY).find((n) => n.toLowerCase() === String(term).toLowerCase());
+  if (wn) { const k = WARD_GLOSSARY[wn]; return { title: wn, text: k.text, color: k.color, glyph: k.glyph }; }
   const d = STATUSES[term]; if (!d) return null;
   return { title: d.name, text: KEYWORDS[d.name] ? KEYWORDS[d.name].text : generic(d), color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
 }
@@ -158,8 +185,10 @@ export function glossaryFor(input, o = {}) {
   for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
   if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
   if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
-  const list = [...found.values()].filter((f) => !skip.has(f.name)).sort((a, b) => rank(a.name) - rank(b.name) || a.order - b.order);
+  for (const t of o.terms || []) if (WARD_GLOSSARY[t] && !found.has('ward:' + t)) found.set('ward:' + t, { name: t, ward: true, order: -100 + order++ }); // explicit Ward terms come first
+  const list = [...found.values()].filter((f) => !skip.has(f.name)).sort((a, b) => (b.ward ? 1 : 0) - (a.ward ? 1 : 0) || rank(a.name) - rank(b.name) || a.order - b.order);
   return list.slice(0, max).map((f) => {
+    if (f.ward) { const k = WARD_GLOSSARY[f.name]; return { term: f.name, title: f.name, definition: k.text, text: k.text, color: k.color, glyph: k.glyph, n: undefined }; }
     const k = KEYWORDS[f.name], d = STATUS_BY_NAME[f.name];
     const definition = defineTerm(f.name, f.n);
     return { term: f.name, title: d && f.n !== undefined && f.name !== 'Weight' ? `${f.name} ${f.n}` : f.name, definition, text: definition, color: k.color, glyph: k.glyph, n: f.n };
@@ -487,7 +516,7 @@ function sectionsText(stack) { const out = []; for (const p of stack) for (const
 function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
 function glossPanel(stack, tip) {
   const o = tip.o || tip;
-  const gl = glossaryFor(o.gloss || [], { weak: sectionsText(stack), max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
+  const gl = glossaryFor(o.gloss || [], { weak: sectionsText(stack), max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids, terms: o.terms });
   return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
 }
 export { toStack as tipSections }; // tests read the panels a tip would draw

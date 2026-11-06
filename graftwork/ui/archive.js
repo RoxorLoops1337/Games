@@ -77,12 +77,12 @@ export default {
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.88)' });
     const meta = app.shared.meta, cc = categoryCounts(meta), iw = w - 28;
     app.text('OPEN SO FAR', x + 14, y + 10, { size: 12, ui: true, bold: true, color: COL.lamp });
-    let yy = y + 36;
+    let yy = y + 34; const pitch = Math.min(38, (h - 34 - 8 - st.heroes.length * 46) / KINDS.length);
     for (const kd of KINDS) {
       const c = cc[kd];
-      app.text(`${KIND_LABEL[kd]} ${c.got} of ${c.total} unlocked`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 1 } });
-      bar(app, x + 14, yy + 27, iw, 5, c.total ? c.got / c.total : 1, c.got >= c.total ? '#8fe0a0' : '#b79442');
-      yy += 38;
+      app.text(`${KIND_LABEL[kd]} ${c.got} of ${c.total} unlocked`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 1, soft: true } });
+      bar(app, x + 14, yy + pitch - 9, iw, 5, c.total ? c.got / c.total : 1, c.got >= c.total ? '#8fe0a0' : '#b79442');
+      yy += pitch;
     }
     yy += 4;
     for (const hr of st.heroes) {
@@ -129,6 +129,7 @@ export default {
       let lab = `${KIND_LABEL[kd]} ${c.got}/${c.total}`;
       if (app.measure(lab, 15, { ui: true, bold: true }) > tw - 14) lab = `${KIND_LABEL[kd]} ${c.got}`;
       if (app.measure(lab, 15, { ui: true, bold: true }) > tw - 14) lab = KIND_LABEL[kd];
+      if (app.measure(lab, 15, { ui: true, bold: true }) > tw - 14) lab = lab.split(' ')[0].slice(0, 5);
       if (app.button(lab, x + 12 + i * (tw + 6), y + 10, tw, 32, { size: 15, ui: true, fit: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);
     });
     const kind = KINDS[this.tab];
