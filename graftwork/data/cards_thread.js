@@ -50,8 +50,8 @@ export const CARDS_THREAD = [
   // ---------- Marrow ----------
   { id: 'm_thread_bloodline', art: 'bobbin', name: 'Bloodline', hero: 'marrow', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', school: 'blood', flags: {},
     fx: [{ op: 'dmg', n: KN(5, 2) }, { op: 'status', s: 'bleed', n: KN(0, 1, 5) }], up: { fx: [{ op: 'dmg', n: KN(6, 3) }, { op: 'status', s: 'bleed', n: KN(1, 1, 6) }] }, flavor: 'Follow the bleeding to its source.' },
-  { id: 'm_thread_stitchup', name: 'Stitch Up', hero: 'marrow', type: 'skill', cost: 1, rarity: 'common', target: 'self', school: 'blood', flags: {},
-    fx: [{ op: 'block', n: KN(4, 2) }, { op: 'heal', n: 1 }], up: { fx: [{ op: 'block', n: KN(5, 3) }, { op: 'heal', n: 2 }] }, flavor: 'Neat work is its own anaesthetic.' },
+  { id: 'm_thread_stitchup', art: 'needle', name: 'Running Stitch', hero: 'marrow', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', school: 'blood', flags: {},
+    fx: [{ op: 'dmg', n: KN(2, 2, 10) }, { op: 'status', s: 'bleed', n: KN(0, 1, 3) }], up: { fx: [{ op: 'dmg', n: KN(3, 2, 12) }, { op: 'status', s: 'bleed', n: KN(1, 1, 4) }] }, flavor: 'Quick passes, no knot to speak of.' },
   { id: 'm_thread_rustseam', name: 'Rust Seam', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', target: 'enemy', school: 'rust', flags: {},
     fx: [{ op: 'dmg', n: KN(4, 3, 19) }, { op: 'addCard', card: 'j_flake', n: 1, to: 'discard' }],
     up: { fx: [{ op: 'dmg', n: KN(5, 4, 25) }, { op: 'addCard', card: 'j_flake', n: 1, to: 'discard' }] }, flavor: 'Old iron makes a long scar.' },
@@ -62,8 +62,8 @@ export const CARDS_THREAD = [
   // ---------- Wick ----------
   { id: 'w_thread_trail', name: 'Candle Trail', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', school: 'ember', flags: {},
     fx: [{ op: 'dmg', n: KN(4, 2) }, { op: 'status', s: 'burn', n: KN(1, 1, 5) }], up: { fx: [{ op: 'dmg', n: KN(5, 2) }, { op: 'status', s: 'burn', n: KN(2, 1, 6) }] }, flavor: 'Wax remembers where it has been.' },
-  { id: 'w_thread_fusewire', art: 'fusewire', name: 'Fuse Wire', hero: 'wick', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', school: 'static', flags: {},
-    fx: [{ op: 'dmg', n: KN(2, 2, 9) }, { op: 'status', s: 'charge', n: 1, to: 'self' }], up: { fx: [{ op: 'dmg', n: KN(3, 2, 11) }, { op: 'status', s: 'charge', n: 1, to: 'self' }] }, flavor: 'Thin, conductive, regrettable.' },
+  { id: 'w_thread_fusewire', art: 'fusewire', name: 'Taper Line', hero: 'wick', type: 'skill', cost: 0, rarity: 'common', target: 'enemy', school: 'ember', flags: {},
+    fx: [{ op: 'status', s: 'burn', n: KN(2, 1, 6) }], up: { fx: [{ op: 'status', s: 'burn', n: KN(3, 1, 8) }] }, flavor: 'The longer the wick, the longer the night.' },
   { id: 'w_thread_arcstitch', name: 'Arc Stitch', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', target: 'enemy', school: 'static', flags: {},
     fx: [{ op: 'dmg', n: KN(3, 3) }, { op: 'status', s: 'charge', n: 2, to: 'self' }], up: { fx: [{ op: 'dmg', n: KN(4, 3) }, { op: 'status', s: 'charge', n: 3, to: 'self' }] }, flavor: 'The needle sparks. The patient notices.' },
   { id: 'w_thread_conflagration', name: 'Hem of Flame', hero: 'wick', type: 'attack', cost: 2, rarity: 'rare', target: 'all', school: 'ember', flags: {},

@@ -1,19 +1,27 @@
 // Headless app harness for UI smoke tests: a recording fake canvas, no DOM needed.
+// Fast path: the common Canvas2D methods are plain own no-ops (no Proxy trap per call); any other name still resolves
+// through a Proxy prototype, so unknown methods and unread properties behave exactly as before.
+const CTX_METHODS = ['arc', 'arcTo', 'beginPath', 'bezierCurveTo', 'clearRect', 'clip', 'closePath', 'drawImage', 'ellipse', 'fill', 'fillRect', 'fillText', 'lineTo', 'moveTo', 'putImageData', 'quadraticCurveTo', 'rect', 'resetTransform', 'restore', 'rotate', 'roundRect', 'save', 'scale', 'setLineDash', 'setTransform', 'stroke', 'strokeRect', 'strokeText', 'transform', 'translate'];
 export function fakeCtx() {
   const grad = { addColorStop() {} };
   const state = { calls: 0 };
-  const target = { canvas: null };
-  return new Proxy(target, {
+  const fallback = new Proxy({}, {
     get(o, k) {
-      if (k === '__calls') return state.calls;
-      if (k in o) return o[k];
       if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => grad;
       if (k === 'measureText') return (s) => ({ width: String(s).length * 8 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+      if (typeof k === 'symbol') return undefined;
       return (...a) => { state.calls++; return undefined; };
     },
-    set(o, k, v) { o[k] = v; return true; },
   });
+  const ctx = Object.create(fallback);
+  ctx.canvas = null;
+  const noop = () => { state.calls++; };
+  for (const m of CTX_METHODS) ctx[m] = noop;
+  ctx.createLinearGradient = ctx.createRadialGradient = ctx.createPattern = () => grad;
+  ctx.measureText = (s) => ({ width: String(s).length * 8 });
+  Object.defineProperty(ctx, '__calls', { get: () => state.calls });
+  return ctx;
 }
 export function installDom() {
   globalThis.window = globalThis.window || { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, addEventListener() {} };

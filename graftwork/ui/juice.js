@@ -11,7 +11,6 @@ export const TIERS = {
   crit:     { stop: 120, shake: 14, decay: 4, roll: 2,   flash: 90, ab: 6, zoom: 1.04, sparks: 26, ring: true,  dust: true,  shards: true,  size: 58, vy: -50, pop: 1.5, tilt: 0.14, wait: 140, pitch: 0.8,  body: 'hitBig',   vol: 1,   kick: 1.6, vig: 1,    sq: 0.22, ink: true, rim: '#ff2a3a' },
   overkill: { stop: 140, shake: 16, decay: 4, roll: 2.5, flash: 90, ab: 8, zoom: 1.05, sparks: 30, ring: true,  dust: true,  shards: true,  size: 58, vy: -50, pop: 1.5, tilt: 0.14, wait: 150, pitch: 0.7,  body: 'hitBig',   vol: 1,   kick: 2,   vig: 1,    sq: 0.24, ink: true, rim: '#ff2a3a', slow: 0.4, slowMs: 250, gore: true },
 };
-export const TIER_ORDER = ['light', 'medium', 'heavy', 'crit', 'overkill'];
 
 // n = damage that reached HP, maxHp / hpBefore = victim values, vulnerable = victim carries Vulnerable.
 export function classify(n, maxHp, hpBefore, vulnerable) {

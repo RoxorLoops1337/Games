@@ -219,8 +219,6 @@ export function cantGraftWhy(inst, gid) {
   return null;
 }
 
-export function hasDmg(spec) { return spec.fx.some((o) => o.op === 'dmg'); }
-export function hasBlock(spec) { return spec.fx.some((o) => o.op === 'block'); }
 
 // ---- Temper: hammer a card's live patches into the card for good ----
 // The boons AND prices stay (a fused graft still shapes the card). The patch slots empty out, so new grafts fit again,

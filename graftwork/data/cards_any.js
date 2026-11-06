@@ -21,5 +21,5 @@ export const CARDS_ANY = [
   C('x_resolve', 'Resolve', 'power', 2, 'rare', 'self', 'A prescription of spite.', [{ op: 'status', s: 'ritual', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'ritual', n: 2, to: 'self' }] }),
   C('x_plate', 'Surgical Plating', 'power', 2, 'rare', 'self', 'Installed without anaesthetic.', [{ op: 'status', s: 'plated', n: 4, to: 'self' }, { op: 'status', s: 'regen', n: 2, to: 'self' }], { fx: [{ op: 'status', s: 'plated', n: 6, to: 'self' }, { op: 'status', s: 'regen', n: 3, to: 'self' }] }),
   C('x_flatline', 'Flatline', 'skill', 2, 'rare', 'self', 'Briefly nothing can touch you.', [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], cost: 1 }, { exhaust: true }),
-  C('x_adrenal', 'Adrenaline Shot', 'skill', 0, 'rare', 'self', 'Side effects include everything.', [{ op: 'energy', n: 2 }, { op: 'draw', n: 2 }], { fx: [{ op: 'energy', n: 2 }, { op: 'draw', n: 3 }] }, { exhaust: true }),
+  C('x_adrenal', 'Adrenaline Shot', 'skill', 0, 'rare', 'self', 'Side effects include everything.', [{ op: 'energy', n: 1 }, { op: 'draw', n: 2 }], { fx: [{ op: 'energy', n: 2 }, { op: 'draw', n: 2 }] }, { exhaust: true }),
 ].map((c) => (SCHOOL[c.id] ? { ...c, school: SCHOOL[c.id] } : c));

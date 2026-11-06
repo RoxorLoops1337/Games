@@ -32,10 +32,6 @@ export function dismissTip(app, key) {
   (meta.tips = meta.tips || {})[key] = 1;
   const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();
 }
-export function resetTips(app) {
-  const meta = app.shared.meta; if (!meta) return;
-  meta.tips = {}; const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();
-}
 
 // o: { pos: {x, y} fixed top-left corner of the bubble (use a quiet corner so it never covers what it teaches about), side: 'below'|'above'|'left'|'right' (where the bubble sits relative to the point, default 'below'), w: max width (default 270) }
 // Returns true while the tip is on screen this frame.

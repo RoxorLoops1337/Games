@@ -157,4 +157,3 @@ export function watchCombat(app, c, intentOf) {
 export function announceEnding(app, win) {
   if (app.a11y) app.a11y.announce(win ? 'Victory. The fight is won.' : 'Defeat. You have fallen.', true);
 }
-export function describeFocus(rec) { return rec ? rec.label : ''; }
