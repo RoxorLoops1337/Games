@@ -5,7 +5,7 @@
 import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
-import { cardSpec, strainInfo, isBare, instWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
+import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
 
 const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
@@ -435,10 +435,11 @@ export default {
     } else {
       const inst = hv.inst, spec = hv.spec;
       yy += app.text(spec.name, x + pad, yy, { size: 20, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 23 }) + 2;
-      if (!inst.grafts.length) {
+      const fusedIds = inst.fused || [];
+      if (!inst.grafts.length && !fusedIds.length) {
         const txt = isBare(inst) ? 'No grafts. A plain card: it weighs nothing, and it is what the Tithe lands on.' : 'No grafts. Junk takes none and weighs nothing.';
         yy += app.text(txt, x + pad, yy, { size: 14, ui: true, maxW: w - 2 * pad, color: COL.vellum }) + 6;
-      } else {
+      } else if (inst.grafts.length) {
         const total = instWeight(inst);
         yy += app.text(`Adds ${total} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum }) + 6;
         inst.grafts.forEach((gid, i) => {
@@ -456,6 +457,19 @@ export default {
           yy += Math.max(15, app.text(gr.price || '', x + pad + 38, yy, { size: 13, ui: true, maxW: w - 2 * pad - 38, lineH: 15, color: '#ffb0b0' }));
           yy += 10;
         });
+      }
+      if (fusedIds.length) {
+        if (!inst.grafts.length) yy += app.text(`Adds ${instWeight(inst)} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum }) + 6;
+        yy += app.text('Tempered for good (cannot be stripped):', x + pad, yy, { size: 13, ui: true, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 15 }) + 3;
+        for (const gid of fusedIds) {
+          const gr = GRAFTS[gid]; if (!gr) continue; const col = COL[gr.school] || COL.vellum;
+          drawSchoolGlyph(ctx, gr.school, x + pad + 6, yy + 8, 6, col);
+          app.text(gr.name, x + pad + 18, yy, { size: 14, bold: true, color: COL.vellum, maxW: w - 100 });
+          app.text(`W${fusedWeight(gid)}`, x + w - pad, yy + 1, { size: 14, ui: true, bold: true, align: 'right', color: COL.vellum });
+          yy += 20;
+          yy += Math.max(14, app.text(`${gr.boon || ''} Price: ${gr.price || ''}`, x + pad + 18, yy, { size: 12, ui: true, maxW: w - 2 * pad - 18, lineH: 14, color: 'rgba(232,220,196,.8)' })) + 4;
+        }
+        yy += 4;
       }
       if (hv.tithed) yy += app.text('Tithed: this card fights at 75 percent this combat.', x + pad, yy, { size: 13, ui: true, bold: true, color: COL.bad, maxW: w - 2 * pad, lineH: 15 }) + 4;
       if (spec.overload) yy += app.text('Overload: numbers x1.5. 25 percent chance to Shatter on its first play each combat.', x + pad, yy, { size: 13, ui: true, bold: true, color: COL.gold, maxW: w - 2 * pad, lineH: 15 }) + 4;

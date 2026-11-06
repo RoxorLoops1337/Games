@@ -225,6 +225,16 @@ function staple(g, x, y, w = 14, rot = 0) {
   g.fillStyle = BRASS_D; g.fillRect(-w / 2, -1, 2.2, 5); g.fillRect(w / 2 - 2.2, -1, 2.2, 5);
   g.restore();
 }
+function drawRivet(g, gid, cx, cy) {
+  const gr = GRAFTS[gid]; const col = (gr && gr.school && COL[gr.school]) || '#c9a227';
+  g.save(); g.translate(cx, cy);
+  g.beginPath(); g.arc(0, 0, 9, 0, Math.PI * 2); g.fillStyle = INK; g.fill();
+  const bg = g.createRadialGradient(-2.5, -3, 1, 0, 0, 8); bg.addColorStop(0, '#f2dc8a'); bg.addColorStop(0.6, '#c9a227'); bg.addColorStop(1, '#6e5414');
+  g.beginPath(); g.arc(0, 0, 7.6, 0, Math.PI * 2); g.fillStyle = bg; g.fill();
+  g.beginPath(); g.arc(0, 0, 3.6, 0, Math.PI * 2); g.fillStyle = col; g.fill(); g.lineWidth = 1; g.strokeStyle = INK; g.stroke();
+  g.beginPath(); g.arc(-2.6, -3, 1.6, 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,.55)'; g.fill();
+  g.restore();
+}
 function drawSmallPatch(g, gid, cx, cy, idx) {
   const gr = GRAFTS[gid]; const school = gr && gr.school; const col = (school && COL[school]) || '#888';
   const w = 34, h = 30, pts = patchPoints(cx - w / 2, cy - h / 2, w, h, gid + idx);
@@ -341,6 +351,8 @@ function renderFace(g, spec, lines, price, o) {
   layoutText(g, spec, lines, price, o);
   // grafts on the edge
   (spec.grafts || []).slice(0, 3).forEach((gid, i) => drawSmallPatch(g, gid, HW + 4, 28 + i * 44, i));
+  // tempered grafts: hammered in for good, shown as brass rivets down the left edge (school colour in the head)
+  (spec.fused || []).slice(0, 4).forEach((gid, i) => drawRivet(g, gid, -HW + 3, 30 + i * 24));
   // junk dressing
   if (junk) drawBandages(g);
   if (o.tithed) drawSeam(g, seed);
@@ -392,7 +404,7 @@ function makeCanvas(w, h) {
   try { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext && c.getContext('2d'); if (!g) return null; return { c, g }; } catch (e) { return null; }
 }
 function faceKey(spec, lines, price, o) {
-  return [spec.id, spec.up ? 1 : 0, (spec.grafts || []).join(','), o.tithed ? 1 : 0, o.jam ? 1 : 0, spec.type, spec.school || '', lines.join('|'), price.join('|')].join('#');
+  return [spec.id, spec.up ? 1 : 0, (spec.grafts || []).join(','), (spec.fused || []).join(','), o.tithed ? 1 : 0, o.jam ? 1 : 0, spec.type, spec.school || '', lines.join('|'), price.join('|')].join('#');
 }
 function getFace(spec, o) {
   const lines = cardLines(spec, !!o.tithed), price = priceLines(spec);

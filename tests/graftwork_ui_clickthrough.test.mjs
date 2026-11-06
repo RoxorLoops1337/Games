@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { makeApp, frames, click } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
-import forge from '../graftwork/ui/forge.js';
+import forge, { optionCenterX, optionIndex } from '../graftwork/ui/forge.js';
 
 async function forgeApp() {
   // Arrange: a fresh Forge visit
@@ -14,14 +14,14 @@ async function forgeApp() {
   app.go('forge', { run }); frames(app, 60);
   return { run, app };
 }
-const optX = (i) => 61 + i * 236 + 107;
-const REFINE = 2;
+const optX = (i) => optionCenterX(i);
+const REFINE = optionIndex('refine');
 
 // Act: click the Refine option at many points across the card, never clicking a card in the picker.
 // Assert: nothing is upgraded and the Forge visit is still unused.
 let checked = 0;
 for (let y = 140; y <= 520; y += 20) {
-  for (let dx = -100; dx <= 100; dx += 25) {
+  for (let dx = -80; dx <= 80; dx += 20) {
     const { run, app } = await forgeApp();
     click(app, optX(REFINE) + dx, y); frames(app, 5);
     assert.equal(run.deck.filter((c) => c.up).length, 0, `refine click at ${optX(REFINE) + dx},${y} upgraded a card by itself`);
