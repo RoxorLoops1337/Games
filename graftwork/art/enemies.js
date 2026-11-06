@@ -33,6 +33,7 @@ export function C(hex, k = 1, a = 1) {
   if (!m) { m = new Map(); colCache.set(hex, m); }
   let s = m.get(key);
   if (s) return s;
+  if (m.size > 3000) m.clear(); // bounded: long soaks sweep k/alpha/flash combinations without end
   const rgb = rgbOf(hex);
   const fl = (hex === INK ? 0.45 : 1) * fq / 8;
   const f = (v) => { let r = k <= 1 ? v * k : v + (255 - v) * (k - 1); r = r + (255 - r) * fl; return Math.max(0, Math.min(255, Math.round(r))); };
