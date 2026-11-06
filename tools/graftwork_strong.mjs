@@ -77,10 +77,12 @@ export function strongFight(run, pol, maxTurns = 40) {
       if (best < 0) break;
       const sp = specOf(c, c.hand[best]);
       const ti = sp.target === 'enemy' ? c.enemies.indexOf(st.target) : null;
+      if (globalThis.GW_TRACE) console.log(`T${c.turn} hp${c.player.hp} blk${c.player.block} en${c.energy} play ${sp.id} (need ${st.need}) foes ${live.map((e) => e.id + ':' + e.hp).join(',')}`);
       playCard(c, best, ti);
       c.ev.length = 0;
     }
     if (c.over) break;
+    if (globalThis.GW_TRACE) console.log(`  end hp${c.player.hp} en${c.energy} hand${c.hand.length}`);
     endTurn(c); c.ev.length = 0;
   }
   if (!c.over) { c.over = 'lose'; c.player.hp = 0; }
@@ -109,10 +111,10 @@ export function strongPickGraft(run, pol) {
       if (s > bs) { bs = s; best = [uid, gid]; }
     }
   }
-  return best && bs >= 1.5 ? best : null;
+  return best && bs >= +(process.env.GW_FLOOR ?? 1.5) ? best : null;
 }
 
-POLICIES.strong = { maxStrain: 2, greed: 0.6, fight: strongFight, pickGraft: strongPickGraft };
+POLICIES.strong = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft };
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
   const N = +process.argv[2] || 40, asc = +process.argv[3] || 0, only = process.argv[4];
@@ -122,6 +124,8 @@ if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
     for (let i = 0; i < N; i++) rs.push(playRun(hero, `strong-${hero}-${i}`, POLICIES.strong, asc));
     const wins = rs.filter((r) => r.outcome === 'won').length;
     const a1 = rs.filter((r) => r.outcome === 'won' || r.act > 1).length;
-    console.log(`strong ${hero.padEnd(7)} A${asc} act1 clear ${a1}/${N}  win ${wins}/${N} (${(100 * wins / N).toFixed(0)}%)`);
+    const fl = (rs.reduce((a, r) => a + r.floors, 0) / N).toFixed(1);
+    const a3 = rs.filter((r) => r.outcome === 'won' || r.act > 2).length;
+    console.log(`strong ${hero.padEnd(7)} A${asc} act1 clear ${a1}/${N}  act2 clear ${a3}/${N}  win ${wins}/${N} (${(100 * wins / N).toFixed(0)}%) floors ${fl}`);
   }
 }
