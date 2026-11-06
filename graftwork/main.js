@@ -1,6 +1,6 @@
 // Boot + flow. Screens never import each other: they call app.shared.flow.* and read app.shared.run.
 import { createApp } from './ui/core.js';
-import { FX_OPTS } from './ui/fx.js';
+import { FX_OPTS, defaultQuality } from './ui/fx.js';
 import * as audio from './ui/audio.js';
 import { installPost } from './ui/post.js';
 import * as RUN from './engine/run.js';
@@ -60,6 +60,7 @@ export function boot(canvas) {
     openPause() { if (!app.stack.some((s) => s.name === 'pause')) app.push('pause', {}); },
     saveMeta() { META.saveMeta(app.shared.meta); },
   };
+  if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
   installPause(app);
   installFullscreen(app);

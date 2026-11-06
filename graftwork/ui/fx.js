@@ -15,6 +15,8 @@
 //  shake/reduced: accessibility. quality: 0..1 count factor (1 = full, 0 = none). mobile: lowers the particle cap to 600.
 export const FX_OPTS = { shake: true, reduced: false, quality: 1, mobile: typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '') };
 
+// Default effects quality: phones and tablets start on 'low' (the auto-downgrade in post.js still applies on top).
+export const defaultQuality = () => (FX_OPTS.mobile ? 'low' : 'high');
 export const CAP_DESKTOP = 2000;
 export const CAP_MOBILE = 600;
 export const CAP_ADD = 150; // additive particles alive at once
@@ -122,7 +124,8 @@ export class Fx {
   }
   // number of live particles (for tests / debug)
   get count() { return this.pool ? this.pool.n : 0; }
-  _cap() { return FX_OPTS.mobile ? CAP_MOBILE : CAP_DESKTOP; }
+  // live particle cap: halves at quality low (0.5), quarter floor; mobile starts from the smaller base
+  _cap() { const b = FX_OPTS.mobile ? CAP_MOBILE : CAP_DESKTOP, q = FX_OPTS.quality; return q !== undefined && q < 1 ? Math.max(100, Math.round(b * Math.max(0.25, q))) : b; }
   _pool() { return this.pool || (this.pool = makePool(CAP_DESKTOP)); }
 
   _spawn(x, y, vx, vy, life, size, shape, col, g, drag, flags, spin, floor, rot) {

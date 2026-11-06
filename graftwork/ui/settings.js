@@ -3,6 +3,7 @@
 //   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false),
 //   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
 //   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
+import { defaultQuality } from './fx.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
@@ -17,7 +18,7 @@ export function settingsOf(app) {
   const s = meta.settings;
   if (!TEXT_STEPS.includes(s.textScale)) s.textScale = s.textSize === 'large' || s.largeText ? 125 : 100;
   for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined) s[k] = DEFAULTS[k];
-  if (!QUALITY.includes(s.quality)) s.quality = 'high';
+  if (!QUALITY.includes(s.quality)) s.quality = defaultQuality();
   return s;
 }
 
