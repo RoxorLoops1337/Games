@@ -289,7 +289,9 @@ export default {
     const tw = 140, ty = 62;
     TABS.forEach((name, i) => {
       const kind = KINDS[i];
-      const label = kind ? `${name} ${seenCount(app, kind)}/${Object.keys(KEYS[kind]).length}` : name;
+      let label = kind ? `${name} ${seenCount(app, kind)}/${Object.keys(KEYS[kind]).length}` : name;
+      if (kind && app.measure(label, 15, { ui: true, bold: true }) > tw - 14) label = `${name} ${seenCount(app, kind)}`; // phones inflate the text: drop the total so the label stays inside its tab
+      if (kind && app.measure(label, 15, { ui: true, bold: true }) > tw - 14) label = name;
       const on = this.tab === i;
       app.reg('codex-tab' + i, 30 + i * (tw + 6), ty, tw, 34, { group: 'tab' + i });
       if (app.button(label, 30 + i * (tw + 6), ty, tw, 34, { size: 15, ui: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);

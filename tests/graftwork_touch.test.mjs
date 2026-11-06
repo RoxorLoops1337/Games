@@ -105,7 +105,10 @@ const playsB = c().playsTurn;
 down(pe.x, pe.y + 40); tick(45);
 assert.ok(st().down && st().down.long, 'long press detected after 350 ms');
 assert.ok(st().hov, 'long press shows the full card face (hover state)');
+tick(3);
+{ const z = reg('card_zoom'); assert.ok(z, 'long press shows the zoom face'); assert.ok(Math.abs(z.h / H - 0.7) < 0.02, 'zoom face fills about 70 percent of the stage height: ' + z.h); assert.ok(Math.abs(z.x + z.w / 2 - W / 2) < 1, 'zoom face is centred'); }
 up(pe.x, pe.y + 40); tick(4); settle();
+assert.ok(!reg('card_zoom'), 'the zoom face closes on release');
 assert.equal(c().playsTurn, playsB, 'releasing a long press does not play');
 
 // ---- 4. end turn confirm: tap elsewhere cancels, tap the box ends
@@ -158,5 +161,54 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   assert.ok(wheel > 100, 'drag up scrolls down: wheel=' + wheel);
   down(200, 230); tick(2); up(200, 230); tick(3); assert.equal(clicks, 1, 'a plain tap still clicks');
   app.stack.pop();
+}
+
+// ---- 8. tap-target floor on the other screens (phone stage): map, shop, forge, event, graft, deck view and codex
+{
+  const { default: mapS } = await import('../graftwork/ui/map.js');
+  const { default: shopS } = await import('../graftwork/ui/shop.js');
+  const { default: forgeS } = await import('../graftwork/ui/forge.js');
+  const { default: eventS } = await import('../graftwork/ui/event.js');
+  const { default: graftS } = await import('../graftwork/ui/graft.js');
+  const { default: deckS } = await import('../graftwork/ui/deckview.js');
+  const { default: codexS } = await import('../graftwork/ui/codex.js');
+  const mk = () => RUN.newRun({ hero: 'marrow', seed: 'touch2' });
+  const scenes = {
+    map: [mapS, (r) => {}],
+    shop: [shopS, (r) => { r.gold = 999; r.phase = 'shop'; r.pending = RUN.makeShop(r); }],
+    forge: [forgeS, (r) => { r.phase = 'forge'; r.pending = { kind: 'forge', used: 0 }; }],
+    event: [eventS, (r) => { RUN.startEvent(r); }],
+    graft: [graftS, (r) => { RUN.startGraftPick(r); }],
+    deck: [deckS, (r) => {}],
+    codex: [codexS, (r) => {}],
+  };
+  for (const [name, [scr, prep]] of Object.entries(scenes)) {
+    const r = mk(); prep(r);
+    app.shared.run = r; app.shared.meta = app.shared.meta || {};
+    app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {}, openCodex() {}, saveMeta() {} };
+    app.register('t_' + name, scr); app.go('t_' + name, { run: r });
+    const got = [];
+    const o2 = app.clicked; app.clicked = (x, y, w, h) => { const g = app.hitRect(x, y, w, h); got.push({ w: g.w * app.scale, h: g.h * app.scale, x: Math.round(x), y: Math.round(y) }); return o2(x, y, w, h); };
+    tick(name === 'event' ? 600 : 120); // the event text types out before its choices appear
+    app.clicked = o2;
+    const regClick = app.layout.getAll().filter((q) => /^(event-choice|shop-(card|graft|potion|relic|svc)|forge-opt)/.test(q.id)); // custom clickables that hit-test by hand
+    assert.ok(got.length + regClick.length >= 1, name + ' registered clickables');
+    for (const q of regClick) assert.ok(q.h * app.scale >= 39.5 && q.w * app.scale >= 39.5, `${name} ${q.id} is ${Math.round(q.w * app.scale)}x${Math.round(q.h * app.scale)} css px`);
+    const bad = got.filter((q) => q.w < 39.5 || q.h < 39.5);
+    assert.equal(bad.length, 0, name + ' tap targets under 40 css px: ' + JSON.stringify(bad.slice(0, 5)));
+    // the layout registry: nothing of the screen lies outside the stage
+    assert.deepEqual(app.layout.findOutOfBounds(W, H, 2).filter((id) => !/^(node:|world)/.test(id)), [], name + ' registry rects inside the stage');
+  }
+}
+
+// ---- 9. the map act banner: a tap skips it (hint after 0.8 s)
+{
+  const { default: mapS } = await import('../graftwork/ui/map.js');
+  const r = RUN.newRun({ hero: 'marrow', seed: 'banner' });
+  app.shared.run = r; app.register('t_map2', mapS); app.go('t_map2', { run: r }); tick(2);
+  assert.ok(mapS.banner, 'act banner shows on a fresh act');
+  tick(60); assert.ok(mapS.banner && mapS.banner.t > 0.8, 'still up after 1 s');
+  down(640, 330); tick(2); up(640, 330); tick(60);
+  assert.ok(!mapS.banner, 'a tap skips the act banner');
 }
 console.log('graftwork touch ok');

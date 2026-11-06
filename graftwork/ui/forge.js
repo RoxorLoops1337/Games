@@ -1,6 +1,6 @@
 // FORGE screen (run.phase === 'forge', run.pending = {kind:'forge', used, last}).
 // Five big options; the player picks one (two with perk 'forgeExtra'), watches the animation, then continues.
-import { tscale } from './graft_parts.js';
+import { tscale, wrapLimit } from './graft_parts.js';
 import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -101,10 +101,17 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.shadowBlur = 0; g.lineWidth = over && !dim ? 3 : 2; g.strokeStyle = dim ? 'rgba(232,220,196,.2)' : over ? COL.lamp : rgba(BRASS, 0.7); g.stroke();
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t); g.globalAlpha = 1;
-  app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
-  app.text(o.short || o.desc, x + OW / 2, y + 196, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
-  if (disabledWhy) app.text(disabledWhy, x + OW / 2, y + OH - 54, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true });
-  else if (!usedUp) { const d = detailFor(run, o.id); app.text(d.t, x + OW / 2, y + OH - 46, { size: 15, ui: true, bold: true, align: 'center', maxW: OW - 24, color: d.c }); }
+  const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
+  // bottom block (reason or live detail) is sized from its real wrapped lines; the description gets what is left (phones inflate the text)
+  let bt = '', bo, bl = 0; const bsz = disabledWhy ? 14 : 15;
+  if (disabledWhy) { bt = disabledWhy; bo = { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true }; }
+  else if (!usedUp) { const d = detailFor(run, o.id); bt = d.t; bo = { size: 15, ui: true, bold: true, align: 'center', maxW: OW - 24, color: d.c }; }
+  const bpitch = disabledWhy ? Math.round(17 * app.sz(14, { ui: true }) / 14) : Math.round(app.sz(15, { ui: true, bold: true }) * 1.22);
+  if (bt) bl = app.wrap(bt, bo.maxW, bsz, { ui: true, bold: true }).length;
+  const botTop = y + OH - 14 - bl * bpitch, descTop = y + 150 + nameH + 2;
+  const dpitch = Math.round(17 * app.sz(14, { ui: true }) / 14), nl = Math.max(1, Math.floor((botTop - descTop - 2) / dpitch));
+  wrapLimit(app, o.short || o.desc, OW - 30, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + OW / 2, descTop + q * dpitch, { size: 14, ui: true, align: 'center', lineH: 17, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum }));
+  if (bt) app.text(bt, x + OW / 2, botTop, bo);
   g.restore();
 }
 

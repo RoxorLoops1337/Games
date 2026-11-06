@@ -501,7 +501,7 @@ export default {
     app.text(ACT_NAMES[b.act], 640 + slide, cy - 36, { size: 64, bold: true, align: 'center', color: COL.vellum, shadow: true });
     const sub = { 1: 'Visiting hours are over.', 2: 'Everything here has a price tag, including you.', 3: 'The audience is already seated.' }[b.act];
     app.text(sub, 640, cy + 44, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.7)' });
-    if (t > 0.8 && t < 2.0) app.text(app.mouse.touch ? 'tap to continue' : 'click to continue', W / 2, cy + 74, { size: 14, ui: true, align: 'center', color: 'rgba(232,220,196,.55)', alpha: clamp((t - 0.8) * 3, 0, 1) });
+    if (t > 0.8 && t < 2.0) app.text(app.mouse.touch ? 'tap to continue' : 'click to continue', W / 2, cy + 68, { size: 14, ui: true, align: 'center', color: 'rgba(232,220,196,.55)', alpha: clamp((t - 0.8) * 3, 0, 1) });
     g.restore();
     if ((app.mouse.pressed || app.mouse.released) && t > 0.15) b.t = Math.max(b.t, 2.0);
   },

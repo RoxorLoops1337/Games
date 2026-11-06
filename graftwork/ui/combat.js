@@ -1491,10 +1491,10 @@ function draw(app) {
   if (S.lamp > 0) { ctx.fillStyle = `rgba(0,0,0,${S.lamp * 0.45})`; ctx.fillRect(0, 0, W, H); }
   if (S.dark > 0) { ctx.fillStyle = `rgba(0,0,0,${S.dark * 0.6})`; ctx.fillRect(0, 0, W, H); }
   if (S.drag && !selNeedsTarget()) drawPlayZone(app);
-  drawCardInfo(app); drawZoomFace(app);
+  drawCardInfo(app);
   drawBanner(app);
   drawJuice(app);
-  drawTips(app);
+  drawTips(app); drawZoomFace(app);
   if (c.pending && !S.ending && !busy()) drawPendingModal(app);
   if (S.modal) drawPilesModal(app);
 }
