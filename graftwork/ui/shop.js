@@ -326,10 +326,6 @@ export function drawAnim(app, a, fx) {
 }
 
 // ---- small drawing helpers -------------------------------------------------------------------------------------------
-export function drawCoinLabel(app, x, y, n, o = {}) {
-  const g = app.ctx; drawCoin(g, x, y + (o.size || 20) * 0.55, o.coin || 18);
-  app.text(String(n), x + 14, y, { size: o.size || 20, bold: true, color: o.color || COL.gold, shadow: true });
-}
 export function stamp(app, cx, cy, text, color, rot) {
   const g = app.ctx; g.save(); g.translate(cx, cy); g.rotate(rot === undefined ? -0.2 : rot);
   const w = app.measure(text, 30, { bold: true }) + 28;

@@ -76,15 +76,3 @@ export function enemySlots(defs) {
 
 export function inRectXY(px, py, x, y, w, h) { return px >= x && px <= x + w && py >= y && py <= y + h; }
 
-// status icon layout: returns [{id, n, x, y}] centred on cx, wrapping within maxW
-export function statusSlots(ids, cx, y, maxW, size) {
-  const step = size + 6;
-  const perRow = Math.max(1, Math.floor((maxW + 6) / step));
-  const out = [];
-  for (let r = 0; r * perRow < ids.length; r++) {
-    const row = ids.slice(r * perRow, (r + 1) * perRow);
-    const w = row.length * step - 6;
-    row.forEach((id, i) => out.push({ id, x: cx - w / 2 + size / 2 + i * step, y: y + r * (size + 8) + size / 2 }));
-  }
-  return out;
-}

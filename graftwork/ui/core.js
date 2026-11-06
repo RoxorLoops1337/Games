@@ -18,7 +18,7 @@ export const EASE = {
 };
 // Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
-export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 0, maxHitGrow: 24 };
+export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24 };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -32,7 +32,7 @@ export function createApp(canvas, opts = {}) {
     keys: new Set(), pressedKeys: [],
     screens: {}, stack: [], tweens: [], timers: [],
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
-    scale: 1, offX: 0, offY: 0, cropY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
+    scale: 1, offX: 0, offY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
     chrome: CH,
     navButtons: false, // screens opt in: Tab / Shift-Tab / Enter walk the buttons registered last frame
@@ -60,12 +60,7 @@ export function createApp(canvas, opts = {}) {
   app.resize = () => {
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
-    // Short, wide viewports (phones in landscape): drop SMALL.cropY logical px of the top and bottom margins so the stage scales up ~7%.
-    // The chrome (pause, fullscreen) is moved inside app.safe, so nothing important sits in the cropped strip.
-    const wide = ih < 600 && iw / ih > W / H;
-    const crop = wide ? SMALL.cropY : 0;
-    app.cropY = crop;
-    app.scale = Math.min(iw / W, ih / (H - crop * 2));
+    app.scale = Math.min(iw / W, ih / H);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cw = W * app.scale, ch = H * app.scale;
     app.offX = (iw - cw) / 2; app.offY = (ih - ch) / 2;

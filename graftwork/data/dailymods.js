@@ -17,4 +17,3 @@ export const DAILY_MODS = [
   { id: 'steady', name: 'Steady Hands', text: 'Up: Shatter chance -25%. Down: shop prices +25%.', up: 'Shatter chance -25%.', down: 'Shop prices +25%.', shatter: -0.25, shopMul: 1.25 },
   { id: 'short', name: 'Short Thread', text: 'Up: Shatter chance -10%. Down: all Lines cap at 4.', up: 'Shatter chance -10%.', down: 'All Lines cap at 4.', lineCap: 4, shatter: -0.1 },
 ];
-export const dailyModFor = (hash) => DAILY_MODS[Math.abs(hash | 0) % DAILY_MODS.length];

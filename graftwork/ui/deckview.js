@@ -77,7 +77,6 @@ export function scrollArea(app, st, x, y, w, h, contentH, draw) {
   }
 }
 export function inView(app, st, x, y, w, h) { const v = st.view; return !!v && app.inRect(v.x, v.y, v.w, v.h) && app.inRect(x, y, w, h); }
-export function clickedIn(app, st, x, y, w, h) { const v = st.view; return !!v && app.inRect(v.x, v.y, v.w, v.h) && app.clicked(x, y, w, h); }
 
 // ---------------------------------------------------------------- card grid
 // items: [{ spec, tithed, jam, onClick(item, i), label, dim, disabled, selected, badges: [{text,color}] }]

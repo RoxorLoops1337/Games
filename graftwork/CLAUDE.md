@@ -11,15 +11,27 @@
 - Every graft also carries its own local **Price** (cost up, exhaust, self damage, jam chance, junk cards, slower draw, max HP loss). A Boon is never free.
 - Offers: 3 cards from your deck (one is always a low-play-count card) x 3 grafts, one of each tier: **safe** (weight 1, small boon, simple price), **greedy** (weight 2 to 3, big boon), **weird** (changes how the card works). Skipping the graft: heal 8, OR +1 Budget permanently, OR +10 gold.
 
-## Layout
+## Module map (read this first)
 ```
 graftwork/
-  index.html  main.js          page + boot (UI owner)
-  engine/rng.js cards.js combat.js text.js   PURE rules, no DOM (do not edit without the lead)
-  engine/run.js                run state: map, rewards, offers, shop, forge, events, save (run owner)
-  data/*.js                    content, one author per file (see below)
-  ui/*.js  art/*.js            screens, canvas art, fx, audio
-tests/graftwork_*.test.mjs     headless suites; `node tests/graftwork_data.test.mjs` is the content gate
+  index.html  main.js          page + boot: builds the app, wires flow.route(), settings sync, window.__gw
+  engine/   PURE rules, no DOM (do not edit without the lead; shared-file protocol below)
+    rng.js          seeded rng (hashSeed, rng objects stored on run.rng)
+    cards.js        card instances, grafts, Budget/Strain/Tithe, Overload, Temper (canGraft, canTemper, temper, strainInfo, cardSpec)
+    combat.js       combat state c, ops interpreter, playCard/endTurn/finishCombat, hook dispatch fire(c, name, ...)
+    seam.js         the Thread (Line, extend, cut, payouts); afflictions.js (poison, Brittle, Rejection, Infection...); resonance.js (school resonance hooks)
+    text.js         rules text generated from specs (cardLines, statusText)
+    run.js          run state: map, rewards, offers, shop, forge, events, ascension, save payload
+    save.js meta.js meta2.js   persistence (see Save keys), meta progression, Credit, cosmetics, Daily Case, boss practice
+  data/     content, one author per file (table below); data/index.js builds the id maps (CARDS, GRAFTS, ENEMIES, STATUSES...) and throws on duplicate ids
+  ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), one file per screen
+            (title map combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
+            seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), lights.js, audio.js,
+            a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js
+  art/      procedural canvas drawing only: cards.js, icons.js, enemies.js, heroes.js, backgrounds.js, attacks.js (attack rigs)
+  design/   ART_BIBLE THREAD ENEMY_DEPTH UX_SPEC JUICE BUILD_PLAN (+ README.md index)
+tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs them all; tests/graftwork_lib.mjs is the fake-canvas harness
+tools/graftwork_*.mjs          balance and audio tooling (see Balance tooling)
 ```
 
 ## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js)
@@ -88,3 +100,59 @@ Voice: clinical tenderness. Second person, short, dry, medical with a wink. Pric
 
 ## Round 4 (design docs in graftwork/design/)
 ART_BIBLE.md (The Anatomical Plate), THREAD.md (the new core rule: school chains cashed by cutting), ENEMY_DEPTH.md (poison, Brittle, Rejection, Infection, Numb, Unpicked...), UX_SPEC.md (drag, HUD grid, pause, fullscreen), JUICE.md (animation language), BUILD_PLAN.md (who owns which file). Engine plumbing for the Thread and the afflictions is wired in combat.js; implementations live in engine/seam.js and engine/afflictions.js.
+
+## Engine hooks (where to plug in)
+- Enemy hooks (`def.on`): combatStart turnStart damaged death playerCard afterMove modDamage statusGained playerBlock seamExtend seamCut seamPay. Signatures are in the Enemy schema above. `seamCut` may set `info.cancel = true` to void a payout (Scissor Nurse).
+- Relic hooks (`relic.on`) and hero hooks go through `fire(c, name, ...)` in engine/combat.js: combatStart turnStart turnEnd cardPlayed damaged kill exhaust shatter combatEnd wouldDie, plus `seamExtend|seamCut|seamPay` from engine/seam.js. Relic `mod` keys (energy, hand, budget, shatter, keepBlock, seamCap) are read by the engine, run-level `perk` names by engine/run.js.
+- Seam plumbing in combat.js: `seamInit` (newCombat), `seamStep` (playCard, before the card's fx), `seamEnd` (endTurn), `seamTurnStart`. `seamPreview(c, card)` is pure and must match the real payout (tests/graftwork_ui_seam.test.mjs checks it). Caps live in seam.js (`SEAM_LEN_CAP`, `SEAM_CUTS_TURN`, ...).
+- Claim flag: `card.claimed = true` (set by The Matron's Claim in data/enemies_1.js) makes a card fight and display exactly like a Tithe for that combat (`s.tithed = card.tithed || card.claimed` in combat.js). Tempered cards (fused grafts) are never claimed. Do not set `tithed` directly from content, use `claimed`.
+- Afflictions (afflStartTurn/afflEndTurn/afflCost/afflAbsorb) are called from combat.js; add a new affliction in data/statuses_aff.js and engine/afflictions.js together.
+- Graft `custom` hooks: onPlay onDraw onDiscard onExhaust onTurnStart (see Graft schema).
+
+## Layout registry rules (ui/layout_registry.js)
+Every HUD widget reports its rectangle each frame: `app.reg(id, x, y, w, h, { layer: 'hud'|'world'|'overlay', group, overlay })`. The layout tests enforce: `hud` rects never intersect unless they share a `group` or one is flagged `overlay` (tooltips, modals, the hovered-card layer); every non-`world` rect lies inside the 1280x720 stage. Register new widgets or `ui_layout` / `ui_combat_layout` cannot see them. Text never goes below `SMALL.minTextPx` (11) and touch targets never below `SMALL.minTouchPx` (40) on phones (ui/core.js).
+
+## Post, fx and audio APIs
+- Post (ui/post.js, `app.post`, all no-ops when quality is off or reduced motion): `shockwave(x,y,strength,ms)`, `aberration(amount,ms)`, `flash(color,a)`, `vignette(a,ms)`, `setBloom(k,threshold?)`, `setGrade(name,ms)`, `setQuality('off'|'low'|'high')`. Logical 1280x720 coordinates. Grades: ward market theatre boss title neutral (auto per screen). Pointer events still hit the 2D canvas.
+- Fx (ui/fx.js): one `new Fx()` per screen. Per frame `fx.update(dt)`, translate by `fx.shakeOffset()`, draw the scene, then `fx.draw(ctx)` and `fx.drawFlash(ctx,W,H)`. Emitters: `burst(x,y,kind)`, `float(text,x,y,opts)`, `floatCounter(id,x,y,n)`, `shakeDir(dx,dy)`, `zoom(k)`. Global switches live in `FX_OPTS` (shake, reduced, quality, flashes); `flashGate()` rate-limits flashes for photosensitivity. Caps: CAP_DESKTOP 2000, CAP_MOBILE 600, CAP_ADD 150, CAP_TRAIL 100.
+- Audio (ui/audio.js, 100% procedural, safe to import in node): `initAudio`, `setVolumes({master,sfx,music})`, `mute(b)`, `duck(ms)`, `sfx(name,opts)`, `hit(dmg,maxHp)`, `music(mode)`, `stopMusic`, `setIntensity`, `heartbeat(on,bpm)`. Names: `SFX_NAMES`, `MUSIC_MODES`. A new sfx goes in the `S` table; heartbeat and Thread sounds that must stay audible over music also go in `DIP`. Run the audio gate after any edit.
+- Juice tuning (ui/juice.js): `TIERS` (hit tiers relative to victim max HP), `BUDGET`/`FINAL` timing tables, pure helpers only. design/JUICE.md has the intent.
+
+## Save keys (never rename)
+- `graftwork_run_v1` (engine/save.js): the run in progress, written by `flow.route()` after every state change, deleted on death or win.
+- `graftwork_meta_v1` (engine/meta.js): meta progression plus settings. Base shape is `v: 1` and final; additive revisions use `rev` (meta2.js `defaults2`, `migrate2`). Fields: unlocked, bestAsc, wins, winAsc, stats, seen, achievements, daily, tips, settings, history, then rev 2 credit, cosmetics, loadout, practice. `migrate()` fills missing fields from defaults, so adding a field is safe, changing a field type is not.
+- Settings (`meta.settings`): master sfx music muted screenShake reducedMotion colorblind colorblindMode flashes highContrast largeText textSize textScale (100|125|150|175) quality ('off'|'low'|'high') fullscreen tips announce. Defaults are in engine/meta.js `DEFAULT_SETTINGS`, ui/settings.js `DEFAULTS` and ui/a11y.js `A11Y_DEFAULTS`; main.js copies them into FX_OPTS and the audio bus each frame.
+- Other test-only names: `graftwork_audio_check`, `graftwork_motion` are not storage keys.
+
+## Test map (which suite guards what)
+Run all: `node tests/run_graftwork.mjs` (or `npm run test:graftwork`). The runner uses a pool of 4 workers (`--jobs=N`, `--serial`, `--times` prints per-suite ms), prints one PASS or FAIL line per file, the last 12 stdout lines of a failure, and `N/N graftwork suites passed`; exit code 1 on any failure.
+| area | suites |
+|---|---|
+| content gate (run first when editing data/) | data, content_fuzz (every card x graft x enemy), audit (power smoke, exploit decks), status_behaviour (status does what its tooltip says) |
+| rules | temper, seam, afflictions, boss_mechanics, meta, meta2 |
+| whole runs | fullrun (strong bot, all heroes), e2e (real flow routing) |
+| combat UI | ui_combat, ui_combat_layout (HUD grid 1..6 enemies x 0..10 cards), ui_juice, ui_seam, motion (timing budgets) |
+| other screens | ui_map, ui_graft, ui_shop (shop+forge), ui_deck, ui_title, ui_pause, ui_layout (non-combat layouts), ui_clickthrough, ui_reward_tip, ui_polish, ui_transitions, onboarding |
+| input and a11y | touch (phone stage 844x390, pointer events), a11y, monkey (seeded random UI fuzz), ui_core |
+| art | art_cards, art_chars, art_icons, attack_rigs |
+| fx and audio | fx, post (API in node plus real Chromium, skips if missing), audio (name tables), audio_mix (offline render in Chromium: clipping, loudness, masking) |
+| perf | perf (fake-ctx op counts, never wall time) |
+The fake canvas in tests/graftwork_lib.mjs (`fakeCtx`) has own no-op methods for the common Canvas2D calls and a Proxy prototype for anything else, because a Proxy trap per draw call used to cost about half of every UI suite. Keep new draw calls to real Canvas2D names.
+
+## Balance tooling (tools/)
+```
+node tools/graftwork_sim.mjs 20 0                 # careful / greedy / none policies, 20 runs per hero, ascension 0
+node tools/graftwork_strong.mjs 40 0 [hero]       # strong bot (Thread aware); the reference for win rates
+node tools/graftwork_schools.mjs schools 100 0    # mono-school builds; also: pairs [N] [asc], relics [N] [asc] [relicId]
+node tools/graftwork_audit.mjs 40 --tier=weird    # per-graft paired comparison vs no graft (--pool=starters|all, --graft=g_id, --rows)
+node tools/graftwork_audio_check.mjs [--json]     # offline loudness, clipping, masking report (needs Playwright chromium)
+```
+Current targets and measured numbers (strong bot, 10 to 40 runs per hero, noisy): ascension 0 wins roughly 40 to 60 percent (marrow 40, wick 60, odile 50 at N=10), ascension 5 roughly 8 to 18 percent (N=40). Act 1 is cleared almost always, Act 2 is the real filter. Grafts: common boon about +4 points, uncommon +6, rare +8, net per rarity common 0, uncommon +1, rare +2 (see Graft schema). Enemies: Act 1 normal 38 to 44 HP and 7 to 9 damage, x1.6 Act 2, x2.4 Act 3; bosses 130 / 220 / 340 HP. Treat a school or relic that moves the strong bot win rate by more than about 10 points as an outlier. Seeds are fixed per run index, so compare before and after with the same N.
+
+## Shared-file edit protocol (what worked over ten rounds)
+1. Content files have one author each; extra statuses go only in your own `statuses_<x>.js`. Shared files (engine/*, ui/core.js, ui/combat.js, data/index.js, main.js, tests/graftwork_lib.mjs) have ONE owner per round: other agents send the owner a small patch description or ask for a hook, they do not edit in parallel.
+2. Prefer adding a hook or an exported helper over editing the middle of a shared function. Additive changes (new field with a default, new optional op) merge cleanly; renames never do.
+3. Merge conflicts in a shared file: keep HEAD (your branch), then re-grep for your feature, then run `node tests/run_graftwork.mjs`.
+4. Run `node tests/graftwork_data.test.mjs` after every content edit and the whole runner before a merge. Never run other games' suites.
+5. Never rename localStorage keys, the `graftwork/` folder or card, graft and enemy ids (saves reference them). No em dashes in any text.
+6. Remove dead code only with proof (a grep or script over graftwork/, tests/ and tools/ finding the name once). Round 10 cleanup removed: status `recall` and its icon, `SMALL.cropY` and `app.cropY` (always 0), and unused exports `dailyModFor hasDmg hasBlock resetIds costText describeFocus KIND_NAME barCol statusSlots clickedIn TIER_ORDER drawCoinLabel resetTips`.

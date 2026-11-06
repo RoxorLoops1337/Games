@@ -166,7 +166,6 @@ export function drawRelicStrip(app, relics) {
   app.reg('topRelics', R.x, R.y - 14, Math.max(30, endX - R.x), 28, {});
 }
 
-export const KIND_NAME = { attack: 'Attack', defend: 'Defend', buff: 'Buff', debuff: 'Debuff', junk: 'Clog', summon: 'Summon', unknown: 'Unknown', stun: 'Stun' };
 export function intentText(info) {
   if (!info) return '';
   if (info.hidden) return 'Its intent is hidden.';
@@ -289,7 +288,6 @@ export function drawHeroPlate(app, P, heroName, t, dgr) {
   else if (app.inRect(H.x + 34, H.y + 2, H.w - 38, 16)) queueTip(app, 'herohp', [[{ title: heroName, text: `HP ${P.hp} / ${P.maxHp}`, color: COL.bad, glyph: 'cross' }]], { x: H.x + 34, y: H.y + 2, w: H.w - 38, h: 16 });
 }
 
-export function barCol(isPlayer) { return isPlayer ? '#b3263a' : '#a8412f'; }
 
 // ---- card keyword panel ----
 const FLAG_HELP = {

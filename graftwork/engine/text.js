@@ -88,5 +88,4 @@ export function priceLines(spec) {
   if (p.gold) out.push(`Costs ${p.gold} gold to play.`);
   return out;
 }
-export function costText(spec, cost) { return spec.cost === 'X' ? 'X' : String(cost === undefined ? spec.cost : cost); }
 export function statusText(id, n) { const d = STATUSES[id]; return d ? d.desc(n || 1) : id; }

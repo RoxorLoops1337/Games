@@ -19,7 +19,6 @@ export const MAX_INNATE = 3;
 const RESOURCE_OPS = new Set(['draw', 'energy', 'gold', 'addCard', 'heal']);
 
 let _eid = 1;
-export function resetIds() { _eid = 1; }
 
 // ---------- setup ----------
 export function newCombat(run, enemyIds, opts = {}) {
