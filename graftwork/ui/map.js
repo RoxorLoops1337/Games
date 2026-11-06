@@ -380,8 +380,8 @@ export default {
     // buttons are anchored to the bottom (stacked when the text scale makes them wide)
     const stack = S > 1.2, bH = 42, aH = 38;
     const abY = BOT - aH, dY = stack ? abY - 8 - bH * 2 - 8 : abY - 8 - bH;
-    const hint = S <= 1 ? 'Arrows or WASD to choose, Enter to go' : null;
-    const hintY = hint ? dY - 20 : dY;
+    const hint = S <= 1 ? (app.measure('Arrows or WASD to choose, Enter to go', 13, { ui: true }) <= IW ? 'Arrows or WASD to choose, Enter to go' : 'WASD to move, Enter to go') : null;
+    const hintH = Math.ceil(app.sz(13, { ui: true }) * 1.2), hintY = hint ? dY - hintH - 6 : dY;
     // potions
     const potTop = hintY - 8 - 58;
     // relics get whatever is left between here and the potions
@@ -425,7 +425,7 @@ export default {
     if (app.button(`Deck (${run.deck.length})`, X + 18, dY, dw, bH, { size: 18 })) app.shared.flow.openDeck();
     if (app.button('Settings', sx, sy, sw, bH, { size: 18 })) app.shared.flow.openSettings();
     if (app.button('Abandon run', X + 18, abY, IW, aH, { size: 16, fill: '#2b1a1a', stroke: 'rgba(179,38,58,.7)', color: '#e6a0a0' })) this.confirm = true;
-    if (hint) app.text(hint, X + PW / 2, dY - 18, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.45)', maxW: IW });
+    if (hint) app.text(hint, X + PW / 2, hintY, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.45)', maxW: IW });
   },
 
   // legend and resonance are reference panels: they follow the text scale up to 125%
@@ -441,35 +441,39 @@ export default {
     app.text('LEGEND', X + 18, Y0 + 10, { size: 14, ui: true, bold: true, color: COL.lamp });
     const types = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'];
     const leg = { fight: 'Fight: gold and a graft', elite: 'Elite: relic reward', event: 'Event: ???', shop: 'Shop: spend gold', forge: 'Forge: rest, expand, refine, strip or reforge', boss: run.act === 3 ? 'Warden, then The Grafter' : 'Boss: ends the act' };
+    // phones inflate the text: row pitch follows the real heights so name and note never overlap
+    const nameH = Math.ceil(app.sz(16, { bold: true }) * 1.18), noteH = Math.ceil(app.sz(14, { ui: true }) * 1.18), LP = Math.max(36, nameH + noteH + 3);
+    const noteL = types.map((t) => app.wrap(leg[t].split(': ')[1] || leg[t], 226, 14, { ui: true }).length), rowY = []; let ry = Y0 + 34; for (const n of noteL) { rowY.push(ry); ry += Math.max(36, nameH + noteH * n + 3); }
     types.forEach((t, i) => {
-      const y = Y0 + 34 + i * 36;
+      const y = rowY[i];
       g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 15, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = 2.4; g.stroke();
       drawNodeIcon(g, t, X + 34, y + 15, 22, 'available');
       app.text(NODE_INFO[t][0], X + 58, y, { size: 16, bold: true, color: NODE_COL[t] === COL.scar ? '#e07a86' : NODE_COL[t] });
-      app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + 17, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
+      app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + nameH, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
     });
     // path key
-    const ky = Y0 + 268;
+    const ky = ry + 22, pk = Math.max(22, noteH + 2);
     g.setLineDash([9, 6]); g.lineWidth = 3; g.strokeStyle = COL.scar; g.beginPath(); g.moveTo(X + 18, ky); g.lineTo(X + 62, ky); g.stroke();
-    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + 22); g.lineTo(X + 62, ky + 22); g.stroke(); g.setLineDash([]);
-    app.text('Open path', X + 72, ky - 8, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
-    app.text('Possible later', X + 72, ky + 14, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
+    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + pk); g.lineTo(X + 62, ky + pk); g.stroke(); g.setLineDash([]);
+    app.text('Open path', X + 72, ky - noteH / 2, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
+    app.text('Possible later', X + 72, ky + pk - noteH / 2, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
 
-    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, Y0 + 306); g.lineTo(X + PW - 18, Y0 + 306); g.stroke(); g.setLineDash([]);
-    app.text('SCHOOL RESONANCE', X + 18, Y0 + 314, { size: 14, ui: true, bold: true, color: COL.lamp });
+    const divY = ky + pk + 16, hdrH = Math.ceil(app.sz(14, { ui: true, bold: true }) * 1.2), rs = divY + 8 + hdrH + 6;
+    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, divY); g.lineTo(X + PW - 18, divY); g.stroke(); g.setLineDash([]);
+    app.text('SCHOOL RESONANCE', X + 18, divY + 8, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
     SCHOOLS_LIST().forEach((s, i) => {
-      const y = Y0 + 338 + i * 38;
+      const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), y = rs + i * SP;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;
-      app.reg('map-school' + i, X + 10, y - 2, PW - 20, 36, { group: 'right' });
-      const hov = app.inRect(X + 10, y - 2, PW - 20, 36);
-      if (hov) { app.rr(X + 10, y - 2, PW - 20, 36, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
+      app.reg('map-school' + i, X + 10, y - 2, PW - 20, SP - 2, { group: 'right' });
+      const hov = app.inRect(X + 10, y - 2, PW - 20, SP - 2);
+      if (hov) { app.rr(X + 10, y - 2, PW - 20, SP - 2, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
       g.save(); g.globalAlpha = c ? 1 : 0.55;
       drawSchoolGlyph(g, s.id, X + 32, y + 10, 11, s.color);
       app.text(s.name, X + 54, y, { size: 16, bold: true, color: c ? s.color : COL.vellum });
       app.text(String(c), X + PW - 22, y, { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum });
       // bar with ticks at 3 and 6
-      const bx = X + 54, bw = 190, by = y + 22;
+      const bx = X + 54, bw = 190, by = y + Math.min(22, SP - 12);
       app.rr(bx, by, bw, 8, 4); g.fillStyle = 'rgba(232,220,196,.12)'; g.fill();
       if (c) { app.rr(bx, by, Math.max(8, bw * clamp(c / 6, 0, 1)), 8, 4); g.fillStyle = s.color; g.fill(); }
       for (const t of [3, 6]) {

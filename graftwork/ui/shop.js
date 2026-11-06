@@ -10,6 +10,7 @@ import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from 
 import { cardLines, priceLines } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
 import { wrapLimit, tscale } from './graft_parts.js';
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const BRASS = '#C9A227';
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) a.sfx(name, o); };
@@ -556,6 +557,7 @@ export default {
       drawCoin(g, cx - 20, cy, 18); app.text(String(price), cx - 6, cy - 11, { size: 19, bold: true, color: can ? COL.gold : COL.bad });
     };
 
+    const smallUi = app.scale < 0.95; // phones: the text floor inflates every label, so tiles trade padding for words
     // ---- cards ----
     let hovered = null;
     shop.cards.forEach((it, i) => {
@@ -595,23 +597,25 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
-      wrapLimit(app, p.text, w - 64, 14, 2, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + 28 + q * 17 - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)', lineH: 17 }));
+      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.1)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - (smallUi ? 30 : 26)) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
+        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + (smallUi ? 30 : 26) + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - 20, it.price, false, 'potion' + i);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
 
     // ---- relics ----
     shop.relics.forEach((it, i) => {
-      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = 96;
+      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = smallUi ? 110 : 96;
       app.reg('shop-relic' + i, REL_X, y - 2, w, h + 2, { group: 'relic' + i });
       const over = !it.sold && app.inRect(REL_X, y, w, h), k = hv(app, 'r' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : rgba(BRASS, 0.5), lw: 2 });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
       app.text(r.name, x + 76, y + 8 - 2 * k, { size: 17, bold: true, color: COL.lamp, maxW: w - 76 - 94 });
-      wrapLimit(app, r.text, w - 90, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, y + 38 + q * 17 - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)', lineH: 17 }));
+      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.1)), ty0 = y + (smallUi ? 6 : 8) + Math.ceil(app.sz(17, { bold: true }) * (smallUi ? 1.12 : 1.2)) + 2, nl = clampN(Math.floor((y + h - 4 - ty0) / pitch), 1, 3);
+        wrapLimit(app, r.text, w - 90, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, ty0 + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp }); }

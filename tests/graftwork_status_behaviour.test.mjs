@@ -67,19 +67,25 @@ t('brittle (player): emptied Block costs ceil(25%) of the broken amount, max 6; 
   assert.equal(c.player.hp, hp - 6, 'max 6');
   endTurn(c); assert.equal(c.player.st.brittle, 2, 'one per turn');
 });
-t('brittle (enemy): no hook on enemies, it only ticks down', () => {
+t('brittle (enemy): the hook is owner-generic, so an enemy with Brittle also pays 25% of broken Block', () => {
   const c = mk(); addStatus(c, E0(c), 'brittle', 2); E0(c).block = 8; const hp = E0(c).hp;
   dealDamage(c, c.player, E0(c), 8, { noMods: true });
   assert.equal(E0(c).hp, hp - 2, 'enemy Block breaking also costs it 25% (status hook is owner-generic)');
 });
 
 // ---------- Rejection / Infection / Numb / Unpicked / Cadence Lock / Leaden ----------
-t('rejection (player): prices trigger twice for exactly one player turn', () => {
+t('rejection (player): self-damage prices trigger twice, for exactly one player turn', () => {
   const E = def('sb_rej', { m: { name: 'M', fx: [{ op: 'status', s: 'rejection', n: 1, to: 'player' }] } });
+  const play1 = (rej) => {
+    const c = mk([IDLE]); c.energy = 9; const k = give(c, 'm_dress'); k.inst.grafts = ['g_ember_pin'];
+    const price = specOf(c, k).price.selfHurt; assert.ok(price > 0, 'fixture graft has a self-damage price');
+    if (rej) c.player.st.rejection = 1; const hp = c.player.hp; pl(c, k); return [hp - c.player.hp, price];
+  };
+  const [plain, price] = play1(false), [twice] = play1(true);
+  assert.equal(plain, price); assert.equal(twice, price * 2);
   const c = mk([E]); endTurn(c); assert.equal(c.player.st.rejection, 1);
-  const k = give(c, 'm_incision'); k.inst.grafts = ['g_ember_pin'];
-  const sp = specOf(c, k); assert.ok(sp);
   endTurn(c); assert.equal(c.player.st.rejection, 1, 'refreshed by the move, never stacked past 1');
+  const d = mk(); d.player.st.rejection = 1; endTurn(d); assert.equal(d.player.st.rejection, undefined, 'lasts one turn');
 });
 t('rejection (enemy): dur status ticks off at its turn end', () => {
   const c = mk(); addStatus(c, E0(c), 'rejection', 1); endTurn(c); assert.equal(E0(c).st.rejection, undefined);
@@ -179,13 +185,14 @@ t('surcharge (enemy): next hit deals N more, ends when set to 0', () => {
   let hp = c.player.hp; endTurn(c); assert.equal(c.player.hp, hp - 14);
   setStatus(c, E0(c), 'surcharge', 0); hp = c.player.hp; endTurn(c); assert.equal(c.player.hp, hp - 10);
 });
-t('grounded: Defibrillator Clear hits 3 less per stack, never under 14; stacks are 1 per 8 damage dealt to it (max 6)', () => {
-  const c = mk(['defibrillator']); const e = E0(c);
-  e.hp = e.maxHp = 9999;
+t('grounded: Clear hits 3 less per stack but never under 14 (tooltip says so); stacks come from damage dealt (max 6)', () => {
+  assert.equal(statusText('grounded', 2), 'Its next Clear hits for 6 less (never below 14). Each 8 damage you deal to it before then adds one.');
+  const c = mk(['defibrillator']); const e = E0(c); e.hp = e.maxHp = 9999;
+  const mv = e.def.moves.discharge.fx[0].n; assert.deepEqual([mv.base, mv.mul, mv.min], [27, -3, 14]);
   dealDamage(c, c.player, e, 17, { noMods: true, hit: true });
-  const d = ENEMIES.defibrillator;
-  assert.equal(statusText('grounded', 2), 'Its next Clear hits for 6 less. Each 8 damage you deal to it before then adds one.'.replace('Its next Clear hits for 6 less.', statusText('grounded', 2).split('.')[0] + '.'));
-  assert.ok(d.moves.discharge.fx[0].n.min === 14);
+  assert.equal(e.st.grounded, 2, '17 damage = 2 stacks');
+  dealDamage(c, c.player, e, 100, { noMods: true, hit: true });
+  assert.equal(e.st.grounded, 6, 'capped at 6');
 });
 t('loose weave (knitter): heals 3 per Thread extension, 9 a turn, and cuts hit it +50%', () => {
   const c = mk(['knitter']); const e = E0(c); e.hp = 10; e.maxHp = 40; const on = e.def.on;

@@ -230,7 +230,8 @@ export function resonanceStrip(app, run, x, y, w, h) {
     }
     ctx.restore();
     const txt = tier ? (s.resonance[tier] || '') : `At 3: ${s.resonance[3] || ''}`;
-    app.text(clampText(app, txt, inner, 12, 3, { ui: true }), left, y + 40, { size: 12, ui: true, maxW: inner, lineH: 13, color: tier ? COL.vellum : 'rgba(232,220,196,.5)' });
+    const rl = clamp(Math.floor((h - 41) / Math.ceil(app.sz(12, { ui: true }) * 1.08)), 1, 3);
+    app.text(clampText(app, txt, inner, 12, rl, { ui: true }), left, y + 38, { size: 12, ui: true, maxW: inner, lineH: 13, color: tier ? COL.vellum : 'rgba(232,220,196,.5)' });
     if (app.inRect(left - 4, y, colW, h)) app.tooltip(`${s.name}: ${n} ${plural(n, 'graft')}`, `3 grafts: ${s.resonance[3]}\n6 grafts: ${s.resonance[6]}\n${s.blurb || ''}`, { color: col });
   });
 }
@@ -337,7 +338,7 @@ export default {
     } else {
       yy += app.text('No Strain', sx, yy, { size: 24, bold: true, color: COL.good });
       const left = info.budget - info.weight;
-      put((left > 0 ? `${left} Weight to spare before your plain cards start paying.` : 'Budget is full. One more Weight and a plain card is Tithed.') + ' Every card fights at full strength.', {});
+      put((left > 0 ? `${left} Weight to spare before plain cards pay.` : 'Budget is full. One more Weight Tithes a plain card.') + '', {});
     }
     app.reg('deck-x', 1080, 18, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
     if (this.pending === null && app.button('X', 1080, 18, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
@@ -396,7 +397,7 @@ export default {
     this.drawSide(app, run, hv, info, 988, MY, 262, MH);
 
     // ---- resonance
-    resonanceStrip(app, run, 28, 620, W - 56, 76);
+    resonanceStrip(app, run, 28, 620, W - 56, 84);
     ctx.restore();
     if (this.pending) this.pending();
   },
@@ -506,6 +507,11 @@ export default {
       else if (inst.grafts.length === MAX_GRAFTS_NORMAL) yy += app.text('Full. A 3rd graft would Overload it.', x + pad, yy, { size: 13, ui: true, color: 'rgba(232,220,196,.6)', maxW: w - 2 * pad, lineH: 15 });
     }
     ctx.restore();
+    if (!hv && maxScroll > 0 && this.sideScroll < maxScroll - 1) {
+      const fh = Math.ceil(app.sz(11, { ui: true }) * 1.2) + 10;
+      const fg = ctx.createLinearGradient(0, y + h - fh, 0, y + h); fg.addColorStop(0, 'rgba(22,18,15,0)'); fg.addColorStop(0.5, 'rgba(22,18,15,.95)'); fg.addColorStop(1, 'rgba(22,18,15,.95)');
+      ctx.save(); ctx.fillStyle = fg; ctx.fillRect(x + 2, y + h - fh, w - 4, fh - 2); ctx.restore();
+    }
     if (!hv && maxScroll > 0 && this.sideScroll < maxScroll - 1) app.text('Scroll for more', x + w / 2, y + h - 6 - app.sz(11, { ui: true }), { size: 11, ui: true, italic: true, align: 'center', color: COL.lamp, shadow: true });
     if (this.pick && this.o.multi) {
       const n = this.sel.size;

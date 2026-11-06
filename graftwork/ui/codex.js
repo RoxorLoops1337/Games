@@ -392,18 +392,36 @@ export default {
     });
   },
   drawRules(app, x, y, w, h) {
-    const ctx = app.ctx, gap = 14, cols = RULES.length > 6 ? 4 : 3, cw = Math.floor((w - gap * (cols - 1)) / cols), ch = Math.floor((h - gap) / 2);
-    RULES.forEach(([title, text], i) => {
-      const cx = x + (i % cols) * (cw + gap), cy = y + Math.floor(i / cols) * (ch + gap);
-      app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
-      ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
-      app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
-      ruleArt(app, i, cx + cw / 2, cy + 74, cw - 24, 140);
-      ctx.restore();
-      ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 174, 14, 0, 6.283); ctx.fill(); ctx.restore();
-      app.text(String(i + 1), cx + 26, cy + 174 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });
-      app.text(title, cx + 48, cy + 162, { size: title.length > 30 ? 15 : 18, bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
-      app.text(text, cx + 16, cy + 192, { size: 14, ui: true, maxW: cw - 32, lineH: 17, color: COL.vellum });
+    const ctx = app.ctx, gap = 14;
+    // phones inflate the text: 3 columns, panels sized to their own words, and the whole sheet scrolls when it outgrows the view
+    const big = app.sz(14, { ui: true }) > 15, cols = big ? 3 : 4, cw = Math.floor((w - 16 - gap * (cols - 1)) / cols);
+    const titleSz = (t) => (t.length > 30 ? 15 : 18);
+    const lh = Math.ceil(app.sz(14, { ui: true }) * 1.2);
+    const geo = RULES.map(([title, text]) => {
+      const tl = app.wrap(title, cw - 60, titleSz(title), { bold: true }).length, tH = tl * Math.ceil(app.sz(titleSz(title), { bold: true }) * 1.18);
+      const bl = app.wrap(text, cw - 32, 14, { ui: true }).length;
+      return { tH, bodyY: 164 + Math.max(tH, 28) + 6, bl };
+    });
+    const rowsN = Math.ceil(RULES.length / cols), baseCh = Math.floor((h - gap) / 2);
+    const rowH = [];
+    for (let r = 0; r < rowsN; r++) { let m = 0; for (let c = 0; c < cols; c++) { const g = geo[r * cols + c]; if (g) m = Math.max(m, g.bodyY + g.bl * lh + 14); } rowH.push(big ? m : Math.max(baseCh, m)); }
+    const contentH = rowH.reduce((a, b) => a + b + gap, 0) - gap;
+    this.rulesSt = this.rulesSt || { scroll: 0, target: 0 };
+    scrollArea(app, this.rulesSt, x, y, w, h, contentH, (top) => {
+      RULES.forEach(([title, text], i) => {
+        const r = Math.floor(i / cols), c = i % cols;
+        const cx = x + c * (cw + gap), cy = top + rowH.slice(0, r).reduce((a, b) => a + b + gap, 0), ch = rowH[r], g = geo[i];
+        if (cy > y + h || cy + ch < y) return;
+        app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
+        ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
+        app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
+        ruleArt(app, i, cx + cw / 2, cy + 74, cw - 24, 140);
+        ctx.restore();
+        ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 178, 14, 0, 6.283); ctx.fill(); ctx.restore();
+        app.text(String(i + 1), cx + 26, cy + 178 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });
+        app.text(title, cx + 48, cy + 164, { size: titleSz(title), bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
+        app.text(text, cx + 16, cy + g.bodyY, { size: 14, ui: true, maxW: cw - 32, lineH: 17, color: COL.vellum });
+      });
     });
   },
 };

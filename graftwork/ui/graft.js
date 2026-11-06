@@ -126,7 +126,7 @@ export default {
     if (st.menu) drawSkipMenu(app);
     else if (st.mode === 'pick') {
       const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
-      (T('graftpick', 412, 130, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
+      (T('graftpick', 640, AFTER.y + 2, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
         (strain.strain > 0 && T('strain', 200, 62, { side: 'below', w: 300 })) || T('skipping', TRAY_X + 326, 556, { side: 'above', w: 300 }));
     }
     // click anywhere skips the attach animation
@@ -266,8 +266,10 @@ function drawOfferCard(app, r, i, c) {
   // caption row
   const base = CARDS[inst.id];
   const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
-  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
-  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 20);
+  // phones inflate the caption: lift it so it never touches the AFTER panel below
+  const capH = Math.ceil(app.sz(14, { ui: true }) * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
+  app.text(cap, cx + 12, capY, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
+  keyBadge(app, String(i + 1), cx - CW / 2 + 12, capY + capH / 2);
 
   if (hover) {
     const lines = [];
@@ -310,7 +312,7 @@ function drawPatchTile(app, r, j, c) {
 
   if (hover) {
     const info = resonanceInfo(st.run, g.school, c.counts);
-    const lines = [`${tier.label} graft, weight ${g.weight}.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
+    const lines = [`${tier.label} graft. W${g.weight} = weight ${g.weight} (the staples): it counts ${g.weight} against your Budget.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
     if (info) lines.push(...info.lines);
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
@@ -356,25 +358,42 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   ctx.beginPath(); ctx.moveTo(x + w - 10 - rw, y + 9); ctx.lineTo(x + w - 10, y + 9); ctx.lineTo(x + w - 10, y + 27); ctx.lineTo(x + w - 10 - rw, y + 27); ctx.lineTo(x + w - 10 - rw + 8, y + 18); ctx.closePath(); ctx.fill();
   ctx.restore();
   app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 11, { size: 13, ui: true, bold: true, align: 'center', color: tier.ink });
-  // staples (weight)
-  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 12 - rw - 8 - (g.weight - i) * 19 + 4, y + 11, 14, '#d8dde0');
-  
+  // weight tag: a "W2" pill (with the staples inside) so the glyphs are never unlabelled
+  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4;
+  const ww = Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + wst + wpad * 2, wx = x + w - 10 - rw - 6 - ww;
+  ctx.save(); app.rr(wx, y + 9, ww, 18, 9); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(216,221,224,.7)'; ctx.stroke(); ctx.restore();
+  app.text(wl, wx + wpad, y + 11, { size: 13, ui: true, bold: true, color: '#e8edf0' });
+  const sx0 = wx + wpad + Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + 4;
+  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, sx0 + i * 8, y + 13, 5, '#d8dde0');
+
   // name
   app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
   // boon + price
   // phones inflate small text (SMALL floor): scale label column, line height and the lines budget by the real size
-  const bk = app.sz(14, { ui: true }) / 14, lk = app.sz(13, { ui: true, bold: true }) / 13;
-  const lo = Math.round(40 * lk), lh = Math.round(16 * bk);
+  const lk = app.sz(13, { ui: true, bold: true }) / 13;
+  const lo = Math.round(40 * lk);
   const nameBot = y + 7 + app.sz(compact ? 18 : 20) * 1.2;
-  let yy = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
-  const lines = clamp(Math.floor((y + h - 4 - yy - 3) / (2 * lh)), 1, compact ? 1 : 2);
-  const boonL = wrapLimit(app, g.boon, tw - lo, 14, lines, { ui: true });
-  const priceL = wrapLimit(app, g.price, tw - lo, 14, lines, { ui: true });
+  const yy0 = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
+  const avail = y + h - 4 - yy0 - 3;
+  // try 14, 13, 12 px text until boon + price both fit whole (no ellipsis) in the tile; else cut the boon first
+  let fs = 14, boonL, priceL, lh;
+  for (const sz of [14, 13, 12]) {
+    fs = sz; lh = Math.round(app.sz(sz, { ui: true }) * 1.16);
+    const total = Math.max(2, Math.floor((avail - 3) / lh));
+    const bl = app.wrap(g.boon, tw - lo, sz, { ui: true }), pl = app.wrap(g.price, tw - lo, sz, { ui: true });
+    const cap = compact ? 2 : total;
+    if (bl.length + pl.length <= cap) { boonL = bl; priceL = pl; break; }
+    if (sz === 12) {
+      const pn = Math.min(pl.length, Math.max(1, cap - 1)), bn = Math.max(1, cap - pn);
+      boonL = wrapLimit(app, g.boon, tw - lo, sz, bn, { ui: true }); priceL = wrapLimit(app, g.price, tw - lo, sz, pn, { ui: true });
+    }
+  }
+  let yy = yy0;
   app.text('Boon', tx, yy, { size: 13, ui: true, bold: true, color: COL.good });
-  boonL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: 14, ui: true, color: COL.vellum }));
-  yy += lines * lh + 3;
+  boonL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: fs, ui: true, color: COL.vellum }));
+  yy += boonL.length * lh + 3;
   app.text('Price', tx, yy, { size: 13, ui: true, bold: true, color: COL.bad });
-  priceL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: 14, ui: true, color: '#ff7a7a' }));
+  priceL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: fs, ui: true, color: '#ff7a7a' }));
   const hp = g.mods.find((m) => m.k === 'maxHp');
   if (hp) {
     const label = `MAX HP ${hp.n}`;
