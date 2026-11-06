@@ -4,9 +4,10 @@
 const AC = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
 const MAX_VOICES = 24, MIN_GAP_MS = 25;
 
-let ctx = null, master, comp, sfxBus, musBus, duckG, verb, noiseBuf;
+let ctx = null, master, comp, sfxBus, musBus, duckG, verb, noiseBuf, lpF, intG;
+let intensity = 0, lowHz = null, hb = { on: false, bpm: 60, timer: 0 };
 let muted = false, vols = { master: 0.8, sfx: 0.8, music: 0.35 };
-let active = 0, cur = { p: 1, v: 1, pan: 0 };
+let active = 0, cur = { p: 1, v: 1, pan: 0, n: 0 };
 const lastAt = {};
 let drawAt = 0, drawN = 0;
 
@@ -25,12 +26,14 @@ export function initAudio() {
       master.connect(comp); comp.connect(ctx.destination);
       sfxBus = ctx.createGain(); sfxBus.connect(master);
       duckG = ctx.createGain(); duckG.connect(master);
-      musBus = ctx.createGain(); musBus.connect(duckG);
+      musBus = ctx.createGain(); lpF = ctx.createBiquadFilter(); lpF.type = 'lowpass'; lpF.frequency.value = 20000; intG = ctx.createGain();
+      musBus.connect(lpF); lpF.connect(intG); intG.connect(duckG);
       verb = ctx.createConvolver(); verb.buffer = makeImpulse(1.8, 2.6);
       const vg = ctx.createGain(); vg.gain.value = 0.5; verb.connect(vg); vg.connect(master);
       const n = ctx.sampleRate; noiseBuf = ctx.createBuffer(1, n, n);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = rnd() * 2 - 1;
-      applyVolumes();
+      applyVolumes(); applyIntensity(); applyLowpass(0);
+      if (hb.on) hbStart();
     }
     if (ctx.state === 'suspended') ctx.resume();
     return true;
@@ -191,10 +194,82 @@ export function sfx(name, opts = {}) {
   lastAt[name] = now;
   let p = typeof opts.pitch === 'number' ? opts.pitch : 1;
   if (name === 'cardDraw') { drawN = now - drawAt < 400 ? Math.min(drawN + 1, 8) : 0; drawAt = now; p *= 1 + drawN * 0.06; }
-  cur = { p, v: typeof opts.vol === 'number' ? opts.vol : 1, pan: opts.pan || 0 };
+  const nn = typeof opts.n === 'number' ? opts.n : typeof opts.len === 'number' ? opts.len : 0;
+  cur = { p, v: typeof opts.vol === 'number' ? opts.vol : 1, pan: opts.pan || 0, n: nn };
   try { S[name][1](); } catch (e) { /* audio is optional */ }
-  cur = { p: 1, v: 1, pan: 0 };
+  cur = { p: 1, v: 1, pan: 0, n: 0 };
 }
+
+// ---------- JUICE layers: hit tiers, Thread, sequences ----------
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const nOf = (lo, hi) => Math.max(lo, Math.min(hi, cur.n || 0));
+Object.assign(S, {
+  hitLight: ['tier light: noise tick, short 160 Hz body, no tail', () => { N(0.04, { v: 0.14, f: 3500 }); T(170, 0.07, { to: 100, type: 'square', v: 0.08 }); }],
+  hitMedium: ['tier medium: tick, 110 Hz thump body, small tail', () => { N(0.06, { v: 0.18, f: 3000, to: 900, send: 0.1 }); T(120, 0.2, { to: 58, v: 0.28 }); T(240, 0.06, { to: 130, type: 'square', v: 0.06 }); }],
+  hitHeavy: ['tier heavy: crack transient, 75 Hz body drop, reverb tail', () => { N(0.05, { v: 0.22, ft: 'highpass', f: 2500 }); N(0.2, { v: 0.26, f: 1800, to: 250, send: 0.25 }); T(100, 0.32, { to: 40, v: 0.42, send: 0.2 }); T(55, 0.3, { to: 34, v: 0.3 }); }],
+  hitCrush: ['tier crushing: sub boom, crunch noise, long tail, ringing metal', () => { N(0.04, { v: 0.28, ft: 'highpass', f: 2000 }); N(0.4, { v: 0.34, f: 1400, to: 150, send: 0.4 }); T(80, 0.55, { to: 28, v: 0.55, send: 0.3 }); T(48, 0.5, { to: 30, v: 0.4 }); T(1500, 0.5, { v: 0.04, fm: [2.76, 1.5], send: 0.5, at: 0.02 }); }],
+  firstBlood: ['quill scratch then a tiny ink-drop plink', () => { for (let i = 0; i < 3; i++) N(0.05, { v: 0.12, ft: 'bandpass', f: 3500 + rnd() * 2500, q: 3, at: i * 0.05 }); T(880, 0.25, { v: 0.05, at: 0.17, send: 0.3 }); }],
+  multiHit: ['stacking tick, pitch rises with hit count (opts.n)', () => { const k = nOf(1, 12); T(500 * Math.pow(2, k / 12), 0.07, { type: 'triangle', v: 0.1 }); N(0.03, { v: 0.1, ft: 'highpass', f: 4000 }); }],
+  multiHitSlam: ['final multi-hit slam: low thump plus bright ring', () => { T(90, 0.25, { to: 45, v: 0.4 }); T(1100 * Math.pow(2, nOf(1, 12) / 24), 0.4, { v: 0.07, fm: [2, 1.2], send: 0.35 }); N(0.08, { v: 0.2, f: 2500 }); }],
+  overkill: ['bone-dry crack, long falling sine', () => { N(0.05, { v: 0.25, ft: 'highpass', f: 3000 }); T(300, 0.5, { to: 50, v: 0.2, send: 0.3 }); }],
+  seamExtend: ['rising stitch tick: needle click plus thread squeak, pitch climbs with len (opts.len)', () => { const k = nOf(1, 10), f = 1100 * Math.pow(2, k / 7); T(f, 0.05, { type: 'square', v: 0.06 }); T(f * 1.5, 0.12, { to: f * 1.6, type: 'triangle', v: 0.07, at: 0.02, send: 0.2 }); N(0.03, { v: 0.08, ft: 'highpass', f: 5000 }); }],
+  seamCut: ['scissor snip (two metal ticks) plus payout chime, brighter with len (opts.len)', () => { const k = nOf(1, 8); N(0.03, { v: 0.2, ft: 'highpass', f: 6000 }); N(0.03, { v: 0.16, ft: 'highpass', f: 4500, at: 0.045 }); T(2800, 0.08, { type: 'square', v: 0.05 }); const base = 660 * Math.pow(2, k / 24); notes([base, base * 1.25, base * 1.5], 0.07, 0.4, { v: 0.1, fm: [2, 0.8], at: 0.1, send: 0.35 }); }],
+  seamSlack: ['loose thread: soft falling sine with airy noise puff', () => { T(520, 0.3, { to: 300, type: 'sine', v: 0.08, fm: [0.5, 0.3] }); N(0.15, { v: 0.05, ft: 'bandpass', f: 1500, to: 600, q: 1 }); }],
+  seamFray: ['rasp: bandpassed noise sawing with a dissonant saw pair', () => { N(0.32, { v: 0.16, ft: 'bandpass', f: 2200, to: 1000, q: 6 }); T(220, 0.28, { to: 190, type: 'sawtooth', v: 0.06 }); T(233, 0.28, { to: 200, type: 'sawtooth', v: 0.06 }); }],
+  seamLight: ['seam lights up on the finishing blow: ascending tick (opts.n)', () => { const k = nOf(0, 12); T(900 * Math.pow(2, k / 12), 0.05, { type: 'square', v: 0.06 }); T(1800 * Math.pow(2, k / 12), 0.1, { v: 0.04, send: 0.2 }); }],
+  seamPop: ['seam pops at half HP: thread whip, tick, sag', () => { N(0.08, { v: 0.2, ft: 'highpass', f: 3500, to: 7000 }); T(2400, 0.04, { type: 'square', v: 0.08 }); T(180, 0.2, { to: 110, type: 'triangle', v: 0.18, at: 0.05 }); }],
+  comboTick: ['combo meter rising tick, pitch by n', () => { T(600 * Math.pow(2, nOf(0, 14) / 12), 0.06, { type: 'triangle', v: 0.07 }); }],
+  comboTier: ['combo threshold crossed (20/40/80): rising chord, n = tier 1..3', () => { const k = nOf(1, 3), b = 440 * Math.pow(2, (k - 1) * 3 / 12); notes([b, b * 1.25, b * 1.5], 0.06, 0.3, { type: 'triangle', v: 0.1, send: 0.3 }); N(0.06, { v: 0.1, ft: 'highpass', f: 5000 }); }],
+  comboCash: ['end of turn cash out: rubber stamp thunk plus coin ring', () => { T(100, 0.12, { to: 55, v: 0.4 }); N(0.05, { v: 0.2, f: 2500 }); T(1568, 0.3, { v: 0.07, at: 0.08, fm: [2, 1], send: 0.3 }); }],
+  nearMiss: ['"it held" stinger: low heartbeat then rising sine relief', () => { T(58, 0.16, { to: 42, v: 0.4 }); T(50, 0.2, { to: 38, v: 0.3, at: 0.2 }); notes([392, 523, 659], 0.12, 0.5, { v: 0.09, at: 0.5, send: 0.4 }); }],
+  bossKillThud: ['boss kill: deep heart thump then a choir swell', () => { T(62, 0.5, { to: 30, v: 0.6 }); N(0.2, { v: 0.2, f: 400, to: 80 }); [262, 330, 392, 523].forEach(f => [-8, 8].forEach(c => T(f * Math.pow(2, c / 1200), 1.6, { type: 'sawtooth', v: 0.022, a: 0.6, at: 0.5, send: 0.6 }))); }],
+  heroDeath: ['hero death: seams split rasp, slump, long falling drone', () => { N(0.5, { v: 0.2, ft: 'bandpass', f: 3000, to: 500, q: 3 }); T(220, 1.6, { to: 40, type: 'sawtooth', v: 0.1, send: 0.4 }); T(50, 1.2, { to: 28, v: 0.45, at: 0.2 }); }],
+  victory: ['victory flourish: rising major arpeggio with bell and held chord', () => { notes([392, 494, 587, 784, 988], 0.09, 0.4, { type: 'triangle', v: 0.12, send: 0.35 }); T(1568, 0.9, { v: 0.06, at: 0.4, fm: [2, 1.2], send: 0.5 }); [392, 494, 587, 784].forEach(f => T(f, 0.9, { v: 0.06, at: 0.5, send: 0.4 })); }],
+  victoryCoin: ['victory gold plink, pitch climbs pentatonically with n', () => { T(PENT[Math.floor(nOf(0, 50)) % PENT.length] * (1 + Math.floor(nOf(0, 50) / PENT.length)), 0.2, { type: 'triangle', v: 0.09, send: 0.25 }); }],
+});
+SFX_NAMES.length = 0; SFX_NAMES.push(...Object.keys(S));
+
+// hit(dmg, maxHp, opts): picks the tier from damage relative to the victim's max HP
+export function hitTier(dmg, maxHp) {
+  const f = maxHp > 0 ? Math.max(0, dmg) / maxHp : 0;
+  return f >= 0.3 ? 'crush' : f > 0.18 ? 'heavy' : f >= 0.08 ? 'medium' : 'light';
+}
+const TIER_SFX = { light: 'hitLight', medium: 'hitMedium', heavy: 'hitHeavy', crush: 'hitCrush' };
+export function hit(dmg, maxHp, opts = {}) {
+  const t = hitTier(dmg, maxHp);
+  sfx(TIER_SFX[t], opts);
+  return t;
+}
+// boss kill: music silence for ms, then the heart thump and choir
+let bkTimer = 0;
+export function bossKill(ms = 1000) {
+  duck(ms); if (musBus && ctx) { const t = ctx.currentTime; musBus.gain.cancelScheduledValues(t); musBus.gain.setTargetAtTime(0, t, 0.05); musBus.gain.setTargetAtTime(muted ? 0 : vols.music, t + ms / 1000, 0.4); }
+  if (!ctx) return; clearTimeout(bkTimer); bkTimer = setTimeout(() => sfx('bossKillThud'), ms);
+}
+
+// ---------- intensity, lowpass, heartbeat ----------
+function applyIntensity() { if (ctx) intG.gain.setTargetAtTime(0.8 + 0.4 * intensity, ctx.currentTime, 0.4); }
+export function setIntensity(x) { intensity = clamp01(+x || 0); applyIntensity(); return intensity; }
+function applyLowpass(ms) { if (!ctx) return; const t = ctx.currentTime; lpF.frequency.cancelScheduledValues(t); lpF.frequency.setTargetAtTime(lowHz || 20000, t, Math.max(0.01, ms / 3000)); }
+export function setLowpass(hzv, ms = 400) {
+  lowHz = typeof hzv === 'number' && isFinite(hzv) && hzv > 0 ? Math.max(100, Math.min(20000, hzv)) : null;
+  applyLowpass(ms); return lowHz;
+}
+function hbBeat() {
+  if (!hb.on || !ctx) return;
+  if (!muted) sfx('heartbeat');
+  hb.timer = setTimeout(hbBeat, 60000 / hb.bpm);
+}
+function hbStart() { clearTimeout(hb.timer); if (ctx && hb.on) hbBeat(); }
+// heartbeat(on, bpm) or heartbeat(bpm|0) (0 = off); bpm clamps to 30..180
+export function heartbeat(on, bpm) {
+  if (typeof on === 'number') { bpm = on; on = on > 0; }
+  if (typeof bpm === 'number' && isFinite(bpm)) hb.bpm = Math.max(30, Math.min(180, bpm));
+  const was = hb.on; hb.on = !!on;
+  if (!hb.on) { clearTimeout(hb.timer); hb.timer = 0; } else if (!was && ctx) hbStart();
+  return hb.on;
+}
+export function audioState() { return { intensity, lowpass: lowHz, heartbeat: hb.on, bpm: hb.bpm }; }
 
 // ---------- music ----------
 const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYG = [0, 1, 3, 5, 7, 8, 10], MAJOR = [0, 2, 4, 5, 7, 9, 11], HARM = [0, 2, 3, 5, 7, 8, 11];
@@ -260,6 +335,7 @@ function sched(v, t) {
   }
   if (p && p.kind === 'drive' && (s === 2 || s === 6)) N(0.1, { t, v: 0.07, ft: 'bandpass', f: 1800, out });
   if (p && p.kind === 'drive' && s % 2 === 1) N(0.02, { t, v: 0.03, ft: 'highpass', f: 7000, out });
+  if (intensity > 0.5 && s % 2 === 1 && v.r() < intensity - 0.3) N(0.02, { t, v: 0.025 * intensity, ft: 'highpass', f: 7500, out });
   const ml = m.mel;
   if (ml.arp) { if (v.r() < ml.p) pluck(ml.inst, degHz(m, ml.arp[v.step % ml.arp.length]), t, ml.v, out); }
   else if (v.r() < ml.p) {

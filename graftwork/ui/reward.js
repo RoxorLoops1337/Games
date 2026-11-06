@@ -6,7 +6,7 @@ import * as RUN from '../engine/run.js';
 import { RELICS, POTIONS } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
-import { wrapLimit, keyBadge } from './graft_parts.js';
+import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -44,38 +44,47 @@ export default {
   draw(app) {
     if (!st) return;
     const ctx = app.ctx, run = st.run, rw = st.rw;
+    const S = tscale(app), K = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true });
     drawBackground(ctx, ACT_THEME[run.act] || 'ward', st.t);
     ctx.save(); ctx.fillStyle = 'rgba(8,6,5,.55)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
 
-    // purse
-    ICONS.drawCoin(ctx, 1090, 34, 28);
-    app.text(String(run.gold), 1112, 20, { size: 26, bold: true, color: COL.gold, shadow: true });
-    ICONS.drawHeart(ctx, 960, 34, 28);
-    app.text(`${run.hp}/${run.maxHp}`, 982, 20, { size: 26, bold: true, color: '#ffb3bd', shadow: true });
+    // purse: top left, so the top right stays free for the global Pause / Fullscreen buttons
+    const ph = Math.round(26 * Math.min(S, 1.25) * 1.22);
+    app.reg('reward-purse', 24, 14, 250, 8 + ph * 2, { group: 'purse' });
+    ICONS.drawCoin(ctx, 44, 14 + 8 + ph / 2, 28);
+    app.text(String(run.gold), 68, 22, { ...K(26), bold: true, color: COL.gold, shadow: true, maxW: 190 });
+    ICONS.drawHeart(ctx, 44, 14 + 8 + ph + ph / 2, 28);
+    app.text(`${run.hp}/${run.maxHp}`, 68, 22 + ph, { ...K(26), bold: true, color: '#ffb3bd', shadow: true, maxW: 190 });
 
     const kind = rw.kind === 'elite' || rw.kind === 'boss' ? rw.kind : 'normal';
-    app.text('Spoils', 640, 22, { size: 54, bold: true, align: 'center', color: COL.lamp, shadow: true });
-    app.text(`${KIND[kind]}. Take what you can carry.`, 640, 84, { size: 19, italic: true, align: 'center', color: DIM });
+    const sub = `${KIND[kind]}. Take what you can carry.`;
+    const th = app.text('Spoils', 640, 16, { size: 52, bold: true, align: 'center', color: COL.lamp, shadow: true, fixed: true });
+    const sh = app.text(sub, 640, 16 + th + 2, { ...K(19), italic: true, align: 'center', color: DIM, maxW: 560 });
+    app.reg('reward-head', 340, 14, 600, th + sh + 6, { group: 'head' });
 
     const rows = buildRows(app);
-    let y = 128;
-    rows.forEach((r, i) => { y = drawRow(app, r, i, y); });
+    const compact = !!st.init.choices;
+    let y = 16 + th + sh + 12;
+    rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
 
     // boss relic choice
-    if (st.init.choices) drawChoices(app, y + 6);
+    if (st.init.choices) drawChoices(app, y + 2, K);
 
-    // forfeit notes
+    // forfeit notes (footer zone above the button)
     const notes = [];
     if (rw.gold > 0) notes.push(`${rw.gold} gold is still on the table. It will be left behind.`);
     if (rw.potion) notes.push('The potion will be left behind.');
     if (rw.relic) notes.push('The relic will be left behind.');
     if (rw.relicChoices && rw.relicChoices.length) notes.push('Choose a relic, or leave them all.');
-    notes.slice(0, 2).forEach((n, i) => app.text(n, 640, 596 + i * 20, { size: 15, ui: true, align: 'center', color: '#ffb36b' }));
+    const nl = Math.round(15 * Math.min(S, 1.25) * 1.22), shown = notes.slice(0, S > 1.2 ? 1 : 2);
+    if (shown.length) app.reg('reward-notes', 340, 640 - 8 - shown.length * nl, 600, shown.length * nl, { group: 'notes' });
+    shown.forEach((n, i) => app.text(n, 640, 640 - 8 - (shown.length - i) * nl, { ...K(15), ui: true, align: 'center', color: '#ffb36b', maxW: 590, lineH: nl }));
 
     const toGraft = rw.graft && RUN.graftableCards(run).length > 0;
     const label = toGraft ? 'Continue to the graft table' : 'Continue to the map';
-    if (app.button(label, 390, 646, 500, 60, { size: 26, fill: '#5a3f10', color: '#ffe9a8', sub: notes.length ? 'Unclaimed spoils are forfeited' : undefined, subColor: '#ffb36b' })) doContinue(app);
-    if (app.inRect(390, 646, 500, 60)) app.tooltip(label, toGraft ? 'Next you pick one of your cards and one graft. Or decline for a small prize.' : 'Back to the map.', { color: COL.lamp });
+    app.reg('reward-continue', 360, 646, 560, 60, { group: 'continue' });
+    if (app.button(label, 360, 646, 560, 60, { size: Math.round(24 * Math.min(S, 1.25) / S), fill: '#5a3f10', color: '#ffe9a8' })) doContinue(app);
+    if (app.inRect(360, 646, 560, 60)) app.tooltip(label, toGraft ? 'Next you pick one of your cards and one graft. Or decline for a small prize.' : 'Back to the map.', { color: COL.lamp });
 
     if (!st) return;
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
@@ -102,15 +111,21 @@ function rowInfo(r) {
   return { title: rl.name, line: rl.text, col: r2.color, head: r2.name + ' relic', tip: [r2.name + ' relic.', rl.text], icon: (c, x, y, s) => ICONS.drawRelic(c, init.relic, x, y, s) };
 }
 
-function drawRow(app, r, i, y) {
+function drawRow(app, r, i, y, compact, K) {
   const ctx = app.ctx, run = st.run, rw = st.rw;
   const info = rowInfo(r);
-  const h = r.id === 'relic' ? 96 : 80;
+  const S = tscale(app), k = Math.min(S, 1.25);
+  const lh = Math.round(15 * k * 1.22), tx = 84, tw = PW - tx - 160;
+  const maxLines = compact ? 1 : r.id === 'relic' ? 3 : 2;
+    const dl = r.id === 'gold' ? [info.line] : wrapLimitK(app, info.line, tw, Math.round(15 * k), maxLines);
+  const headH = Math.round(13 * k * 1.22), titleH = Math.round(26 * k * 1.22);
+  const h = Math.max(compact ? 72 : r.id === 'relic' ? 96 : 80, 12 + headH + titleH + dl.length * lh + 10);
   const slide = EASE.out(clamp((st.t - 0.15 - i * 0.12) / 0.45, 0, 1));
   const x = PX + (1 - slide) * 60;
   const full = r.id === 'potion' && !r.taken && run.potions.length >= RUN.potionSlots(run);
   const can = !r.taken && !full;
   const hover = can && !app.blocked && app.inRect(x, y, PW, h);
+  app.reg('reward-row' + i, x, y, PW, h, { group: 'row' + i });
   ctx.save();
   ctx.globalAlpha = slide;
   if (hover) { ctx.shadowColor = info.col; ctx.shadowBlur = 22; }
@@ -122,20 +137,22 @@ function drawRow(app, r, i, y) {
   const yy = y + (hover ? -2 : 0);
   ctx.save(); ctx.globalAlpha = slide * (r.taken ? 0.4 : 1);
   const cy = yy + h / 2;
-  if (r.id === 'gold') ICONS.drawCoin(ctx, x + 58, cy, 52); else info.icon(ctx, x + 58, cy, 56);
+  if (r.id === 'gold') ICONS.drawCoin(ctx, x + 46, cy, 48); else info.icon(ctx, x + 46, cy, 52);
   ctx.restore();
   const a = slide * (r.taken ? 0.45 : 1);
-  app.text(info.head.toUpperCase(), x + 108, yy + 11, { size: 13, ui: true, bold: true, color: DIM, alpha: a });
-  app.text(info.title, x + 108, yy + 26, { size: 26, bold: true, color: info.col, shadow: true, alpha: a });
-  if (r.id !== 'gold') wrapLimit(app, info.line, PW - 108 - 190, 15, r.id === 'relic' ? 3 : 2, { ui: true }).forEach((ln, k) => app.text(ln, x + 108, yy + 58 + k * 17 - (r.id === 'relic' ? 0 : 6), { size: 15, ui: true, color: COL.vellum, alpha: a }));
-  else app.text(info.line, x + 108, yy + 56, { size: 15, ui: true, color: COL.vellum, alpha: a });
+  let ty = yy + 10;
+  app.text(info.head.toUpperCase(), x + tx, ty, { ...K(13), ui: true, bold: true, color: DIM, alpha: a, maxW: tw }); ty += headH;
+  app.text(info.title, x + tx, ty, { ...K(26), bold: true, color: info.col, shadow: true, alpha: a, maxW: tw }); ty += titleH;
+  dl.forEach((ln, n) => app.text(ln, x + tx, ty + n * lh, { ...K(15), ui: true, color: COL.vellum, alpha: a, lineH: lh }));
   // status chip
   const label = r.taken ? 'Taken' : full ? 'Slots full' : 'Take';
-  const cw = 130, ch = 40, cx = x + PW - cw - 18, cyy = cy - ch / 2;
+  const cw = 130, ch = Math.round(40 * Math.min(k, 1.2)), cx = x + PW - cw - 14, cyy = cy - ch / 2;
+  app.reg('reward-chip' + i, cx, cyy, cw, ch, { group: 'row' + i });
   ctx.save(); ctx.globalAlpha = slide;
   app.rr(cx, cyy, cw, ch, 8); ctx.fillStyle = r.taken ? 'rgba(80,100,80,.35)' : full ? 'rgba(90,20,30,.6)' : hover ? '#6a4a14' : '#4a3410'; ctx.fill();
   ctx.lineWidth = 2; ctx.strokeStyle = r.taken ? 'rgba(127,207,138,.5)' : full ? COL.bad : COL.lamp; ctx.stroke(); ctx.restore();
-  app.text(label, cx + cw / 2, cyy + 8, { size: 20, bold: true, align: 'center', color: r.taken ? COL.good : full ? '#ffb3bd' : '#ffe9a8', alpha: slide });
+  const fs = Math.min(20 * k, (cw - 12) / (label.length * 0.56));
+  app.text(label, cx + cw / 2, cyy + (ch - fs) / 2 - 1, { size: Math.floor(Math.max(14, fs)), fixed: true, bold: true, align: 'center', color: r.taken ? COL.good : full ? '#ffb3bd' : '#ffe9a8', alpha: slide });
   keyBadge(app, String(i + 1), x - 16, cy);
 
   if (!app.blocked && app.inRect(x, y, PW, h)) {
@@ -143,23 +160,28 @@ function drawRow(app, r, i, y) {
     else app.tooltip(info.title, null, { lines: info.tip, color: info.col });
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
-  return y + h + 12;
+  return y + h + (compact ? 8 : 12);
 }
+// wrapLimit at an exact (already capped) pixel size
+function wrapLimitK(app, str, maxW, px, maxLines) { return wrapLimit(app, str, maxW, px, maxLines, { ui: true, fixed: true }); }
 
-function drawChoices(app, y) {
+function drawChoices(app, y, K) {
   const ctx = app.ctx, rw = st.rw, init = st.init;
+  const S = tscale(app), k = Math.min(S, 1.25);
   const n = init.choices.length;
-  const w = 210, h = 250, gap = 24;
+  const w = 264, h = 262, gap = 20;
   const totalW = n * w + (n - 1) * gap, x0 = 640 - totalW / 2;
   const picked = st.taken.boss;
-  app.text(picked ? 'Relic claimed.' : 'Choose ONE relic', 640, y + 2, { size: 20, bold: true, align: 'center', color: picked ? COL.good : '#c58bff', shadow: true });
+  const hh = app.text(picked ? 'Relic claimed.' : 'Choose ONE relic', 640, y, { ...K(20), bold: true, align: 'center', color: picked ? COL.good : '#c58bff', shadow: true, maxW: 500 });
+  app.reg('reward-choose', 440, y, 400, hh, { group: 'choose' });
   init.choices.forEach((id, i) => {
     const rl = RELICS[id]; if (!rl) return;
     const r2 = RARITY[rl.rarity] || RARITY.boss;
     const slide = EASE.out(clamp((st.t - 0.2 - i * 0.12) / 0.45, 0, 1));
     const mine = picked === id, locked = picked && !mine;
-    const x = x0 + i * (w + gap), yy = y + 30 + (1 - slide) * 80;
+    const x = x0 + i * (w + gap), yy = y + hh + 6 + (1 - slide) * 40;
     const hover = !picked && !app.blocked && app.inRect(x, yy, w, h);
+    app.reg('reward-choice' + i, x, yy, w, h, { group: 'choice' + i });
     ctx.save(); ctx.globalAlpha = slide * (locked ? 0.3 : 1);
     if (hover || mine) { ctx.shadowColor = mine ? COL.good : '#c58bff'; ctx.shadowBlur = 26; }
     app.rr(x, yy + (hover ? -4 : 0), w, h, 12);
@@ -168,13 +190,15 @@ function drawChoices(app, y) {
     ctx.restore();
     const hy = yy + (hover ? -4 : 0);
     ctx.save(); ctx.globalAlpha = slide * (locked ? 0.3 : 1);
-    ICONS.drawRelic(ctx, id, x + w / 2, hy + 52, 62);
+    ICONS.drawRelic(ctx, id, x + w / 2, hy + 46, 58);
     ctx.restore();
     const a = slide * (locked ? 0.3 : 1);
-    app.text(rl.name, x + w / 2, hy + 94, { size: 21, bold: true, align: 'center', color: r2.color, shadow: true, alpha: a, maxW: w - 16, lineH: 23 });
-    app.text(r2.name.toUpperCase() + ' RELIC', x + w / 2, hy + 122, { size: 12, ui: true, bold: true, align: 'center', color: DIM, alpha: a });
-    wrapLimit(app, rl.text, w - 28, 14, 6, { ui: true }).forEach((ln, k) => app.text(ln, x + w / 2, hy + 142 + k * 16, { size: 14, ui: true, align: 'center', color: COL.vellum, alpha: a }));
-    if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, bold: true, align: 'center', color: COL.good });
+    let ty = hy + 82;
+    ty += app.text(rl.name, x + w / 2, ty, { ...K(21), bold: true, align: 'center', color: r2.color, shadow: true, alpha: a, maxW: w - 24, lineH: Math.round(21 * k * 1.15) });
+    ty += app.text(r2.name.toUpperCase() + ' RELIC', x + w / 2, ty + 1, { ...K(12), ui: true, bold: true, align: 'center', color: DIM, alpha: a, maxW: w - 24 }) + 4;
+    const lh = Math.round(14 * k * 1.2), room = Math.max(1, Math.floor((hy + h - 30 - ty) / lh));
+    wrapLimit(app, rl.text, w - 28, Math.round(14 * k), room, { ui: true, fixed: true }).forEach((ln, q) => app.text(ln, x + w / 2, ty + q * lh, { size: Math.round(14 * k), fixed: true, ui: true, align: 'center', color: COL.vellum, alpha: a }));
+    if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, fixed: true, bold: true, align: 'center', color: COL.good });
     else keyBadge(app, 'QWE'[i], x + 18, hy + 18);
     if (!picked && !app.blocked && app.inRect(x, yy, w, h)) {
       app.tooltip(rl.name, null, { lines: [r2.name + ' relic.', rl.text, 'Only one can be taken.'], color: r2.color });

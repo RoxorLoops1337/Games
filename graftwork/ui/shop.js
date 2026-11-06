@@ -9,6 +9,7 @@ import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
+import { wrapLimit, tscale } from './graft_parts.js';
 
 const BRASS = '#C9A227';
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) a.sfx(name, o); };
@@ -106,6 +107,7 @@ export function drawModal(app, st, run, extra = {}) {
   const g = app.ctx, dt = app.dt;
   m.t += dt;
   const fade = clamp(m.t / 0.18, 0, 1);
+  app.reg('modal', 36, 30, 1208, 660, { overlay: true });
   g.save(); g.globalAlpha = fade; g.fillStyle = 'rgba(6,4,3,.82)'; g.fillRect(0, 0, 1280, 720);
   app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3 });
   app.text(m.title, 640, 44, { size: 30, bold: true, align: 'center', color: COL.lamp });
@@ -125,6 +127,7 @@ export function drawModal(app, st, run, extra = {}) {
     m.scrollT = clamp(m.scrollT, 0, maxS);
     m.scroll = lerp(m.scroll, m.scrollT, clamp(dt * 14, 0, 1));
     const tith = tithedUids(run);
+    app.reg('scroll-modal', gx, gy, gw, gh, { overlay: true });
     g.save(); app.rr(gx, gy, gw, gh, 8); g.clip();
     let hover = -1;
     const rects = m.cards.map((inst, i) => {
@@ -246,6 +249,7 @@ function patchAt(app, graft, bx, by, w, h, rot, al) {
 function dimBg(app, k) { const g = app.ctx; g.save(); g.fillStyle = 'rgba(6,4,3,' + (0.97 * k) + ')'; g.fillRect(0, 0, 1280, 720); g.restore(); }
 
 export function drawAnim(app, a, fx) {
+  app.reg('shop-anim', 0, 0, 1280, 720, { overlay: true });
   const g = app.ctx, k = clamp(a.t / a.dur, 0, 1);
   dimBg(app, 0.9 * clamp(k * 6, 0, 1) * (k > 0.92 ? (1 - k) / 0.08 : 1));
   if (a.kind === 'attach') {
@@ -331,7 +335,7 @@ export function stamp(app, cx, cy, text, color, rot) {
   app.text(text, 0, -17, { size: 30, bold: true, align: 'center', color: color || '#c4223c' }); g.restore();
 }
 export function toastDraw(app, S, y = 650) {
-  if (S.toastT > 0) { S.toastT -= app.dt; const a = clamp(S.toastT * 3, 0, 1); app.panel(640 - 230, y - 8, 460, 44, { fill: `rgba(60,10,16,${0.9 * a})`, stroke: `rgba(255,122,122,${a})` }); app.text(S.toast, 640, y, { size: 20, bold: true, align: 'center', color: COL.bad, alpha: a }); }
+  if (S.toastT > 0) { app.reg('shop-toast', 640 - 230, y - 8, 460, 44, { overlay: true }); S.toastT -= app.dt; const a = clamp(S.toastT * 3, 0, 1); app.panel(640 - 230, y - 8, 460, 44, { fill: `rgba(60,10,16,${0.9 * a})`, stroke: `rgba(255,122,122,${a})` }); app.text(S.toast, 640, y, { size: 20, bold: true, align: 'center', color: COL.bad, alpha: a }); }
 }
 
 // =====================================================================================================================
@@ -506,7 +510,12 @@ export default {
       if (updateAnim(app, S.anim, S.fx, fdt || 0) || (app.mouse.released && S.anim.t > 0.4)) S.anim = null;
     }
   },
+  // dense screen: the text scale is honoured up to 110% (see the graft table)
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.1);
+    try { this.drawShop(app); } finally { app.textScale = ts; }
+  },
+  drawShop(app) {
     if (!S) return;
     const g = app.ctx, run = app.shared.run, flow = app.shared.flow, shop = run.pending;
     if (!shop || shop.kind !== 'shop') return;
@@ -522,23 +531,27 @@ export default {
     // ---- header ----
     const info = strainInfo(run);
     app.text('The Black Market', 270, 10, { size: 30, bold: true, color: COL.lamp, shadow: true });
-    app.text('BUDGET', 600, 8, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
+    app.reg('shop-title', 270, 8, 320, 44, { group: 'title' }); app.reg('shop-budget', 600, 4, 270, 60, { group: 'budget' });
+    app.text('BUDGET', 600, 6, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
     drawGauge(app, 600, 26, 260, info);
-    app.text(gaugeLabel(info), 600, 48, { size: 12, ui: true, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
+    app.text(gaugeLabel(info), 600, 46, { size: 14, ui: true, maxW: 268, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
     if (app.inRect(600, 4, 270, 60)) app.tooltip('Budget', `Total graft weight ${info.weight} against a Budget of ${info.budget}. Over it, each Strain point Tithes a Bare card (-25% numbers).` + (info.tithed.length ? `\nTithed now: ${info.tithed.map((u) => cardName(run, u)).join(', ')}.` : ''));
-    if (app.button(`Deck (${run.deck.length})`, 930, 10, 130, 44, { size: 18 })) flow.openDeck();
-    app.panel(1074, 10, 190, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
-    drawCoin(g, 1096, 32, 26 + S.goldPop * 0);
-    app.text(String(Math.round(S.gold)), 1118, 16, { size: 26, bold: true, color: COL.gold, shadow: true });
-    if (app.inRect(1074, 10, 190, 44)) app.tooltip('Gold', 'Spend it before the next fight does.');
+    // the top-right corner (x 1128..1272, y 0..56) belongs to the global Pause / Fullscreen buttons
+    app.reg('shop-gold', 884, 10, 112, 44, { group: 'gold' }); app.reg('shop-deck', 1008, 10, 112, 44, { group: 'deckbtn' });
+    if (app.button(`Deck (${run.deck.length})`, 1008, 10, 112, 44, { size: 16 })) flow.openDeck();
+    app.panel(884, 10, 112, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
+    drawCoin(g, 904, 32, 24 + S.goldPop * 0);
+    app.text(String(Math.round(S.gold)), 920, 17, { size: 24, bold: true, color: COL.gold, shadow: true, maxW: 70 });
+    if (app.inRect(884, 10, 112, 44)) app.tooltip('Gold', 'Spend it before the next fight does.');
 
     // ---- section labels ----
-    const lab = (s, x, y) => app.text(s, x, y, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.55)' });
-    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 342); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, 474); lab('RELICS', REL_X, 342); lab('SERVICES', 270, 596);
+    const lab = (s, x, y) => app.text(s, x, y, { size: 13, ui: true, maxW: 250, bold: true, color: 'rgba(232,220,196,.55)' });
+    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 342); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, 474); lab('RELICS', REL_X, 342); lab('SERVICES', 270, 598);
 
-    const priceTag = (cx, cy, price, sold) => {
+    const priceTag = (cx, cy, price, sold, grp) => {
       if (sold) return;
       const can = run.gold >= price, w = 78;
+      app.reg('shop-price-' + grp, cx - w / 2, cy - 14, w, 28, { group: grp });
       app.panel(cx - w / 2, cy - 14, w, 28, { fill: 'rgba(10,8,6,.9)', stroke: can ? rgba(BRASS, 0.8) : 'rgba(179,38,58,.9)', r: 14 });
       drawCoin(g, cx - 20, cy, 18); app.text(String(price), cx - 6, cy - 11, { size: 19, bold: true, color: can ? COL.gold : COL.bad });
     };
@@ -548,13 +561,14 @@ export default {
     shop.cards.forEach((it, i) => {
       const spec = cardSpec({ uid: -1 - i, id: it.id, grafts: [], up: 0 });
       const cx = CARD_X(i) + shakeX('card' + i), cy = CARD_Y, sc0 = 0.7;
+      app.reg('shop-card' + i, CARD_X(i) - 77, cy - 112, 154, 217 + 4 + 33, { group: 'card' + i });
       const over = !it.sold && app.inRect(CARD_X(i) - 77, cy - 108, 154, 217);
       const k = hv(app, 'c' + i, over);
       if (over) { app.cursor = 'pointer'; hovered = { i, spec, it }; }
       g.save(); if (k > 0.02) { g.shadowColor = 'rgba(242,193,78,.5)'; g.shadowBlur = 20 * k; }
       drawCard(g, spec, cx, cy - 8 * k, { scale: sc0 + 0.06 * k, dim: it.sold ? 0.6 : 0, glow: k * 0.5 });
       g.restore();
-      if (it.sold) stamp(app, cx, cy, 'SOLD'); else priceTag(CARD_X(i), cy + 126, it.price, false);
+      if (it.sold) stamp(app, cx, cy, 'SOLD'); else priceTag(CARD_X(i), cy + 126, it.price, false, 'card' + i);
       if (!it.sold && app.clicked(CARD_X(i) - 77, cy - 108, 154, 217)) buyDirect(app, 'card', i, { x: CARD_X(i), y: cy }, it.price);
     });
     if (hovered) app.tooltip(hovered.spec.name, `${typeLabel(hovered.spec)}, cost ${hovered.spec.cost}\n${cardLines(hovered.spec).join('\n')}\nBuying adds it to your deck for ${hovered.it.price} gold.`, { color: COL[hovered.spec.type] === undefined ? undefined : undefined });
@@ -562,52 +576,56 @@ export default {
     // ---- grafts ----
     shop.grafts.forEach((it, i) => {
       const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64;
+      app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 100, { group: 'graft' + i });
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
       if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, [...graftLines(gr), `Sews onto one of your cards. ${it.price} gold.`].join('\n'), { color: COL[gr.school] }); }
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, h, { hover: k });
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w / 2, y + h + 26, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w / 2, y + h + 22, it.price, false, 'graft' + i);
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 
     // ---- potions ----
     shop.potions.forEach((it, i) => {
-      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 84;
+      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 96;
+      app.reg('shop-potion' + i, POT_X(i), y - 2, w, h + 2, { group: 'potion' + i });
       const over = !it.sold && app.inRect(POT_X(i), y, w, h), k = hv(app, 'p' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
-      drawPotion(g, it.id, x + 30, y + h / 2 - 2 * k, 40);
-      app.text(p.name, x + 56, y + 8 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
-      app.text(p.text, x + 56, y + 28 - 2 * k, { size: 12, ui: true, color: 'rgba(232,220,196,.75)', maxW: w - 64, lineH: 14 });
+      drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
+      app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
+      wrapLimit(app, p.text, w - 64, 14, 2, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + 28 + q * 17 - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)', lineH: 17 }));
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 46, y + h - 18, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - 20, it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
 
     // ---- relics ----
     shop.relics.forEach((it, i) => {
-      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = 92;
+      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = 96;
+      app.reg('shop-relic' + i, REL_X, y - 2, w, h + 2, { group: 'relic' + i });
       const over = !it.sold && app.inRect(REL_X, y, w, h), k = hv(app, 'r' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : rgba(BRASS, 0.5), lw: 2 });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
-      app.text(r.name, x + 76, y + 8 - 2 * k, { size: 18, bold: true, color: COL.lamp, maxW: w - 86 });
-      app.text(r.text, x + 76, y + 31 - 2 * k, { size: 13, ui: true, color: 'rgba(232,220,196,.85)', maxW: w - 90, lineH: 15 });
+      app.text(r.name, x + 76, y + 8 - 2 * k, { size: 17, bold: true, color: COL.lamp, maxW: w - 76 - 94 });
+      wrapLimit(app, r.text, w - 90, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, y + 38 + q * 17 - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)', lineH: 17 }));
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + h - 18, it.price, false);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp }); }
       if (!it.sold && app.clicked(REL_X, y, w, h)) buyDirect(app, 'relic', i, { x: x + 40, y: y + 46 }, it.price);
     });
 
     // ---- services ----
     const rp = RUN.servicePrice(run, 'remove'), sp = RUN.servicePrice(run, 'strip');
+    app.reg('shop-remove', 270, 614, 300, 66, { group: 'remove' }); app.reg('shop-strip', 590, 614, 300, 66, { group: 'strip' }); app.reg('shop-leave', 940, 600, 310, 90, { group: 'leave' });
     const grafted = run.deck.some((c) => c.grafts.length);
-    if (app.button('Remove a card', 270, 614, 300, 66, { size: 22, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
+    if (app.button('Remove a card', 270, 614, 300, 66, { size: 20, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
     if (app.inRect(270, 614, 300, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
     const stripDis = !grafted;
-    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 22, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
+    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 20, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
     if (app.inRect(590, 614, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
     if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }

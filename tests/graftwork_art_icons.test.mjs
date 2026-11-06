@@ -1,4 +1,5 @@
 // Draws every status, relic, potion, node state, intent, HUD piece and background theme with the fake canvas: nothing may throw.
+import assert from "node:assert/strict";
 import { fakeCtx, installDom } from './graftwork_lib.mjs';
 installDom();
 const I = await import('../graftwork/art/icons.js');
@@ -24,5 +25,37 @@ for (const k of ['draw', 'discard', 'exhaust']) I.drawPileIcon(ctx, 1, 1, 40, k)
 I.drawMapPath(ctx, 0, 0, 100, 100, 'available', 1); I.drawMapPath(ctx, 0, 0, 100, 100, 'visited'); I.drawMapPath(ctx, 0, 0, 100, 100, 'locked');
 for (const th of [...B.BACKGROUND_THEMES, 'nonsense']) for (const t of [0, 1.7, 40]) B.drawBackground(ctx, th, t, { dim: 0.2 });
 B.drawBackground(ctx, 'ward', 1); B.drawVignette(ctx, 0.5); B.drawLampCone(ctx, 10, 10);
+// ---- round 4 additions: three sizes, new pictograms, intents, thread language, school colours
+const NEW_ST = ['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden', 'weightofdebt', 'stitchedup'];
+for (const sz of [20, 26, 40]) {
+  for (const id of [...NEW_ST, ...Object.keys(STATUSES), 'brand_new_status_zz']) { for (const good of [true, false]) { I.drawStatus(ctx, id, 30, 30, sz, good); I.drawStatus(ctx, id, 30, 30, sz, good, { shape: true }); I.drawStatus(ctx, id, 30, 30, sz, good, true); } }
+  for (const k of ['attack', 'defend', 'buff', 'debuff', 'poison', 'summon', 'junk', 'unknown', 'multi', 'heavy', 'conditional', 'stun', 'heal', 'weird']) I.drawIntent(ctx, k, 30, 30, sz);
+  I.drawIntent(ctx, 'attack', 30, 30, sz, { hits: 3 }); I.drawIntent(ctx, 'attack', 30, 30, sz, { heavy: true, conditional: true }); I.drawIntent(ctx, ['defend', 'conditional'], 30, 30, sz); I.drawIntent(ctx, ['attack', 'buff'], 30, 30, sz);
+  for (const r of Object.values(RELICS)) I.drawRelic(ctx, r.id, 30, 30, sz);
+  for (const p of Object.values(POTIONS)) I.drawPotion(ctx, p.id, 30, 30, sz);
+  for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'boss', 'final']) for (const st of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 30, 30, sz, st);
+  I.drawNeedle(ctx, 30, 30, sz); I.drawScissors(ctx, 30, 30, sz); I.drawKnot(ctx, 30, 30, sz, '#B3263A'); I.drawLooseThread(ctx, 30, 30, sz); I.drawClasp(ctx, 30, 30, sz);
+  I.drawEnergyOrb(ctx, 30, 30, sz * 2, 2, 3); I.drawHeart(ctx, 30, 30, sz); I.drawShield(ctx, 30, 30, sz, 7); I.drawCoin(ctx, 30, 30, sz);
+}
+for (const id of NEW_ST) ok(I.STATUS_IDS_DRAWN.includes(id), 'dedicated glyph for ' + id);
+for (const k of ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded']) ok(/^#[0-9A-F]{6}$/.test(I.SCHOOL_GLYPH_COLORS[k]), 'school colour ' + k);
+ok(I.SCHOOL_GLYPH_COLORS.ember === '#E8571F' && I.SCHOOL_GLYPH_COLORS.gilded === '#EFD98F', 'school colours mirror the bible');
+for (const f of ['drawNeedle', 'drawScissors', 'drawKnot', 'drawLooseThread', 'drawClasp']) ok(typeof I[f] === 'function', f + ' exported');
 ok(glyphs.size >= 49, 'relic glyphs distinct enough: ' + glyphs.size);
 console.log('graftwork_art_icons ok', n);
+
+// ---- round 4 backgrounds: every theme with parallax, ambient colours, cost benchmark (fake canvas = call overhead only)
+{
+  const { fakeCtx: fc } = await import('./graftwork_lib.mjs');
+  const Bg = await import('../graftwork/art/backgrounds.js');
+  const g = fc();
+  for (const th of Bg.BACKGROUND_THEMES) {
+    assert.ok(/^#[0-9a-f]{6}$/i.test(Bg.ambient(th)), 'ambient ' + th);
+    for (const par of [0, -1, 1, 5]) { const o = { parallax: par }; Bg.drawBackground(g, th, 1.5, o); assert.ok(o.parallax >= -1 && o.parallax <= 1, 'parallax clamped'); }
+    const t0 = performance.now(); for (let i = 0; i < 30; i++) Bg.drawBackground(g, th, i / 60, {}); const ms = (performance.now() - t0) / 30;
+    assert.ok(ms < 2, th + ' background costs ' + ms.toFixed(2) + ' ms');
+  }
+  for (const th of ['ward', 'market', 'theatre', 'title', 'table', 'shop', 'forge', 'event', 'win', 'lose', 'map1', 'map2', 'map3']) assert.ok(Bg.BACKGROUND_THEMES.includes(th), 'theme ' + th);
+  assert.ok(typeof Bg.keyLamp(1).x === 'number');
+  Bg.drawVignette(g, 0.5); Bg.drawLampCone(g, 100, 0);
+}

@@ -10,6 +10,8 @@ export const TIER = {
   greedy: { label: 'GREEDY', color: '#F2C14E', ink: '#2b1e00' },
   weird: { label: 'WEIRD', color: '#b78be6', ink: '#1d0f33' },
 };
+// the text scale as a multiplier (settings may hold 1.25 or 125)
+export const tscale = (app) => { const v = app.textScale; return v >= 50 ? v / 100 : v > 0 ? v : 1; };
 export const schoolColor = (id) => (SCHOOLS[id] && SCHOOLS[id].color) || COL[id] || '#aaa';
 
 export function shatterChance(run) {
@@ -39,6 +41,8 @@ export function resonanceInfo(run, schoolId, counts) {
   if (n < 6) lines.push(`At ${next}: ${s.resonance[next]}`);
   return { name: s.name, n, next, color: s.color, lines, blurb: s.blurb };
 }
+
+// size is the UNSCALED size (what you pass to app.text); app.wrap / app.measure apply the text scale. Pass {fixed:true} when drawing with fixed:true.
 
 export function wrapLimit(app, str, maxW, size, maxLines, o = {}) {
   const lines = app.wrap(str, maxW, size, o);

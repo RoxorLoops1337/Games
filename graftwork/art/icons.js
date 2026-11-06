@@ -8,19 +8,46 @@ import { COL, FONT, rgba, shade } from '../ui/core.js';
 import { RELICS, STATUSES } from '../data/index.js';
 
 const TAU = Math.PI * 2;
-const D = '#120d0b';
+const D = '#2B1E1A'; // sepia ink: the one outline colour
+let PX = 12; // pixels per glyph unit (set by withGlyph / sub) so hatch and outline stay about 1 px
+const _lit = new WeakMap();
+function litGrad(c) { let g = _lit.get(c); if (!g) { g = c.createLinearGradient(-0.65, -0.65, 0.15, 0.15); g.addColorStop(0, 'rgba(255,247,224,.9)'); g.addColorStop(1, 'rgba(255,247,224,0)'); _lit.set(c, g); } return g; }
+// 1 px diagonal hatch on the shadow side (lower right) of the current clip, glyph units. Key light is upper left.
+function hatchLines(c, a = 0.3, from = 0.1) {
+  if (PX < 6) return;
+  const pitch = Math.max(0.17, 2.6 / PX);
+  // Path2D keeps the caller's current path intact (glyphs often stroke the same path after fs)
+  const hp = typeof Path2D !== 'undefined' ? new Path2D() : null; const t = hp || c; if (!hp) c.beginPath();
+  for (let s = from; s < 1.5; s += pitch) { t.moveTo(s / 2 - 1.2, s / 2 + 1.2); t.lineTo(s / 2 + 1.2, s / 2 - 1.2); }
+  c.lineWidth = Math.min(0.05, Math.max(0.025, 0.9 / PX)); c.strokeStyle = `rgba(43,30,26,${a})`; c.lineCap = 'butt'; if (hp) c.stroke(hp); else c.stroke();
+}
+// pixel-space version for discs centred on the origin
+function hatchDisc(c, rad, a = 0.3) {
+  c.save(); c.beginPath(); c.arc(0, 0, rad, 0, TAU); c.clip();
+  const pitch = Math.max(2.4, rad * 0.2); c.beginPath();
+  for (let s = rad * 0.1; s < rad * 1.5; s += pitch) { c.moveTo(s / 2 - rad * 1.2, s / 2 + rad * 1.2); c.lineTo(s / 2 + rad * 1.2, s / 2 - rad * 1.2); }
+  c.lineWidth = 1; c.strokeStyle = `rgba(43,30,26,${a})`; c.stroke(); c.restore();
+}
+const disc = (c, rad, k) => { c.beginPath(); c.arc(0, 0, rad, 0, TAU); c.fillStyle = k; c.fill(); };
 const LW = 0.11;
 const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
 function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 // ---- tiny path helpers (unit space) ----
 const path = (c, p, close = true) => { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); if (close) c.closePath(); };
-const fs = (c, k, w = 0.06) => { c.fillStyle = k; c.fill(); if (w) { c.lineWidth = w; c.strokeStyle = D; c.lineJoin = 'round'; c.stroke(); } };
+const fs = (c, k, w = 0.06) => {
+  c.fillStyle = k; c.fill(); if (!w) return;
+  const ow = Math.min(Math.max(w, 1 / PX), 0.12), hl = Math.min(1 / PX, 0.05);
+  c.save(); c.clip(); c.lineJoin = 'round';
+  c.lineWidth = 2 * (ow + hl); c.strokeStyle = litGrad(c); c.stroke(); // 1 px highlight on the lit edge
+  c.lineWidth = 2 * ow; c.strokeStyle = D; c.stroke(); // single sepia contour
+  hatchLines(c); c.restore();
+};
 const ln = (c, k, w = LW) => { c.lineWidth = w; c.strokeStyle = k; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke(); };
 const ci = (c, x, y, r) => { c.beginPath(); c.arc(x, y, r, 0, TAU); };
 const rr = (c, x, y, w, h, r) => { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); };
 const seg = (c, x1, y1, x2, y2, k, w = LW) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); ln(c, k, w); };
-const sub = (c, fn, x, y, s, rot = 0, k, a) => { c.save(); c.translate(x, y); if (rot) c.rotate(rot); c.scale(s, s); fn(c, k, a); c.restore(); };
+const sub = (c, fn, x, y, s, rot = 0, k, a) => { c.save(); c.translate(x, y); if (rot) c.rotate(rot); c.scale(s, s); const p = PX; PX *= s; fn(c, k, a); PX = p; c.restore(); };
 const starPath = (c, x, y, r, pts = 5, inner = 0.45) => { c.beginPath(); for (let i = 0; i < pts * 2; i++) { const a = -Math.PI / 2 + (i * Math.PI) / pts, rad = i % 2 ? r * inner : r; c[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rad, y + Math.sin(a) * rad); } c.closePath(); };
 const shieldPath = (c, s = 1, yo = 0) => { c.beginPath(); c.moveTo(-0.5 * s, -0.5 * s + yo); c.lineTo(0.5 * s, -0.5 * s + yo); c.lineTo(0.5 * s, 0.05 * s + yo); c.quadraticCurveTo(0.5 * s, 0.45 * s + yo, 0, 0.66 * s + yo); c.quadraticCurveTo(-0.5 * s, 0.45 * s + yo, -0.5 * s, 0.05 * s + yo); c.closePath(); };
 const arrow = (c, x1, y1, x2, y2, k, w = 0.14, head = 0.22) => { const a = Math.atan2(y2 - y1, x2 - x1); seg(c, x1, y1, x2, y2, k, w); c.beginPath(); c.moveTo(x2 + Math.cos(a) * head * 0.5, y2 + Math.sin(a) * head * 0.5); c.lineTo(x2 + Math.cos(a + 2.5) * head, y2 + Math.sin(a + 2.5) * head); c.lineTo(x2 + Math.cos(a - 2.5) * head, y2 + Math.sin(a - 2.5) * head); c.closePath(); fs(c, k, 0.03); };
@@ -161,6 +188,88 @@ G.crossedscalpels = (c, k, a) => { sub(c, G.scalpel, -0.1, 0, 1, 0, '#8c2f2f', a
 // ======================================================================================
 // STATUS TABLE: id -> [glyph, main, accent]
 // ======================================================================================
+
+// ---- round 4: affliction pictograms (distinct silhouettes) ----
+G.poison = (c, k, a) => { dropPath(c, 0.98, 0.04); fs(c, k); path(c, [0, -0.12, 0.22, 0.12, 0.09, 0.12, 0.09, 0.42, -0.09, 0.42, -0.09, 0.12, -0.22, 0.12]); fs(c, a, 0.03); ci(c, 0.42, -0.4, 0.07); fs(c, a, 0.03); ci(c, 0.3, -0.58, 0.05); fs(c, a, 0.03); };
+G.brittle = (c, k, a) => {
+  path(c, [-0.54, -0.5, -0.04, -0.5, -0.15, -0.2, 0.0, 0.05, -0.1, 0.3, -0.04, 0.68, -0.3, 0.5, -0.54, 0.1]); fs(c, k);
+  path(c, [0.08, -0.46, 0.6, -0.5, 0.6, 0.1, 0.42, 0.5, 0.06, 0.68, 0.12, 0.3, 0.02, 0.05, 0.14, -0.2]); fs(c, k);
+  path(c, [-0.02, 0.72, 0.1, 0.62, 0.14, 0.74]); fs(c, a, 0.03); path(c, [-0.1, -0.62, 0.0, -0.54, -0.12, -0.5]); fs(c, a, 0.03);
+};
+G.rejection = (c, k, a) => {
+  rr(c, -0.55, -0.4, 0.82, 0.8, 0.05); fs(c, k); for (let i = 0; i < 4; i++) { seg(c, -0.55, -0.24 + i * 0.2, 0.27, -0.24 + i * 0.2, 'rgba(43,30,26,.35)', 0.025); }
+  for (let i = 0; i < 3; i++) seg(c, -0.45 + i * 0.17, -0.06, -0.33 + i * 0.17, -0.06, a, 0.06);
+  c.beginPath(); c.moveTo(-0.02, -0.06); c.bezierCurveTo(0.3, -0.08, 0.5, -0.5, 0.62, -0.18); c.bezierCurveTo(0.7, 0.1, 0.45, 0.25, 0.5, 0.55); ln(c, D, 0.15); ln(c, a, 0.07);
+};
+G.infection = (c, k, a) => {
+  rr(c, -0.62, 0.0, 1.24, 0.3, 0.14); fs(c, k); for (let i = 0; i < 4; i++) seg(c, -0.42 + i * 0.28, -0.02, -0.3 + i * 0.28, 0.32, D, 0.06);
+  ci(c, 0.05, -0.2, 0.3); fs(c, a); ci(c, -0.34, -0.12, 0.18); fs(c, a); ci(c, 0.42, -0.1, 0.15); fs(c, a); ci(c, 0.0, -0.3, 0.08); c.fillStyle = k; c.fill();
+};
+G.numb = (c, k, a) => {
+  rr(c, -0.56, -0.42, 1.12, 0.84, 0.16); fs(c, k); rr(c, -0.44, -0.3, 0.88, 0.6, 0.1); c.setLineDash([0.1, 0.07]); ln(c, 'rgba(43,30,26,.6)', 0.04); c.setLineDash([]);
+  seg(c, -0.6, 0.58, 0.6, -0.58, D, 0.22); seg(c, -0.6, 0.58, 0.6, -0.58, a, 0.1);
+};
+G.unpicked = (c, k, a) => {
+  rr(c, -0.62, -0.1, 0.9, 0.5, 0.05); fs(c, k); for (let i = 0; i < 3; i++) seg(c, -0.5 + i * 0.26, 0.06, -0.34 + i * 0.26, 0.06, a, 0.07);
+  c.beginPath(); c.moveTo(0.1, 0.06); c.bezierCurveTo(0.4, 0.06, 0.5, -0.3, 0.3, -0.42); c.bezierCurveTo(0.1, -0.52, 0.0, -0.3, 0.2, -0.28); ln(c, D, 0.15); ln(c, a, 0.07);
+  seg(c, 0.2, -0.28, 0.32, -0.2, a, 0.04); seg(c, 0.2, -0.28, 0.1, -0.2, a, 0.04);
+};
+G.chainbreak = (c, k, a) => {
+  const ring = (x, y, rot) => { c.save(); c.translate(x, y); c.rotate(rot); rr(c, -0.3, -0.16, 0.6, 0.32, 0.16); ln(c, D, 0.2); rr(c, -0.3, -0.16, 0.6, 0.32, 0.16); ln(c, k, 0.11); c.restore(); };
+  ring(-0.3, 0.3, -0.6); ring(0.32, -0.3, -0.6);
+  path(c, [-0.05, 0.0, 0.1, -0.12, 0.04, -0.02, 0.18, 0.1, 0.0, 0.02]); fs(c, a, 0.03);
+  seg(c, 0.0, 0.2, 0.0, 0.1, a, 0.05);
+};
+G.mask = (c, k, a) => {
+  c.beginPath(); c.moveTo(-0.5, -0.4); c.quadraticCurveTo(0, -0.6, 0.5, -0.4); c.lineTo(0.42, 0.18); c.quadraticCurveTo(0.2, 0.66, 0, 0.66); c.quadraticCurveTo(-0.2, 0.66, -0.42, 0.18); c.closePath(); fs(c, k);
+  path(c, [-0.34, -0.18, -0.1, -0.1, -0.18, 0.0, -0.34, -0.06]); fs(c, D, 0); path(c, [0.34, -0.18, 0.1, -0.1, 0.18, 0.0, 0.34, -0.06]); fs(c, D, 0);
+  c.beginPath(); c.moveTo(-0.2, 0.36); c.quadraticCurveTo(0, 0.22, 0.2, 0.36); ln(c, D, 0.07);
+  sub(c, (cc, kk) => { dropPath(cc, 1); fs(cc, kk); }, 0.5, -0.38, 0.34, 0.2, a, a);
+};
+G.slab = (c, k, a) => {
+  rr(c, -0.5, -0.58, 1.0, 1.16, 0.06); fs(c, k); rr(c, -0.32, -0.4, 0.64, 0.8, 0.04); c.fillStyle = '#100b09'; c.fill(); ln(c, 'rgba(0,0,0,.8)', 0.04);
+  for (const [x, y] of [[-0.42, -0.5], [0.42, -0.5], [-0.42, 0.5], [0.42, 0.5]]) { ci(c, x, y, 0.04); c.fillStyle = D; c.fill(); }
+  path(c, [0, 0.22, 0.14, 0.04, 0.06, 0.04, 0.06, -0.2, -0.06, -0.2, -0.06, 0.04, -0.14, 0.04]); fs(c, a, 0.02);
+};
+G.leaden = (c, k, a) => {
+  c.beginPath(); c.arc(0, -0.36, 0.2, Math.PI, 0); ln(c, D, 0.17); c.beginPath(); c.arc(0, -0.36, 0.2, Math.PI, 0); ln(c, k, 0.08);
+  path(c, [-0.24, -0.22, 0.24, -0.22, 0.56, 0.58, -0.56, 0.58]); fs(c, k); seg(c, -0.4, 0.38, 0.4, 0.38, 'rgba(255,255,255,.25)', 0.04);
+  path(c, [0, 0.52, 0.16, 0.3, -0.16, 0.3]); fs(c, a, 0.02);
+};
+G.debtledger = (c, k, a) => {
+  rr(c, -0.5, -0.58, 1.0, 1.16, 0.06); fs(c, k); seg(c, -0.3, -0.58, -0.3, 0.58, D, 0.05);
+  for (let r = 0; r < 3; r++) { for (let i = 0; i < 3; i++) seg(c, -0.14 + i * 0.13, -0.4 + r * 0.26, -0.14 + i * 0.13, -0.2 + r * 0.26, D, 0.05); seg(c, -0.18, -0.34 + r * 0.26, 0.2, -0.26 + r * 0.26, D, 0.04); }
+  ci(c, 0.3, 0.42, 0.14); fs(c, a, 0.04);
+};
+G.stitchshield = (c, k, a) => {
+  shieldPath(c, 1.1); fs(c, k); seg(c, 0, -0.45, 0, 0.55, a, 0.05); for (let i = 0; i < 5; i++) seg(c, -0.12, -0.38 + i * 0.2, 0.12, -0.28 + i * 0.2, a, 0.06);
+};
+// ---- round 4: the Thread language ----
+G.needlet = (c, k, a) => {
+  c.beginPath(); c.moveTo(0.31, -0.34); c.bezierCurveTo(0.72, -0.18, 0.6, 0.28, 0.2, 0.5); ln(c, D, 0.14); ln(c, a, 0.06);
+  c.save(); c.rotate(0.75); path(c, [-0.05, -0.64, 0.05, -0.64, 0.03, 0.5, 0, 0.72, -0.03, 0.5]); fs(c, k, 0.03); c.beginPath(); c.ellipse(0, -0.46, 0.02, 0.1, 0, 0, TAU); c.fillStyle = D; c.fill(); c.restore();
+};
+G.scissors = (c, k, a) => {
+  for (const s of [-1, 1]) { c.save(); c.rotate(s * 0.28); path(c, [-0.07, 0.1, 0.08, 0.1, 0.03, -0.68, -0.03, -0.68]); fs(c, k, 0.03); seg(c, 0, 0.1, 0, 0.3, k, 0.07); ci(c, 0, 0.46, 0.17); ln(c, D, 0.15); ci(c, 0, 0.46, 0.17); ln(c, a, 0.07); c.restore(); }
+  ci(c, 0, 0.05, 0.06); fs(c, a, 0.03);
+};
+G.knot = (c, k, a) => {
+  for (const s of [-1, 1]) { c.beginPath(); c.moveTo(s * 0.1, 0.1); c.bezierCurveTo(s * 0.3, 0.35, s * 0.46, 0.4, s * 0.6, 0.62); ln(c, D, 0.17); ln(c, k, 0.09); }
+  c.beginPath(); c.ellipse(-0.12, -0.12, 0.26, 0.17, 0.6, 0, TAU); ln(c, D, 0.19); ln(c, k, 0.1);
+  c.beginPath(); c.ellipse(0.12, -0.12, 0.26, 0.17, -0.6, 0, TAU); ln(c, D, 0.19); ln(c, k, 0.1);
+  ci(c, 0, -0.08, 0.1); fs(c, k, 0.04);
+};
+G.loosethread = (c, k, a) => {
+  c.beginPath(); c.moveTo(-0.6, 0.5); c.bezierCurveTo(-0.2, 0.5, -0.3, 0.0, 0.1, 0.05); c.bezierCurveTo(0.5, 0.1, 0.45, -0.45, 0.1, -0.4); c.bezierCurveTo(-0.1, -0.37, -0.02, -0.15, 0.1, -0.2); ln(c, D, 0.17); ln(c, k, 0.09);
+  seg(c, -0.6, 0.5, -0.7, 0.42, k, 0.04); seg(c, -0.6, 0.5, -0.72, 0.54, k, 0.04); seg(c, -0.6, 0.5, -0.66, 0.62, k, 0.04);
+};
+G.clasp = (c, k, a) => {
+  ci(c, 0, 0.08, 0.46); ln(c, D, 0.24); ci(c, 0, 0.08, 0.46); ln(c, k, 0.14);
+  rr(c, -0.13, -0.66, 0.26, 0.4, 0.05); fs(c, k, 0.05); ci(c, 0, 0.08, 0.12); fs(c, a, 0.04);
+};
+G.multiblade = (c, k, a) => { sub(c, G.sword, -0.2, 0.04, 0.8, -0.38, '#9aa2a8', a); sub(c, G.sword, 0.2, 0.04, 0.8, 0.38, '#9aa2a8', a); sub(c, G.sword, 0, -0.02, 0.9, 0, k, a); };
+G.heavysword = (c, k, a) => { sub(c, G.sword, 0, 0, 1.08, 0, k, a); };
+G.asterisk = (c, k, a) => { for (let i = 0; i < 3; i++) { const an = (i / 3) * Math.PI; seg(c, -Math.cos(an) * 0.55, -Math.sin(an) * 0.55, Math.cos(an) * 0.55, Math.sin(an) * 0.55, D, 0.34); } for (let i = 0; i < 3; i++) { const an = (i / 3) * Math.PI; seg(c, -Math.cos(an) * 0.52, -Math.sin(an) * 0.52, Math.cos(an) * 0.52, Math.sin(an) * 0.52, k, 0.2); } };
 const GR = '#bfe5c1', RD = '#ffb0a8', GO = '#F2C14E', OR = '#ff8a3c', CY = '#7FD1E0', VI = '#c9a8ff', SL = '#c8d2d8';
 const ST = {
   strength: ['fist', '#f0c8a0', '#d2a070'], dexterity: ['feather', GR, '#8fbf94'], weak: ['droop', '#d9b49a', RD], vulnerable: ['crackshield', '#9fb2bd', RD],
@@ -177,63 +286,77 @@ const ST = {
   tally: ['tally', '#e8dcc4', RD], priced: ['tag', '#e8dcc4', GO], offer: ['scales', GO, '#e8dcc4'], interest: ['percent', GO, '#fff3b0'],
   brined: ['jar', '#6fb8a8', '#c8c0a0'], strings: ['marionette', '#e8dcc4', '#b3a58a'], fragile: ['goblet', '#bfe3ea', '#fff'], veiled: ['curtain', '#8e3a52', GO],
   baton: ['baton', '#f0ead8', '#6a4a30'],
+  poison: ['poison', '#6fcf4a', '#f0ffd0'], brittle: ['brittle', '#b9c6cc', '#ffb0a8'], rejection: ['rejection', '#e6d8c0', '#d2243c'], infection: ['infection', '#d9c83a', '#fff6a0'],
+  numb: ['numb', '#a9aeb2', '#f0f0f0'], unpicked: ['unpicked', '#e6d8c0', '#d2243c'], cadencelock: ['chainbreak', '#c8d2d8', '#ff6a5a'], stagefright: ['mask', '#e8dcc4', '#7FD1E0'],
+  dread: ['slab', '#7a7480', '#ff6a5a'], leaden: ['leaden', '#8d949a', '#d8dde2'], weightofdebt: ['debtledger', '#e8dcc4', '#F2C14E'], stitchedup: ['stitchshield', '#c9d6dc', '#e8dcc4'],
 };
 export const STATUS_IDS_DRAWN = Object.keys(ST);
 
-function badge(ctx, r, rim, centerCol = '#241c18', glow = 0) {
-  // r = pixel radius. Outer ring, dark center, bevel.
-  const g = ctx.createRadialGradient(0, -r * 0.3, r * 0.1, 0, 0, r);
-  g.addColorStop(0, shade(centerCol, 1.5)); g.addColorStop(1, shade(centerCol, 0.55));
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.97, 0, TAU); ctx.fillStyle = D; ctx.fill();
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, TAU); ctx.fillStyle = rim; ctx.fill();
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, TAU); ctx.lineWidth = Math.max(0.8, r * 0.06); ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, TAU); ctx.fillStyle = g; ctx.fill();
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, TAU); ctx.lineWidth = Math.max(0.8, r * 0.07); ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.stroke();
+function badge(ctx, r, rim, centerCol = '#241c18') {
+  // engraved medallion: one sepia outline, flat spot-colour rim with 1 px hatch, dark slab face, 1 px highlight on the lit side
+  const p = PX; PX = r;
+  disc(ctx, r * 0.97, D); disc(ctx, r * 0.9, rim); hatchDisc(ctx, r * 0.9, 0.34);
+  disc(ctx, r * 0.7, centerCol); hatchDisc(ctx, r * 0.7, 0.3);
+  if (r >= 10) { ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 0, TAU); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(20,12,8,.7)'; ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.82, Math.PI * 1.08, Math.PI * 1.62); ctx.lineWidth = Math.max(1, r * 0.06); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,247,224,.75)'; ctx.stroke();
+  PX = p;
 }
 function withGlyph(ctx, x, y, size, k, a, name, gs = 0.64) {
   const r = size / 2;
   ctx.save(); ctx.translate(x, y); ctx.scale(r * gs, r * gs);
-  const fn = G[name] || G.question; fn(ctx, k, a); ctx.restore();
+  const p = PX; PX = r * gs; const fn = G[name] || G.question; fn(ctx, k, a); PX = p; ctx.restore();
 }
 const GOODRIM = '#4f9a5c', BADRIM = '#c2433f';
-export function drawStatus(ctx, id, x, y, size, good = true) {
+export function drawStatus(ctx, id, x, y, size, good = true, opt) {
+  // opt: true | { shape: true } adds the colourblind corner triangle (up = good, down = bad)
+  const shape = opt === true || !!(opt && opt.shape);
   const r = size / 2; const e = ST[id];
   ctx.save(); ctx.translate(x, y);
-  const rim = good ? GOODRIM : BADRIM;
-  badge(ctx, r, rim, good ? '#1c2a20' : '#2e1818');
-  // small pip so good/bad is readable without color: good = notch dots, bad = zigzag teeth
+  badge(ctx, r, good ? GOODRIM : BADRIM, good ? '#1d2a21' : '#2f1a18');
   ctx.restore();
   if (e) withGlyph(ctx, x, y, size, e[1], e[2], e[0], 0.8);
   else {
     ctx.save(); ctx.fillStyle = good ? '#d8f5da' : '#ffd2cc'; ctx.font = `bold ${Math.round(size * 0.5)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(id || '?')[0].toUpperCase(), x, y + size * 0.03); ctx.restore();
   }
-  if (!good) { // bad: tiny downward notch at bottom of the rim; good: tiny up notch (colorblind cue)
-    ctx.save(); ctx.fillStyle = '#ffd2cc'; ctx.translate(x, y + r * 0.84); ctx.beginPath(); ctx.moveTo(-r * 0.12, -r * 0.05); ctx.lineTo(r * 0.12, -r * 0.05); ctx.lineTo(0, r * 0.1); ctx.fill(); ctx.restore();
-  } else {
-    ctx.save(); ctx.fillStyle = '#d8f5da'; ctx.translate(x, y + r * 0.84); ctx.beginPath(); ctx.moveTo(-r * 0.12, r * 0.05); ctx.lineTo(r * 0.12, r * 0.05); ctx.lineTo(0, -r * 0.1); ctx.fill(); ctx.restore();
-  }
+  ctx.save(); ctx.fillStyle = good ? '#8fe3a0' : '#ff8f84'; ctx.strokeStyle = D; ctx.lineWidth = 1; ctx.lineJoin = 'round';
+  if (shape) { const cx = x + r * 0.68, cy = y - r * 0.68, h = r * 0.34, u = good ? -1 : 1; ctx.beginPath(); ctx.moveTo(cx - h * 1.1, cy - u * h * 0.8); ctx.lineTo(cx + h * 1.1, cy - u * h * 0.8); ctx.lineTo(cx, cy + u * h * 0.9); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  else { ctx.translate(x, y + r * 0.84); ctx.beginPath(); if (good) { ctx.moveTo(-r * 0.12, r * 0.05); ctx.lineTo(r * 0.12, r * 0.05); ctx.lineTo(0, -r * 0.1); } else { ctx.moveTo(-r * 0.12, -r * 0.05); ctx.lineTo(r * 0.12, -r * 0.05); ctx.lineTo(0, r * 0.1); } ctx.fill(); }
+  ctx.restore();
 }
 
 // ======================================================================================
 // INTENTS (bare glyphs with a soft glow)
 // ======================================================================================
 const INT = {
-  attack: ['sword', '#ffb0a0', '#8a5f3a', '#ff5a4a'], defend: ['shieldg', '#9ec8e8', '#e8f4ff', '#6aa8e0'], buff: ['arrowup', '#8fe29a', '#fff', '#5ac86a'],
-  debuff: ['debuff', '#c9a8ff', '#ff9a8a', '#9a6aff'], junk: ['paper', '#e8dcc4', '#b3a58a', '#cfc6a8'], summon: ['summon', '#c9a8ff', '#7a5ac8', '#a07aff'],
+  attack: ['sword', '#ffb0a0', '#8a5f3a', '#ff5a4a'], multi: ['multiblade', '#ffb0a0', '#8a5f3a', '#ff5a4a'], heavy: ['heavysword', '#ffb0a0', '#8a5f3a', '#e0453a'],
+  defend: ['shieldg', '#9ec8e8', '#e8f4ff', '#6aa8e0'], buff: ['arrowup', '#8fe29a', '#fff', '#5ac86a'],
+  debuff: ['debuff', '#c9a8ff', '#ff9a8a', '#9a6aff'], poison: ['poison', '#6fcf4a', '#f0ffd0', '#6acf4a'], junk: ['paper', '#e8dcc4', '#b3a58a', '#cfc6a8'], summon: ['summon', '#c9a8ff', '#7a5ac8', '#a07aff'],
   unknown: ['question', '#e8dcc4', '#fff', '#cfc6a8'], stun: ['stars', '#ffe55a', '#8fa0ff', '#ffe55a'], sleep: ['question', '#9ec8e8', '#fff', '#6aa8e0'],
-  heal: ['cross', '#8fe29a', '#fff', '#5ac86a'], flee: ['swerve', '#d8f0ff', CY, CY], special: ['sparkle', GO, '#fff', GO],
+  heal: ['cross', '#8fe29a', '#fff', '#5ac86a'], flee: ['swerve', '#d8f0ff', CY, CY], special: ['sparkle', GO, '#fff', GO], conditional: ['asterisk', GO, '#fff', GO],
 };
-export function drawIntent(ctx, kind, x, y, size) {
-  if (Array.isArray(kind)) kind = kind[0];
-  const e = INT[kind] || INT.unknown;
-  const r = size / 2;
+// drawIntent(ctx, kind, x, y, size, opt?) opt: { hits (>1 = stacked blades), heavy (bigger, red ring), conditional (asterisk badge: a tooltip-listed bonus) }
+// kind may also be 'multi' | 'heavy' | 'conditional' | 'poison', or an array (first non-'conditional' entry is drawn; 'conditional' adds the badge).
+export function drawIntent(ctx, kind, x, y, size, opt) {
+  let cond = !!(opt && opt.conditional); const hits = opt && opt.hits;
+  if (Array.isArray(kind)) { cond = cond || kind.includes('conditional'); kind = kind.find((q) => q !== 'conditional') || 'conditional'; }
+  if (kind === 'attack') { if (opt && opt.heavy) kind = 'heavy'; else if (hits > 1) kind = 'multi'; }
+  const e = INT[kind] || INT.unknown; const heavy = kind === 'heavy';
+  const r = (size / 2) * (heavy ? 1.12 : 1); const gc = e[3].length === 7 ? e[3] : '#ffffff';
   ctx.save();
-  const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.15);
-  g.addColorStop(0, rgba(e[3].length === 7 ? e[3] : '#ffffff', 0.28)); g.addColorStop(1, rgba(e[3].length === 7 ? e[3] : '#ffffff', 0));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.15, 0, TAU); ctx.fill();
+  const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 1.25);
+  g.addColorStop(0, rgba(gc, 0.3)); g.addColorStop(1, rgba(gc, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, TAU); ctx.fill();
+  ctx.translate(x, y);
+  disc(ctx, r * 0.98, 'rgba(26,20,17,.7)');
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.93, 0, TAU); ctx.lineWidth = heavy ? Math.max(2, r * 0.16) : Math.max(1, r * 0.07); ctx.strokeStyle = heavy ? '#e0453a' : rgba(gc, 0.75); ctx.stroke();
   ctx.restore();
-  withGlyph(ctx, x, y, size, e[1], e[2], e[0], 0.92);
+  withGlyph(ctx, x, y, r * 2, e[1], e[2], e[0], 0.9);
+  if (cond && kind !== 'conditional') {
+    const br = r * 0.36; ctx.save(); ctx.translate(x + r * 0.64, y + r * 0.64); disc(ctx, br * 1.1, D); disc(ctx, br, '#F2C14E');
+    const p = PX; PX = br; hatchDisc(ctx, br, 0.3); PX = p; ctx.restore();
+    withGlyph(ctx, x + r * 0.64, y + r * 0.64, br * 2, D, D, 'asterisk', 0.8);
+  }
 }
 
 // ======================================================================================
@@ -280,16 +403,10 @@ export function drawRelic(ctx, id, x, y, size, rarity) {
   const rim = RIM[rar] || RIM.common;
   const k = (RSPEC[id] && RSPEC[id][0]) || RTINT[h % RTINT.length], a = (RSPEC[id] && RSPEC[id][1]) || RACC[(h >> 5) % RACC.length];
   ctx.save(); ctx.translate(x, y);
-  // medallion: rim, bronze bevel, dark center
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.97, 0, TAU); ctx.fillStyle = D; ctx.fill();
-  const rg = ctx.createLinearGradient(-r, -r, r, r); rg.addColorStop(0, shade(rim, 1.3)); rg.addColorStop(0.5, rim); rg.addColorStop(1, shade(rim, 0.55));
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, TAU); ctx.fillStyle = rg; ctx.fill();
-  const cg = ctx.createRadialGradient(0, -r * 0.3, r * 0.1, 0, 0, r * 0.76); cg.addColorStop(0, '#3a2f29'); cg.addColorStop(1, '#17110f');
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, TAU); ctx.fillStyle = cg; ctx.fill();
-  ctx.lineWidth = Math.max(0.8, r * 0.07); ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.stroke();
+  badge(ctx, r, rim, '#2a211c');
   // hash pips on the rim (1 to 3) so two relics sharing a glyph never match
   const pips = 1 + (h % 3);
-  for (let i = 0; i < pips; i++) { const an = ((((h >> (3 + i * 4)) % 12) / 12) * TAU) - Math.PI / 2; ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.83, Math.sin(an) * r * 0.83, Math.max(0.9, r * 0.055), 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill(); }
+  for (let i = 0; i < pips; i++) { const an = ((((h >> (3 + i * 4)) % 12) / 12) * TAU) - Math.PI / 2; ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.82, Math.sin(an) * r * 0.82, Math.max(0.9, r * 0.05), 0, TAU); ctx.fillStyle = D; ctx.fill(); }
   ctx.restore();
   withGlyph(ctx, x, y, size, k, a, relicGlyph(id), 0.78);
 }
@@ -310,9 +427,9 @@ function bottle(c, shape, liquid, label, extra, t) {
   // unit space: bottle fits in -0.75..0.75
   const glass = 'rgba(190,225,235,.28)', edge = 'rgba(220,240,245,.75)';
   const fill = (body, level) => { // liquid clipped to body path
-    c.save(); body(); c.clip(); const lg = c.createLinearGradient(-0.5, 0, 0.5, 0); lg.addColorStop(0, shade(liquid, 0.75)); lg.addColorStop(0.45, liquid); lg.addColorStop(1, shade(liquid, 0.6)); c.fillStyle = lg; c.fillRect(-1, level, 2, 2); c.beginPath(); c.moveTo(-1, level); for (let i = 0; i <= 8; i++) c.lineTo(-1 + i * 0.25, level + Math.sin(i * 1.7 + t * 2) * 0.012); c.lineTo(1, level + 0.06); c.lineTo(-1, level + 0.06); c.fillStyle = shade(liquid, 1.25); c.fill(); c.restore();
+    c.save(); body(); c.clip(); const lg = c.createLinearGradient(-0.5, 0, 0.5, 0); lg.addColorStop(0, shade(liquid, 0.75)); lg.addColorStop(0.45, liquid); lg.addColorStop(1, shade(liquid, 0.6)); c.fillStyle = lg; c.fillRect(-1, level, 2, 2); hatchLines(c, 0.32, 0.0); c.beginPath(); c.moveTo(-1, level); for (let i = 0; i <= 8; i++) c.lineTo(-1 + i * 0.25, level + Math.sin(i * 1.7 + t * 2) * 0.012); c.lineTo(1, level + 0.06); c.lineTo(-1, level + 0.06); c.fillStyle = shade(liquid, 1.25); c.fill(); c.restore();
   };
-  const outline = (body) => { body(); c.lineWidth = 0.07; c.strokeStyle = D; c.stroke(); body(); c.fillStyle = glass; c.fill(); c.lineWidth = 0.04; c.strokeStyle = edge; c.stroke(); };
+  const outline = (body) => { body(); c.fillStyle = glass; c.fill(); c.lineWidth = Math.max(0.05, 1.1 / PX); c.strokeStyle = D; c.lineJoin = 'round'; c.stroke(); c.beginPath(); c.moveTo(-0.2, -0.1); c.lineTo(-0.2, 0.55); c.lineWidth = Math.max(0.03, 1 / PX); c.strokeStyle = edge; c.stroke(); };
   const cork = (x, y, w, h) => { rr(c, x - w / 2, y, w, h, 0.04); fs(c, '#b98a50', 0.04); };
   if (shape === 'round') {
     const body = () => { c.beginPath(); c.moveTo(-0.14, -0.62); c.lineTo(-0.14, -0.28); c.arc(0, 0.2, 0.5, -2.0, Math.PI + 2.0 - Math.PI * 2 + Math.PI * 2, false); c.lineTo(0.14, -0.28); c.lineTo(0.14, -0.62); c.closePath(); };
@@ -349,7 +466,7 @@ function bottle(c, shape, liquid, label, extra, t) {
 export function drawPotion(ctx, id, x, y, size) {
   const e = PT[id] || [PSHAPES[hash(id) % PSHAPES.length], `hsl(${hash(id) % 360},60%,55%)`, GLYPH_NAMES[hash(id) % GLYPH_NAMES.length]];
   let liquid = e[1]; if (liquid.startsWith('hsl')) { liquid = '#' + [(hash(id) >> 3) & 255, (hash(id) >> 11) & 255, (hash(id) >> 19) & 255].map((v) => (80 + (v % 150)).toString(16)).join(''); }
-  ctx.save(); ctx.translate(x, y); const s = size / 2 / 0.78; ctx.scale(s, s);
+  ctx.save(); ctx.translate(x, y); const s = size / 2 / 0.78; ctx.scale(s, s); PX = s;
   ctx.beginPath(); ctx.ellipse(0, 0.74, 0.42, 0.08, 0, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   bottle(ctx, e[0], liquid, e[2], e[3], now());
@@ -427,59 +544,58 @@ function numText(ctx, str, x, y, px, col = '#fff', stroke = D) {
   ctx.save(); ctx.font = `bold ${Math.round(px)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, px * 0.2); ctx.strokeStyle = stroke; ctx.strokeText(str, x, y); ctx.fillStyle = col; ctx.fillText(str, x, y); ctx.restore();
 }
 export function drawEnergyOrb(ctx, x, y, size, n = 0, max) {
+  // brass dial with a glass face
   const r = size / 2, t = now(); const empty = n <= 0;
   ctx.save();
-  // glow
-  if (!empty) { const p = 0.85 + 0.15 * Math.sin(t * 2.6); const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.6 * p); g.addColorStop(0, rgba('#F2C14E', 0.45)); g.addColorStop(1, rgba('#F2C14E', 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.7, 0, TAU); ctx.fill(); }
-  // brass base
-  const by = y + r * 0.74;
-  const bg = ctx.createLinearGradient(x - r, 0, x + r, 0); bg.addColorStop(0, '#6a4a1c'); bg.addColorStop(0.35, '#d9b058'); bg.addColorStop(0.7, '#9a7228'); bg.addColorStop(1, '#4e3612');
-  ctx.beginPath(); ctx.ellipse(x, by + r * 0.08, r * 0.82, r * 0.26, 0, 0, TAU); ctx.fillStyle = D; ctx.fill();
-  ctx.beginPath(); ctx.moveTo(x - r * 0.78, by - r * 0.1); ctx.lineTo(x + r * 0.78, by - r * 0.1); ctx.lineTo(x + r * 0.86, by + r * 0.08); ctx.quadraticCurveTo(x, by + r * 0.4, x - r * 0.86, by + r * 0.08); ctx.closePath(); ctx.fillStyle = bg; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = D; ctx.stroke();
-  for (const s of [-1, 0, 1]) { ctx.beginPath(); ctx.arc(x + s * r * 0.5, by + r * 0.08, Math.max(1, r * 0.05), 0, TAU); ctx.fillStyle = '#3a280e'; ctx.fill(); }
-  // glass orb
-  ctx.beginPath(); ctx.arc(x, y, r * 0.88, 0, TAU); ctx.fillStyle = D; ctx.fill();
-  const og = ctx.createRadialGradient(x - r * 0.2, y - r * 0.25, r * 0.05, x, y, r * 0.82);
-  if (empty) { og.addColorStop(0, '#4a4a52'); og.addColorStop(1, '#17171c'); } else { og.addColorStop(0, '#fff3b0'); og.addColorStop(0.45, '#F2C14E'); og.addColorStop(1, '#8a5a10'); }
-  ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, TAU); ctx.fillStyle = og; ctx.fill();
-  // arcing sparks inside
-  if (!empty) { ctx.save(); ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, TAU); ctx.clip(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = Math.max(1, r * 0.04); for (let i = 0; i < 3; i++) { const a0 = t * 1.3 + i * 2.1; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a0) * r * 0.3 + Math.sin(a0 * 3) * r * 0.1, y + Math.sin(a0) * r * 0.3); ctx.lineTo(x + Math.cos(a0 + 0.1) * r * 0.7, y + Math.sin(a0 + 0.1) * r * 0.7); ctx.stroke(); } ctx.restore(); }
-  // highlight
-  ctx.beginPath(); ctx.ellipse(x - r * 0.3, y - r * 0.4, r * 0.28, r * 0.14, -0.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
-  ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, TAU); ctx.lineWidth = Math.max(1, r * 0.05); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke();
-  ctx.restore();
-  numText(ctx, String(n), x, y + r * 0.02, r * (max !== undefined ? 0.95 : 1.1), empty ? '#9a9aa4' : '#fffbe8', empty ? '#101014' : '#6a3c06');
-  if (max !== undefined) numText(ctx, '/' + max, x + r * 0.02, y + r * 0.52, r * 0.38, empty ? '#7a7a84' : '#fff3b0', '#3a2008');
+  if (!empty) { const p = 0.85 + 0.15 * Math.sin(t * 2.6); const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.6 * p); g.addColorStop(0, rgba('#F2C14E', 0.4)); g.addColorStop(1, rgba('#F2C14E', 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.7, 0, TAU); ctx.fill(); }
+  ctx.translate(x, y); const pp = PX; PX = r;
+  disc(ctx, r * 0.98, D); disc(ctx, r * 0.92, '#C9A227'); hatchDisc(ctx, r * 0.92, 0.38);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.82, Math.PI * 0.06, Math.PI * 0.56); ctx.lineWidth = Math.max(1, r * 0.08); ctx.strokeStyle = '#7A5F12'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.82, Math.PI * 1.06, Math.PI * 1.56); ctx.strokeStyle = '#FFF1B0'; ctx.stroke();
+  for (let i = 0; i < 4; i++) { const an = Math.PI / 4 + i * Math.PI / 2; ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.82, Math.sin(an) * r * 0.82, Math.max(0.8, r * 0.045), 0, TAU); ctx.fillStyle = '#4e3a0c'; ctx.fill(); }
+  disc(ctx, r * 0.68, D); disc(ctx, r * 0.64, empty ? '#25252b' : '#3a2a0e');
+  if (!empty) { const og = ctx.createRadialGradient(-r * 0.15, -r * 0.2, r * 0.05, 0, 0, r * 0.64); og.addColorStop(0, 'rgba(255,243,176,.95)'); og.addColorStop(0.6, 'rgba(242,193,78,.7)'); og.addColorStop(1, 'rgba(138,90,16,.5)'); ctx.beginPath(); ctx.arc(0, 0, r * 0.64, 0, TAU); ctx.fillStyle = og; ctx.fill(); }
+  ctx.strokeStyle = empty ? 'rgba(160,160,170,.5)' : 'rgba(90,60,10,.65)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; i < 12; i++) { const an = (i / 12) * TAU; ctx.moveTo(Math.cos(an) * r * 0.54, Math.sin(an) * r * 0.54); ctx.lineTo(Math.cos(an) * r * 0.62, Math.sin(an) * r * 0.62); } ctx.stroke();
+  hatchDisc(ctx, r * 0.64, 0.22);
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r * 0.64, 0, TAU); ctx.clip(); ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.1); ctx.lineTo(-r * 0.1, -r * 0.5); ctx.lineWidth = Math.max(1, r * 0.12); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.stroke(); ctx.restore();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.64, 0, TAU); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.stroke();
+  PX = pp; ctx.restore();
+  numText(ctx, String(n), x, y + r * 0.02, r * (max !== undefined ? 0.8 : 0.95), empty ? '#9a9aa4' : '#fffbe8', empty ? '#101014' : '#4a2a04');
+  if (max !== undefined) numText(ctx, '/' + max, x + r * 0.02, y + r * 0.44, r * 0.3, empty ? '#7a7a84' : '#fff3b0', '#3a2008');
 }
 export function drawCoin(ctx, x, y, size) {
-  const r = size / 2; ctx.save();
-  ctx.beginPath(); ctx.arc(x, y, r * 0.96, 0, TAU); ctx.fillStyle = D; ctx.fill();
-  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r); g.addColorStop(0, '#fff0a8'); g.addColorStop(0.45, '#F2C14E'); g.addColorStop(1, '#8a5f10');
-  ctx.beginPath(); ctx.arc(x, y, r * 0.86, 0, TAU); ctx.fillStyle = g; ctx.fill();
-  ctx.beginPath(); ctx.arc(x, y, r * 0.62, 0, TAU); ctx.lineWidth = Math.max(1, r * 0.09); ctx.strokeStyle = 'rgba(100,60,0,.6)'; ctx.stroke();
-  // stitched cross emblem
-  ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(90,50,0,.75)'; ctx.lineWidth = Math.max(1, r * 0.13);
-  ctx.beginPath(); ctx.moveTo(x, y - r * 0.34); ctx.lineTo(x, y + r * 0.34); ctx.moveTo(x - r * 0.34, y); ctx.lineTo(x + r * 0.34, y); ctx.stroke();
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.12, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fill();
-  ctx.restore();
+  const r = size / 2; ctx.save(); ctx.translate(x, y); const p = PX; PX = r;
+  disc(ctx, r * 0.97, D); disc(ctx, r * 0.88, '#D4AA32'); hatchDisc(ctx, r * 0.88, 0.36);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.64, 0, TAU); ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = 'rgba(90,55,5,.7)'; ctx.stroke();
+  ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(70,40,0,.8)'; ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.beginPath(); ctx.moveTo(0, -r * 0.32); ctx.lineTo(0, r * 0.32); ctx.moveTo(-r * 0.32, 0); ctx.lineTo(r * 0.32, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.78, Math.PI * 1.08, Math.PI * 1.6); ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = '#FFF1B0'; ctx.stroke();
+  PX = p; ctx.restore();
 }
 export function drawHeart(ctx, x, y, size) {
-  const r = size / 2; ctx.save(); ctx.translate(x, y + r * 0.05); ctx.scale(r * 1.02, r * 1.02);
-  heartPath(ctx, 1); const g = ctx.createLinearGradient(-0.8, -0.6, 0.8, 0.7); g.addColorStop(0, '#ff6a78'); g.addColorStop(0.5, '#B3263A'); g.addColorStop(1, '#5a0c1c'); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 0.08; ctx.strokeStyle = D; ctx.lineJoin = 'round'; ctx.stroke();
-  // stitched scar
-  ctx.beginPath(); ctx.moveTo(-0.25, 0.3); ctx.lineTo(0.28, -0.12); ctx.lineWidth = 0.07; ctx.strokeStyle = '#2b0a10'; ctx.lineCap = 'round'; ctx.stroke();
-  for (let i = 0; i < 3; i++) { const t = 0.2 + i * 0.3, px = -0.25 + 0.53 * t, py = 0.3 - 0.42 * t; ctx.beginPath(); ctx.moveTo(px - 0.07, py - 0.09); ctx.lineTo(px + 0.07, py + 0.09); ctx.lineWidth = 0.05; ctx.strokeStyle = '#f0d8c8'; ctx.stroke(); }
-  ctx.beginPath(); ctx.ellipse(-0.38, -0.25, 0.1, 0.17, 0.7, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fill();
-  ctx.restore();
+  // HP vial: corked glass tube, red liquid with a meniscus, tick marks
+  const r = size / 2; ctx.save(); ctx.translate(x, y + r * 0.02); ctx.scale(r * 0.95, r * 0.95); const p = PX; PX = r * 0.95;
+  const body = () => { ctx.beginPath(); ctx.moveTo(-0.13, -0.5); ctx.lineTo(-0.13, -0.32); ctx.quadraticCurveTo(-0.34, -0.26, -0.34, -0.04); ctx.lineTo(-0.34, 0.36); ctx.arc(0, 0.36, 0.34, Math.PI, 0, true); ctx.lineTo(0.34, -0.04); ctx.quadraticCurveTo(0.34, -0.26, 0.13, -0.32); ctx.lineTo(0.13, -0.5); ctx.closePath(); };
+  body(); fs(ctx, 'rgba(200,228,232,.22)', 0.05);
+  ctx.save(); body(); ctx.clip(); ctx.fillStyle = '#A3142F'; ctx.fillRect(-1, 0.0, 2, 1.2); ctx.beginPath(); ctx.ellipse(0, 0.0, 0.34, 0.06, 0, 0, TAU); ctx.fillStyle = '#d4384f'; ctx.fill(); hatchLines(ctx, 0.34, 0.0);
+  ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(-0.24, 0.1, 0.07, 0.5); ctx.restore();
+  body(); ctx.lineWidth = Math.max(0.05, 1.1 / PX); ctx.strokeStyle = D; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(0.14, -0.02 + i * 0.22); ctx.lineTo(0.27, -0.02 + i * 0.22); } ctx.lineWidth = Math.max(0.03, 1 / PX); ctx.strokeStyle = 'rgba(43,30,26,.6)'; ctx.stroke();
+  rr(ctx, -0.2, -0.7, 0.4, 0.22, 0.05); fs(ctx, '#b98a50', 0.05);
+  PX = p; ctx.restore();
 }
 export function drawShield(ctx, x, y, size, n) {
-  const r = size / 2; ctx.save(); ctx.translate(x, y); ctx.scale(r * 0.95, r * 0.95);
-  shieldPath(ctx, 1.4, -0.0); ctx.fillStyle = D; ctx.fill();
-  const g = ctx.createLinearGradient(-0.7, -0.7, 0.7, 0.8); g.addColorStop(0, '#d4e4ee'); g.addColorStop(0.5, '#7fa0ad'); g.addColorStop(1, '#3e5c6b');
-  ctx.save(); ctx.scale(0.94, 0.94); shieldPath(ctx, 1.4, -0.0); ctx.fillStyle = g; ctx.fill(); ctx.restore();
-  ctx.save(); ctx.scale(0.74, 0.74); shieldPath(ctx, 1.4, -0.0); ctx.lineWidth = 0.05; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke(); ctx.restore();
-  for (const [px, py] of [[-0.5, -0.5], [0.5, -0.5], [-0.52, 0.15], [0.52, 0.15], [0, 0.78]]) { ctx.beginPath(); ctx.arc(px, py, 0.075, 0, TAU); ctx.fillStyle = '#c9d6dc'; ctx.fill(); ctx.lineWidth = 0.03; ctx.strokeStyle = D; ctx.stroke(); }
-  ctx.restore();
+  // riveted plates: steel shield split by two seams, rivets at the plate corners
+  const r = size / 2; ctx.save(); ctx.translate(x, y); ctx.scale(r * 0.95, r * 0.95); const p = PX; PX = r * 0.95;
+  shieldPath(ctx, 1.4, 0); fs(ctx, '#8fa9b5', 0.06);
+  ctx.save(); shieldPath(ctx, 1.4, 0); ctx.clip();
+  ctx.fillStyle = '#b4cbd5'; ctx.fillRect(-1, -1, 1, 1.05); ctx.fillStyle = '#6f8c99'; ctx.fillRect(0, 0.05, 1, 1);
+  seg(ctx, 0, -0.8, 0, 1.0, D, Math.max(0.04, 1 / PX)); seg(ctx, -0.8, 0.05, 0.8, 0.05, D, Math.max(0.04, 1 / PX));
+  hatchLines(ctx, 0.3, 0.0); ctx.restore();
+  shieldPath(ctx, 1.4, 0); ctx.lineWidth = Math.max(0.05, 1.1 / PX); ctx.strokeStyle = D; ctx.lineJoin = 'round'; ctx.stroke();
+  for (const [px, py] of [[-0.52, -0.5], [0.52, -0.5], [-0.52, 0.27], [0.52, 0.27], [0, -0.5], [0, 0.78]]) { ctx.beginPath(); ctx.arc(px, py, 0.07, 0, TAU); ctx.fillStyle = '#e4eef2'; ctx.fill(); ctx.lineWidth = Math.max(0.03, 0.8 / PX); ctx.strokeStyle = D; ctx.stroke(); }
+  PX = p; ctx.restore();
   if (n !== undefined && n !== null) numText(ctx, String(n), x, y + r * 0.05, r * 0.95, '#ffffff', '#1e3340');
 }
 export function drawBudgetGauge(ctx, x, y, w, weight = 0, budget = 6, previewWeight = 0) {
@@ -541,3 +657,14 @@ export function drawPileIcon(ctx, x, y, size, kind = 'draw', pile) {
   else { ctx.save(); ctx.translate(0, r * 0.05); ctx.scale(r * 0.5, r * 0.5); G.flame(ctx, '#ff7a2b', '#ffd86b'); ctx.restore(); }
   ctx.restore();
 }
+
+// ======================================================================================
+// THREAD LANGUAGE (for the UI): all centred, size = diameter
+// ======================================================================================
+export function drawNeedle(ctx, x, y, size, color = '#dfe3ea') { withGlyph(ctx, x, y, size, color, '#B3263A', 'needlet', 1.4); }
+export function drawScissors(ctx, x, y, size, color = '#cfd6dc') { withGlyph(ctx, x, y, size, color, '#C9A227', 'scissors', 1.4); }
+export function drawKnot(ctx, x, y, size, color = '#E8DCC4') { withGlyph(ctx, x, y, size, color, D, 'knot', 1.4); }
+export function drawLooseThread(ctx, x, y, size, color = '#E8DCC4') { withGlyph(ctx, x, y, size, color, D, 'loosethread', 1.4); }
+export function drawClasp(ctx, x, y, size, color = '#C9A227') { withGlyph(ctx, x, y, size, color, '#7A5F12', 'clasp', 1.4); }
+// Revised school colours from the art bible (lead: sync COL.* to these).
+export const SCHOOL_GLYPH_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };

@@ -20,7 +20,7 @@ const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS } = D;
 const { app, flow } = boot(canvas);
 const PHASES = ['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
 const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
-const MODALS = new Set(['deckview', 'codex', 'settings']);
+const MODALS = new Set(['deckview', 'codex', 'settings', 'pause']);
 const MAX_TICKS = Number(process.env.GW_MONKEY_TICKS || 2500);
 const RUNS = Number(process.env.GW_MONKEY_RUNS || 4);
 const ONE = process.env.GW_MONKEY_SEED || '';
@@ -109,7 +109,7 @@ function step(dt = 1 / 60) {
   if (key === stuckKey) stuckN++; else { stuckKey = key; stuckN = 0; }
   const exempt = app.current === 'map' || app.current === 'title' || (run && run.phase === 'combat');
   if (!exempt && stuckN > STUCK) fail(`stuck ${STUCK} ticks in state ${key}`);
-  combatTicks = run && run.phase === 'combat' && app.current === 'combat' ? combatTicks + 1 : 0;
+  combatTicks = run && run.phase === 'combat' ? combatTicks + 1 : 0; // counts while the pause overlay quit to title leaves the combat run parked
 }
 
 // ---- actions ----
@@ -184,6 +184,7 @@ function doAbandon() { log('abandon'); flow.abandon(); step(); }
 function botFight() {
   const run = app.shared.run;
   log('bot fight');
+  run.hp = run.maxHp; // random play has usually bled the run: give the bot a fair fight so the reward path is exercised
   const { res } = fight(run, POLICIES.careful);
   RUN.resolveFight(run, res); flow.route(); step();
 }
@@ -211,7 +212,7 @@ function playOne(hero, idx) {
       titleTicks++;
       if (titleTicks > 400) { titleTicks = 0; flow.start({ hero, seed: `monkey-${id}-${ctxInfo.tick}` }); uiStarts--; }
     } else titleTicks = 0;
-    if (combatTicks > 1500) { botFight(); combatTicks = 0; continue; }
+    if (combatTicks > 500) { botFight(); combatTicks = 0; continue; }
     if (r < 0.40) doClick(R);
     else if (r < 0.55) doKey(R);
     else if (r < 0.63) doDrag(R);

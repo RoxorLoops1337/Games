@@ -1,4 +1,5 @@
 // End-of-run screen (run.phase 'dead' or 'won'): recap, the deck as you left it, unlocks, next steps.
+import { tscale } from './graft_parts.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -48,7 +49,12 @@ export default {
     this.nextNew = 1.4;
   },
   leave(app) { app.clearTweens(this); },
+  // dense recap: the text scale is honoured up to 110%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.1);
+    try { this.drawEnd(app); } finally { app.textScale = ts; }
+  },
+  drawEnd(app) {
     const g = app.ctx, run = this.run, fx = this.fx, flow = app.shared.flow, t = (this.t0 += app.dt);
     const still = calm(app);
     const d = fx.update(app.dt);
@@ -62,6 +68,7 @@ export default {
     const k = EASE.out(clamp(t / 0.8, 0, 1));
     const title = this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
     const tcol = this.won ? '#f7dc8a' : '#d9606c';
+    app.reg('end-title', 240, 14, 800, 108, { group: 'title' });
     g.save(); g.globalAlpha = k;
     app.text(title, 640, 22 + (1 - k) * -14, { size: this.won ? 50 : 62, bold: true, align: 'center', color: tcol, shadow: true, stroke: 'rgba(8,6,5,.85)', strokeW: 8 });
     let sub;
@@ -117,6 +124,7 @@ export default {
   },
   drawRecap(app, x, y, w, h, hero) {
     const g = app.ctx, run = this.run, st = run.stats, s = this.strain;
+    app.reg('end-recap', x, y, w, h, { group: 'recap' });
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.88)' });
     app.text('RECAP', x + 18, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp });
     app.text(hero.name, x + 18, y + 28, { size: 26, bold: true, color: hero.color === '#9E0F2E' ? '#e66a7c' : hero.color });
@@ -149,6 +157,7 @@ export default {
     });
   },
   drawGrid(app, x, y, w, h) {
+    app.reg('end-grid', x, y, w, h, { group: 'grid' });
     const g = app.ctx;
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.78)' });
     app.text('THE DECK AS YOU LEFT IT', x + 18, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp });
@@ -185,6 +194,7 @@ export default {
     const g = app.ctx, run = this.run;
     // masterpiece
     const ph = 296;
+    app.reg('end-star', x, y, w, ph, { group: 'star' });
     app.panel(x, y, w, ph, { r: 12, fill: 'rgba(30,22,10,.88)', stroke: this.star ? rgba(COL.lamp, 0.7) : 'rgba(232,220,196,.2)' });
     if (this.star) {
       const c = this.star, pulse = calm(app) ? 0.5 : 0.5 + Math.sin(app.t * 2) * 0.5;
@@ -201,6 +211,7 @@ export default {
     }
     // unlocks and records
     const ny = y + ph + 12, nh = h - ph - 12;
+    app.reg('end-news', x, ny, w, nh, { group: 'news' });
     app.panel(x, ny, w, nh, { r: 12, fill: 'rgba(16,12,11,.88)', stroke: this.news.length ? rgba(COL.lamp, 0.5) : undefined });
     app.text(this.news.length ? 'NEW ON THE RECORD' : 'NOTHING NEW ON THE RECORD', x + w / 2, ny + 10, { size: 12, ui: true, bold: true, align: 'center', color: this.news.length ? COL.lamp : '#8c8372' });
     let yy = ny + 32;
@@ -234,7 +245,8 @@ export default {
       const fill = id === 'new' ? '#4a3a1d' : id === 'endless' ? '#2a3a2a' : undefined;
       const stroke = id === 'new' ? COL.lamp : id === 'endless' ? '#8fe0a0' : undefined;
       const sub = id === 'new' ? `${HEROES[run.hero].name}, ascension ${run.ascension || 0}` : id === 'endless' ? 'The next loop, harder' : undefined;
-      if (app.button(label, x, y, bw, bh, { size: 19, fill, stroke, sub })) {
+      app.reg('end-btn-' + id, x, y, bw, bh, { group: 'btn' + id });
+      if (app.button(label, x, y, bw, bh, { size: 18, fill, stroke, sub })) {
         if (id === 'new') flow.start({ hero: run.hero, ascension: run.ascension || 0 });
         else if (id === 'endless') { RUN.startLoop(run); run.phase = 'map'; run.ended = false; delete run.endInfo; flow.route(); }
         else if (id === 'copy') this.copySeed(app);

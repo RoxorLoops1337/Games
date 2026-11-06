@@ -7,6 +7,8 @@
 import { CARDS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } from '../data/index.js';
 import { cardSpec, strainInfo, relicMod, newInst, OVERLOAD_MULT, OVERLOAD_SHATTER, TITHE_MULT } from './cards.js';
 import { resonanceOf, RES_HOOKS } from './resonance.js';
+import { seamInit, seamStep, seamEnd, seamTurnStart } from './seam.js';
+import { afflInst, afflCost, afflStartTurn, afflEndTurn, afflAbsorb } from './afflictions.js';
 
 export const HAND_CAP = 10;
 export const MAX_PLAYS_TURN = 20;
@@ -32,6 +34,7 @@ export function newCombat(run, enemyIds, opts = {}) {
   };
   c.A = makeApi(c);
   c.strain = strainInfo(run);
+  c.seam = seamInit(c);
   c.res = resonanceOf(run).tiers;
   const tithed = new Set(c.strain.tithed);
   const brand = relicMod(run, 'brandingIron') || run.relics.some((r) => RELICS[r] && RELICS[r].perk === 'brandingIron');
@@ -64,7 +67,7 @@ function wrap(c, inst, tithed = false) {
   return { inst, uid: inst.uid, tithed, jam: false, costMod: 0, plays: 0, rolled: false, temp: false };
 }
 export function specOf(c, card) {
-  const s = cardSpec(card.inst);
+  const s = cardSpec(afflInst(c, card));
   s.tithed = !!card.tithed;
   return s;
 }
@@ -81,6 +84,7 @@ export function effCost(c, card) {
   if (sp.cost === 'X') return 'X';
   let k = sp.cost + card.costMod + (card.jam ? 1 : 0) + (c.player.st.costup || 0);
   if (card.costSet !== undefined) k = card.costSet;
+  k = afflCost(c, card, k);
   return Math.max(0, k);
 }
 
@@ -147,6 +151,7 @@ export function addStatus(c, tgt, s, n, o = {}) {
   if (!d.canNeg && v < 0) v = 0;
   if (v === 0) delete tgt.st[s]; else tgt.st[s] = Math.min(STATUS_CAP, v);
   if (!o.silent) c.ev.push({ t: 'status', who: tgt.uid || 'player', s, n: tgt.st[s] || 0, d: n });
+  if (s === 'infection' && tgt.kind === 'player' && c.strain) refreshStrain(c);
 }
 function eachStatus(ent, f) { for (const s of Object.keys(ent.st)) { const d = STATUSES[s]; if (d && ent.st[s]) f(d, ent.st[s], s); } }
 
@@ -199,9 +204,11 @@ export function dealDamage(c, src, tgt, base, o = {}) {
   const raw = n;
   let absorbed = 0;
   if (!o.pierce && tgt.block > 0) { absorbed = Math.min(tgt.block, n); tgt.block -= absorbed; n -= absorbed; }
+  if (n > 0 && tgt.st.stitchedup > 0) n = afflAbsorb(c, tgt, n); // Stitched Up (engine/afflictions.js)
   if (n > 0) tgt.hp -= n;
   if (tgt.kind === 'player') { c.damageTakenThisCombat += n; if (src && src.kind === 'enemy') c.lastHitBy = src.name; }
   c.ev.push({ t: 'dmg', src: src ? (src.uid || 'player') : null, who: tgt.uid || 'player', raw, n, absorbed, hit: !o.status, thorns: !!o.thorns, broke: absorbed > 0 && tgt.block === 0 });
+  if (absorbed > 0 && tgt.block === 0) eachStatus(tgt, (d, v) => { if (d.hooks && d.hooks.blockBroken) d.hooks.blockBroken(c.A, tgt, v, { amount: absorbed, src }); });
   if (src && o.card && c.currentCard) c.currentCard.dealt = (c.currentCard.dealt || 0) + n;
   if (raw > 0 && !o.status && !o.thorns) {
     eachStatus(tgt, (d, v) => { if (d.hooks && d.hooks.attacked) d.hooks.attacked(c.A, tgt, v, { attacker: src, dmg: n, raw }); });
@@ -345,6 +352,7 @@ export function readSrc(c, ctx, src) {
     case 'kills': return c.killsThisTurn;
     case 'dealt': return ctx.dealt || 0;
     case 'gold': return c.run.gold || 0;
+    case 'knots': return c.seam ? c.seam.len : 0;
     case 'junk': return [...c.hand, ...c.drawPile, ...c.discard].filter((k) => CARDS[k.inst.id].type === 'junk').length;
     case 'attacksInHand': return c.hand.filter((k) => CARDS[k.inst.id].type === 'attack').length;
     default:
@@ -520,22 +528,25 @@ export function playCard(c, hi, ti) {
   c.currentCard = card;
   card.dealt = 0;
   c.ev.push({ t: 'play', card: card.uid, id: sp.id, target: target ? target.uid : null, cost: chk.cost });
-  // local prices
+  seamStep(c, card, sp);
+  // local prices (Rejection makes them trigger twice)
   const pr = sp.price;
-  if (pr.selfHurt) loseHp(c, c.player, Math.ceil(pr.selfHurt * (card.brand ? 1.5 : 1)), { floor1: true, src: 'graft' });
-  for (const s of pr.selfStatus) addStatus(c, c.player, s.s, s.n);
+  const pm = c.player.st.rejection > 0 ? 2 : 1;
+  if (pr.selfHurt) loseHp(c, c.player, Math.ceil(pr.selfHurt * (card.brand ? 1.5 : 1) * pm), { floor1: true, src: 'graft' });
+  for (const s of pr.selfStatus) addStatus(c, c.player, s.s, s.n * pm);
   if (pr.gold) c.A.gold(-pr.gold);
-  if (pr.drawdown) addStatus(c, c.player, 'drawdown', pr.drawdown);
-  for (const j of pr.junk) if (j.when === 'onPlay') addCard(c, j.card, j.n, j.to);
+  if (pr.drawdown) addStatus(c, c.player, 'drawdown', pr.drawdown * pm);
+  for (const j of pr.junk) if (j.when === 'onPlay') addCard(c, j.card, j.n * pm, j.to);
   // repeats
   let times = 1 + sp.repeat;
   if (c.player.st.echo > 0 && sp.type !== 'power') { times++; addStatus(c, c.player, 'echo', -1); }
   let m = mult(sp, card.tithed);
   if (card.brand) m *= 1.5;
+  if (card.reknit && sp.overload) m /= OVERLOAD_MULT;
   let shatter = false;
   if (sp.overload && !card.rolled) {
     card.rolled = true;
-    const p = Math.max(0, OVERLOAD_SHATTER + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
+    const p = Math.max(0, (card.reknit ? 0.4 : OVERLOAD_SHATTER) + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
     if (c.rng.chance(p)) shatter = true;
   }
   for (let r = 0; r < times; r++) {
@@ -628,6 +639,8 @@ export function startPlayerTurn(c) {
   if (c.over) return;
   c.turn++;
   c.playsTurn = 0; c.cardsThisTurn = []; c.killsThisTurn = 0;
+  seamTurnStart(c);
+  if (c.player.st.infection) refreshStrain(c);
   const keepBlock = c.player.st.barricade > 0 || relicMod(c.run, 'keepBlock') > 0;
   if (!keepBlock) c.player.block = 0;
   c.energy = c.maxEnergy;
@@ -643,6 +656,7 @@ export function startPlayerTurn(c) {
     const grafted = c.hand.filter((k) => k.inst.grafts.length && !k.jam);
     for (let i = 0; i < bf && grafted.length; i++) { const k = grafted.splice(c.rng.int(grafted.length), 1)[0]; k.jam = true; c.ev.push({ t: 'jam', card: k.uid, backfire: true }); }
   }
+  afflStartTurn(c);
   for (const card of c.hand) { const sp = specOf(c, card); for (const h of sp.custom) if (h.onTurnStart) h.onTurnStart(c.A, { card, spec: sp }); }
   fire(c, 'turnStart', {});
   checkEnd(c);
@@ -651,6 +665,8 @@ export function startPlayerTurn(c) {
 export function endTurn(c) {
   if (c.over || c.pending) return;
   c.ev.push({ t: 'turnEnd' });
+  seamEnd(c);
+  afflEndTurn(c);
   fire(c, 'turnEnd', {});
   eachStatus(c.player, (d, v, s) => {
     if (d.hooks && d.hooks.turnEnd) d.hooks.turnEnd(c.A, c.player, v);
@@ -658,7 +674,7 @@ export function endTurn(c) {
   // hand: retain stays, the rest is discarded (ethereal exhausts)
   for (const card of c.hand.slice()) {
     const sp = specOf(c, card);
-    if (sp.flags.retain) { card.jam = false; continue; }
+    if (sp.flags.retain || card.retain) { card.jam = false; continue; }
     discardCard(c, card, 'turnEnd');
   }
   tickDurations(c, c.player);
@@ -714,4 +730,13 @@ export function finishCombat(c) {
   if (g) run.gold = (run.gold || 0) + g;
   fire(c, 'combatEnd', {});
   return { win: c.over === 'win', killedBy: c.lastHitBy || null, shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
+}
+
+// Infection adds to Strain mid-combat: recompute it and move the Tithe onto the right cards in every zone.
+export function refreshStrain(c) {
+  const inf = c.player.st.infection || 0;
+  c.strain = strainInfo(c.run, c.run.deck, 0, inf);
+  const set = new Set(c.strain.tithed);
+  for (const z of [c.hand, c.drawPile, c.discard, c.exhaust, c.powers]) for (const k of z) if (!k.temp) k.tithed = set.has(k.uid);
+  c.ev.push({ t: 'strain', strain: c.strain.strain });
 }

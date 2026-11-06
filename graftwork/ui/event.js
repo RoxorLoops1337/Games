@@ -1,5 +1,6 @@
 // EVENT screen (run.phase === 'event', run.pending = {kind:'event', id, result}).
 // Left: a framed mood scene (procedural). Right: a parchment panel with the scene text (typewriter), choices, then the result.
+import { tscale, wrapLimit } from './graft_parts.js';
 import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec } from '../engine/cards.js';
@@ -11,7 +12,7 @@ import { drawHeart, drawCoin, drawRelic } from '../art/icons.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
-const PANEL = { x: 584, y: 28, w: 664, h: 664 };
+const PANEL = { x: 584, y: 64, w: 664, h: 632 }; // starts under the global Pause / Fullscreen zone (y 0..56)
 const ACT_TINT = { 1: ['#1c2b24', '#4f7a5f', '#bfe3c8'], 2: ['#2b1d12', '#8a5a2b', '#ffd596'], 3: ['#1c1230', '#6b4fa0', '#f5e6a8'] };
 const CPS = 62; // typewriter chars per second
 
@@ -167,7 +168,12 @@ export default {
     RUN.afterEvent(run);
     app.shared.flow.route();
   },
+  // the parchment follows the text scale up to 125%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
+    try { this.drawEvent(app); } finally { app.textScale = ts; }
+  },
+  drawEvent(app) {
     const g = app.ctx, run = this.run, mouse = app.mouse;
     const ev = this.ev;
     drawBackground(g, 'event', app.t);
@@ -188,17 +194,19 @@ export default {
     if (this.gotRelic && RELICS[this.gotRelic]) {
       this.gotRelicT += app.dt; const r = RELICS[this.gotRelic];
       const a = clamp(this.gotRelicT < 0.3 ? this.gotRelicT / 0.3 : 1, 0, 1);
-      g.save(); g.globalAlpha = a; app.panel(FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 110, { fill: 'rgba(14,12,10,.92)', stroke: COL.lamp, lw: 2.5 });
+      app.reg('event-relic', FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 130, { overlay: true });
+      g.save(); g.globalAlpha = a; app.panel(FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 130, { fill: 'rgba(14,12,10,.92)', stroke: COL.lamp, lw: 2.5 });
       drawRelic(g, this.gotRelic, FRAME.x + 110, FRAME.y + 205, 56);
       app.text('Relic gained', FRAME.x + 156, FRAME.y + 166, { size: 13, ui: true, bold: true, color: COL.lamp });
       app.text(r.name, FRAME.x + 156, FRAME.y + 184, { size: 22, bold: true });
-      app.text(r.text, FRAME.x + 156, FRAME.y + 212, { size: 13, ui: true, maxW: FRAME.w - 240, color: 'rgba(232,220,196,.8)' });
+      wrapLimit(app, r.text, FRAME.w - 240, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, FRAME.x + 156, FRAME.y + 210 + q * Math.round(17 * tscale(app)), { size: 14, ui: true, color: 'rgba(232,220,196,.8)' }));
       g.restore();
     }
   },
   drawHud(app, run) {
     const g = app.ctx;
     const y = FRAME.y + FRAME.h + 34;
+    app.reg('event-hud', FRAME.x, y - 20, FRAME.w, 40, { group: 'hud' });
     const hp = 1 + this.heartPulse * 0.45, gp = 1 + this.goldPulse * 0.35;
     g.save(); g.translate(FRAME.x + 34, y); g.scale(hp, hp); drawHeart(g, 0, 0, 30); g.restore();
     app.text(`${run.hp} / ${run.maxHp}`, FRAME.x + 62, y - 13, { size: 24, bold: true, color: this.heartPulse > 0.05 ? '#ff9aa6' : COL.vellum });
@@ -209,7 +217,9 @@ export default {
   },
   drawPanel(app, run, ev) {
     const g = app.ctx, mouse = app.mouse;
-    const P = PANEL, ix = P.x + 36, iw = P.w - 72;
+    const P = PANEL, ix = P.x + 36, iw = P.w - 72, k = tscale(app);
+    app.reg('event-frame', FRAME.x, FRAME.y, FRAME.w, FRAME.h, { group: 'frame' });
+    app.reg('event-panel', P.x, P.y, P.w, P.h, { group: 'panel' });
     // parchment
     g.save();
     app.rr(P.x + 4, P.y + 6, P.w, P.h, 10); g.fillStyle = 'rgba(0,0,0,.45)'; g.fill();
@@ -221,31 +231,32 @@ export default {
 
     // title
     app.text(ev.act ? `ACT ${['', 'I', 'II', 'III'][ev.act]} EVENT` : 'EVENT', ix, P.y + 30, { size: 13, ui: true, bold: true, color: 'rgba(43,30,26,.55)' });
-    const th = app.text(ev.name, ix, P.y + 48, { size: 40, bold: true, color: COL.ink, maxW: iw, lineH: 46 });
+    const th = app.text(ev.name, ix, P.y + 48, { size: 36, bold: true, color: COL.ink, maxW: iw, lineH: 42 });
     let y = P.y + 48 + th + 8;
     g.strokeStyle = COL.scar; g.lineWidth = 2.5; g.setLineDash([10, 7]); g.beginPath(); g.moveTo(ix, y); g.lineTo(ix + iw, y); g.stroke(); g.setLineDash([]);
     y += 20;
 
     // scene text, typewriter
-    const lines = app.wrap(ev.text, iw, 21, {});
+    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k);
+    const lines = app.wrap(ev.text, iw, TS, {});
     const total = ev.text.length;
     const shown = Math.min(total, Math.floor(this.shown));
     let left = shown;
     lines.forEach((ln, i) => {
       const n = Math.max(0, Math.min(ln.length, left)); left -= ln.length + 1;
-      if (n > 0) app.text(ln.slice(0, n), ix, y + i * 29, { size: 21, color: this.result !== null ? 'rgba(43,30,26,.7)' : COL.ink });
+      if (n > 0) app.text(ln.slice(0, n), ix, y + i * TL, { size: TS, color: this.result !== null ? 'rgba(43,30,26,.7)' : COL.ink });
     });
     const typing = shown < total;
     if (typing && Math.floor(app.t * 2) % 2 === 0) { // blinking quill mark
-      app.text('|', ix + iw - 6, y + (lines.length - 1) * 29, { size: 21, color: COL.scar });
+      app.text('|', ix + iw - 6, y + (lines.length - 1) * TL, { size: TS, color: COL.scar });
     }
-    y += lines.length * 29 + 16;
+    y += lines.length * TL + 16;
     const textEnd = y;
     // click panel to finish the text
     if (typing) {
       if (!app.blocked && !this.picker && mouse.released && app.inRect(P.x, P.y, P.w, P.h)) this.shown = 1e9;
       for (const e of app.pressedKeys) if (e.key === 'Enter' || e.key === ' ') this.shown = 1e9;
-      app.text('click to skip', P.x + P.w - 28, P.y + P.h - 30, { size: 12, ui: true, align: 'right', italic: true, color: 'rgba(43,30,26,.45)' });
+      app.text('click to skip', P.x + P.w - 28, P.y + P.h - 34, { size: 14, ui: true, align: 'right', italic: true, color: 'rgba(43,30,26,.45)' });
       return;
     }
 
@@ -253,10 +264,17 @@ export default {
 
     // choices
     const choices = RUN.eventChoices(run);
+    const room = P.y + P.h - 16 - y, many = choices.length;
+    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((lim ? 50 : 38) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
+    let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
+    if (tot(ms) > room) ms = mk(2);
+    if (tot(ms) > room) ms = mk(1);
+    const bare = tot(ms) > room; if (bare) { ms = mk(0); if (tot(ms) > room) { const hh = Math.max(30, Math.floor((room - choices.length * 10) / choices.length)); ms = ms.map((m) => ({ sub: [], h: hh })); } } // no room: labels only, the description moves into the hover tooltip
     choices.forEach((c, idx) => {
-      const sub = c.text ? app.wrap(c.text, iw - 36, 15, { ui: true }) : [];
-      const h = 22 + 28 + sub.length * 19 + (c.ok ? 6 : 22);
+      const sub = ms[idx].sub;
+      const h = ms[idx].h;
       const x = ix, w = iw;
+      app.reg('event-choice' + idx, x, y - 2, w, h + 2, { group: 'panel' });
       const over = c.ok && !this.picker && app.inRect(x, y, w, h);
       g.save();
       app.rr(x, y + (over ? -2 : 0), w, h, 8);
@@ -264,19 +282,20 @@ export default {
       g.lineWidth = over ? 2.8 : 1.8; g.strokeStyle = !c.ok ? 'rgba(43,30,26,.3)' : over ? COL.scar : 'rgba(43,30,26,.6)'; if (!c.ok) g.setLineDash([6, 5]); g.stroke(); g.setLineDash([]);
       g.restore();
       // number tab
-      app.text(String(idx + 1), x + 18, y + 13, { size: 20, bold: true, color: c.ok ? COL.scar : 'rgba(43,30,26,.35)', align: 'center' });
-      app.text(c.label, x + 36, y + 11, { size: 22, bold: true, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
-      sub.forEach((ln, k) => app.text(ln, x + 36, y + 42 + k * 19, { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
-      if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - 22, { size: 14, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
+      const cmp = h < 44, ly = cmp ? Math.max(2, Math.round((h - 16 * 1.22 * k) / 2)) : 10;
+      app.text(String(idx + 1), x + 18, y + (cmp ? ly : 13), { size: cmp ? 16 : 20, bold: true, color: c.ok ? COL.scar : 'rgba(43,30,26,.35)', align: 'center' });
+      app.text(wrapLimit(app, c.label, w - 190, 22, 1, { bold: true })[0], x + 36, y + ly, { size: cmp ? 16 : 22, bold: true, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
+      sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * Math.round(19 * k), { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
+      if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - Math.round(22 * k), { size: 14, maxW: w - 50, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
-      if (over) app.cursor = 'pointer';
+      if (over) { app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text); }
       let fire = false;
       if (c.ok && !this.picker && !this.busy) {
         if (over && mouse.released && mouse.pressStart && app.inRect(x, y, w, h)) { fire = true; if (app.onClick) app.onClick(); }
         if (app.pressedKeys.some((e) => e.key === String(idx + 1))) fire = true;
       }
       if (fire) this.pick(app, c, run);
-      y += h + 12;
+      y += h + 10;
     });
   },
   pick(app, c, run) {
@@ -289,20 +308,24 @@ export default {
   drawResult(app, ix, iw, y) {
     const g = app.ctx, P = PANEL;
     const text = String(this.result);
+    const k = tscale(app), RL = Math.round(30 * k);
     const lines = app.wrap(text, iw - 40, 22, { italic: true });
-    const h = lines.length * 30 + 44;
+    const h = lines.length * RL + 44;
+    app.reg('event-result', ix, y, iw, h, { group: 'panel' });
     app.rr(ix, y, iw, h, 8); g.fillStyle = 'rgba(179,38,58,.08)'; g.fill();
     g.strokeStyle = COL.scar; g.lineWidth = 2; g.setLineDash([9, 6]); g.stroke(); g.setLineDash([]);
     let left = Math.floor(this.resultShown);
-    lines.forEach((ln, i) => { const n = Math.max(0, Math.min(ln.length, left)); left -= ln.length + 1; if (n > 0) app.text(ln.slice(0, n), ix + 20, y + 22 + i * 30, { size: 22, italic: true, color: COL.ink }); });
+    lines.forEach((ln, i) => { const n = Math.max(0, Math.min(ln.length, left)); left -= ln.length + 1; if (n > 0) app.text(ln.slice(0, n), ix + 20, y + 22 + i * RL, { size: 22, italic: true, color: COL.ink }); });
     if (this.resultShown < text.length) { if (!app.blocked && app.mouse.released) this.resultShown = 1e9; return; }
-    const by = Math.min(y + h + 26, P.y + P.h - 90);
+    const by = Math.min(y + h + 26, P.y + P.h - 76);
+    app.reg('event-continue', ix + iw - 240, by, 240, 56, { group: 'panel' });
     if (app.button('Continue', ix + iw - 240, by, 240, 56, { size: 24, fill: '#5a1a22', stroke: COL.scar, key: 'enter' })) this.cont(app);
     if (app.pressedKeys.some((e) => e.key === ' ')) this.cont(app);
   },
   drawPicker(app, run, ev) {
     const g = app.ctx, mouse = app.mouse, pk = this.picker;
     const blocked0 = app.blocked;
+    app.reg('event-picker', 0, 0, W, H, { overlay: true });
     g.fillStyle = 'rgba(8,6,5,.95)'; g.fillRect(0, 0, W, H);
     app.text(pk.label, 640, 22, { size: 34, bold: true, align: 'center' });
     app.text(pk.text || 'Choose a card.', 640, 64, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', maxW: 800 });
@@ -315,6 +338,7 @@ export default {
     if (mouse.wheel) pk.scroll += mouse.wheel * 0.6;
     pk.scroll = clamp(pk.scroll, 0, maxS);
     let hover = -1;
+    app.reg('scroll-picker', 0, viewTop, W, viewH, { overlay: true });
     g.save(); g.beginPath(); g.rect(0, viewTop, W, viewH); g.clip();
     pk.cards.forEach((inst, i) => {
       const cx = gx + (i % per) * (cw + gap) + cw / 2, cy = viewTop + Math.floor(i / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll;

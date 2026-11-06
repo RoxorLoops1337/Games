@@ -10,7 +10,7 @@ import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../ar
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import {
-  TIER, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
+  TIER, tscale, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
 const SC = 1.05;                       // offered card scale
@@ -65,11 +65,18 @@ export default {
 
   key() { return false; },
 
+  // This table is the densest screen in the game (3 cards, 4 patches, the bill and the buttons in 1280x720), so the text
+  // scale is honoured up to 110% here and no further: past that the fixed columns of the UX spec cannot hold the words.
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.1);
+    try { this.drawTable(app); } finally { app.textScale = ts; }
+  },
+  drawTable(app) {
     if (!st) return;
     const ctx = app.ctx, run = st.run;
     const live = st.mode === 'pick';
     const interactive = live && !st.menu && !app.blocked;
+    if (!app.blocked) app.escBusy = true; // Esc opens / closes the decline menu or skips the sewing animation here
 
     drawBackground(ctx, 'table', st.t);
     // vignette so the lamp pool reads
@@ -172,20 +179,26 @@ function onKey(app, k) {
 // ---------------------------------------------------------------- top bar
 function drawTopBar(app, strain, interactive) {
   const ctx = app.ctx, run = st.run;
+  app.reg('graft-budget', 24, 6, 372, 58, { group: 'budget' });
   app.text(`Budget ${strain.weight}/${strain.budget}`, 24, 8, { size: 25, bold: true, color: strain.strain > 0 ? '#ff9aa6' : COL.vellum, shadow: true });
   drawGauge(app, 24, 42, 360, 16, strain.weight, strain.budget, 0, st.t);
   if (app.inRect(24, 6, 372, 58)) app.tooltip('Budget', 'The total graft weight your deck carries for free. Every point over Budget is Strain, and each Strain Tithes one Bare card: it fights at -25% numbers that combat. Strain with no Bare card left to take it becomes Backfire.', { color: COL.lamp });
   const sx = 470;
+  app.reg('graft-strain', sx - 6, 6, 250, 58, { group: 'strain' });
   app.text(`Strain ${strain.strain}`, sx, 8, { size: 25, bold: true, color: strain.strain > 0 ? COL.bad : COL.good, shadow: true });
   app.text(strain.strain === 0 ? 'Nothing is Tithed' : `${strain.tithed.length} card${strain.tithed.length === 1 ? '' : 's'} Tithed now${strain.backfire ? `, Backfire ${strain.backfire}` : ''}`, sx, 40, { size: 15, ui: true, color: DIM });
   if (app.inRect(sx - 6, 6, 250, 58)) app.tooltip('Strain', 'Weight over Budget. Each point lands a Tithe on the cheapest, oldest Bare card in your deck.', { color: COL.bad });
   // purse + hp
-  ICONS.drawCoin(ctx, 770, 30, 26);
-  app.text(String(run.gold), 790, 17, { size: 24, bold: true, color: COL.gold, shadow: true });
-  ICONS.drawHeart(ctx, 890, 30, 26);
-  app.text(`${run.hp}/${run.maxHp}`, 910, 17, { size: 24, bold: true, color: '#ffb3bd', shadow: true });
-  if (app.button('Deck', 1130, 14, 126, 42, { size: 20, key: undefined, disabled: !interactive })) { sfx(app, 'uiClick'); app.shared.flow.openDeck(); }
-  if (app.inRect(1130, 14, 126, 42)) app.tooltip('Your deck', 'Open the full deck: every card, its grafts and who is Tithed.');
+  const pk = Math.min(tscale(app), 1.25), pz = Math.round(22 * pk);
+  app.reg('graft-purse', 740, 8, 262, 50, { group: 'purse' });
+  ICONS.drawCoin(ctx, 756, 30, 26);
+  app.text(String(run.gold), 774, 30 - pz * 0.6, { size: pz, fixed: true, bold: true, color: COL.gold, shadow: true, maxW: 70 });
+  ICONS.drawHeart(ctx, 862, 30, 26);
+  app.text(`${run.hp}/${run.maxHp}`, 880, 30 - pz * 0.6, { size: pz, fixed: true, bold: true, color: '#ffb3bd', shadow: true, maxW: 118 });
+  // the top-right corner (x 1128..1272, y 0..56) belongs to the global Pause / Fullscreen buttons
+  app.reg('graft-deck', 1012, 14, 106, 42, { group: 'deckbtn' });
+  if (app.button('Deck', 1012, 14, 106, 42, { size: 20, key: undefined, disabled: !interactive })) { sfx(app, 'uiClick'); app.shared.flow.openDeck(); }
+  if (app.inRect(1012, 14, 106, 42)) app.tooltip('Your deck', 'Open the full deck: every card, its grafts and who is Tithed.');
 }
 
 // ---------------------------------------------------------------- offered cards
@@ -193,6 +206,7 @@ function drawOfferCard(app, r, i, c) {
   const ctx = app.ctx, run = st.run;
   const inst = RUN.findInst(run, r.uid); if (!inst) return;
   const sel = st.selCard === r.uid;
+  app.reg('graft-card' + i, r.x, r.y - 16, r.w, r.h + 44, { group: 'card' + i });
   const deal = EASE.out(clamp((st.dealT - i * 0.1) / 0.5, 0, 1));
   if (deal <= 0) return;
   const hover = c.interactive && deal >= 1 && app.inRect(r.x, r.y, r.w, r.h);
@@ -245,9 +259,9 @@ function drawOfferCard(app, r, i, c) {
 
   // caption row
   const base = CARDS[inst.id];
-  const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + '   ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
-  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal });
-  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 22);
+  const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
+  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
+  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 20);
 
   if (hover) {
     const lines = [];
@@ -273,6 +287,7 @@ function drawPatchTile(app, r, j, c) {
   const slide = EASE.out(clamp((st.dealT - 0.25 - j * 0.1) / 0.5, 0, 1));
   if (slide <= 0) return;
   const compact = st.rects.patches.length > 3;
+  app.reg('graft-patch' + j, r.x - 28, r.y, r.w + 28, r.h, { group: 'patch' + j });
   const dim = st.mode === 'pick' && c.inst && !canGraft(c.inst, r.gid);
   const hover = c.interactive && slide >= 1 && app.inRect(r.x, r.y, r.w, r.h);
   const key = 'p' + r.gid;
@@ -336,8 +351,8 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   ctx.restore();
   app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 11, { size: 13, ui: true, bold: true, align: 'center', color: tier.ink });
   // staples (weight)
-  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 22 - (g.weight - i) * 19 + 4, y + 33, 14, '#d8dde0');
-  app.text('weight ' + g.weight, x + w - 12 - rw - 4 - (compact ? 0 : 0), y + 11, { size: 12, ui: true, align: 'right', color: DIM });
+  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 12 - rw - 8 - (g.weight - i) * 19 + 4, y + 11, 14, '#d8dde0');
+  
   // name
   app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
   // boon + price
@@ -363,6 +378,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 function drawInfoPanel(app, R, counts) {
   const ctx = app.ctx;
   const x = TRAY_X, y = R.infoY, w = TRAY_W, h = R.infoH;
+  app.reg('graft-info', x, y, w, h, { group: 'info' });
   app.panel(x, y, w, h, { fill: 'rgba(20,16,14,.8)', stroke: 'rgba(232,220,196,.25)', r: 8 });
   const hov = R.patches.find((r) => app.inRect(r.x, r.y, r.w, r.h));
   const gid = hov ? hov.gid : st.selGraft;
@@ -385,6 +401,7 @@ function drawAfter(app, c) {
   const ctx = app.ctx, run = st.run;
   const { x, y, w, h } = AFTER;
   const { pair, pv, strain } = c;
+  app.reg('graft-after', x, y, w, h, { group: 'after' });
   app.panel(x, y, w, h, { fill: 'rgba(18,15,13,.9)', stroke: pair ? 'rgba(242,193,78,.7)' : 'rgba(232,220,196,.3)', lw: pair ? 2.5 : 2 });
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
@@ -466,7 +483,7 @@ function drawAfter(app, c) {
     app.text(wn.text, lx + 12 + hw + 6, wy + 9, { size: 14.5, ui: true, color: COL.vellum, maxW: w - 32 - hw - 36 });
     wy += bh + 5;
   }
-  if (!pair && !warns.length) app.text('Keys: 1 2 3 pick a card, Q W E pick a graft, Enter sews, Esc declines.', lx, y + h - 24, { size: 14, ui: true, color: 'rgba(232,220,196,.45)' });
+  if (!pair && !warns.length) app.text('Keys: 1-3 card, Q-R graft, Enter sews, Esc declines.', lx, y + h - 24, { size: 14, ui: true, maxW: w - 32, color: 'rgba(232,220,196,.45)' });
 }
 
 // ---------------------------------------------------------------- buttons
@@ -486,9 +503,10 @@ function drawButtons(app, c) {
     } else sfx(app, 'error');
   }
   if (app.inRect(TRAY_X, 556, 208, 46)) app.tooltip('Reroll', locked ? 'Rerolling is closed at Ascension 8 and above.' : poor ? `You need ${cost} gold. Each reroll costs 10 more.` : 'Deal a fresh set of cards and grafts. Each reroll costs 10 more gold.');
-  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 19, sub: 'Heal, Budget or gold instead', disabled: !interactive }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
+  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 17, sub: 'Heal, Budget or gold', disabled: !interactive }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
   if (app.inRect(TRAY_X + 222, 556, 208, 46)) app.tooltip('Decline the graft', `Sew nothing and take ${skipLimit(run) > 1 ? 'two' : 'one'} of: heal 8 HP, +1 Budget for the rest of the run, or +10 gold. Esc.`);
 
+  app.reg('graft-reroll', TRAY_X, 556, 208, 46, { group: 'reroll' }); app.reg('graft-decline', TRAY_X + 222, 556, 208, 46, { group: 'decline' }); app.reg('graft-sew', TRAY_X, 612, TRAY_W, 76, { group: 'sew' });
   const lab = st.mode === 'attach' ? 'Sewing...' : 'Sew it on';
   let subT = 'Choose a card and a graft';
   if (pair) {
@@ -526,6 +544,7 @@ function drawSkipMenu(app) {
   const ctx = app.ctx, run = st.run;
   ctx.save(); ctx.fillStyle = 'rgba(6,5,4,.78)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
   const px = 190, py = 120, pw = 900, ph = 470;
+  app.reg('graft-skipmenu', px, py, pw, ph, { overlay: true });
   app.panel(px, py, pw, ph, { fill: 'rgba(24,20,17,.97)', stroke: COL.lamp, lw: 2.5, r: 14 });
   app.text('Decline the graft', 640, py + 18, { size: 34, bold: true, align: 'center', color: COL.lamp, shadow: true });
   const lim = skipLimit(run);

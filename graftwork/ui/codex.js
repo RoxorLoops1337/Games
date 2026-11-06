@@ -1,11 +1,13 @@
 // CODEX: modal reference book (flow.openCodex()). Tabs: Cards / Grafts / Relics / Enemies / Statuses / Schools / Rules.
 // Entries not yet in meta.seen[kind][id] show as silhouettes with a hint. Type to search (seen entries only).
+import { tscale } from './graft_parts.js';
 import { COL, W, H, rgba } from './core.js';
 import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { drawStatus, drawRelic } from '../art/icons.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, SCHOOLS, HEROES, GRAFT_LIST } from '../data/index.js';
 import { cardSpec } from '../engine/cards.js';
+import { drawSeamBadge } from './seam_ui.js';
 import { statusText } from '../engine/text.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, clampText, gaugeCells } from './deckview.js';
 
@@ -23,6 +25,7 @@ function runOwns(run, kind, id) {
   return false;
 }
 export function isSeen(app, kind, id) {
+  if (kind === 'statuses') return true; // statuses are rules, not secrets: every one has a readable glossary entry
   const m = app.shared.meta, s = m && m.seen && m.seen[kind];
   return !!((s && s[id]) || runOwns(app.shared.run, kind, id));
 }
@@ -153,6 +156,8 @@ const RULES = [
   ['Strain Tithes your plain cards', 'Weight over Budget is Strain. Each point Tithes a plain card: it fights at 75 percent. With no plain card left, grafted cards jam.'],
   ['Overload and Shatter', 'A card holds 2 grafts. The 3rd Overloads it: +1 Weight, numbers x1.5, and a 25 percent chance to Shatter on its first play each combat.'],
   ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
+  ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school Cuts it and pays one Stitch per knot after the first. A longer Line pays more.'],
+  ['Slack, Tied, Frayed', 'Slack: a card with no school changes nothing. Tied: a Tempered card never cuts, and a Tied Line carries over a turn. Frayed: a jammed card acts as Slack.'],
 ];
 function ruleArt(app, i, cx, cy, w, h) {
   const ctx = app.ctx, t = app.t;
@@ -181,7 +186,7 @@ function ruleArt(app, i, cx, cy, w, h) {
       gaugeCells(app, cx - w / 2 + 28, cy - 44, { budget: 6, weight: 4, strain: 0 }, { cell: 22, maxW: 300 });
       app.text('4 of 6', cx - w / 2 + 28 + 175, cy - 40, { size: 13, ui: true, color: COL.good });
       gaugeCells(app, cx - w / 2 + 28, cy + 8, { budget: 6, weight: 8, strain: 2 }, { cell: 22, maxW: 300 });
-      app.text('8 of 6', cx - w / 2 + 28 + 230, cy + 12, { size: 13, ui: true, color: COL.bad });
+      app.text('8 of 6', cx - w / 2 + 28 + 175, cy - 14, { size: 13, ui: true, color: COL.bad });
       break;
     }
     case 3: {
@@ -202,6 +207,19 @@ function ruleArt(app, i, cx, cy, w, h) {
       ctx.save(); ctx.fillStyle = COL.gold;
       for (let k = 0; k < 6; k++) { const a = k * 1.1 + 0.4, r = 14 + ((t * 18 + k * 9) % 30); ctx.save(); ctx.translate(cx + 60 + Math.cos(a) * r, cy + 50 + Math.sin(a) * r * 0.6); ctx.rotate(a + t); ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(4, 4); ctx.lineTo(-4, 3); ctx.closePath(); ctx.fill(); ctx.restore(); }
       ctx.restore();
+      break;
+    }
+    case 6: { // the Thread: three knots, then the scissors
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 72, cy); ctx.lineTo(cx + 48, cy); ctx.stroke();
+      ['ember', 'ember', 'echo'].forEach((sc, k) => { const bx = cx - 60 + k * 40; ctx.beginPath(); ctx.arc(bx, cy, 15, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 3.4; ctx.strokeStyle = '#C9A227'; ctx.stroke(); drawSchoolGlyph(ctx, sc, bx, cy, 10, (SCHOOLS[sc] || {}).color); });
+      drawSeamBadge(app, 'cut', cx + 78, cy, 0.9, 'echo');
+      break;
+    }
+    case 7: { // Slack, Tied, Frayed: a loose thread, a locked knot, a fraying end
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 80, cy); ctx.lineTo(cx + 80, cy); ctx.stroke();
+      ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.beginPath(); ctx.arc(cx - 56, cy, 16, 0, 6.283); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#C9A227'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 40, cy); for (let k = 1; k <= 5; k++) ctx.lineTo(cx + 40 + k * 7, cy + (k % 2 ? -7 : 7) * Math.sin(t * 3 + k)); ctx.strokeStyle = '#d8a066'; ctx.lineWidth = 2; ctx.stroke();
       break;
     }
     default: {
@@ -249,23 +267,31 @@ export default {
     }
     return out;
   },
+  // the codex follows the text scale up to 125%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
+    try { this.drawCodex(app); } finally { app.textScale = ts; }
+  },
+  drawCodex(app) {
     const ctx = app.ctx;
     this.pending = null;
     if (this.anim < 1) this.anim = Math.min(1, this.anim + app.dt / 0.16);
     const k = 1 - Math.pow(1 - this.anim, 3);
     ctx.save(); ctx.fillStyle = `rgba(6,4,3,${0.82 * k})`; ctx.fillRect(0, 0, W, H); ctx.restore();
     ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * 14);
+    app.reg('codex-panel', 14, 10, W - 28, H - 20, { overlay: true });
     app.panel(14, 10, W - 28, H - 20, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
     app.text('Codex', 36, 18, { size: 28, bold: true, color: COL.lamp });
     app.text('Everything you have met. The rest waits in silhouette.', 150, 30, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)' });
-    if (app.button('X', W - 62, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
+    app.reg('codex-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
+    if (app.button('X', 1080, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
     // tabs
     const tw = 160, ty = 62;
     TABS.forEach((name, i) => {
       const kind = KINDS[i];
       const label = kind ? `${name} ${seenCount(app, kind)}/${Object.keys(KEYS[kind]).length}` : name;
       const on = this.tab === i;
+      app.reg('codex-tab' + i, 30 + i * (tw + 6), ty, tw, 34, { group: 'tab' + i });
       if (app.button(label, 30 + i * (tw + 6), ty, tw, 34, { size: 15, ui: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);
     });
     const kind = KINDS[this.tab];
@@ -284,9 +310,10 @@ export default {
       if (this.q) app.text(this.q + caret, sx + 10, 111, { size: 15, ui: true, color: COL.vellum });
       else app.text('Type to search seen entries', sx + 10, 111, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
     } else {
-      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in six panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
+      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in eight panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     }
     const CX = 28, CY = 144, CW = W - 56, CH = H - 144 - 20;
+    app.reg('scroll-codex', CX, 0, CW, H, { overlay: true }); // every cell clips its own content
     if (kind === 'cards') this.drawCards(app, CX, CY, CW, CH);
     else if (kind) this.drawList(app, kind, CX, CY, CW, CH);
     else if (this.tab === 5) this.drawSchools(app, CX, CY, CW, CH);
@@ -365,9 +392,9 @@ export default {
     });
   },
   drawRules(app, x, y, w, h) {
-    const ctx = app.ctx, gap = 14, cw = Math.floor((w - gap * 2) / 3), ch = Math.floor((h - gap) / 2);
+    const ctx = app.ctx, gap = 14, cols = RULES.length > 6 ? 4 : 3, cw = Math.floor((w - gap * (cols - 1)) / cols), ch = Math.floor((h - gap) / 2);
     RULES.forEach(([title, text], i) => {
-      const cx = x + (i % 3) * (cw + gap), cy = y + Math.floor(i / 3) * (ch + gap);
+      const cx = x + (i % cols) * (cw + gap), cy = y + Math.floor(i / cols) * (ch + gap);
       app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
       ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
       app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
@@ -375,7 +402,7 @@ export default {
       ctx.restore();
       ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 174, 14, 0, 6.283); ctx.fill(); ctx.restore();
       app.text(String(i + 1), cx + 26, cy + 174 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });
-      app.text(title, cx + 48, cy + 162, { size: 18, bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
+      app.text(title, cx + 48, cy + 162, { size: title.length > 30 ? 15 : 18, bold: true, color: COL.lamp, maxW: cw - 60, lineH: 20 });
       app.text(text, cx + 16, cy + 192, { size: 14, ui: true, maxW: cw - 32, lineH: 17, color: COL.vellum });
     });
   },

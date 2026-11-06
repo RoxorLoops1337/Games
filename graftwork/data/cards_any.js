@@ -1,5 +1,6 @@
 // Neutral cards any hero can find in shops and events.
 const C = (id, name, type, cost, rarity, target, flavor, fx, up, flags = {}) => ({ id, name, hero: 'any', type, cost, rarity, target, flavor, flags, fx, up });
+const SCHOOL = { x_sweep: 'static', x_gauze: 'hoard', x_second: 'hoard', x_recall: 'echo', x_hold: 'hoard', x_barbs: 'rust', x_lunge: 'blood', x_adrenal: 'static', x_plate: 'gilded', x_cleave: 'ember' };
 export const CARDS_ANY = [
   // common
   C('x_jab', 'Clinical Jab', 'attack', 1, 'common', 'enemy', 'Quick, precise, billed separately.', [{ op: 'dmg', n: 7 }], { fx: [{ op: 'dmg', n: 9 }] }),
@@ -21,4 +22,4 @@ export const CARDS_ANY = [
   C('x_plate', 'Surgical Plating', 'power', 2, 'rare', 'self', 'Installed without anaesthetic.', [{ op: 'status', s: 'plated', n: 4, to: 'self' }, { op: 'status', s: 'regen', n: 2, to: 'self' }], { fx: [{ op: 'status', s: 'plated', n: 6, to: 'self' }, { op: 'status', s: 'regen', n: 3, to: 'self' }] }),
   C('x_flatline', 'Flatline', 'skill', 2, 'rare', 'self', 'Briefly nothing can touch you.', [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], cost: 1 }, { exhaust: true }),
   C('x_adrenal', 'Adrenaline Shot', 'skill', 0, 'rare', 'self', 'Side effects include everything.', [{ op: 'energy', n: 2 }, { op: 'draw', n: 2 }], { fx: [{ op: 'energy', n: 2 }, { op: 'draw', n: 3 }] }, { exhaust: true }),
-];
+].map((c) => (SCHOOL[c.id] ? { ...c, school: SCHOOL[c.id] } : c));

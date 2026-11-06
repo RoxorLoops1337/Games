@@ -2,6 +2,7 @@
 //   opts: { mode: 'view'|'pick', filter(inst)->bool, title, onPick(inst | inst[]), onCancel(), multi: true|N }
 // Pick mode: the clicked inst goes to opts.onPick AFTER the view has closed (so the caller can flow.route() cleanly).
 // Also exports reusable helpers: scrollArea, cardGrid, gaugeCells, resonanceStrip, pill.
+import { tscale } from './graft_parts.js';
 import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
@@ -61,6 +62,7 @@ export function scrollArea(app, st, x, y, w, h, contentH, draw) {
   if (Math.abs(st.target - st.scroll) < 0.4) st.scroll = st.target;
   st.scroll = clamp(st.scroll, 0, max);
 
+  app.reg('scroll-view', x, y, w, h, { overlay: true }); // content scrolls and is clipped inside this box
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   draw(y - st.scroll);
   ctx.restore();
@@ -239,6 +241,7 @@ const SORTS = [['order', 'Order'], ['name', 'Name'], ['cost', 'Cost'], ['weight'
 const costKey = (c) => (c === 'X' ? 9 : c);
 
 function chip(app, label, x, y, w, active, o = {}) {
+  app.reg('deck-chip-' + label, x, y, w, 28, { group: 'chip-' + label });
   return app.button(label, x, y, w, 28, { size: 14, ui: true, fill: active ? '#5a4720' : COL.slab2, stroke: active ? COL.lamp : 'rgba(232,220,196,.4)', color: active ? COL.lamp : COL.vellum, r: 6, ...o });
 }
 
@@ -279,7 +282,12 @@ export default {
     arr.forEach((c) => { c.ok = eligible(c.inst); });
     return arr;
   },
+  // the deck view follows the text scale up to 125%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
+    try { this.drawDeck(app); } finally { app.textScale = ts; }
+  },
+  drawDeck(app) {
     const ctx = app.ctx, run = app.shared.run;
     this.pending = null;
     if (this.anim < 1) this.anim = Math.min(1, this.anim + app.dt / 0.16);
@@ -288,6 +296,7 @@ export default {
     ctx.save(); ctx.fillStyle = `rgba(6,4,3,${0.8 * k})`; ctx.fillRect(0, 0, W, H); ctx.restore();
     ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * 14);
     const PX = 14, PY = 10, PW = W - 28, PH = H - 20;
+    app.reg('deck-panel', PX, PY, PW, PH, { overlay: true });
     app.panel(PX, PY, PW, PH, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
     if (app.mouse.pressed && !app.inRect(PX, PY, PW, PH) && !this.pick && !app.blocked) this.pending = () => this.close(app, false);
     if (!run) { app.text('No run in progress.', W / 2, 340, { size: 24, align: 'center' }); ctx.restore(); return; }
@@ -326,7 +335,8 @@ export default {
       app.text(left > 0 ? `${left} Weight to spare before your plain cards start paying.` : 'Budget is full. One more Weight and a plain card is Tithed.', sx, 42, { size: 15, ui: true, maxW: sw, lineH: 17 });
       app.text('Every card fights at full strength.', sx, 77, { size: 15, ui: true, color: 'rgba(232,220,196,.6)' });
     }
-    if (this.pending === null && app.button('X', W - 62, 20, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
+    app.reg('deck-x', 1080, 18, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
+    if (this.pending === null && app.button('X', 1080, 18, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
 
     // ---- tabs row
     let tx = 36; const ty = 110;

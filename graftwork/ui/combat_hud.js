@@ -1,9 +1,11 @@
 // Combat screen drawing helpers: bars, status rows, intent bubbles, card keyword panel.
 import { COL, EASE, clamp, rgba } from './core.js';
-import { STATUSES, GRAFTS, SCHOOLS, CARDS } from '../data/index.js';
+import { STATUSES, GRAFTS, SCHOOLS, CARDS, RELICS } from '../data/index.js';
 import { statusText } from '../engine/text.js';
-import { drawStatus, drawIntent, drawShield } from '../art/icons.js';
-import { statusSlots } from './combat_layout.js';
+import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
+import * as L from './combat_layout.js';
+import { queueTip, statusSection, keywordSection, explainIntent } from './tooltips.js';
+import { opText } from '../engine/text.js';
 
 export const STATUS_COL = { burn: COL.ember, bleed: '#d12a44', poison: '#8fd14f', vulnerable: '#e0a050', weak: '#9aa8b0', strength: '#ff9a6a', dexterity: '#7fd1e0' };
 export const stCol = (id) => STATUS_COL[id] || (STATUSES[id] && STATUSES[id].good ? COL.good : COL.bad);
@@ -24,28 +26,143 @@ export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
   ctx.restore();
   app.rr(x, y, w, h, h / 2); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(232,220,196,.55)'; ctx.stroke();
   ctx.restore();
-  if (label) app.text(label, x + w / 2, y + h / 2 - Math.round(h * 0.5), { size: Math.max(10, h - 3), align: 'center', ui: true, bold: true, shadow: true });
+  if (label) app.text(label, x + w / 2, y + h / 2 - 8, { size: 14, align: 'center', ui: true, bold: true, color: '#fff', stroke: '#0e0e0e', strokeW: 3, fixed: true });
 }
 
-// icons with counts, pop rings, hover tooltips. ent: {st, pop}. Returns nothing.
-export function drawStatusRow(app, ent, cx, y, maxW, size, t) {
-  const ctx = app.ctx;
-  const ids = Object.keys(ent.st).filter((s) => ent.st[s]);
-  const slots = statusSlots(ids, cx, y, maxW, size);
-  for (const sl of slots) {
-    const n = ent.st[sl.id];
-    const pop = ent.pop[sl.id] || 0;
-    const sc = 1 + 0.55 * pop * pop;
-    ctx.save(); ctx.translate(sl.x, sl.y); ctx.scale(sc, sc);
-    drawStatus(ctx, sl.id, 0, 0, size, stGood(sl.id));
+// ---- text helpers ----
+// Shrinks a string to fit maxW (down to minSize), then ellipsizes. Returns { str, size, w }.
+export function fitText(app, str, maxW, size, minSize = 14, o = {}) {
+  str = String(str);
+  let sz = size;
+  while (sz > minSize && app.measure(str, Math.round(sz * (app.textScale || 1)), o) > maxW) sz--;
+  let w = app.measure(str, Math.round(sz * (app.textScale || 1)), o);
+  while (str.length > 1 && w > maxW) { str = str.slice(0, -2) + '…'; w = app.measure(str, Math.round(sz * (app.textScale || 1)), o); if (str.length <= 2) break; }
+  return { str, size: sz, w };
+}
+
+// ---- HUD popovers (relic '+N', status '+N'): one open at a time, drawn last by drawPopovers ----
+export const hudState = { open: null, chip: null };
+const cb = (app) => !!(app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.colorblind);
+
+function cornerShape(ctx, good, x, y) {
+  ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5; ctx.beginPath();
+  if (good) { ctx.moveTo(x, y - 4); ctx.lineTo(x + 4.5, y + 4); ctx.lineTo(x - 4.5, y + 4); } else { ctx.moveTo(x - 4.5, y - 4); ctx.lineTo(x + 4.5, y - 4); ctx.lineTo(x, y + 4); }
+  ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
+}
+function drawOneStatus(app, ent, id, x, y, sz, anchorRect) {
+  const ctx = app.ctx, n = ent.st[id], pop = (ent.pop && ent.pop[id]) || 0, good = stGood(id);
+  const k = 1 + 0.55 * pop * pop;
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); drawStatus(ctx, id, 0, 0, sz, good); ctx.restore();
+  if (pop > 0) { ctx.save(); ctx.globalAlpha = pop; ctx.strokeStyle = stCol(id); ctx.lineWidth = 3 * pop + 1; ctx.beginPath(); ctx.arc(x, y, sz * 0.5 + (1 - pop) * sz * 0.9, 0, 6.283); ctx.stroke(); ctx.restore(); }
+  const d = STATUSES[id];
+  if (d && d.stack === 'dur' && n > 0 && n <= 5) { // duration pips on the lower arc
+    ctx.save(); ctx.fillStyle = stCol(id); ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1;
+    for (let i = 0; i < n; i++) { const a = 1.5708 + (i - (n - 1) / 2) * 0.42; const px = x + Math.cos(a) * (sz / 2 + 1), py = y + Math.sin(a) * (sz / 2 + 1); ctx.beginPath(); ctx.arc(px, py, 2, 0, 6.283); ctx.fill(); ctx.stroke(); }
     ctx.restore();
-    if (pop > 0) {
-      ctx.save(); ctx.globalAlpha = pop; ctx.strokeStyle = stCol(sl.id); ctx.lineWidth = 3 * pop + 1;
-      ctx.beginPath(); ctx.arc(sl.x, sl.y, size * 0.5 + (1 - pop) * size * 0.9, 0, 6.283); ctx.stroke(); ctx.restore();
-    }
-    app.text(String(n), sl.x + size * 0.5, sl.y + size * 0.1, { size: Math.max(11, Math.round(size * 0.55)), bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 3, color: '#fff' });
-    if (app.inRect(sl.x - size / 2, sl.y - size / 2, size, size)) app.tooltip(stName(sl.id) + ' ' + n, statusText(sl.id, n), { color: stCol(sl.id) });
   }
+  if (cb(app)) cornerShape(ctx, good, x - sz / 2 + 3, y - sz / 2 + 4);
+  const nfs = Math.max(14, Math.min(20, Math.round(sz * 0.58)));
+  app.text(String(n), x + sz / 2 + 2, y + sz / 2 - nfs - 1, { size: nfs, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 4, color: '#fff', fixed: true });
+  if (app.inRect(x - sz / 2, y - sz / 2, sz, sz)) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz });
+}
+// Status icons in rows: good statuses on the top row, bad on the second (rows = 2), or one row (rows = 1). Icons shrink from
+// `size` to 26 before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
+// ent: {st, pop}. o: { id, rows, group }. Returns the height used.
+export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
+  const ids = Object.keys(ent.st).filter((s) => ent.st[s]);
+  const rows = o.rows || 2, key = o.id || 'ent';
+  if (!ids.length) { if (hudState.open === 'st:' + key) hudState.open = null; return 0; }
+  const good = ids.filter(stGood), bad = ids.filter((s) => !stGood(s));
+  let sz = size, perRow = Math.max(1, Math.floor((maxW + 4) / (sz + 4)));
+  const need = (k) => Math.max(1, Math.floor((maxW + 4) / (k + 4)));
+  const fits = (k) => (rows === 1 ? ids.length <= need(k) : good.length <= need(k) && bad.length <= need(k)) && ids.length <= 8;
+  for (const k of [size, 30, 28, 26]) { if (k > size) continue; sz = k; perRow = need(k); if (fits(k)) break; }
+  let gShow = good, bShow = bad; const hidden = [];
+  if (rows === 1) { const all = good.concat(bad); gShow = all.slice(0, ids.length <= Math.min(8, perRow) ? all.length : Math.min(8, perRow) - 1); bShow = []; hidden.push(...all.slice(gShow.length)); }
+  else {
+    if (good.length > perRow) { gShow = good.slice(0, perRow); hidden.push(...good.slice(perRow)); }
+    if (bad.length > perRow) { bShow = bad.slice(0, perRow); hidden.push(...bad.slice(perRow)); }
+    while (gShow.length + bShow.length > 8) { hidden.push((bShow.length ? bShow : gShow).pop()); }
+    if (hidden.length && bShow.length >= perRow) hidden.push(bShow.pop());
+  }
+  const step = sz + 4, rowH = sz + 3, ctx = app.ctx;
+  const rowsOut = rows === 1 ? [gShow.concat([])] : [gShow, bShow];
+  let chip = hidden.length ? true : false;
+  if (rows === 1) { /* chip joins the single row */ } else if (!bShow.length && gShow.length && chip) { /* chip goes on row 2 */ }
+  let r = 0, minX = 1e9, maxX = -1e9, used = 0;
+  const lay = (list, extraChip) => {
+    const n = list.length + (extraChip ? 1 : 0); if (!n) return;
+    const w = n * step - 4, x0 = cx - w / 2 + sz / 2, yy = y + r * rowH + sz / 2;
+    list.forEach((id, i) => drawOneStatus(app, ent, id, x0 + i * step, yy, sz));
+    minX = Math.min(minX, cx - w / 2); maxX = Math.max(maxX, cx + w / 2);
+    if (extraChip) {
+      const chipX = x0 + list.length * step - sz / 2, cr = { x: chipX, y: yy - sz / 2, w: sz + 6, h: sz };
+      app.rr(cr.x, cr.y, cr.w, cr.h, 6); ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
+      app.text('+' + hidden.length, cr.x + cr.w / 2, cr.y + cr.h / 2 - 8, { size: 14, bold: true, ui: true, align: 'center', color: COL.lamp, fixed: true });
+      maxX = Math.max(maxX, cr.x + cr.w);
+      if (app.inRect(cr.x, cr.y, cr.w, cr.h)) { app.cursor = 'pointer'; if (app.clicked(cr.x, cr.y, cr.w, cr.h)) hudState.open = hudState.open === 'st:' + key ? null : 'st:' + key; }
+      if (hudState.open === 'st:' + key) hudState.chip = { key: 'st:' + key, rect: cr, items: ids.map((id) => ({ id, n: ent.st[id] })), kind: 'st' };
+    }
+    r++; used = r;
+  };
+  if (rows === 1) lay(gShow, chip);
+  else { lay(gShow, false); if (bShow.length || chip) { lay(bShow, chip); } }
+  const h = used * rowH;
+  if (maxX > minX) app.reg('status:' + key, minX, y, maxX - minX, h, { group: o.group || key });
+  return h;
+}
+
+// Popovers (drawn last so nothing covers them): the status list and the relic list.
+export function drawPopovers(app) {
+  const ctx = app.ctx, pc = hudState.chip; hudState.chip = null;
+  if (!hudState.open) return;
+  if (!pc || pc.key !== hudState.open) { if (!pc) hudState.open = null; return; }
+  const items = pc.items, rowH = 28, pad = 8;
+  const cols = pc.kind === 'relic' ? 6 : 1;
+  const w = pc.kind === 'relic' ? cols * 38 + pad * 2 : 230;
+  const rowsN = pc.kind === 'relic' ? Math.ceil(items.length / cols) : Math.min(items.length, 14);
+  const h = pc.kind === 'relic' ? rowsN * 38 + pad * 2 : rowsN * rowH + pad * 2;
+  const x = clamp(pc.rect.x + pc.rect.w / 2 - w / 2, 6, 1274 - w), y = Math.min(pc.rect.y + pc.rect.h + 6, 714 - h);
+  app.panel(x, y, w, h, { fill: 'rgba(14,12,10,.98)', stroke: COL.lamp });
+  app.reg('popover', x, y, w, h, { layer: 'overlay', overlay: true });
+  if (pc.kind === 'relic') {
+    items.forEach((it, i) => {
+      const ix = x + pad + (i % cols) * 38, iy = y + pad + Math.floor(i / cols) * 38;
+      drawRelic(ctx, it.id, ix + 19, iy + 19, 30);
+      if (app.inRect(ix, iy, 38, 38) && RELICS[it.id]) queueTip(app, 'rl:' + it.id, [[{ title: RELICS[it.id].name, text: RELICS[it.id].text, color: COL.lamp, glyph: 'star' }]], { x: ix, y: iy, w: 38, h: 38 });
+    });
+  } else {
+    items.slice(0, rowsN).forEach((it, i) => {
+      const iy = y + pad + i * rowH;
+      drawStatus(ctx, it.id, x + pad + 11, iy + 12, 22, stGood(it.id));
+      app.text(`${stName(it.id)} ${it.n}`, x + pad + 30, iy + 3, { size: 16, ui: true, bold: true, color: stCol(it.id), fixed: true });
+      if (app.inRect(x + pad, iy, w - pad * 2, rowH)) queueTip(app, 'stl:' + it.id, [[statusSection(it.id, it.n)]], { x, y: iy, w, h: rowH });
+    });
+  }
+  const r = pc.rect;
+  if (app.mouse.released && !app.inRect(x, y, w, h) && !app.inRect(r.x, r.y, r.w, r.h)) hudState.open = null;
+}
+
+// Relic strip: shows `show` relics then a '+N' chip. Registers 'topRelics'.
+export function drawRelicStrip(app, relics) {
+  const R = L.RELIC0, ctx = app.ctx, n = relics.length;
+  const shown = n > R.show ? R.show : n, step = n <= R.show ? Math.min(R.step, (R.x1 - R.x) / Math.max(1, n)) : R.step;
+  for (let i = 0; i < shown; i++) {
+    const id = relics[i], cx = R.x + i * step + R.size / 2;
+    drawRelic(ctx, id, cx, R.y, R.size);
+    const r = RELICS[id];
+    if (r && app.inRect(cx - R.size / 2 - 2, R.y - R.size / 2, R.size + 4, R.size)) queueTip(app, 'rl:' + id, [[{ title: r.name, text: r.text, color: COL.lamp, glyph: 'star' }]], { x: cx - R.size / 2, y: R.y - R.size / 2, w: R.size, h: R.size });
+  }
+  let endX = R.x + Math.max(0, shown - 1) * step + R.size + 2;
+  if (n > shown) {
+    const rest = n - shown, cr = { x: R.x + shown * step, y: R.y - 14, w: 46, h: 28 };
+    app.rr(cr.x, cr.y, cr.w, cr.h, 7); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.95)'; ctx.fill(); ctx.lineWidth = 1.8; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
+    app.text('+' + rest, cr.x + cr.w / 2, cr.y + 4, { size: 18, bold: true, ui: true, align: 'center', color: COL.lamp, fixed: true });
+    if (app.inRect(cr.x, cr.y, cr.w, cr.h)) { app.cursor = 'pointer'; if (app.clicked(cr.x, cr.y, cr.w, cr.h)) hudState.open = hudState.open === 'relics' ? null : 'relics'; }
+    if (hudState.open === 'relics') hudState.chip = { key: 'relics', rect: cr, items: relics.slice(shown).map((id) => ({ id })), kind: 'relic' };
+    endX = cr.x + cr.w;
+  } else if (hudState.open === 'relics') hudState.open = null;
+  app.reg('topRelics', R.x, R.y - 14, Math.max(30, endX - R.x), 28, {});
 }
 
 export const KIND_NAME = { attack: 'Attack', defend: 'Defend', buff: 'Buff', debuff: 'Debuff', junk: 'Clog', summon: 'Summon', unknown: 'Unknown', stun: 'Stun' };
@@ -65,29 +182,110 @@ export function intentText(info) {
   return out.join(' ');
 }
 
-// Intent bubble centred at (x, y). prog 0..1 = ink-in progress.
-export function drawIntentBubble(app, info, x, y, prog, alpha = 1) {
+// Intent plate centred at (x, y): 28 px icon + 24 px bold number (contrast stroke) + 'xN' hits. prog 0..1 = ink-in progress.
+// Returns { x, y, w, h } of the plate (for hit tests and the layout registry).
+export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   const ctx = app.ctx;
-  if (!info || prog <= 0 || alpha <= 0) return { w: 0, h: 0 };
-  const kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 3);
-  const showNum = !info.hidden && info.kinds.includes('attack');
-  const num = showNum ? (info.hits > 1 ? `${info.per} x ${info.hits}` : String(info.dmg)) : (info.hidden ? '?' : '');
-  const isz = 30, numW = num ? app.measure(num, 22, { bold: true }) + 6 : 0;
-  const w = kinds.length * (isz + 2) + numW + 18, h = 42;
-  const sc = EASE.back(clamp(prog, 0, 1));
+  if (!info || prog <= 0 || alpha <= 0) return { x, y, w: 0, h: 0 };
+  let kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 2);
+  const attack = !info.hidden && info.kinds.includes('attack');
+  const num = attack ? String(info.hits > 1 ? info.per : info.dmg) : (info.hidden ? '?' : '');
+  const hitTxt = attack && info.hits > 1 ? 'x' + info.hits : '';
+  const numW = num ? app.measure(num, 24, { bold: true, ui: true }) : 0, hitW = hitTxt ? app.measure(hitTxt, 18, { bold: true, ui: true }) : 0;
+  const body = (k) => k.length * 30 + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
+  if (body(kinds) > maxW && kinds.length > 1) kinds = kinds.slice(0, 1);
+  const w = Math.min(maxW, body(kinds)), h = 36;
   ctx.save();
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
-  ctx.translate(x, y); ctx.scale(sc, sc);
-  const col = info.hidden ? '#bbb' : info.kinds.includes('attack') ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
-  app.rr(-w / 2, -h / 2, w, h, 12); ctx.fillStyle = 'rgba(16,13,12,.82)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
-  // ink wipe: reveal left to right
-  ctx.save(); ctx.beginPath(); ctx.rect(-w / 2, -h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
-  let cx = -w / 2 + 9 + isz / 2;
-  for (const k of kinds) { drawIntent(ctx, k, cx, 0, isz); cx += isz + 2; }
-  if (num) app.text(num, w / 2 - 9, -13, { size: 22, bold: true, align: 'right', color: info.hidden ? '#ddd' : '#fff', stroke: '#0e0e0e', strokeW: 4 });
+  const col = info.hidden ? '#bbb' : attack ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
+  app.rr(x - w / 2, y - h / 2, w, h, 12); ctx.fillStyle = 'rgba(16,13,12,.88)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
+  ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
+  let cx = x - w / 2 + 8;
+  for (const k of kinds) { drawIntent(ctx, k, cx + 14, y, 28); cx += 30; }
+  if (num) { app.text(num, cx + 2, y - 14, { size: 24, bold: true, ui: true, color: '#fff', stroke: '#0e0e0e', strokeW: 4, fixed: true }); cx += numW + 4; }
+  if (hitTxt) app.text(hitTxt, cx + 2, y - 10, { size: 18, bold: true, ui: true, color: '#ffd9a0', stroke: '#0e0e0e', strokeW: 4, fixed: true });
   ctx.restore();
+  return { x: x - w / 2, y: y - h / 2, w, h };
+}
+
+// ---- enemy plate: nameplate, move name, intent, hp bar with trail, block, status rows. ALL inside the enemy's slot. ----
+// o: { alpha, hot, info, many (live enemies), suppress, tgt }
+export function drawEnemyPlate(app, ed, o) {
+  const ctx = app.ctx, def = ed.e.def, sw = Math.max(L.ENEMY_SLOT_MIN, ed.sw || 130), left = ed.x - sw / 2, foot = L.ENEMY_FOOT, grp = 'en' + ed.id;
+  const col = def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum;
+  const nameCol = def.kind === 'boss' ? '#ff8a8a' : col;
+  ctx.save(); ctx.globalAlpha = o.alpha;
+  // nameplate
+  const nm = fitText(app, ed.e.name, sw - 4, 17, 14, { bold: true });
+  app.text(nm.str, ed.x, L.ENEMY_LANE_TOP, { size: nm.size, bold: true, align: 'center', color: nameCol, stroke: '#0e0e0e', strokeW: 3 });
+  app.reg(grp + ':name', ed.x - nm.w / 2, L.ENEMY_LANE_TOP, nm.w, Math.round(nm.size * 1.25), { group: grp });
+  // move name: always with <= 4 enemies, else on hover
+  const info = o.info;
+  if (info && !info.hidden && (o.many <= 4 || o.hot)) {
+    const mn = fitText(app, o.moveName || '', sw - 4, 15, 14, { ui: true });
+    app.text(mn.str, ed.x, L.ENEMY_LANE_TOP + 21, { size: mn.size, ui: true, align: 'center', color: COL.vellum2, stroke: '#0e0e0e', strokeW: 3 });
+    app.reg(grp + ':move', ed.x - mn.w / 2, L.ENEMY_LANE_TOP + 21, mn.w, Math.round(mn.size * 1.25), { group: grp });
+  }
+  // intent plate
+  let ir = null;
+  if (info && ed.intentOut < 1) {
+    ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 57, ed.intentT, (1 - ed.intentOut), sw - 2);
+    if (ir.w) app.reg(grp + ':intent', ir.x, ir.y, ir.w, ir.h, { group: grp });
+  }
+  // hp bar + block
+  const by = foot + 6, bx = left + 24, bw = sw - 26;
+  drawBar(app, bx, by, bw, 16, ed.shown, ed.trail, ed.maxHp, '#a8412f', `${Math.max(0, Math.ceil(ed.hp))}/${ed.maxHp}`);
+  if (ed.block > 0) { const k = 1 + ed.bpulse * 0.35; ctx.save(); ctx.translate(left + 11, by + 9); ctx.scale(k, k); drawShield(ctx, 0, 0, 30, ed.block); ctx.restore(); }
+  app.reg(grp + ':hp', left, by - 3, sw, 22, { group: grp });
   ctx.restore();
-  return { w, h };
+  // status rows
+  ctx.save(); ctx.globalAlpha = o.alpha;
+  drawStatusRow(app, ed, ed.x, by + 24, sw - 2, ed.scale < 0.8 ? 28 : 32, 0, { id: grp, rows: 2, group: grp });
+  ctx.restore();
+  if (o.suppress) return;
+  // tips: block, intent, hp/body
+  if (ed.block > 0 && app.inRect(left, by - 6, 24, 28)) queueTip(app, 'blk' + grp, [[{ title: 'Block ' + ed.block, text: 'Absorbs damage until this enemy acts.', color: '#bcd0d8', glyph: 'square' }]], { x: left, y: by - 6, w: 24, h: 28 });
+  else if (ir && ir.w && o.info && app.inRect(ir.x, ir.y, ir.w, ir.h)) queueTip(app, 'int' + grp + ':' + o.info.move, intentTip(app, ed, o), { x: ir.x, y: ir.y, w: ir.w, h: ir.h });
+  else if (o.hot && !o.tgt && app.inRect(ed.x - ed.w / 2, foot - ed.h, ed.w, ed.h + 24)) queueTip(app, 'body' + grp, bodyTip(ed, o), { x: ed.x - ed.w / 2, y: foot - ed.h, w: ed.w, h: ed.h });
+}
+function intentTip(app, ed, o) {
+  const info = o.info;
+  if (info.hidden) return [[{ title: 'Unknown intent', text: 'This enemy hides what it will do next.', color: '#bbb', glyph: 'diamond' }]];
+  const ex = explainIntent(o.c, ed.e, info);
+  const mv = ed.e.def.moves[ed.e.move] || {};
+  let text = (ex.lines.length ? ex.lines.join('\n') : intentText(info));
+  for (const extra of [mv.note, mv.tip]) if (extra && !text.includes(extra)) text += '\n' + extra;
+  return [[{ title: o.moveName || 'Intent', text, color: info.kinds.includes('attack') ? '#ff9a8a' : COL.vellum, glyph: 'tri', why: ex.why }]];
+}
+function bodyTip(ed, o) {
+  const def = ed.e.def, kindTxt = def.kind === 'boss' ? ' (Boss)' : def.kind === 'elite' ? ' (Elite)' : '';
+  const panels = [[{ title: ed.e.name + kindTxt, text: `HP ${ed.hp}/${ed.maxHp}` + (ed.block ? `, Block ${ed.block}` : '') + (o.info ? '\nNext: ' + (o.info.hidden ? 'unknown' : (o.moveName || '') + '. ' + intentText(o.info)) : ''), color: def.kind === 'boss' ? '#ff8a8a' : def.kind === 'elite' ? COL.lamp : COL.vellum, glyph: 'diamond' }]];
+  const sts = Object.keys(ed.st).filter((s) => ed.st[s]).slice(0, 4).map((s) => statusSection(s, ed.st[s], ed));
+  if (sts.length) panels.push(sts);
+  return panels;
+}
+
+// Hero plate: hp bar, block, one row of statuses (good first). Registers 'heroPlate'.
+// dgr (low HP): { pulse 0..1, level, rm }. The bar glows and throbs with the heartbeat, the number swells and shakes; reduced motion keeps a steady glow.
+export function drawHeroPlate(app, P, heroName, t, dgr) {
+  const ctx = app.ctx, H = L.HERO_PLATE;
+  const hpLabel = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`;
+  if (dgr) {
+    const pu = dgr.rm ? 0.4 : dgr.pulse, lv = dgr.level, bx = H.x + 34, by = H.y + 2, bw = H.w - 38;
+    const sh = dgr.rm ? 0 : Math.sin(t * 90) * 1.6 * pu * lv, grow = 1 + pu * 0.06 * lv;
+    ctx.save(); ctx.translate(bx + bw / 2 + sh, by + 8); ctx.scale(grow, 1 + pu * 0.22 * lv); ctx.translate(-(bx + bw / 2), -8);
+    ctx.shadowColor = `rgba(255,40,60,${0.45 + 0.5 * pu * lv})`; ctx.shadowBlur = 8 + 16 * pu * lv;
+    drawBar(app, bx, 0, bw, 16, P.shown, P.trail, P.maxHp, pu > 0.5 ? '#e0344a' : '#b3263a', '');
+    ctx.restore();
+    const fs = 14 + Math.round(5 * pu * lv);
+    app.text(hpLabel, bx + bw / 2 + sh, by + 8 - 8 - (fs - 14) * 0.5, { size: fs, align: 'center', ui: true, bold: true, color: pu > 0.5 ? '#ffb0b0' : '#ff8a8a', stroke: '#2a0408', strokeW: 4, fixed: true });
+  } else
+  drawBar(app, H.x + 34, H.y + 2, H.w - 38, 16, P.shown, P.trail, P.maxHp, '#b3263a', hpLabel);
+  if (P.block > 0) { const k = 1 + P.bpulse * 0.35; ctx.save(); ctx.translate(H.x + 15, H.y + 11); ctx.scale(k, k); drawShield(ctx, 0, 0, 32, P.block); ctx.restore(); }
+  drawStatusRow(app, P, H.x + H.w / 2, H.y + 26, H.w, 24, t, { id: 'hero', rows: 1, group: 'heroPlate' });
+  app.reg('heroPlate', H.x, H.y, H.w, H.h, {});
+  if (P.block > 0 && app.inRect(H.x, H.y, 30, 22)) queueTip(app, 'heroblk', [[{ title: 'Block ' + P.block, text: 'Absorbs damage until your next turn.', color: '#bcd0d8', glyph: 'square' }]], { x: H.x, y: H.y, w: 30, h: 22 });
+  else if (app.inRect(H.x + 34, H.y + 2, H.w - 38, 16)) queueTip(app, 'herohp', [[{ title: heroName, text: `HP ${P.hp} / ${P.maxHp}`, color: COL.bad, glyph: 'cross' }]], { x: H.x + 34, y: H.y + 2, w: H.w - 38, h: 16 });
 }
 
 export function barCol(isPlayer) { return isPlayer ? '#b3263a' : '#a8412f'; }

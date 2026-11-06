@@ -21,4 +21,15 @@ A.sfx('unknown');
 for (const m of MODES) A.music(m);
 A.duck(300);
 A.stopMusic();
+const NEW = ['hitLight', 'hitMedium', 'hitHeavy', 'hitCrush', 'seamExtend', 'seamCut', 'seamSlack', 'seamFray', 'firstBlood', 'multiHit', 'multiHitSlam', 'comboTick', 'comboTier', 'comboCash', 'nearMiss', 'bossKillThud', 'heroDeath', 'victory'];
+for (const n of NEW) { assert.ok(A.SFX_NAMES.includes(n), 'missing ' + n); A.sfx(n, { len: 4, n: 3 }); }
+assert.equal(A.analyze().length, A.SFX_NAMES.length);
+assert.equal(A.hitTier(5, 100), 'light'); assert.equal(A.hitTier(10, 100), 'medium');
+assert.equal(A.hitTier(20, 100), 'heavy'); assert.equal(A.hitTier(40, 100), 'crush'); assert.equal(A.hitTier(5, 0), 'light');
+assert.equal(A.hit(40, 100), 'crush');
+assert.equal(A.setIntensity(2), 1); assert.equal(A.setIntensity(-1), 0); assert.equal(A.setIntensity(NaN), 0);
+assert.equal(A.setLowpass(800), 800); assert.equal(A.setLowpass(null), null);
+assert.equal(A.heartbeat(true, 90), true); assert.equal(A.audioState().bpm, 90);
+assert.equal(A.heartbeat(false), false); assert.equal(A.heartbeat(110), true); assert.equal(A.heartbeat(0), false);
+A.bossKill(500);
 console.log('graftwork audio ok: ' + A.SFX_NAMES.length + ' sfx, ' + MODES.length + ' modes');

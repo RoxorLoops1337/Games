@@ -11,6 +11,14 @@ import { STATUS_RELICS } from './statuses_relics.js';
 import { STATUS_GSAFE } from './statuses_gsafe.js';
 import { STATUS_GGREEDY } from './statuses_ggreedy.js';
 import { STATUS_GRAFTSX } from './statuses_ggraftsx.js';
+import { STATUS_AFF } from './statuses_aff.js';
+import { STATUS_THREAD } from './statuses_thread.js';
+import { CARDS_THREAD } from './cards_thread.js';
+import { GRAFTS_THREAD } from './grafts_thread.js';
+import { RELICS_THREAD } from './relics_thread.js';
+import { ENEMIES_NEW1 } from './enemies_new1.js';
+import { ENEMIES_NEW2 } from './enemies_new2.js';
+import { ENEMIES_NEW3 } from './enemies_new3.js';
 import { CARDS_MARROW } from './cards_marrow.js';
 import { CARDS_WICK } from './cards_wick.js';
 import { CARDS_ODILE } from './cards_odile.js';
@@ -38,11 +46,11 @@ function byId(name, ...lists) {
   }
   return m;
 }
-export const STATUSES = byId('status', STATUS_LIST, STATUS_MARROW, STATUS_WICK, STATUS_ODILE, STATUS_GRAFTS, STATUS_E1, STATUS_E2, STATUS_E3, STATUS_RELICS, STATUS_GSAFE, STATUS_GGREEDY, STATUS_GRAFTSX);
-export const CARDS = byId('card', CARDS_MARROW, CARDS_WICK, CARDS_ODILE, CARDS_ANY, CARDS_JUNK);
-export const GRAFTS = byId('graft', GRAFTS_SAFE, GRAFTS_GREEDY, GRAFTS_WEIRD, GRAFTS_EXTRA);
-export const ENEMIES = byId('enemy', ENEMIES_1, ENEMIES_2, ENEMIES_3, BOSSES);
-export const RELICS = byId('relic', RELIC_LIST);
+export const STATUSES = byId('status', STATUS_LIST, STATUS_MARROW, STATUS_WICK, STATUS_ODILE, STATUS_GRAFTS, STATUS_E1, STATUS_E2, STATUS_E3, STATUS_RELICS, STATUS_GSAFE, STATUS_GGREEDY, STATUS_GRAFTSX, STATUS_AFF, STATUS_THREAD);
+export const CARDS = byId('card', CARDS_MARROW, CARDS_WICK, CARDS_ODILE, CARDS_ANY, CARDS_JUNK, CARDS_THREAD);
+export const GRAFTS = byId('graft', GRAFTS_SAFE, GRAFTS_GREEDY, GRAFTS_WEIRD, GRAFTS_THREAD, GRAFTS_EXTRA);
+export const ENEMIES = byId('enemy', ENEMIES_1, ENEMIES_2, ENEMIES_3, BOSSES, ENEMIES_NEW1, ENEMIES_NEW2, ENEMIES_NEW3);
+export const RELICS = byId('relic', RELIC_LIST, RELICS_THREAD);
 export const POTIONS = byId('potion', POTION_LIST);
 export const EVENTS = byId('event', EVENT_LIST);
 export const HEROES = byId('hero', HERO_LIST);

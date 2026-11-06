@@ -9,6 +9,7 @@ import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
 import { heroUnlocked, maxAscension } from '../engine/meta.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
+import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
 
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
@@ -202,6 +203,8 @@ export default {
     if (this.state === 'menu') this.drawMenu(app, keys);
     else if (this.state === 'select') this.drawSelect(app, keys);
     else if (this.state === 'credits') this.drawCredits(app, keys);
+    // top right: fullscreen (reserved zone 1128..1272 x 0..56)
+    fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
     // corner: version + mute (always)
     app.text('GRAFTWORK ' + VERSION, 16, H - 26, { size: 13, ui: true, color: 'rgba(232,220,196,.45)' });
     const st = settingsOf(app);
@@ -226,14 +229,17 @@ export default {
   drawMenu(app, keys) {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
     if (keys.some((e) => e.key === 'Escape') && this.confirmAbandon) this.confirmAbandon = false;
-    const bw = 330, bh = 48, step = 56, x = 640 - bw / 2;
+    const bw = 330, bh = 48, step = (this.hasSave ? 1 : 0) + 5 + (canFullscreen() ? 1 : 0) > 6 ? 52 : 56, x = 640 - bw / 2;
     let y = 306;
     const k = EASE.out(clamp(this.menuK, 0, 1));
     g.save(); g.globalAlpha = k;
     // dim plate behind menu for contrast
     const items = [];
     if (this.hasSave) items.push('continue');
-    items.push('new', 'daily', 'codex', 'settings', 'credits');
+    items.push('new', 'daily', 'codex', 'settings');
+    const fsOK = canFullscreen();
+    if (fsOK) items.push('fullscreen');
+    items.push('credits');
     const plateH = items.length * step + 14 + (this.hasSave ? 14 : 0);
     app.panel(x - 22, y - 12, bw + 44, plateH, { r: 14, fill: 'rgba(14,11,10,.62)', stroke: 'rgba(232,220,196,.12)' });
     for (const id of items) {
@@ -259,10 +265,12 @@ export default {
         }
       } else if (id === 'codex') { if (app.button('Codex', x, yy, bw, bh, { size: 22 })) flow.openCodex(); }
       else if (id === 'settings') { if (app.button('Settings', x, yy, bw, bh, { size: 22 })) flow.openSettings(); }
+      else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (app.button('Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
       else if (id === 'credits') { if (app.button('Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
       y += step;
     }
     g.restore();
+    if (!canFullscreen() && isIPhone()) app.text('Add to Home Screen for fullscreen', 640, y + 6, { size: 13, ui: true, italic: true, align: 'center', color: 'rgba(232,220,196,.6)' });
     // daily card on the right
     this.drawDailyCard(app, 930, 312);
     if (this.confirmAbandon) this.drawConfirm(app, 'Start a new run?', 'Your saved run will be replaced. This cannot be undone.', 'Replace saved run', () => { this.confirmAbandon = false; this.openSelect(app); }, () => { this.confirmAbandon = false; });
