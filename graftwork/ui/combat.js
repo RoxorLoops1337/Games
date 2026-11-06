@@ -101,7 +101,18 @@ function absorb() {
 }
 
 // ---------------------------------------------------------------- event handling (returns wait in ms)
+// Feedback guard: every card play must visibly register. Effect events mark the play as seen; if the next turn-level event
+// arrives and nothing did, float 'No effect' so the player knows the card resolved.
+const PLAY_QUIET = new Set(['play', 'replay', 'exhaust', 'discard', 'power', 'shuffle', 'intent', 'spawn', 'start', 'turnStart', 'turnEnd', 'enemyAct', 'jam', 'shatter', 'burnCard']);
+function flushPlay() {
+  const pf = S.pf; S.pf = null;
+  if (!pf || pf.seen || !S.fx) return;
+  const p = pf.target && S.edBy.get(pf.target) ? entPos(pf.target) : { x: HERO_X + 40, y: FOOT_Y - 110 };
+  S.fx.float('No effect', p.x, p.y - 50, { color: '#aaa', size: 20, life: 1.0 });
+}
 function handle(ev) {
+  if (S.pf) { if (ev.t === 'play' || ev.t === 'turnEnd' || ev.t === 'enemyAct') flushPlay(); else if (!PLAY_QUIET.has(ev.t) && !(ev.t === 'dmg' && !ev.absorbed && !ev.raw)) S.pf.seen = true; }
+  if (ev.t === 'play') S.pf = { seen: false, target: ev.target || null };
   const c = S.c, fx = S.fx;
   switch (ev.t) {
     case 'spawn': {
@@ -174,7 +185,7 @@ function handle(ev) {
       en.block += ev.n; en.bpulse = 1;
       const p = entPos(ev.who);
       fx.burst(p.x, p.y, 'block', { n: 8 }); fx.ring(p.x, p.y, '#bcd0d8', 70, 0.35);
-      fx.float('+' + ev.n, p.x, p.y - 30, { color: '#bcd0d8', size: 22 });
+      fx.float('+' + ev.n + ' Block', p.x, p.y - 30, { color: '#bcd0d8', size: 22 });
       sfx('block', { vol: 0.8 });
       return 95;
     }
@@ -367,6 +378,7 @@ function onDmg(ev) {
     } else {
       fx.hitstop(20); kick(dirx, 0, 3, 8, 0);
       fx.float(String(ev.absorbed), p.x - 46, p.y - 18, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
+      if (!(ev.n > 0)) fx.float('Blocked', p.x, p.y - 62, { color: '#bcd0d8', size: 22, life: 1.0 });
     }
     wait = ev.broke ? 120 : 90;
   }
@@ -428,7 +440,7 @@ function onDmg(ev) {
       }
       wait = Math.max(wait, 60);
     }
-  } else if (!ev.absorbed && ev.raw === 0) { fx.float('0', p.x, p.y - 20, { color: '#aaa', size: 20 }); wait = 40; }
+  } else if (!ev.absorbed && ev.raw === 0) { fx.float(isP ? 'Nothing' : 'No effect', p.x, p.y - 30, { color: '#aaa', size: 20, life: 1.0 }); wait = 60; }
   // the striking card shudders on contact
   const sp = S.spr.find((s) => s.mode === 'play'); if (sp) sp.jit = 1;
   return wait;
@@ -442,7 +454,10 @@ function onStatus(ev) {
   const prev = en.st[ev.s] || 0;
   if (ev.n) en.st[ev.s] = ev.n; else delete en.st[ev.s];
   const gained = ev.d !== undefined ? ev.d > 0 : false;
-  if (!gained) return 0;
+  if (!gained) {
+    if (ev.d < 0 && (en.st[ev.s] || 0) < prev) { const q = entPos(ev.who); en.pop[ev.s] = 1; S.fx.float(`${stName(ev.s)} ${ev.d}`, q.x, q.y - 56, { color: '#aaa', size: 18, life: 0.9 }); return 60; }
+    return 0;
+  }
   const good = !(STATUSES[ev.s] && STATUSES[ev.s].good === false);
   en.pop[ev.s] = 1;
   const p = entPos(ev.who);
@@ -1801,10 +1816,12 @@ function drawTips(app) {
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
+  // the card-play tip shows right away once a card is selected, and otherwise right after the energy tip (before the intent tip)
+  if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
   if (first && !S.hov) {
     if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM }, `Energy pays for cards. You get ${c.maxEnergy} each turn and it does not carry over. Spend it.`)) return;
-    if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
+    if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 60, FOOT_Y - 230, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280, maxBottom: TIP_BOTTOM })) return;
   }

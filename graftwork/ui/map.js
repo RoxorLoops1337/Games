@@ -19,9 +19,9 @@ const CHART = { x: 330, y: 0, w: 620, h: 720 };
 const NODE_INFO = {
   fight: ['Fight', 'A ward patient with opinions. Reward: gold, a graft.'],
   elite: ['Elite', 'A harder fight. Reward: a relic, gold and a graft.'],
-  event: ['Event', '???'],
-  shop: ['Shop', 'Cards, grafts, relics, potions and a few services.'],
-  forge: ['Forge', 'Rest, expand, refine, strip or reforge. Pick one.'],
+  event: ['Event', 'A short story with choices. Could cost you, could pay off.'],
+  shop: ['Shop', 'Buy cards, grafts, relics and potions with gold.'],
+  forge: ['Forge', 'Heal, upgrade a card, or rework your grafts. Pick one.'],
   boss: ['Boss', 'The floor warden. Reward: a choice of boss relic.'],
   final: ['The Grafter', 'The last node. Nothing is saved after this.'],
 };
@@ -291,8 +291,8 @@ export default {
       if (hovered.id && click.some((c) => c.n === hovered)) { app.cursor = 'pointer'; this.kb = false; }
       const info = NODE_INFO[hovered.type] || [hovered.type, ''];
       const state = hovered.visited ? 'Visited.' : availIds.has(hovered.id) ? 'Click to enter.' : reach.has(hovered.id) ? 'Not yet reachable.' : 'Off your path.';
-      const label = hovered.type === 'event' ? 'Event: ???' : hovered.type === 'elite' ? 'Elite: relic reward' : hovered.type === 'forge' ? 'Forge: rest, expand, refine, strip or reforge' : info[0];
-      app.tooltip(info[0], (hovered.type === 'event' ? 'Event: ???\nWhatever is behind this door, it wants to talk.' : (label === info[0] ? info[1] : label + '\n' + info[1])) + '\n' + state, { color: NODE_COL[hovered.type] });
+      const label = hovered.type === 'elite' ? 'Elite: relic reward' : info[0];
+      app.tooltip(info[0], (label === info[0] ? info[1] : label + '\n' + info[1]) + '\n' + state, { color: NODE_COL[hovered.type] });
     }
     g.restore(); // clip
     // pins + border
@@ -443,7 +443,7 @@ export default {
     app.reg('map-right', X, Y0, PW, PH, { group: 'right' });
     app.text('LEGEND', X + 18, Y0 + 10, { size: 14, ui: true, bold: true, color: COL.lamp });
     const types = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'];
-    const leg = { fight: 'Fight: gold and a graft', elite: 'Elite: relic reward', event: 'Event: ???', shop: 'Shop: spend gold', forge: 'Forge: rest, expand, refine, strip or reforge', boss: run.act === 3 ? 'Warden, then The Grafter' : 'Boss: ends the act' };
+    const leg = { fight: 'Fight: gold and a graft', elite: 'Elite: relic reward', event: 'Event: a story with choices', shop: 'Shop: buy with gold', forge: 'Forge: heal or upgrade a card', boss: run.act === 3 ? 'Warden, then The Grafter' : 'Boss: ends the act' };
     // phones inflate the text: row pitch follows the real heights so name and note never overlap
     const nameH = Math.ceil(app.sz(16, { bold: true }) * 1.18), noteH = Math.ceil(app.sz(14, { ui: true }) * 1.18), LP = Math.max(36, nameH + noteH + 3);
     const noteL = types.map((t) => app.wrap(leg[t].split(': ')[1] || leg[t], 226, 14, { ui: true }).length), rowY = []; let ry = Y0 + 34; for (const n of noteL) { rowY.push(ry); ry += Math.max(36, nameH + noteH * n + 3); }

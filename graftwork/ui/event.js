@@ -14,6 +14,7 @@ const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
 const PANEL = { x: 584, y: 64, w: 664, h: 632 }; // starts under the global Pause / Fullscreen zone (y 0..56)
 const ACT_TINT = { 1: ['#1c2b24', '#4f7a5f', '#bfe3c8'], 2: ['#2b1d12', '#8a5a2b', '#ffd596'], 3: ['#1c1230', '#6b4fa0', '#f5e6a8'] };
+const CHOICE_GUARD = 0.15; // s after the text is fully shown before a choice can be picked
 const CPS = 62; // typewriter chars per second
 
 function reduced(app) { const s = app.shared.meta && app.shared.meta.settings; return !!(s && (s.reduceMotion || s.reducedMotion)); }
@@ -112,7 +113,7 @@ export default {
     const run = app.shared.run; this.run = run;
     this.fx = new Fx();
     this.picker = null; this.busy = false; this.heartPulse = 0; this.goldPulse = 0;
-    this.shown = 0; this.t = 0; this.resultT = 0; this.resultShown = 0; this.pickScroll = 0; this.flash = null;
+    this.shown = 0; this.t = 0; this.doneT = null; this.resultT = 0; this.resultShown = 0; this.pickScroll = 0; this.flash = null;
     const p = run.pending;
     this.ev = p && EVENTS[p.id];
     if (p && p.result !== null && p.result !== undefined) { this.shown = 1e9; this.resultShown = 1e9; this.result = p.result; this.gain = []; }
@@ -247,6 +248,7 @@ export default {
       if (n > 0) app.text(ln.slice(0, n), ix, y + i * TL, { size: TS, color: this.result !== null ? 'rgba(43,30,26,.7)' : COL.ink });
     });
     const typing = shown < total;
+    if (typing) this.doneT = null; else if (this.doneT == null) this.doneT = this.t; // choices arm 150 ms after the text is fully shown
     if (typing && Math.floor(app.t * 2) % 2 === 0) { // blinking quill mark
       app.text('|', ix + iw - 6, y + (lines.length - 1) * TL, { size: TS, color: COL.scar });
     }
@@ -291,7 +293,7 @@ export default {
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
       if (over) { app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text); }
       let fire = false;
-      if (c.ok && !this.picker && !this.busy) {
+      if (c.ok && !this.picker && !this.busy && this.doneT != null && this.t - this.doneT >= CHOICE_GUARD) {
         if (over && mouse.released && mouse.pressStart && app.inRect(x, y, w, h)) { fire = true; if (app.onClick) app.onClick(); }
         if (app.pressedKeys.some((e) => e.key === String(idx + 1))) fire = true;
       }
