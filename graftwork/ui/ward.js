@@ -173,6 +173,7 @@ export default {
     MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
     const w = run.ward;
     if (!w) return;
+    ISO.camReset();
     assets.ensure(app); // the room, actor and icon art (assets/ward/); every draw falls back to the procedural look until it is there
     if (!w.rooms[w.hero.room]) { const e = WD.entranceOf(run); if (e) w.hero.room = e.id; } // a hero is always standing in a room
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
@@ -238,6 +239,7 @@ export default {
     const so = S.fx.shakeOffset();
     g.save(); g.translate(so.x, so.y);
     this.drawSheet(app);
+    { const H0 = this.host(app); H0.buildable.clear(); if (w.phase === 'morning') for (const [x, y] of WD.buildCells(run)) H0.buildable.add(x + ',' + y); if (!busy) this.camInput(app); ISO.camUpdate(H0); }
     const inter = this.interact(app);
     this.drawRooms(app, inter);
     this.drawTint(app);
@@ -252,6 +254,8 @@ export default {
     this.actions(app, inter);
     S.selZone = null;
     if (w.phase === 'morning') this.hand(app, inter); else this.walkStrip(app);
+    this.camButtons(app);
+    this.roomCard(app);
     if (inter.chip) this.drawChip(app, inter.chip);
     this.drawTransition(app);
     if (S.toastT > 0) this.drawToast(app);
@@ -581,37 +585,82 @@ export default {
     else if (k === 'Enter' && S.selRoom) this.walkTo(app, S.selRoom, S.alt);
     else if (k >= '1' && k <= '5' && w.phase === 'morning') { const c = w.deck.hand[+k - 1]; if (c) { S.sel = S.sel === c.uid ? null : c.uid; S.kb = -1; } }
     else if ((k === 'p' || k === 'P') && !S.plans) S.plans = true;
+    else if (k === 'c' || k === 'C') ISO.camRecenter();
   },
 
   // ---- the isometric map: ground, rooms (back to front), actors, ghost, tooltip of the hovered room ----
   host(app) {
     const run = S.run;
     const H = S.host || (S.host = { app, run, S, MEM, reduced: false, buildAge, bossLine, TRIG, stepS: STEP_S, glows: [], buildable: new Set(), bossOpen: false });
-    H.app = app; H.run = run; H.reduced = reduced(app); H.bossOpen = WD.bossOpen(run);
+    H.app = app; H.run = run; H.reduced = reduced(app); H.bossOpen = WD.bossOpen(run); H.bossForced = WD.bossForced(run);
     return H;
   },
   drawRooms(app, inter) {
     const run = S.run, w = run.ward, H = this.host(app), g = app.ctx;
     H.buildable.clear(); if (w.phase === 'morning') for (const [x, y] of WD.buildCells(run)) H.buildable.add(x + ',' + y);
-    ISO.drawGround(H, inter);
-    S.heroRec = ISO.drawRooms(H, inter);
-    ISO.drawGhost(H, inter);
+    S.heroRec = ISO.drawWorld(H, inter);
     // spawn pop: a ring and a burst when a new arrival lands
     for (const r of Object.values(w.rooms)) {
       const pt = MEM.pops[r.id]; if (pt === undefined || S.t < pt) continue;
       const k = (S.t - pt) / 0.5;
       if (k >= 1) { delete MEM.pops[r.id]; continue; }
       const cc = cellCenter(r.x, r.y);
-      g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.ellipse(cc.x, cc.y, (10 + 30 * EASE.out(k)), (10 + 30 * EASE.out(k)) / 2, 0, 0, Math.PI * 2); g.stroke(); g.restore();
+      g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.ellipse(cc.x, cc.y, (10 + 30 * EASE.out(k)) * ISO.CAM.z, (10 + 30 * EASE.out(k)) * ISO.CAM.z / 2, 0, 0, Math.PI * 2); g.stroke(); g.restore();
       if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x, cc.y - 10, 'spark', { n: 8 }); }
     }
-    const hr = S.hoverRoom && !app.blocked ? w.rooms[S.hoverRoom] : null;
-    if (hr) {
-      const d = ROOMS[hr.type], tint = K.ROOM_TINT[hr.type] || '#8a7a5c', b = ISO.roomBox(w, hr.x, hr.y);
-      const anchor = { x: b.x, y: b.y, w: b.w, h: b.h, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) + 4), bottom: 716, dir: 1 } }; // over the log only (never TODAY, the relics or the walk notes); one tip, no stacked glossary panel
-      app.tooltip(d.name + (DARKW(hr) ? ' (dark)' : ''), roomTip(run, hr), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, anchor });
-    }
     ISO.drawLoading(H);
+  },
+
+  // ---- the room card: name, power, spawn timer, what is inside, anchored beside the hovered room and kept on the map panel ----
+  roomCard(app) {
+    const run = S.run, w = run.ward, r = S.hoverRoom && !app.blocked && !S.drag ? w.rooms[S.hoverRoom] : null;
+    if (!r) return;
+    const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y), CWd = 208, X0 = 10;
+    const every = WD.everyOf(r), body = roomTip(run, r), bo = { size: 13, ui: true, color: 'rgba(232,220,196,.85)', fit: { w: CWd - 2 * X0, lines: 7, soft: true } }, Lb = app.layoutText(body, bo);
+    const hasBar = every && r.type !== 'rm_theatre', head = 24, barH = hasBar ? 22 : 0, Hh = head + barH + Lb.h + 16;
+    let x = b.x + b.w + 6; if (x + CWd > SHEET.x + SHEET.w - 4) x = b.x - CWd - 6;
+    x = clamp(x, SHEET.x + 4, SHEET.x + SHEET.w - CWd - 4);
+    const y = clamp(b.y + 4, SHEET.y + 4, SHEET.y + SHEET.h - Hh - 4);
+    app.reg('ward-roomcard', x, y, CWd, Hh, { overlay: true });
+    app.panel(x, y, CWd, Hh, { fill: 'rgba(22,18,16,.96)', r: 8, rivets: false });
+    g.save(); g.fillStyle = tint; app.rr(x + 1, y + 6, 3, 14, 1.5); g.fill(); g.restore();
+    app.text(K.roomShort(r.type) + (DARKW(r) ? ' (dark)' : ''), x + X0, y + 5, { size: 16, bold: true, color: COL.lamp, fit: { w: CWd - 2 * X0, lines: 1 } });
+    let yy = y + head + 2;
+    if (hasBar) { // spawn timer: wax bar toward the next spawn
+      const full = r.contents.length >= WD.capOf(r), k = full ? 1 : clamp((every - r.timers.spawn + 1) / every, 0, 1);
+      app.rr(x + X0, yy + 2, CWd - 2 * X0, 8, 4); g.fillStyle = 'rgba(0,0,0,.5)'; g.fill();
+      app.rr(x + X0, yy + 2, Math.max(8, (CWd - 2 * X0) * k), 8, 4); g.fillStyle = full ? COL.scar : '#d9b44a'; g.fill();
+      yy += barH;
+    }
+    app.text(body, x + X0, yy, bo);
+  },
+  // wheel and pinch zoom, drag to pan, C to recenter (the camera is manual after any of them); a pan never counts as a tap or a card drop
+  camInput(app) {
+    const m = app.mouse, over = ISO.overMap(m.x, m.y);
+    if (S.plans || S.banner) { S.panStart = null; return; }
+    if (over && m.wheel) { ISO.camZoomBy(Math.exp(-m.wheel * 0.0014), m.x, m.y); m.wheel = 0; }
+    if (m.second && !m.p2) m.second = false;
+    if (m.second && m.p2 && m.down) { // pinch: the second finger gives the distance
+      const d = Math.hypot(m.x - m.p2.x, m.y - m.p2.y);
+      if (S.pinchD > 4 && d > 4) ISO.camZoomBy(d / S.pinchD, (m.x + m.p2.x) / 2, (m.y + m.p2.y) / 2);
+      S.pinchD = d; S.panning = true; return;
+    }
+    S.pinchD = 0;
+    if (m.pressed && over && !S.drag && !app.blocked) S.panStart = { x: m.x, y: m.y, lx: m.x, ly: m.y };
+    if (S.panStart && m.down && !S.drag) {
+      if (!S.panning && Math.hypot(m.x - S.panStart.x, m.y - S.panStart.y) > (m.touch ? 12 : 9)) S.panning = true;
+      if (S.panning) { ISO.camPanBy(m.x - S.panStart.lx, m.y - S.panStart.ly); S.panStart.lx = m.x; S.panStart.ly = m.y; }
+    }
+    if (!m.down) { if (S.panning) { m.released = false; m.pressed = false; } S.panning = false; S.panStart = null; }
+  },
+  camButtons(app) {
+    const x = SHEET.x + 8, y = SHEET.y + 8, sz = 40, defs = [['+', () => ISO.camZoomBy(1.3, 640, 306), 'ward-zoom-in'], ['-', () => ISO.camZoomBy(1 / 1.3, 640, 306), 'ward-zoom-out'], ['C', () => ISO.camRecenter(), 'ward-recenter']];
+    defs.forEach(([lab, fn, id], i) => {
+      const by = y + i * (sz + 4);
+      app.reg(id, x, by, sz, sz, { group: 'map-ctl' });
+      if (app.button(lab, x, by, sz, sz, { size: 18, fill: id === 'ward-recenter' && ISO.CAM.manual ? '#5a3f10' : undefined, stroke: id === 'ward-recenter' && ISO.CAM.manual ? COL.lamp : undefined })) { fn(); sfx(app, 'uiClick', { vol: 0.5 }); }
+      if (app.inRect(x, by, sz, sz)) app.tooltip(id === 'ward-recenter' ? 'Recenter (C)' : id === 'ward-zoom-in' ? 'Zoom in' : 'Zoom out', id === 'ward-recenter' ? 'Frame the rooms you built and the hero again. Wheel or pinch to zoom, drag to pan.' : 'Wheel or pinch also zooms; drag the map to pan.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } });
+    });
   },
 
   // time of day over the whole map: cool morning, plain midday, amber evening, deep blue night with lamp pools (ui/ward_iso.js)

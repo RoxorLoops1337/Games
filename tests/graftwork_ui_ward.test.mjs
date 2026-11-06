@@ -15,6 +15,8 @@ const ward = wardMod.default, { cellCenter, handRects, resetWardMem, wardInterlu
 const SCR = {};
 for (const n of ['combat', 'reward', 'graft', 'shop', 'event', 'title', 'end']) SCR[n] = (await import(`../graftwork/ui/${n}.js`)).default;
 const KIT = await import('../graftwork/ui/ward_kit.js');
+const ISO = await import('../graftwork/ui/ward_iso.js');
+const wide = (app) => { ISO.camZoomBy(0.4, 640, 306); frames(app, 3); }; // zoom out so far cells are on the panel (the camera frames the built rooms)
 
 let n = 0;
 const t = async (name, fn) => { try { await fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -75,7 +77,7 @@ await t('morning: drag a room plan onto a legal cell builds it; an illegal drop 
   const [ent] = layout(run, [['rm_entrance', 0, 2]]);
   run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = [];
   const uid = give(run, 'b_ward');
-  flow.route(); frames(app, 200);
+  flow.route(); frames(app, 200); wide(app);
   const r = handRects(1)[0], bad = cellCenter(4, 4);
   drag(app, r.x + r.w / 2, r.y + 60, bad.x, bad.y);
   assert.equal(Object.keys(run.ward.rooms).length, 2, 'not built away from the rooms');
@@ -414,10 +416,9 @@ await t('z5: Rest of day waits out every walk left today and stops in the mornin
   run.hp = 30; run.ward.deck.hand = []; flow.route(); frames(app, 200);
   const A = reg('ward-act'); click(app, A.x + A.w / 2, A.y + A.h / 2); frames(app, 3);
   assert.equal(run.ward.phase, 'midday');
-  const tips = []; const tt = app.tooltip.bind(app); app.tooltip = (title, text, o) => { tips.push({ title, o }); return tt(title, text, o); };
   const c = cellCenter(1, 2); app.mouse.x = c.x; app.mouse.y = c.y; frames(app, 4);
-  const rt = tips.find((x) => /Corridor/.test(x.title)); assert.ok(rt, 'room tip shown');
-  assert.ok(!rt.o.terms, 'no stacked glossary panel'); assert.ok(rt.o.anchor.band.y >= 200, 'the tip band starts below TODAY');
+  const card = reg('ward-roomcard'); assert.ok(card, 'the room card is shown beside the hovered room');
+  assert.ok(card.x >= 284 && card.x + card.w <= 996 && card.y >= 64 && card.y + card.h <= 548, 'inside the map panel, never over the side panels (TODAY stays clear)');
   app.mouse.x = 5; app.mouse.y = 5; frames(app, 2);
   const rest = reg('ward-act'), bx = rest.x + rest.w - 50, by = rest.y + 108 + 23; click(app, bx, by); frames(app, 600);
   assert.equal(run.ward.phase, 'morning'); assert.equal(run.ward.day, 2, 'midday, evening and night were waited out');
@@ -615,19 +616,23 @@ await t('item6: the Codex Rules tab teaches the Ward (build, the die and the rou
 });
 
 // ---------------- isometric view (ui/ward_iso.js, ui/assets.js) ----------------
-const ISO = await import('../graftwork/ui/ward_iso.js');
 const { assets, createAssets } = await import('../graftwork/ui/assets.js');
 
 await t('iso: every cell centre picks its own cell, points off the plinth pick nothing, the wall above a back-row room picks that room', async () => {
-  const { run } = await setup({ seed: 'iso1' }); const w = run.ward;
-  for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) { const c = ISO.cellC(w, x, y); assert.deepEqual(ISO.pick(w, c.x, c.y), { x, y }, `cell ${x},${y}`); assert.deepEqual(ISO.pick(w, c.x + ISO.TW * 0.3, c.y), { x, y }, 'inside the diamond'); }
+  const { app, run, flow } = await setup({ seed: 'iso1' }); const w = run.ward; flow.route(); frames(app, 5); wide(app); ISO.camZoomBy(0.8, 640, 306); frames(app, 3);
+  for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) { const c = ISO.cellC(w, x, y); if (!ISO.overMap(c.x, c.y)) continue; assert.deepEqual(ISO.pick(w, c.x, c.y), { x, y }, `cell ${x},${y}`); const ex = c.x + ISO.TW * 0.3 * ISO.CAM.z; if (ISO.overMap(ex, c.y)) assert.deepEqual(ISO.pick(w, ex, c.y), { x, y }, 'inside the diamond'); }
   assert.equal(ISO.pick(w, 20, 20), null); assert.equal(ISO.pick(w, 1270, 700), null);
   layout(run, [['rm_entrance', 0, 2], ['rm_ward', 4, 0]]);
-  const top = ISO.cellC(w, 4, 0);
-  assert.deepEqual(ISO.pick(w, top.x, top.y - ISO.TH / 2 - 12), { x: 4, y: 0 }, 'the wall volume of a room on the back row');
-  assert.equal(ISO.pick(w, top.x, top.y - 200), null);
-  const tl = ISO.cellC(w, 0, 0), br = ISO.cellC(w, w.w - 1, w.h - 1), rt = ISO.cellC(w, w.w - 1, 0), lt = ISO.cellC(w, 0, w.h - 1), M = ISO.MAPR;
-  assert.ok(lt.x - ISO.TW / 2 >= M.x && rt.x + ISO.TW / 2 <= M.x + M.w && tl.y - 70 >= M.y && br.y + ISO.TH / 2 + 14 <= M.y + M.h, 'the whole floor fits the map panel (logical px: the same at every stage scale)');
+  frames(app, 3); wide(app);
+  const top = ISO.cellC(w, 4, 0), z = ISO.CAM.z;
+  assert.deepEqual(ISO.pick(w, top.x, top.y - (ISO.TH / 2 + 12) * z), { x: 4, y: 0 }, 'the wall volume of a room on the back row');
+  assert.equal(ISO.pick(w, top.x, top.y - 400), null);
+  assert.equal(ISO.pick(w, 100, 300), null, 'outside the map panel nothing is picked');
+  // the camera frames the built rooms large; pan and zoom are manual until Recenter
+  ISO.camRecenter(); frames(app, 5);
+  const big = ISO.CAM.z; assert.ok(big > 1.5, 'a small cluster is drawn large: zoom ' + big);
+  const cw = ISO.cellW(w, 0, 2), sc0 = ISO.cellC(w, 0, 2); assert.ok(Math.abs(sc0.x - (ISO.MAPR.x + ISO.MAPR.w / 2 + (cw.x - ISO.CAM.x) * big)) < 1.5, 'toScreen matches the camera');
+  ISO.camPanBy(40, 0); assert.ok(ISO.CAM.manual && ISO.cellC(w, 0, 2).x > sc0.x + 30, 'a pan moves the view'); ISO.camRecenter(); frames(app, 5); assert.ok(!ISO.CAM.manual);
 });
 
 await t('iso: a click at a room\'s iso position switches its power, a click on an empty cell does nothing (morning); rooms register a world hit box', async () => {
@@ -665,7 +670,7 @@ await t('iso: monsters stand inside their room (one figure each, max 5), elites 
   const A = ISO.lastActors(), mons = A.filter((a) => a.kind === 'monster'), el = A.filter((a) => a.kind === 'elite'), hero = A.filter((a) => a.kind === 'hero');
   assert.equal(mons.length, 5 + 2, 'a full ward shows 5 figures (the cap) and the other ward 2'); assert.equal(el.length, 1); assert.equal(hero.length, 1);
   assert.equal(el[0].lvl, 2); assert.ok(el[0].h > mons[0].h, 'elites are larger');
-  const room = (id) => { const r = run.ward.rooms[id], c = ISO.cellC(run.ward, r.x, r.y); return (a) => Math.abs(a.x - c.x) < ISO.TW / 2 && Math.abs(a.y - c.y) < ISO.TH / 2; };
+  const room = (id) => { const r = run.ward.rooms[id], c = ISO.cellW(run.ward, r.x, r.y); return (a) => Math.abs(a.x - c.x) < ISO.TW / 2 && Math.abs(a.y - c.y) < ISO.TH / 2; };
   assert.equal(mons.filter(room(wd)).length, 5, 'they stand inside the floor diamond of their room');
   for (let i = 1; i < A.length; i++) assert.ok(A[i - 1].y <= A[i].y, 'actors are drawn sorted by screen y');
   run.ward.rooms[wd].on = false; frames(app, 3);
@@ -676,7 +681,7 @@ await t('iso: the hero stands on its room and walks smoothly cell to cell (betwe
   const { app, run, flow } = await setup({ seed: 'iso5' });
   const [a, b] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]);
   run.ward.deck.hand = []; flow.route(); frames(app, 200);
-  const ca = ISO.cellC(run.ward, 0, 2), cb = ISO.cellC(run.ward, 1, 2), H0 = () => ISO.lastActors().find((x) => x.kind === 'hero');
+  const ca = ISO.cellW(run.ward, 0, 2), cb = ISO.cellW(run.ward, 1, 2), H0 = () => ISO.lastActors().find((x) => x.kind === 'hero');
   assert.ok(Math.abs(H0().x - ca.x) < 8 && Math.abs(H0().y - ca.y) < 10, 'standing on the entrance');
   const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.12, done: null, wait: false }; frames(app, 1);
   const h = H0(); assert.ok(h.x > ca.x + 3 && h.x < cb.x, 'between the two centres'); assert.equal(h.flip, 1, 'faces right-down'); assert.ok(h.moving);
@@ -706,7 +711,7 @@ await t('assets loader: lazy, @1x on phones and @2x on desktop, null while loadi
 
 await t('iso: with no art the rooms are procedural blocks; with a manifest the sprites are drawn aligned by floorCx / floorCy / floorW', async () => {
   const { app, run, flow } = await setup({ seed: 'iso6' });
-  const [ent, wd, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2], ['rm_quarry', 2, 2]]);
+  const [ent, cor, wd, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]]);
   run.ward.deck.hand = []; flow.route(); frames(app, 100);
   const calls = []; const dI = app.ctx.drawImage; app.ctx.drawImage = (...a) => { calls.push(a); };
   const img = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 };
@@ -716,7 +721,7 @@ await t('iso: with no art the rooms are procedural blocks; with a manifest the s
     assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: def('a.webp'), rm_quarry: def('q.webp') }, actors: {}, icons: {}, cards: {}, cardsById: {} };
     assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, img }); assets.imgs.set('q.webp', { ok: true, img: { ...img } });
     run.ward.rooms[qu].on = false; frames(app, 3);
-    const sp = calls.filter((c) => c[0] === img && c.length === 5), c1 = ISO.cellC(run.ward, 1, 2), s = ISO.TW * 0.76 / 380;
+    const sp = calls.filter((c) => c[0] === img && c.length === 5), c1 = ISO.cellW(run.ward, 2, 2), s = ISO.TW / 380;
     assert.ok(sp.length >= 1, 'the ward sprite was drawn');
     const call = sp[sp.length - 1]; assert.ok(Math.abs(call[1] - (c1.x - 200 * s)) < 1 && Math.abs(call[2] - (c1.y - 300 * s)) < 1 && Math.abs(call[3] - 400 * s) < 1, 'aligned by the floor centre and scaled by the floor width');
     assert.ok(calls.filter((c) => c[0] === assets.imgs.get('q.webp').img).length === 0, 'the dark quarry is not drawn from the plain sprite');
@@ -751,6 +756,27 @@ await t('iso: a full floor (10 rooms, 40 monsters) stays within a canvas-call bu
   run.ward.deck.hand = []; flow.route(); frames(app, 100);
   const c0 = app.ctx.__calls; frames(app, 20); const per = (app.ctx.__calls - c0) / 20;
   assert.ok(per < 6000, 'canvas calls per frame ' + Math.round(per));
+});
+
+await t('camera: wheel and pinch zoom, a drag pans without tapping a room, C and the Recenter button return to the fit', async () => {
+  const { app, run, flow } = await setup({ seed: 'cam1' });
+  const [ent, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_quarry', 1, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const z0 = ISO.CAM.z; assert.ok(!ISO.CAM.manual);
+  app.mouse.x = 640; app.mouse.y = 300; app.mouse.wheel = -300; frames(app, 3);
+  assert.ok(ISO.CAM.manual && ISO.CAM.tz > z0, 'the wheel zooms in');
+  key(app, 'c'); frames(app, 3); assert.ok(!ISO.CAM.manual && Math.abs(ISO.CAM.z - z0) < 0.01, 'C recenters');
+  // a drag across a room is a pan: the room is not toggled, the view moved
+  const c = cellCenter(1, 2), x0 = ISO.cellC(run.ward, 1, 2).x;
+  const m = app.mouse; m.x = c.x; m.y = c.y; m.pressed = true; m.down = true; app.tick(1 / 60);
+  for (let i = 1; i <= 6; i++) { m.x = c.x + i * 6; app.tick(1 / 60); }
+  m.released = true; m.down = false; app.tick(1 / 60); frames(app, 2);
+  assert.equal(run.ward.rooms[qu].on, true, 'a pan is not a tap'); assert.ok(ISO.CAM.manual && ISO.cellC(run.ward, 1, 2).x > x0 + 20, 'the map moved with the pointer');
+  // pinch: a second finger spreads away
+  const z1 = ISO.CAM.tz; m.x = 600; m.y = 300; m.down = true; m.second = true; m.p2 = { x: 700, y: 300 }; app.tick(1 / 60);
+  m.p2 = { x: 800, y: 300 }; app.tick(1 / 60); assert.ok(ISO.CAM.tz > z1, 'pinching out zooms in');
+  m.down = false; m.second = false; m.p2 = null; frames(app, 2);
+  click(app, ISO.MAPR.x + 24, ISO.MAPR.y + 8 + 2 * 44 + 20); frames(app, 3); assert.ok(!ISO.CAM.manual, 'the Recenter button');
 });
 
 console.log(`${n} ward UI checks passed`);
