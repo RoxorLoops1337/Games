@@ -310,7 +310,7 @@ export default {
       if (this.q) app.text(this.q + caret, sx + 10, 111, { size: 15, ui: true, color: COL.vellum });
       else app.text('Type to search seen entries', sx + 10, 111, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
     } else {
-      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in six panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
+      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in eight panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     }
     const CX = 28, CY = 144, CW = W - 56, CH = H - 144 - 20;
     app.reg('scroll-codex', CX, 0, CW, H, { overlay: true }); // every cell clips its own content
