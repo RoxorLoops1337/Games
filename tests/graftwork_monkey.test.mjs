@@ -212,7 +212,7 @@ function playOne(hero, idx) {
       titleTicks++;
       if (titleTicks > 400) { titleTicks = 0; flow.start({ hero, seed: `monkey-${id}-${ctxInfo.tick}` }); uiStarts--; }
     } else titleTicks = 0;
-    if (combatTicks > 1500) { botFight(); combatTicks = 0; continue; }
+    if (combatTicks > 500) { botFight(); combatTicks = 0; continue; }
     if (r < 0.40) doClick(R);
     else if (r < 0.55) doKey(R);
     else if (r < 0.63) doDrag(R);

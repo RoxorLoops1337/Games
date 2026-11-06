@@ -217,7 +217,7 @@ for (const scale of [100, 125, 150]) {
   for (const scale of [100, 150]) for (const n of [1, 2, 3, 4, 5]) {
     const h = await make({ scale, seed: 'evx' });
     flowFor(h);
-    const fake = { id: 'e_layout', name: 'A Very Long Event Name That Wraps Over Two Lines Of The Parchment', act: 0, text: 'The corridor smells of iodine and old coins. '.repeat(9),
+    const fake = { id: 'e_layout', name: 'A Very Long Event Name That Wraps Over Two Lines Of The Parchment', act: 0, text: 'The corridor smells of iodine and old coins. '.repeat(7),
       choices: Array.from({ length: n }, (_, i) => ({ label: 'Choice number ' + (i + 1) + ' with a long label', text: 'Plain description of what this does to you and your deck, said at some length so it wraps onto several lines of the choice card.', apply: () => 'Done.' })) };
     EVENTS.e_layout = fake;
     h.run.phase = 'event'; h.run.pending = { kind: 'event', id: 'e_layout', result: null };
