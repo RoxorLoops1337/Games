@@ -23,7 +23,7 @@ export const SEL_Y = 470, SEL_S = 1.18;           // desktop selected (click-to-
 export const PREVIEW_Y = 400, PREVIEW_S = 1.0;    // touch tap preview
 export const PLAY_BTN = { w: 120, h: 52 }, CANCEL_BTN = 44;
 export const AIM_LINE = PLAY_LINE - 40, ARM_Y = 400, DISARM_Y = 440;
-export const ENEMY_REGION = { x0: 500, x1: 1252 };
+export const ENEMY_REGION = { x0: 470, x1: 1262 };
 export const GOLD_POS = { x: 300, y: 28 };
 export const DECK_BTN = { x: 1020, y: 9, w: 108, h: 38 };
 // Top-right x 1128..1272 y 0..56 is RESERVED for the global Pause and Fullscreen buttons: nothing of ours may enter it.
@@ -53,15 +53,15 @@ export function handStrip(i, n) {
 export function enemySlots(defs) {
   const n = defs.length;
   if (!n) return [];
-  const gap = n > 3 ? 6 : 16;
+  const gap = n > 3 ? 10 : 40;
   const bs = defs.map((d) => { const b = enemyBounds(d) || { w: 150, h: 170 }; return { w: Math.max(40, b.w), h: Math.max(40, b.h) }; });
   const regionW = ENEMY_REGION.x1 - ENEMY_REGION.x0;
   const maxH = Math.max(...bs.map((b) => b.h));
   let sc = Math.min(1, ENEMY_ART_H / maxH);
-  const widths = (k) => bs.map((b) => Math.max(ENEMY_SLOT_MIN, b.w * k + 14));
+  const widths = (k) => bs.map((b) => Math.max(ENEMY_SLOT_MIN, b.w * k + 34));
   const total = (k) => widths(k).reduce((a, w) => a + w, 0) + gap * (n - 1);
-  while (total(sc) > regionW && sc > 0.55) sc -= 0.02;
-  sc = Math.max(0.55, sc);
+  while (total(sc) > regionW && sc > 0.5) sc -= 0.02;
+  sc = Math.max(0.5, sc);
   let ws = widths(sc);
   const tot = ws.reduce((a, w) => a + w, 0) + gap * (n - 1);
   if (tot > regionW) ws = ws.map((w) => w * (regionW - gap * (n - 1)) / (tot - gap * (n - 1))); // squeeze slots, never the min below ~100
