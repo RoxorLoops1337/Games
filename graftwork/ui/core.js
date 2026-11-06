@@ -81,12 +81,35 @@ export function createApp(canvas, opts = {}) {
     };
   };
   const toLogical = (e) => { const r = canvas.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return { x: app.mouse.x, y: app.mouse.y }; return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
-  canvas.addEventListener('pointermove', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; });
-  canvas.addEventListener('pointerdown', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = true; app.mouse.pressed = true; app.mouse.button = e.button; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener('pointerup', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false; app.mouse.released = true; app.mouse.touchUp = !!e.pointerType && e.pointerType !== 'mouse'; });
+  // Only the primary pointer drives the cursor: a second finger must not drag the pointer around or fake a release (combat reads app.mouse.second to cancel a drag).
+  // Touch drags also scroll: a vertical move past PAN_START logical px feeds app.mouse.wheel (unless the screen pans itself and sets app.touchPan = false)
+  // and the lift is not a click, so scrolling a list never buys what the finger started on.
+  const PAN_START = 14;
+  let pan = null;
+  const isTouchEv = (e) => !!e.pointerType && e.pointerType !== 'mouse';
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.isPrimary === false) return;
+    const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y;
+    if (pan && app.mouse.down && isTouchEv(e)) {
+      if (!pan.moved && Math.abs(p.y - pan.y0) > PAN_START) { pan.moved = true; pan.last = pan.y0 + Math.sign(p.y - pan.y0) * PAN_START; }
+      if (pan.moved) { if (app.touchPan !== false) app.mouse.wheel -= (p.y - pan.last) / 0.7; pan.last = p.y; }
+    }
+  });
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.isPrimary === false) { app.mouse.second = true; return; }
+    const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = true; app.mouse.pressed = true; app.mouse.button = e.button;
+    app.mouse.touch = isTouchEv(e); pan = { y0: p.y, last: p.y, moved: false };
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (e.isPrimary === false) return;
+    const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false;
+    if (!(pan && pan.moved && app.touchPan !== false)) app.mouse.released = true; // a scroll gesture ends without a click
+    app.mouse.touchUp = isTouchEv(e); pan = null;
+  });
   // Touch fires pointerleave right after pointerup: moving the pointer away at once would eat the tap (clicks are resolved on the next tick). Touch parks the pointer after that tick instead.
   canvas.addEventListener('pointerleave', (e) => { if (!app.mouse.down && !(e && e.pointerType && e.pointerType !== 'mouse')) { app.mouse.x = -999; app.mouse.y = -999; } });
-  canvas.addEventListener('pointercancel', () => { app.mouse.down = false; app.mouse.released = false; app.mouse.x = -999; app.mouse.y = -999; });
+  canvas.addEventListener('pointercancel', (e) => { if (e && e.isPrimary === false) return; app.mouse.down = false; app.mouse.released = false; app.mouse.x = -999; app.mouse.y = -999; pan = null; });
   canvas.addEventListener('wheel', (e) => { app.mouse.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); if (app.navButtons && e.key === 'Tab') e.preventDefault(); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
@@ -347,7 +370,7 @@ export function createApp(canvas, opts = {}) {
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    app.tip = null; app.cursor = 'default'; LAYOUT.clear();
+    app.tip = null; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
     const stack = app.stack;
     for (let i = 0; i < stack.length; i++) {
       const s = stack[i];

@@ -116,6 +116,7 @@ export default {
     // ---- input: scroll / drag / keys ----
     const overChart = !app.blocked && mouse.x >= CHART.x && mouse.x <= CHART.x + CHART.w;
     if (!app.blocked) {
+      app.touchPan = false; // the chart pans itself below
       if (mouse.wheel && overChart) { this.scroll += mouse.wheel * 0.7; this.scrollTarget = null; }
       if (mouse.pressed && overChart && !this.banner) { this.drag = { y: mouse.y, s: this.scroll }; this.moved = false; }
       if (this.drag && mouse.down) { const dy = mouse.y - this.drag.y; if (Math.abs(dy) > 6) this.moved = true; if (this.moved) { this.scroll = this.drag.s - dy; this.scrollTarget = null; } }

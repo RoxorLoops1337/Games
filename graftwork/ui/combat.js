@@ -1061,6 +1061,7 @@ function hoverCand(m) {
 function updateInput(app, dt) {
   const m = app.mouse, c = S.c, u = U();
   ensureTouch(app);
+  app.touchPan = !!(S.modal || c.pending); // a finger drag is a card drag in combat; the pile and pick lists scroll by drag
   const mine = app.stack[app.stack.length - 1] === SCREEN;
   const keys = mine ? app.pressedKeys.slice() : [];
   app.escBusy = !!(mine && (S.drag || S.modal || S.sel || (S.potSel !== null && S.potSel !== undefined) || u.endConfirm || c.pending));
