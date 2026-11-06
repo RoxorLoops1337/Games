@@ -10,6 +10,8 @@ export const TIER = {
   greedy: { label: 'GREEDY', color: '#F2C14E', ink: '#2b1e00' },
   weird: { label: 'WEIRD', color: '#b78be6', ink: '#1d0f33' },
 };
+// the text scale as a multiplier (settings may hold 1.25 or 125)
+export const tscale = (app) => { const v = app.textScale; return v >= 50 ? v / 100 : v > 0 ? v : 1; };
 export const schoolColor = (id) => (SCHOOLS[id] && SCHOOLS[id].color) || COL[id] || '#aaa';
 
 export function shatterChance(run) {
@@ -40,10 +42,9 @@ export function resonanceInfo(run, schoolId, counts) {
   return { name: s.name, n, next, color: s.color, lines, blurb: s.blurb };
 }
 
-// size is the UNSCALED size (what you pass to app.text); the text scale is applied here so the measuring matches the drawing.
-// Pass {fixed:true} when the caller draws with app.text(..., {fixed:true}) at exactly this size.
-export function wrapLimit(app, str, maxW, size0, maxLines, o = {}) {
-  const size = Math.round(size0 * (o.fixed ? 1 : (app.textScale || 1)));
+// size is the UNSCALED size (what you pass to app.text); app.wrap / app.measure apply the text scale. Pass {fixed:true} when drawing with fixed:true.
+
+export function wrapLimit(app, str, maxW, size, maxLines, o = {}) {
   const lines = app.wrap(str, maxW, size, o);
   if (lines.length <= maxLines) return lines;
   const out = lines.slice(0, maxLines);

@@ -6,7 +6,7 @@ import * as RUN from '../engine/run.js';
 import { RELICS, POTIONS } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
-import { wrapLimit, keyBadge } from './graft_parts.js';
+import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -44,7 +44,7 @@ export default {
   draw(app) {
     if (!st) return;
     const ctx = app.ctx, run = st.run, rw = st.rw;
-    const S = app.textScale || 1, K = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true });
+    const S = tscale(app), K = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true });
     drawBackground(ctx, ACT_THEME[run.act] || 'ward', st.t);
     ctx.save(); ctx.fillStyle = 'rgba(8,6,5,.55)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
 
@@ -83,7 +83,7 @@ export default {
     const toGraft = rw.graft && RUN.graftableCards(run).length > 0;
     const label = toGraft ? 'Continue to the graft table' : 'Continue to the map';
     app.reg('reward-continue', 360, 646, 560, 60, { group: 'continue' });
-    if (app.button(label, 360, 646, 560, 60, { size: Math.round(26 * Math.min(S, 1.25) / S), fill: '#5a3f10', color: '#ffe9a8' })) doContinue(app);
+    if (app.button(label, 360, 646, 560, 60, { size: Math.round(24 * Math.min(S, 1.25) / S), fill: '#5a3f10', color: '#ffe9a8' })) doContinue(app);
     if (app.inRect(360, 646, 560, 60)) app.tooltip(label, toGraft ? 'Next you pick one of your cards and one graft. Or decline for a small prize.' : 'Back to the map.', { color: COL.lamp });
 
     if (!st) return;
@@ -114,7 +114,7 @@ function rowInfo(r) {
 function drawRow(app, r, i, y, compact, K) {
   const ctx = app.ctx, run = st.run, rw = st.rw;
   const info = rowInfo(r);
-  const S = app.textScale || 1, k = Math.min(S, 1.25);
+  const S = tscale(app), k = Math.min(S, 1.25);
   const lh = Math.round(15 * k * 1.22), tx = 84, tw = PW - tx - 160;
   const maxLines = compact ? 1 : r.id === 'relic' ? 3 : 2;
     const dl = r.id === 'gold' ? [info.line] : wrapLimitK(app, info.line, tw, Math.round(15 * k), maxLines);
@@ -167,7 +167,7 @@ function wrapLimitK(app, str, maxW, px, maxLines) { return wrapLimit(app, str, m
 
 function drawChoices(app, y, K) {
   const ctx = app.ctx, rw = st.rw, init = st.init;
-  const S = app.textScale || 1, k = Math.min(S, 1.25);
+  const S = tscale(app), k = Math.min(S, 1.25);
   const n = init.choices.length;
   const w = 264, h = 262, gap = 20;
   const totalW = n * w + (n - 1) * gap, x0 = 640 - totalW / 2;

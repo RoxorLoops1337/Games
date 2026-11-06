@@ -9,6 +9,7 @@ import { drawNodeIcon, drawRelic, drawPotion, drawHeart, drawCoin } from '../art
 import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import { maybeTip } from './tutorial.js';
+import { tscale } from './graft_parts.js';
 
 const ACT_NAMES = { 1: 'The Ward', 2: 'The Cellar Market', 3: 'The Gilt Theatre' };
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
@@ -314,7 +315,7 @@ export default {
   },
 
   leftPanel(app, run) {
-    const g = app.ctx, hero = HEROES[run.hero], S = app.textScale || 1;
+    const g = app.ctx, hero = HEROES[run.hero], S = tscale(app);
     const X = 12, PW = 300, IW = PW - 36, BOT = 708 - 12;
     const cs = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true }); // text that scales, but not past what the panel can hold
     app.panel(X, 12, PW, 696, { fill: 'rgba(22,18,16,.94)', r: 12 });
@@ -429,7 +430,7 @@ export default {
 
   // legend and resonance are reference panels: they follow the text scale up to 125%
   rightPanel(app, run) {
-    const ts = app.textScale; app.textScale = Math.min(ts, 1.25);
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
     try { this.rightPanelInner(app, run); } finally { app.textScale = ts; }
   },
   rightPanelInner(app, run) {

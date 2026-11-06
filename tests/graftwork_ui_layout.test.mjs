@@ -30,9 +30,9 @@ async function make(opts = {}) {
   const rawText = app.text;
   app.text = (str, x, y, o = {}) => {
     if (depth > 0 && str !== '' && str !== undefined && str !== null && o.alpha !== 0) {
-      const size = Math.round((o.size || 18) * (o.fixed ? 1 : app.textScale)), lineH = o.lineH || Math.round(size * 1.22);
-      const lines = o.maxW ? app.wrap(String(str), o.maxW, size, o) : String(str).split('\n');
-      let w = 0; for (const l of lines) w = Math.max(w, app.measure(l, size, o));
+      const k = o.fixed ? 1 : app.textScale, usz = o.size || 18, size = Math.round(usz * k), lineH = o.lineH ? Math.round(o.lineH * k) : Math.round(size * 1.22);
+      const lines = o.maxW ? app.wrap(String(str), o.maxW, usz, o) : String(str).split('\n');
+      let w = 0; for (const l of lines) w = Math.max(w, app.measure(l, usz, o));
       const h = (lines.length - 1) * lineH + size;
       const al = o.align || 'left', bl = o.baseline || 'top';
       const x0 = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x;

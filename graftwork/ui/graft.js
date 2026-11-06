@@ -10,7 +10,7 @@ import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../ar
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import {
-  TIER, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
+  TIER, tscale, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
 const SC = 1.05;                       // offered card scale
@@ -68,7 +68,7 @@ export default {
   // This table is the densest screen in the game (3 cards, 4 patches, the bill and the buttons in 1280x720), so the text
   // scale is honoured up to 110% here and no further: past that the fixed columns of the UX spec cannot hold the words.
   draw(app) {
-    const ts = app.textScale; app.textScale = Math.min(ts, 1.1);
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.1);
     try { this.drawTable(app); } finally { app.textScale = ts; }
   },
   drawTable(app) {
@@ -189,7 +189,7 @@ function drawTopBar(app, strain, interactive) {
   app.text(strain.strain === 0 ? 'Nothing is Tithed' : `${strain.tithed.length} card${strain.tithed.length === 1 ? '' : 's'} Tithed now${strain.backfire ? `, Backfire ${strain.backfire}` : ''}`, sx, 40, { size: 15, ui: true, color: DIM });
   if (app.inRect(sx - 6, 6, 250, 58)) app.tooltip('Strain', 'Weight over Budget. Each point lands a Tithe on the cheapest, oldest Bare card in your deck.', { color: COL.bad });
   // purse + hp
-  const pk = Math.min(app.textScale || 1, 1.25), pz = Math.round(22 * pk);
+  const pk = Math.min(tscale(app), 1.25), pz = Math.round(22 * pk);
   app.reg('graft-purse', 740, 8, 262, 50, { group: 'purse' });
   ICONS.drawCoin(ctx, 756, 30, 26);
   app.text(String(run.gold), 774, 30 - pz * 0.6, { size: pz, fixed: true, bold: true, color: COL.gold, shadow: true, maxW: 70 });
@@ -259,8 +259,8 @@ function drawOfferCard(app, r, i, c) {
 
   // caption row
   const base = CARDS[inst.id];
-  const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + '   ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
-  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 40 });
+  const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
+  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
   keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 20);
 
   if (hover) {
