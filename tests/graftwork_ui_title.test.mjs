@@ -97,7 +97,7 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   app.go('title'); frames(app, 30);
   click(app, 560, 442); assert.equal(log.codex, 1, 'codex');
   click(app, 640, 554); frames(app, 20); assert.equal(title.state, 'credits'); key(app, 'Escape'); assert.equal(title.state, 'menu');
-  click(app, 640, 498); frames(app, 10); assert.equal(app.stack.length, 2, 'settings pushed');
+  click(app, 555, 498); frames(app, 10); assert.equal(app.stack.length, 2, 'settings pushed'); // Settings is the left half of the Settings | Archive row
   click(app, 340 + 600 - 54 + 19, 14 + 16 + 19); frames(app, 2); assert.equal(app.stack.length, 1, 'X closes settings');
   click(app, 1245, 675); assert.equal(meta.settings.muted, true, 'mute corner toggle'); assert.equal(log.muted, true);
 }

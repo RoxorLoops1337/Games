@@ -1,5 +1,6 @@
 // THE GRAFT TABLE: pick one of your own cards and one graft, read the whole bill, then sew.
 // Immediate-mode screen. The run is only changed through engine/run.js (applyGraft, skipGraft, rerollGraftOffer, afterGraft).
+import { newRibbon } from './archive_kit.js';
 import { COL, EASE, clamp, lerp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import { maybeTip } from './tutorial.js';
@@ -9,12 +10,13 @@ import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
+import { lnw } from '../art/linework.js';
 import {
   TIER, tscale, schoolColor, shatterChance, hpPerPlay, cantReason, cantGraftWhy, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
-import { KEYWORDS, keywordsIn } from './tooltips.js';
-const GLOSS = ['Line', 'Knot', 'Claim', 'Ringing', 'Tithe', 'Stitch', 'Slack'];
+import { glossTip } from './tooltips.js';
+import { cardLines } from '../engine/text.js';
 const SC = 1.05;                       // offered card scale
 const CW = CARD_W * SC, CH = CARD_H * SC;
 const CARD_Y = 274;                   // card centre line
@@ -247,7 +249,7 @@ function drawOfferCard(app, r, i, c) {
     // sewn-on patch badge
     const gc = schoolColor(c.g.school);
     ctx.save(); ctx.translate(cx + CW / 2 - 28, cy + CH / 2 - 30); ctx.rotate(0.12);
-    ctx.fillStyle = '#2b231e'; ctx.strokeStyle = gc; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); app.rr(-24, -16, 48, 32, 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#2b231e'; ctx.strokeStyle = gc; ctx.lineWidth = lnw(2); ctx.setLineDash([4, 3]); app.rr(-24, -16, 48, 32, 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
     drawSchoolGlyph(ctx, c.g.school, 0, 0, 9, gc); ctx.restore();
   } else {
     drawCard(ctx, cardSpec(inst), cx, cy, { scale: SC, tithed, selected: sel, hover, dim: dim ? 0.5 : 0 });
@@ -261,7 +263,7 @@ function drawOfferCard(app, r, i, c) {
     if (pairSel) drawCrack(ctx, cx, cy, CW, CH, overloadProgress(), st.t);
     else {
       ctx.save(); ctx.globalAlpha = 0.9 * deal;
-      app.rr(cx - 68, cy - CH / 2 - 15, 136, 22, 6); ctx.fillStyle = '#3a2a08'; ctx.fill(); ctx.strokeStyle = COL.lamp; ctx.lineWidth = 1.5; ctx.stroke();
+      app.rr(cx - 68, cy - CH / 2 - 15, 136, 22, 6); ctx.fillStyle = '#3a2a08'; ctx.fill(); ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(1.5); ctx.stroke();
       ctx.restore();
       app.text('NEXT = OVERLOAD', cx, cy - CH / 2 - 12, { size: 13, ui: true, bold: true, align: 'center', color: COL.lamp });
     }
@@ -274,8 +276,9 @@ function drawOfferCard(app, r, i, c) {
   const gTxt = inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare';
   const cap = twins.length > 1 ? `Copy #${twins.indexOf(inst) + 1} of ${twins.length}, ${gTxt}` : (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + gTxt; // copies of one card are told apart by number (the played count stays in the hover note)
   // phones inflate the caption: lift it so it never touches the AFTER panel below
-  const capH = Math.ceil(app.sz(14, { ui: true }) * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
-  app.text(cap, cx + 12, capY, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
+  const capO = { size: 14, ui: true, fit: { w: CW - 18, lines: 1 } }, capL = app.layoutText(cap, capO);
+  const capH = Math.ceil(capL.size * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
+  app.text(cap, cx + 14, capY, { ...capO, align: 'center', color: DIM, alpha: deal });
   keyBadge(app, String(i + 1), cx - CW / 2 + 12, capY + capH / 2);
 
   if (hover) {
@@ -288,7 +291,7 @@ function drawOfferCard(app, r, i, c) {
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
+    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }
@@ -319,6 +322,7 @@ function drawPatchTile(app, r, j, c) {
   if (sel) { ctx.shadowColor = COL.lamp; ctx.shadowBlur = 26; }
   drawPatchBody(app, g, x, y, w, h, { tier, sc, compact, sel, hover, dim });
   ctx.restore();
+  if (!dim && slide >= 1) newRibbon(app, r.gid, x + 3, y + 3, w, { size: 10 });
   keyBadge(app, GRAFT_KEYS[j].toUpperCase(), x - 14, y + h / 2);
 
   if (hover) {
@@ -328,9 +332,8 @@ function drawPatchTile(app, r, j, c) {
     if (compact) lines.push('Boon: ' + g.boon, 'Price: ' + g.price);
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
     if (info && st.rects.infoH < 60) lines.push(...info.lines.slice(0, 2)); // the info panel shows it when there is room
-    for (const kw of keywordsIn([g.boon, g.price]).filter((n) => GLOSS.includes(n)).slice(0, 1)) lines.push(`${kw}: ${KEYWORDS[kw].text.split('. ')[0].replace(/\.$/, '')}.`); // first-use jargon: one line on the first rules word the patch uses
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
-    app.tooltip(g.name, null, { lines, color: sc, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
+    app.tooltip(g.name, null, { lines, color: sc, gloss: [g.boon, g.price, String(g.tier || 'safe').toUpperCase()], school: g.school, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } }); // gloss: every rules word the Boon, Price, tier tag and weight pill name
     if (app.clicked(x, y, w, h)) clickGraft(app, j);
   }
 }
@@ -345,9 +348,9 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   grd.addColorStop(0, sel ? '#3a2e24' : '#2f2620'); grd.addColorStop(1, sel ? '#2a211a' : '#211b17');
   ctx.fillStyle = grd; ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = sel ? COL.lamp : hover ? '#fff3c4' : 'rgba(232,220,196,.35)'; ctx.stroke();
+  ctx.lineWidth = lnw(sel ? 3 : 2); ctx.strokeStyle = sel ? COL.lamp : hover ? '#fff3c4' : 'rgba(232,220,196,.35)'; ctx.stroke();
   // stitched inner border in school colour
-  ctx.setLineDash([6, 5]); ctx.lineWidth = 1.8; ctx.strokeStyle = rgba(sc, 0.85);
+  ctx.setLineDash([6, 5]); ctx.lineWidth = lnw(1.8); ctx.strokeStyle = rgba(sc, 0.85);
   app.rr(x + 5, y + 5, w - 10, h - 10, 7); ctx.stroke(); ctx.setLineDash([]);
   // swatch
   const sw = 64, sx = x + 12, sy = y + 12, sh = h - 24;
@@ -355,49 +358,55 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   const fg = ctx.createLinearGradient(sx, sy, sx + sw, sy + sh);
   fg.addColorStop(0, rgba(sc, 0.75)); fg.addColorStop(1, rgba(sc, 0.3));
   ctx.fillStyle = fg; ctx.fillRect(sx, sy, sw, sh);
-  ctx.strokeStyle = 'rgba(14,12,10,.22)'; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.strokeStyle = 'rgba(14,12,10,.22)'; ctx.lineWidth = lnw(1); ctx.beginPath();
   for (let i = -sh; i < sw; i += 6) { ctx.moveTo(sx + i, sy); ctx.lineTo(sx + i + sh * 0.7, sy + sh); }
   ctx.stroke();
   ctx.restore();
-  ctx.lineWidth = 1.5; ctx.strokeStyle = sc; app.rr(sx, sy, sw, sh, 6); ctx.stroke();
-  ctx.beginPath(); ctx.arc(sx + sw / 2, sy + sh / 2, 21, 0, 6.283); ctx.fillStyle = 'rgba(20,16,14,.82)'; ctx.fill(); ctx.strokeStyle = sc; ctx.lineWidth = 2; ctx.stroke();
+  ctx.lineWidth = lnw(1.5); ctx.strokeStyle = sc; app.rr(sx, sy, sw, sh, 6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(sx + sw / 2, sy + sh / 2, 21, 0, 6.283); ctx.fillStyle = 'rgba(20,16,14,.82)'; ctx.fill(); ctx.strokeStyle = sc; ctx.lineWidth = lnw(2); ctx.stroke();
   drawSchoolGlyph(ctx, g.school, sx + sw / 2, sy + sh / 2, 15, sc);
   ctx.restore();
 
   const tx = x + 88, tw = w - 88 - 12;
   // tier ribbon
-  const rw = Math.max(74, Math.ceil(app.measure(tier.label, 13, { ui: true, bold: true })) + 26); // phones inflate the label
+  const tierO = { size: 13, ui: true, bold: true, fit: { w: 104, lines: 1 } }, tierL = app.layoutText(tier.label, tierO);
+  const rw = Math.max(60, Math.ceil(tierL.w) + 26); // the label shrinks to fit; the ribbon follows the measured text
   ctx.save();
   ctx.fillStyle = tier.color;
   ctx.beginPath(); ctx.moveTo(x + w - 10 - rw, y + 9); ctx.lineTo(x + w - 10, y + 9); ctx.lineTo(x + w - 10, y + 27); ctx.lineTo(x + w - 10 - rw, y + 27); ctx.lineTo(x + w - 10 - rw + 8, y + 18); ctx.closePath(); ctx.fill();
   ctx.restore();
-  app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 11, { size: 13, ui: true, bold: true, align: 'center', color: tier.ink });
+  app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 9 + (18 - tierL.size) / 2 - 1, { ...tierO, align: 'center', color: tier.ink });
   // weight tag: a "W2" pill (with the staples inside) so the glyphs are never unlabelled
-  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4;
-  const ww = Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + wst + wpad * 2, wx = x + w - 10 - rw - 6 - ww;
-  ctx.save(); app.rr(wx, y + 9, ww, 18, 9); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(216,221,224,.7)'; ctx.stroke(); ctx.restore();
-  app.text(wl, wx + wpad, y + 11, { size: 13, ui: true, bold: true, color: '#e8edf0' });
-  const sx0 = wx + wpad + Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + 4;
+  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4, wO = { size: 13, ui: true, bold: true, fit: { w: 52, lines: 1 } }, wL = app.layoutText(wl, wO);
+  const ww = Math.ceil(wL.w) + wst + wpad * 2, wx = x + w - 10 - rw - 12 - ww;
+  ctx.save(); app.rr(wx, y + 9, ww, 18, 9); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = 'rgba(216,221,224,.7)'; ctx.stroke(); ctx.restore();
+  app.text(wl, wx + wpad, y + 9 + (18 - wL.size) / 2 - 1, { ...wO, color: '#e8edf0' });
+  const sx0 = wx + wpad + Math.ceil(wL.w) + 4;
   for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, sx0 + i * 8, y + 13, 5, '#d8dde0');
 
   // name
-  app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
+  app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true, fit: { w: Math.max(40, wx - 8 - tx), lines: 1 } });
   // boon + price
   // phones inflate small text (SMALL floor): scale label column, line height and the lines budget by the real size
   const lk = app.sz(13, { ui: true, bold: true }) / 13;
   const lo = Math.round(40 * lk);
   const nameBot = y + 7 + app.sz(compact ? 18 : 20) * 1.2;
   const yy0 = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
-  const avail = y + h - 4 - yy0 - 3;
+  // a dimmed tile keeps its own bottom row for the reason, so the label never sits on top of the Boon / Price text
+  const hp = g.mods.find((m) => m.k === 'maxHp');
+  const hpW = hp ? app.measure(`MAX HP ${hp.n}`, 13, { ui: true, bold: true }) + 14 + 8 : 0;
+  const dimO = { size: 15, bold: true, fit: { w: Math.max(60, tw - hpW), lines: 1 } }, dimL = dim ? app.layoutText('Cannot go on this card', dimO) : null;
+  const dimH = dim ? Math.ceil(dimL.size * 1.2) + 1 : 0;
+  const avail = y + h - 4 - yy0 - 3 - dimH;
   // try 14, 13, 12 px text until boon + price both fit whole (no ellipsis) in the tile; else cut the boon first
   let fs = 14, boonL, priceL, lh;
-  for (const sz of [14, 13, 12]) {
+  for (const sz of [14, 13, 12, 11, 10]) {
     fs = sz; lh = Math.round(app.sz(sz, { ui: true }) * 1.16);
     const total = Math.max(2, Math.floor((avail - 3) / lh));
     const bl = app.wrap(g.boon, tw - lo, sz, { ui: true }), pl = app.wrap(g.price, tw - lo, sz, { ui: true });
-    const cap = compact ? 2 : total;
+    const cap = total;
     if (bl.length + pl.length <= cap) { boonL = bl; priceL = pl; break; }
-    if (sz === 12) {
+    if (sz === 10) {
       const pn = Math.min(pl.length, Math.max(1, cap - 1)), bn = Math.max(1, cap - pn);
       boonL = wrapLimit(app, g.boon, tw - lo, sz, bn, { ui: true }); priceL = wrapLimit(app, g.price, tw - lo, sz, pn, { ui: true });
     }
@@ -408,14 +417,13 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   yy += boonL.length * lh + 3;
   app.text('Price', tx, yy, { size: 13, ui: true, bold: true, color: COL.bad });
   priceL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: fs, ui: true, color: '#ff7a7a' }));
-  const hp = g.mods.find((m) => m.k === 'maxHp');
   if (hp) {
     const label = `MAX HP ${hp.n}`;
     const lw = app.measure(label, 13, { ui: true, bold: true }) + 14;
-    app.rr(x + w - 12 - lw, y + h - 28, lw, 20, 5); ctx.save(); ctx.fillStyle = '#4a0f18'; ctx.fill(); ctx.strokeStyle = COL.bad; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+    app.rr(x + w - 12 - lw, y + h - 28, lw, 20, 5); ctx.save(); ctx.fillStyle = '#4a0f18'; ctx.fill(); ctx.strokeStyle = COL.bad; ctx.lineWidth = lnw(1.5); ctx.stroke(); ctx.restore();
     app.text(label, x + w - 12 - lw / 2, y + h - 26, { size: 13, ui: true, bold: true, align: 'center', color: '#ffb3bd' });
   }
-  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.62)'; app.rr(x, y, w, h, 10); ctx.fill(); ctx.restore(); app.text('Cannot go on this card', x + w / 2, y + h / 2 - 9, { size: 17, bold: true, align: 'center', color: '#ffb3bd', shadow: true }); }
+  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.62)'; app.rr(x, y, w, h, 10); ctx.fill(); ctx.restore(); app.text('Cannot go on this card', tx, y + h - 4 - dimH, { ...dimO, color: '#ffb3bd', shadow: true }); }
 }
 
 function drawInfoPanel(app, R, counts) {
@@ -448,15 +456,17 @@ function drawAfter(app, c) {
   app.reg('graft-after', x, y, w, h, { group: 'after' });
   app.panel(x, y, w, h, { fill: 'rgba(18,15,13,.9)', stroke: pair ? 'rgba(242,193,78,.7)' : 'rgba(232,220,196,.3)', lw: pair ? 2.5 : 2 });
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
+  if (pair && app.inRect(x + 12, y + 4, 118, 38)) glossTip(app, '', ['AFTER'], { x: x + 12, y: y + 4, w: 118, h: 38, band: DETAIL_BAND });
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
   const sub = st.note ? st.note.text : pair ? (st.mode === 'attach' ? `Sewing ${c.g.name} onto ${spec2name(c.inst)}...` : `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.`) : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
   const subX = x + (pair ? 134 : 196), subW = w - (pair ? 150 : 212);
-  const subL = wrapLimit(app, sub, subW, 14, 1, { ui: true });
-  app.text(subL[0], subX, y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM });
+  const subO = { size: 14, ui: true, fit: { w: subW, lines: 2 } }, subL = app.layoutText(sub, subO);
+  app.text(sub, subX, y + 8, { ...subO, color: st.note ? '#ff9aa6' : DIM });
+  const dy = Math.max(0, Math.ceil(subL.lines.length * subL.lineH) - 36); // a phone's inflated two-line hint pushes the rows down instead of onto them
 
   // rows
   const lx = x + 16;
-  const rowBudget = y + 46, rowStrain = y + 82, rowTithe = y + 114;
+  const rowBudget = y + 46 + dy, rowStrain = y + 82 + dy, rowTithe = y + 114 + dy;
   const vx = lx + Math.max(80, Math.ceil(app.measure('BUDGET', 14, { ui: true, bold: true })) + 10); // value column clears the inflated phone labels
   app.text('BUDGET', lx, rowBudget + 5, { size: 14, ui: true, bold: true, color: DIM });
   const wTxt = pair ? `${B.weight}/${B.budget}  →  ${A.weight}/${A.budget}` : `${A.weight}/${A.budget}`;
@@ -469,20 +479,23 @@ function drawAfter(app, c) {
   const sCol = A.strain > B.strain ? COL.bad : A.strain > 0 ? '#ffb36b' : COL.good;
   app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, vx, rowStrain, { size: 24, bold: true, color: sCol });
   let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} land${A.tithed.length === 1 ? 's' : ''} on Bare cards.`;
-  app.text(verdict, lx + 262, rowStrain + 4, { size: 16, ui: true, color: A.strain ? '#ffb3b3' : COL.good });
   // max hp
   let hpMod = null;
   if (pair) { const m = c.g.mods.find((k) => k.k === 'maxHp'); if (m && !(c.inst.waived && c.inst.waived.includes(c.g.id))) hpMod = m; }
+  let vw = x + w - 16 - (lx + 262);
   if (hpMod) {
-    const after = Math.max(10, run.maxHp + hpMod.n);
-    app.text(`MAX HP ${run.maxHp} → ${after}`, x + w - 16, rowStrain + 1, { size: 20, bold: true, align: 'right', color: COL.bad, shadow: true });
+    const after = Math.max(10, run.maxHp + hpMod.n), hpTxt = `MAX HP ${run.maxHp} → ${after}`, hpO = { size: 20, bold: true, fit: { w: 200, lines: 1 } }, hpL = app.layoutText(hpTxt, hpO);
+    app.text(hpTxt, x + w - 16, rowStrain + 1, { ...hpO, align: 'right', color: COL.bad, shadow: true });
+    vw -= Math.ceil(hpL.w) + 10; // the verdict gives way to the measured MAX HP label
   }
+  app.text(verdict, lx + 262, rowStrain + 4, { size: 16, ui: true, color: A.strain ? '#ffb3b3' : COL.good, fit: { w: vw, lines: 1 } });
 
   // tithe strip
   app.text('TITHED', lx, rowTithe + 7, { size: 14, ui: true, bold: true, color: COL.bad });
   const names = (u) => { const i = RUN.findInst(run, u); return i ? CARDS[i.id].name : '?'; };
   const tithedUids = pair ? A.tithed : strain.tithed;
-  let cx = lx + 80, cy = rowTithe;
+  const tx0 = lx + Math.max(80, Math.ceil(app.measure('TITHED', 14, { ui: true, bold: true })) + 12); // chips start clear of the (phone-inflated) label
+  let cx = tx0, cy = rowTithe;
   const chipH = 28, maxX = x + w - 16;
   let rows = 1, shown = 0;
   const anim = st.mode === 'attach' && st.anim ? st.anim : null;
@@ -492,12 +505,12 @@ function drawAfter(app, c) {
   for (const u of tithedUids) {
     const label = names(u);
     const cw = app.measure(label, 14, { ui: true, bold: true }) + 26;
-    if (cx + cw > maxX) { if (rows >= 2) break; rows++; cx = lx + 80; cy += chipH + 6; }
+    if (cx + cw > maxX) { if (rows >= 2) break; rows++; cx = tx0; cy += chipH + 6; }
     const isNew = pair && !pv.before.tithed.includes(u);
     const hov = app.inRect(cx, cy, cw, chipH);
     ctx.save();
     ctx.globalAlpha = isNew || !pair ? 1 : 0.65;
-    app.rr(cx, cy, cw, chipH, 6); ctx.fillStyle = '#2a1114'; ctx.fill(); ctx.strokeStyle = isNew ? '#ff4d63' : 'rgba(179,38,58,.7)'; ctx.lineWidth = isNew ? 2 : 1.5; ctx.stroke();
+    app.rr(cx, cy, cw, chipH, 6); ctx.fillStyle = '#2a1114'; ctx.fill(); ctx.strokeStyle = isNew ? '#ff4d63' : 'rgba(179,38,58,.7)'; ctx.lineWidth = lnw(isNew ? 2 : 1.5); ctx.stroke();
     ctx.restore();
     const p = anim ? seamProgress(u) : 1;
     ctx.save(); ctx.globalAlpha = 0.75; drawSeam(ctx, cx + cw / 2, cy + chipH / 2, cw - 6, chipH - 8, p, st.t); ctx.restore();
@@ -531,7 +544,7 @@ function drawAfter(app, c) {
     ctx.save();
     app.rr(lx, wy, WW, bh, 7);
     ctx.fillStyle = wn.gold ? 'rgba(80,58,10,.85)' : 'rgba(80,12,22,.85)'; ctx.fill();
-    ctx.strokeStyle = wn.gold ? COL.lamp : COL.bad; ctx.lineWidth = 2; if (wn.gold) ctx.setLineDash([9, 3, 2, 3]); ctx.stroke();
+    ctx.strokeStyle = wn.gold ? COL.lamp : COL.bad; ctx.lineWidth = lnw(2); if (wn.gold) ctx.setLineDash([9, 3, 2, 3]); ctx.stroke();
     ctx.restore();
     app.text(wn.head + ':', lx + 12, wy + 8, { size: 16, ui: true, bold: true, color: wn.gold ? COL.lamp : '#ff8f9c' });
     tl.forEach((ln, q) => app.text(ln, tx, wy + 9 + q * lh, { size: 14.5, ui: true, color: COL.vellum }));
@@ -550,14 +563,14 @@ function drawButtons(app, c) {
   const poor = !rerollFree && run.gold < cost;
   const can = interactive && !locked && !poor;
   const sub = locked ? 'Locked (Ascension 8)' : rerollFree ? 'Free' : `${cost} gold`;
-  if (app.button('Reroll offer', TRAY_X, 556, 208, 46, { size: 19, sub, disabled: !can, subColor: poor && !locked ? '#ff9aa6' : undefined }) && can) {
+  if (app.button('Reroll offer', TRAY_X, 556, 208, 46, { size: 19, sub, disabled: !can, fit: true, subColor: poor && !locked ? '#ff9aa6' : undefined }) && can) {
     if (RUN.rerollGraftOffer(run)) {
       st.offer = run.pending.offer; st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small); st.selCard = null; st.selGraft = null; st.dealT = 0; st.morphT = 1; st.pvKey = '';
       sfx(app, 'shuffle'); if (!rerollFree) sfx(app, 'coin', { vol: 0.5 });
     } else sfx(app, 'error');
   }
   if (app.inRect(TRAY_X, 556, 208, 46)) app.tooltip('Reroll', locked ? 'Rerolling is closed at Ascension 8 and above.' : poor ? `You need ${cost} gold. Each reroll costs 10 more.` : 'Deal a fresh set of cards and grafts. Each reroll costs 10 more gold.');
-  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 17, sub: 'Heal, Budget or gold', disabled: !interactive }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
+  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 17, sub: 'Heal, Budget or gold', disabled: !interactive, fit: true }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
   if (app.inRect(TRAY_X + 222, 556, 208, 46)) app.tooltip('Decline the graft', `Sew nothing and take ${skipLimit(run) > 1 ? 'two' : 'one'} of: heal 8 HP, +1 Budget for the rest of the run, or +10 gold. Esc.`);
 
   app.reg('graft-reroll', TRAY_X, 556, 208, 46, { group: 'reroll' }); app.reg('graft-decline', TRAY_X + 222, 556, 208, 46, { group: 'decline' }); app.reg('graft-sew', TRAY_X, 612, TRAY_W, 76, { group: 'sew' });
@@ -611,12 +624,12 @@ function drawSkipMenu(app) {
     ctx.save();
     if (sel) { ctx.shadowColor = info.col; ctx.shadowBlur = 24; }
     app.rr(x, y + (hov ? -3 : 0), w, h, 12); ctx.fillStyle = sel ? '#3a2e24' : '#2a221d'; ctx.fill();
-    ctx.shadowBlur = 0; ctx.lineWidth = sel ? 3 : 2; ctx.strokeStyle = sel ? info.col : hov ? '#fff3c4' : 'rgba(232,220,196,.4)'; ctx.stroke();
+    ctx.shadowBlur = 0; ctx.lineWidth = lnw(sel ? 3 : 2); ctx.strokeStyle = sel ? info.col : hov ? '#fff3c4' : 'rgba(232,220,196,.4)'; ctx.stroke();
     ctx.restore();
     const cy = y + 62 + (hov ? -3 : 0);
     if (id === 'heal') ICONS.drawHeart(ctx, x + w / 2, cy, 54);
     else if (id === 'gold') ICONS.drawCoin(ctx, x + w / 2, cy, 54);
-    else { ctx.save(); ctx.strokeStyle = COL.lamp; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w / 2 - 22, cy); ctx.lineTo(x + w / 2 + 22, cy); ctx.moveTo(x + w / 2, cy - 22); ctx.lineTo(x + w / 2, cy + 22); ctx.stroke(); ctx.restore(); }
+    else { ctx.save(); ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(5); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w / 2 - 22, cy); ctx.lineTo(x + w / 2 + 22, cy); ctx.moveTo(x + w / 2, cy - 22); ctx.lineTo(x + w / 2, cy + 22); ctx.stroke(); ctx.restore(); }
     app.text(info.name, x + w / 2, y + 108, { size: 26, bold: true, align: 'center', color: info.col, shadow: true });
     app.text(info.line, x + w / 2, y + 148, { size: 17, ui: true, align: 'center', color: COL.vellum });
     app.text(info.tip, x + w / 2, y + 176, { size: 14, ui: true, align: 'center', color: DIM, maxW: w - 30 });
@@ -740,7 +753,7 @@ function drawAttach(app) {
     const n = 6, cnt = sp * n;
     const pts = [];
     for (let i = 0; i <= n; i++) pts.push([-tw / 2 - 4 + ((tw + 8) / n) * i, (i % 2 ? 1 : -1) * (th / 2 + 7)]);
-    ctx.shadowBlur = 0; ctx.strokeStyle = s.overload ? '#ffb09a' : '#efe6d0'; ctx.lineWidth = s.overload ? 3 : 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowBlur = 0; ctx.strokeStyle = s.overload ? '#ffb09a' : '#efe6d0'; ctx.lineWidth = lnw(s.overload ? 3 : 2.4); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
     let tip = pts[0];
     for (let i = 1; i <= n; i++) {
@@ -750,8 +763,8 @@ function drawAttach(app) {
     ctx.stroke();
     if (sp > 0 && sp < 1) {
       ctx.save(); ctx.translate(tip[0], tip[1]); ctx.rotate(-0.9 + (Math.floor(cnt) % 2 ? 1.8 : 0));
-      ctx.strokeStyle = '#e8eef0'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 4); ctx.stroke();
-      ctx.strokeStyle = '#8a9499'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, -27, 2.5, 0, 6.283); ctx.stroke();
+      ctx.strokeStyle = '#e8eef0'; ctx.lineWidth = lnw(2.5); ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 4); ctx.stroke();
+      ctx.strokeStyle = '#8a9499'; ctx.lineWidth = lnw(1); ctx.beginPath(); ctx.arc(0, -27, 2.5, 0, 6.283); ctx.stroke();
       ctx.restore();
     }
     // staple clunk

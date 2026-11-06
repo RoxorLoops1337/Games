@@ -3,7 +3,8 @@
 // Screens redraw every frame and call app.button(...) etc.; clicks are resolved from last frame's pointer state.
 import * as LAYOUT from './layout_registry.js';
 import * as CH from './chrome.js';
-import { renderTip, resetTips } from './tooltips.js';
+import { setLineDevice } from '../art/linework.js';
+import { renderTip, resetTips, drawPinnedTip } from './tooltips.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -18,7 +19,8 @@ export const EASE = {
 };
 // Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
-export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24 };
+// fitMinPx: the smallest on-screen size (CSS px) a FITTED label may shrink to when the boosted size would not fit its box (app.text option fit).
+export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -67,7 +69,7 @@ export function createApp(canvas, opts = {}) {
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
     canvas.style.left = app.offX + 'px'; canvas.style.top = app.offY + 'px';
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
-    app.dpr = dpr; app.px = canvas.width / W;
+    app.dpr = dpr; app.px = canvas.width / W; setLineDevice(app.px, app.scale);
     // logical margins (from the canvas edges) that are visible AND clear of notches
     const I = insets(), s = app.scale;
     app.safe = {
@@ -152,6 +154,7 @@ export function createApp(canvas, opts = {}) {
   const scaleOf = (o) => { if (o.fixed) return 1; const v = app.textScale; return v >= 50 ? v / 100 : v > 0 ? v : 1; };
   // Final font size in logical px: user scale, then the small-screen floor (never more than SMALL.maxBoost x, so layouts still fit).
   const fin = (size, o) => {
+    if (o.exact) return Math.round(size); // already a final size (from layoutText / fitText)
     const n = Math.round(size * scaleOf(o)), s = app.scale;
     if (!(s < SMALL.floorBelow) || !(s > 0)) return n;
     const fl = Math.ceil(app.minPx / s);
@@ -180,6 +183,55 @@ export function createApp(canvas, opts = {}) {
     app.textCache.set(key, out); return out;
   }
   app.wrap = (str, maxW, size, o = NO) => wrapRaw(str, maxW, fin(size, o), o);
+  // ---- fit-to-box text ----
+  // layoutText(str, o) -> { size, lines, lineH, w, h, trunc }: the text as app.text will draw it. Without o.fit it is the plain policy
+  // (user scale, then the small-screen floor, wrapped to o.maxW). With o.fit = { w, h?, lines? } it is made to FIT the box:
+  //   1. shrink from the boosted size down to a legible minimum (never under the design size, never under SMALL.fitMinPx CSS px on a phone),
+  //   2. only then wrap onto more lines (as many as fit.lines, or h allows),
+  //   3. only then cut the last line with an ellipsis (trunc = true; fit.ellipsis === false keeps the overflow instead).
+  // A label that fits on one line at some size in range is kept on one line (largest such size). fit.w may also be given as o.maxW.
+  const mw = (ln, size, o) => { ctx.save(); ctx.font = font(size, o); spacing(o); const w = lineW(ln, o); ctx.restore(); return w; };
+  function layoutText(str, o) {
+    str = String(str);
+    const usz = o.size || 18, target = fin(usz, o), F = o.fit;
+    const lh = (sz) => (o.lineH ? Math.round(o.lineH * sz / usz) : Math.round(sz * 1.22));
+    if (!F) {
+      let lines; if (o.maxW) lines = wrapRaw(str, o.maxW, target, o); else lines = str.indexOf('\n') >= 0 ? str.split('\n') : [str];
+      return { size: target, lines, lineH: lh(target), trunc: false };
+    }
+    const W0 = F.w || o.maxW || 1e9, H0 = F.h || 0, s = app.scale > 0 ? app.scale : 1;
+    const design = Math.round(usz * scaleOf(o)), minPhone = s < SMALL.floorBelow ? Math.ceil(SMALL.fitMinPx / s) : 0;
+    const lo2 = Math.min(target, Math.max(minPhone, Math.round(design * 0.8), 9));
+    const maxL = F.lines || (H0 ? Math.max(1, Math.floor((H0 + 2) / lh(lo2))) : 1);
+    const paras = str.split('\n');
+    // 1. one line per paragraph, largest size that fits
+    if (paras.length <= maxL) {
+      for (let sz = target; sz >= lo2; sz--) {
+        let ok = true; for (const p of paras) if (mw(p, sz, o) > W0) { ok = false; break; }
+        if (ok && (!H0 || paras.length * lh(sz) <= H0 + 2)) return { size: sz, lines: paras, lineH: lh(sz), trunc: false };
+      }
+    }
+    // 2. wrapped, largest size whose line count fits
+    for (let sz = target; sz >= lo2; sz--) {
+      const lines = wrapRaw(str, W0, sz, o);
+      if (lines.length <= maxL && (!H0 || lines.length * lh(sz) <= H0 + 2) && lines.every((l) => mw(l, sz, o) <= W0 + 0.5)) return { size: sz, lines, lineH: lh(sz), trunc: false };
+    }
+    // 3. smallest size, ellipsis on the last line that still fits
+    const sz = lo2; let lines = wrapRaw(str, W0, sz, o).slice();
+    const keep = Math.max(1, Math.min(maxL, H0 ? Math.floor((H0 + 2) / lh(sz)) : maxL));
+    let trunc = false;
+    if (lines.length > keep) { lines = lines.slice(0, keep); trunc = true; }
+    if (F.ellipsis !== false) for (let i = 0; i < lines.length; i++) {
+      let l = lines[i]; const last = trunc && i === lines.length - 1;
+      if (last) l = l.replace(/[ ,.;:]+$/, '') + '\u2026';
+      if (mw(l, sz, o) > W0) { trunc = true; while (l.length > 1 && mw(l, sz, o) > W0) l = l.slice(0, -2) + '\u2026'; }
+      lines[i] = l;
+    }
+    return { size: sz, lines, lineH: lh(sz), trunc, soft: !!F.soft };
+  }
+  app.layoutText = (str, o = NO) => { const r = layoutText(str, o); let w = 0; for (const l of r.lines) w = Math.max(w, mw(l, r.size, o)); r.w = w; r.h = (r.lines.length - 1) * r.lineH + r.size; return r; };
+  // fitText(str, w, h, size, o): convenience wrapper, returns the same record as layoutText.
+  app.fitText = (str, w, h, size, o = NO) => app.layoutText(str, Object.assign({}, o, { size, fit: { w, h, lines: o.lines } }));
   const ONE = [''];
   function put(stroke, ln, x, y, o) {
     if (!o.tab) { if (stroke) ctx.strokeText(ln, x, y); else ctx.fillText(ln, x, y); return; }
@@ -197,13 +249,15 @@ export function createApp(canvas, opts = {}) {
   // text(str, x, y, {size, color, align, baseline, bold, italic, ui, maxW, lineH, shadow, alpha, stroke, engraved, tab, fixed}) -> total height
   app.textScale = 1;
   app.text = (str, x, y, o = NO) => {
-    const usz = o.size || 18, size = fin(usz, o), lineH = o.lineH ? Math.round(o.lineH * size / usz) : Math.round(size * 1.22);
+    let size, lineH, lines;
+    if (o.fit) { const L = layoutText(String(str), o); size = L.size; lineH = L.lineH; lines = L.lines; }
+    else { const usz = o.size || 18; size = fin(usz, o); lineH = o.lineH ? Math.round(o.lineH * size / usz) : Math.round(size * 1.22); }
     ctx.save();
     ctx.font = font(size, o); ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.baseline || 'top';
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
     spacing(o);
-    let lines;
-    if (o.maxW) lines = wrapRaw(str, o.maxW, size, o);
+    if (lines) { /* fitted */ }
+    else if (o.maxW) lines = wrapRaw(str, o.maxW, size, o);
     else { str = String(str); if (str.indexOf('\n') >= 0) lines = str.split('\n'); else { ONE[0] = str; lines = ONE; } }
     const col = o.color || COL.vellum;
     for (let i = 0; i < lines.length; i++) {
@@ -254,7 +308,7 @@ export function createApp(canvas, opts = {}) {
   // Visual press feedback hook: a short brass ripple inside the rect. Screens may call it for custom widgets; set app.onPress to also react.
   app.press = (x, y, w, h, r) => { CH.press(app, x, y, w, h, r); if (app.onPress) app.onPress(x, y, w, h); };
   let hotX = NaN, hotY = NaN, hotL = null;
-  // button: returns true on click. o: {fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
+  // button: returns true on click. o: {fit, fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
   app.button = (label, x, y, w, h, o = NO) => {
     const dis = !!o.disabled, F = app.focus;
     // Hit target floor: a button smaller than minTouch CSS px on screen grows its HIT area (not its look), by at most SMALL.maxHitGrow logical px a side.
@@ -276,7 +330,7 @@ export function createApp(canvas, opts = {}) {
     if (fi >= 0 && F.active && fi === F.idx) { CH.focusRing(app, x, y + dy, w, h, o.r === undefined ? 8 : o.r); if (!app.tip && o.tip) app.tooltip(o.tipTitle || label || 'Button', o.tip); app.focusLabel = label; }
     if (o.icon) o.icon(ctx, x, y + dy, w, h);
     const size = o.size || 20, ty = y + dy + (o.sub ? h / 2 - app.sz(size) * 0.95 : h / 2 - app.sz(size) * 0.55);
-    TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0;
+    TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0; TO.fit = o.fit ? { w: w - 8, lines: 1 } : null; // o.fit: shrink the label (and the sub line) to the button instead of overflowing it
     app.text(label, x + w / 2, ty, TO);
     if (o.sub) { TO.size = Math.round(size * 0.7); TO.color = o.subColor || 'rgba(232,220,196,.7)'; TO.bold = false; TO.ui = true; TO.shadow = false; app.text(o.sub, x + w / 2, ty + app.sz(size) * 1.15, TO); }
     if (!dis && o.key && keyHit(o.key)) { app.press(x, y, w, h, o.r); return true; }
@@ -287,7 +341,7 @@ export function createApp(canvas, opts = {}) {
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.
   app.tooltip = (title, text, o = NO) => { if (app.blocked) return; /* a screen or modal on top covers this widget */ app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o }; };
   function drawTip() {
-    const tip = app.tip; if (!tip) return;
+    const tip = app.tip; if (!tip) { drawPinnedTip(app); return; } // a held tip outlives the finger
     if (!app.forceTipFallback && renderTip(app, tip) !== false) return; // forceTipFallback: tests and debugging
     const maxW = 300, pad = 12, lh = app.sz(20), tsz = app.sz(19);
     const body = tip.lines ? tip.lines.join('\n') : (tip.text || '');

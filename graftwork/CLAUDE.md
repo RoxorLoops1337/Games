@@ -143,6 +143,7 @@ The fake canvas in tests/graftwork_lib.mjs (`fakeCtx`) has own no-op methods for
 ```
 node tools/graftwork_sim.mjs 20 0                 # careful / greedy / none policies, 20 runs per hero, ascension 0
 node tools/graftwork_strong.mjs 40 0 [hero]       # strong bot (Thread aware); the reference for win rates
+node tools/graftwork_tiers.mjs                    # skill tiers random/sloppy/careful/strong (design/DIFFICULTY.md has the targets)
 node tools/graftwork_schools.mjs schools 100 0    # mono-school builds; also: pairs [N] [asc], relics [N] [asc] [relicId]
 node tools/graftwork_audit.mjs 40 --tier=weird    # per-graft paired comparison vs no graft (--pool=starters|all, --graft=g_id, --rows)
 node tools/graftwork_audio_check.mjs [--json]     # offline loudness, clipping, masking report (needs Playwright chromium)

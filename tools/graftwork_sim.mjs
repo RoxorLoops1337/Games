@@ -201,6 +201,7 @@ export function fight(run, pol, maxTurns = 40) {
       // play setup cards first when a card of value is waiting to use them
       if (bestSetup >= 0 && (bestSetup === best || bss > 3.5) && !(echo && bestSetup !== best)) best = bestSetup;
       if (best < 0) break;
+      if (pol.slip) { const o = pol.slip(c, best, run); if (o === -1) break; if (o !== undefined) best = o; } // optional human-error hook (tools/graftwork_tiers.mjs)
       const sp = specOf(c, c.hand[best]);
       let ti = null;
       if (sp.target === 'enemy') {
@@ -249,7 +250,7 @@ export function graftScore(run, inst, gid, pol) {
   return { s, strain: pv.after.strain, pv };
 }
 
-function chooseGraft(run, pol) {
+export function chooseGraft(run, pol) {
   const offer = run.pending.offer;
   if (pol.skipAll || !offer.cards.length) return null;
   if (pol.pickGraft) return pol.pickGraft(run, pol);
@@ -285,7 +286,7 @@ function chooseNode(run) {
   return nodes.slice().sort((a, b) => score(b) - score(a))[0];
 }
 
-function eventScore(run, ch) {
+export function eventScore(run, ch) {
   const t = ch.text || '';
   const hpF = run.hp / run.maxHp;
   let s = 0;
@@ -309,7 +310,7 @@ function eventScore(run, ch) {
   return s;
 }
 
-function pickEventCard(run, ch, eligible) {
+export function pickEventCard(run, ch, eligible) {
   const cards = eligible.map((u) => RUN.findInst(run, u));
   if (/Remove/.test(ch.text)) {
     const junk = cards.find((x) => CARDS[x.id].type === 'junk'); if (junk) return junk.uid;
@@ -320,7 +321,7 @@ function pickEventCard(run, ch, eligible) {
   return cards.slice().sort((a, b) => cardV(b) - cardV(a))[0].uid;
 }
 
-function doShop(run, pol, log) {
+export function doShop(run, pol, log) {
   const shop = run.pending; log.shops++;
   if (pol.buyCards && pol.shopCards && pol.cardsFirst) pol.shopCards(run, shop, pol);
   // 1) best relic we can afford (relics are the main gold sink)
@@ -358,7 +359,7 @@ function doShop(run, pol, log) {
   RUN.advance(run);
 }
 
-function doForge(run, pol) {
+export function doForge(run, pol) {
   const hpF = run.hp / run.maxHp;
   if (pol.forge && pol.forge(run, pol, hpF)) { RUN.advance(run); return; } // policy hook: true when it spent the forge action itself
   if (hpF < 0.7) RUN.forgeAct(run, 'rest');
@@ -374,7 +375,7 @@ function doForge(run, pol) {
 }
 
 export function playRun(heroId, seed, pol = POLICIES.careful, asc = 0, o = {}) {
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' }) // GW_UNLOCK=all|start;
   const log = { fights: [], grafts: 0, skips: 0, shatters: 0, events: 0, shops: 0 };
   let guard = 0;
   while (guard++ < 600 && run.phase !== 'dead' && run.phase !== 'won') {
@@ -393,7 +394,7 @@ export function playRun(heroId, seed, pol = POLICIES.careful, asc = 0, o = {}) {
         const rw = run.pending;
         RUN.claimGold(run, rw);
         if (rw.relic) RUN.addRelic(run, rw.relic);
-        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, rw.relicChoices[0]);
+        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, (o.forceBoss && rw.relicChoices.includes(o.forceBoss)) ? o.forceBoss : (pol.pickRelic ? pol.pickRelic(rw.relicChoices) : rw.relicChoices[0]));
         if (rw.potion) RUN.addPotion(run, rw.potion);
         RUN.afterReward(run); break;
       }

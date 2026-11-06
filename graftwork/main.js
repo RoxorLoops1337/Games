@@ -19,8 +19,10 @@ import shop from './ui/shop.js';
 import forge from './ui/forge.js';
 import event from './ui/event.js';
 import end from './ui/end.js';
+import ward, { wardInterlude } from './ui/ward.js';
 import deckview from './ui/deckview.js';
 import codex from './ui/codex.js';
+import archive from './ui/archive.js';
 import wardrobe from './ui/wardrobe.js';
 import { setCardBack } from './art/cards.js';
 import { setHeroTint } from './art/heroes.js';
@@ -29,7 +31,7 @@ import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
 
-const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
+const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 
 export function applyLoadout(m) { try { setCardBack(m.loadout.back); setHeroTint(META.tintColor(m)); } catch (e) { /* cosmetics are optional */ } }
@@ -41,11 +43,11 @@ export function boot(canvas) {
   const flow = {
     app, audio, RUN, META,
     start(opts) {
-      const run = RUN.newRun(opts);
+      const run = RUN.newRun(META.withUnlocks(app.shared.meta, opts)); // content gating: the player's unlocked set (Daily: starting pool)
       app.shared.run = run; META.onRunStart && META.onRunStart(app.shared.meta, run); saveRun(run);
       flow.route();
     },
-    startPractice(snap) { const run = META.newPracticeRun(snap); app.shared.run = run; saveRun(run); flow.route(); },
+    startPractice(snap) { const run = META.newPracticeRun(snap, app.shared.meta); app.shared.run = run; saveRun(run); flow.route(); },
     resume() { const run = loadRun(); if (!run) return false; app.shared.run = run; flow.route(); return true; },
     hasSave: () => hasRun(),
     abandon() { const run = app.shared.run; if (run) { run.phase = 'dead'; run.abandoned = true; } flow.route(); },
@@ -59,6 +61,7 @@ export function boot(canvas) {
       }
       saveRun(run);
       const scr = PHASE_SCREEN[run.phase] || 'map';
+      if (run.mode === 'ward' && scr !== 'ward' && scr !== 'end' && wardInterlude(app, run, scr)) return; // the hero walks to the next trigger on the Ward first
       const kind = run.pending && run.pending.fightKind;
       audio.music(scr === 'combat' ? (kind === 'boss' || kind === 'final' ? 'boss' : ACT_THEME[run.act])
         : scr === 'map' ? ACT_THEME[run.act] : scr === 'graft' ? 'grafting' : scr === 'shop' ? 'shop' : scr === 'forge' ? 'forge'
@@ -67,6 +70,7 @@ export function boot(canvas) {
     },
     openDeck(opts) { app.push('deckview', opts || {}); },
     openCodex() { app.push('codex', {}); },
+    openArchive() { app.push('archive', {}); },
     openWardrobe() { app.push('wardrobe', {}); },
     openSettings() { app.push('settings', {}); },
     openPause() { if (!app.stack.some((s) => s.name === 'pause')) app.push('pause', {}); },
@@ -82,7 +86,7 @@ export function boot(canvas) {
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, wardrobe, settings, pause };
+  const S = { title, map, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);

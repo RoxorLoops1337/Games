@@ -11,6 +11,7 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import { maybeTip } from './tutorial.js';
 import { tscale } from './graft_parts.js';
+import { lnw } from '../art/linework.js';
 
 const ACT_NAMES = { 1: 'The Ward', 2: 'The Cellar Market', 3: 'The Gilt Theatre' };
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
@@ -39,7 +40,7 @@ function drawScalpel(g, x, y, rot, s = 1, glow = 0) {
   if (glow) { g.shadowColor = COL.lamp; g.shadowBlur = 14 * glow; }
   g.fillStyle = '#2b1e1a'; g.beginPath(); g.roundRect ? g.roundRect(-4, -4, 8, 34, 3) : g.rect(-4, -4, 8, 34); g.fill();
   g.fillStyle = '#d8dde0'; g.beginPath(); g.moveTo(-3, -4); g.quadraticCurveTo(0, -30, 6, -34); g.quadraticCurveTo(5, -16, 3, -4); g.closePath(); g.fill();
-  g.strokeStyle = '#0e0e0e'; g.lineWidth = 1.2; g.stroke();
+  g.strokeStyle = '#0e0e0e'; g.lineWidth = lnw(1.2); g.stroke();
   g.restore();
 }
 
@@ -163,7 +164,7 @@ export default {
     g.fillStyle = pg; g.fill();
     g.save(); app.rr(CHART.x, CHART.y + 6, CHART.w, CHART.h - 12, 10); g.clip();
     // faint grid (scrolls with the map)
-    g.strokeStyle = 'rgba(70,52,34,.13)'; g.lineWidth = 1;
+    g.strokeStyle = 'rgba(70,52,34,.13)'; g.lineWidth = lnw(1);
     const off = this.scroll % 40;
     for (let y = -off; y < H; y += 40) { g.beginPath(); g.moveTo(CHART.x, y); g.lineTo(CHART.x + CHART.w, y); g.stroke(); }
     for (let x = CHART.x + 10; x < CHART.x + CHART.w; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
@@ -181,7 +182,7 @@ export default {
       if (y < 16 || y > H - 22) continue;
       const done = r <= run.row;
       app.text(String(r + 1), CHART.x + 22, y - 9, { size: 15, align: 'center', color: done ? 'rgba(43,30,26,.25)' : 'rgba(43,30,26,.55)', italic: true });
-      g.strokeStyle = 'rgba(43,30,26,.22)'; g.lineWidth = 1; g.beginPath(); g.moveTo(CHART.x + 38, y + 14); g.lineTo(CHART.x + 50, y + 14); g.stroke();
+      g.strokeStyle = 'rgba(43,30,26,.22)'; g.lineWidth = lnw(1); g.beginPath(); g.moveTo(CHART.x + 38, y + 14); g.lineTo(CHART.x + 50, y + 14); g.stroke();
     }
 
     // edges
@@ -197,10 +198,10 @@ export default {
         const live = from0 ? (n === from0 && availIds.has(m.id)) : false;
         const reachable = reach.has(m.id) && (reach.has(n.id) || n === from0);
         g.setLineDash([9, 7]);
-        if (traveled) { g.strokeStyle = 'rgba(14,14,14,.85)'; g.lineWidth = 2.6; }
-        else if (live) { g.strokeStyle = COL.scar; g.lineWidth = 3; g.setLineDash([9, 6]); g.lineDashOffset = -app.t * 14; }
-        else if (reachable) { g.strokeStyle = 'rgba(43,30,26,.55)'; g.lineWidth = 2; }
-        else { g.strokeStyle = 'rgba(43,30,26,.16)'; g.lineWidth = 1.6; }
+        if (traveled) { g.strokeStyle = 'rgba(14,14,14,.85)'; g.lineWidth = lnw(2.6); }
+        else if (live) { g.strokeStyle = COL.scar; g.lineWidth = lnw(3); g.setLineDash([9, 6]); g.lineDashOffset = -app.t * 14; }
+        else if (reachable) { g.strokeStyle = 'rgba(43,30,26,.55)'; g.lineWidth = lnw(2); }
+        else { g.strokeStyle = 'rgba(43,30,26,.16)'; g.lineWidth = lnw(1.6); }
         stitchPath(g, A, B, n.id + m.id); g.stroke(); g.lineDashOffset = 0;
         g.setLineDash([]);
         if (live || traveled) { // knots at the ends
@@ -211,7 +212,7 @@ export default {
     // start thread under row 0
     if (run.node === null) {
       const ys = worldY(map, 0) + 62 - this.scroll;
-      g.setLineDash([9, 7]); g.strokeStyle = COL.scar; g.lineWidth = 3; g.lineDashOffset = -app.t * 14;
+      g.setLineDash([9, 7]); g.strokeStyle = COL.scar; g.lineWidth = lnw(3); g.lineDashOffset = -app.t * 14;
       for (const id of map.byRow[0]) { const b = nodeWorld(map, map.nodes[id]); g.beginPath(); g.moveTo(640, ys); g.lineTo(b.x, b.y - this.scroll); g.stroke(); }
       g.setLineDash([]); g.lineDashOffset = 0;
       app.text('Admission', 640, ys + 10, { size: 14, align: 'center', italic: true, color: 'rgba(43,30,26,.6)' });
@@ -246,21 +247,21 @@ export default {
       g.translate(x, y); g.scale(sc, sc);
       // disc
       g.fillStyle = '#1f1914'; g.beginPath(); g.arc(0, 0, R, 0, 6.283); g.fill();
-      g.lineWidth = big ? 4 : 3; g.strokeStyle = NODE_COL[n.type] || '#aaa'; g.stroke();
-      g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,.6)'; g.beginPath(); g.arc(0, 0, R - 5, 0, 6.283); g.stroke();
+      g.lineWidth = lnw(big ? 4 : 3); g.strokeStyle = NODE_COL[n.type] || '#aaa'; g.stroke();
+      g.lineWidth = lnw(1); g.strokeStyle = 'rgba(0,0,0,.6)'; g.beginPath(); g.arc(0, 0, R - 5, 0, 6.283); g.stroke();
       g.restore();
       g.save(); g.globalAlpha = n.visited ? 0.55 : faint ? 0.6 : 1;
       drawNodeIcon(g, n.type, x, y, R * 1.45 * sc, state);
       g.restore();
       if (n.visited) { // tick
-        g.save(); g.strokeStyle = isCur ? COL.lamp : 'rgba(232,220,196,.9)'; g.lineWidth = 3.4; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + R * 0.1, y + R * 0.9); g.lineTo(x + R * 0.38, y + R * 1.15); g.lineTo(x + R * 0.95, y + R * 0.5); g.stroke(); g.restore();
+        g.save(); g.strokeStyle = isCur ? COL.lamp : 'rgba(232,220,196,.9)'; g.lineWidth = lnw(3.4); g.lineCap = 'round'; g.beginPath(); g.moveTo(x + R * 0.1, y + R * 0.9); g.lineTo(x + R * 0.38, y + R * 1.15); g.lineTo(x + R * 0.95, y + R * 0.5); g.stroke(); g.restore();
       }
       if (isCur) {
-        g.save(); g.strokeStyle = COL.lamp; g.lineWidth = 3; g.shadowColor = COL.lamp; g.shadowBlur = 12;
-        g.beginPath(); g.arc(x, y, R + 7, 0, 6.283); g.stroke(); g.setLineDash([4, 5]); g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, R + 13, 0, 6.283); g.stroke(); g.restore();
+        g.save(); g.strokeStyle = COL.lamp; g.lineWidth = lnw(3); g.shadowColor = COL.lamp; g.shadowBlur = 12;
+        g.beginPath(); g.arc(x, y, R + 7, 0, 6.283); g.stroke(); g.setLineDash([4, 5]); g.lineWidth = lnw(1.5); g.beginPath(); g.arc(x, y, R + 13, 0, 6.283); g.stroke(); g.restore();
       }
       if (isSel || (hov && isAvail)) {
-        g.save(); g.strokeStyle = COL.lamp; g.lineWidth = 2.5; g.setLineDash([6, 4]); g.lineDashOffset = -app.t * 20; g.beginPath(); g.arc(x, y, R + 12, 0, 6.283); g.stroke(); g.restore();
+        g.save(); g.strokeStyle = COL.lamp; g.lineWidth = lnw(2.5); g.setLineDash([6, 4]); g.lineDashOffset = -app.t * 20; g.beginPath(); g.arc(x, y, R + 12, 0, 6.283); g.stroke(); g.restore();
       }
       if (isAvail) click.push({ n, x, y, R, hov });
       { const rr = R * sc + 2, y0 = Math.max(0, y - rr), y1 = Math.min(H, y + rr); if (y1 > y0) app.reg('node:' + n.id, x - rr, y0, rr * 2, y1 - y0, { group: 'node:' + n.id, overlay: !!(this.banner || this.confirm) }); }
@@ -271,7 +272,7 @@ export default {
       const t = EASE.inOut(clamp(this.trav.t / this.trav.dur, 0, 1));
       const a = this.trav.from, b = this.trav.to;
       const mx = lerp(a.x, b.x, t), my = lerp(a.y, b.y, t) - Math.sin(t * Math.PI) * 10 - this.scroll;
-      g.save(); g.setLineDash([9, 7]); g.strokeStyle = COL.scar; g.lineWidth = 4; g.beginPath(); g.moveTo(a.x, a.y - this.scroll); g.lineTo(mx, my); g.stroke(); g.restore();
+      g.save(); g.setLineDash([9, 7]); g.strokeStyle = COL.scar; g.lineWidth = lnw(4); g.beginPath(); g.moveTo(a.x, a.y - this.scroll); g.lineTo(mx, my); g.stroke(); g.restore();
       drawScalpel(g, mx, my, Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2 + 0.2, 1.1, 1);
     } else if (run.node !== null) {
       const p = nodeWorld(map, map.nodes[run.node]);
@@ -296,7 +297,7 @@ export default {
     }
     g.restore(); // clip
     // pins + border
-    g.strokeStyle = 'rgba(30,20,12,.8)'; g.lineWidth = 3; app.rr(CHART.x, CHART.y + 6, CHART.w, CHART.h - 12, 10); g.stroke();
+    g.strokeStyle = 'rgba(30,20,12,.8)'; g.lineWidth = lnw(3); app.rr(CHART.x, CHART.y + 6, CHART.w, CHART.h - 12, 10); g.stroke();
     for (const [px, py] of [[CHART.x + 14, 22], [CHART.x + CHART.w - 14, 22], [CHART.x + 14, H - 22], [CHART.x + CHART.w - 14, H - 22]]) {
       g.fillStyle = '#3b3028'; g.beginPath(); g.arc(px, py, 7, 0, 6.283); g.fill(); g.fillStyle = '#9a8a70'; g.beginPath(); g.arc(px - 1.5, py - 1.5, 3, 0, 6.283); g.fill();
     }
@@ -343,14 +344,15 @@ export default {
     { const lt = titleName(app.shared.meta); if (S <= 1.2) ny += app.text(lt ? `"${lt}"` : hero.title, X + 112, ny, { size: 14, ui: true, italic: !!lt, color: lt ? COL.lamp : 'rgba(232,220,196,.65)', maxW: IW - 94 }); }
     y = Math.max(y + 80, ny) + 10;
     // hp
-    const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25)), bx = X + 46, bw = IW - 28;
+    const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25), Math.ceil(app.sz(Math.round(13 * Math.min(S, 1.25)), { ui: true, bold: true }) * 1.2) + 2), bx = X + 46, bw = IW - 28;
     drawHeart(g, X + 30, y + bh / 2, 18);
     app.reg('map-hp', bx, y, bw, bh, { group: 'left' });
     app.rr(bx, y, bw, bh, bh / 2); g.fillStyle = '#0e0b0a'; g.fill();
     const k = clamp(run.hp / run.maxHp, 0, 1);
     app.rr(bx, y, Math.max(6, bw * k), bh, bh / 2); g.fillStyle = k < 0.3 ? '#d33' : COL.scar; g.fill();
-    app.rr(bx, y, bw, bh, bh / 2); g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 1.5; g.stroke();
-    app.text(`${run.hp} / ${run.maxHp}`, bx + bw / 2, y + (bh - 13 * Math.min(S, 1.25)) / 2 - 1, { ...cs(13), ui: true, align: 'center', bold: true, shadow: true });
+    app.rr(bx, y, bw, bh, bh / 2); g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = lnw(1.5); g.stroke();
+    { const hpO = { ...cs(13), ui: true, align: 'center', bold: true, shadow: true, fit: { w: bw - 12, h: bh } }, hpT = `${run.hp} / ${run.maxHp}`, hpL = app.layoutText(hpT, hpO);
+      app.text(hpT, bx + bw / 2, y + (bh - hpL.size) / 2 - 1, hpO); }
     if (app.inRect(X + 18, y - 4, IW, bh + 8)) app.tooltip('Health', 'Heal at the Forge. Some events and relics help too.');
     y += bh + 10;
     // gold + deck count
@@ -371,7 +373,7 @@ export default {
       app.rr(px, y, pw, 14, 3);
       if (i < si.weight) g.fillStyle = over ? COL.scar : '#c9b48a'; else g.fillStyle = over ? 'rgba(179,38,58,.25)' : 'rgba(232,220,196,.12)';
       g.fill();
-      g.strokeStyle = over ? 'rgba(179,38,58,.9)' : 'rgba(232,220,196,.35)'; g.lineWidth = 1; g.stroke();
+      g.strokeStyle = over ? 'rgba(179,38,58,.9)' : 'rgba(232,220,196,.35)'; g.lineWidth = lnw(1); g.stroke();
     }
     y += 18;
     const sTxt = si.strain ? `Strain ${si.strain}: ${si.tithed.length} card${si.tithed.length === 1 ? '' : 's'} Tithed` + (si.backfire ? `, Backfire ${si.backfire}` : '') : 'No Strain';
@@ -418,7 +420,7 @@ export default {
     for (let i = 0; i < slots; i++) {
       const cx = X + 18 + i * 56 + 24, cy = potTop + 26, id = run.potions[i];
       app.reg('map-potion' + i, cx - 24, cy - 26, 48, 52, { group: 'left' });
-      app.rr(cx - 24, cy - 26, 48, 52, 10); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); g.strokeStyle = 'rgba(232,220,196,.3)'; g.lineWidth = 1.5; g.setLineDash(id ? [] : [4, 4]); g.stroke(); g.setLineDash([]);
+      app.rr(cx - 24, cy - 26, 48, 52, 10); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); g.strokeStyle = 'rgba(232,220,196,.3)'; g.lineWidth = lnw(1.5); g.setLineDash(id ? [] : [4, 4]); g.stroke(); g.setLineDash([]);
       if (id) {
         drawPotion(g, id, cx, cy, 38);
         if (app.inRect(cx - 24, cy - 26, 48, 52) && POTIONS[id]) app.tooltip(POTIONS[id].name, POTIONS[id].text + '\nUsed in combat.', { color: COL.energy });
@@ -452,15 +454,15 @@ export default {
     const noteL = types.map((t) => app.wrap(leg[t].split(': ')[1] || leg[t], 226, 14, { ui: true }).length), rowY = []; let ry = Y0 + 34; for (const n of noteL) { rowY.push(ry); ry += Math.max(36, nameH + noteH * n + 3); }
     types.forEach((t, i) => {
       const y = rowY[i];
-      g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 15, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = 2.4; g.stroke();
+      g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 15, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = lnw(2.4); g.stroke();
       drawNodeIcon(g, t, X + 34, y + 15, 22, 'available');
       app.text(NODE_INFO[t][0], X + 58, y, { size: 16, bold: true, color: NODE_COL[t] === COL.scar ? '#e07a86' : NODE_COL[t] });
       app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + nameH, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
     });
     // path key
     const ky = ry + 22, pk = Math.max(22, noteH + 2);
-    g.setLineDash([9, 6]); g.lineWidth = 3; g.strokeStyle = COL.scar; g.beginPath(); g.moveTo(X + 18, ky); g.lineTo(X + 62, ky); g.stroke();
-    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + pk); g.lineTo(X + 62, ky + pk); g.stroke(); g.setLineDash([]);
+    g.setLineDash([9, 6]); g.lineWidth = lnw(3); g.strokeStyle = COL.scar; g.beginPath(); g.moveTo(X + 18, ky); g.lineTo(X + 62, ky); g.stroke();
+    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = lnw(2); g.beginPath(); g.moveTo(X + 18, ky + pk); g.lineTo(X + 62, ky + pk); g.stroke(); g.setLineDash([]);
     app.text('Open path', X + 72, ky - noteH / 2, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
     app.text('Possible later', X + 72, ky + pk - noteH / 2, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
 
@@ -468,23 +470,29 @@ export default {
     g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, divY); g.lineTo(X + PW - 18, divY); g.stroke(); g.setLineDash([]);
     app.text('SCHOOL RESONANCE', X + 18, divY + 8, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
+    // rows: name over bar when the panel has the room, else name, bar and count on one line (phones inflate the text and the legend eats the height)
+    const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), nmSz = app.sz(16, { bold: true }), roomy = SP >= Math.ceil(nmSz * 1.2) + 14;
     SCHOOLS_LIST().forEach((s, i) => {
-      const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), y = rs + i * SP;
+      const y = rs + i * SP;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;
       app.reg('map-school' + i, X + 10, y - 2, PW - 20, SP - 2, { group: 'right' });
       const hov = app.inRect(X + 10, y - 2, PW - 20, SP - 2);
       if (hov) { app.rr(X + 10, y - 2, PW - 20, SP - 2, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
       g.save(); g.globalAlpha = c ? 1 : 0.55;
-      drawSchoolGlyph(g, s.id, X + 32, y + 10, 11, s.color);
-      app.text(s.name, X + 54, y, { size: 16, bold: true, color: c ? s.color : COL.vellum });
-      app.text(String(c), X + PW - 22, y, { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum });
+      const rowH = SP - 2, nameW = roomy ? 150 : 84, bx = roomy ? X + 54 : X + 142, bw = roomy ? 190 : PW - 142 - 42 - 8;
+      const nO = { size: 16, bold: true, color: c ? s.color : COL.vellum, fit: { w: nameW, h: Math.min(24, rowH) } }, nL = app.layoutText(s.name, nO);
+      const cO = { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum, fit: { w: 30, h: Math.min(24, rowH) } }, cL = app.layoutText(String(c), cO);
+      const ny = roomy ? y : y - 2 + (rowH - nL.size) / 2 - 1, cy = roomy ? y : y - 2 + (rowH - cL.size) / 2 - 1;
+      drawSchoolGlyph(g, s.id, X + 32, roomy ? y + 10 : y - 2 + rowH / 2, 11, s.color);
+      app.text(s.name, roomy ? X + 54 : X + 48, ny, nO);
+      app.text(String(c), X + PW - 22, cy, cO);
       // bar with ticks at 3 and 6
-      const bx = X + 54, bw = 190, by = y + Math.min(22, SP - 12);
+      const by = roomy ? y + Math.min(22, SP - 12) : y - 2 + rowH / 2 - 4;
       app.rr(bx, by, bw, 8, 4); g.fillStyle = 'rgba(232,220,196,.12)'; g.fill();
       if (c) { app.rr(bx, by, Math.max(8, bw * clamp(c / 6, 0, 1)), 8, 4); g.fillStyle = s.color; g.fill(); }
       for (const t of [3, 6]) {
         const tx = bx + bw * (t / 6) - (t === 6 ? 1 : 0);
-        g.strokeStyle = c >= t ? COL.lamp : 'rgba(232,220,196,.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(tx, by - 3); g.lineTo(tx, by + 11); g.stroke();
+        g.strokeStyle = c >= t ? COL.lamp : 'rgba(232,220,196,.6)'; g.lineWidth = lnw(2); g.beginPath(); g.moveTo(tx, by - 3); g.lineTo(tx, by + 11); g.stroke();
       }
       g.restore();
       if (hov) app.tooltip(s.name + ` (${c} graft${c === 1 ? '' : 's'})`, s.blurb + '\n' + (tier >= 3 ? '[ON] ' : '[3] ') + 'At 3: ' + s.resonance[3] + '\n' + (tier >= 6 ? '[ON] ' : '[6] ') + 'At 6: ' + s.resonance[6], { color: s.color });
@@ -498,7 +506,7 @@ export default {
     const cy = 330, slide = (1 - EASE.out(clamp(t / 0.7, 0, 1))) * 60;
     app.reg('map-banner', 0, cy - 90, W, 180, { overlay: true });
     g.fillStyle = 'rgba(22,18,16,.95)'; g.fillRect(0, cy - 90, W, 180);
-    g.strokeStyle = COL.scar; g.lineWidth = 3; g.setLineDash([14, 9]);
+    g.strokeStyle = COL.scar; g.lineWidth = lnw(3); g.setLineDash([14, 9]);
     g.beginPath(); g.moveTo(0, cy - 88); g.lineTo(W, cy - 88); g.moveTo(0, cy + 88); g.lineTo(W, cy + 88); g.stroke(); g.setLineDash([]);
     app.text('ACT ' + ROMAN[b.act], 640 - slide, cy - 66, { size: 22, ui: true, bold: true, align: 'center', color: COL.lamp });
     app.text(ACT_NAMES[b.act], 640 + slide, cy - 36, { size: 64, bold: true, align: 'center', color: COL.vellum, shadow: true });

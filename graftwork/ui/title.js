@@ -6,11 +6,15 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
+import { percentLabel } from './archive_kit.js';
+import { heroHint } from '../engine/unlock.js';
 import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
 import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../engine/assist.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
+import { lnw } from '../art/linework.js';
+import { drawModeSwitch, modeOf } from './ward_kit.js';
 
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
@@ -23,7 +27,7 @@ const todaySeed = () => RUN.dailySeed();
 // ---------- small drawing helpers ----------
 function padlock(g, x, y, s, col = '#9b8f7a') {
   g.save(); g.translate(x, y); g.scale(s, s);
-  g.strokeStyle = col; g.lineWidth = 5; g.beginPath(); g.arc(0, -8, 11, Math.PI, 0); g.lineTo(11, 0); g.moveTo(-11, -8); g.lineTo(-11, 0); g.stroke();
+  g.strokeStyle = col; g.lineWidth = lnw(5); g.beginPath(); g.arc(0, -8, 11, Math.PI, 0); g.lineTo(11, 0); g.moveTo(-11, -8); g.lineTo(-11, 0); g.stroke();
   g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(-17, -2, 34, 26, 4) : g.rect(-17, -2, 34, 26); g.fill();
   g.fillStyle = '#1A1614'; g.beginPath(); g.arc(0, 8, 4, 0, 6.283); g.fill(); g.fillRect(-1.5, 8, 3, 9);
   g.restore();
@@ -31,7 +35,7 @@ function padlock(g, x, y, s, col = '#9b8f7a') {
 function stitchLine(g, x1, y1, x2, y2, o = {}) {
   const len = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.floor(len / (o.step || 12)));
   const ux = (x2 - x1) / len, uy = (y2 - y1) / len, nx = -uy, ny = ux, s = o.size || 4;
-  g.save(); g.strokeStyle = o.color || '#0E0E0E'; g.lineWidth = o.lw || 2; g.lineCap = 'round';
+  g.save(); g.strokeStyle = o.color || '#0E0E0E'; g.lineWidth = lnw(o.lw || 2); g.lineCap = 'round';
   g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
   g.beginPath();
   for (let i = 0; i <= n; i++) { const px = x1 + ux * (len * i / n), py = y1 + uy * (len * i / n); g.moveTo(px - nx * s, py - ny * s); g.lineTo(px + nx * s, py + ny * s); }
@@ -40,9 +44,9 @@ function stitchLine(g, x1, y1, x2, y2, o = {}) {
 function staple(g, x, y, ang = 0, s = 1) {
   g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
   g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 6; g.shadowOffsetY = 2;
-  g.strokeStyle = '#d6a94a'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -3); g.lineTo(-14, 3); g.lineTo(14, 3); g.lineTo(14, -3); g.stroke();
+  g.strokeStyle = '#d6a94a'; g.lineWidth = lnw(5); g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -3); g.lineTo(-14, 3); g.lineTo(14, 3); g.lineTo(14, -3); g.stroke();
   g.shadowBlur = 0; g.shadowOffsetY = 0;
-  g.strokeStyle = '#fff1b8'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-13, 1.5); g.lineTo(13, 1.5); g.stroke();
+  g.strokeStyle = '#fff1b8'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(-13, 1.5); g.lineTo(13, 1.5); g.stroke();
   g.restore();
 }
 
@@ -78,10 +82,10 @@ function drawLogo(app, cx, cy, k) {
   g.globalAlpha = clamp(k * 2 - 0.4, 0, 1);
   const seam = (x0, x3, y0, ang) => {
     g.save(); g.translate(x0, y0); g.rotate(ang); const L = x3 - x0;
-    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.strokeStyle = '#0a0808'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.lineWidth = 3; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
-    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = 1; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw(6); g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.strokeStyle = '#0a0808'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.lineWidth = lnw(3); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
+    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = lnw(1); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
     g.restore();
   };
   seam(x1 + w1 * 0.1, x1 + w1 * 0.9, seamY - 4, -0.04);
@@ -111,7 +115,7 @@ function drawScene(app, st) {
   g.restore();
   // lamp fixture
   g.save(); g.translate(640, -20); g.rotate(sway);
-  g.strokeStyle = '#0c0a09'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.stroke();
+  g.strokeStyle = '#0c0a09'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.stroke();
   g.fillStyle = '#2b2622'; g.beginPath(); g.moveTo(-40, 62); g.quadraticCurveTo(-34, 30, 0, 28); g.quadraticCurveTo(34, 30, 40, 62); g.closePath(); g.fill();
   g.fillStyle = '#fbe39a'; g.shadowColor = '#ffd36a'; g.shadowBlur = 30; g.beginPath(); g.ellipse(0, 62, 40, 7, 0, 0, 6.283); g.fill();
   g.restore();
@@ -125,7 +129,7 @@ function drawScene(app, st) {
       const x = -120 + p * (W + 240), y = c.y + Math.sin(t * 0.4 + c.ph) * (still ? 0 : 18);
       g.save(); g.translate(x, y); g.rotate(c.rot + (still ? 0 : Math.sin(t * 0.3 + c.ph) * 0.08));
       g.globalAlpha = c.a * Math.sin(p * Math.PI);
-      g.strokeStyle = '#e8dcc4'; g.lineWidth = 2; g.setLineDash([7, 6]);
+      g.strokeStyle = '#e8dcc4'; g.lineWidth = lnw(2); g.setLineDash([7, 6]);
       g.beginPath(); g.roundRect ? g.roundRect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s, 8) : g.rect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s); g.stroke();
       g.setLineDash([]); g.beginPath(); g.moveTo(-30 * c.s, 0); g.lineTo(30 * c.s, 0); g.stroke();
       g.restore();
@@ -221,9 +225,9 @@ export default {
     const over = app.inRect(mx, my, 38, 38);
     if (over) { app.cursor = 'pointer'; app.tooltip(st.muted ? 'Sound off' : 'Sound on', 'Click to toggle.'); }
     app.panel(mx, my, 38, 38, { r: 8, fill: over ? 'rgba(60,50,42,.9)' : 'rgba(26,22,20,.8)', stroke: over ? COL.lamp : 'rgba(232,220,196,.4)' });
-    g.save(); g.strokeStyle = COL.vellum; g.fillStyle = COL.vellum; g.lineWidth = 2;
+    g.save(); g.strokeStyle = COL.vellum; g.fillStyle = COL.vellum; g.lineWidth = lnw(2);
     g.beginPath(); g.moveTo(mx + 9, my + 15); g.lineTo(mx + 14, my + 15); g.lineTo(mx + 20, my + 9); g.lineTo(mx + 20, my + 29); g.lineTo(mx + 14, my + 23); g.lineTo(mx + 9, my + 23); g.closePath(); g.fill();
-    if (st.muted) { g.strokeStyle = COL.scar; g.lineWidth = 3; g.beginPath(); g.moveTo(mx + 25, my + 14); g.lineTo(mx + 33, my + 24); g.moveTo(mx + 33, my + 14); g.lineTo(mx + 25, my + 24); g.stroke(); }
+    if (st.muted) { g.strokeStyle = COL.scar; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(mx + 25, my + 14); g.lineTo(mx + 33, my + 24); g.moveTo(mx + 33, my + 14); g.lineTo(mx + 25, my + 24); g.stroke(); }
     else { g.beginPath(); g.arc(mx + 21, my + 19, 6, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(mx + 21, my + 19, 11, -0.9, 0.9); g.stroke(); }
     g.restore();
     if (app.clicked(mx, my, 38, 38)) {
@@ -279,7 +283,13 @@ export default {
         if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Wardrobe', 'Spend Credit on card backs, tints, titles and a starting relic. Shortcut: W.');
         if (app.button('Wardrobe', x + hw + 10, yy, hw, bh, { size: 22 }) && flow.openWardrobe) flow.openWardrobe();
       }
-      else if (id === 'settings') { if (app.button('Settings', x, yy, bw, bh, { size: 22 })) flow.openSettings(); }
+      else if (id === 'settings') {
+        const hw = Math.floor((bw - 10) / 2), al = percentLabel(meta);
+        if (app.button('Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
+        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.', { color: COL.lamp });
+        app.reg('title-archive', x + hw + 10, yy, hw, bh, { group: 'archive' });
+        if (app.button(app.measure(al, 20, { bold: true }) > hw - 16 ? 'Archive' : al, x + hw + 10, yy, hw, bh, { size: 20, fit: true }) && flow.openArchive) flow.openArchive();
+      }
       else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (app.button('Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
       else if (id === 'credits') { if (app.button('Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
       y += step;
@@ -312,7 +322,7 @@ export default {
     app.text(mod.name, x + 16, y + 116, { size: 17, bold: true, color: '#f0d27a' });
     app.text(mod.text, x + 16, y + 140, { size: 14, ui: true, maxW: 268, color: '#d9cba8' });
     if (played) {
-      g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = 2; g.strokeRect(-40, -13, 80, 26);
+      g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.strokeRect(-40, -13, 80, 26);
       app.text('PLAYED', 0, -8, { size: 14, bold: true, ui: true, align: 'center', color: COL.scar }); g.restore();
     }
     g.restore();
@@ -335,52 +345,55 @@ export default {
     const g = app.ctx, meta = app.shared.meta;
     const k = EASE.out(clamp(this.selK, 0, 1));
     g.save(); const dg = g.createLinearGradient(0, 0, 0, 130); dg.addColorStop(0, 'rgba(8,6,5,.0)'); dg.addColorStop(1, 'rgba(8,6,5,.55)'); g.fillStyle = dg; g.fillRect(0, 0, W, 130); g.fillStyle = 'rgba(8,6,5,.55)'; g.fillRect(0, 130, W, H - 130); g.restore();
-    app.text('Choose your grafter', 640, 112, { size: 26, align: 'center', bold: true, alpha: k });
-    const pw = 380, ph = 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = 148;
+    const phone = app.scale < 0.95; // phone stage scales: the boosted text needs a taller panel, so the whole select column uses the spare stage height
+    app.text('Choose your grafter', 640, phone ? 92 : 112, { size: 26, align: 'center', bold: true, alpha: k, fit: { w: 700, lines: 1 } });
+    const pw = 380, ph = phone ? 396 : 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = phone ? 122 : 148;
     HERO_ORDER.forEach((id, i) => {
       const h = HEROES[id]; if (!h) return;
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
-    this.drawAssist(app, px0, 506);
+    drawModeSwitch(app, px0, phone ? 40 : 52, 360, phone ? 46 : 42); // Classic map | The Ward (new), remembered in meta.settings.mode
+    const ay = py + ph + 6, ah = phone ? 46 : 32;
+    this.drawAssist(app, px0, ay);
     // lower row
-    const ly = 536;
+    const ly = ay + ah + 2;
     const unlocked = heroUnlocked(meta, this.hero);
     const maxA = Math.min(10, maxAscension(meta, this.hero) + 1);
     this.asc = clamp(this.asc, 0, maxA);
     // seed
-    app.text('SEED (optional)', px0, ly, { size: 12, ui: true, bold: true, color: COL.lamp });
+    app.text('SEED (optional)', px0, ly, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 250, lines: 1 } });
     const sx = px0, sy = ly + 20, sw = 250, sh = 38;
     const sOver = app.inRect(sx, sy, sw, sh);
     if (app.clicked(sx, sy, sw, sh)) this.seedFocus = true; else if (app.mouse.released && !sOver) this.seedFocus = false;
     app.panel(sx, sy, sw, sh, { r: 6, fill: 'rgba(8,6,5,.8)', stroke: this.seedFocus ? COL.lamp : 'rgba(232,220,196,.35)' });
     if (sOver) app.cursor = 'text';
     const caret = this.seedFocus && Math.floor(app.t * 2) % 2 === 0 ? '|' : '';
-    if (this.seed) app.text(this.seed + caret, sx + 12, sy + 8, { size: 18, ui: true });
-    else app.text(this.seedFocus ? caret : 'random', sx + 12, sy + 9, { size: 16, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
+    if (this.seed) app.text(this.seed + caret, sx + 12, sy + 8, { size: 18, ui: true, fit: { w: sw - 24, lines: 1 } });
+    else app.text(this.seedFocus ? caret : 'random', sx + 12, sy + 9, { size: 16, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: sw - 24, lines: 1 } });
     for (const e of keys) {
       if (e.key === 'Backspace') { this.seed = this.seed.slice(0, -1); this.seedFocus = true; }
       else if (e.key.length === 1 && /[a-zA-Z0-9_-]/.test(e.key) && !e.ctrlKey && !e.metaKey && this.seed.length < 20) { this.seed += e.key; this.seedFocus = true; }
     }
     // ascension
     const ax = px0 + 290;
-    app.text('ASCENSION', ax, ly, { size: 12, ui: true, bold: true, color: COL.lamp });
+    app.text('ASCENSION', ax, ly, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 130, lines: 1 } });
     if (app.inRect(ax, ly - 4, 120, 70)) app.tooltip('Ascension', 'Difficulty. Leave it at 0 for your first run. Each step adds a harder rule once you have won.', { color: COL.lamp });
     if (app.button('<', ax, ly + 20, 38, 38, { size: 22, disabled: this.asc <= 0 })) this.asc--;
     app.text(String(this.asc), ax + 62, ly + 22, { size: 30, bold: true, align: 'center', color: this.asc ? '#ff9a7a' : COL.vellum });
     if (app.button('>', ax + 86, ly + 20, 38, 38, { size: 22, disabled: this.asc >= maxA })) this.asc++;
-    if (maxA < 10 && this.asc >= maxA) app.text('Clear this level to open the next.', ax, ly + 64, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.5)', maxW: 130 });
+    if (maxA < 10 && this.asc >= maxA) app.text('Clear this level to open the next.', ax, ly + 64, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.5)', fit: { w: 130, h: 40, lines: 2 } });
     // cumulative modifiers
     const tx = ax + 150, tw = W - px0 - tx;
     const lines = RUN.ASCENSION_TEXT.slice(1, this.asc + 1);
     app.panel(tx - 10, ly - 2, tw + 10, 134, { r: 8, fill: 'rgba(8,6,5,.55)', stroke: 'rgba(232,220,196,.15)' });
-    if (!lines.length) app.text('Ascension 0: ' + RUN.ASCENSION_TEXT[0], tx, ly + 8, { size: 14, ui: true, color: 'rgba(232,220,196,.6)' });
+    if (!lines.length) app.text('Ascension 0: ' + RUN.ASCENSION_TEXT[0], tx, ly + 8, { size: 14, ui: true, color: 'rgba(232,220,196,.6)', fit: { w: tw - 12, lines: 1 } });
     else {
       const col = lines.length > 5 ? 2 : 1, cw = col === 2 ? tw / 2 - 6 : tw - 12;
       lines.forEach((ln, i) => {
         const cx = tx + Math.floor(i / 5) * (tw / 2), cy = ly + 6 + (i % 5) * 24, last = i === lines.length - 1;
         app.text(`${i + 1}`, cx, cy, { size: 13, ui: true, bold: true, color: last ? '#ff9a7a' : '#a58f6b' });
-        app.text(ln, cx + 20, cy, { size: 13, ui: true, color: last ? '#ffe2d6' : '#cdbf9d', maxW: cw - 24, lineH: 14 });
+        app.text(ln, cx + 24, cy, { size: 13, ui: true, color: last ? '#ffe2d6' : '#cdbf9d', fit: { w: cw - 28, h: 24, lines: 1 } });
       });
     }
     // buttons
@@ -390,6 +403,7 @@ export default {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
       const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
+      if (modeOf(meta) === 'ward') opts.mode = 'ward'; // Classic map | The Ward (ui/ward_kit.js drawModeSwitch)
       const af = assistFlags(this.assistOf(app)); if (af) opts.assist = af; // Assist mode (engine/assist.js)
       this.begin(app, opts);
     }
@@ -412,20 +426,27 @@ export default {
     return st.assist;
   },
   drawAssist(app, x, y) {
-    const a = this.assistOf(app), flow = app.shared.flow, h = 28;
+    const a = this.assistOf(app), flow = app.shared.flow, phone = app.scale < 0.95, h = phone ? 46 : 32;
     const save = () => { if (flow.saveMeta) flow.saveMeta(); };
     app.reg('title-assist', x, y, 130, h, { group: 'assist' });
     if (app.inRect(x, y, 130, h)) app.tooltip('Assist mode', 'An easier way to learn the game. Off by default. ' + ASSIST_NOTE);
-    if (app.button('Assist: ' + (a.on ? 'On' : 'Off'), x, y, 130, h, { size: 15, fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
+    const bw0 = phone ? 176 : 134, dis = phone ? 2 : 0; // labels sit in their buttons: up to two lines on a phone so nothing is cut
+    const mid = (txt, o) => { const L = app.layoutText(txt, o); return y + (h - L.h) / 2; }; // vertical centre for one or two fitted lines
+    const lab = (txt, bx, bw, o) => { const O = { size: o.size, bold: true, shadow: true, align: 'center', color: o.color || COL.vellum, fit: { w: bw - 4, h: h - 2, lines: dis ? 2 : 1 } }; app.text(txt, bx + bw / 2, mid(txt, O), O); };
+    if (app.button('', x, y, 130, h, { fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
+    lab('Assist: ' + (a.on ? 'On' : 'Off'), x, 130, { size: 15 });
     if (!a.on) return;
     ASSIST_OPTIONS.forEach((o, i) => {
-      const ox = x + 140 + i * 158, on = !!a[o.id];
-      app.reg('title-assist-' + o.id, ox, y, 150, h, { group: 'assist' });
-      if (app.inRect(ox, y, 150, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
-      if (app.button(o.name, ox, y, 150, h, { size: 14, fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined, color: on ? '#fbe9b0' : undefined })) { a[o.id] = !on; save(); }
-      const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = 1.5; g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
+      const ox = x + 140 + i * (bw0 + 8), bw = bw0, on = !!a[o.id];
+      app.reg('title-assist-' + o.id, ox, y, bw, h, { group: 'assist' });
+      if (app.inRect(ox, y, bw, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
+      if (app.button('', ox, y, bw, h, { fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined })) { a[o.id] = !on; save(); }
+      lab(o.name, ox + 20, bw - 20, { size: 14, color: on ? '#fbe9b0' : undefined });
+      const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = lnw(1.5); g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
     });
-    app.text('Assisted runs do not unlock ascensions or achievements.', x + 140 + 4 * 158 + 6, y + 1, { size: 12, ui: true, italic: true, maxW: W - 50 - (x + 140 + 4 * 158 + 6), lineH: 14, color: 'rgba(232,220,196,.6)' });
+    const nx = x + 140 + 4 * (bw0 + 8) + 4;
+    const NO_ = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.6)', fit: { w: W - 50 - nx, h: h + 2, lines: dis ? 2 : 1 } };
+    app.text('Assisted runs do not unlock ascensions or achievements.', nx, mid('Assisted runs do not unlock ascensions or achievements.', NO_), NO_);
   },
   drawHeroPanel(app, h, x, y, w, ph, idx) {
     const g = app.ctx, meta = app.shared.meta;
@@ -450,52 +471,81 @@ export default {
     drawPortrait(g, h.id, x + 54, y + 40 + sway, 66);
     g.restore();
     if (locked) { padlock(g, x + 54, y + 44, 0.9); }
-    // name block
-    app.text(h.name, x + 108, y + 12, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true });
-    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6' });
-    // school badge (shape glyph + name)
-    drawSchoolGlyph(g, h.school, x + w - 34, y + 30, 11, locked ? '#6d655a' : school.color);
-    app.text(school.name, x + w - 34, y + 46, { size: 11, ui: true, bold: true, align: 'center', color: locked ? '#6d655a' : school.color });
+    // name block (fitted: the name and title stop short of the school badge)
+    app.text(h.name, x + 108, y + 10, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true, fit: { w: w - 108 - 76, lines: 1 } });
+    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6', fit: { w: w - 108 - 14, lines: 1 } });
+    // school badge (shape glyph, name to its left; the title row below runs under it)
+    drawSchoolGlyph(g, h.school, x + w - 26, y + 16, 11, locked ? '#6d655a' : school.color);
+    app.text(school.name, x + w - 14, y + 28, { size: 11, ui: true, bold: true, align: 'right', color: locked ? '#6d655a' : school.color, fit: { w: 60, lines: 1 } });
     if (locked) {
-      app.text('LOCKED', x + 108, y + 62, { size: 12, ui: true, bold: true, color: '#8c8372' });
-      app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 104, { size: 17, color: '#9b8f7a', maxW: w - 48, italic: true });
-      app.text(h.blurb, x + 24, y + 150, { size: 14, color: '#6d655a', maxW: w - 48 });
+      app.text('LOCKED', x + 24, y + 86, { size: 12, ui: true, bold: true, color: '#8c8372', fit: { w: 120, lines: 1 } });
+      const ul = app.text(heroHint(meta, h.id) || (h.unlock ? h.unlock.text : 'Locked.'), x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3, soft: true } });
+      app.text(h.blurb, x + 24, y + 106 + ul + 8, { size: 14, color: '#6d655a', fit: { w: w - 48, h: 90, lines: 4, soft: true } });
       // a big shrouded bust so the locked card still teases who is waiting (idle breath unless reduced motion)
       g.save(); g.globalAlpha = 0.34 + (calm(app) ? 0 : 0.06 * Math.sin(app.t * 1.6 + idx));
-      drawPortrait(g, h.id, x + w / 2, y + 262 + (calm(app) ? 0 : Math.sin(app.t * 1.2 + idx) * 2), 128);
+      drawPortrait(g, h.id, x + w / 2, y + ph - 90 + (calm(app) ? 0 : Math.sin(app.t * 1.2 + idx) * 2), 128);
       g.restore();
-      g.save(); g.globalAlpha = 0.85; padlock(g, x + w / 2 + 44, y + 312, 0.8); g.restore();
+      g.save(); g.globalAlpha = 0.85; padlock(g, x + w / 2 + 44, y + ph - 40, 0.8); g.restore();
       return;
     }
-    // blurb + passive
-    let yy = y + 92;
-    yy += app.text(h.blurb, x + 20, yy, { size: 14, maxW: w - 40, color: '#e0d4b8', lineH: 17 }) + 8;
-    stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
-    yy += 8;
-    app.text('PASSIVE', x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
-    yy += 14;
-    yy += app.text(h.passive, x + 20, yy, { size: 14, maxW: w - 40, color: '#fbe9b0', lineH: 17 }) + 4;
+    // Vertical budget: everything below the header band shares y+88 .. y+ph-26 (SELECTED sits under it). The rules (passive, starter deck) are fitted
+    // first and never cut; the flavor blurb takes whatever is left (soft: it may shrink or lose its last line on the smallest phone stage).
+    const iw = w - 40, top = y + 88, bottom = y + ph - 26;
     const hp = h.perks && h.perks.hp, gold = h.perks && h.perks.gold;
-    app.text(`${hp} HP    ${gold} gold`, x + 20, yy, { size: 13, ui: true, color: '#b7aa8c' });
-    yy += 26;
-    // starter deck
     const counts = {}, types = { attack: 0, skill: 0, power: 0 };
     for (const id of h.deck) { counts[id] = (counts[id] || 0) + 1; const t = CARDS[id] && CARDS[id].type; if (types[t] !== undefined) types[t]++; }
-    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
-    let tx = x + w - 20;
-    for (const t of ['power', 'skill', 'attack']) {
-      const s = `${types[t]} ${TYPE_NAMES[t]}`; const wd = app.measure(s, 12, { ui: true });
-      tx -= wd; app.text(s, tx, yy, { size: 12, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 12;
+    const ids = Object.keys(counts), cw = iw / 2, cellW = cw - 12;
+    const names = ids.map((id) => `${counts[id]}x ${CARDS[id] ? CARDS[id].name : id}`);
+    const rows = Math.ceil(ids.length / 2);
+    const deckLbl = `STARTER DECK  ${h.deck.length}`, tl = ['power', 'skill', 'attack'].map((t) => ({ t, s: `${types[t]} ${TYPE_NAMES[t]}` }));
+    // m shrinks the design sizes (large text scales); the rules block must fit between the band and SELECTED, so take the largest m that does
+    let P = null;
+    for (const m of [1, 0.92, 0.85, 0.78, 0.7]) {
+      const rowO = { size: 13 * m, ui: true }, hdrO = { size: 12 * m, ui: true, bold: true };
+      let rowSz = 99; for (const n of names) rowSz = Math.min(rowSz, app.layoutText(n, { ...rowO, fit: { w: cellW, lines: 1 } }).size);
+      const rowPitch = Math.round(rowSz * 1.3);
+      const hdrSz = app.layoutText(deckLbl, { ...hdrO, fit: { w: iw, lines: 1 } }).size;
+      const tySz = Math.min(hdrSz, ...tl.map((q) => app.layoutText(q.s, { size: 12 * m, ui: true, fit: { w: iw / 3 - 8, lines: 1 } }).size));
+      const typesW = tl.reduce((n, q) => n + app.measure(q.s, tySz, { ui: true, exact: true }) + 10, -10);
+      const twoRows = app.measure(deckLbl, hdrSz, { ...hdrO, exact: true }) + typesW + 14 > iw; // the type counts drop to their own line when they would touch the label
+      const hdrH = Math.round(Math.max(hdrSz, tySz) * 1.25) + 3, deckH = hdrH * (twoRows ? 2 : 1) + rows * rowPitch;
+      const lblH = Math.round(app.layoutText('PASSIVE', { ...hdrO, fit: { w: 120, lines: 1 } }).size * 1.22) + 1;
+      const hpO = { size: 13 * m, ui: true }, hpTxt = `${hp} HP    ${gold} gold`, hpH = Math.round(app.layoutText(hpTxt, { ...hpO, fit: { w: iw, lines: 1 } }).size * 1.22) + 6;
+      const pOpts = { size: 14 * m, lineH: 17 * m }, pL = app.layoutText(h.passive, { ...pOpts, fit: { w: iw, lines: 3 } }), passH = pL.lines.length * pL.lineH + 4;
+      const room = bottom - top - (lblH + passH + hpH + deckH + 16);
+      P = { m, rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room };
+      if (room >= 0) break;
     }
-    yy += 17;
-    const ids = Object.keys(counts);
+    const { rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room } = P;
+    let yy = top;
+    if (room >= 14) { // the flavor blurb takes what is left (soft: it may shrink or lose its last line on the smallest phone stage)
+      const bO = { size: 14 * P.m, lineH: 17 * P.m, fit: { w: iw, h: room, lines: 3, soft: true } }, bL = app.layoutText(h.blurb, bO);
+      app.text(h.blurb, x + 20, yy, { ...bO, color: '#e0d4b8' });
+      yy += bL.lines.length * bL.lineH + 8;
+    }
+    stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
+    yy += 8;
+    app.text('PASSIVE', x + 20, yy, { ...hdrO, color: labelColor(h.color), fit: { w: 120, lines: 1 } });
+    yy += lblH;
+    app.text(h.passive, x + 20, yy, { ...pOpts, color: '#fbe9b0', fit: { w: iw, lines: 3 } });
+    yy += passH;
+    app.text(hpTxt, x + 20, yy, { ...hpO, color: '#b7aa8c', fit: { w: iw, lines: 1 } });
+    yy += hpH;
+    app.text(deckLbl, x + 20, yy, { ...hdrO, size: hdrSz, exact: true, color: labelColor(h.color) });
+    let tx = x + w - 20;
+    if (twoRows) yy += hdrH;
+    for (const q of tl) {
+      const t = q.t, wd = app.measure(q.s, tySz, { ui: true, exact: true });
+      tx -= wd; app.text(q.s, tx, yy, { size: tySz, exact: true, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 10;
+    }
+    yy += hdrH;
     ids.forEach((id, i) => {
-      const cx = x + 20 + (i % 2) * ((w - 40) / 2), cy = yy + Math.floor(i / 2) * 18;
+      const cx = x + 20 + (i % 2) * cw, cy = yy + Math.floor(i / 2) * rowPitch;
       const c = CARDS[id];
-      g.save(); g.fillStyle = c ? (COL[c.type] || '#888') : '#888'; g.fillRect(cx, cy + 3, 4, 11); g.restore();
-      app.text(`${counts[id]}x ${c ? c.name : id}`, cx + 10, cy, { size: 13, ui: true, color: '#efe3c4' });
+      g.save(); g.fillStyle = c ? (COL[c.type] || '#888') : '#888'; g.fillRect(cx, cy + 3, 4, Math.max(11, rowSz - 2)); g.restore();
+      app.text(names[i], cx + 10, cy, { ...rowO, color: '#efe3c4', size: rowSz, exact: true });
     });
-    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 12, ui: true, bold: true, align: 'right', color: labelColor(h.color) }); }
+    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 12, ui: true, bold: true, align: 'right', color: labelColor(h.color), fit: { w: 100, lines: 1 } }); }
   },
 
   // ---- credits ----

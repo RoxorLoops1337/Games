@@ -1,5 +1,6 @@
 // EVENT screen (run.phase === 'event', run.pending = {kind:'event', id, result}).
 // Left: a framed mood scene (procedural). Right: a parchment panel with the scene text (typewriter), choices, then the result.
+import { glossTip, cardGlossTip } from './tooltips.js';
 import { tscale, wrapLimit } from './graft_parts.js';
 import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
 import * as RUN from '../engine/run.js';
@@ -10,9 +11,11 @@ import { drawEventPlate } from '../art/plates.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin, drawRelic, drawEventSeal } from '../art/icons.js';
+import { lnw } from '../art/linework.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
+const EV_BAND = { x: 576, y: 70, bottom: 700, dir: -1 }; // glossary tips open over the picture on the left, never over the choices
 const PANEL = { x: 584, y: 64, w: 664, h: 632 }; // starts under the global Pause / Fullscreen zone (y 0..56)
 const ACT_TINT = { 1: ['#1c2b24', '#4f7a5f', '#bfe3c8'], 2: ['#2b1d12', '#8a5a2b', '#ffd596'], 3: ['#1c1230', '#6b4fa0', '#f5e6a8'] };
 const CHOICE_GUARD = 0.15; // s after the text is fully shown before a choice can be picked
@@ -37,7 +40,7 @@ const SIL = {
   },
   crates(g, x, y, s, c) {
     g.fillStyle = c; g.fillRect(x - 50 * s, y - 44 * s, 56 * s, 44 * s); g.fillRect(x + 10 * s, y - 34 * s, 44 * s, 34 * s); g.fillRect(x - 30 * s, y - 84 * s, 46 * s, 40 * s);
-    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 2; g.strokeRect(x - 50 * s, y - 44 * s, 56 * s, 44 * s); g.strokeRect(x - 30 * s, y - 84 * s, 46 * s, 40 * s);
+    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw(2); g.strokeRect(x - 50 * s, y - 44 * s, 56 * s, 44 * s); g.strokeRect(x - 30 * s, y - 84 * s, 46 * s, 40 * s);
   },
   gurney(g, x, y, s, c) {
     g.fillStyle = c; g.fillRect(x - 74 * s, y - 52 * s, 148 * s, 10 * s); g.fillRect(x - 66 * s, y - 42 * s, 6 * s, 28 * s); g.fillRect(x + 60 * s, y - 42 * s, 6 * s, 28 * s);
@@ -70,8 +73,8 @@ function drawScene(g, ev, act, t, rm) {
   const flick = rm ? 1 : 1 + Math.sin(t * 7 + h) * 0.03 + Math.sin(t * 13.3) * 0.02;
   const lg = g.createRadialGradient(lx, ly, 6, lx, ly, 240 * flick); lg.addColorStop(0, rgba(light, 0.3)); lg.addColorStop(0.4, rgba(light, 0.08)); lg.addColorStop(1, rgba(light, 0));
   g.fillStyle = lg; g.fillRect(FRAME.x + 10, FRAME.y + 10, FRAME.w - 20, FRAME.h - 20);
-  g.strokeStyle = '#2b1e1a'; g.lineWidth = 2; g.beginPath(); g.moveTo(lx, FRAME.y + 12); g.lineTo(lx, ly - 10); g.stroke();
-  g.beginPath(); g.arc(lx, ly, 8, 0, 6.283); g.fillStyle = light; g.fill(); g.lineWidth = 2; g.strokeStyle = '#2b1e1a'; g.stroke();
+  g.strokeStyle = '#2b1e1a'; g.lineWidth = lnw(2); g.beginPath(); g.moveTo(lx, FRAME.y + 12); g.lineTo(lx, ly - 10); g.stroke();
+  g.beginPath(); g.arc(lx, ly, 8, 0, 6.283); g.fillStyle = light; g.fill(); g.lineWidth = lnw(2); g.strokeStyle = '#2b1e1a'; g.stroke();
   // drifting motes
   for (let i = 0; i < (rm ? 0 : 16); i++) {
     const px = FRAME.x + ((hash('m' + i + ev.id) % 1000) / 1000) * FRAME.w + Math.sin(t * 0.4 + i) * 12;
@@ -81,7 +84,7 @@ function drawScene(g, ev, act, t, rm) {
   g.restore();
   // frame: stitched border and corner tabs
   g.save();
-  g.lineWidth = 8; g.strokeStyle = '#2b2018'; g.strokeRect(FRAME.x - 4, FRAME.y - 4, FRAME.w + 8, FRAME.h + 8);
+  g.lineWidth = lnw(8); g.strokeStyle = '#2b2018'; g.strokeRect(FRAME.x - 4, FRAME.y - 4, FRAME.w + 8, FRAME.h + 8);
   g.restore();
 }
 
@@ -203,19 +206,20 @@ export default {
     app.rr(P.x + 4, P.y + 6, P.w, P.h, 10); g.fillStyle = 'rgba(0,0,0,.45)'; g.fill();
     app.rr(P.x, P.y, P.w, P.h, 10);
     const pg = g.createLinearGradient(P.x, P.y, P.x + P.w, P.y + P.h); pg.addColorStop(0, '#e2d5b6'); pg.addColorStop(1, '#cbbb95'); g.fillStyle = pg; g.fill();
-    g.strokeStyle = '#2b1e1a'; g.lineWidth = 3; g.stroke();
-    g.lineWidth = 1.5; g.strokeStyle = 'rgba(43,30,26,.4)'; g.setLineDash([8, 6]); app.rr(P.x + 10, P.y + 10, P.w - 20, P.h - 20, 6); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = '#2b1e1a'; g.lineWidth = lnw(3); g.stroke();
+    g.lineWidth = lnw(1.5); g.strokeStyle = 'rgba(43,30,26,.4)'; g.setLineDash([8, 6]); app.rr(P.x + 10, P.y + 10, P.w - 20, P.h - 20, 6); g.stroke(); g.setLineDash([]);
     g.restore();
 
     // title
     app.text(ev.act ? `ACT ${['', 'I', 'II', 'III'][ev.act]} EVENT` : 'EVENT', ix, P.y + 30, { size: 13, ui: true, bold: true, color: 'rgba(43,30,26,.55)' });
     const th = app.text(ev.name, ix, P.y + 48, { size: 36, bold: true, color: COL.ink, maxW: iw, lineH: 42 });
     let y = P.y + 48 + th + 8;
-    g.strokeStyle = COL.scar; g.lineWidth = 2.5; g.setLineDash([10, 7]); g.beginPath(); g.moveTo(ix, y); g.lineTo(ix + iw, y); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = COL.scar; g.lineWidth = lnw(2.5); g.setLineDash([10, 7]); g.beginPath(); g.moveTo(ix, y); g.lineTo(ix + iw, y); g.stroke(); g.setLineDash([]);
     y += 20;
 
     // scene text, typewriter
-    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k);
+    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.max(Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k), Math.ceil(app.sz(TS) * 1.2)); // pitch follows the real (phone-inflated) font size
+    const storyY = y;
     const lines = app.wrap(ev.text, iw, TS, {});
     const total = ev.text.length;
     const shown = Math.min(total, Math.floor(this.shown));
@@ -231,6 +235,7 @@ export default {
     }
     y += lines.length * TL + 16;
     const textEnd = y;
+    if (!app.blocked && !this.picker && app.inRect(ix, storyY, iw, textEnd - storyY)) glossTip(app, '', [ev.text], { x: ix, y: storyY, w: iw, h: textEnd - storyY, band: EV_BAND });
     // click panel to finish the text
     if (typing) {
       if (!app.blocked && !this.picker && mouse.released && app.inRect(P.x, P.y, P.w, P.h)) this.shown = 1e9;
@@ -259,7 +264,7 @@ export default {
       g.save();
       app.rr(x, y + (over ? -2 : 0), w, h, 8);
       g.fillStyle = !c.ok ? 'rgba(43,30,26,.10)' : over ? 'rgba(179,38,58,.20)' : 'rgba(43,30,26,.12)'; g.fill();
-      g.lineWidth = over ? 2.8 : 1.8; g.strokeStyle = !c.ok ? 'rgba(43,30,26,.3)' : over ? COL.scar : 'rgba(43,30,26,.6)'; if (!c.ok) g.setLineDash([6, 5]); g.stroke(); g.setLineDash([]);
+      g.lineWidth = lnw(over ? 2.8 : 1.8); g.strokeStyle = !c.ok ? 'rgba(43,30,26,.3)' : over ? COL.scar : 'rgba(43,30,26,.6)'; if (!c.ok) g.setLineDash([6, 5]); g.stroke(); g.setLineDash([]);
       g.restore();
       // number tab
       const cmp = h < 44, ly = cmp ? Math.max(2, Math.round((h - 16 * 1.22 * k) / 2)) : 10;
@@ -269,7 +274,7 @@ export default {
       sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * lp, { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
       if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - Math.round(22 * k), { size: 14, maxW: w - 50, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
-      if (over) { app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text); }
+      if (!this.picker && app.inRect(x, y, w, h)) { if (over) app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text, { gloss: [c.label], anchor: { x, y, w, h, band: EV_BAND } }); else glossTip(app, '', [c.label, c.text || ''], { x, y, w, h, band: EV_BAND }); } // Boon, Price and result words: Gilt, Burn, Strain... each explained beside the choice
       let fire = false;
       if (c.ok && !this.picker && !this.busy && this.doneT != null && this.t - this.doneT >= CHOICE_GUARD) {
         if (over && mouse.released && mouse.pressStart && app.inRect(x, y, w, h)) { fire = true; if (app.onClick) app.onClick(); }
@@ -289,12 +294,13 @@ export default {
   drawResult(app, ix, iw, y) {
     const g = app.ctx, P = PANEL;
     const text = String(this.result);
-    const k = tscale(app), RL = Math.round(30 * k);
+    const k = tscale(app), RL = Math.max(Math.round(30 * k), Math.ceil(app.sz(22, { italic: true }) * 1.2));
     const lines = app.wrap(text, iw - 40, 22, { italic: true });
     const h = lines.length * RL + 44;
     app.reg('event-result', ix, y, iw, h, { group: 'panel' });
+    if (!app.blocked && app.inRect(ix, y, iw, h)) glossTip(app, '', [text], { x: ix, y, w: iw, h, band: EV_BAND });
     app.rr(ix, y, iw, h, 8); g.fillStyle = 'rgba(179,38,58,.08)'; g.fill();
-    g.strokeStyle = COL.scar; g.lineWidth = 2; g.setLineDash([9, 6]); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.setLineDash([9, 6]); g.stroke(); g.setLineDash([]);
     let left = Math.floor(this.resultShown);
     lines.forEach((ln, i) => { const n = Math.max(0, Math.min(ln.length, left)); left -= ln.length + 1; if (n > 0) app.text(ln.slice(0, n), ix + 20, y + 22 + i * RL, { size: 22, italic: true, color: COL.ink }); });
     if (this.resultShown < text.length) { if (!app.blocked && app.mouse.released) this.resultShown = 1e9; return; }
@@ -331,7 +337,7 @@ export default {
       if (over && pk.f !== app.frame && mouse.released && mouse.pressStart && Math.abs(mouse.pressStart.x - cx) < cw / 2 + 4) { if (app.onClick) app.onClick(); this.choose(app, pk.i, inst.uid); }
     });
     g.restore();
-    if (hover >= 0) app.cursor = 'pointer';
+    if (hover >= 0) { app.cursor = 'pointer'; const hi = pk.cards[hover]; try { const cx0 = gx + (hover % per) * (cw + gap) + cw / 2, cy0 = viewTop + Math.floor(hover / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll; cardGlossTip(app, cardSpec(hi), { x: cx0 - cw / 2, y: cy0 - ch / 2, w: cw, h: ch }); } catch (e) { /* unreadable card: no tip */ } }
     if (maxS > 0) { g.fillStyle = 'rgba(232,220,196,.15)'; g.fillRect(W - 24, viewTop, 5, viewH); g.fillStyle = 'rgba(232,220,196,.6)'; g.fillRect(W - 25, viewTop + (pk.scroll / maxS) * (viewH - 80), 7, 80); app.text('scroll for more', 640, H - 80, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.45)' }); }
     if (app.button('Cancel', 540, H - 62, 200, 46, { size: 20, key: 'escape' }) && pk.f !== app.frame) this.picker = null;
   },

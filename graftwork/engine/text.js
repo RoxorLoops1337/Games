@@ -24,10 +24,11 @@ function num(v, m) {
 function scaled(verb, v, noun, m, tail = '') {
   if (typeof v === 'number' || !v || !v.per) return `${verb} ${num(v, m)}${noun ? ' ' + noun : ''}${tail}.`;
   const mul = v.mul === undefined ? 1 : v.mul;
-  const per = mul >= 1 ? `${mul === 1 ? '' : mul + ' '}${noun || ''} per ${srcName(v.per)}` : `1 ${noun || ''} per ${Math.round(1 / mul)} ${srcName(v.per)}`;
+  const per = mul >= 1 ? `${mul === 1 ? '1 ' : mul + ' '}${mul === 1 && noun === 'cards' ? 'card' : noun || ''} per ${srcName(v.per)}` : `1 ${noun || ''} per ${Math.round(1 / mul)} ${srcName(v.per)}`;
   const base = v.base ? (m ? scaleNum(v.base, m) : v.base) : 0;
   return base ? `${verb} ${base}${noun ? ' ' + noun : ''}${tail}, plus ${per.replace(/\s+/g, ' ').trim()}.` : `${verb} ${per.replace(/\s+/g, ' ').trim()}${tail}.`;
 }
+const capFirst = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
 const sName = (s) => (STATUSES[s] ? STATUSES[s].name : s);
 const plural = (n, w) => (n === 1 ? w : w + 's');
 const toWord = { all: ' to ALL enemies', random: ' to a random enemy', allEnemies: ' to ALL enemies' };
@@ -61,7 +62,7 @@ export function opText(op, m, seen) {
     case 'fetch': return `Return ${num(nn || 1)} card from your ${op.from || 'discard pile'} to your hand.`;
     case 'if': { // a branch that repeats a sentence the card already printed says "again" instead of the same sentence twice
       const br = (list) => list.map((o) => { const t = opText(o, m); return seen && seen.has(t) ? t.replace(/^Deal (.+)\.$/, 'Deal $1 again.').replace(/^(Apply|Gain|Draw) (\d+) (.+)\.$/, '$1 $2 more $3.').replace(/^Heal (\d+)\.$/, 'Heal $1 more.') : t; }).join(' ');
-      return `${op.ifText || 'If the condition holds'}: ${br(op.then || [])}${op.else ? ' Otherwise: ' + br(op.else) : ''}`;
+      return `${capFirst(op.ifText || 'If the condition holds')}: ${br(op.then || [])}${op.else ? ' Otherwise: ' + br(op.else) : ''}`;
     }
     case 'repeat': return `${op.fx.map((o) => opText(o, m)).join(' ')} (x${num(nn)})`;
     case 'custom': return op.text || '...';

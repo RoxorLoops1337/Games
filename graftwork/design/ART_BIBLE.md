@@ -34,3 +34,12 @@ Bloom threshold .8 strength .35 on lamps/foil/glow only, never on text. God rays
 
 ## Cut or simplify
 Cut the glow-dot particle and per-particle shadowBlur (use pre-baked glow sprites). Reduce motifs to a consistent engraved set, no gradients inside motifs. One heavy post effect per screen state; text and intent icons stay above all post passes. Lower UI saturation; school colour only for glyph and rim. No duplicate nested outlines on small icons.
+
+## Line weights
+One shared stroke system lives in `art/linework.js`; every stroke in art/*.js and the UI chrome goes through `lw()` (imported as `lnw` where a file has a local called `lw`). The ideal is an engraved plate: fine ink contours, hairline rules, faint hatching.
+- Named weights `LW`: `hatch` 0.7 (hatching, always at low alpha), `hair` 1 (borders, rules, inner frames), `fine` 1.2 (inner detail), `ink` 1.8 (main contours: cards, enemies, hero, icons), `bold` 2.6 (selection, emphasis). Never use a heavier outline than `bold`; ropes, chains and arches are bodies, not outlines.
+- Legacy numeric widths (`lw(3)`) are thinned by `LINE_SCALE` 0.6 (3 -> 1.8, 2 -> 1.2, 1..2 eases, <= 1 unchanged). `lw(k, scale, unit)`: `scale` multiplies, `unit` converts to drawing units (icons draw in glyph units via `GW()`).
+- Floor: never under 1 device pixel (0.7 for hatch), read from `setLineDevice(app.px, app.scale)`, called by `app.resize`. Below `app.scale` 0.8 (phones) widths snap to whole device pixels so hairlines stay crisp.
+- Panels: a hairline brass border, a second faint brass rule just inside it (the double rule), hatching at `hatch`. Frames may use the double rule; outlines never do.
+- Text is exempt: glyph strokes (card numbers, intent numerals, `strokeText` halos, `app.text` strokes) are not thinned, to keep contrast.
+- Everything is still baked once and cached; `lw()` is pure arithmetic. Guard: `tests/graftwork_linework.test.mjs`.

@@ -18,7 +18,7 @@ const longNames = normals.slice().sort((a, b) => ENEMIES[b].name.length - ENEMIE
 const fails = [], warns = new Set();
 const foreign = (id) => /^(hand_|seam|preview|end_confirm|pause|fs|fullscreen|cannot)/.test(id); // owned by other builders: warn, do not fail
 
-async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = null, eAll = 0, hp = 0, heroSt = null }) {
+async function scene({ pscale = 0, n, hand, relics = 0, potions = 0, statuses = 0, hover = null, eAll = 0, hp = 0, heroSt = null }) {
   const run = RUN.newRun({ hero: 'marrow', seed: 'lay' + n + hand });
   run.phase = 'combat';
   run.pending = { kind: 'combat', fightKind: 'normal', enemies: longNames.slice(0, n) };
@@ -26,9 +26,13 @@ async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = n
   if (potions) run.potions = Object.keys(POTIONS).slice(0, potions);
   const flow = { RUN, route() {}, openDeck() {}, openSettings() {} };
   const app = await makeApp({ run, audio, flow, meta: { settings: { colorblind: true } } });
+  if (pscale) { // phone stage scale: the text floor inflates labels, with proportional fake metrics so fitting is meaningful
+    app.scale = pscale; app.minPx = 11;
+    app.ctx.measureText = (q) => { const f = String(app.ctx.font || ''), m = /(\d+(?:\.\d+)?)px/.exec(f), sz = m ? +m[1] : 16; return { width: String(q).length * sz * (/bold/.test(f) ? 0.56 : 0.52) }; };
+  }
   const texts = [];
   const orig = app.text;
-  app.text = (str, x, y, o = {}) => { texts.push({ str: String(str), x, y, o }); return orig(str, x, y, o); };
+  app.text = (str, x, y, o = {}) => { const L = pscale && str !== '' ? app.layoutText(String(str), o) : null; texts.push({ str: String(str), x, y, o, L, w: L ? L.w : 0, h: L ? L.h : 0, al: o.align || 'left' }); return orig(str, x, y, o); };
   app.register('combat', combat);
   app.go('combat', { run });
   frames(app, 200);
@@ -54,10 +58,20 @@ async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = n
   if (hover === 'enemy') { const ed = st.eds[0]; app.mouse.x = ed.x; app.mouse.y = L.ENEMY_FOOT - ed.h / 2; }
   texts.length = 0;
   frames(app, 12);
-  return { app, st, texts, c };
+  return { app, st, texts, c, pscale };
 }
 
-function check(label, { app, st, texts }) {
+function check(label, { app, st, texts, pscale }) {
+  if (pscale) { // phones: no label ends in an ellipsis, no two labels share pixels
+    const box = (t) => ({ x: t.al === 'center' ? t.x - t.w / 2 : t.al === 'right' ? t.x - t.w : t.x, y: t.y, w: t.w, h: t.h });
+    for (const t of texts) if (t.L && t.L.trunc && !t.L.soft && !t.o.decor) fails.push(`${label} truncated: "${t.str}"`);
+    const named = texts.filter((t) => t.L && t.y > 0 && t.y < 720 && t.str.trim());
+    for (let i = 0; i < named.length; i++) for (let j = i + 1; j < named.length; j++) {
+      const a = box(named[i]), b = box(named[j]); if (named[i].str === named[j].str) continue;
+      const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (ix > 3 && iy > 4 && ix * iy > 0.2 * Math.min(a.w * a.h, b.w * b.h) && !/^(hand_|seam|preview)/.test('')) fails.push(`${label} text over text: "${named[i].str}" x "${named[j].str}"`);
+    }
+  }
   const all = app.layout.getAll();
   const ovAll = app.layout.findOverlaps().filter((o) => !(o.a.startsWith('hand_') && o.b.startsWith('hand_')));
   for (const o of ovAll) if (foreign(o.a) || foreign(o.b)) warns.add(`${o.a} x ${o.b}`);
@@ -78,13 +92,17 @@ function check(label, { app, st, texts }) {
   for (const t of texts) {
     if (skip.some((r) => t.x >= r.x - 2 && t.x <= r.x + r.w + 2 && t.y >= r.y - 2 && t.y <= r.y + r.h + 2)) continue;
     const sz = (t.o.size || 18) * (t.o.fixed ? 1 : app.textScale);
-    if (sz < 14 && t.str.trim() && t.str !== 'Click to dismiss' && !t.o.decor && t.y > 0) fails.push(`${label} text under 14px: "${t.str}" ${sz}px`);
+    if (!pscale && sz < 14 && t.str.trim() && t.str !== 'Click to dismiss' && !t.o.decor && t.y > 0) fails.push(`${label} text under 14px: "${t.str}" ${sz}px`);
   }
 }
 
 for (let n = 1; n <= 6; n++) for (const hand of [0, 1, 5, 7, 10]) {
   const s = await scene({ n, hand });
   check(`n=${n} hand=${hand}`, s);
+}
+for (const pscale of [0.64, 0.54, 0.46]) {
+  for (const [n, hand] of [[1, 5], [3, 8], [4, 5]]) check(`phone ${pscale} n=${n} hand=${hand}`, await scene({ pscale, n, hand, eAll: 3, heroSt: ['weak', 'vulnerable', 'strength'] }));
+  check(`phone ${pscale} 2 enemies`, await scene({ pscale, n: 2, hand: 7, heroSt: ['weak', 'vulnerable'] }));
 }
 check('long statuses', await scene({ n: 3, hand: 5, statuses: 14 }));
 check('12 relics', await scene({ n: 2, hand: 5, relics: 12 }));

@@ -6,7 +6,9 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
 import { ASCENSION_TEXT } from './run.js';
 import { defaults2, migrate2, awardCaseFile, recordBosses, grantReward } from './meta2.js';
+import { unlockDefaults, migrateUnlock, awardRun, trackRun, heroGate } from './unlock.js';
 export * from './meta2.js';
+export * from './unlock.js';
 
 export const KEY = 'graftwork_meta_v1';
 export const HISTORY_MAX = 20;
@@ -28,7 +30,7 @@ export function defaultMeta() {
   const seen = {}; for (const k of SEEN_KINDS) seen[k] = {};
   return {
     v: 1,
-    unlocked: { heroes, relics: [] },
+    unlocked: { heroes, relics: [], ...unlockDefaults() }, // heroes + content unlock model (engine/unlock.js)
     bestAsc: {}, wins: {}, winAsc: {},
     stats: { runs: 0, wins: 0, deaths: 0, floors: 0, grafts: 0, shatters: 0, elites: 0, bosses: 0, goldEarned: 0, bestLoop: 0, fastestWinFloors: null, dailyWins: 0 },
     seen, achievements: {},
@@ -50,6 +52,7 @@ function fill(t, d) {
 export function migrate(m) {
   if (!isObj(m)) return migrate2(defaultMeta(), true);
   const hadRev = m.rev >= 2;
+  const hadModel = !!(isObj(m.unlocked) && m.unlocked.v >= 1); // content unlock model present? (else: one-time grant from the codex)
   fill(m, defaultMeta());
   for (const k of Object.keys(m.stats)) if (k !== 'fastestWinFloors' && !Number.isFinite(m.stats[k])) m.stats[k] = 0;
   if (m.stats.fastestWinFloors !== null && !Number.isFinite(m.stats.fastestWinFloors)) m.stats.fastestWinFloors = null;
@@ -58,7 +61,8 @@ export function migrate(m) {
   m.unlocked.heroes = m.unlocked.heroes.filter((h) => typeof h === 'string');
   m.history = m.history.filter(isObj).slice(0, HISTORY_MAX);
   m.v = 1; // the key and the base shape are final; additive revisions live in m.rev
-  return migrate2(m, hadRev);
+  migrate2(m, hadRev);
+  return migrateUnlock(m, hadModel);
 }
 export function loadMeta() {
   let raw = null;
@@ -133,7 +137,7 @@ function endContext(run, outcome, m) {
 }
 
 export function recordRunEnd(m, run, outcome) {
-  const res = { newUnlocks: [], newAchievements: [] };
+  const res = { newUnlocks: [], newAchievements: [], unlock: { up: 0, unlockedNow: [] } };
   if (!m || !run) return res;
   res.caseFile = { items: [], total: 0, capped: false };
   if (run.practice) { run.metaDone = true; res.practice = true; return res; } // practice fights never touch stats or Credit
@@ -168,12 +172,11 @@ export function recordRunEnd(m, run, outcome) {
   res.caseFile = awardCaseFile(m, run, won); // milestones -> Credit (engine/meta2.js)
   recordBosses(m, run);                      // saved decks for 'Practice a boss'
 
-  // heroes
-  const reachedAct2 = (run.act || 1) >= 2 || (run.loop || 0) > 0 || won;
+  // heroes: finished-run count plus the old trigger (engine/unlock.js heroGate, data/unlocks.js HERO_GATES)
+  trackRun(m, run);
   for (const h of Object.values(HEROES)) {
     if (heroUnlocked(m, h.id) || !h.unlock) continue;
-    const rule = h.unlock.rule;
-    if ((rule === 'act2' && reachedAct2) || (rule === 'win' && won)) {
+    if (heroGate(m, h.id)) {
       m.unlocked.heroes.push(h.id);
       res.newUnlocks.push({ kind: 'hero', id: h.id, name: h.name, text: h.title || h.blurb || '' });
     }
@@ -192,6 +195,7 @@ export function recordRunEnd(m, run, outcome) {
     }
   }
 
+  res.unlock = awardRun(m, run, res); // Unlock Points and content unlocks (engine/unlock.js)
   m.history.unshift({ hero: run.hero, asc, outcome, floors: st.floors || 0, grafts: st.grafts || 0, date: Date.now(), seed: String(run.seed), loop: run.loop || 0, daily: !!run.daily, ...(assisted ? { assist: true } : {}) });
   m.history = m.history.slice(0, HISTORY_MAX);
   saveMeta(m);

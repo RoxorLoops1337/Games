@@ -2,6 +2,7 @@
 // Pure drawing: combat.js decides when (long press = while the finger is down, preview = until the next tap).
 import { W, H } from './core.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
+import { lnw } from '../art/linework.js';
 
 export const ZOOM_FRAC = 0.7;
 export const zoomScale = () => (H * ZOOM_FRAC) / CARD_H;
@@ -25,11 +26,11 @@ export const infoClose = () => { INFO.on = false; };
 export const touchUi = (app) => !!(app.mouse && app.mouse.touch) || app.scale < 0.95;
 export function openInfoCard(app, title, text, color) { Object.assign(INFO, { on: true, title: String(title || ''), text: String(text || ''), color: color || '#F2C14E', f0: app.frame, t0: app.t }); }
 // The small 'i' chip. Returns true on the frame it is tapped (the tap is consumed). Pass `also` rects (tap targets for the truncated text itself).
-export function infoChip(app, x, y, also = []) {
+export function infoChip(app, x, y, also = [], group) {
   const ctx = app.ctx, r = 11;
-  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.strokeStyle = '#F2C14E'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.strokeStyle = '#F2C14E'; ctx.lineWidth = lnw(1.5); ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text('i', x, y + 1, { size: 14, bold: true, ui: true, align: 'center', baseline: 'middle', color: '#F2C14E' });
-  if (app.reg) app.reg('info_chip', x - r, y - r, r * 2, r * 2, { layer: 'hud' });
+  if (app.reg) app.reg('info_chip', x - r, y - r, r * 2, r * 2, { layer: 'hud', group }); // group: the tile the chip sits in, so it may overlap that tile's own rect
   let hit = app.clicked(x - r - 3, y - r - 3, r * 2 + 6, r * 2 + 6);
   for (const a of also) if (!hit && app.clicked(a.x, a.y, a.w, a.h)) hit = true;
   return hit;
@@ -42,7 +43,7 @@ export function drawInfoCard(app) {
   const lh = Math.round(26 * app.sz(20, { ui: true }) / 20), th = Math.round(34 * app.sz(26, { bold: true }) / 26);
   const ph = Math.min(H - 60, pad * 2 + th + lines.length * lh + 34), px = (W - pw) / 2, py = (H - ph) / 2;
   ctx.save(); ctx.fillStyle = `rgba(6,5,4,${0.72 * a})`; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = a;
-  ctx.fillStyle = '#2a2116'; ctx.strokeStyle = INFO.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 14); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = '#2a2116'; ctx.strokeStyle = INFO.color; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 14); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text(INFO.title, W / 2, py + pad, { size: 26, bold: true, ui: true, align: 'center', color: INFO.color, shadow: true, maxW: pw - pad * 2 });
   lines.forEach((ln, i) => app.text(ln, px + pad, py + pad + th + i * lh, { size: 20, ui: true, color: '#E8DCC4' }));
   app.text('Tap to close', W / 2, py + ph - 24, { size: 14, ui: true, align: 'center', baseline: 'middle', color: 'rgba(232,220,196,.6)' });

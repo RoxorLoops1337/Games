@@ -9,11 +9,12 @@
 //   queueTip(app, key, stack, anchor) / flushTips(app)  combat HUD tips: one per frame, drawn last, 150 ms hover delay
 //   statusPanel / keywordPanel / cardTipStack helpers build the sections.
 import { COL } from './core.js';
-import { STATUSES } from '../data/index.js';
+import { STATUSES, SCHOOLS, GRAFTS } from '../data/index.js';
 import { cardLines } from '../engine/text.js';
 import { mult, scaleNum } from '../engine/combat.js';
 import { OVERLOAD_MULT, TITHE_MULT } from '../engine/cards.js';
 import { opText, srcName } from '../engine/text.js';
+import { lnw } from '../art/linework.js';
 
 const K = (color, glyph, text) => ({ color, glyph, text });
 export const KEYWORDS = {
@@ -54,38 +55,162 @@ export const KEYWORDS = {
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),
 };
+// Rules words that are not statuses: types, schools, tiers and the loose words of the rules text.
+KEYWORDS.Jam = K('#d8a066', 'cross', 'A jammed card costs 1 more and acts as Slack (Frayed) this turn. It clears at end of turn.');
+KEYWORDS.Bare = K('#d6c7a6', 'square', 'A card with no grafts (junk does not count). Strain lands its Tithe on the cheapest, oldest Bare card.');
+KEYWORDS.Pierce = K('#bcd0d8', 'tri', 'Damage that ignores Block and goes straight to HP.');
+KEYWORDS['X cost'] = K('#7fd1e0', 'diamond', 'Spends all your remaining Energy when played. The effect repeats or scales with the Energy spent.');
+KEYWORDS.Attack = K('#e0a050', 'tri', 'A card that deals damage. Strength adds to it, Weak cuts it, Vulnerable raises it.');
+KEYWORDS.Skill = K('#8fb4d1', 'square', 'A card that defends or sets something up (Block, draw, buffs).');
+KEYWORDS.Power = K('#c58bff', 'star', 'Played once, then stays out of your deck for the rest of the combat.');
+KEYWORDS.Junk = K('#a79bb5', 'hex', 'A clog card added by a Price. Most are Unplayable and fade at end of turn. Rust grafts turn them into fuel.');
+KEYWORDS.Safe = K('#8fd18f', 'diamond', 'Safe patch: Weight 1, a small Boon and a simple Price.');
+KEYWORDS.Greedy = K('#e0a050', 'tri', 'Greedy patch: Weight 2 or 3, a big Boon. It pushes you toward Strain.');
+KEYWORDS.Weird = K('#c58bff', 'star', 'Weird patch: it changes how the card works, with a Price to match.');
+KEYWORDS.After = K('#f2c14e', 'square', 'The deck as it will be if you sew this graft: Weight, Budget, Strain and who gets Tithed.');
+for (const sc of Object.values(SCHOOLS)) {
+  if (KEYWORDS[sc.name]) continue; // Echo is a status too: the status text wins, the school is named by o.school
+  KEYWORDS[sc.name] = K(sc.color, 'diamond', `${sc.name} school. ${sc.blurb} At 3 grafts of it: ${sc.resonance[3]} At 6: ${sc.resonance[6]}`);
+}
 // Every status (player afflictions included) is a glossary word too, so card text and tooltips can name it.
 export const THREAD_TERMS = ['Thread', 'Line', 'Knot', 'Stitch', 'Cut', 'Slack', 'Tied', 'Frayed'];
+// A number that prints as 'N' but still counts as 2 in comparisons: desc(NUM) reads 'Gain N gold at the end of combat.'
+const NUM = Object.assign(Object.create(Number.prototype), { valueOf: () => 2, toString: () => 'N', [Symbol.toPrimitive]: (h) => (h === 'number' ? 2 : 'N') });
+const STATUS_BY_NAME = {};
+const generic = (d) => { try { return String(d.desc(NUM)); } catch (e) { try { return String(d.desc(2)); } catch (e2) { return ''; } } };
 for (const d of Object.values(STATUSES)) {
-  if (!d || !d.name || KEYWORDS[d.name]) continue;
-  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
-  KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', text);
+  if (!d || !d.name) continue;
+  STATUS_BY_NAME[d.name] = d;
+  if (KEYWORDS[d.name]) continue;
+  KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', generic(d));
 }
+KEYWORDS.Charge.text = 'Stored by Static cards. Every 2 Charge adds 1 to each hit you deal (max +3). Static cards spend it.';
+// THE WARD terms (design/WARD.md). Kept apart from KEYWORDS so card and event text never pick them up by accident ('Power' the card type,
+// 'night' in an event): a tip names them explicitly with o.terms (ui/ward.js, ui/ward_kit.js). glossaryEntry resolves them after KEYWORDS.
+export const WARD_GLOSSARY = {
+  Wood: K('#b07a44', 'square', 'A building resource. Sawmills make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
+  Stone: K('#a8a198', 'square', 'A building resource. Quarries make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
+  Power: K('#FFE9A0', 'circle', 'Capacity, not spent. Every lit room uses its power. Generators add 2. Switch a room off in the morning to free its power.'),
+  Morning: K('#F2C14E', 'diamond', 'Build stage. Timers tick and spawns appear, resource rooms produce, you draw 5 building plans. No walking.'),
+  Midday: K('#F5E6A8', 'diamond', 'One walk. Fights pay +10% gold. Chapel events lean to gold and healing.'),
+  Evening: K('#e0a050', 'diamond', 'One walk. Dinner: draw 1 more card on the first turn of every fight.'),
+  Night: K('#8fb4d1', 'diamond', 'One walk. Monsters +1 Strength, elites +2 and one more relic to choose from. Fights pay +25% gold. Events turn strange.'),
+  Ward: K('#B3263A', 'tri', 'Fight room. A monster checks in every day, up to 5. Walk in to fight them all: 3 at once, the rest as Reinforcements.'),
+  Isolation: K('#C9A227', 'tri', 'Elite room. An elite every 2 days. Left 3 days it becomes a Level 2 elite.'),
+  Chapel: K('#3E7C74', 'diamond', 'Event room. An event every 4 days. The phase you walk in at changes how it leans.'),
+  Dispensary: K('#5a8fd8', 'square', 'The shop as a room. Restocks every 3 days. Also sells building plans and strikes one for 50 gold.'),
+  Workshop: K('#E8571F', 'hex', 'The forge as a room. Recharges every 3 days.'),
+  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 25% of your max HP.'),
+  Sawmill: K('#8F4A2A', 'square', '+2 wood each morning while lit.'),
+  Quarry: K('#6f6a60', 'square', '+2 stone each morning while lit.'),
+  'Counting House': K('#B8922A', 'square', '+15 gold each morning while lit.'),
+  Generator: K('#b8c23a', 'star', '+2 power capacity. Uses none.'),
+  Corridor: K('#8a7a5c', 'square', 'A cheap connector. Never spawns anything, never goes dark.'),
+  Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next in line from the Ward steps in.'),
+  'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP and +2 Strength, and one more relic to choose from.'),
+  'Dark room': K('#9aa0a6', 'cross', 'A room switched off. Its timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
+};
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
 export function glossaryEntry(term) {
   const name = Object.keys(KEYWORDS).find((n) => n.toLowerCase() === String(term).toLowerCase());
   if (name) { const k = KEYWORDS[name]; return { title: name, text: k.text, color: k.color, glyph: k.glyph }; }
+  const wn = Object.keys(WARD_GLOSSARY).find((n) => n.toLowerCase() === String(term).toLowerCase());
+  if (wn) { const k = WARD_GLOSSARY[wn]; return { title: wn, text: k.text, color: k.color, glyph: k.glyph }; }
   const d = STATUSES[term]; if (!d) return null;
-  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
-  return { title: d.name, text, color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
+  return { title: d.name, text: KEYWORDS[d.name] ? KEYWORDS[d.name].text : generic(d), color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
 }
 // 'knot' and 'knots' are written in lower case in boon text ("counts as 2 knots"): they find the Knot entry too
 const canon = (w) => (w === 'knot' ? 'Knot' : w);
-const NAMES = [...Object.keys(KEYWORDS), 'knot'].sort((a, b) => b.length - a.length);
-const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed)?\\b', 'g');
+// Loose words are matched in any case, the CAPS tags (tier tags, weight pills, the AFTER panel) only in capitals.
+const LOOSE = { jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
+const CAPS = { SAFE: 'Safe', GREEDY: 'Greedy', WEIRD: 'Weird', AFTER: 'After', W1: 'Weight', W2: 'Weight', W3: 'Weight' };
+const NOT_PLAIN = new Set(['Jam', 'Bare', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After']);
+const NAMES = [...Object.keys(KEYWORDS).filter((n) => !NOT_PLAIN.has(n)), 'knot'].sort((a, b) => b.length - a.length);
+const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed|d|ing)?\\b', 'g');
+const LOOSE_RE = /\b(jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
+const CAPS_RE = /\b(SAFE|GREEDY|WEIRD|AFTER|W[123])\b/g;
+// scan(line): every keyword hit in a string, in order, without overlaps: [{ i, len, name, caps }]
+function scan(line) {
+  const hits = []; line = String(line || '');
+  KW_RE.lastIndex = 0; let m;
+  while ((m = KW_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: canon(m[1]) });
+  LOOSE_RE.lastIndex = 0;
+  while ((m = LOOSE_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: LOOSE[m[1].toLowerCase()] });
+  CAPS_RE.lastIndex = 0;
+  while ((m = CAPS_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: CAPS[m[1]], caps: m[1] });
+  hits.sort((a, b) => a.i - b.i || b.len - a.len);
+  const out = []; let end = -1;
+  for (const h of hits) if (h.i >= end) { out.push(h); end = h.i + h.len; }
+  return out;
+}
 
 export function keywordsIn(lines) {
   const out = [];
   const arr = Array.isArray(lines) ? lines : [String(lines || '')];
-  for (const ln of arr) {
-    KW_RE.lastIndex = 0; let m;
-    while ((m = KW_RE.exec(ln))) if (!out.includes(canon(m[1]))) out.push(canon(m[1]));
-  }
+  for (const ln of arr) for (const h of scan(ln)) if (!out.includes(h.name)) out.push(h.name);
   return out;
 }
 
+// ---- glossaryFor: the one resolver every tooltip, info card and tip panel uses ----
+// glossaryFor(text | [texts], { max = 3, skip: Set of names, school, ids: [status ids], types }) -> [{ term, title, definition, text, color, glyph, n }]
+// 'Gain 4 Gilt' resolves with the live number (4): "Gain 4 gold at the end of combat." Most important first: statuses and rules words,
+// then schools, then card types and basics (Block, Attack...). Each term once.
+const BASIC = new Set(['Block', 'Attack', 'Skill', 'Power', 'Junk', 'Energy']);
+const TAGS = new Set(['Safe', 'Greedy', 'Weird', 'After', 'Weight', 'Budget']);
+const rank = (name) => (BASIC.has(name) ? 3 : SCHOOLS_BY_NAME[name] ? 2 : TAGS.has(name) ? 1 : 0);
+const SCHOOLS_BY_NAME = {}; for (const sc of Object.values(SCHOOLS)) SCHOOLS_BY_NAME[sc.name] = sc;
+export function defineTerm(name, n) {
+  const k = KEYWORDS[name], d = STATUS_BY_NAME[name];
+  if (name === 'Weight' && n >= 1 && n <= 3) return `Weight ${n}: this patch counts ${n} against your Budget. Over the Budget is Strain.`;
+  if (d && typeof n === 'number' && Number.isFinite(n)) {
+    try { let t = String(d.desc(n)); if (k && /Ignores Block/.test(k.text) && !/Block/.test(t)) t += ' Ignores Block.'; return t; } catch (e) { /* fall through */ }
+  }
+  return k ? k.text : '';
+}
+function numAround(line, h) {
+  const before = line.slice(Math.max(0, h.i - 12), h.i).match(/(?<![\d.])([+-]?\d+)\s*(?:x\s*)?$/); // not the tail of a multiplier: 'x0.75 Weak' is no 75
+  if (before && !/per\s+\d+\s*$/.test(line.slice(Math.max(0, h.i - 12), h.i))) return +before[1];
+  const after = line.slice(h.i + h.len, h.i + h.len + 6).match(/^\s+(\d+)\b/);
+  if (after) return +after[1];
+  if (h.caps && /^W[123]$/.test(h.caps)) return +h.caps[1];
+  return undefined;
+}
+const flatStrings = (v, out = []) => { if (v === null || v === undefined) return out; if (Array.isArray(v)) v.forEach((x) => flatStrings(x, out)); else if (typeof v === 'string') out.push(v); return out; };
+export function glossaryFor(input, o = {}) {
+  const max = o.max === undefined ? 3 : o.max, skip = o.skip || new Set();
+  const found = new Map(); let order = 0;
+  const add = (name, n) => { const f = found.get(name); if (f) { if (f.n === undefined && n !== undefined) f.n = n; return; } found.set(name, { name, n, order: order++ }); };
+  for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
+  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) if (!TAGS.has(h.name)) add(h.name, numAround(ln, h)); // the tip's own prose: Weight / Budget there are already explained in place
+  for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
+  if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
+  if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
+  for (const t of o.terms || []) if (WARD_GLOSSARY[t] && !found.has('ward:' + t)) found.set('ward:' + t, { name: t, ward: true, order: -100 + order++ }); // explicit Ward terms come first
+  const list = [...found.values()].filter((f) => !skip.has(f.name)).sort((a, b) => (b.ward ? 1 : 0) - (a.ward ? 1 : 0) || rank(a.name) - rank(b.name) || a.order - b.order);
+  return list.slice(0, max).map((f) => {
+    if (f.ward) { const k = WARD_GLOSSARY[f.name]; return { term: f.name, title: f.name, definition: k.text, text: k.text, color: k.color, glyph: k.glyph, n: undefined }; }
+    const k = KEYWORDS[f.name], d = STATUS_BY_NAME[f.name];
+    const definition = defineTerm(f.name, f.n);
+    return { term: f.name, title: d && f.n !== undefined && f.name !== 'Weight' ? `${f.name} ${f.n}` : f.name, definition, text: definition, color: k.color, glyph: k.glyph, n: f.n };
+  });
+}
+// text + the definitions of its rules words, for the phone info card ("Gilt 4: Gain 4 gold at the end of combat.")
+export function withGloss(text, o = {}) { const g = glossaryText([text, o.gloss || []], o); return g ? `${text}\n\n${g}` : text; }
+// Plain-text form for the touch info card: "Gilt 4: Gain 4 gold at the end of combat."
+export function glossaryText(input, o = {}) { return glossaryFor(input, o).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
+// Everything a card face says in rules words: its lines, the Boon and Price of every graft on it, X cost, Overload.
+export function specGloss(spec) {
+  if (!spec) return [];
+  const gs = [...(spec.fused || []), ...(spec.grafts || [])].map((id) => (GRAFTS[id] ? [GRAFTS[id].boon, GRAFTS[id].price] : []));
+  return [cardLines(spec), gs, spec.cost === 'X' ? 'X cost' : '', spec.overload ? 'Overload' : ''];
+}
+// glossary-only hover tip for a card face (picker grids, deck view, codex, rewards)
+export function cardGlossTip(app, spec, anchor, o = {}) { if (spec) glossTip(app, o.title || '', [specGloss(spec), o.extra || []], anchor, { types: spec.type, school: spec.school }); }
+// A hover target that has no tip of its own: a tip made only of definitions. anchor may carry a band.
+export function glossTip(app, title, texts, anchor, o = {}) { app.tooltip(title || '', '', { glossOnly: true, gloss: texts, anchor, color: o.color, school: o.school, types: o.types, ids: o.ids }); }
+
 export function drawGlyph(ctx, kind, x, y, s, color) {
-  ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = lnw(1); ctx.beginPath();
   const r = s / 2;
   if (kind === 'square') ctx.rect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
   else if (kind === 'tri') { ctx.moveTo(0, -r); ctx.lineTo(r, r * 0.8); ctx.lineTo(-r, r * 0.8); ctx.closePath(); }
@@ -99,8 +224,8 @@ export function drawGlyph(ctx, kind, x, y, s, color) {
 
 // ---- card text with keyword underlines ----
 const tokens = (line) => {
-  const out = []; let last = 0; KW_RE.lastIndex = 0; let m;
-  while ((m = KW_RE.exec(line))) { if (m.index > last) out.push({ t: line.slice(last, m.index) }); out.push({ t: m[0], kw: canon(m[1]) }); last = m.index + m[0].length; }
+  const out = []; let last = 0;
+  for (const h of scan(line)) { if (h.i > last) out.push({ t: line.slice(last, h.i) }); out.push({ t: line.slice(h.i, h.i + h.len), kw: h.name }); last = h.i + h.len; }
   if (last < line.length) out.push({ t: line.slice(last) });
   return out;
 };
@@ -118,7 +243,7 @@ export function drawCardText(app, ctx, lines, x, y, w, size = 15, o = {}) {
       const col = wd.kw ? KEYWORDS[wd.kw].color : (o.color || COL.vellum);
       app.text(wd.t, cx, yy, { size, ui: true, bold: !!wd.kw, color: col, fixed: o.fixed, stroke: o.stroke, strokeW: o.strokeW });
       if (wd.kw) {
-        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = lnw(1.5); ctx.setLineDash([2, 3]);
         ctx.beginPath(); ctx.moveTo(cx, yy + sz * 1.12); ctx.lineTo(cx + ww, yy + sz * 1.12); ctx.stroke(); ctx.restore();
       }
       cx += ww;
@@ -221,10 +346,13 @@ export function statusSection(id, n, ent) {
 export function cardTipStack(spec, c, o = {}) {
   if (!spec) return [];
   const lines = cardLines(spec, !!o.tithed);
-  const kws = keywordsIn(lines);
-  if (spec.overload && !kws.includes('Overload')) kws.push('Overload');
-  if (o.tithed && !kws.includes('Tithe')) kws.push('Tithe');
-  const p1 = kws.slice(0, 5).map(keywordSection).filter(Boolean);
+  const extra = [];
+  if (spec.overload) extra.push('Overload');
+  if (o.tithed) extra.push('Tithe');
+  if (spec.cost === 'X') extra.push('X cost');
+  const gl = glossaryFor([lines, extra], { max: GLOSS_MAX, school: spec.school, types: spec.type });
+  const kws = gl.map((g) => g.term);
+  const p1 = gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
   const p2 = [];
   const why = explainNumber(spec, c, o);
   if (why.length) p2.push({ title: 'The numbers', color: COL.lamp, glyph: 'square', text: '', why });
@@ -237,87 +365,179 @@ export function cardTipStack(spec, c, o = {}) {
 }
 
 // ---- rendering ----
-const MAXW = 320, PAD = 12, TI = 19, BO = 16;
+const MAXW = 320, PAD = 12, TI = 19, BO = 16, WH = 15, GAP = 8, EDGE = 6, RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
 let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
 // resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
 export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
-const sc = (app, n) => Math.round(n * (app.textScale || 1));
-function measurePanel(app, sections) {
-  const bw = MAXW - PAD * 2; let h = PAD * 2;
-  const lay = sections.map((s) => {
-    const body = s.text ? app.wrap(s.text, bw, sc(app, BO), { ui: true }) : [];
-    const why = (s.why || []).map((w) => app.wrap(w, bw, sc(app, 15), { ui: true }));
-    const sh = sc(app, TI) + 5 + body.length * Math.round(sc(app, BO) * 1.25) + why.reduce((a, l) => a + l.length * Math.round(sc(app, 15) * 1.25) + 3, 0) + 8;
-    h += sh; return { s, body, why, sh };
-  });
-  return { lay, h: h - 8 };
+// ---- measured layout ----
+// Every section is measured with app.layoutText at the real (boosted) text size, and drawn from the SAME records, so the heights it reserves are the
+// heights it uses. Sections stack with a consistent gap into panels; panels flow into columns inside the free area (the stage minus the safe area), and
+// the block is placed beside the anchor, flipped to the other side or the nearest band when it would run off, and kept out of the reserved top-right zone.
+function measureSection(app, s, bw, cfg) {
+  const gx = s.glyph ? 18 : 0;
+  const title = app.layoutText(s.title || ' ', { size: cfg.ti, bold: true, maxW: bw - gx });
+  const bodyO = { size: cfg.bo, ui: true, maxW: bw, lineH: Math.round(cfg.bo * 1.25) };
+  const body = s.text ? app.layoutText(s.text, bodyO) : null;
+  const whyO = { size: WH, ui: true, maxW: bw, lineH: Math.round(WH * 1.25) };
+  const why = (s.why || []).map((w) => ({ str: w, L: app.layoutText(w, whyO) }));
+  const th = title.lines.length * title.lineH;
+  const bh = body ? body.lines.length * body.lineH : 0;
+  const wh = why.reduce((a, w) => a + w.L.lines.length * w.L.lineH + 3, 0);
+  return { s, gx, title, body, bodyO, why, whyO, th, bh, wh, h: th + cfg.tg + bh + wh };
 }
-// Plain and single-panel tips gloss the rules words in their text (Line, knots, Claim, Tithe, Ringing...) in a second panel, up to two.
-// Not in a fixed band shorter than 250px (those tips are tight; they spell out what matters themselves).
-const JARGON = ['Line', 'Knot', 'Claim', 'Tithe', 'Ringing', 'Strain', 'Backfire', 'Stitch', 'Overload', 'Shatter', 'Thread', 'Weight', 'Budget'];
-function gloss(stack, tip) {
-  const band = tip.anchor && tip.anchor.band;
-  if (stack.length !== 1 || (band && band.bottom - band.y < 250)) return stack;
-  const have = new Set(stack[0].map((s) => s.title));
-  const text = stack[0].map((s) => (s.text || '') + ' ' + (s.why || []).join(' ')).join(' ');
-  const kws = keywordsIn(text).filter((n) => JARGON.includes(n) && !have.has(n) && !stack[0].some((s) => String(s.title || '').startsWith(n))).slice(0, 2).map(keywordSection).filter(Boolean);
-  return kws.length ? [stack[0], kws] : stack;
+function buildPanels(app, panels, W, cfg, availH) {
+  const bw = W - PAD * 2, out = [];
+  for (const p of panels) {
+    const secs = p.map((s) => measureSection(app, s, bw, cfg));
+    let cur = [], h = PAD * 2;
+    for (const m of secs) {
+      const add = (cur.length ? cfg.gap : 0) + m.h;
+      if (cur.length && h + add > availH) { out.push({ secs: cur, h, w: W }); cur = []; h = PAD * 2; }
+      h += (cur.length ? cfg.gap : 0) + m.h; cur.push(m);
+    }
+    if (cur.length) out.push({ secs: cur, h, w: W });
+  }
+  return out;
 }
-function toStack(tip) {
-  if (tip.stack) return gloss(tip.stack, tip);
-  const text = tip.lines ? tip.lines.join('\n') : (tip.text || '');
-  return gloss([[{ title: tip.title, text, color: tip.color }]], tip);
+function flowColumns(panels, availH) {
+  const cols = []; let cur = null;
+  for (const p of panels) {
+    if (!cur || cur.h + GAP + p.h > availH) { cur = { items: [], h: 0, w: p.w }; cols.push(cur); }
+    cur.h += (cur.items.length ? GAP : 0) + p.h; cur.items.push(p);
+  }
+  return cols;
 }
-function place(app, a, w, h, prevBottomY) {
-  // right of the item, else left, else below/above; never under the pointer, always on screen
+function fitBlock(app, panels, availW, availH) {
+  const phone = app.scale < 0.95;
+  const boost = Math.max(1, app.sz(BO) / BO);
+  const W0 = phone ? Math.round(Math.max(MAXW, Math.min(0.40 * 1280, MAXW * boost))) : MAXW;
+  const tries = [
+    { W: W0, cfg: { ti: TI, bo: BO, gap: GAP, tg: 5 } },
+    { W: W0, cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
+    { W: Math.min(Math.round(W0 * 1.4), 520), cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
+  ];
+  let last = null;
+  for (const t of tries) {
+    const W = Math.min(t.W, Math.max(200, availW));
+    const ps = buildPanels(app, panels, W, t.cfg, availH), cols = flowColumns(ps, availH);
+    const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h));
+    last = { cols, w, h, cfg: t.cfg, ok: w <= availW + 0.5 && h <= availH + 0.5 };
+    if (last.ok) return last;
+  }
+  // last resort: drop trailing sections (the least important definitions) until it fits
+  let rest = panels.map((p) => p.slice());
+  while (!last.ok) {
+    let i = rest.length - 1; while (i >= 0 && !rest[i].length) i--;
+    if (i < 0 || (rest.flat().length <= 1)) break;
+    rest[i].pop(); if (!rest[i].length) rest.pop();
+    const W = last.cols[0].w, ps = buildPanels(app, rest, W, last.cfg, availH), cols = flowColumns(ps, availH);
+    last = { cols, w: cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h: Math.max(...cols.map((c) => c.h)), cfg: last.cfg };
+    last.ok = last.w <= availW + 0.5 && last.h <= availH + 0.5;
+  }
+  return last;
+}
+const ovl = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+// keep a rect out of the reserved Pause / Fullscreen zone: slide it down under the zone, else left of it
+function clearReserved(r, B) {
+  if (!ovl(r, RESERVED)) return r;
+  if (r.y < RESERVED.y + RESERVED.h + 4 && RESERVED.y + RESERVED.h + 4 + r.h <= B.y1) return { ...r, y: RESERVED.y + RESERVED.h + 4 };
+  return { ...r, x: Math.max(B.x0, RESERVED.x - 4 - r.w) };
+}
+// free placement: right, left, below, above of the anchor; the candidate that covers the anchor and the pointer least, runs off least, wins
+function place(app, a, w, h, B) {
   const m = app.mouse;
   const cands = [
     { x: a.x + a.w + 10, y: a.y }, { x: a.x - w - 10, y: a.y },
     { x: a.x + a.w / 2 - w / 2, y: a.y + a.h + 10 }, { x: a.x + a.w / 2 - w / 2, y: a.y - h - 10 },
   ];
   let best = null;
-  for (const c of cands) {
-    const x = Math.max(6, Math.min(1274 - w, c.x)), y = Math.max(6, Math.min(714 - h, c.y));
-    const under = m.x >= x - 4 && m.x <= x + w + 4 && m.y >= y - 4 && m.y <= y + h + 4;
-    const clipped = c.x < 6 || c.x + w > 1274;
-    if (!under && !clipped) { best = { x, y }; break; }
-    if (!best && !under) best = { x, y };
-  }
-  return best || { x: Math.max(6, Math.min(1274 - w, a.x + a.w + 10)), y: Math.max(6, Math.min(714 - h, a.y)) };
-}
-function drawStack(app, stack, anchor) {
-  const ctx = app.ctx;
-  const panels = stack.slice(0, 2).map((p) => measurePanel(app, p));
-  if (stack.length > 2) { const extra = stack.slice(2).flat().map((s) => s.title).join(', '); panels[1] = measurePanel(app, [...stack[1], { title: 'Also', text: extra, color: COL.vellum2 }]); }
-  const totalH = panels.reduce((a, p) => a + p.h, 0) + (panels.length - 1) * 8;
-  // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement
-  const band = anchor.band;
-  const pos = band ? { x: band.x, y: band.y } : place(app, anchor, MAXW, Math.min(totalH, 700));
-  let y = band ? Math.min(band.y, Math.max(6, 714 - panels[0].h)) : Math.max(6, Math.min(714 - totalH, pos.y));
-  let col = 0;
-  panels.forEach((p, i) => {
-    if (band && i > 0 && y + p.h > band.bottom) { col++; y = band.y; }
-    pos.x = band ? band.x + col * (MAXW + 8) * band.dir - (band.dir < 0 ? MAXW : 0) : pos.x;
-    const first = p.lay[0] && p.lay[0].s;
-    app.panel(pos.x, y, MAXW, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
-    app.reg('tip' + i, pos.x, y, MAXW, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
-    let yy = y + PAD;
-    for (const L of p.lay) {
-      const s = L.s, gx = s.glyph ? 18 : 0;
-      if (s.glyph) drawGlyph(ctx, s.glyph, pos.x + PAD + 7, yy + sc(app, TI) * 0.55, 13, s.color || COL.lamp);
-      app.text(s.title || '', pos.x + PAD + gx, yy, { size: TI, bold: true, color: s.color || COL.lamp });
-      yy += sc(app, TI) + 5;
-      if (L.body.length) { app.text(s.text, pos.x + PAD, yy, { size: BO, ui: true, maxW: MAXW - PAD * 2, lineH: Math.round(sc(app, BO) * 1.25), color: COL.vellum }); yy += L.body.length * Math.round(sc(app, BO) * 1.25); }
-      for (const wl of L.why) { app.text(wl.join(' '), pos.x + PAD, yy + 3, { size: 15, ui: true, maxW: MAXW - PAD * 2, lineH: Math.round(sc(app, 15) * 1.25), color: COL.lamp }); yy += wl.length * Math.round(sc(app, 15) * 1.25) + 3; }
-      yy += 8;
-    }
-    y += p.h + 8;
+  cands.forEach((c, i) => {
+    const off = Math.max(0, B.x0 - c.x) + Math.max(0, c.x + w - B.x1) + Math.max(0, B.y0 - c.y) + Math.max(0, c.y + h - B.y1);
+    let r = { x: Math.max(B.x0, Math.min(B.x1 - w, c.x)), y: Math.max(B.y0, Math.min(B.y1 - h, c.y)), w, h };
+    r = clearReserved(r, B);
+    const under = m.x >= r.x - 4 && m.x <= r.x + w + 4 && m.y >= r.y - 4 && m.y <= r.y + h + 4 ? 1e6 : 0;
+    const cost = ovl(r, a) * 4 + under + off * 50 + ovl(r, RESERVED) * 4 + i;
+    if (!best || cost < best.cost) best = { cost, r };
   });
+  return best.r;
+}
+export function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
+function drawStack(app, stack, anchor) {
+  const ctx = app.ctx, B = tipBounds(app);
+  const secs = stack.slice(0, 2).map((p) => p.slice());
+  if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
+  // anchor.band = { x, y, bottom, dir }: a fixed band beside the item (+1 right / -1 left of x) the panels fill column by column. When the stack
+  // does not fit the band it is placed freely beside the item instead.
+  const band = anchor.band;
+  let blk = null, rect = null;
+  if (band) {
+    const bx = band.dir > 0 ? band.x : band.x - 1, availW = band.dir > 0 ? B.x1 - band.x : bx - B.x0;
+    const by = Math.max(B.y0, band.y), availH = Math.min(band.bottom, B.y1) - by;
+    if (availW > 200 && availH > 100) {
+      const f = fitBlock(app, secs, availW, availH);
+      if (f.ok) { blk = f; rect = clearReserved({ x: band.dir > 0 ? band.x : band.x - f.w, y: by, w: f.w, h: f.h }, B); }
+    }
+  }
+  if (!blk) {
+    blk = fitBlock(app, secs, B.x1 - B.x0, B.y1 - B.y0);
+    rect = place(app, anchor, blk.w, blk.h, B);
+  }
+  const L = { rect, panels: [], anchor, frame: app.frame };
+  app._tipDraw = true;
+  let cx = rect.x, idx = 0;
+  for (const col of blk.cols) {
+    let y = rect.y;
+    for (const p of col.items) {
+      const first = p.secs[0] && p.secs[0].s, W = p.w, pl = { x: cx, y, w: W, h: p.h, secs: [] };
+      app.panel(cx, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
+      app.reg('tip' + idx++, cx, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
+      let yy = y + PAD;
+      p.secs.forEach((m, si) => {
+        const s = m.s, sy = yy;
+        if (s.glyph) drawGlyph(ctx, s.glyph, cx + PAD + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
+        app.text(s.title || ' ', cx + PAD + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - PAD * 2 - m.gx, color: s.color || COL.lamp });
+        yy += m.th + blk.cfg.tg;
+        if (m.body) { app.text(s.text, cx + PAD, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
+        for (const w of m.why) { app.text(w.str, cx + PAD, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
+        pl.secs.push({ x: cx + PAD, y: sy, w: W - PAD * 2, h: yy - sy, title: s.title });
+        yy += blk.cfg.gap;
+      });
+      L.panels.push(pl); y += p.h + GAP;
+    }
+    cx += col.w + GAP;
+  }
+  app._tipDraw = false; app.tipLayout = L;
+}
+// Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
+// live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
+// such as a graft's Boon and Price). Words already titled in the tip are not repeated. tip.o.glossOnly: the glossary IS the tip.
+const GLOSS_MAX = 3;
+function sectionsText(stack) { const out = []; for (const p of stack) for (const s of p) { out.push(s.text || ''); for (const w of s.why || []) out.push(w); } return out; }
+function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
+function glossPanel(stack, tip) {
+  const o = tip.o || tip;
+  const gl = glossaryFor(o.gloss || [], { weak: sectionsText(stack), max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids, terms: o.terms });
+  return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
+}
+export { toStack as tipSections }; // tests read the panels a tip would draw
+function toStack(tip) {
+  const o = tip.o || tip;
+  if (o.glossOnly && !tip.stack) {
+    const gl = glossPanel([[]], tip);
+    const sec = (tip.title ? [{ title: tip.title, text: tip.text || '', color: tip.color }] : []).concat(gl);
+    return sec.length ? [sec] : [];
+  }
+  const text = tip.lines ? tip.lines.join('\n') : (tip.text || '');
+  const stack = tip.stack || [[{ title: tip.title, text, color: tip.color }]];
+  if (stack.length !== 1) return stack;
+  const gl = glossPanel(stack, tip);
+  return gl.length ? [stack[0], gl] : stack;
 }
 // Core hook: returns true when it drew the tip. A plain tip anchors on the pointer.
 export function renderTip(app, tip) {
   if (!tip) return false;
   const stack = toStack(tip);
+  if (!stack.length) return true;
   const k = tip.key || JSON.stringify(stack).slice(0, 200);
   if (app.frame - f0 > 1 || k !== key0) { key0 = k; t0 = app.t; }
   f0 = app.frame;
@@ -329,9 +549,14 @@ export function renderTip(app, tip) {
 }
 // HUD tips: call from anywhere while hovering; flushTips draws the last one at the end of the frame.
 export function queueTip(app, key, stack, anchor) { queued = { key, stack, anchor, frame: app.frame }; }
-export function flushTips(app) {
+// A tip held with a finger stays after the finger lifts, until the next tap. core.js calls this on frames with no live tip.
+let pinFrame = -1;
+export function drawPinnedTip(app) {
   if (pin && app.mouse.pressed && !(app.mouse.touchUp)) pin = null;
-  if (pin) { drawStack(app, pin.stack, pin.anchor); }
+  if (pin && pinFrame !== app.frame) { pinFrame = app.frame; drawStack(app, pin.stack, pin.anchor); }
+}
+export function flushTips(app) {
+  drawPinnedTip(app);
   const q = queued; queued = null;
   if (!q || q.frame !== app.frame) return false;
   return renderTip(app, { stack: q.stack, anchor: q.anchor, key: q.key });

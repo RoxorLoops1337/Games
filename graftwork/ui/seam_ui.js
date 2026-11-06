@@ -14,6 +14,7 @@ import { specOf } from '../engine/combat.js';
 import * as SEAM from '../engine/seam.js';
 import { maybeTip, threadLesson, tipSeen, TIP_TEXTS } from './tutorial.js';
 import * as L from './combat_layout.js';
+import { lnw } from '../art/linework.js';
 
 const BRASS = '#C9A227', BRASS_D = '#7a5f16', BRASS_L = '#ecd27a', INK = '#0E0E0E', PAPER = '#f3ead4';
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
@@ -53,11 +54,8 @@ function snd(app, name, fallback, o) {
   if (n) a.sfx(n, o);
 }
 function fitText(app, str, x, y, size, o = {}) {
-  let eff = Math.round(size * (app.textScale || 1));
-  const maxW = o.maxW || 200;
-  while (eff > 9 && app.measure(str, eff, { ui: true, bold: o.bold }) > maxW) eff--;
-  app.text(str, x, y, { ...o, ui: true, size: eff, fixed: true, maxW: undefined });
-  return eff;
+  const w = o.maxW || 200, rest = { ...o, ui: true, maxW: undefined, fit: { w, lines: o.lines || 1, h: o.h } };
+  return app.text(str, x, y, { ...rest, size });
 }
 
 // ---------------------------------------------------------------- preview / badge logic
@@ -101,14 +99,14 @@ function worthNow(c) {
 
 // ---------------------------------------------------------------- glyphs
 function badgeGlyph(ctx, kind, x, y, r, col) {
-  ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(1.6, r * 0.2);
+  ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lnw(Math.max(1.6, r * 0.2));
   if (kind === 'extend') { // needle with an eye and a thread tail
     ctx.beginPath(); ctx.moveTo(-r * 0.62, r * 0.62); ctx.lineTo(r * 0.7, -r * 0.7); ctx.stroke();
     ctx.beginPath(); ctx.ellipse(-r * 0.5, r * 0.5, r * 0.16, r * 0.3, 0.78, 0, 6.283); ctx.fillStyle = INK; ctx.fill(); ctx.stroke();
-    ctx.lineWidth = Math.max(1.2, r * 0.12); ctx.beginPath(); ctx.moveTo(-r * 0.66, r * 0.7); ctx.quadraticCurveTo(-r * 0.9, r * 0.2, -r * 0.4, r * 0.05); ctx.stroke();
+    ctx.lineWidth = lnw(Math.max(1.2, r * 0.12)); ctx.beginPath(); ctx.moveTo(-r * 0.66, r * 0.7); ctx.quadraticCurveTo(-r * 0.9, r * 0.2, -r * 0.4, r * 0.05); ctx.stroke();
   } else if (kind === 'cut') { // scissors
     ctx.beginPath(); ctx.moveTo(-r * 0.4, -r * 0.4); ctx.lineTo(r * 0.8, r * 0.5); ctx.moveTo(-r * 0.4, r * 0.4); ctx.lineTo(r * 0.8, -r * 0.5); ctx.stroke();
-    ctx.lineWidth = Math.max(1.4, r * 0.15);
+    ctx.lineWidth = lnw(Math.max(1.4, r * 0.15));
     ctx.beginPath(); ctx.arc(-r * 0.62, -r * 0.5, r * 0.26, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(-r * 0.62, r * 0.5, r * 0.26, 0, 6.283); ctx.stroke();
   } else if (kind === 'slack') { // a loose thread
     ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.1); ctx.bezierCurveTo(-r * 0.4, -r * 0.7, -r * 0.1, r * 0.7, r * 0.25, -r * 0.1); ctx.bezierCurveTo(r * 0.45, -r * 0.45, r * 0.75, -r * 0.2, r * 0.55, r * 0.15); ctx.stroke();
@@ -124,11 +122,11 @@ function badgeBody(ctx, kind, x, y, r, col) {
   else if (kind === 'slack') { const q = r * 0.92; ctx.moveTo(-q, -q * 0.3); ctx.quadraticCurveTo(-q, -q, -q * 0.3, -q); ctx.lineTo(q * 0.3, -q); ctx.quadraticCurveTo(q, -q, q, -q * 0.3); ctx.lineTo(q, q * 0.3); ctx.quadraticCurveTo(q, q, q * 0.3, q); ctx.lineTo(-q * 0.3, q); ctx.quadraticCurveTo(-q, q, -q, q * 0.3); ctx.closePath(); }
   else ctx.arc(0, 0, r, 0, 6.283);
   ctx.fillStyle = 'rgba(16,12,10,.94)'; ctx.fill();
-  ctx.lineWidth = Math.max(2, r * 0.2); ctx.strokeStyle = col;
+  ctx.lineWidth = lnw(Math.max(2, r * 0.2)); ctx.strokeStyle = col;
   if (kind === 'slack' && ctx.setLineDash) ctx.setLineDash([r * 0.5, r * 0.3]);
   ctx.stroke();
   if (ctx.setLineDash) ctx.setLineDash([]);
-  if (kind === 'tied') { ctx.beginPath(); ctx.arc(0, 0, r * 1.2, 0, 6.283); ctx.lineWidth = Math.max(1, r * 0.1); ctx.strokeStyle = BRASS; ctx.stroke(); }
+  if (kind === 'tied') { ctx.beginPath(); ctx.arc(0, 0, r * 1.2, 0, 6.283); ctx.lineWidth = lnw(Math.max(1, r * 0.1)); ctx.strokeStyle = BRASS; ctx.stroke(); }
   ctx.restore();
 }
 export function drawSeamBadge(app, kind, x, y, s, school) {
@@ -143,10 +141,10 @@ export function drawSeamBadge(app, kind, x, y, s, school) {
 function drawBead(ctx, x, y, school, o = {}) {
   const sc = o.scale === undefined ? 1 : o.scale, col = o.tint || schoolCol(school);
   ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.globalAlpha *= o.alpha === undefined ? 1 : o.alpha;
-  if (o.hot) { ctx.beginPath(); ctx.arc(0, 0, BEAD_R + 5 + (o.pulse || 0), 0, 6.283); ctx.strokeStyle = rgba(col.length === 7 ? col : '#ffffff', 0.55); ctx.lineWidth = 2.5; ctx.stroke(); }
+  if (o.hot) { ctx.beginPath(); ctx.arc(0, 0, BEAD_R + 5 + (o.pulse || 0), 0, 6.283); ctx.strokeStyle = rgba(col.length === 7 ? col : '#ffffff', 0.55); ctx.lineWidth = lnw(2.5); ctx.stroke(); }
   ctx.beginPath(); ctx.arc(0, 0, BEAD_R, 0, 6.283); ctx.fillStyle = o.ghost ? 'rgba(30,50,56,.55)' : '#1d1813'; ctx.fill();
-  ctx.lineWidth = 3.4; ctx.strokeStyle = o.ghost ? col : BRASS_D; ctx.stroke();
-  if (!o.ghost) { ctx.beginPath(); ctx.arc(0, 0, BEAD_R - 0.6, -2.6, -0.5); ctx.lineWidth = 1.5; ctx.strokeStyle = BRASS_L; ctx.stroke(); }
+  ctx.lineWidth = lnw(3.4); ctx.strokeStyle = o.ghost ? col : BRASS_D; ctx.stroke();
+  if (!o.ghost) { ctx.beginPath(); ctx.arc(0, 0, BEAD_R - 0.6, -2.6, -0.5); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = BRASS_L; ctx.stroke(); }
   drawSchoolGlyph(ctx, school, 0, 0, 10.5, col);
   ctx.restore();
 }
@@ -154,7 +152,7 @@ function drawNeedle(ctx, x, y, ang) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
   const g = ctx.createLinearGradient(0, -3, 0, 3); g.addColorStop(0, '#f4f7f8'); g.addColorStop(1, '#8e999e');
   ctx.beginPath(); ctx.moveTo(-17, -2.6); ctx.lineTo(14, -1.6); ctx.lineTo(24, 0); ctx.lineTo(14, 1.6); ctx.lineTo(-17, 2.6); ctx.closePath();
-  ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = INK; ctx.stroke();
+  ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = lnw(1); ctx.strokeStyle = INK; ctx.stroke();
   ctx.beginPath(); ctx.ellipse(-12, 0, 1.6, 0.9, 0, 0, 6.283); ctx.fillStyle = INK; ctx.fill();
   ctx.restore();
 }
@@ -181,27 +179,28 @@ export function drawSeamRail(app, c, rect, t, focus, idle) {
 
   // panel
   ctx.save();
-  app.rr(rect.x, rect.y, rect.w, rect.h, 12); ctx.fillStyle = 'rgba(14,12,10,.74)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = s.tied ? BRASS : 'rgba(232,220,196,.22)'; ctx.stroke();
+  app.rr(rect.x, rect.y, rect.w, rect.h, 12); ctx.fillStyle = 'rgba(14,12,10,.74)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = s.tied ? BRASS : 'rgba(232,220,196,.22)'; ctx.stroke();
 
   // left block: label, knot count, cut pips, frayed icon
-  app.text(s.tied ? 'TIED' : 'THREAD', rect.x + 14, rect.y + 6, { size: 11, ui: true, bold: true, color: s.tied ? BRASS_L : BRASS, fixed: false });
-  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(rect.x + 76 + i * 11, rect.y + 13, 3.4, 0, 6.283); ctx.fillStyle = i < s.cuts ? '#6a6458' : BRASS; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke(); }
+  const tl = app.layoutText(s.tied ? 'TIED' : 'THREAD', { size: 11, ui: true, bold: true, fit: { w: 66, lines: 1 } }), pip0 = rect.x + 14 + tl.w + 9;
+  app.text(s.tied ? 'TIED' : 'THREAD', rect.x + 14, rect.y + 6, { size: tl.size, exact: true, ui: true, bold: true, color: s.tied ? BRASS_L : BRASS });
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(pip0 + i * 10, rect.y + 6 + tl.size * 0.55, 3.4, 0, 6.283); ctx.fillStyle = i < s.cuts ? '#6a6458' : BRASS; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = lnw(1); ctx.stroke(); }
   fitText(app, `${s.len} knot${s.len === 1 ? '' : 's'}`, rect.x + 14, rect.y + 23, 17, { bold: true, color: COL.vellum, maxW: 90 });
   const jammed = (c.hand || []).filter((k) => k.jam).length;
   if (jammed) { // frayed icon: a thread ending in loose strands
     const fx0 = rect.x + 104, fy0 = rect.y + 37;
-    ctx.strokeStyle = '#d8a066'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#d8a066'; ctx.lineWidth = lnw(1.8); ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(fx0 - 9, fy0); ctx.lineTo(fx0, fy0); ctx.moveTo(fx0, fy0); ctx.lineTo(fx0 + 8, fy0 - 5); ctx.moveTo(fx0, fy0); ctx.lineTo(fx0 + 9, fy0); ctx.moveTo(fx0, fy0); ctx.lineTo(fx0 + 8, fy0 + 5); ctx.stroke();
     app.text(String(jammed), fx0 - 14, fy0 - 7, { size: 11, ui: true, bold: true, color: '#d8a066', align: 'right' });
   }
 
   // the seam: a dashed slit in the cloth under the thread
-  ctx.strokeStyle = 'rgba(232,220,196,.26)'; ctx.lineWidth = 2; if (ctx.setLineDash) ctx.setLineDash([7, 6]);
+  ctx.strokeStyle = 'rgba(232,220,196,.26)'; ctx.lineWidth = lnw(2); if (ctx.setLineDash) ctx.setLineDash([7, 6]);
   ctx.beginPath(); ctx.moveTo(a0, cy); ctx.lineTo(a1, cy); ctx.stroke(); if (ctx.setLineDash) ctx.setLineDash([]);
   // start anchor: a grommet, or the brass clasp when Tied
   if (s.tied) {
-    ctx.strokeStyle = BRASS_L; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(a0 - 3, cy, 8, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(a0 + 6, cy, 8, 0, 6.283); ctx.strokeStyle = BRASS; ctx.stroke();
-  } else { ctx.beginPath(); ctx.arc(a0, cy, 5, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = BRASS_D; ctx.stroke(); }
+    ctx.strokeStyle = BRASS_L; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.arc(a0 - 3, cy, 8, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(a0 + 6, cy, 8, 0, 6.283); ctx.strokeStyle = BRASS; ctx.stroke();
+  } else { ctx.beginPath(); ctx.arc(a0, cy, 5, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = lnw(2.5); ctx.strokeStyle = BRASS_D; ctx.stroke(); }
 
   // needle position (eased) and the pull animation
   const lastX = n ? beadPos(rect, n - 1).x : a0;
@@ -221,14 +220,14 @@ export function drawSeamRail(app, c, rect, t, focus, idle) {
   const thread = (w, col) => {
     ctx.beginPath(); ctx.moveTo(a0, cy); let px = a0, py = cy;
     for (let i = 0; i < n; i++) { const b = beadPos(rect, i); ctx.quadraticCurveTo((px + b.x) / 2, cy + 6, b.x, cy); px = b.x; py = cy; }
-    ctx.quadraticCurveTo((px + eye.x) / 2, cy + 7, eye.x, eye.y); ctx.lineWidth = w; ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.quadraticCurveTo((px + eye.x) / 2, cy + 7, eye.x, eye.y); ctx.lineWidth = lnw(w); ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.stroke();
   };
   if (n || whip <= 0) { thread(5.5, 'rgba(232,220,196,.28)'); thread(3, '#0a0908'); }
   if (!n && whip > 0) { // recoiling stub
     const sx = M.snipX, len = Math.max(20, (sx - a0) * whip);
     ctx.beginPath(); ctx.moveTo(a0, cy);
     for (let i = 1; i <= 12; i++) { const x = a0 + (len * i) / 12; ctx.lineTo(x, cy + Math.sin(i * 1.3 + now * 40) * 9 * whip); }
-    ctx.lineWidth = 3; ctx.strokeStyle = '#0a0908'; ctx.stroke();
+    ctx.lineWidth = lnw(3); ctx.strokeStyle = '#0a0908'; ctx.stroke();
   }
 
   // beads
@@ -249,9 +248,9 @@ export function drawSeamRail(app, c, rect, t, focus, idle) {
 
   // teaching text when the Line is empty or short
   if (!pv) {
-    if (s.len === 0) fitText(app, 'Share a school with the last card to tie a knot.', a0 + 66, cy - 8, 14, { maxW: a1 - a0 - 70, color: 'rgba(232,220,196,.9)' });
+    if (s.len === 0) fitText(app, 'Share a school with the last card to tie a knot.', a0 + 66, cy - 23, 14, { lines: 2, h: 46, maxW: a1 - a0 - 70, color: 'rgba(232,220,196,.9)' });
     else if (s.len === 1) {
-      fitText(app, 'Play a card with the same school to tie a knot.', lastX + 96, cy - 8, 14, { maxW: a1 - lastX - 96, color: 'rgba(232,220,196,.88)' });
+      fitText(app, 'Play a card with the same school to tie a knot.', lastX + 96, cy - 23, 14, { lines: 2, h: 46, maxW: a1 - lastX - 96, color: 'rgba(232,220,196,.88)' });
     }
   }
   ctx.restore();
@@ -276,7 +275,7 @@ function drawChip(app, c, rect, pv) {
   } else return;
   const col = school ? schoolCol(school) : BRASS;
   ctx.save();
-  app.rr(x, y, w, h, 9); ctx.fillStyle = 'rgba(30,24,18,.9)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
+  app.rr(x, y, w, h, 9); ctx.fillStyle = 'rgba(30,24,18,.9)'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = col; ctx.stroke();
   ctx.restore();
   drawSeamBadge(app, kind, x + 20, y + h / 2, 0.62, school);
   fitText(app, l1, x + 42, y + 3, 14, { bold: true, color: col === COL.gilded || col === COL.static || col === COL.echo ? col : COL.vellum, maxW: w - 48 });
@@ -301,14 +300,14 @@ function drawOverlays(app, c, rect) {
   if (sk >= 0 && sk < 1) {
     const x = M.snipX, close = clamp(sk / (SNIP_CLOSE / 0.5), 0, 1), fl = (sk - SNIP_CLOSE / 0.5) / 0.28;
     ctx.save(); ctx.globalAlpha = 1 - clamp((sk - 0.5) / 0.5, 0, 1);
-    if (fl >= 0 && fl < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4 * (1 - fl) + 1; ctx.beginPath(); ctx.moveTo(x, rect.y - 6); ctx.lineTo(x, rect.y + rect.h + 6); ctx.stroke(); ctx.beginPath(); ctx.arc(x, cy, 26 * (1 - fl) + 6, 0, 6.283); ctx.fillStyle = 'rgba(255,248,214,.55)'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+    if (fl >= 0 && fl < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fff'; ctx.lineWidth = lnw(4 * (1 - fl) + 1); ctx.beginPath(); ctx.moveTo(x, rect.y - 6); ctx.lineTo(x, rect.y + rect.h + 6); ctx.stroke(); ctx.beginPath(); ctx.arc(x, cy, 26 * (1 - fl) + 6, 0, 6.283); ctx.fillStyle = 'rgba(255,248,214,.55)'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
     const sy = cy - 4 - (sk > 0.3 ? (sk - 0.3) * 40 : 0), open = 1 - close;
     ctx.translate(x + 6, sy); ctx.rotate(-0.4 + open * 0.0);
-    ctx.lineCap = 'round'; ctx.strokeStyle = '#dfe6ea'; ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round'; ctx.strokeStyle = '#dfe6ea'; ctx.lineWidth = lnw(3.2);
     const sp = open * 0.5;
     ctx.save(); ctx.rotate(sp); ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(18, 0); ctx.stroke(); ctx.restore();
     ctx.save(); ctx.rotate(-sp); ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(18, 0); ctx.stroke(); ctx.restore();
-    ctx.strokeStyle = BRASS; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(-20, -5, 5, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(-20, 5, 5, 0, 6.283); ctx.stroke();
+    ctx.strokeStyle = BRASS; ctx.lineWidth = lnw(2.4); ctx.beginPath(); ctx.arc(-20, -5, 5, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.arc(-20, 5, 5, 0, 6.283); ctx.stroke();
     ctx.restore();
   }
   // signature moments
@@ -330,7 +329,7 @@ function drawOverlays(app, c, rect) {
 const SIG_DRAW = {
   ember(app, g, k, rect) { // the rail edge ignites
     const ctx = app.ctx; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - k) * 0.85;
-    ctx.lineWidth = 3 + 3 * (1 - k); ctx.strokeStyle = '#ff8a3c'; app.rr(rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke();
+    ctx.lineWidth = lnw(3 + 3 * (1 - k)); ctx.strokeStyle = '#ff8a3c'; app.rr(rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke();
     ctx.globalAlpha = (1 - k) * 0.25; ctx.fillStyle = '#ff6a2b'; ctx.fillRect(rect.x + 4, rect.y + rect.h - 10 - 18 * (1 - k), rect.w - 8, 14); ctx.restore();
   },
   echo(app, g, k, rect) { // a glass twin of the Line replays three times, each fainter
@@ -345,7 +344,7 @@ const SIG_DRAW = {
     const cnt = g.n, shown = Math.min(cnt, Math.ceil((k / 0.6) * cnt));
     for (let i = 0; i < shown; i++) {
       const wob = Math.sin(app.t * 40 + i * 2) * (1 + k * 3), cyy = y - i * 6;
-      ctx.beginPath(); ctx.ellipse(x + wob, cyy, 13, 4.6, 0, 0, 6.283); ctx.fillStyle = i % 2 ? '#ecd27a' : '#C9A227'; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(x + wob, cyy, 13, 4.6, 0, 0, 6.283); ctx.fillStyle = i % 2 ? '#ecd27a' : '#C9A227'; ctx.fill(); ctx.lineWidth = lnw(1.4); ctx.strokeStyle = INK; ctx.stroke();
     }
   },
   blood(app, g, k, rect, cy) { // a seam opens along the Line, then stitches shut
@@ -353,9 +352,9 @@ const SIG_DRAW = {
     const open = k < 0.5 ? EASE.out(k / 0.5) : 1 - EASE.in((k - 0.5) / 0.3 > 1 ? 1 : (k - 0.5) / 0.3);
     if (open > 0.02) {
       ctx.beginPath(); ctx.moveTo(x0, cy); ctx.quadraticCurveTo((x0 + x1) / 2, cy - 11 * open, x1, cy); ctx.quadraticCurveTo((x0 + x1) / 2, cy + 11 * open, x0, cy);
-      ctx.fillStyle = '#3a0510'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#c4223c'; ctx.stroke();
+      ctx.fillStyle = '#3a0510'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = '#c4223c'; ctx.stroke();
     }
-    if (k > 0.5) { const cnt = Math.floor(clamp((k - 0.5) / 0.4, 0, 1) * 8); ctx.strokeStyle = '#e9d9c0'; ctx.lineWidth = 1.8; ctx.beginPath(); for (let i = 0; i < cnt; i++) { const x = x0 + (x1 - x0) * (i + 0.5) / 8; ctx.moveTo(x - 3, cy - 7); ctx.lineTo(x + 3, cy + 7); } ctx.stroke(); }
+    if (k > 0.5) { const cnt = Math.floor(clamp((k - 0.5) / 0.4, 0, 1) * 8); ctx.strokeStyle = '#e9d9c0'; ctx.lineWidth = lnw(1.8); ctx.beginPath(); for (let i = 0; i < cnt; i++) { const x = x0 + (x1 - x0) * (i + 0.5) / 8; ctx.moveTo(x - 3, cy - 7); ctx.lineTo(x + 3, cy + 7); } ctx.stroke(); }
   },
   rust(app, g, k, rect, cy) { // an orange bloom where the plates corrode
     const ctx = app.ctx, r = 40 + 110 * EASE.out(k), gr = ctx.createRadialGradient(g.x, cy, 4, g.x, cy, r);
@@ -363,7 +362,7 @@ const SIG_DRAW = {
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = gr; ctx.fillRect(g.x - r, cy - r, r * 2, r * 2); ctx.restore();
   },
   static(app, g, k, rect, cy) { // a one-frame white snap along the rail
-    if (k > 0.25) return; const ctx = app.ctx; ctx.save(); ctx.globalAlpha = 1 - k * 4; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.shadowColor = '#E8F542'; ctx.shadowBlur = 10;
+    if (k > 0.25) return; const ctx = app.ctx; ctx.save(); ctx.globalAlpha = 1 - k * 4; ctx.strokeStyle = '#fff'; ctx.lineWidth = lnw(2); ctx.shadowColor = '#E8F542'; ctx.shadowBlur = 10;
     ctx.beginPath(); ctx.moveTo(rect.x + 6, cy); for (let i = 1; i < 14; i++) ctx.lineTo(rect.x + 6 + (rect.w - 12) * i / 14, cy + (i % 2 ? -1 : 1) * (6 + (i * 37) % 7)); ctx.stroke(); ctx.restore();
   },
   gilded(app, g, k) { // gold-leaf god-ray fan

@@ -6,8 +6,9 @@
 import { COL, W, H, EASE, clamp } from './core.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs, toggleFullscreen } from './fullscreen.js';
 import { saveRun } from '../engine/save.js';
+import { lnw } from '../art/linework.js';
 
-export const IN_RUN = new Set(['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
+export const IN_RUN = new Set(['map', 'ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
 export const PAUSE_BTN = { x: 1136, y: 9, w: 44, h: 38 };
 export const FS_BTN = { x: 1188, y: 9, w: 44, h: 38 };
 // Chrome buttons stay inside the safe corner (notch, home bar, cropped strip): shifted by app.safe, unchanged when it is zero.
@@ -143,13 +144,13 @@ export default {
   },
   frame(app, g, px, py, pw, ph) {
     app.panel(px, py, pw, ph, { r: 16, fill: 'rgba(22,18,16,.985)', stroke: BRASS, lw: 3 });
-    g.save(); app.rr(px + 7, py + 7, pw - 14, ph - 14, 11); g.strokeStyle = 'rgba(232,220,196,.16)'; g.lineWidth = 1.5; g.stroke();
+    g.save(); app.rr(px + 7, py + 7, pw - 14, ph - 14, 11); g.strokeStyle = 'rgba(232,220,196,.16)'; g.lineWidth = lnw(1.5); g.stroke();
     g.fillStyle = BRASS;
     for (const [rx, ry] of [[px + 16, py + 16], [px + pw - 16, py + 16], [px + 16, py + ph - 16], [px + pw - 16, py + ph - 16]]) { g.beginPath(); g.arc(rx, ry, 3.5, 0, 6.283); g.fill(); }
     g.restore();
   },
   stitchLine(g, x1, y, x2) {
-    g.save(); g.strokeStyle = 'rgba(176,141,60,.7)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x1, y); g.lineTo(x2, y);
+    g.save(); g.strokeStyle = 'rgba(176,141,60,.7)'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(x1, y); g.lineTo(x2, y);
     for (let x = x1; x < x2; x += 12) { g.moveTo(x, y - 3); g.lineTo(x, y + 3); }
     g.stroke(); g.restore();
   },
@@ -157,7 +158,7 @@ export default {
     const pulse = o.focus && !calm(app) ? 0.5 + 0.5 * Math.sin(this.clock * 4) * 0.35 : 0.8;
     g.save(); app.rr(x, y, w, h, 9);
     g.fillStyle = o.focus ? '#3d311b' : o.danger ? '#2c1a1a' : COL.slab2; g.fill();
-    g.lineWidth = o.focus ? 2.8 : 1.6; g.strokeStyle = o.focus ? `rgba(242,193,78,${pulse + 0.2})` : o.danger ? 'rgba(179,38,58,.55)' : 'rgba(232,220,196,.35)'; g.stroke();
+    g.lineWidth = lnw(o.focus ? 2.8 : 1.6); g.strokeStyle = o.focus ? `rgba(242,193,78,${pulse + 0.2})` : o.danger ? 'rgba(179,38,58,.55)' : 'rgba(232,220,196,.35)'; g.stroke();
     if (o.focus) { g.fillStyle = COL.lamp; g.beginPath(); g.moveTo(x + 12, y + h / 2 - 7); g.lineTo(x + 22, y + h / 2); g.lineTo(x + 12, y + h / 2 + 7); g.closePath(); g.fill(); }
     g.restore();
     T(app, label, x + w / 2, y + h / 2 - 13 * sc(app), { size: o.size || 22, bold: true, align: 'center', color: o.focus ? '#fff1c4' : o.danger ? '#e9a3a3' : COL.vellum });
@@ -224,6 +225,7 @@ export default {
       if (this.dragY !== undefined) this.scroll -= m.y - this.dragY; this.dragY = m.y;
     } else this.dragY = undefined;
     this.scroll = clamp(this.scroll, 0, maxS);
+    app.reg('scroll-help', px + 20, top, pw - 40, vh, { overlay: true }); // the glossary scrolls and is clipped inside this box
     g.save(); g.beginPath(); g.rect(px + 20, top, pw - 40, vh); g.clip();
     const draw = (rows, x0) => {
       let y = top - this.scroll;

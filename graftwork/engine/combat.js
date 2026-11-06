@@ -49,6 +49,9 @@ export function newCombat(run, enemyIds, opts = {}) {
   }
   c.drawPile = [...rest, ...inn];
   enemyIds.forEach((id, i) => spawn(c, id, { silent: true, slot: i }));
+  // Ward mode (engine/ward.js): phase modifiers and reinforcements ride on run.pending; classic runs never set them.
+  const wm = run.pending && run.pending.kind === 'combat' && run.pending.mods;
+  if (wm) { c.wardMods = wm; c.reinforce = (run.pending.reinforce || []).slice(); c.handSize += wm.handAdd || 0; for (const e of c.enemies) wardBuff(c, e); }
   if (hero && hero.start) for (const s of Object.keys(hero.start)) addStatus(c, c.player, s, hero.start[s], { silent: true });
   // combat-start price: junk entering the draw pile or discard, and graft custom hooks
   for (const card of c.drawPile.slice()) {
@@ -64,6 +67,12 @@ export function newCombat(run, enemyIds, opts = {}) {
   return c;
 }
 
+// Ward phase modifiers on one enemy: HP multiplier (Level 2 elites, early boss) and Strength (night).
+function wardBuff(c, e) {
+  const m = c.wardMods; if (!m) return;
+  if (m.hpMul && m.hpMul !== 1) { e.maxHp = Math.max(1, Math.round(e.maxHp * m.hpMul)); e.hp = e.maxHp; }
+  if (m.enemyStr) e.st.strength = (e.st.strength || 0) + m.enemyStr;
+}
 function wrap(c, inst, tithed = false) {
   return { inst, uid: inst.uid, tithed, jam: false, costMod: 0, plays: 0, rolled: false, temp: false };
 }
@@ -248,6 +257,9 @@ export function kill(c, e, src) {
   if (e.def.on && e.def.on.death) e.def.on.death(c.A, e, src);
   fire(c, 'kill', { enemy: e });
   eachStatus(c.player, (d, v) => { if (d.hooks && d.hooks.kill) d.hooks.kill(c.A, c.player, v, { enemy: e }); });
+  if (c.reinforce && c.reinforce.length && !e.minion && !c.over) { // Ward: the next monster in the room steps up
+    const rid = c.reinforce.shift(), r = spawn(c, rid); if (!r) c.reinforce.unshift(rid); else { wardBuff(c, r); c.ev.push({ t: 'reinforce', e: r.uid, id: r.id, left: c.reinforce.length }); if (r.def.on && r.def.on.combatStart) r.def.on.combatStart(c.A, r); }
+  }
   checkEnd(c);
 }
 
@@ -683,7 +695,7 @@ export function startPlayerTurn(c) {
   if (c.over) return;
   const slow = c.player.st.drawdown || 0;
   if (slow) setStatus(c, c.player, 'drawdown', 0);
-  drawCards(c, Math.max(0, c.handSize - slow));
+  drawCards(c, Math.max(0, c.handSize - slow) + (c.turn === 1 && c.wardMods ? c.wardMods.firstTurnDraw || 0 : 0));
   // Backfire: Strain that found no Bare card to tithe jams grafted cards in hand
   let bf = c.strain.backfire;
   if (bf > 0) {
