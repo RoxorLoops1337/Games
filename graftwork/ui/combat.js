@@ -440,7 +440,7 @@ function onDmg(ev) {
       }
       wait = Math.max(wait, 60);
     }
-  } else if (!ev.absorbed && ev.raw === 0) { fx.float(isP ? 'Nothing' : 'No effect', p.x, p.y - 30, { color: '#aaa', size: 20, life: 1.0 }); wait = 60; }
+  } else if (!ev.absorbed && ev.raw === 0) { fx.float(isP ? 'No damage' : 'No effect', p.x, p.y - 30, { color: '#aaa', size: 20, life: 1.0 }); wait = 60; }
   // the striking card shudders on contact
   const sp = S.spr.find((s) => s.mode === 'play'); if (sp) sp.jit = 1;
   return wait;
