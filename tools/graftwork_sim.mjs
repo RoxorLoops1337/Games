@@ -61,7 +61,7 @@ function incomingDmg(c) {
   for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) t += intentOf(c, e).dmg;
   return t;
 }
-function cardValue(c, card, ck, st) {
+export function cardValue(c, card, ck, st) {
   const sp = ck.spec;
   const m = mult(sp, card.tithed) * (card.brand ? 1.5 : 1);
   const live = st.live;
@@ -92,7 +92,7 @@ function cardValue(c, card, ck, st) {
     } else if (o.op === 'block') {
       const b = Math.max(1, Math.round(n * m)) * times + (c.player.st.dexterity || 0);
       const useful = Math.min(b, need);
-      v += sc * (useful * 1.5 + (b - useful) * (c.player.st.barricade ? 0.8 : 0.1) + (lowHp ? b * 0.3 : 0));
+      v += sc * (useful * (st.blockW || 1.5) +(b - useful) * (c.player.st.barricade ? 0.8 : 0.1) + (lowHp ? b * 0.3 : 0));
     } else if (o.op === 'status') {
       const to = o.to || 'enemy';
       if (to === 'self' || to === 'player') {
@@ -224,7 +224,7 @@ export function fight(run, pol, maxTurns = 40) {
 function cardV(inst, threat = 6) { return fxValue(cardSpec(inst), threat); }
 const WEIRD_BONUS = { common: 2, uncommon: 3.5, rare: 5 };
 
-function graftScore(run, inst, gid, pol) {
+export function graftScore(run, inst, gid, pol) {
   const g = GRAFTS[gid];
   const before = cardV(inst);
   const afterInst = { ...inst, grafts: [...inst.grafts, gid] };
@@ -252,6 +252,7 @@ function graftScore(run, inst, gid, pol) {
 function chooseGraft(run, pol) {
   const offer = run.pending.offer;
   if (pol.skipAll || !offer.cards.length) return null;
+  if (pol.pickGraft) return pol.pickGraft(run, pol);
   let best = null, bs = -1e9;
   for (const uid of offer.cards) {
     const inst = RUN.findInst(run, uid);
@@ -369,7 +370,7 @@ export function playRun(heroId, seed, pol = POLICIES.careful, asc = 0, o = {}) {
         const kind = run.pending.fightKind;
         const enemies = run.pending.enemies.join('+');
         const hp0 = run.hp;
-        const { res, c } = fight(run, pol);
+        const { res, c } = (pol.fight || fight)(run, pol);
         log.fights.push({ act: run.act, kind, win: res.win, turns: res.turns, hp: run.hp, hp0, enemies });
         log.shatters += res.shattered.length;
         RUN.resolveFight(run, res); break;
