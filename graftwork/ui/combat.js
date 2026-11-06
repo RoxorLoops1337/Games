@@ -377,9 +377,11 @@ function onDmg(ev) {
       if (T.ink) fx.emit({ x: p.x, y: p.y, n: 8, colors: ['#1a1614', '#2b1e1a'], speed: 170, size: 6, gravity: 250, life: 0.8 });
       if (T.gore) fx.emit({ x: p.x, y: p.y, n: 18, colors: ['#9E0F2E', '#e8dcc4', '#c4223c'], speed: 380, size: 5, gravity: 800, life: 1.0, shape: 'flake', spin: 14 });
       if (T.slow) fx.slowmo(T.slow, T.slowMs);
-      if (!multi) fx.float(String(ev.n), p.x + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
+      if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x, p.y - 20, ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
+      else if (!multi) fx.float(String(ev.n), p.x + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
       if (k.overkill) fx.float(`+${k.over} OVERKILL`, p.x, p.y - 84, { color: COL.gold, size: 18, life: 1.3 });
-      sfx(slam ? 'hitBig' : T.body, { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol });
+      const hopt = { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol };
+      if (typeof (jau() || {}).hit === 'function') audioCall('hit', slam ? Math.max(ev.n, en.maxHp * 0.2) : ev.n, en.maxHp, hopt); else sfx(slam ? 'hitBig' : T.body, hopt);
       if (isP) {
         S.vig = Math.max(S.vig, T.vig); sfx('loseHp', { vol: 0.7 }); S.heroKick = Math.max(S.heroKick || 0, T.kick);
         if (killing) setKiller(ev, null);
@@ -459,6 +461,7 @@ function juiceLeave() {
 function kick(dx, dy, px, decay, roll) {
   if (!FX_OPTS.shake || calm() || !(px > 0)) return;
   const sh = S.shk, l = Math.hypot(dx, dy) || 1;
+  if (typeof S.fx.shakeDir === 'function') { S.fx.shakeDir(Math.atan2(dy, dx), Math.min(1, Math.sqrt(px / 14))); return; }
   sh.amp = J.kickAmp(sh.amp, px); sh.dx = dx / l; sh.dy = dy / l; sh.decay = decay; sh.roll = Math.max(sh.roll * 0.5, roll || 0);
 }
 function zoomPunch(z, x, y, back) { if (calm()) return; const zp = S.zp; zp.z = Math.max(zp.z, z); zp.cx = x; zp.cy = y; zp.back = back; }
@@ -483,7 +486,7 @@ function juiceTick(ad, raw) {
     if (ed.fin) {
       ed.fin.t += raw;
       const lit = Math.min(J.FINAL.seams, Math.floor(ed.fin.t / J.FINAL.perSeam));
-      if (lit > a.seamLit) { a.seamLit = lit; sfx('intentReveal', { vol: 0.25, pitch: 1.2 + lit * 0.15 }); }
+      if (lit > a.seamLit) { a.seamLit = lit; sfx(hasSfx('seamLight') ? 'seamLight' : 'intentReveal', { vol: 0.25, pitch: 1.2 + lit * 0.15 }); }
     }
   }
   if (S.killer && S.killer.ed) S.killer.ed.intentOut = 0;
@@ -578,7 +581,7 @@ function drawEnemyJ(ctx, ed, def, x, y) {
 }
 function drawJuice(app) {
   const ctx = app.ctx, E = S.ending, now = S.t * 1000;
-  J.drawCounters(ctx, S.hc, now);
+  if (typeof S.fx.floatCounter !== 'function') J.drawCounters(ctx, S.hc, now);
   for (const th of S.threads) J.drawThread(ctx, th);
   J.drawCombo(ctx, S.combo, HERO_X - 110, FOOT_Y - 215, now);
   if (S.killer) { const ed = S.killer.ed; J.drawKilledBy(ctx, S.killer.text, ed ? ed.x : HERO_X, (ed ? FOOT_Y - ed.h - 34 : FOOT_Y - 200) + 44); }
@@ -636,8 +639,9 @@ function onKill(ev) {
   zoomPunch(1.12, ed.x, cy, 2.2); aberr(8, 300); kick(1, 0, 8, 5, 0);
   S.threads.push({ x: ed.x, y: cy - 20, t: 0, life: 2.4 });
   if (boss) {
-    audioCall('setIntensity', 0); audioCall('duck', 1000); post('setGrade', 'neutral', 900); S.gradeSet = true;
-    later(1000, () => { sfx('heartbeat', { vol: 1 }); post('shockwave', ed.x, cy, 1, 900); });
+    audioCall('setIntensity', 0); const bk = typeof (jau() || {}).bossKill === 'function'; if (bk) audioCall('bossKill', 1000); else audioCall('duck', 1000);
+    post('setGrade', 'neutral', 900); S.gradeSet = true;
+    later(1000, () => { if (!bk) sfx('heartbeat', { vol: 1 }); post('shockwave', ed.x, cy, 1, 900); });
     later(1250, () => { sfx('gilded', { vol: 0.8 }); audioCall('setIntensity', 0.7); });
     return 700;
   }

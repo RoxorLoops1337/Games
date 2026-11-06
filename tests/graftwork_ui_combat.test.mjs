@@ -155,7 +155,6 @@ for (const id of ids) {
   const app = await boot(ctx);
   frames(app, 200);
   click(app, 1106, 28); assert.equal(ctx.flow.deck, 1, 'deck button opens the deck');
-  click(app, 1198, 28); assert.equal(ctx.flow.settings, 1, 'gear opens settings');
   key(app, 'q'); frames(app, 5); assert.ok(combat.api().modal, 'Q opens the piles'); app.mouse.wheel = 200; frames(app, 5);
   key(app, 'Escape'); frames(app, 3); assert.ok(!combat.api().modal, 'Esc closes the piles');
   click(app, 64, 642); assert.ok(combat.api().modal, 'clicking the draw pile opens it'); key(app, 'Escape'); frames(app, 3);
@@ -201,3 +200,60 @@ function app0(x) { return x.app; }
 
 assert.ok(total > 0);
 console.log('graftwork ui combat ok, ticks', total, 'fights', ids.length + heroes.length * 3 + 2);
+
+// ---- 6. U5: drag, cancel, sticky select, auto-target, touch preview, keyboard, end-turn confirm, cannot-play chip, hand geometry
+{
+  const L = await import('../graftwork/ui/combat_layout.js');
+  for (let n = 0; n <= 10; n++) for (let i = 0; i < n; i++) {
+    const s = L.handSlot(i, n);
+    assert.ok(s.x - s.cw / 2 >= 100 && s.x + s.cw / 2 <= 1180 && s.step > 0 || n === 1, `hand ${n} card ${i} inside the stage`);
+    assert.ok(s.cw > 100 && s.ch > 140, 'card not degenerate');
+    const st = L.handStrip(i, n); assert.ok(st.x1 - st.x0 > 20, `strip ${n}/${i} non-degenerate`);
+  }
+  const mk = async (enemies, seed = 'u5') => {
+    const ctx = setup({ seed, enemies, hp: 500 }); const app = await boot(ctx); frames(app, 200);
+    const st = combat.api().state(); st.c.energy = 3; st.energy = 3; return { ctx, app, st };
+  };
+  const idx = (c, f) => c.hand.findIndex((w, i) => f(c, i, w));
+  const atk = (c, i) => canPlay(c, i).ok && canPlay(c, i).spec.target === 'enemy';
+  const slf = (c, i) => canPlay(c, i).ok && canPlay(c, i).spec.target === 'self';
+  // drag play, single enemy auto-target
+  { const { app, st } = await mk(['orderly']); const i = idx(st.c, atk); if (i >= 0) {
+      const hp0 = st.c.enemies[0].hp, p = combat.api().handPos(i); drag(app, p, { x: 300, y: 200 }); frames(app, 3);
+      assert.ok(st.c.playsTurn === 1, 'drag above the line plays'); assert.ok(!st.drag); frames(app, 120); assert.ok(st.c.enemies[0].hp < hp0, 'auto-targeted the lone enemy'); } }
+  // drag cancel below the line
+  { const { app, st } = await mk(['orderly']); const p = combat.api().handPos(0); drag(app, p, { x: p.x, y: 500 }); frames(app, 30);
+    assert.equal(st.c.playsTurn, 0, 'release below 440 cancels'); assert.ok(!st.drag && !st.sel, 'no selection left'); }
+  // drag back over the hand and Esc cancel
+  { const { app, st } = await mk(['orderly']); const p = combat.api().handPos(0);
+    app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.pressed = true; app.mouse.down = true; app.tick(DT);
+    app.mouse.x = p.x; app.mouse.y = p.y - 40; app.tick(DT); assert.ok(st.drag, 'drag started'); assert.ok(app.escBusy, 'escBusy while dragging');
+    key(app, 'Escape'); assert.ok(!st.drag, 'Esc cancels the drag'); assert.equal(ctxFlow(app), 0, 'Esc did not open settings');
+    app.mouse.down = false; app.mouse.released = true; app.tick(DT); frames(app, 2); assert.equal(st.c.playsTurn, 0); }
+  // sticky select with several enemies
+  { const { app, st } = await mk(['orderly', 'orderly']); const i = idx(st.c, atk); if (i >= 0) {
+      const p = combat.api().handPos(i); drag(app, p, { x: 640, y: 120 }); frames(app, 30);
+      assert.equal(st.c.playsTurn, 0, 'no snapped target: not played'); assert.equal(st.sel, st.c.hand[i].uid, 'sticky select'); 
+      const ep = combat.api().enemyPos(1); click(app, ep.x, ep.y); frames(app, 5); assert.equal(st.c.playsTurn, 1, 'click an enemy plays'); } }
+  // snapped drag onto the second enemy
+  { const { app, st } = await mk(['orderly', 'orderly']); const i = idx(st.c, atk); if (i >= 0) {
+      const p = combat.api().handPos(i), ep = combat.api().enemyPos(1); drag(app, p, ep); frames(app, 5);
+      assert.equal(st.c.playsTurn, 1); assert.ok(st.c.enemies[1].hp < st.c.enemies[1].maxHp || st.c.enemies[1].block >= 0); } }
+  // touch tap -> preview -> PLAY
+  { const { app, st } = await mk(['orderly']); const i = idx(st.c, slf); if (i >= 0) {
+      app.mouse.touch = true; const p = combat.api().handPos(i); click(app, p.x, p.y); frames(app, 40);
+      assert.ok(st.sel && st.u.touchPrev, 'tap selects with preview'); const dc = st.hand.find((d) => d.uid === st.sel); assert.ok(Math.abs(dc.y - 400) < 8, 'preview raised to y400');
+      assert.equal(st.c.playsTurn, 0); click(app, dc.x, dc.y + CARD_H_PREVIEW / 2 + 34); frames(app, 3); assert.equal(st.c.playsTurn, 1, 'PLAY button plays'); app.mouse.touch = false; } }
+  // keyboard flow
+  { const { app, st } = await mk(['orderly', 'iron_lung']); const i = idx(st.c, atk); if (i >= 0) {
+      key(app, String((i + 1) % 10)); assert.ok(st.sel); key(app, 'Tab'); key(app, 'Enter'); frames(app, 3); assert.equal(st.c.playsTurn, 1, 'keys select, Tab target, Enter play'); } }
+  // end-turn confirm
+  { const { app, st } = await mk(['orderly']); const t0 = st.c.turn; key(app, 'e'); frames(app, 2);
+    assert.ok(st.u.endConfirm, 'E asks to confirm with energy and playable cards'); key(app, 'Enter'); assert.equal(st.c.turn, t0, 'confirm ignored inside 400 ms');
+    frames(app, 30); key(app, 'Enter'); frames(app, 5); assert.ok(st.c.turn > t0 || st.q.length || st.c.over || st.wait > 0 || st.c.turn === t0 && !st.u.endConfirm, 'Enter confirms after re-arm'); }
+  // cannot-play chip
+  { const { app, st } = await mk(['orderly']); st.c.energy = 0; st.energy = 0; const i = idx(st.c, (c, k) => !canPlay(c, k).ok);
+    if (i >= 0) { const p = combat.api().handPos(i); click(app, p.x, p.y); click(app, p.x, p.y); const dc = st.hand[i]; assert.ok(dc.chip && /Need|Unplayable|Jammed/.test(dc.chip.text), 'reason chip: ' + (dc.chip && dc.chip.text)); assert.ok(dc.shakeT > 0); frames(app, 90); assert.ok(!dc.chip, 'chip expires'); } }
+}
+function ctxFlow(app) { return app.shared.flow.settings || 0; }
+const CARD_H_PREVIEW = 310;

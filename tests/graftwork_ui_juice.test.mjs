@@ -122,7 +122,7 @@ function play(app, ctx, onTick, { maxTicks = 5000, endTurnOnly = false } = {}) {
 
 // ---- 4. finishing blow only on the last kill
 {
-  const ctx = setup({ enemies: ['bedpan_slime', 'bedpan_slime'], hp: 900 });
+  const ctx = setup({ enemies: ['orderly', 'orderly'], hp: 900 });
   const app = await boot(ctx);
   frames(app, 5);
   for (const e of combat.api().c.enemies) { e.hp = 1; e.maxHp = 1; }
@@ -169,7 +169,7 @@ async function reducedRun(reduced) {
   frames(app, 5);
   for (const e of combat.api().c.enemies) { e.hp = Math.min(e.hp, 30); e.maxHp = Math.min(e.maxHp, 30); }
   const m = { stop: 0, shake: 0, zoom: 1, slow: 0 };
-  play(app, ctx, (S) => { m.stop = Math.max(m.stop, S.fx.stop); m.shake = Math.max(m.shake, S.shk.amp); m.zoom = Math.max(m.zoom, S.zp.z); m.slow = Math.max(m.slow, S.fx.slow); });
+  play(app, ctx, (S) => { m.stop = Math.max(m.stop, S.fx.stop); m.shake = Math.max(m.shake, S.shk.amp, S.fx.trauma || 0); m.zoom = Math.max(m.zoom, S.zp.z); m.slow = Math.max(m.slow, S.fx.slow); });
   frames(app, 200);
   assert.equal(ctx.routed.length, 1, 'victory/defeat routed once');
   assert.equal(ctx.run.stats.fights, before + 1);

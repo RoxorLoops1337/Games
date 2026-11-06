@@ -22,7 +22,7 @@ export function affl(c) {
   return a;
 }
 
-function ensure(c) { if (process.env.NOAFF) return affl(c);
+function ensure(c) {
   const a = affl(c);
   if (!c.player.st.__affl) {
     const raw = c.player.st;
