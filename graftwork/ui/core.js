@@ -18,7 +18,7 @@ export const EASE = {
 };
 // Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
-export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 0, maxHitGrow: 14 };
+export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 0, maxHitGrow: 20 };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -203,8 +203,27 @@ export function createApp(canvas, opts = {}) {
   app.hover = app.inRect;
   // A click is used ONCE per frame: whoever claims it first (a button) consumes it, so a modal that opens on that click
   // cannot also receive it and pick whatever card appeared under the pointer.
+  // Touch floor: below SMALL.floorBelow scale a clickable smaller than minTouch CSS px also answers presses just outside it (by at most maxHitGrow logical px a side),
+  // unless the press lies inside another clickable seen last frame, so lists of small rows never steal each other's taps.
+  let rectsNow = [], rectsPrev = [], rectFrame = -1;
+  app.hitRect = (x, y, w, h) => { // the grown hit rect of a clickable (also used by tests to measure tap targets)
+    if (!(app.scale < SMALL.floorBelow && app.scale > 0)) return { x, y, w, h };
+    const m = app.minTouch / app.scale, gx = clamp((m - w) / 2, 0, SMALL.maxHitGrow), gy = clamp((m - h) / 2, 0, SMALL.maxHitGrow);
+    return { x: x - gx, y: y - gy, w: w + gx * 2, h: h + gy * 2 };
+  };
   app.clicked = (x, y, w, h) => {
-    const hit = !!(app.mouse.released && app.mouse.pressStart && inBox(app.mouse.pressStart, x, y, w, h) && app.inRect(x, y, w, h));
+    if (rectFrame !== app.frame) { const t = rectsPrev; rectsPrev = rectsNow; rectsNow = t; rectsNow.length = 0; rectFrame = app.frame; }
+    rectsNow.push(x, y, w, h);
+    const ps = app.mouse.pressStart; if (!(app.mouse.released && ps) || app.blocked) return false;
+    let hit = inBox(ps, x, y, w, h);
+    if (!hit && app.scale < SMALL.floorBelow) {
+      const g = app.hitRect(x, y, w, h);
+      if (inBox(ps, g.x, g.y, g.w, g.h)) {
+        hit = true;
+        const R = rectsPrev; for (let i = 0; i < R.length; i += 4) { if (R[i] === x && R[i + 1] === y && R[i + 2] === w && R[i + 3] === h) continue; if (inBox(ps, R[i], R[i + 1], R[i + 2], R[i + 3])) { hit = false; break; } }
+      }
+    }
+    if (hit) { const g = app.hitRect(x, y, w, h); hit = inBox(app.mouse, g.x, g.y, g.w, g.h); } // the finger must also lift on it
     if (hit) app.mouse.released = false;
     return hit;
   };
@@ -240,7 +259,7 @@ export function createApp(canvas, opts = {}) {
     if (o.sub) { TO.size = Math.round(size * 0.7); TO.color = o.subColor || 'rgba(232,220,196,.7)'; TO.bold = false; TO.ui = true; TO.shadow = false; app.text(o.sub, x + w / 2, ty + app.sz(size) * 1.15, TO); }
     if (!dis && o.key && keyHit(o.key)) { app.press(x, y, w, h, o.r); return true; }
     if (!dis && fi >= 0 && F.active && F.fire && fi === F.idx) { F.fire = false; app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
-    if (!dis && app.clicked(hx, hy, hw, hh)) { app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
+    if (!dis && app.clicked(x, y, w, h)) { app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
     return false;
   };
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.

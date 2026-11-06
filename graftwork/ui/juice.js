@@ -1,6 +1,6 @@
 // JUICE tuning tables and pure helpers (design/JUICE.md). No DOM, no engine imports: ui/combat.js owns the state and calls these.
 // Everything that draws takes a plain 2D ctx. Reduced motion and shake settings are applied by the caller (combat.js).
-import { timing as rigTiming } from '../art/attacks.js';
+import { timing as rigTiming, styleOf } from '../art/attacks.js';
 
 // ---------------------------------------------------------------- relative hit tiers
 // Tiers are relative to the VICTIM's max HP: light < 8%, medium 8 to 18%, heavy > 18%; crit = Vulnerable or > 30%; overkill = beyond remaining HP.
@@ -220,4 +220,14 @@ export function drawDeathCard(ctx, W, H, t) {
   const b = Math.max(0, Math.min(1, (t - 2.0) / 0.6));
   ctx.globalAlpha = b; ctx.fillStyle = '#2B1E1A'; ctx.font = 'italic bold 40px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('The ward remembers.', W / 2, H / 2); ctx.restore();
+}
+
+// ---------------------------------------------------------------- melee reach: the body closes on the hero so contact is visible on the damage frame
+const RANGED = /^(spit|beam|gaze|swarm|breath|paddles|cast|call|flex|guard|heal|inhale|raise)$/;
+export function isMelee(def, moveId) { const st = styleOf(def && def.id, def && def.art && def.art.body, moveId); return !!st && !RANGED.test(st); }
+export const REACH_FRAC = 0.6;
+// 0..1 share of the reach travel at this attack time (tell: 0, act: accelerates in, hold: 1, rec: eases back)
+export function reachK(tm, ms) {
+  const r = atkPhase(tm, ms);
+  return r.phase === 'act' ? easeInQuad(r.k) : r.phase === 'hold' ? 1 : r.phase === 'rec' ? 1 - easeInOutCubic(r.k) : 0;
 }

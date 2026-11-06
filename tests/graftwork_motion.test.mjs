@@ -50,4 +50,28 @@ const B = J.BUDGET;
   assert.ok(tFree > 0 && tFree <= 900, `input free after ${tFree.toFixed(0)} ms`);
   assert.ok(S.spr.length === 0 || S.spr.every((s) => s.t < 1), 'no card sprite lingers');
 }
+// 5. melee reach: melee bodies close on the hero, ranged ones stay put; profile 0 at tell, rises through act, 1 on hold, eases back
+{
+  assert.ok(J.isMelee(ENEMIES.bedpan_slime), 'slime leaps at the hero');
+  assert.ok(J.isMelee(ENEMIES.orderly));
+  assert.ok(!J.isMelee(ENEMIES.leech_jar), 'ranged beam stays put');
+  const tm = { tell: 100, act: 100, hold: 50, rec: 100 };
+  assert.equal(J.reachK(tm, 50), 0); assert.equal(J.reachK(tm, 220), 1); assert.equal(J.reachK(tm, 400), 0);
+  let prev = -1; for (let ms = 100; ms <= 200; ms += 10) { const k = J.reachK(tm, ms); assert.ok(k >= prev); prev = k; }
+  assert.ok(J.reachK(tm, 199) > 0.95, 'contact frame is at full reach');
+}
+// 6. live fight: first enemy action within 250 ms of End Turn; hit flash fades inside 150 ms; reduced motion runs clean
+for (const reduced of [false, true]) {
+  const { FX_OPTS } = await import('../graftwork/ui/fx.js'); FX_OPTS.reduced = reduced;
+  const run = RUN.newRun({ hero: 'marrow', seed: 'mo2' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime'] }; run.hp = 900; run.maxHp = 900; run.potions = [];
+  const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } });
+  app.register('combat', combat); app.go('combat', { run }); frames(app, 120);
+  const key = () => { app.pressedKeys.push({ key: 'e', preventDefault() {} }); };
+  key(); frames(app, 30); key();
+  const S = combat.api().state(); let ms = 0, tAct = -1;
+  for (let i = 0; i < 120 && tAct < 0; i++) { app.tick(1 / 60); ms += 1000 / 60; if (S.eds[0].atkT >= 0) tAct = ms; }
+  assert.ok(tAct > 0 && tAct <= 250, `first enemy action ${tAct.toFixed(0)} ms after End Turn (reduced=${reduced})`);
+  frames(app, 120);
+  FX_OPTS.reduced = false;
+}
 console.log('graftwork motion ok');

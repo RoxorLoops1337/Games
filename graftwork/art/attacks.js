@@ -199,6 +199,9 @@ function resolve(id, body, moveId) {
   return { id, bk, style, sdef, cls, weight, hits: cls === 'attack' ? hits : 1, sigT: sig && sig.t && sigMove && cls === 'attack' ? sig.t : null };
 }
 
+// style name of an enemy's move ('splat', 'spit', ...); ui/combat.js uses it to decide whether the body closes the distance
+export function styleOf(id, body, moveId) { try { return resolve(id, body, moveId).style; } catch (e) { return ''; } }
+
 export function timing(id, body, moveId) {
   const r = resolve(id, body, moveId);
   let t;

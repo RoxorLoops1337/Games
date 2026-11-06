@@ -37,7 +37,7 @@ function tickEnt(en, d) {
   en.shown += (en.hp - en.shown) * (1 - Math.exp(-d * 16));
   if (Math.abs(en.shown - en.hp) < 0.05) en.shown = en.hp;
   if (en.trail > en.hp) { if (en.tdelay > 0) en.tdelay -= d; else en.trail = Math.max(en.hp, en.trail - Math.max(8, en.maxHp) * 1.1 * d); } else en.trail = en.hp;
-  en.hurt = Math.max(0, en.hurt - d * 4); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
+  en.hurt = Math.max(0, en.hurt - d * 8); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
   for (const s of Object.keys(en.pop)) { en.pop[s] -= d * 2.2; if (en.pop[s] <= 0) delete en.pop[s]; }
 }
 function mkEd(e) {
@@ -134,8 +134,8 @@ function handle(ev) {
     }
     case 'turnEnd': {
       S.sel = null; S.potSel = null; sfx('turnEnd'); comboCash();
-      for (const ed of S.eds) if (!(ed.st.barricade > 0)) ed.block = 0;
-      return 170;
+      for (const ed of S.eds) { if (!(ed.st.barricade > 0)) ed.block = 0; if (ed.visible && !ed.dyingOn) fx.ring(ed.x, EF - ed.h - 20, '#cfc3a8', 46, 0.3); } // intent plates pulse as the turn changes hands
+      return 90; // the first enemy action starts about 200 ms after End Turn
     }
     case 'intent': {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
@@ -199,7 +199,7 @@ function handle(ev) {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
       const info = intentWith(ed, ev.move);
       const atk = info && info.kinds.includes('attack');
-      ed.atkT = 0; ed.atkKind = atk ? 'attack' : 'cast'; ed.intentOut = 0.0001; ed.atkTm = atk ? J.atkTiming(ed.e.def) : null; S.lastAct.set(ev.e, ev.move);
+      ed.atkT = 0; ed.atkKind = atk ? 'attack' : 'cast'; ed.intentOut = 0.0001; ed.atkTm = atk ? J.atkTiming(ed.e.def) : null; ed.melee = !!(atk && J.isMelee(ed.e.def, ev.move)); S.lastAct.set(ev.e, ev.move);
       const mv = ed.e.def.moves[ev.move];
       ed.callout = { text: (mv && mv.name) || '', t: 0 };
       if (!atk) { const p = entPos(ev.e); fx.ring(p.x, p.y, '#cfc3a8', 80, 0.5); }
@@ -591,6 +591,7 @@ function enemyPose(ed) {
 function drawEnemyJ(ctx, ed, def, x, y) {
   const a = ed.anim, idl = rmotion() || ed.dying > 0 ? 0 : Math.sin((S.t + ed.phase) * 2.1) * 0.014, sy = 1 + a.sq + idl, sx = 1 / (1 + a.sq) * (1 - idl * 0.6);
   ctx.save();
+  if (ed.melee && ed.atkT >= 0 && ed.atkKind === 'attack' && ed.atkTm && !calm() && !rmotion()) x -= Math.max(0, ed.x - (HERO_X + 90)) * J.REACH_FRAC * J.reachK(ed.atkTm, ed.atkT * 1000);
   if (a.sq || idl) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
   drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac });
   if (a.seamLit > 0) J.drawSeams(ctx, x, y, ed.w, ed.h, a.seamLit, S.t, 1 - ed.dying);
