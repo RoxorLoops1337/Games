@@ -269,7 +269,7 @@ export default {
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);
-    if (globalThis.__D) console.log('room', room, 'y', y, 'tot', tot(ms), 'n', choices.length, TS, lines.length);
+    if (globalThis.__D && tot(mk(0)) > room) console.log('BARE', room, tot(mk(0)), choices.length, k, ev.id);
     const bare = tot(ms) > room; if (bare) ms = mk(0); // no room: labels only, the description moves into the hover tooltip
     choices.forEach((c, idx) => {
       const sub = ms[idx].sub;
