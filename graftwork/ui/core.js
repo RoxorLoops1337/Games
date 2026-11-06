@@ -18,7 +18,7 @@ export const EASE = {
 };
 // Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
-export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 0, maxHitGrow: 20 };
+export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, cropY: 0, maxHitGrow: 24 };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -92,6 +92,9 @@ export function createApp(canvas, opts = {}) {
   window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); if (app.navButtons && e.key === 'Tab') e.preventDefault(); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
   window.addEventListener('keyup', (e) => app.keys.delete(e.key));
   window.addEventListener('resize', app.resize);
+  // Rotating a phone: iOS reports the old inner size for a moment, so measure again after the rotation settles; the URL bar showing or hiding fires visualViewport resize
+  window.addEventListener('orientationchange', () => { app.resize(); setTimeout(app.resize, 120); setTimeout(app.resize, 400); });
+  if (window.visualViewport && window.visualViewport.addEventListener) window.visualViewport.addEventListener('resize', app.resize);
 
   // ---- screens ----
   const top = () => app.stack[app.stack.length - 1];
