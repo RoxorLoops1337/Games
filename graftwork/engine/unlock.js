@@ -90,8 +90,8 @@ export function computeUP(d, newKills = 0, newAch = 0) {
     firstKills: Math.min(UP.FIRST_KILL_MAX, newKills) * UP.FIRST_KILL, achievements: Math.min(UP.ACHIEVEMENT_MAX, newAch) * UP.ACHIEVEMENT,
   };
   let raw = Object.values(parts).reduce((a, b) => a + b, 0);
-  if (d.assist) raw *= UP.ASSIST_MULT;
-  const up = Math.max(UP.FLOOR, Math.min(UP.RUN_CAP, Math.round(raw)));
+  const capped = Math.min(UP.RUN_CAP, raw) * (d.assist ? UP.ASSIST_MULT : 1); // Assist pays at most half the cap
+  const up = Math.max(UP.FLOOR, Math.round(capped));
   return { up, parts, capped: raw > UP.RUN_CAP, raw };
 }
 

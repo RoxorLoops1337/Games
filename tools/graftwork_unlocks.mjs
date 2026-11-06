@@ -12,7 +12,7 @@ import { makeRng } from '../graftwork/engine/rng.js';
 import { TOTAL_COST, UP } from '../graftwork/data/unlocks.js';
 
 // The bots all play far better than real beginners, so skill is emulated by handicap: ascension level (harder game) per tier.
-const TIERS = { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 8] };
+const TIERS = { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 6] };
 const HEROES = ['marrow', 'wick', 'odile'];
 const MAX_RUNS = 220;
 

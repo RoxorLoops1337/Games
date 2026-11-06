@@ -154,6 +154,7 @@ export function glossaryFor(input, o = {}) {
   const found = new Map(); let order = 0;
   const add = (name, n) => { const f = found.get(name); if (f) { if (f.n === undefined && n !== undefined) f.n = n; return; } found.set(name, { name, n, order: order++ }); };
   for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
+  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) if (!TAGS.has(h.name)) add(h.name, numAround(ln, h)); // the tip's own prose: Weight / Budget there are already explained in place
   for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
   if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
   if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
@@ -340,15 +341,17 @@ let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
 // resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
 export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
 const sc = (app, n) => Math.round(n * (app.textScale || 1));
-function measurePanel(app, sections) {
-  const bw = MAXW - PAD * 2; let h = PAD * 2;
+// compact: a tight band (about 140px tall) gets a wide, low panel: 16px titles, 15px text, 4px between entries.
+function measurePanel(app, sections, W = MAXW, compact = false) {
+  const bw = W - PAD * 2; let h = PAD * 2;
+  const ti = compact ? 16 : TI, bo = compact ? 15 : BO, gap = compact ? 4 : 8, tg = compact ? 2 : 5;
   const lay = sections.map((s) => {
-    const body = s.text ? app.wrap(s.text, bw, sc(app, BO), { ui: true }) : [];
+    const body = s.text ? app.wrap(s.text, bw, sc(app, bo), { ui: true }) : [];
     const why = (s.why || []).map((w) => app.wrap(w, bw, sc(app, 15), { ui: true }));
-    const sh = sc(app, TI) + 5 + body.length * Math.round(sc(app, BO) * 1.25) + why.reduce((a, l) => a + l.length * Math.round(sc(app, 15) * 1.25) + 3, 0) + 8;
+    const sh = sc(app, ti) + tg + body.length * Math.round(sc(app, bo) * 1.25) + why.reduce((a, l) => a + l.length * Math.round(sc(app, 15) * 1.25) + 3, 0) + gap;
     h += sh; return { s, body, why, sh };
   });
-  return { lay, h: h - 8 };
+  return { lay, h: h - gap, w: W, compact, ti, bo, gap, tg };
 }
 // Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
 // live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
@@ -358,7 +361,7 @@ function sectionsText(stack) { const out = []; for (const p of stack) for (const
 function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
 function glossPanel(stack, tip) {
   const o = tip.o || tip;
-  const gl = glossaryFor([o.gloss || [], sectionsText(stack)], { max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
+  const gl = glossaryFor(o.gloss || [], { weak: sectionsText(stack), max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
   return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
 }
 export { toStack as tipSections }; // tests read the panels a tip would draw
@@ -394,29 +397,38 @@ function place(app, a, w, h, prevBottomY) {
 }
 function drawStack(app, stack, anchor) {
   const ctx = app.ctx;
-  const panels = stack.slice(0, 2).map((p) => measurePanel(app, p));
-  if (stack.length > 2) { const extra = stack.slice(2).flat().map((s) => s.title).join(', '); panels[1] = measurePanel(app, [...stack[1], { title: 'Also', text: extra, color: COL.vellum2 }]); }
+  const secs = stack.slice(0, 2);
+  if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
+  const panels = secs.map((p) => measurePanel(app, p));
   const totalH = panels.reduce((a, p) => a + p.h, 0) + (panels.length - 1) * 8;
-  // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement
+  // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement.
+  // A panel that does not fit below the first one moves to the next column; in a tight band it is re-measured wide and low so it fits there.
   const band = anchor.band;
   const pos = band ? { x: band.x, y: band.y } : place(app, anchor, MAXW, Math.min(totalH, 700));
   let y = band ? Math.min(band.y, Math.max(6, 714 - panels[0].h)) : Math.max(6, Math.min(714 - totalH, pos.y));
-  let col = 0;
-  panels.forEach((p, i) => {
-    if (band && i > 0 && y + p.h > band.bottom) { col++; y = band.y; }
-    pos.x = band ? band.x + col * (MAXW + 8) * band.dir - (band.dir < 0 ? MAXW : 0) : pos.x;
-    const first = p.lay[0] && p.lay[0].s;
-    app.panel(pos.x, y, MAXW, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
-    app.reg('tip' + i, pos.x, y, MAXW, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
+  let col = 0, colX = band ? band.x : 0;
+  panels.forEach((p0, i) => {
+    let p = p0;
+    if (band && i > 0 && y + p.h > band.bottom) {
+      col++; y = band.y; colX += band.dir * (panels[i - 1].w + 8);
+      const room = band.dir > 0 ? 1274 - colX : colX - 6;
+      if (p.h > band.bottom - band.y + 2 && room >= 320) p = measurePanel(app, secs[i], Math.min(room, 520), true);
+      if (y + p.h > 718) y = Math.max(6, 718 - p.h);
+      panels[i] = p;
+    }
+    pos.x = band ? colX - (band.dir < 0 ? p.w : 0) : pos.x;
+    const first = p.lay[0] && p.lay[0].s, W = p.w;
+    app.panel(pos.x, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
+    app.reg('tip' + i, pos.x, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
     let yy = y + PAD;
     for (const L of p.lay) {
       const s = L.s, gx = s.glyph ? 18 : 0;
-      if (s.glyph) drawGlyph(ctx, s.glyph, pos.x + PAD + 7, yy + sc(app, TI) * 0.55, 13, s.color || COL.lamp);
-      app.text(s.title || '', pos.x + PAD + gx, yy, { size: TI, bold: true, color: s.color || COL.lamp });
-      yy += sc(app, TI) + 5;
-      if (L.body.length) { app.text(s.text, pos.x + PAD, yy, { size: BO, ui: true, maxW: MAXW - PAD * 2, lineH: Math.round(sc(app, BO) * 1.25), color: COL.vellum }); yy += L.body.length * Math.round(sc(app, BO) * 1.25); }
-      for (const wl of L.why) { app.text(wl.join(' '), pos.x + PAD, yy + 3, { size: 15, ui: true, maxW: MAXW - PAD * 2, lineH: Math.round(sc(app, 15) * 1.25), color: COL.lamp }); yy += wl.length * Math.round(sc(app, 15) * 1.25) + 3; }
-      yy += 8;
+      if (s.glyph) drawGlyph(ctx, s.glyph, pos.x + PAD + 7, yy + sc(app, p.ti) * 0.55, 13, s.color || COL.lamp);
+      app.text(s.title || '', pos.x + PAD + gx, yy, { size: p.ti, bold: true, color: s.color || COL.lamp });
+      yy += sc(app, p.ti) + p.tg;
+      if (L.body.length) { app.text(s.text, pos.x + PAD, yy, { size: p.bo, ui: true, maxW: W - PAD * 2, lineH: Math.round(sc(app, p.bo) * 1.25), color: COL.vellum }); yy += L.body.length * Math.round(sc(app, p.bo) * 1.25); }
+      for (const wl of L.why) { app.text(wl.join(' '), pos.x + PAD, yy + 3, { size: 15, ui: true, maxW: W - PAD * 2, lineH: Math.round(sc(app, 15) * 1.25), color: COL.lamp }); yy += wl.length * Math.round(sc(app, 15) * 1.25) + 3; }
+      yy += p.gap;
     }
     y += p.h + 8;
   });

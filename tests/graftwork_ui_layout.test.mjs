@@ -104,7 +104,7 @@ const OPEN_DESK = new Set(['shop|oob', 'event|oob', 'graft|text-text', 'deck|tex
 let openCount = 0;
 function done(name) {
   const mine = problems.filter((p) => p.startsWith(name));
-  const hard = mine.filter((p) => { const [tag, kind] = p.split('|'), ph = /\/p0\.\d+/.test(tag), k = tag.split('/')[0] + '|' + kind; const open = (ph ? OPEN_ON_PHONE : OPEN_DESK).has(k); if (open) openCount++; return !open; });
+  const hard = mine.filter((p) => { const [tag, kind] = p.split('|'), ph = /\/p0\.\d+|phone/.test(tag), k = tag.split('/')[0] + '|' + kind; const open = (ph ? OPEN_ON_PHONE : OPEN_DESK).has(k); if (open) openCount++; return !open; });
   if (hard.length) { console.log(hard.map((p) => '  ' + p).join('\n')); }
   return hard.length;
 }
