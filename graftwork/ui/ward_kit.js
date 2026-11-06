@@ -18,7 +18,7 @@ import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
 
 export const INK = '#2B1E1A', VELLUM = '#E8DCC4', BRASS = '#C9A227';
-export const DEFAULT_MODE = 'classic';
+export const DEFAULT_MODE = 'ward'; // the Ward is the default once its screen and tests are in (design/WARD.md step 4)
 export function modeOf(meta) { const m = meta && meta.settings && meta.settings.mode; return m === 'classic' || m === 'ward' ? m : DEFAULT_MODE; }
 
 export const ROOM_TINT = {

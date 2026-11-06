@@ -32,7 +32,7 @@ const STEP_S = 0.25; // a room per step
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };
 const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
-const PH_TINT = { morning: ['#ffd27a', 0.07], midday: ['#ffffff', 0], evening: ['#6a3008', 0.17], night: ['#0b1a4a', 0.32] };
+const PH_TINT = { morning: ['#ffe2a8', 0.5], midday: ['#ffffff', 0], evening: ['#d89a5a', 0.75], night: ['#5a6aa8', 0.85] }; // multiplied over the plan
 const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event: ['event', 'Chapel event'], shop: ['shop', 'Dispensary'], forge: ['forge', 'Workshop'], rest: ['rest', 'Clean sheets'], boss: ['boss', 'The boss'] };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
 
@@ -156,7 +156,7 @@ export default {
     const w = run.ward;
     if (!w) return;
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
-    if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
+    if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
     const P = MEM.plan;
     if (P && P.act !== w.act) MEM.plan = null;
     if (MEM.plan) { // steps still to show: towards the next trigger (params.then) or to the end of the walk
@@ -172,7 +172,7 @@ export default {
     if (!S || !S.run.ward) return;
     S.t += dt; S.fx.update(dt);
     if (S.toastT > 0) S.toastT -= dt;
-    if (S.banner) { S.banner.t += dt; if (S.banner.t > 2.6) S.banner = null; }
+    if (S.banner) { const wall = (Date.now() - (S.banner.t0 || Date.now())) / 1000; S.banner.t = Math.max(S.banner.t + dt, wall); if (S.banner.t > 2.6) S.banner = null; } // wall clock too: a slow phone must not keep the plate up
     if (S.trans) { S.trans.t += dt; if (S.trans.t >= S.trans.dur) S.trans = null; }
     const wk = S.walk;
     if (wk) {
@@ -610,11 +610,11 @@ export default {
   drawTint(app) {
     const g = app.ctx, w = S.run.ward, tr = S.trans, s = SHEET;
     const k = tr ? EASE.inOut(clamp(tr.t / tr.dur, 0, 1)) : 1;
-    const layer = (ph, a) => { const [c, al] = PH_TINT[ph] || PH_TINT.midday; if (al * a <= 0.001) return; g.fillStyle = rgba(c, al * a); g.fillRect(s.x, s.y, s.w, s.h); };
+    const layer = (ph, a) => { const [c, al] = PH_TINT[ph] || PH_TINT.midday; if (al * a <= 0.001) return; g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = rgba(c, al * a); g.fillRect(s.x, s.y, s.w, s.h); g.restore(); };
     g.save(); app.rr(s.x, s.y, s.w, s.h, 6); g.clip();
     if (tr && tr.from) layer(tr.from, 1 - k);
     layer(w.phase, k);
-    if (w.phase === 'night') { const mg = g.createRadialGradient(s.x + s.w - 60, s.y + 40, 10, s.x + s.w - 60, s.y + 40, 380); mg.addColorStop(0, rgba('#cfe0ff', 0.16 * k)); mg.addColorStop(1, 'rgba(207,224,255,0)'); g.fillStyle = mg; g.fillRect(s.x, s.y, s.w, s.h); }
+    if (w.phase === 'night') { const mg = g.createRadialGradient(s.x + s.w - 60, s.y + 40, 10, s.x + s.w - 60, s.y + 40, 380); mg.addColorStop(0, rgba('#cfe0ff', 0.28 * k)); mg.addColorStop(1, 'rgba(207,224,255,0)'); g.fillStyle = mg; g.fillRect(s.x, s.y, s.w, s.h); }
     if (w.phase === 'evening') { const fl = 0.92 + 0.08 * Math.sin(S.t * 7) * Math.sin(S.t * 3.1); const lg = g.createRadialGradient(s.x + s.w / 2, s.y - 40, 20, s.x + s.w / 2, s.y - 40, 520); lg.addColorStop(0, rgba('#ffcf7a', 0.16 * fl * k)); lg.addColorStop(1, 'rgba(255,207,122,0)'); g.fillStyle = lg; g.fillRect(s.x, s.y, s.w, s.h); }
     g.restore();
   },
@@ -637,12 +637,12 @@ export default {
     const p = WD.pathTo(run, dest, S.altFor === dest ? S.alt : 0);
     let n = 0;
     for (const t of p.triggers || []) {
-      const c = roomCenter(run, t.room), sx = c.x + 22, sy = c.y - 22;
-      g.save(); g.fillStyle = t.bribed ? '#6a625a' : '#1f1914'; g.beginPath(); g.arc(sx, sy, 13, 0, Math.PI * 2); g.fill(); g.strokeStyle = t.bribed ? '#9a9088' : COL.scar; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
-      drawNodeIcon(g, TRIG[t.kind] ? TRIG[t.kind][0] : 'event', sx, sy, 22, t.bribed ? 'locked' : 'available');
+      const c = roomCenter(run, t.room), sx = c.x + 4, sy = c.y + 2;
+      g.save(); g.fillStyle = t.bribed ? '#6a625a' : '#1f1914'; g.beginPath(); g.arc(sx, sy, 16, 0, Math.PI * 2); g.fill(); g.strokeStyle = t.bribed ? '#9a9088' : COL.scar; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
+      drawNodeIcon(g, TRIG[t.kind] ? TRIG[t.kind][0] : 'event', sx, sy, 28, t.bribed ? 'locked' : 'available');
       if (!t.bribed) n++;
-      g.save(); g.fillStyle = t.bribed ? '#6a625a' : COL.scar; g.beginPath(); g.arc(sx - 11, sy - 11, 7.5, 0, Math.PI * 2); g.fill(); g.restore();
-      app.text(t.bribed ? '-' : String(n), sx - 11, sy - 18, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3e0', fixed: true });
+      g.save(); g.fillStyle = t.bribed ? '#6a625a' : COL.scar; g.beginPath(); g.arc(sx - 15, sy - 14, 9, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#f3e9d2'; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
+      app.text(t.bribed ? '-' : String(n), sx - 15, sy - 21, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3e0', fixed: true });
     }
     void w;
   },
