@@ -142,13 +142,13 @@ for (const webkit of [false, true]) {
   const { app, meta, log } = await rig(null);
   app.go('title'); frames(app, 5); app.push('settings'); frames(app, 30);
   const s = settingsOf(app); assert.equal(s.textScale, 100); assert.equal(s.quality, 'high');
-  const sy1 = 292 + 14 + 4 * 46; // text row y
-  const segX = (i) => 340 + 600 - 32 - (3 * 64 + 12) + i * 70 + 32;
+  const sy1 = 230 + 14 + 6 * 36; // text row y
+  const segX = (i) => 340 + 600 - 32 - (4 * 64 + 18) + i * 70 + 32;
   const saves = log.saved;
   click(app, segX(2), sy1 + 18); assert.equal(s.textScale, 150); assert.equal(s.textSize, 'large'); assert.ok(log.saved > saves, 'persisted');
   click(app, segX(1), sy1 + 18); assert.equal(s.textScale, 125);
-  click(app, segX(0), sy1 + 58); assert.equal(s.quality, 'off');
-  click(app, segX(1), sy1 + 58); assert.equal(s.quality, 'low');
+  click(app, segX(0) + 70, sy1 + 98); assert.equal(s.quality, 'off');
+  click(app, segX(1) + 70, sy1 + 98); assert.equal(s.quality, 'low');
   // existing toggles still there
   click(app, 640, 326); assert.equal(s.muted, true);
   // old saves: largeText/textSize large migrates to 125
