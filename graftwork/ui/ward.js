@@ -34,6 +34,7 @@ const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_l
 const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
 const PH_TINT = { morning: ['#ffe2a8', 0.5], midday: ['#ffffff', 0], evening: ['#d89a5a', 0.75], night: ['#5a6aa8', 0.85] }; // multiplied over the plan
 const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event: ['event', 'Chapel event'], shop: ['shop', 'Dispensary'], forge: ['forge', 'Workshop'], rest: ['rest', 'Clean sheets'], boss: ['boss', 'The boss'] };
+const TRIG_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Event', shop: 'Shop', forge: 'Forge', boss: 'Boss' };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
 
 export const cellXY = (x, y) => ({ x: GRID.x + x * CELL, y: GRID.y + y * CELL });
@@ -179,6 +180,7 @@ export default {
   key() { return false; },
   update(app, dt) {
     if (!S || !S.run.ward) return;
+    app.touchPan = !!S.plans; // a finger drag on the Ward is a plan drag (core.js turns a vertical touch move into a scroll otherwise, and the drop never happened); only the plans overlay scrolls
     S.t += dt; S.fx.update(dt);
     if (S.dieRolling > 0) S.dieRolling = Math.max(0, S.dieRolling - dt);
     { const w0 = S.run.ward; if (w0.phase !== 'morning' && !S.banner && S.run.phase === 'ward' && !WD.bossForced(S.run)) { const r0 = WD.rollOf(S.run); if (r0 && MEM.dieKey !== r0.key) { MEM.dieKey = r0.key; startDie(app); } } }
@@ -984,7 +986,7 @@ export default {
     kinds.forEach((kd, i) => {
       const lx = B.x + 20 + i * lw0, ly = legY + 4;
       drawNodeIcon(g, kd, lx + 12, ly + 12, 22, 'available');
-      app.text(TRIG[kd][1], lx + 28, ly + 4, { size: 13, ui: true, color: 'rgba(232,220,196,.75)', fit: { w: lw0 - 32, lines: 1 } });
+      app.text(app.scale < 0.8 ? TRIG_SHORT[kd] : TRIG[kd][1], lx + 28, ly + 4, { size: 13, ui: true, color: 'rgba(232,220,196,.75)', fit: { w: lw0 - 32, lines: 1 } });
     });
   },
 

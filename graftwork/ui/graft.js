@@ -284,14 +284,13 @@ function drawOfferCard(app, r, i, c) {
   if (hover) {
     // one short note in the fixed detail band (never beside or over the sibling cards, patches or buttons)
     const lines = [];
-    if (base.flavor) lines.push(base.flavor);
-    lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.');
+    if (!st.small) { if (base.flavor) lines.push(base.flavor); lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.'); } // phones: the room goes to the definitions (the caption already says how often it was played)
     if (inst.grafts.length) lines.push('Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.');
-    else lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
+    else if (!st.small) lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, region: DETAIL_REGION } });
+    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, region: st.small ? { ...DETAIL_REGION, y0: 392 } : DETAIL_REGION } }); // phones: the tall inflated text may also cover the lower part of the cards
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }

@@ -299,5 +299,22 @@ await t('z4: re-entering the Ward after a fight drops stale build stamps (rooms 
   assert.equal(wardMod.wardMem.stamps[id], undefined, 'stale stamp cleared on enter');
 });
 
+await t('z4: touch plan drags are not scrolls on the Ward (app.touchPan off), so a plan dragged up from the hand can drop', async () => {
+  const { app, run, flow } = await setup({ seed: 'z4touch' });
+  layout(run, [['rm_entrance', 0, 2]]);
+  flow.route(); frames(app, 30);
+  assert.equal(app.touchPan, false, 'morning: finger drags drop plans');
+  run.ward.phase = 'midday'; frames(app, 10); assert.equal(app.touchPan, false);
+});
+
+await t('z4: the title Continue line of a Ward run reads the day, not Floor 0', async () => {
+  const mem = {}; globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  const { run } = await setup({ seed: 'z4title' });
+  const { saveRun } = await import('../graftwork/engine/save.js'); saveRun(run);
+  const info = SCR.title.readSave({});
+  assert.ok(info && info.day === 1 && info.dayLimit === 6, JSON.stringify(info));
+  delete globalThis.localStorage;
+});
+
 void BUILD_CARDS;
 console.log(`${n} ward UI checks passed`);
