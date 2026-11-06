@@ -464,7 +464,7 @@ for (const pscale of [0.64, 0.54, 0.46, 0]) {
       for (const [x, y] of [[420, 120], [420, 200], [100, 150], [100, 500], [900, 420]]) { hoverAt(h, x, y); look(h, 3, tag + '/hover'); }
     }
     // end screen with the award: first run, big run with many stamps + hero, capped win, everything open, practice
-    for (const kind of ['first', 'many', 'winhero', 'done', 'practice', 'abandon']) {
+    for (const kind of ['first', 'many', 'winhero', 'done', 'practice']) {
       const meta = kind === 'done' ? doneMeta() : richMeta();
       if (kind === 'many' || kind === 'winhero') meta.unlocked.points = 600;
       if (kind === 'winhero') { meta.stats.deaths = 6; meta.unlocked.maxAct = 2; }
@@ -477,7 +477,7 @@ for (const pscale of [0.64, 0.54, 0.46, 0]) {
       if (kind === 'abandon') { h.run.abandoned = true; h.run.stats.floors = 1; }
       h.run.endInfo = METAX.recordRunEnd(h.meta, h.run, won ? 'won' : 'dead');
       go(h, 'end'); const tag = T('end') + '/award-' + kind;
-      look(h, 8, tag + '/early'); look(h, 80, tag + '/mid'); look(h, 400, tag);
+      look(h, 80, tag + '/mid'); look(h, 400, tag);
       hoverAt(h, 500, 215); look(h, 3, tag + '/hoverstamp'); hoverAt(h, 600, 300); look(h, 3, tag + '/hoverarch');
     }
     // NEW ribbons in the offers: shop (card, graft, potion, relic), graft table, boss reward

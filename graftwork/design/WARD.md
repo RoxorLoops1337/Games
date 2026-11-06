@@ -131,3 +131,38 @@ hero token walks room to room and each trigger opens its screen, then returns to
 3. Content and balance: upgrade/effect cards, ward relics, building card rewards, unlocks, phase
    tuning so the difficulty targets in DIFFICULTY.md hold in Ward mode.
 4. Make the Ward the default mode.
+
+## 8. Engine as built (step 1 done: engine/ward.js, data/ward.js, tools/graftwork_ward_sim.mjs, tests/graftwork_ward.test.mjs)
+
+API (pure, seeded by run.rng, state on `run.ward`, saved with the run):
+- `RUN.newRun({ mode: 'ward' })` sets `run.mode = 'ward'` (classic runs carry NO mode field, so their saves stay byte identical; `RUN.runMode(run)` reads it). `RUN.startAct` calls `wardInit(run, act)` in ward mode. `run.phase === 'ward'` means the Ward screen; `run.ward.phase` is morning | midday | evening | night.
+- `run.ward = { act, day, dayLimit, phase, w, h, grid[y][x] (null | 'rubble' | roomId), rooms{ id: {type, x, y, on, level, timers:{spawn}, contents, upgrades, overtime?} }, hero:{room}, res:{wood, stone}, power:{base, cap, used}, deck:{draw, hand, discard} (cards {uid, id}), effects:[{id, n, until:'day'|'used'}], walk:{path, i, dest, wait, forced} | null, log, bossDone, why }`. Gold is the run's gold.
+- Morning: `canBuild(run, uid, x, y)`, `canPlayBuild(run, uid, target)` -> `{ok, why}` with why in phase nocard cost bounds occupied rubble adjacent target type already hero cut fixed timer power; `playBuildCard(run, uid, target)` (target `{x,y}` for room cards and Demolish on rubble, a room id for upgrades, Double Shift and Demolish, 'wood'|'stone' for Requisition); `togglePower(run, roomId)`; `endMorning(run)`. Helpers: `buildCells`, `wardPower`, `neighbors`, `roomAt`, `buildDeckList`.
+- Walks: `pathTo(run, roomId, alt)` -> `{ok, why, path (rooms after the start; [here] for a wait), triggers [{room, kind, detail, bribed?}], cost, offPenalty, alts [{path, triggers, offPenalty}], move, wait?, forced?}`; why in phase morning target far unreachable boss. `startWalk(run, roomId, alt)` returns the first trigger's pending (run.phase is now combat / event / shop / forge), `null` when the walk ended with nothing to open (the phase already advanced), or `false` when illegal (`run.ward.why`). `afterTrigger(run)` continues the walk; `RUN.advance` (after reward, graft, shop, forge) and `RUN.afterEvent` call it in ward mode, so the existing screens need no change.
+- Rewards: elite and boss rewards carry `rw.buildChoice` (ids); `takeBuildChoice(run, idOrNull)`. `rw.ward = {wood, stone, count, goldMul}`, early boss `rw.wardBonus = {gold, card}`. A night elite (and a Level 2 elite) turns `rw.relic` into `rw.relicChoices`.
+- Dispensary: `makeShop` adds `shop.builds [{id, price, sold}]`, `shop.buildRemovePrice`; `RUN.shopBuy(run, 'build', i)` and `RUN.shopBuy(run, 'buildRemove', 0, cardUid)` (once per visit).
+- Combat hook (engine/combat.js, inert in classic): `run.pending.mods = {enemyStr, firstTurnDraw, handAdd, hpMul, goldMul}` and `run.pending.reinforce = [enemyIds]`. newCombat applies Strength and the HP multiplier to every enemy, adds `handAdd` to the hand size and `firstTurnDraw` to turn 1; when a non-minion dies the next reinforcement spawns (event `{t:'reinforce', e, id, left}`). goldMul is applied in the reward, not in combat.
+- Unlocks: kind `build` (`build:b_*`), start set = every room card plus b_overtime b_iron_doors b_reinforced_beds b_morning_rounds b_requisition b_triage b_lamp_oil.
+
+Choices and changes from sections 1 to 6 (all numbers live in data/ward.js):
+- Ward spawns 1 monster EVERY day (doc: every 2) and Reinforced Beds makes it 2 a day; Isolation every 2 days (doc: 3). At the doc's numbers the strong bot met about 5.5 one-monster fights and 1.2 elites per act and won 47 percent; now 9 to 12 fights and 1 to 2.4 elites per act.
+- Starter building deck is 12: Corridor, Workshop, Ward, Isolation, Sawmill, Quarry, Chapel, Dispensary, Generator, Linen Room, Morning Rounds, Requisition (one Corridor became a Workshop; Isolation and Linen Room added) so elites, forge and rest do not hinge on a reward.
+- Gold-leaf costs are run gold: Isolation 3 stone + 20 gold, Workshop 2 stone + 40 gold.
+- Encounters: up to 3 monsters on the board, the rest are real reinforcements (combat hook). Gold: 1 monster 75 percent, 2 monsters 100 percent, +30 percent per monster beyond 2; 4+ monsters queue one more graft pick (there are no card rewards in Graftwork). Each monster +1 wood or stone, an elite +2 of each.
+- Dark (off) rooms: contents sleep (they do not trigger) and crossing costs 3 HP (never below 1); corridors, Entrance and Theatre never go dark. Iron Doors still trigger when the room is the walk's destination. Waiting (walking to your own room) heals 3 and triggers the room if it holds something.
+- Sterile Field: the Chapel holds 2 events and you sit through both (doc: "a second choice"). Rations: +1 card drawn every turn of every fight today. Bribe the Porter costs 20 gold and never skips the boss. Night Shift doubles night Strength and the night gold bonus in that room.
+- Events: the Chapel draws from the act pool (as classic); midday weights events whose text mentions heal or gold x3, night weights random, relic, max HP, Overload, 50% x3.
+- Boss: the Theatre triggers when walked through or into from day (last - 2); before that it is safe to cross. Early boss: HP x0.9, +30 gold, a free uncommon or rare building card. The boss ignores night Strength. On the last night every walk but the Theatre is refused and the Theatre is entered from anywhere. After the boss reward the next floor starts (heal 50 percent as classic); after the Act 3 boss the Grafter fight starts at once.
+- Floor: Entrance in column 0, Theatre in column 8; pre-built rooms in the left half; 3 to 5 rubble (4 to 6 in Acts 2 and 3) never next to the Entrance and never sealing the Theatre off. A room card needs an empty cell next to a room other than the Theatre. Demolish never removes the Entrance, Theatre, the hero's room or a room that would cut another off.
+- A new floor's first morning already ticks timers and produces, so pre-built rooms open with a monster, an event and +2 wood.
+
+Sim (tools/graftwork_ward_sim.mjs, strong = heuristic builder and walker on POLICIES.strong fights; random = random builds, walks and fights; N = 30 per hero):
+
+| A0 | win | died act 1/2/3 | Act 1 fights / monsters / elites | Act 2 | Act 3 |
+|---|---|---|---|---|---|
+| random (all heroes) | 0/90 | 90/0/0 | | | |
+| strong marrow | 27% | 0/12/10 | 9.4 / 9.4 / 1.0 | 10.7 / 12.2 / 2.4 | 9.4 / 11.6 / 2.4 |
+| strong wick | 43% | 1/8/8 | 8.7 / 8.8 / 1.6 | 10.2 / 11.1 / 2.0 | 11.2 / 12.8 / 1.8 |
+| strong odile | 33% | 1/8/11 | 9.1 / 9.2 / 1.1 | 11.6 / 13.1 / 2.0 | 9.5 / 11.4 / 1.6 |
+
+A5 strong: marrow 13%, wick 20%, odile 13% (classic A5 target 8 to 18). Every act has 2 events, 1 to 2 shops and 1 to 2 forges. The bot almost never takes the early boss.

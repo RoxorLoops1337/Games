@@ -65,12 +65,12 @@ export default {
     yy += app.text('PROGRESS', x + 14, yy, { size: 12, ui: true, bold: true, color: COL.lamp }) + 4;
     yy += app.text(st.done ? 'Archive complete' : `Archive ${st.percent} percent`, x + 14, yy, { size: 28, bold: true, color: st.done ? '#8fe0a0' : '#fbe9b0', fit: { w: iw, lines: 1 } }) + 6;
     bar(app, x + 14, yy, iw, 14, st.total ? st.unlockedCount / st.total : 1, st.done ? '#8fe0a0' : GOLD); yy += 22;
-    yy += app.text(`${st.unlockedCount} of ${st.total} locked items opened`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 2 } }) + 8;
+    yy += app.text(`${st.unlockedCount} of ${st.total} locked items opened`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 2, soft: true } }) + 8;
     yy += app.text(`Runs finished: ${runs}`, x + 14, yy, { size: 14, ui: true, color: '#cdbf9d', fit: { w: iw, lines: 1 } }) + 10;
     if (st.done) { app.text('Everything is unlocked. Nothing left to earn here.', x + 14, yy, { size: 14, ui: true, italic: true, color: '#8fe0a0', fit: { w: iw, h: y + h - yy - 8, lines: 3 } }); return; }
     yy += app.text('NEXT UNLOCK', x + 14, yy, { size: 12, ui: true, bold: true, color: COL.lamp }) + 4;
     bar(app, x + 14, yy, iw, 12, st.nextCost ? st.points / st.nextCost : 0); yy += 18;
-    app.text(`${st.points} of ${st.nextCost} points. A run pays 2 to ${st.upCap}.`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, h: y + h - yy - 8, lines: 2 } });
+    app.text(`${st.points} of ${st.nextCost} points. A run pays 2 to ${st.upCap}.`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, h: y + h - yy - 8, lines: 2, soft: true } });
   },
   drawTotals(app, st, x, y, w, h) {
     app.reg('archive-totals', x, y, w, h, { group: 'totals' });
@@ -102,11 +102,11 @@ export default {
       const ry = top + i * pitch, first = i === 0, it = s.items[0];
       if (first) { app.rr(x + 8, ry, w - 16, pitch - 3, 8); app.ctx.fillStyle = 'rgba(242,193,78,.10)'; app.ctx.fill(); app.ctx.lineWidth = lnw(1.5); app.ctx.strokeStyle = rgba(GOLD, 0.5); app.ctx.stroke(); }
       drawSilhouette(app, s.kind, x + 38, ry + (pitch - 3) / 2, Math.min(28, pitch - 8));
-      const n = s.items.length, label = `${shortHint(it.hint)} ${n > 1 ? `${n} ${((KIND_LABEL[s.kind] || 'items') || 'items').toLowerCase()} open together.` : ''}`;
+      const n = s.items.length, label = `${shortHint(it.hint)} ${n > 1 ? `${n} ${(KIND_LABEL[s.kind] || 'items').toLowerCase()} open together.` : ''}`;
       app.text(first ? 'NEXT' : String(i + 1), x + 66, ry + 6, { size: 11, ui: true, bold: true, color: first ? GOLD : DIM, fit: { w: 44, lines: 1 } });
       app.text(label, x + 116, ry + 6, { size: 14, ui: true, color: first ? '#fbe9b0' : '#d9cba8', fit: { w: w - 116 - 140, h: pitch - 8, lines: 2, soft: true } });
       app.text(`${s.cost} points`, x + w - 18, ry + 6, { size: 15, ui: true, bold: true, align: 'right', color: first ? GOLD : '#cdbf9d', fit: { w: 112, lines: 1 } });
-      if (app.inRect(x + 8, ry, w - 16, pitch - 3)) app.tooltip(first ? 'Next unlock' : `Unlock ${i + 1}`, `${n} ${n > 1 ? 'items' : 'item'} (${((KIND_LABEL[s.kind] || 'items') || 'items').toLowerCase()}). Costs ${s.cost} points; your unspent points carry over.`, { color: GOLD });
+      if (app.inRect(x + 8, ry, w - 16, pitch - 3)) app.tooltip(first ? 'Next unlock' : `Unlock ${i + 1}`, `${n} ${n > 1 ? 'items' : 'item'} (${(KIND_LABEL[s.kind] || 'items').toLowerCase()}). Costs ${s.cost} points; your unspent points carry over.`, { color: GOLD });
     });
   },
   tileTip(app, v, anchor) {

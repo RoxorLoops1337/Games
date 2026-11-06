@@ -62,7 +62,7 @@ export default {
     }
     this.nextNew = 1.4;
     // ARCHIVE: Unlock Points paid by this run, the progress bar and the items opened now (stamped in one by one)
-    const ul = info.unlock || { up: 0, parts: {}, unlockedNow: [] };
+    const ul = { up: 0, parts: {}, unlockedNow: [], points: 0, nextCost: 0, percent: 0, ...(info.unlock || {}) };
     this.ul = ul; this.stampN = 0; this.stampAt = 1.1;
     this.heroNews = (info.newUnlocks || []).filter((u) => u && (u.kind === 'hero' || typeof u === 'string')).map((u) => { const id = typeof u === 'string' ? u : u.id; const h = HEROES[id]; return { id, name: h ? h.name : id, text: h ? h.title : '' }; });
     this.stamps = [...this.heroNews.map((h) => ({ hero: h })), ...(ul.unlockedNow || []).map((v) => ({ v }))];
@@ -129,7 +129,7 @@ export default {
     const lx = x + 18, lw = 296, pitch = Math.min(Math.ceil(app.sz(13, { ui: true }) * 1.25) + 3, (h - 34 - 62) / Math.max(1, rows.length));
     g.save(); g.globalAlpha = k;
     let yy = y + 34;
-    if (run.practice) app.text('Practice pays no points.', lx, yy, { size: 14, ui: true, italic: true, color: '#b7aa8c', fit: { w: lw, lines: 2 } });
+    if (run.practice) yy += app.text('Practice pays no points.', lx, yy, { size: 14, ui: true, italic: true, color: '#b7aa8c', fit: { w: lw, lines: 2, soft: true } }) + 6;
     rows.forEach((id, i) => {
       const a = clamp((t - 0.5 - i * 0.08) / 0.25, 0, 1); g.globalAlpha = k * a;
       app.text(label[id], lx, yy, { size: 13, ui: true, color: '#cdbf9d', fit: { w: lw - 54, lines: 1 } });
@@ -139,8 +139,8 @@ export default {
     g.globalAlpha = k;
     stitch(g, lx, yy + 3, lx + lw, yy + 3); yy += 8;
     const tot = Math.round(ul.up * clamp((t - 0.6) / 0.8, 0, 1));
-    app.text(`+${still ? ul.up : tot}`, lx, yy, { size: 30, bold: true, color: '#fbe9b0', shadow: true, fit: { w: 90, lines: 1 } });
-    app.text(ul.capped ? `points, capped at ${UP.RUN_CAP}` : run.assist ? 'points (assist pays half at most)' : 'points this run', lx + 96, yy + 10, { size: 13, ui: true, color: ul.capped ? '#ffb070' : '#e0d4b8', fit: { w: lw - 96, lines: 2 } });
+    app.text(`+${still ? ul.up : tot}`, lx, yy, { size: 30, bold: true, color: '#fbe9b0', shadow: true, fit: { w: 90, lines: 1, soft: true } });
+    app.text(ul.capped ? `points, capped at ${UP.RUN_CAP}` : run.assist ? 'points (assist pays half at most)' : 'points this run', lx + 96, yy + 10, { size: 13, ui: true, color: ul.capped ? '#ffb070' : '#e0d4b8', fit: { w: lw - 96, lines: 2, soft: true } });
     g.restore();
     // right column: progress, then the stamped items
     const rx = x + 330, rw = w - 330 - 16;
@@ -150,13 +150,13 @@ export default {
     app.rr(rx, ry, rw, 14, 7); g.fillStyle = 'rgba(8,6,5,.85)'; g.fill(); g.lineWidth = lnw(1.2); g.strokeStyle = 'rgba(232,220,196,.3)'; g.stroke();
     if (fill * bk * (rw - 2) > 1) { app.rr(rx + 1, ry + 1, fill * bk * (rw - 2), 12, 6); g.fillStyle = done ? '#8fe0a0' : GOLD; g.fill(); }
     ry += 20;
-    const line = done ? 'The Archive is complete. Thank you for the long stay.' : `${ul.points} of ${ul.nextCost} points to the next unlock. ${ul.percent} percent open.`;
-    ry += app.text(line, rx, ry, { size: 13, ui: true, color: '#e0d4b8', fit: { w: rw, h: 34, lines: 2 } }) + 8;
+    const line = !ul.nextCost && !done ? 'Points are paid when a run ends.' : done ? 'The Archive is complete. Thank you for the long stay.' : `${ul.points} of ${ul.nextCost} points to the next unlock. ${ul.percent} percent open.`;
+    ry += app.text(line, rx, ry, { size: 13, ui: true, color: '#e0d4b8', fit: { w: rw, h: 34, lines: 2, soft: true } }) + 8;
     this.drawStamps(app, rx, ry, rw, y + h - 8 - ry, t);
   },
   drawStamps(app, x, y, w, h, t) {
     const g = app.ctx, still = calm(app), audio = app.shared.audio;
-    if (!this.stamps.length) { app.text(this.run.practice ? '' : 'Nothing opened this time. The points are kept.', x, y + 8, { size: 13, ui: true, italic: true, color: '#a58f6b', fit: { w, h: 36, lines: 2 } }); return; }
+    if (!this.stamps.length) { app.text(this.run.practice ? '' : 'Nothing opened this time. The points are kept.', x, y + 8, { size: 13, ui: true, italic: true, color: '#a58f6b', fit: { w, h: 36, lines: 2, soft: true } }); return; }
     const lh = Math.ceil(app.sz(11, { ui: true, bold: true }) * 1.2);
     app.text('OPENED NOW', x, y, { size: 11, ui: true, bold: true, color: '#8fe0a0', fit: { w, lines: 1 } });
     let ty = y + lh + 4, room = h - lh - 4, idx = 0;
@@ -178,7 +178,7 @@ export default {
       ty += bh + 6; room -= bh + 6;
     }
     const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 62, rows = Math.max(1, Math.floor(room / (chh + 4))), shown = Math.min(items.length, rows * 3);
-    if (items.length > shown) app.text(`+${items.length - shown} more in the Archive`, x + w, y, { size: 11, ui: true, italic: true, align: 'right', color: '#a58f6b', fit: { w: Math.max(60, w - app.measure('OPENED NOW', 11, { ui: true, bold: true }) - 12), lines: 1 } });
+    if (items.length > shown) app.text(`+${items.length - shown} more in the Archive`, x + w, y, { size: 11, ui: true, italic: true, align: 'right', color: '#a58f6b', fit: { w: Math.max(60, w - app.measure('OPENED NOW', 11, { ui: true, bold: true }) - 12), lines: 1, soft: true } });
     const nameH = Math.ceil(app.sz(11, { ui: true }) * 1.2) + 4;
     for (let j = 0; j < shown; j++) {
       const v = items[j].v, i = this.stamps.indexOf(items[j]), k = stampK(i), cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
@@ -188,7 +188,7 @@ export default {
       app.rr(cx0, cy0, cw, chh, 8); g.fillStyle = 'rgba(20,15,10,.9)'; g.fill(); g.lineWidth = lnw(1.5); g.strokeStyle = rgba(GOLD, 0.6); g.stroke();
       g.save(); g.beginPath(); g.rect(cx0 + 2, cy0 + 2, cw - 4, artH); g.clip(); g.translate(cx0 + cw / 2, cy0 + 2 + artH / 2); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, Math.min(v.kind === 'card' ? 36 : 30, artH - 2)); g.restore();
       g.fillStyle = 'rgba(8,6,5,.92)'; g.fillRect(cx0 + 2, cy0 + chh - nameH - 2, cw - 4, nameH);
-      app.text(v.name, cx0 + cw / 2, cy0 + chh - nameH, { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1 } });
+      app.text(v.name, cx0 + cw / 2, cy0 + chh - nameH, { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1, soft: true } });
       g.restore();
       if (k >= 1 && app.inRect(cx0, cy0, cw, chh)) app.tooltip(v.name, `New ${v.kind} in the Archive. ${KIND_LABEL[v.kind] || 'Items'} you open show up in offers from the next run.`, { color: GOLD });
     }
