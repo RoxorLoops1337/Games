@@ -10,9 +10,13 @@ import { POLICIES, playRun } from './graftwork_sim.mjs';
 import './graftwork_strong.mjs'; // adds POLICIES.strong
 import { makeRng } from '../graftwork/engine/rng.js';
 import { TOTAL_COST, UP } from '../graftwork/data/unlocks.js';
+import { playWardRun } from './graftwork_ward_sim.mjs';
+// GW_MODE=ward builds the pools from Ward runs (strong bot at A0, careful bot at A5; the sloppy tier plays the Ward's sloppy bot at A3); default is the classic map
+const WARD = process.env.GW_MODE === 'ward';
+const WARD_POL = { strong: 'strong', careful: 'careful', sloppy: 'sloppy' };
 
 // The bots all play far better than real beginners, so skill is emulated by handicap: ascension level (harder game) per tier.
-const TIERS = { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 6] };
+const TIERS = WARD ? { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 3] } : { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 6] };
 const HEROES = ['marrow', 'wick', 'odile'];
 const MAX_RUNS = 220;
 
@@ -23,7 +27,7 @@ export function buildPools(perHero = 40, quiet = false) {
     for (const h of HEROES) {
       const arr = [];
       for (let i = 0; i < perHero; i++) {
-        const r = playRun(h, `unl-${tier}-${h}-${i}`, pol, asc, { unlocked: process.env.GW_POOL || 'all' });
+        const r = WARD ? playWardRun(h, `unl-${tier}-${h}-${i}`, WARD_POL[tier], asc, { unlocked: process.env.GW_POOL || 'all' }) : playRun(h, `unl-${tier}-${h}-${i}`, pol, asc, { unlocked: process.env.GW_POOL || 'all' });
         arr.push({ json: RUN.serializeRun(r.run), outcome: r.outcome });
       }
       pools[tier][h] = arr;

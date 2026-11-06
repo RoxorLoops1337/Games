@@ -8,7 +8,7 @@ export const RELICS_WARD = [
   { id: 'r_w_high_sun', name: 'High Sun Tonic', rarity: 'uncommon', ward: true, text: 'At midday, start each fight with 1 Strength.',
     on: { combatStart: (A) => { if (ph(A) === 'midday') A.status(A.player, 'strength', 1); } } },
   { id: 'r_w_moon_lamp', name: 'Moon Lamp', rarity: 'common', ward: true, text: 'At night, start each fight with 6 Block.',
-    on: { combatStart: (A) => { if (ph(A) === 'night') A.block(A.player, 6); } } },
+    on: { turnStart: (A) => { if (A.c.turn === 1 && ph(A) === 'night') A.block(A.player, 6); } } },
   { id: 'r_w_dinner_gong', name: 'Dinner Gong', rarity: 'boss', ward: true, text: 'At evening, gain 1 energy on the first turn of each fight.',
     on: { turnStart: (A) => { if (A.c.turn === 1 && ph(A) === 'evening') A.energy(1); } } },
   { id: 'r_w_supper_bell', name: 'Supper Bell', rarity: 'uncommon', ward: true, perk: 'eveningHeal', n: 2, text: 'At evening, every room you walk into heals you 2.' },

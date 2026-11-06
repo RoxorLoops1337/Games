@@ -829,7 +829,7 @@ export default {
       const mods = []; const ph = PHASES[w.phase];
       if (p.triggers.some((t) => t.kind === 'fight' || t.kind === 'elite')) { if (ph.goldMul) mods.push(`fights pay +${Math.round((ph.goldMul - 1) * 100)}% gold`); if (ph.firstTurnDraw) mods.push('+1 card on the first turn'); if (ph.enemyStr) mods.push(`monsters +${ph.enemyStr} Strength, elites +${ph.eliteStr}`); }
       if (mods.length) body(PHASES[w.phase].name + ': ' + mods.join(', ') + '.', '#e0c27a', 3);
-      if (p.triggers.some((t) => t.kind === 'boss' && t.detail.early)) body('Early boss: HP x0.9, +30 gold and a free uncommon or rare plan.', COL.lamp, 3);
+      if (p.triggers.some((t) => t.kind === 'boss' && t.detail.early)) body('Early boss: HP x0.85, +60 gold, a free uncommon or rare plan and one more graft pick.', COL.lamp, 3);
       return;
     }
     big(PHASES[w.phase].name);

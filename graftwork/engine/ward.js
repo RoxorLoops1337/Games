@@ -530,7 +530,7 @@ export function wardRewards(run, rw, prev) {
   const gain = { wood: 0, stone: 0 };
   if (info.boss) {
     rw.buildChoice = buildChoice(run, OFFER_SLOTS.boss);
-    if (info.early) { run.gold += T.earlyBossGold; run.stats.goldEarned += T.earlyBossGold; const id = rollBuildCard(run, ['uncommon', 'rare']); addCard(run, id); rw.wardBonus = { gold: T.earlyBossGold, card: id }; }
+    if (info.early) { run.gold += T.earlyBossGold; run.stats.goldEarned += T.earlyBossGold; const id = rollBuildCard(run, ['uncommon', 'rare']); addCard(run, id); rw.wardBonus = { gold: T.earlyBossGold, card: id, graft: 1 }; run.flags.queueGraft = (run.flags.queueGraft || 0) + 1; }
     w.bossDone = true;
   } else if (info.elite) {
     gain.wood += T.resPerElite; gain.stone += T.resPerElite;

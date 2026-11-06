@@ -25,7 +25,7 @@ export const ROOMS = {
   rm_boiler: { id: 'rm_boiler', name: 'Boiler', cost: { wood: 1, stone: 3 }, power: 0, spawn: null, boiler: 1, hint: 'Uses no power. +1 power capacity per two lit Wards.', art: 'ward_generator' },
   rm_laundry: { id: 'rm_laundry', name: 'Laundry', cost: { wood: 2, stone: 1 }, power: 1, spawn: null, auto: { every: 2, junk: 1 }, hint: 'Every 2 days while lit, washes one junk card out of your deck.', art: 'ward_linen' },
   rm_isolation2: { id: 'rm_isolation2', name: 'Isolation Ward II', cost: { stone: 4, gold: 40 }, power: 2, spawn: { kind: 'elite', every: 3, cap: 1 }, level2: true, hint: 'An elite every 3 days, always Level 2 (+30% HP, +2 Strength, one more relic to choose from). Uses 2 power.', art: 'ward_isolation' },
-  rm_linen: { id: 'rm_linen', name: 'Linen Room', cost: { wood: 2 }, power: 1, spawn: { kind: 'rest', every: 2, cap: 1 }, heal: 0.25, hint: 'Clean sheets every 2 days: walk in to heal 25% of max HP.', art: 'ward_linen' },
+  rm_linen: { id: 'rm_linen', name: 'Linen Room', cost: { wood: 2 }, power: 1, spawn: { kind: 'rest', every: 2, cap: 1 }, heal: 0.3, hint: 'Clean sheets every 2 days: walk in to heal 30% of max HP.', art: 'ward_linen' },
 };
 export const ROOM_LIST = Object.values(ROOMS);
 
@@ -106,12 +106,12 @@ export const PREBUILT = ['rm_ward', 'rm_chapel', 'rm_sawmill'];
 
 // Tuning (design/WARD.md section 8 lists every number and why).
 export const WARD_TUNE = {
-  move: 4, hand: 5, offHp: 3, waitHeal: 3, carry: 0.5,
+  move: 4, hand: 5, offHp: 3, waitHeal: 5, carry: 0.5,
   boardMax: 3,                  // monsters on the board at once; the rest wait as reinforcements
   goldPerExtra: 0.3,            // ward fight gold +30% per monster beyond 2 (1 monster pays 75%)
   bigFight: 4,                  // 4+ monsters: one more graft pick
   eliteAge: 3, eliteL2: { hpMul: 1.3, str: 2, relic: 1 },
-  earlyBossHp: 0.9, earlyBossGold: 30, earlyDays: 2,
+  earlyBossHp: 0.85, earlyBossGold: 60, earlyDays: 2,
   resPerMonster: 1, resPerElite: 2,
   buildRemovePrice: 50, kitchenDraw: 2, morgueStone: 1, libraryChance: 0.25, pharmacyGold: 15, otPayPer: 5, otPayMax: 50, quarantineDays: 2, fireDoorCap: 3, buildPrice: { common: 35, uncommon: 55, rare: 85 },
 };

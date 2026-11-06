@@ -22,7 +22,7 @@ const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
 const WANT = { rm_sawmill: 2, rm_quarry: 2, rm_ward: 3, rm_isolation: 2, rm_chapel: 1, rm_dispensary: 1, rm_workshop: 1, rm_linen: 1, rm_counting: 1, rm_generator: 3, rm_pharmacy: 1, rm_library: 1, rm_morgue: 1, rm_kitchen: 1, rm_boiler: 1, rm_laundry: 1, rm_isolation2: 1 };
 function roomPriority(run, type) {
   const w = run.ward, have = count(run, type), pw = W.wardPower(run), need = W.ROOMS[type].power;
-  if (type === 'rm_corridor') return w.res.wood >= 3 ? 1 : 0.2;
+  if (type === 'rm_corridor') return w.day >= w.dayLimit - 3 && w.res.wood >= 2 ? 5 : w.res.wood >= 3 ? 1 : 0.2; // late in the floor: a road to the Theatre, for the early boss
   if (type === 'rm_generator') return pw.free < 1 ? 9 : pw.free < 2 ? 3 : 0;
   if (have >= (WANT[type] || 1)) return 0;
   if (need && pw.free < need) return 0.5; // would be built dark
@@ -99,7 +99,7 @@ function walkScore(run, pv) {
     else if (t.kind === 'shop') s += run.gold >= 120 ? 8 : run.gold >= 60 ? 3 : 0.5;
     else if (t.kind === 'forge') s += hpF < 0.7 ? 11 : 6;
     else if (t.kind === 'rest') s += (1 - hpF) * 22;
-    else if (t.kind === 'boss') s += t.detail.early ? (hpF >= 0.8 && w.day >= w.dayLimit - 1 ? 30 : -40) : 100;
+    else if (t.kind === 'boss') s += t.detail.early ? (hpF >= 0.7 && w.day >= w.dayLimit - 1 ? 30 : -40) : 100;
   }
   if (fights > 2) s -= (fights - 2) * 4;
   if (hp < run.maxHp * 0.25) s -= 25;

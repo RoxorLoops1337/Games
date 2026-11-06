@@ -10,7 +10,7 @@ import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
-import { wrapLimit, tscale, hpPerPlay } from './graft_parts.js';
+import { tscale, hpPerPlay } from './graft_parts.js';
 import { specGloss, cardGlossTip, glossTip, withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
@@ -221,7 +221,7 @@ export function drawModal(app, st, run, extra = {}) {
       app.text(`Weight ${gr.weight}${i >= MAX_GRAFTS_NORMAL ? ' +1 Overload' : ''}`, bx + 280, by + 10, { size: 15, ui: true, bold: true, color: COL.lamp, fit: { w: bw - 300, h: 20, lines: 1 } });
       app.text('Boon: ' + gr.boon, bx + 280, by + 33, { size: 15, ui: true, color: COL.good, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
       app.text('Price: ' + gr.price, bx + 280, by + 73, { size: 15, ui: true, color: COL.bad, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
-      if (over) { app.cursor = 'pointer'; glossTip(app, '', [gr.boon, gr.price, 'W' + gr.weight], { x: bx, y: by, w: bw, h: bh }, { school: gr.school }); }
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Boon: ${gr.boon}\nPrice: ${gr.price}`, { color: COL[gr.school], gloss: [gr.boon, gr.price, 'W' + gr.weight, String(gr.tier || 'safe').toUpperCase()], school: gr.school, anchor: { x: bx, y: by, w: bw, h: bh } }); }
       if (app.clicked(bx, by, bw, bh)) { if (why) { sfx(app, 'error'); m.toast = why; m.toastT = 1.6; } else picked = gid; }
     });
     if (hover !== m.hov) { m.hov = hover; if (hover >= 0) sfx(app, 'uiHover', { vol: 0.3 }); }
@@ -629,7 +629,7 @@ export default {
       const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64; let grInfo = false, gInfoY = 0;
       app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 120, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
-      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Boon: ${gr.boon}\nPrice: ${gr.price}\nSews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, 'W' + gr.weight, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // the tip spells out the full Boon and Price and every rules word; it sits over the service row when that fits, else beside the patch
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
       if (!it.sold) newRibbon(app, it.id, x + 3, y + 3, w, { size: 10 });

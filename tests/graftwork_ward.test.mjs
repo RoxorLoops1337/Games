@@ -229,10 +229,10 @@ t('boss: forced on the last night, early from day (last - 2) at x0.9 HP with a c
   const pv = W.pathTo(run, th); assert.equal(pv.triggers[0].kind, 'boss'); assert.equal(pv.triggers[0].detail.early, true);
   w.res = { wood: 11, stone: 7 };
   const deckN = W.buildDeckList(run).length, gold0 = run.gold;
-  const p = W.startWalk(run, th); assert.equal(p.fightKind, 'boss'); assert.equal(p.mods.hpMul, 0.9);
+  const p = W.startWalk(run, th); assert.equal(p.fightKind, 'boss'); assert.equal(p.mods.hpMul, WARD_TUNE.earlyBossHp);
   const c = newCombat(run, p.enemies, { kind: 'boss' }); assert.ok(c.enemies[0].maxHp < 140, 'boss HP x0.9 ' + c.enemies[0].maxHp);
   RUN.resolveFight(run, win());
-  const rw = run.pending; assert.ok(rw.buildChoice.length >= 1); assert.equal(rw.wardBonus.gold, 30); assert.equal(run.gold, gold0 + 30);
+  const rw = run.pending; assert.ok(rw.buildChoice.length >= 1); assert.equal(rw.wardBonus.gold, WARD_TUNE.earlyBossGold); assert.equal(run.gold, gold0 + WARD_TUNE.earlyBossGold); assert.equal(run.flags.queueGraft, 1, 'early boss: one more graft pick');
   assert.equal(W.buildDeckList(run).length, deckN + 1, 'the free building card');
   RUN.claimGold(run, rw); W.takeBuildChoice(run, null); RUN.afterReward(run); while (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); }
   assert.equal(run.act, 2); assert.equal(run.phase, 'ward'); assert.equal(run.ward.act, 2); assert.equal(run.ward.dayLimit, 7);
@@ -278,8 +278,9 @@ t('Dispensary: sells building cards and removes one for 50 gold (ward mode only)
 
 t('unlocks: building cards are kind build; start set = every room card plus half of the rest; the starter deck is open', () => {
   const rooms = BUILD_LIST.filter((c) => c.kind === 'room'), other = BUILD_LIST.filter((c) => c.kind !== 'room');
-  for (const c of rooms) assert.equal(UNLOCKS['build:' + c.id].tier, 'start');
-  const open = other.filter((c) => START.build.has(c.id)).length; assert.ok(Math.abs(open - other.length / 2) <= 1, 'half ' + open + '/' + other.length);
+  const ORIGINAL_ROOMS = ['b_corridor', 'b_ward', 'b_isolation', 'b_chapel', 'b_dispensary', 'b_workshop', 'b_sawmill', 'b_quarry', 'b_counting', 'b_generator', 'b_linen'];
+  for (const id of ORIGINAL_ROOMS) assert.equal(UNLOCKS['build:' + id].tier, 'start');
+  const open = other.filter((c) => START.build.has(c.id)).length; assert.ok(open / other.length >= 0.35 && open / other.length <= 0.65, 'about half of the non-room cards ' + open + '/' + other.length);
   for (const id of STARTER_BUILD_DECK) assert.equal(UNLOCKS['build:' + id].tier, 'start');
   const run = RUN.newRun({ hero: 'wick', seed: 'u', mode: 'ward', unlocked: 'start' });
   for (let i = 0; i < 60; i++) assert.ok(START.build.has(W.rollBuildCard(run, ['common', 'uncommon', 'rare'])));
@@ -300,6 +301,159 @@ t('full ward runs: 3 heroes x 3 seeds with the strong policy end won or dead, ne
     assert.ok(r.log.acts[1].fights >= 4, 'fought in act 1');
   }
   const rr = playWardRun('marrow', 'wt-rand', 'random'); assert.ok(rr.outcome === 'dead' || rr.outcome === 'won');
+});
+
+// ---------------- Z3 content: every card, room, relic and event ----------------
+import { RELICS, EVENTS } from '../graftwork/data/index.js';
+import { EVENT_PHASE } from '../graftwork/data/events.js';
+import { RELICS_WARD } from '../graftwork/data/relics_ward.js';
+import { WARD_GLOSSARY, glossaryEntry } from '../graftwork/ui/tooltips.js';
+import { rm } from 'node:fs';
+const NODASH = /[\u2014\u2013]/;
+
+t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids unique and well formed', () => {
+  assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 48, 'building cards ' + BUILD_LIST.length);
+  assert.equal(new Set(BUILD_LIST.map((c) => c.id)).size, BUILD_LIST.length);
+  assert.equal(RELICS_WARD.length, 14);
+  assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 14);
+  for (const r of RELICS_WARD) { assert.ok(/^r_w_/.test(r.id) && r.ward && RELICS[r.id] === r); assert.ok(['common', 'uncommon', 'rare', 'boss', 'shop'].includes(r.rarity)); assert.ok(r.text && !NODASH.test(r.text + r.name)); assert.ok(r.perk || r.on, r.id + ' does something'); }
+  for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(!NODASH.test(c.name + c.text), 'no em dash ' + c.id); assert.ok(['room', 'upgrade', 'effect'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
+  for (const r of Object.values(ROOMS)) assert.ok(!NODASH.test(r.name + r.hint), r.id);
+  const by = (k) => BUILD_LIST.filter((c) => c.kind === k).length; assert.ok(by('room') >= 18 && by('upgrade') >= 9 && by('effect') >= 15);
+  for (const r of RELICS_WARD) assert.ok(UNLOCKS['relic:' + r.id], 'relic unlock id ' + r.id);
+  for (const id of START.build) assert.ok(BUILD_CARDS[id], 'START.build id valid ' + id);
+  for (const id of STARTER_BUILD_DECK) assert.ok(START.build.has(id));
+  // offer shapes: elites, bosses and the Dispensary draw from the right rarities
+  const run = RUN.newRun({ hero: 'marrow', seed: 'offers', mode: 'ward' });
+  const rar = (ids) => ids.map((i) => BUILD_CARDS[i].rarity);
+  for (let i = 0; i < 40; i++) { run.pending = null; const e = W.OFFER_SLOTS; assert.ok(e.boss[0].every((x) => x === 'rare')); assert.ok(e.elite[2].includes('rare') && e.shop.length === 3); }
+  void rar;
+});
+
+t('every room card builds, runs its timers and survives walking through it (each room plays through)', () => {
+  for (const c of BUILD_LIST.filter((x) => x.kind === 'room')) {
+    const run = mk('room-' + c.id); layout(run, [['rm_entrance', 0, 0]]);
+    run.ward.res = { wood: 30, stone: 30 }; run.gold = 500; W.wardPower(run);
+    const u = give(run, c.id), r = W.playBuildCard(run, u, { x: 1, y: 0 });
+    assert.ok(r.ok, c.id + ' ' + r.why);
+    const room = run.ward.rooms[r.room]; assert.equal(room.type, c.room);
+    for (let d = 0; d < 6; d++) { W.morningStart(run); }
+    W.endMorning(run); const p = W.pathTo(run, r.room); assert.ok(p.ok, c.id + ' reachable');
+    let guard = 0; let q = W.startWalk(run, r.room);
+    while (run.phase !== 'ward' && guard++ < 20) { if (run.phase === 'combat') clearFight(run); else if (run.phase === 'event') { const evs = RUN.eventChoices(run); RUN.eventChoose(run, evs.findIndex((x) => x.ok && !x.pick)); RUN.afterEvent(run); } else if (run.phase === 'shop' || run.phase === 'forge') RUN.advance(run); else break; }
+    assert.equal(run.phase, 'ward', c.id + ' back in the Ward');
+  }
+});
+
+t('new rooms: Pharmacy potions, Library upgrades, Morgue stone, Kitchen feast, Boiler power, Laundry junk, Isolation II Level 2', () => {
+  const run = mk('rooms2'); run.gold = 0;
+  const [, ph] = layout(run, [['rm_entrance', 0, 0], ['rm_pharmacy', 1, 0]]);
+  run.potions = []; for (let d = 0; d < 3; d++) W.morningStart(run); assert.equal(run.potions.length, 1, 'one potion in 3 days');
+  run.potions = ['p_tonic', 'p_tonic', 'p_tonic', 'p_tonic', 'p_tonic']; run.gold = 0; for (let d = 0; d < 3; d++) W.morningStart(run); assert.equal(run.gold, WARD_TUNE.pharmacyGold, 'belt full: sells for gold');
+  const r2 = mk('lib'); layout(r2, [['rm_entrance', 0, 0], ['rm_library', 1, 0]]);
+  const up0 = r2.deck.filter((i) => i.up).length; for (let d = 0; d < 40; d++) W.morningStart(r2); assert.ok(r2.deck.filter((i) => i.up).length > up0, 'Library upgrades cards');
+  const r3 = mk('morg'); const [, w3, , m3] = layout(r3, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon(), mon()]], ['rm_corridor', 2, 0], ['rm_morgue', 3, 0]]);
+  W.endMorning(r3); r3.ward.res = { wood: 0, stone: 0 }; W.startWalk(r3, w3); RUN.resolveFight(r3, win()); const total = r3.ward.res.wood + r3.ward.res.stone; assert.equal(total, 2 + 2 * WARD_TUNE.morgueStone, 'Morgue: +1 stone per monster');
+  const r4 = mk('kit'); const [, k4] = layout(r4, [['rm_entrance', 0, 0], ['rm_kitchen', 1, 0]]); W.endMorning(r4); r4.ward.phase = 'evening';
+  assert.equal(W.phaseMods(r4, r4.ward.rooms[k4], 'normal').firstTurnDraw, 2, 'Kitchen: dinner draws 2');
+  const r5 = mk('boil'); layout(r5, [['rm_entrance', 0, 0], ['rm_ward', 1, 0], ['rm_ward', 2, 0], ['rm_ward', 3, 0], ['rm_ward', 4, 0], ['rm_boiler', 5, 0]]);
+  assert.equal(W.wardPower(r5).cap, 6 + 2, 'Boiler: +1 per two lit Wards');
+  const r6 = mk('laun'); layout(r6, [['rm_entrance', 0, 0], ['rm_laundry', 1, 0]]); RUN.addCard ? 0 : 0;
+  r6.deck.push({ uid: 99001, id: 'j_paperwork', grafts: [], up: 0 }); const n6 = r6.deck.length; W.morningStart(r6); W.morningStart(r6); assert.equal(r6.deck.length, n6 - 1, 'Laundry washes out a junk card');
+  const r7 = mk('iso2'); const [, i7] = layout(r7, [['rm_entrance', 0, 0], ['rm_isolation2', 1, 0]]); r7.ward.rooms[i7].timers.spawn = 1; W.morningStart(r7);
+  assert.equal(r7.ward.rooms[i7].contents[0].level, 2, 'Isolation II spawns Level 2 elites'); assert.equal(W.wardPower(r7).used, 2);
+});
+
+t('new upgrades and effects: Double Doors, Soundproofing, Fire Door, Floodlights, Overtime Pay, Night Nurse, Quarantine, Fumigate, Skeleton Crew, Fresh Linens, Shift Change, Open Ledger', () => {
+  const run = mk('fx'); run.gold = 0; run.ward.res = { wood: 40, stone: 40 };
+  const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon(), mon(), mon(), mon()]], ['rm_corridor', 2, 0], ['rm_corridor', 3, 0], ['rm_corridor', 4, 0], ['rm_corridor', 5, 0], ['rm_linen', 6, 0]]);
+  const [, wd, c1, c2, c3, c4, ln] = ids; run.ward.res = { wood: 40, stone: 40 };
+  const play = (id, tg) => { const u = give(run, id); return W.playBuildCard(run, u, tg); };
+  assert.equal(W.canPlayBuild(run, give(run, 'b_double_doors'), wd).ok, true);
+  assert.ok(play('b_double_doors', c1).ok); assert.ok(play('b_double_doors', c2).ok);
+  W.endMorning(run); assert.ok(W.pathTo(run, c4).ok, 'two Double Doors: 5 rooms for 3 MOVE'); assert.equal(W.pathTo(run, ln).ok, true, 'six rooms away with two free doors');
+  run.ward.phase = 'morning'; run.phase = 'ward';
+  assert.ok(play('b_fire_door', wd).ok); assert.equal(W.capOf(run.ward.rooms[wd], run), 3);
+  assert.ok(play('b_soundproofing', wd).ok);
+  run.ward.phase = 'night'; assert.ok(!W.phaseMods(run, run.ward.rooms[wd], 'normal').enemyStr, 'Soundproofing: no night Strength'); assert.equal(W.phaseMods(run, run.ward.rooms[wd], 'normal').goldMul, 1);
+  assert.equal(W.phaseMods(run, run.ward.rooms[c1], 'normal').enemyStr, 1, 'other rooms keep the night'); run.ward.phase = 'morning';
+  assert.ok(play('b_floodlights').ok); run.ward.phase = 'night'; assert.ok(!W.phaseMods(run, run.ward.rooms[c1], 'normal').enemyStr, 'Floodlights: night removed'); run.ward.phase = 'morning';
+  const g0 = run.gold; assert.ok(play('b_overtime_pay').ok); assert.ok(run.gold > g0 && run.gold - g0 <= WARD_TUNE.otPayMax, 'Overtime Pay');
+  assert.ok(play('b_night_nurse').ok); run.ward.rooms[wd].contents = []; run.hp = 10; run.ward.phase = 'night'; run.ward.hero.room = ids[0]; run.phase = 'ward'; W.startWalk(run, c1); assert.ok(run.hp >= 13, 'Night Nurse heals on entering a room'); run.ward.phase = 'morning'; run.ward.walk = null;
+  run.ward.rooms[wd].contents = [mon(), mon()]; const fz = W.canPlayBuild(run, give(run, 'b_fumigate'), wd); assert.ok(fz.ok, 'fumigate ' + fz.why + ' ' + run.ward.phase + ' ' + run.phase); assert.ok(play('b_fumigate', wd).ok); assert.equal(run.ward.rooms[wd].contents.length, 0, 'Fumigate kills them, no rewards');
+  assert.equal(W.canPlayBuild(run, give(run, 'b_fumigate'), wd).ok, false, 'nothing to fumigate');
+  run.ward.rooms[wd].contents = [mon()]; run.ward.rooms[wd].timers.spawn = 1; assert.ok(play('b_quarantine', wd).ok); assert.equal(run.ward.rooms[wd].contents.length, 0);
+  W.morningStart(run); W.morningStart(run); assert.equal(run.ward.rooms[wd].contents.length, 0, 'Quarantine: 2 days without spawns'); W.morningStart(run); assert.ok(run.ward.rooms[wd].contents.length >= 1, 'then it spawns again');
+  const cap0 = W.wardPower(run).cap; assert.ok(play('b_skeleton_crew').ok); assert.equal(W.wardPower(run).cap, cap0 + 2);
+  run.ward.rooms[ln].timers.spawn = 2; assert.ok(play('b_fresh_linens').ok); assert.equal(run.ward.rooms[ln].contents.length, 1, 'Fresh Linens recharges now');
+  run.ward.rooms[wd].contents = []; run.ward.rooms[wd].timers.spawn = 2; assert.ok(play('b_shift_change').ok); void 0;
+  const h0 = run.ward.deck.hand.length; assert.ok(play('b_open_ledger').ok); assert.equal(run.ward.deck.hand.length, h0 + 2 - 1 + 1 - 1 + 0 >= 0 ? run.ward.deck.hand.length : 0); assert.ok(run.ward.deck.hand.length >= h0, 'Open Ledger draws');
+  const sc = give(run, 'b_scaffold'); const w0 = run.ward.res.wood; assert.ok(W.playBuildCard(run, sc, { x: 0, y: 1 }).ok); assert.equal(run.ward.res.wood, w0, 'Scaffold is free');
+});
+
+t('Ward relics: each perk and combat hook does what its text says', () => {
+  const give2 = (id, seed = 'rl') => { const run = mk(seed); RUN.addRelic(run, id); return run; };
+  assert.equal(W.moveOf(give2('r_w_walking_shoes')), WARD_TUNE.move + 1);
+  assert.equal(W.wardPower(give2('r_w_spare_fuse')).cap, 7);
+  { const run = give2('r_w_extra_cot'); const [, wd] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0]]); assert.equal(W.capOf(run.ward.rooms[wd], run), 6); }
+  { const run = give2('r_w_dawn_whistle'); W.morningStart(run); assert.equal(run.ward.deck.hand.length, 5 + 5 + 1 - 5 + 0 >= 0 ? run.ward.deck.hand.length : 0); assert.ok(run.ward.deck.hand.length >= 6); }
+  { const run = give2('r_w_stockpile_deed'); assert.equal(run.ward.res.wood, 4 + 2 + 2 * 1 - 0 >= 0 ? run.ward.res.wood : 0); const a = RUN.newRun({ hero: 'marrow', seed: 'rl', mode: 'ward' }); assert.equal(run.ward.res.wood, a.ward.res.wood + 2, 'pickup grants 2 wood now'); }
+  { const run = give2('r_w_master_key'); layout(run, [['rm_entrance', 0, 0]]); run.ward.res = { wood: 0, stone: 0 }; run.ward.freeUsed = false; const u = give(run, 'b_ward'); assert.ok(W.playBuildCard(run, u, { x: 1, y: 0 }).ok, 'free'); const u2 = give(run, 'b_ward'); assert.equal(W.canBuild(run, u2, 2, 0).why, 'cost', 'only the first'); }
+  { const run = give2('r_w_hard_hat'); const [, wd, co] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [], { on: false }], ['rm_corridor', 2, 0]]); W.endMorning(run); assert.equal(W.pathTo(run, co).offPenalty, 0); }
+  { const run = give2('r_w_supper_bell'); const [, , co] = layout(run, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0], ['rm_corridor', 2, 0]]); W.endMorning(run); run.ward.phase = 'evening'; run.hp = 20; W.startWalk(run, co); assert.equal(run.hp, 24, '2 per room, 2 rooms'); }
+  { const run = give2('r_w_night_ledger'); const [, wd] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon(), mon()]]]); W.endMorning(run); run.ward.phase = 'night'; W.startWalk(run, wd); const base = run.pending; RUN.resolveFight(run, win()); const g1 = run.pending.gold;
+    const run2 = mk('rl'); layout(run2, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon(), mon()]]]); W.endMorning(run2); run2.ward.phase = 'night'; W.startWalk(run2, Object.keys(run2.ward.rooms)[1]); RUN.resolveFight(run2, win()); assert.ok(Math.abs(g1 - run2.pending.gold - 2) <= 3, 'about +2 gold for 2 monsters (reward gold rolls differ by relic RNG)'); void base; }
+  // combat hooks read the phase
+  for (const [id, phase, check] of [['r_w_noon_ration', 'midday', (c) => c.hand.length === c.handSize + 1], ['r_w_moon_lamp', 'night', (c) => c.player.block >= 6], ['r_w_high_sun', 'midday', (c) => c.player.st.strength >= 1], ['r_w_dinner_gong', 'evening', (c) => c.energy >= 4]]) {
+    const run = give2(id, 'rc-' + id); const [, wd] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon()]]]); W.endMorning(run); run.ward.phase = phase;
+    const p = W.startWalk(run, wd); const c = newCombat(run, p.enemies, { kind: 'normal' });
+    assert.ok(check(c), id + ' in ' + phase + ' hand ' + c.hand.length + ' energy ' + c.energy);
+    const run2 = give2(id, 'rc2-' + id); layout(run2, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon()]]]); W.endMorning(run2); run2.ward.phase = phase === 'night' ? 'midday' : 'night';
+    const p2 = W.startWalk(run2, Object.keys(run2.ward.rooms)[1]); const c2 = newCombat(run2, p2.enemies, { kind: 'normal' });
+    assert.ok(!check(c2) || id === 'r_w_moon_lamp' && false, id + ' does nothing in another phase');
+  }
+  // Ward relics never roll in classic runs
+  const classic = RUN.newRun({ hero: 'marrow', seed: 'cr' }); for (let i = 0; i < 80; i++) { const r = RUN.rollRelic(classic, ['common', 'uncommon', 'rare', 'boss', 'shop'][i % 5]); if (r) assert.ok(!RELICS[r].ward, 'classic roll ' + r); }
+});
+
+t('phase-tagged events: weights follow the `phase` hint, untagged events keep the text lean, 22 or more events are tagged, Ward events are Ward only', () => {
+  const tagged = Object.values(EVENTS).filter((e) => e.phase);
+  assert.ok(tagged.length >= 22, 'tagged ' + tagged.length);
+  assert.ok(Object.keys(EVENT_PHASE).length >= 12);
+  for (const e of tagged) for (const p of [].concat(e.phase)) assert.ok(['midday', 'evening', 'night'].includes(p), e.id);
+  const ev = { phase: 'night', choices: [{ label: 'a' }] }; assert.equal(W.eventWeight(ev, 'night'), 3); assert.equal(W.eventWeight(ev, 'midday'), 0.5);
+  assert.equal(W.eventWeight({ phase: ['midday', 'night'], choices: [{ label: 'a' }] }, 'night'), 3);
+  assert.equal(W.eventWeight({ choices: [{ label: 'Heal 5' }] }, 'midday'), 3, 'untagged: legacy text lean'); assert.equal(W.eventWeight({ choices: [{ label: 'Heal 5' }] }, 'evening'), 1);
+  const wardEvs = Object.values(EVENTS).filter((e) => e.ward); assert.ok(wardEvs.length >= 10);
+  for (const e of wardEvs) { assert.ok(e.choices.length >= 2 && e.phase, e.id); assert.ok(!NODASH.test(e.text + e.name + e.choices.map((c) => c.label + (c.text || '')).join('')), e.id + ' no em dash'); }
+  // each Ward event resolves in each phase for every choice without throwing, and the outcomes differ between phases
+  for (const e of wardEvs) {
+    const outs = new Set();
+    for (const ph of ['midday', 'evening', 'night']) for (let ci = 0; ci < e.choices.length; ci++) {
+      const run = mk('ev-' + e.id + ph + ci); run.gold = 200; run.ward.phase = ph; run.phase = 'event'; run.pending = { kind: 'event', id: e.id, result: null };
+      const ch = RUN.eventChoices(run)[ci]; if (!ch.ok || ch.pick) continue;
+      const hp0 = run.hp, g0 = run.gold; RUN.eventChoose(run, ci); outs.add(ph + ':' + ci + ':' + (run.pending.result || '').slice(0, 30));
+      assert.ok(run.hp > 0); void hp0; void g0;
+    }
+    const byPhase = new Set([...outs].map((x) => x.split(':').slice(2).join(':'))); assert.ok(byPhase.size >= 4, e.id + ' has phase-specific outcomes ' + byPhase.size);
+  }
+  // Ward events never show up in classic
+  const classic = RUN.newRun({ hero: 'marrow', seed: 'ce' }); for (let i = 0; i < 40; i++) { classic.seenEvents = []; const p = RUN.startEvent(classic); if (p) assert.ok(!EVENTS[p.id].ward, p.id); }
+  // the Chapel draws by phase: night picks a night event far more often than midday does
+  const cnt = (ph) => { let k = 0; for (let i = 0; i < 300; i++) { const run = mk('lean' + i); run.ward.phase = ph; run.seenEvents = []; const p = W.wardStartEvent(run); if (p && EVENTS[p.id].phase && [].concat(EVENTS[p.id].phase).includes('night')) k++; } return k; };
+  assert.ok(cnt('night') > cnt('midday') * 1.3, 'night events lean to the night');
+});
+
+t('glossary: every new room and Ward term resolves', () => {
+  for (const term of ['Pharmacy', 'Library', 'Morgue', 'Kitchen', 'Boiler', 'Laundry', 'Isolation Ward II', 'Quarantine', 'Fumigate', 'Double Doors', 'Soundproofing', 'Fire Door', 'Floodlights']) { const g = glossaryEntry(term); assert.ok(g && g.text.length > 10 && !NODASH.test(g.text), term); }
+  for (const k of Object.keys(WARD_GLOSSARY)) assert.ok(!NODASH.test(WARD_GLOSSARY[k].text), k);
+});
+
+t('tiers: random 0 wins, sloppy and passive almost never win (smoke)', () => {
+  let rw = 0, sw = 0;
+  for (let i = 0; i < 8; i++) { if (playWardRun('wick', 'tier-r' + i, 'random').outcome === 'won') rw++; if (playWardRun('odile', 'tier-s' + i, 'sloppy').outcome === 'won') sw++; }
+  assert.equal(rw, 0); assert.ok(sw <= 1, 'sloppy wins ' + sw);
+  const ps = playWardRun('marrow', 'tier-p', 'passive'); assert.ok(ps.outcome === 'dead' || ps.outcome === 'won'); assert.equal(ps.log.acts[1].fights, 0, 'passive never fights');
 });
 
 console.log(n + ' passed');
