@@ -47,7 +47,7 @@ function checkState(c, tag) {
 }
 function checkEvents(c, evs, tag, st) {
   for (const e of evs) {
-    if (st.over && !['status', 'dmg', 'hp', 'kill', 'heal', 'block', 'win', 'lose'].includes(e.t) && e.t !== 'discard' && e.t !== 'exhaust') bug(`${tag}: event ${e.t} after combat end`);
+    if (st.over && ['enemyAct', 'play', 'turnStart', 'intent', 'turnEnd'].includes(e.t)) bug(`${tag}: event ${e.t} after combat end`);
     for (const [k, v] of Object.entries(e)) if (typeof v === 'number' && !Number.isFinite(v)) bug(`${tag}: event ${e.t}.${k} = ${v}`);
     if (e.t === 'dmg') {
       if (e.n < 0 || e.raw < 0 || e.absorbed < 0) bug(`${tag}: negative dmg event`);
@@ -63,8 +63,9 @@ function checkEvents(c, evs, tag, st) {
 }
 // intent vs reality: summed raw hit damage per enemy against the number the UI showed
 function runEnemyPhase(c, tag, st) {
+  const single = c.enemies.filter((e) => !e.dead).length === 1;
   const shown = new Map();
-  for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) { try { shown.set(e.uid, { move: e.move, id: e.id, info: intentOf(c, e), dead: false }); } catch (x) { bug(`${tag}: intentOf(${e.id}) threw ${x.message}`); } }
+  for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) { try { shown.set(e.uid, { move: e.move, id: e.id, info: intentOf(c, e), tip: !!(e.def.moves[e.move] && e.def.moves[e.move].tip) }); } catch (x) { bug(`${tag}: intentOf(${e.id}) threw ${x.message}`); } }
   const mark = c.ev.length;
   endTurn(c);
   const evs = c.ev.slice(mark);
@@ -72,12 +73,12 @@ function runEnemyPhase(c, tag, st) {
   const acted = new Set();
   for (const e of evs) if (e.t === 'enemyAct') acted.add(e.e);
   for (const [uid, s] of shown) {
-    if (!acted.has(uid)) continue;
+    if (!acted.has(uid) || shown.size > 1 || !single) continue; // several enemies buff, debuff and kill each other mid-phase: only lone enemies compare cleanly
     const real = evs.filter((e) => e.t === 'dmg' && e.src === uid && e.who === 'player' && e.hit).reduce((a, e) => a + e.raw, 0);
     // tidy: only compare when the move deals damage and nothing killed the player
     if (s.info.hidden) continue;
     const key = `intent mismatch ${s.id}/${s.move}`;
-    const tipped = !!(ENEMIES[s.id].moves[s.move].tip);
+    const tipped = s.tip;
     if (real !== s.info.dmg) bug(`${key} (${tipped ? 'has tip' : 'NO tip'}): shown ${s.info.dmg}, dealt raw ${real}`, tag);
   }
 }

@@ -180,6 +180,7 @@ export function loseHp(c, tgt, n, o = {}) {
   n = Math.max(0, Math.floor(n));
   if (n <= 0 || tgt.dead) return 0;
   if (o.floor1 && tgt.hp - n < 1) n = Math.max(0, tgt.hp - 1);
+  if (n <= 0) return 0;
   tgt.hp -= n;
   if (tgt.kind === 'player') c.damageTakenThisCombat += n;
   c.ev.push({ t: 'hp', who: tgt.uid || 'player', n, src: o.src || 'cost' });
@@ -585,7 +586,7 @@ export function pickMove(c, e) {
   else if (d.opening && e.turn < d.opening.length) id = d.opening[e.turn];
   else if (d.pattern) id = d.pattern[(e.turn - (d.opening ? d.opening.length : 0)) % d.pattern.length];
   else id = Object.keys(d.moves)[0];
-  if (!d.moves[id]) throw new Error(`enemy ${e.id} has no move ${id}`);
+  if (!(e.def.moves || d.moves)[id]) throw new Error(`enemy ${e.id} has no move ${id}`); // pick() may swap e.def (Understudy learns moves)
   e.move = id;
   c.ev.push({ t: 'intent', e: e.uid, move: id });
 }
