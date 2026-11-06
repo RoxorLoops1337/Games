@@ -1633,7 +1633,7 @@ function drawTopBar(app) {
   const ht = fitText(app, hero.title || '', 118, 14, 14, { ui: true });
   app.text(ht.str, 60, 29, { size: ht.size, ui: true, color: COL.vellum2 });
   drawHeart(ctx, 192, 28, 26);
-  app.text(`${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`, 210, 17, { size: 19, bold: true, ui: true, color: COL.bad });
+  { const hl = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`; app.text(hl, 210, 17, { size: hl.length > 5 ? 15 : 19, bold: true, ui: true, color: COL.bad });
   const gp = 1 + S.goldPulse * 0.25;
   ctx.save(); ctx.translate(L.GOLD_POS.x - 10, L.GOLD_POS.y); ctx.scale(gp, gp); drawCoin(ctx, 0, 0, 24); ctx.restore();
   app.text(String(S.gold), L.GOLD_POS.x + 8, 17, { size: 19, bold: true, ui: true, color: COL.gold });
