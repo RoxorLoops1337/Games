@@ -21,6 +21,7 @@ import event from './ui/event.js';
 import end from './ui/end.js';
 import deckview from './ui/deckview.js';
 import codex from './ui/codex.js';
+import archive from './ui/archive.js';
 import wardrobe from './ui/wardrobe.js';
 import { setCardBack } from './art/cards.js';
 import { setHeroTint } from './art/heroes.js';
@@ -67,6 +68,7 @@ export function boot(canvas) {
     },
     openDeck(opts) { app.push('deckview', opts || {}); },
     openCodex() { app.push('codex', {}); },
+    openArchive() { app.push('archive', {}); },
     openWardrobe() { app.push('wardrobe', {}); },
     openSettings() { app.push('settings', {}); },
     openPause() { if (!app.stack.some((s) => s.name === 'pause')) app.push('pause', {}); },
@@ -82,7 +84,7 @@ export function boot(canvas) {
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, wardrobe, settings, pause };
+  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);

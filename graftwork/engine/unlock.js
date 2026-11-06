@@ -17,6 +17,10 @@ function U(m) { // the unlock block, repaired in place
   for (const k of Object.keys(d)) if (u[k] === undefined || typeof u[k] !== typeof d[k] || (isObj(d[k]) && !isObj(u[k]))) u[k] = d[k];
   return u;
 }
+// NEW ribbon set: unlock ids opened by a finished run and not yet seen in an offer. Additive, repaired in place.
+export function freshOf(m) { const u = U(m); if (!isObj(u.fresh)) u.fresh = {}; return u.fresh; }
+export function isFresh(m, itemId) { const id = unlockIdOf(itemId); return !!(id && m && m.unlocked && isObj(m.unlocked.fresh) && m.unlocked.fresh[id]); }
+export function takeFresh(m, itemId) { const id = unlockIdOf(itemId); if (!id || !isFresh(m, itemId)) return false; delete m.unlocked.fresh[id]; return true; }
 const nz = (x) => (Number.isFinite(x) && x > 0 ? x : 0);
 
 // ---------------- queries ----------------
@@ -130,6 +134,7 @@ export function awardRun(m, run, result) {
   const r = computeUP(d, kills, ach);
   u.points += r.up; u.lifetime += r.up;
   const unlockedNow = spend(m);
+  for (const e of unlockedNow) freshOf(m)[e.unlockId] = 1; // the NEW ribbon (ui/archive_kit.js) shows once per item, the first time it is offered
   const st = unlockState(m);
   return { up: r.up, parts: r.parts, capped: r.capped, newKills: kills, newAchievements: ach, points: st.points, nextCost: st.nextCost, unlockedNow, unlockedCount: st.unlockedCount, total: st.total, percent: st.percent, done: st.done };
 }

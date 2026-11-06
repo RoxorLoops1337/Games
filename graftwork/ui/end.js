@@ -11,6 +11,9 @@ import * as RUN from '../engine/run.js';
 import { HEROES, ENEMIES, RELICS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENT_LIST } from '../data/achievements.js';
 import { lnw } from '../art/linework.js';
+import { drawPortrait } from '../art/heroes.js';
+import { KIND_LABEL, GOLD, drawArt }
+import { UP } from '../engine/unlock.js' from './archive_kit.js';
 
 const GAP = 7;
 const calm = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
@@ -58,6 +61,11 @@ export default {
       else { this.fx.flash('#b3263a', 0.35, 0.6); this.fx.shake(0.35); }
     }
     this.nextNew = 1.4;
+    // ARCHIVE: Unlock Points paid by this run, the progress bar and the items opened now (stamped in one by one)
+    const ul = info.unlock || { up: 0, parts: {}, unlockedNow: [] };
+    this.ul = ul; this.stampN = 0; this.stampAt = 1.1;
+    this.heroNews = (info.newUnlocks || []).filter((u) => u && (u.kind === 'hero' || typeof u === 'string')).map((u) => { const id = typeof u === 'string' ? u : u.id; const h = HEROES[id]; return { id, name: h ? h.name : id, text: h ? h.title : '' }; });
+    this.stamps = [...this.heroNews.map((h) => ({ hero: h })), ...(ul.unlockedNow || []).map((v) => ({ v }))];
   },
   leave(app) { app.clearTweens(this); },
   // dense recap: the text scale is honoured up to 110%
@@ -91,7 +99,8 @@ export default {
     g.restore();
 
     this.drawRecap(app, 30, 140, 300, 508, hero);
-    this.drawGrid(app, 345, 140, 640, 508);
+    this.drawArchive(app, 345, 140, 640, 272, t);
+    this.drawGrid(app, 345, 424, 640, 224);
     this.drawSide(app, 1000, 140, 250, 508, t);
     this.drawButtons(app, flow, run);
 
@@ -106,6 +115,85 @@ export default {
     this.hover = null;
     fx.draw(g); fx.drawFlash(g, W, H);
     if (this.toast && this.toast.t > 0) { this.toast.t -= app.dt; app.text(this.toast.msg, 640, 624, { size: 16, ui: true, align: 'center', color: COL.lamp, alpha: clamp(this.toast.t * 2, 0, 1), shadow: true }); }
+  },
+  // ---- ARCHIVE panel: points earned (with the breakdown), progress to the next unlock, items opened now ----
+  drawArchive(app, x, y, w, h, t) {
+    const g = app.ctx, ul = this.ul, run = this.run, st = run.stats || {}, still = calm(app), done = ul.done || (ul.total && ul.unlockedCount >= ul.total);
+    app.reg('end-archive', x, y, w, h, { group: 'archive' });
+    app.panel(x, y, w, h, { r: 12, fill: 'rgba(30,22,10,.9)', stroke: rgba(GOLD, 0.7), lw: 2 });
+    app.text('ARCHIVE', x + 18, y + 10, { size: 14, ui: true, bold: true, color: GOLD });
+    const k = EASE.out(clamp((t - 0.4) / 0.6, 0, 1));
+    const parts = ul.parts || {}, f1 = (v) => String(Math.round(v * 10) / 10);
+    const label = { base: 'Finishing a run', floors: `Floors climbed (${st.floors || 0})`, elites: `Elites (${Math.min(6, st.elites || 0)})`, bosses: `Bosses (${st.bosses || 0})`, act: `Act ${run.act || 1} reached`, win: run.ascension ? `Victory (ascension ${run.ascension})` : 'Victory', firstKills: `First kills (${ul.newKills || 0})`, achievements: `New achievements (${ul.newAchievements || 0})` };
+    const rows = Object.keys(label).filter((id) => parts[id] > 0);
+    const lx = x + 18, lw = 296, pitch = Math.min(Math.ceil(app.sz(13, { ui: true }) * 1.25) + 3, (h - 34 - 62) / Math.max(1, rows.length));
+    g.save(); g.globalAlpha = k;
+    let yy = y + 34;
+    if (run.practice) app.text('Practice pays no points.', lx, yy, { size: 14, ui: true, italic: true, color: '#b7aa8c', fit: { w: lw, lines: 2 } });
+    rows.forEach((id, i) => {
+      const a = clamp((t - 0.5 - i * 0.08) / 0.25, 0, 1); g.globalAlpha = k * a;
+      app.text(label[id], lx, yy, { size: 13, ui: true, color: '#cdbf9d', fit: { w: lw - 54, lines: 1 } });
+      app.text('+' + f1(parts[id]), lx + lw, yy, { size: 13, ui: true, bold: true, align: 'right', color: COL.lamp, fit: { w: 50, lines: 1 } });
+      yy += pitch;
+    });
+    g.globalAlpha = k;
+    stitch(g, lx, yy + 3, lx + lw, yy + 3); yy += 8;
+    const tot = Math.round(ul.up * clamp((t - 0.6) / 0.8, 0, 1));
+    app.text(`+${still ? ul.up : tot}`, lx, yy, { size: 30, bold: true, color: '#fbe9b0', shadow: true, fit: { w: 90, lines: 1 } });
+    app.text(ul.capped ? `points, capped at ${UP.RUN_CAP}` : run.assist ? 'points (assist pays half at most)' : 'points this run', lx + 96, yy + 10, { size: 13, ui: true, color: ul.capped ? '#ffb070' : '#e0d4b8', fit: { w: lw - 96, lines: 2 } });
+    g.restore();
+    // right column: progress, then the stamped items
+    const rx = x + 330, rw = w - 330 - 16;
+    app.text(done ? 'EVERYTHING UNLOCKED' : 'NEXT UNLOCK', rx, y + 10, { size: 12, ui: true, bold: true, color: done ? '#8fe0a0' : COL.lamp, fit: { w: rw, lines: 1 } });
+    let ry = y + 10 + Math.ceil(app.sz(12, { ui: true, bold: true }) * 1.2) + 6;
+    const fill = done ? 1 : ul.nextCost ? clamp(ul.points / ul.nextCost, 0, 1) : 0, bk = still ? 1 : EASE.out(clamp((t - 0.5) / 1, 0, 1));
+    app.rr(rx, ry, rw, 14, 7); g.fillStyle = 'rgba(8,6,5,.85)'; g.fill(); g.lineWidth = lnw(1.2); g.strokeStyle = 'rgba(232,220,196,.3)'; g.stroke();
+    if (fill * bk * (rw - 2) > 1) { app.rr(rx + 1, ry + 1, fill * bk * (rw - 2), 12, 6); g.fillStyle = done ? '#8fe0a0' : GOLD; g.fill(); }
+    ry += 20;
+    const line = done ? 'The Archive is complete. Thank you for the long stay.' : `${ul.points} of ${ul.nextCost} points to the next unlock. ${ul.percent} percent open.`;
+    ry += app.text(line, rx, ry, { size: 13, ui: true, color: '#e0d4b8', fit: { w: rw, h: 34, lines: 2 } }) + 8;
+    this.drawStamps(app, rx, ry, rw, y + h - 8 - ry, t);
+  },
+  drawStamps(app, x, y, w, h, t) {
+    const g = app.ctx, still = calm(app), audio = app.shared.audio;
+    if (!this.stamps.length) { app.text(this.run.practice ? '' : 'Nothing opened this time. The points are kept.', x, y + 8, { size: 13, ui: true, italic: true, color: '#a58f6b', fit: { w, h: 36, lines: 2 } }); return; }
+    const lh = Math.ceil(app.sz(11, { ui: true, bold: true }) * 1.2);
+    app.text('OPENED NOW', x, y, { size: 11, ui: true, bold: true, color: '#8fe0a0', fit: { w, lines: 1 } });
+    let ty = y + lh + 4, room = h - lh - 4, idx = 0;
+    const heroStamp = this.stamps.find((s) => s.hero);
+    const stampK = (i) => (still ? 1 : clamp((t - this.stampAt - i * 0.5) / 0.28, 0, 1));
+    const trigger = (i, cx, cy, hero) => {
+      if (this.stampN > i) return; this.stampN = i + 1;
+      if (audio) audio.sfx(hero ? 'victory' : 'relic', { vol: 0.7 });
+      if (!still) { this.fx.burst(cx, cy, 'gild', { n: hero ? 40 : 16 }); this.fx.ring(cx, cy, GOLD, hero ? 120 : 60, 0.6); if (hero) this.fx.flash('#ffe6a0', 0.35, 0.5); }
+    };
+    if (heroStamp) {
+      const i = this.stamps.indexOf(heroStamp), k = stampK(i), bh = Math.min(64, room - 40);
+      if (k > 0) trigger(i, x + 36, ty + bh / 2, true);
+      g.save(); g.globalAlpha = EASE.out(k); app.rr(x, ty, w, bh, 8); g.fillStyle = 'rgba(80,58,14,.85)'; g.fill(); g.lineWidth = lnw(2); g.strokeStyle = GOLD; g.stroke();
+      g.save(); app.rr(x + 2, ty + 2, 64, bh - 4, 6); g.clip(); drawPortrait(g, heroStamp.hero.id, x + 34, ty + bh - 6, 78); g.restore();
+      app.text(`${heroStamp.hero.name.toUpperCase()} JOINS YOU`, x + 74, ty + 6, { size: 15, bold: true, color: '#fbe9b0', shadow: true, fit: { w: w - 82, lines: 1 } });
+      app.text(heroStamp.hero.text || 'A new hero is open on the select screen.', x + 74, ty + 8 + Math.ceil(app.sz(15, { bold: true }) * 1.2), { size: 12, ui: true, italic: true, color: '#e0d4b8', fit: { w: w - 82, h: bh - 34, lines: 2 } });
+      g.restore();
+      ty += bh + 6; room -= bh + 6;
+    }
+    const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 70, rows = Math.max(1, Math.floor(room / (chh + 4))), cap = rows * 3;
+    const shown = items.length > cap ? cap - 1 : items.length;
+    for (let j = 0; j < shown; j++) {
+      const v = items[j].v, i = this.stamps.indexOf(items[j]), k = stampK(i), cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
+      if (k > 0) trigger(i, cx0 + cw / 2, cy0 + 26, false);
+      const sc = 1 + (1 - EASE.out(k)) * 0.7;
+      g.save(); g.globalAlpha = EASE.out(k);
+      app.rr(cx0, cy0, cw, chh, 8); g.fillStyle = 'rgba(20,15,10,.9)'; g.fill(); g.lineWidth = lnw(1.5); g.strokeStyle = rgba(GOLD, 0.6); g.stroke();
+      g.save(); g.translate(cx0 + cw / 2, cy0 + 28); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, v.kind === 'card' ? 46 : 38); g.restore();
+      app.text(v.name, cx0 + cw / 2, cy0 + chh - 6 - Math.ceil(app.sz(11, { ui: true }) * 1.2), { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1 } });
+      g.restore();
+      if (k >= 1 && app.inRect(cx0, cy0, cw, chh)) app.tooltip(v.name, `New ${v.kind} in the Archive. ${KIND_LABEL[v.kind]} you open show up in offers from the next run.`, { color: GOLD });
+    }
+    if (items.length > shown) {
+      const j = shown, cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
+      app.text(`and ${items.length - shown} more in the Archive`, cx0 + cw / 2, cy0 + chh / 2 - 8, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b', fit: { w: cw - 6, h: chh - 8, lines: 3 } });
+    }
   },
   drawAtmosphere(app, t, still) {
     const g = app.ctx;

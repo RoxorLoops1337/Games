@@ -30,7 +30,9 @@ async function make(opts = {}) {
   const texts = [];
   let depth = 0;
   const rawText = app.text;
+  const tipTexts = [];
   app.text = (str, x, y, o = {}) => {
+    if (app._tipDraw && str !== '' && str !== undefined) { const L = app.layoutText(String(str), o), al = o.align || 'left'; tipTexts.push({ s: String(L.lines[0]).slice(0, 30), x: al === 'center' ? x - L.w / 2 : x, y, w: L.w, h: L.h, trunc: L.trunc && !L.soft }); }
     if (depth > 0 && str !== '' && str !== undefined && str !== null && o.alpha !== 0) {
       const L = app.layoutText(String(str), o), size = L.size, w = L.w, h = L.h, lines = L.lines;
       const al = o.align || 'left', bl = o.baseline || 'top';
@@ -40,21 +42,51 @@ async function make(opts = {}) {
     }
     return rawText(str, x, y, o);
   };
-  const h = { textPct: opts.scale || 100, app, run, meta, texts, flow: null, checks: 0, owner: opts.owner || '' };
+  const h = { textPct: opts.scale || 100, app, run, meta, texts, tipTexts, flow: null, checks: 0, owner: opts.owner || '' };
   const wrapScreen = (name, mod) => ({ __proto__: mod, draw(a) { depth++; try { return mod.draw.call(this, a); } finally { depth--; } } });
   h.register = (name, mod) => app.register(name, wrapScreen(name, mod));
   for (const n of Object.keys(SCREENS)) h.register(n, SCREENS[n]);
   app.register('base', { draw() {} });
-  app.afterFrame = () => { if (h.collect) { analyse(h, label); h.collect = false; } texts.length = 0; };
+  app.afterFrame = () => { if (h.collect) { analyse(h, label); h.collect = false; } texts.length = 0; tipTexts.length = 0; };
   return h;
 }
 const inside = (r, x, y) => x >= r.x - 0.5 && x <= r.x + r.w + 0.5 && y >= r.y - 0.5 && y <= r.y + r.h + 0.5;
 const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;
 
+// Tooltip gate: the tip drawn this frame (app.tipLayout from ui/tooltips.js) lies inside the stage and clear of the reserved zone, its panels and
+// sections do not overlap, no text is cut or drawn outside the section that owns it, and no two texts of the tip share pixels.
+function checkTip(h, add) {
+  const L = h.app.tipLayout; if (!L || L.frame !== h.app.frame) return;
+  const r = L.rect, ph = h.app.scale < 0.95;
+  if (r.x < 5.5 || r.y < 5.5 || r.x + r.w > 1274.5 || r.y + r.h > 714.5) add('tip-oob', `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.w)}x${Math.round(r.h)}`);
+  if (hit(r, RESERVED)) add('tip-reserved', `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.w)}x${Math.round(r.h)}`);
+  for (const p of L.panels) {
+    if (ph && p.w > 0.41 * 1280 + 80) add('tip-wide', `${Math.round(p.w)}`);
+    p.secs.forEach((s, i) => {
+      const n = p.secs[i + 1];
+      if (n && s.y + s.h > n.y + 0.5) add('tip-sections-overlap', `"${s.title}" x "${n.title}"`);
+      if (s.y + s.h > p.y + p.h - 5) add('tip-section-outside-panel', `"${s.title}"`);
+    });
+  }
+  for (let i = 0; i < L.panels.length; i++) for (let j = i + 1; j < L.panels.length; j++) if (hit(L.panels[i], L.panels[j])) add('tip-panels-overlap', `${i} x ${j}`);
+  const T = h.tipTexts;
+  for (const t of T) {
+    if (t.trunc) add('tip-text-truncated', t.s);
+    const sec = L.panels.flatMap((p) => p.secs).find((s) => t.x >= s.x - 20 && t.x <= s.x + s.w + 1 && t.y >= s.y - 1 && t.y < s.y + s.h);
+    if (!sec) { add('tip-text-orphan', `"${t.s}" @${Math.round(t.x)},${Math.round(t.y)}`); continue; }
+    if (t.y + t.h > sec.y + sec.h + 1 || t.x + t.w > sec.x + sec.w + 1) add('tip-text-overflow', `"${t.s}" ${Math.round(t.w)}x${Math.round(t.h)} in "${sec.title}" ${Math.round(sec.w)}x${Math.round(sec.h)}`);
+  }
+  for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+    const a = T[i], b = T[j], ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    if (ix > 2 && iy > 2) add('tip-text-text', `"${a.s}" x "${b.s}"`);
+  }
+  tipChecked++;
+}
 function analyse(h, tag) {
   h.checks++;
   if (false) return;
   const add = (kind, msg) => { const k = tag + '|' + kind + '|' + msg; if (!problems.includes(k)) problems.push(k); };
+  checkTip(h, add);
   const regs = LAYOUT.getAll();
   for (const o of LAYOUT.findOverlaps()) add('overlap', `${o.a} x ${o.b} (${o.area}px2)`);
   for (const id of LAYOUT.findOutOfBounds()) add('oob', id);
@@ -101,7 +133,7 @@ function go(h, name, params = {}) { h.app.go(name, { run: h.run, ...params }); }
 // NEW regression while these screens are fixed one by one (fit them with app.text fit:{w,h,lines}, then delete the entry). Desktop scale 1 has no exemptions.
 const OPEN_ON_PHONE = new Set(['map|text-overflow', 'map|text-hits', 'map|text-text', 'reward|text-text', 'graft|text-text', 'graft|text-truncated', 'graft|text-overflow', 'event|text-text']);
 const OPEN_DESK = new Set(['event|oob', 'graft|text-text']); // pre-existing on desktop: tooltips drawn past the stage, a dimmed card under its own label
-let openCount = 0;
+let openCount = 0, tipChecked = 0;
 function done(name) {
   const mine = problems.filter((p) => p.startsWith(name));
   const hard = mine.filter((p) => { const [tag, kind] = p.split('|'), ph = /\/p0\.\d+|phone/.test(tag), k = tag.split('/')[0] + '|' + kind; const open = (ph ? OPEN_ON_PHONE : OPEN_DESK).has(k); if (open) openCount++; return !open; });
@@ -372,7 +404,50 @@ for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 
   for (const m of ['help']) { hp.app.top().mode = m; look(hp, 20, T('pause') + '/' + m); }
   const hq = await make(o); flowFor(hq); hq.app.shared.audio = h.app.shared.audio; hq.app.go('base'); hq.app.push('pause', {}); look(hq, 20, T('pause') + '/m'); hq.app.top().activate(hq.app, 'abandon'); look(hq, 20, T('pause') + '/confirm');
 }
+
+// ---- TOOLTIP SWEEP: hover a grid over each screen at every phone scale and desktop; every tip drawn is checked by checkTip ------------------
+const sweepTips = (h, tag, step = [96, 76]) => {
+  const app = h.app;
+  for (let y = 70; y < 710; y += step[1]) for (let x = 40; x < 1250; x += step[0]) {
+    app.mouse.x = x; app.mouse.y = y; app.tipLayout = null;
+    frames(app, 11); h.collect = true; label = tag; frames(app, 1);
+  }
+  app.mouse.x = -99; app.mouse.y = -99; frames(app, 2);
+};
+const ALLSEEN = () => ({ cards: Object.fromEntries(Object.keys(CARDS).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.map((g) => [g.id, 1])), enemies: Object.fromEntries(Object.keys(ENEMIES).map((k) => [k, 1])), relics: Object.fromEntries(Object.keys(RELICS).map((k) => [k, 1])), statuses: Object.fromEntries(Object.keys(STATUSES).map((k) => [k, 1])) });
+const combatMod = (await import('../graftwork/ui/combat.js')).default;
+const audioMod = await import('../graftwork/ui/audio.js');
+for (const pscale of [0.64, 0.54, 0.46, 0]) {
+  const T = (n) => `${n}/` + (pscale ? 'p' + pscale : 'tips-desk');
+  const mk = (o) => make(Object.assign({ seed: 'tip', pscale }, o));
+  for (const four of [false, true]) {
+    const h = await mk({}); flowFor(h); graftHeavy(h.run, four ? 9 : 2); if (four) h.run.relics.push('r_second_opinion'); h.run.gold = 999;
+    RUN.startGraftPick(h.run); go(h, 'graft'); look(h, 90, T('graft') + 'sw'); sweepTips(h, T('graft') + '/sweep');
+    key(h.app, '2'); key(h.app, 'q'); look(h, 40, T('graft') + 'sw2'); sweepTips(h, T('graft') + '/sweep-pair');
+  }
+  { const h = await mk({}); flowFor(h); h.run.gold = 9999; h.run.act = 3; graftHeavy(h.run, 4); h.run.phase = 'shop'; h.run.pending = RUN.makeShop(h.run); go(h, 'shop'); look(h, 60, T('shop') + 'sw'); sweepTips(h, T('shop') + '/sweep');
+    h.app.mouse.x = 0; h.app.mouse.y = 0; click(h.app, 370, 400); look(h, 30, T('shop') + 'pk'); sweepTips(h, T('shop') + '/sweep-picker'); }
+  { const h = await mk({}); flowFor(h); h.run.gold = 999; graftHeavy(h.run, 6); h.run.phase = 'forge'; h.run.pending = { kind: 'forge', used: 0 }; go(h, 'forge'); look(h, 60, T('forge') + 'sw'); sweepTips(h, T('forge') + '/sweep');
+    const fm = await import('../graftwork/ui/forge.js');
+    for (const opt of [0, 1, 2, 3]) { click(h.app, fm.optionCenterX(opt), 300); look(h, 30, T('forge') + 'pk'); sweepTips(h, T('forge') + '/sweep-picker' + opt, [120, 90]); key(h.app, 'Escape'); look(h, 20, T('forge') + 'cl'); } }
+  { const h = await mk({}); flowFor(h); h.run.act = 3; const rw = RUN.fightRewards(h.run, 'elite', {}); rw.potion = Object.keys(POTIONS)[1]; rw.relic = Object.keys(RELICS)[3]; go(h, 'reward'); look(h, 80, T('reward') + 'sw'); sweepTips(h, T('reward') + '/sweep'); }
+  { const h = await mk({}); flowFor(h); h.app.go('base'); graftHeavy(h.run, 8); h.app.push('deckview', {}); look(h, 40, T('deck') + 'sw'); sweepTips(h, T('deck') + '/sweep', [80, 70]); }
+  { const h = await mk({ meta: { seen: ALLSEEN() } }); flowFor(h); h.app.go('base'); h.app.push('codex', {}); for (let i = 0; i < 7; i++) { h.app.top().setTab(i); look(h, 20, T('codex') + 'sw'); sweepTips(h, T('codex') + '/sweep' + i, [110, 80]); } }
+  { const h = await mk({}); const f = flowFor(h); RUN.startAct(h.run, 2); h.run.relics = Object.keys(RELICS).slice(0, 12); h.run.potions = Object.keys(POTIONS).slice(0, 3); graftHeavy(h.run, 9); f.route(); frames(h.app, 200); sweepTips(h, T('map') + '/sweep'); }
+  for (const ev of Object.values(EVENTS).filter((e, i) => i % 4 === 0)) { const h = await mk({}); flowFor(h); h.run.act = ev.act || 1; h.run.gold = 300; h.run.phase = 'event'; h.run.pending = { kind: 'event', id: ev.id, result: null }; h.run.flags = h.run.flags || {}; go(h, 'event'); if (!h.app.screens.event.ev) continue; look(h, 400, T('event') + 'sw'); sweepTips(h, T('event') + '/sweep', [120, 80]); }
+  for (const [n, hand, stN] of [[1, 8, 8], [3, 8, 8], [4, 8, 3]]) { // combat: 1 / 3 / 4 enemies, a hand of 8, 8 statuses
+    const h = await mk({ hero: 'wick' }); flowFor(h); h.app.shared.audio = audioMod; h.app.register('combat', combatMod);
+    graftHeavy(h.run, 6); h.run.phase = 'combat';
+    const names = Object.values(ENEMIES).filter((e) => e.act === 1 && e.kind === 'normal').map((e) => e.id).slice(0, n);
+    h.run.pending = { kind: 'combat', fightKind: 'normal', enemies: names }; h.app.go('combat', { run: h.run }); frames(h.app, 200);
+    const st = combatMod.api().state(), c = st.c, ids = Object.keys(STATUSES).slice(0, stN);
+    for (const e of c.enemies) for (const sid of ids) { e.st[sid] = 2; st.edBy.get(e.uid).st[sid] = 2; }
+    for (const sid of ids) { c.player.st[sid] = 3; st.P.st[sid] = 3; }
+    frames(h.app, 60); sweepTips(h, T('combat') + `/${n}e`, [64, 50]);
+  }
+}
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end', 'wardrobe', 'title', 'settings', 'pause']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end', 'wardrobe', 'title', 'settings', 'pause']) { console.log(pre + ':'); bad += done(pre); }
+console.log('tip layouts checked', tipChecked);
 console.log('problems', bad, `(+${openCount} known open violations on phone scales, see OPEN_ON_PHONE)`);
 assert.equal(bad, 0, 'layout problems found (listed above)');

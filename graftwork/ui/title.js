@@ -6,6 +6,8 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
+import { percentLabel } from './archive_kit.js';
+import { heroHint } from '../engine/unlock.js';
 import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
 import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../engine/assist.js';
 import { loadRun } from '../engine/save.js';
@@ -280,7 +282,13 @@ export default {
         if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Wardrobe', 'Spend Credit on card backs, tints, titles and a starting relic. Shortcut: W.');
         if (app.button('Wardrobe', x + hw + 10, yy, hw, bh, { size: 22 }) && flow.openWardrobe) flow.openWardrobe();
       }
-      else if (id === 'settings') { if (app.button('Settings', x, yy, bw, bh, { size: 22 })) flow.openSettings(); }
+      else if (id === 'settings') {
+        const hw = Math.floor((bw - 10) / 2), al = percentLabel(meta);
+        if (app.button('Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
+        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.', { color: COL.lamp });
+        app.reg('title-archive', x + hw + 10, yy, hw, bh, { group: 'archive' });
+        if (app.button(al, x + hw + 10, yy, hw, bh, { size: 22, fit: true }) && flow.openArchive) flow.openArchive();
+      }
       else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (app.button('Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
       else if (id === 'credits') { if (app.button('Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
       y += step;
@@ -468,7 +476,7 @@ export default {
     app.text(school.name, x + w - 14, y + 28, { size: 11, ui: true, bold: true, align: 'right', color: locked ? '#6d655a' : school.color, fit: { w: 60, lines: 1 } });
     if (locked) {
       app.text('LOCKED', x + 24, y + 86, { size: 12, ui: true, bold: true, color: '#8c8372', fit: { w: 120, lines: 1 } });
-      const ul = app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3 } });
+      const ul = app.text(heroHint(meta, h.id) || (h.unlock ? h.unlock.text : 'Locked.'), x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3 } });
       app.text(h.blurb, x + 24, y + 106 + ul + 8, { size: 14, color: '#6d655a', fit: { w: w - 48, h: 90, lines: 4, soft: true } });
       // a big shrouded bust so the locked card still teases who is waiting (idle breath unless reduced motion)
       g.save(); g.globalAlpha = 0.34 + (calm(app) ? 0 : 0.06 * Math.sin(app.t * 1.6 + idx));

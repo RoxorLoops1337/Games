@@ -336,22 +336,148 @@ export function cardTipStack(spec, c, o = {}) {
 }
 
 // ---- rendering ----
-const MAXW = 320, PAD = 12, TI = 19, BO = 16;
+const MAXW = 320, PAD = 12, TI = 19, BO = 16, WH = 15, GAP = 8, EDGE = 6, RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
 let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
 // resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
 export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
-const sc = (app, n) => Math.round(n * (app.textScale || 1));
-// compact: a tight band (about 140px tall) gets a wide, low panel: 16px titles, 15px text, 4px between entries.
-function measurePanel(app, sections, W = MAXW, compact = false) {
-  const bw = W - PAD * 2; let h = PAD * 2;
-  const ti = compact ? 16 : TI, bo = compact ? 15 : BO, gap = compact ? 4 : 8, tg = compact ? 2 : 5;
-  const lay = sections.map((s) => {
-    const body = s.text ? app.wrap(s.text, bw, sc(app, bo), { ui: true }) : [];
-    const why = (s.why || []).map((w) => app.wrap(w, bw, sc(app, 15), { ui: true }));
-    const sh = sc(app, ti) + tg + body.length * Math.round(sc(app, bo) * 1.25) + why.reduce((a, l) => a + l.length * Math.round(sc(app, 15) * 1.25) + 3, 0) + gap;
-    h += sh; return { s, body, why, sh };
+// ---- measured layout ----
+// Every section is measured with app.layoutText at the real (boosted) text size, and drawn from the SAME records, so the heights it reserves are the
+// heights it uses. Sections stack with a consistent gap into panels; panels flow into columns inside the free area (the stage minus the safe area), and
+// the block is placed beside the anchor, flipped to the other side or the nearest band when it would run off, and kept out of the reserved top-right zone.
+function measureSection(app, s, bw, cfg) {
+  const gx = s.glyph ? 18 : 0;
+  const title = app.layoutText(s.title || ' ', { size: cfg.ti, bold: true, maxW: bw - gx });
+  const bodyO = { size: cfg.bo, ui: true, maxW: bw, lineH: Math.round(cfg.bo * 1.25) };
+  const body = s.text ? app.layoutText(s.text, bodyO) : null;
+  const whyO = { size: WH, ui: true, maxW: bw, lineH: Math.round(WH * 1.25) };
+  const why = (s.why || []).map((w) => ({ str: w, L: app.layoutText(w, whyO) }));
+  const th = title.lines.length * title.lineH;
+  const bh = body ? body.lines.length * body.lineH : 0;
+  const wh = why.reduce((a, w) => a + w.L.lines.length * w.L.lineH + 3, 0);
+  return { s, gx, title, body, bodyO, why, whyO, th, bh, wh, h: th + cfg.tg + bh + wh };
+}
+function buildPanels(app, panels, W, cfg, availH) {
+  const bw = W - PAD * 2, out = [];
+  for (const p of panels) {
+    const secs = p.map((s) => measureSection(app, s, bw, cfg));
+    let cur = [], h = PAD * 2;
+    for (const m of secs) {
+      const add = (cur.length ? cfg.gap : 0) + m.h;
+      if (cur.length && h + add > availH) { out.push({ secs: cur, h, w: W }); cur = []; h = PAD * 2; }
+      h += (cur.length ? cfg.gap : 0) + m.h; cur.push(m);
+    }
+    if (cur.length) out.push({ secs: cur, h, w: W });
+  }
+  return out;
+}
+function flowColumns(panels, availH) {
+  const cols = []; let cur = null;
+  for (const p of panels) {
+    if (!cur || cur.h + GAP + p.h > availH) { cur = { items: [], h: 0, w: p.w }; cols.push(cur); }
+    cur.h += (cur.items.length ? GAP : 0) + p.h; cur.items.push(p);
+  }
+  return cols;
+}
+function fitBlock(app, panels, availW, availH) {
+  const phone = app.scale < 0.95;
+  const boost = Math.max(1, app.sz(BO) / BO);
+  const W0 = phone ? Math.round(Math.max(MAXW, Math.min(0.40 * 1280, MAXW * boost))) : MAXW;
+  const tries = [
+    { W: W0, cfg: { ti: TI, bo: BO, gap: GAP, tg: 5 } },
+    { W: W0, cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
+    { W: Math.min(Math.round(W0 * 1.4), 520), cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
+  ];
+  let last = null;
+  for (const t of tries) {
+    const W = Math.min(t.W, Math.max(200, availW));
+    const ps = buildPanels(app, panels, W, t.cfg, availH), cols = flowColumns(ps, availH);
+    const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h));
+    last = { cols, w, h, cfg: t.cfg, ok: w <= availW + 0.5 && h <= availH + 0.5 };
+    if (last.ok) return last;
+  }
+  // last resort: drop trailing sections (the least important definitions) until it fits
+  let rest = panels.map((p) => p.slice());
+  while (!last.ok) {
+    let i = rest.length - 1; while (i >= 0 && !rest[i].length) i--;
+    if (i < 0 || (rest.flat().length <= 1)) break;
+    rest[i].pop(); if (!rest[i].length) rest.pop();
+    const W = last.cols[0].w, ps = buildPanels(app, rest, W, last.cfg, availH), cols = flowColumns(ps, availH);
+    last = { cols, w: cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h: Math.max(...cols.map((c) => c.h)), cfg: last.cfg };
+    last.ok = last.w <= availW + 0.5 && last.h <= availH + 0.5;
+  }
+  return last;
+}
+const ovl = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+// keep a rect out of the reserved Pause / Fullscreen zone: slide it down under the zone, else left of it
+function clearReserved(r, B) {
+  if (!ovl(r, RESERVED)) return r;
+  if (r.y < RESERVED.y + RESERVED.h + 4 && RESERVED.y + RESERVED.h + 4 + r.h <= B.y1) return { ...r, y: RESERVED.y + RESERVED.h + 4 };
+  return { ...r, x: Math.max(B.x0, RESERVED.x - 4 - r.w) };
+}
+// free placement: right, left, below, above of the anchor; the candidate that covers the anchor and the pointer least, runs off least, wins
+function place(app, a, w, h, B) {
+  const m = app.mouse;
+  const cands = [
+    { x: a.x + a.w + 10, y: a.y }, { x: a.x - w - 10, y: a.y },
+    { x: a.x + a.w / 2 - w / 2, y: a.y + a.h + 10 }, { x: a.x + a.w / 2 - w / 2, y: a.y - h - 10 },
+  ];
+  let best = null;
+  cands.forEach((c, i) => {
+    const off = Math.max(0, B.x0 - c.x) + Math.max(0, c.x + w - B.x1) + Math.max(0, B.y0 - c.y) + Math.max(0, c.y + h - B.y1);
+    let r = { x: Math.max(B.x0, Math.min(B.x1 - w, c.x)), y: Math.max(B.y0, Math.min(B.y1 - h, c.y)), w, h };
+    r = clearReserved(r, B);
+    const under = m.x >= r.x - 4 && m.x <= r.x + w + 4 && m.y >= r.y - 4 && m.y <= r.y + h + 4 ? 1e6 : 0;
+    const cost = ovl(r, a) * 4 + under + off * 50 + ovl(r, RESERVED) * 4 + i;
+    if (!best || cost < best.cost) best = { cost, r };
   });
-  return { lay, h: h - gap, w: W, compact, ti, bo, gap, tg };
+  return best.r;
+}
+export function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
+function drawStack(app, stack, anchor) {
+  const ctx = app.ctx, B = tipBounds(app);
+  const secs = stack.slice(0, 2).map((p) => p.slice());
+  if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
+  // anchor.band = { x, y, bottom, dir }: a fixed band beside the item (+1 right / -1 left of x) the panels fill column by column. When the stack
+  // does not fit the band it is placed freely beside the item instead.
+  const band = anchor.band;
+  let blk = null, rect = null;
+  if (band) {
+    const bx = band.dir > 0 ? band.x : band.x - 1, availW = band.dir > 0 ? B.x1 - band.x : bx - B.x0;
+    const by = Math.max(B.y0, band.y), availH = Math.min(band.bottom, B.y1) - by;
+    if (availW > 200 && availH > 100) {
+      const f = fitBlock(app, secs, availW, availH);
+      if (f.ok) { blk = f; rect = clearReserved({ x: band.dir > 0 ? band.x : band.x - f.w, y: by, w: f.w, h: f.h }, B); }
+    }
+  }
+  if (!blk) {
+    blk = fitBlock(app, secs, B.x1 - B.x0, B.y1 - B.y0);
+    rect = place(app, anchor, blk.w, blk.h, B);
+  }
+  const L = { rect, panels: [], anchor, frame: app.frame };
+  app._tipDraw = true;
+  let cx = rect.x, idx = 0;
+  for (const col of blk.cols) {
+    let y = rect.y;
+    for (const p of col.items) {
+      const first = p.secs[0] && p.secs[0].s, W = p.w, pl = { x: cx, y, w: W, h: p.h, secs: [] };
+      app.panel(cx, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
+      app.reg('tip' + idx++, cx, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
+      let yy = y + PAD;
+      p.secs.forEach((m, si) => {
+        const s = m.s, sy = yy;
+        if (s.glyph) drawGlyph(ctx, s.glyph, cx + PAD + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
+        app.text(s.title || ' ', cx + PAD + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - PAD * 2 - m.gx, color: s.color || COL.lamp });
+        yy += m.th + blk.cfg.tg;
+        if (m.body) { app.text(s.text, cx + PAD, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
+        for (const w of m.why) { app.text(w.str, cx + PAD, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
+        pl.secs.push({ x: cx + PAD, y: sy, w: W - PAD * 2, h: yy - sy, title: s.title });
+        yy += blk.cfg.gap;
+      });
+      L.panels.push(pl); y += p.h + GAP;
+    }
+    cx += col.w + GAP;
+  }
+  app._tipDraw = false; app.tipLayout = L;
 }
 // Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
 // live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
@@ -377,61 +503,6 @@ function toStack(tip) {
   if (stack.length !== 1) return stack;
   const gl = glossPanel(stack, tip);
   return gl.length ? [stack[0], gl] : stack;
-}
-function place(app, a, w, h, prevBottomY) {
-  // right of the item, else left, else below/above; never under the pointer, always on screen
-  const m = app.mouse;
-  const cands = [
-    { x: a.x + a.w + 10, y: a.y }, { x: a.x - w - 10, y: a.y },
-    { x: a.x + a.w / 2 - w / 2, y: a.y + a.h + 10 }, { x: a.x + a.w / 2 - w / 2, y: a.y - h - 10 },
-  ];
-  let best = null;
-  for (const c of cands) {
-    const x = Math.max(6, Math.min(1274 - w, c.x)), y = Math.max(6, Math.min(714 - h, c.y));
-    const under = m.x >= x - 4 && m.x <= x + w + 4 && m.y >= y - 4 && m.y <= y + h + 4;
-    const clipped = c.x < 6 || c.x + w > 1274;
-    if (!under && !clipped) { best = { x, y }; break; }
-    if (!best && !under) best = { x, y };
-  }
-  return best || { x: Math.max(6, Math.min(1274 - w, a.x + a.w + 10)), y: Math.max(6, Math.min(714 - h, a.y)) };
-}
-function drawStack(app, stack, anchor) {
-  const ctx = app.ctx;
-  const secs = stack.slice(0, 2);
-  if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
-  const panels = secs.map((p) => measurePanel(app, p));
-  const totalH = panels.reduce((a, p) => a + p.h, 0) + (panels.length - 1) * 8;
-  // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement.
-  // A panel that does not fit below the first one moves to the next column; in a tight band it is re-measured wide and low so it fits there.
-  const band = anchor.band;
-  const pos = band ? { x: band.x, y: band.y } : place(app, anchor, MAXW, Math.min(totalH, 700));
-  let y = band ? Math.min(band.y, Math.max(6, 714 - panels[0].h)) : Math.max(6, Math.min(714 - totalH, pos.y));
-  let col = 0, colX = band ? band.x : 0;
-  panels.forEach((p0, i) => {
-    let p = p0;
-    if (band && i > 0 && y + p.h > band.bottom) {
-      col++; y = band.y; colX += band.dir * (panels[i - 1].w + 8);
-      const room = band.dir > 0 ? 1274 - colX : colX - 6;
-      if (p.h > band.bottom - band.y + 2 && room >= 320) p = measurePanel(app, secs[i], Math.min(room, 520), true);
-      if (y + p.h > 718) y = Math.max(6, 718 - p.h);
-      panels[i] = p;
-    }
-    pos.x = band ? colX - (band.dir < 0 ? p.w : 0) : pos.x;
-    const first = p.lay[0] && p.lay[0].s, W = p.w;
-    app.panel(pos.x, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
-    app.reg('tip' + i, pos.x, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
-    let yy = y + PAD;
-    for (const L of p.lay) {
-      const s = L.s, gx = s.glyph ? 18 : 0;
-      if (s.glyph) drawGlyph(ctx, s.glyph, pos.x + PAD + 7, yy + sc(app, p.ti) * 0.55, 13, s.color || COL.lamp);
-      app.text(s.title || '', pos.x + PAD + gx, yy, { size: p.ti, bold: true, color: s.color || COL.lamp });
-      yy += sc(app, p.ti) + p.tg;
-      if (L.body.length) { app.text(s.text, pos.x + PAD, yy, { size: p.bo, ui: true, maxW: W - PAD * 2, lineH: Math.round(sc(app, p.bo) * 1.25), color: COL.vellum }); yy += L.body.length * Math.round(sc(app, p.bo) * 1.25); }
-      for (const wl of L.why) { app.text(wl.join(' '), pos.x + PAD, yy + 3, { size: 15, ui: true, maxW: W - PAD * 2, lineH: Math.round(sc(app, 15) * 1.25), color: COL.lamp }); yy += wl.length * Math.round(sc(app, 15) * 1.25) + 3; }
-      yy += p.gap;
-    }
-    y += p.h + 8;
-  });
 }
 // Core hook: returns true when it drew the tip. A plain tip anchors on the pointer.
 export function renderTip(app, tip) {
