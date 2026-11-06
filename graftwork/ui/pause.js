@@ -8,7 +8,7 @@ import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, reques
 import { saveRun } from '../engine/save.js';
 import { lnw } from '../art/linework.js';
 
-export const IN_RUN = new Set(['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
+export const IN_RUN = new Set(['map', 'ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
 export const PAUSE_BTN = { x: 1136, y: 9, w: 44, h: 38 };
 export const FS_BTN = { x: 1188, y: 9, w: 44, h: 38 };
 // Chrome buttons stay inside the safe corner (notch, home bar, cropped strip): shifted by app.safe, unchanged when it is zero.

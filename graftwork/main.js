@@ -19,6 +19,7 @@ import shop from './ui/shop.js';
 import forge from './ui/forge.js';
 import event from './ui/event.js';
 import end from './ui/end.js';
+import ward, { wardInterlude } from './ui/ward.js';
 import deckview from './ui/deckview.js';
 import codex from './ui/codex.js';
 import archive from './ui/archive.js';
@@ -60,6 +61,7 @@ export function boot(canvas) {
       }
       saveRun(run);
       const scr = PHASE_SCREEN[run.phase] || 'map';
+      if (run.mode === 'ward' && scr !== 'ward' && scr !== 'end' && wardInterlude(app, run, scr)) return; // the hero walks to the next trigger on the Ward first
       const kind = run.pending && run.pending.fightKind;
       audio.music(scr === 'combat' ? (kind === 'boss' || kind === 'final' ? 'boss' : ACT_THEME[run.act])
         : scr === 'map' ? ACT_THEME[run.act] : scr === 'graft' ? 'grafting' : scr === 'shop' ? 'shop' : scr === 'forge' ? 'forge'
@@ -84,7 +86,7 @@ export function boot(canvas) {
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause };
+  const S = { title, map, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
