@@ -1645,7 +1645,7 @@ function drawTopBar(app) {
   if (app.button('Deck', L.DECK_BTN.x, L.DECK_BTN.y, L.DECK_BTN.w, L.DECK_BTN.h, { size: 18 })) { const f = app.shared.flow; if (f && f.openDeck) f.openDeck(); }
 }
 
-const PILE_LABEL = { draw: 'DRAW', disc: 'DISCARD', exh: 'EXHAUST' };
+const PILE_LABEL = { draw: 'DRAW', disc: 'DISCARD', exh: 'EXH' };
 function pileStack(app, pos, count, s, label, key, onClick) {
   const ctx = app.ctx, pl = S.pulse[key] || 0;
   const bw = CARD_W * s, bh = CARD_H * s;
@@ -1661,14 +1661,14 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   else for (let i = layers - 1; i >= 0; i--) drawCardBack(ctx, -i * 2, -i * 2.5, { scale: s });
   ctx.restore();
   // label ribbon across the lower part of the pile
-  const fs = key === 'exh' ? 10 : 12, ly = pos.y + bh / 2 - fs - 6;
+  const fs = 14, ly = Math.min(pos.y + bh / 2 - fs - 6, H - fs - 6);
   ctx.save(); ctx.fillStyle = 'rgba(10,8,8,.82)'; ctx.fillRect(pos.x - bw / 2, ly - 2, bw, fs + 6); ctx.restore();
   app.text(PILE_LABEL[key] || label, pos.x, ly, { size: fs, bold: true, ui: true, align: 'center', color: count ? COL.vellum : 'rgba(232,220,196,.55)', fixed: true });
   // count badge on the top right corner of the pile (inside the registered rect, clear of the screen edge), bumps when cards arrive
   const bx = pos.x + bw / 2 - 1, by = pos.y - bh / 2 + 11, br = 15 + pl * 4;
   ctx.save(); ctx.fillStyle = count ? 'rgba(14,12,10,.95)' : 'rgba(14,12,10,.7)'; ctx.strokeStyle = pl > 0 ? COL.lamp : count ? COL.vellum : 'rgba(232,220,196,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text(String(count), bx, by - 9, { size: 16 + Math.round(pl * 3), bold: true, ui: true, align: 'center', fixed: true, color: count ? '#fff' : 'rgba(232,220,196,.6)' });
-  const R = { x: pos.x - bw / 2 - 5, y: pos.y - bh / 2 - 5, w: bw + 24, h: bh + 10 };
+  const ry0 = Math.max(pos.y - bh / 2 - 5, L.ORB.y + L.ORB.size / 2 + 1), R = { x: pos.x - bw / 2 - 5, y: ry0, w: bw + 24, h: H - ry0 };
   app.reg('pile_' + key, R.x, R.y, R.w, R.h, {});
   if (app.inRect(R.x, R.y, R.w, R.h)) {
     app.cursor = 'pointer'; queueTip(app, 'pile' + key + count, [[{ title: label, text: `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`, color: COL.vellum, glyph: 'square' }]], R);
