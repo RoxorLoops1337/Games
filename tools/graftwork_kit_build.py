@@ -57,7 +57,49 @@ PROPS = {
     'pew': {'sw': 30, 'fp': [2, 1], 'name': 'Pew'},
     'candle_stand': {'sw': 12, 'fp': [1, 1], 'name': 'Candle stand'},
     'lectern': {'sw': 14, 'fp': [1, 1], 'name': 'Lectern'},
+    # batch 4 (the remaining rooms)
+    'boiler_tank': {'sw': 22, 'fp': [2, 1], 'name': 'Boiler tank'},
+    'coal_pile': {'sw': 26, 'fp': [2, 1], 'name': 'Coal pile'},
+    'valve_wheel': {'sw': 10, 'fp': [1, 1], 'name': 'Valve wheel'},
+    'cable_coil': {'sw': 15, 'fp': [1, 1], 'name': 'Cable coil'},
+    'fuse_box': {'sw': 13, 'fp': [1, 1], 'name': 'Fuse box'},
+    'counting_desk': {'sw': 24, 'fp': [2, 1], 'name': 'Counting desk'},
+    'coin_chest': {'sw': 14, 'fp': [1, 1], 'name': 'Coin chest'},
+    'abacus': {'sw': 13, 'fp': [1, 1], 'name': 'Abacus'},
+    'pharmacy_counter': {'sw': 28, 'fp': [2, 1], 'name': 'Pharmacy counter'},
+    'pill_jars': {'sw': 15, 'fp': [1, 1], 'name': 'Pill jar cabinet'},
+    'padded_cot': {'sw': 31, 'fp': [2, 1], 'name': 'Padded cot'},
+    'restraint_chair': {'sw': 13, 'fp': [1, 1], 'name': 'Restraint chair'},
+    'stove': {'sw': 22, 'fp': [2, 1], 'name': 'Iron stove'},
+    'prep_table': {'sw': 28, 'fp': [2, 1], 'name': 'Prep table'},
+    'cauldron': {'sw': 14, 'fp': [1, 1], 'name': 'Cauldron'},
+    'hanging_pots': {'sw': 15, 'fp': [1, 1], 'name': 'Hanging pot rack'},
+    'wash_tub': {'sw': 15, 'fp': [1, 1], 'name': 'Wash tub'},
+    'mangle': {'sw': 28, 'fp': [2, 1], 'name': 'Mangle'},
+    'drying_rack': {'sw': 26, 'fp': [2, 1], 'name': 'Drying rack'},
+    'bookcase': {'sw': 24, 'fp': [2, 1], 'name': 'Bookcase'},
+    'reading_desk': {'sw': 26, 'fp': [2, 1], 'name': 'Reading desk'},
+    'globe': {'sw': 11, 'fp': [1, 1], 'name': 'Globe'},
+    'library_ladder': {'sw': 10, 'fp': [1, 1], 'name': 'Library ladder'},
+    'linen_shelf': {'sw': 14, 'fp': [1, 1], 'name': 'Linen shelf'},
+    'linen_cart': {'sw': 17, 'fp': [1, 1], 'name': 'Linen cart'},
+    'slab_table': {'sw': 31, 'fp': [2, 1], 'name': 'Slab table'},
+    'locker_wall': {'sw': 30, 'fp': [2, 1], 'name': 'Locker wall'},
+    'sheet_body': {'sw': 31, 'fp': [2, 1], 'name': 'Sheeted body'},
+    'operating_table': {'sw': 28, 'fp': [2, 1], 'name': 'Operating table'},
+    'footlights': {'sw': 28, 'fp': [2, 1], 'name': 'Footlights'},
+    'instrument_tray': {'sw': 11, 'fp': [1, 1], 'name': 'Instrument tray'},
+    'throne': {'sw': 11, 'fp': [1, 1], 'name': 'Throne'},
+    'workbench': {'sw': 28, 'fp': [2, 1], 'name': 'Workbench'},
+    'anvil': {'sw': 11, 'fp': [1, 1], 'name': 'Anvil'},
+    'tool_chest': {'sw': 14, 'fp': [1, 1], 'name': 'Tool chest'},
+    'pickaxe_rack': {'sw': 15, 'fp': [1, 1], 'name': 'Pickaxe rack'},
+    'ore_cart': {'sw': 28, 'fp': [2, 1], 'name': 'Ore cart'},
+    'work_lamp': {'sw': 7, 'fp': [1, 1], 'name': 'Work lamp'},
 }
+# per-prop raw fixes: despeckle = key-colour magenta left in see-through ironwork becomes transparent;
+# fade_top = fraction of the trimmed height over which the top fades out (chains that ran off the canvas)
+FIX = {'hanging_pots': {'despeckle': True, 'fade_top': 0.12}}
 # wall pieces: height in world units, mount ('floor' = bottom on the floor line, 'mid' = centred at wall mid height), display name
 PIECES = {
     'window': {'h': 30, 'mount': 'mid', 'name': 'Gothic window'},
@@ -119,6 +161,19 @@ def save_pair(im, d, id_):
     save_webp(clean(half), os.path.join(d, f'{id_}@1x.webp'))
 
 
+def fix_prop(im, fx):
+    a = np.array(im).copy()
+    if fx.get('despeckle'):
+        rgb = a[..., :3].astype(int)
+        m = (a[..., 3] > 0) & (rgb[..., 0] > 140) & (rgb[..., 2] > 140) & (rgb[..., 1] < 120) & (rgb[..., 0] - rgb[..., 1] > 70)
+        a[m] = 0
+    if fx.get('fade_top'):
+        n = int(a.shape[0] * fx['fade_top'])
+        ramp = np.linspace(0, 1, n)[:, None]
+        a[:n, :, 3] = (a[:n, :, 3] * ramp).astype(np.uint8)
+    return Image.fromarray(a, 'RGBA')
+
+
 def trim(im):
     a = np.array(im)[..., 3] > 20
     ys, xs = np.where(a)
@@ -164,6 +219,8 @@ for id_, d in PROPS.items():
     if not os.path.exists(f):
         continue
     im = trim(clean(Image.open(f)))
+    if id_ in FIX:
+        im = fix_prop(im, FIX[id_])
     wpx = round(d['sw'] * PX_PER_UNIT)
     im = clean(im.resize((wpx, max(1, round(im.height * wpx / im.width))), Image.LANCZOS))
     save_pair(im, os.path.join(OUT, 'props'), id_)

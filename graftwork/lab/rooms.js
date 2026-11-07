@@ -506,9 +506,9 @@ function renderBar() {
   if (S.scene === 'build') {
     const tools = grp('Tool'); for (const [id, n] of [['prop', 'Place'], ['erase', 'Erase']]) tools.appendChild(btn(n, S.build.tool === id, () => { S.build.tool = id; renderBar(); }));
     tools.appendChild(btn(S.build.flip ? 'Flipped' : 'Flip', S.build.flip, () => { S.build.flip = !S.build.flip; renderBar(); })); bar.appendChild(tools);
-    const props = grp('Props'); for (const [id, d] of Object.entries(KITM ? KITM.props : {})) props.appendChild(thumb(d, id, 'prop'));
+    const props = grp('Props (' + Object.keys(KITM ? KITM.props : {}).length + ')'); props.classList.add('wrap'); for (const [id, d] of Object.entries(KITM ? KITM.props : {})) props.appendChild(thumb(d, id, 'prop'));
     bar.appendChild(props);
-    const pcs = grp('Wall pieces'); for (const [id, d] of Object.entries(KITM ? KITM.pieces : {})) if (id !== 'door') pcs.appendChild(thumb(d, id, 'piece')); bar.appendChild(pcs);
+    const pcs = grp('Wall pieces'); pcs.classList.add('wrap'); for (const [id, d] of Object.entries(KITM ? KITM.pieces : {})) if (id !== 'door') pcs.appendChild(thumb(d, id, 'piece')); bar.appendChild(pcs);
     const room = S.rooms.get('0,0'), th = grp('Floor theme'); for (const [id, d] of Object.entries(KITM ? KITM.floors : {})) th.appendChild(btn(d.name, room.floor === id, () => { room.floor = id; renderBar(); }));
     const tw = grp('Wall theme'); for (const [id, d] of Object.entries(KITM ? KITM.walls : {})) tw.appendChild(btn(d.name, room.wall === id, () => { room.wall = id; renderBar(); }));
     bar.appendChild(th); bar.appendChild(tw);
