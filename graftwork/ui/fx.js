@@ -130,6 +130,8 @@ export class Fx {
   }
   // number of live particles (for tests / debug)
   get count() { return this.pool ? this.pool.n : 0; }
+  // true while anything this Fx owns is still moving (particles, floats, bolts, rings, flashes, shake, hit-stop, slow-mo, zoom): the idle pacing and the static-frame logic ask
+  get busy() { return this.count > 0 || this.floats.length > 0 || this.bolts.length > 0 || this.rings.length > 0 || this.flashes.length > 0 || this.trauma > 0.001 || this.stop > 0 || this.slow > 0 || Math.abs(this.zm) > 0.001; }
   // live particle cap: halves at quality low (0.5), quarter floor; mobile starts from the smaller base
   _cap() { const b = FX_OPTS.mobile ? CAP_MOBILE : CAP_DESKTOP, q = FX_OPTS.quality; return q !== undefined && q < 1 ? Math.max(100, Math.round(b * Math.max(0.25, q))) : b; }
   _pool() { return this.pool || (this.pool = makePool(CAP_DESKTOP)); }

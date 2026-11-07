@@ -103,15 +103,16 @@ export function createGovernor(o = {}) {
   g.input = (now) => { g.lastInput = now; };
   g.enter = (now) => { g.enteredAt = now; };
   // target interval in ms for the current state (0 = every callback)
-  g.wanted = (now, screen, tier, hidden = false, reduced = false) => {
+  // calm: the active screen says nothing on it moves fast (screen.calm(app), round 2): it may idle at 30 fps like the title even though it is not in `screens`
+  g.wanted = (now, screen, tier, hidden = false, reduced = false, calm = false) => {
     if (hidden) return Infinity;
-    if (!g.screens.includes(screen)) return 0;
+    if (!calm && !g.screens.includes(screen)) return 0;
     if (tier === 'minimal') return g.interval;
     return now - Math.max(g.lastInput, g.enteredAt) >= g.idleAfter ? g.interval : 0;
   };
   // true when this rAF callback should run a tick. 3 ms of slack so a 60 Hz display lands on every second vsync instead of slipping to every third.
-  g.shouldRun = (now, lastRun, screen, tier, hidden = false) => {
-    const w = g.wanted(now, screen, tier, hidden);
+  g.shouldRun = (now, lastRun, screen, tier, hidden = false, calm = false) => {
+    const w = g.wanted(now, screen, tier, hidden, false, calm);
     g.capped = w > 0 && w !== Infinity;
     if (w === Infinity) { g.skipped++; return false; }
     if (w === 0 || now - lastRun >= w - 3) { g.ran++; return true; }

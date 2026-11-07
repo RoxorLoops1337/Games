@@ -18,6 +18,9 @@ import { COL } from '../ui/core.js';
 import { cardLines, priceLines } from '../engine/text.js';
 import { GRAFTS } from '../data/index.js';
 import { lnw } from './linework.js';
+import { createFaceLru, chooseBucket, idealBucket, LEGACY, PIXEL_BUDGET, BIG_MAX, BIG_FROM } from './face_lod.js';
+import { deviceScale } from '../ui/smoothing.js';
+import { FLAGS } from '../ui/perf_flags.js';
 import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf } from '../ui/templates.js';
 
 export const CARD_W = 220, CARD_H = 310;
@@ -1016,25 +1019,34 @@ function faceTemplate(spec, o) {
 }
 
 // ---------- caching ----------
-const S = 1.5, PAD = 26, LM = 14;
-const cache = new Map(); const CACHE_MAX = 110;
+// Faces are baked at a BUCKET of render scales (art/face_lod.js): the smallest step that is not below the device pixels the card is drawn at, so a 40 card deck grid
+// is no longer a 3x downscale of a 1.5x bitmap every frame and a zoomed card on a DPR 3 phone is rendered at device resolution. The key carries the bucket.
+const PAD = 26, LM = 14;
+const cache = createFaceLru({ max: 110, budget: PIXEL_BUDGET, bigMax: BIG_MAX });
+let builtNow = 0;
+export function cardFrame() { builtNow = 0; } // main.js calls this once per tick: the per-frame budget of face builds
+export const cardCacheStats = () => ({ faces: cache.size, pixels: cache.pixels, big: cache.bigCount, evicted: cache.stats.evicted, builds: FACE_STATS.builds, reuse: FACE_STATS.reuse });
+const FACE_STATS = { builds: 0, reuse: 0 };
 function faceKey(spec, lines, price, o) {
   return [spec.id, spec.up ? 1 : 0, (spec.grafts || []).join(','), (spec.fused || []).join(','), o.tithed ? 1 : 0, o.jam ? 1 : 0, o.compact ? 1 : 0, o.mark || '', o.rarity || spec.rarity || '', spec.type, spec.school || '', lines.join('|'), price.join('|')].join('#');
 }
-function getFace(spec, o) {
+function getFace(spec, o, need) {
   const lines = cardLines(spec, !!o.tithed), price = priceLines(spec);
   const T = faceTemplate(spec, o);
-  const key = faceKey(spec, lines, price, o) + (T ? '#T:' + T.fr.id : '');
-  let ent = cache.get(key);
-  if (ent) { cache.delete(key); cache.set(key, ent); return ent; }
+  const base = faceKey(spec, lines, price, o) + (T ? '#T:' + T.fr.id : '');
+  const pick = chooseBucket(need, (b) => cache.has(base + '@' + b), builtNow);
+  const key = base + '@' + pick.bucket;
+  let ent = pick.build ? undefined : cache.get(key);
+  if (ent) { if (pick.bucket !== idealBucket(need)) FACE_STATS.reuse++; return ent; }
+  const S = pick.bucket;
   const win = T ? T.slots.window : o.compact ? ((spec.grafts || []).length ? WINCG : WINC) : WIN, I = artInfo(spec);
   const cv = makeCanvas(Math.ceil((CARD_W + PAD * 2) * S), Math.ceil((CARD_H + PAD * 2) * S));
   if (cv) {
+    builtNow++; FACE_STATS.builds++;
     cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + PAD, HH + PAD);
     if (T) renderFaceTemplate(cv.g, spec, lines, price, o, I, T); else renderFace(cv.g, spec, lines, price, o, I, win);
-    ent = { cv: cv.c, win, info: I, layers: undefined, T };
+    ent = { cv: cv.c, win, info: I, layers: undefined, T, S, px: cv.c.width * cv.c.height, big: S >= BIG_FROM };
     cache.set(key, ent);
-    if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
     return ent;
   }
   return { direct: (g) => (T ? renderFaceTemplate(g, spec, lines, price, o, I, T) : renderFace(g, spec, lines, price, o, I, win)), win, info: I, T };
@@ -1042,7 +1054,7 @@ function getFace(spec, o) {
 export function clearCardCache() { cache.clear(); backCache = {}; }
 function buildLayers(ent) { // lazy: only cards that are ever tilted pay for the 3 parallax canvases
   if (ent.layers !== undefined) return ent.layers;
-  const w = ent.win, I = ent.info, mk = (ww, hh) => makeCanvas(Math.ceil(ww * S), Math.ceil(hh * S));
+  const S = ent.S || 1.5, w = ent.win, I = ent.info, mk = (ww, hh) => makeCanvas(Math.ceil(ww * S), Math.ceil(hh * S));
   const a = mk(w.w + 2 * LM, w.h + 2 * LM), b = mk(w.w + 2 * LM, w.h + 2 * LM), c = mk(w.w + 2 * LM, w.h + 2 * LM), d = mk(w.w + 8, w.h + 8);
   if (!a || !b || !c || !d) { ent.layers = null; return null; }
   [a, b, c].forEach((q) => { q.g.setTransform(S, 0, 0, S, 0, 0); q.g.translate(-(w.x - LM), -(w.y - LM)); });
@@ -1144,7 +1156,7 @@ export function drawCard(ctx, spec, x, y, o = {}) {
     const a = o.selected ? Math.max(gl, 0.7) : gl;
     for (let i = 4; i >= 1; i--) { rr(ctx, -HW - i * 3, -HH - i * 3, CARD_W + i * 6, CARD_H + i * 6, 12 + i * 3); ctx.fillStyle = alpha(col, a * 0.1); ctx.fill(); }
   }
-  const face = getFace(spec, o), win = face.win, tl = o.tilt, tx = tl ? tl.x || 0 : 0, ty = tl ? tl.y || 0 : 0;
+  const face = getFace(spec, o, FLAGS.faceLod && typeof ctx.getTransform === 'function' ? deviceScale(ctx) : LEGACY), win = face.win, tl = o.tilt, tx = tl ? tl.x || 0 : 0, ty = tl ? tl.y || 0 : 0;
   if (face.cv) {
     ctx.drawImage(face.cv, -HW - PAD, -HH - PAD, CARD_W + PAD * 2, CARD_H + PAD * 2);
     if (tl && (Math.abs(tx) > 0.02 || Math.abs(ty) > 0.02)) { // 3-layer parallax: back wash 2px, motif 5px, foreground 9px
@@ -1302,7 +1314,7 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.save(); ctx.translate(-L.x * 7, -L.y * 10); rr(ctx, -HW, -HH, CARD_W, CARD_H, 12); ctx.fillStyle = 'rgba(0,0,0,.34)'; ctx.fill(); ctx.restore();
   const bid = BACK_IDS.includes(o.back) ? o.back : curBack, P = PAL[bid];
   const BT = backTemplate(bid, o), bkey = BT ? bid + '@' + BT.fr.id : bid; // a template back (per hero or act when the manifest has one) replaces the procedural one
-  if (backCache[bkey] === undefined) { const cv = makeCanvas(Math.ceil((CARD_W + 8) * S), Math.ceil((CARD_H + 8) * S)); if (cv) { cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + 4, HH + 4); if (BT) renderBackTemplate(cv.g, BT, P); else renderBack(cv.g, bid); backCache[bkey] = cv.c; } else backCache[bkey] = false; }
+  if (backCache[bkey] === undefined) { const BS = LEGACY, cv = makeCanvas(Math.ceil((CARD_W + 8) * BS), Math.ceil((CARD_H + 8) * BS)); if (cv) { cv.g.setTransform(BS, 0, 0, BS, 0, 0); cv.g.translate(HW + 4, HH + 4); if (BT) renderBackTemplate(cv.g, BT, P); else renderBack(cv.g, bid); backCache[bkey] = cv.c; } else backCache[bkey] = false; }
   if (backCache[bkey]) ctx.drawImage(backCache[bkey], -HW - 4, -HH - 4, CARD_W + 8, CARD_H + 8); else if (BT) renderBackTemplate(ctx, BT, P); else renderBack(ctx, bid);
   const pulse = 0.5 + 0.5 * Math.sin(t * 1.6), pg = ctx.createRadialGradient(0, 0, 4, 0, 0, 84); pg.addColorStop(0, `rgba(${P.glow},${(bid === 'bone' ? 0.06 : 0.1) + 0.16 * pulse * (bid === 'bone' ? 0.4 : 1)})`); pg.addColorStop(1, `rgba(${P.glow},0)`); ctx.fillStyle = pg; ctx.fillRect(-90, -100, 180, 200);
   rr(ctx, -HW + 0.75, -HH + 0.75, CARD_W - 1.5, CARD_H - 1.5, 11.5);

@@ -62,6 +62,7 @@ export const GLOSSARY = [
 ];
 
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
     this.k = calm(app) ? 1 : 0; this.clock = 0; this.mode = 'menu'; this.confirm = null; this.sel = 0; this.scroll = 0; this.fresh = true;
     this.lastMx = -1; this.lastMy = -1;

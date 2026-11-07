@@ -36,6 +36,7 @@ const isOwned = (meta, c, e) => e.id === null || meta.cosmetics[c.list].includes
 const isOn = (meta, c, e) => meta.loadout[LOADOUT[c.id]] === e.id;
 
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
     this.cat = 0; this.toast = null;
     this.anim = (app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0;

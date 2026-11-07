@@ -281,6 +281,7 @@ function ruleArt(app, i, cx, cy, w, h) {
 
 // ---------------------------------------------------------------- the screen
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
     this.tab = 0; this.q = ''; this.filt = {}; this.sts = {}; this.pending = null;
     this.anim = (app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0;

@@ -28,6 +28,7 @@ export function settingsOf(app) {
 }
 
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
     this.k = 0; this.foc = 0; this.kb = false; this.rows = []; this.drag = null; this.reset = 0; this.fresh = true;
     settingsOf(app);

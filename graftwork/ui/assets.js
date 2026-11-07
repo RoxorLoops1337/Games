@@ -44,7 +44,7 @@ export function pickAtkFrame(by, phase, k = 0) {
 
 export function createAssets(opts = {}) {
   const A = {
-    base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, hits: 0,
+    base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, hits: 0, ver: 0,
     // test / tool hooks: a fetch and an image factory can be injected
     fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null,
     // the modular room kit (assets/ward_kit/manifest.json): floors, walls, pieces, props. Optional: no kit means every room is painted.
@@ -95,8 +95,8 @@ export function createAssets(opts = {}) {
   // decode (the long task on the first frame of a screen). Injected image factories (tests) and old browsers keep the plain onload path.
   function begin(e, url) {
     const img = A.makeImage ? A.makeImage() : new Image();
-    const good = () => { if (e.ok || e.bad) return; e.ok = true; e.bytes = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4; e.used = A.clock; A.hits++; };
-    const fail = () => { if (e.ok || e.bad) return; e.bad = true; A.failed++; };
+    const good = () => { if (e.ok || e.bad) return; e.ok = true; e.bytes = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4; e.used = A.clock; A.hits++; A.ver++; };
+    const fail = () => { if (e.ok || e.bad) return; e.bad = true; A.failed++; A.ver++; };
     img.onerror = fail;
     try { img.decoding = 'async'; } catch (err) { /* read-only in fakes */ }
     img.src = url;
