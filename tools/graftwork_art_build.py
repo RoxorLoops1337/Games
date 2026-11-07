@@ -22,6 +22,18 @@ with the same trim and bottom-centre anchor as the 2x file (so anchorX/anchorY a
 gains `file3x` and `bbox` = [x0, y0, x1, y1], the opaque box of the standing frame in 2x pixel units (combat sizes the figure from it).
 The existing manifest is patched in place; raws below 1024 px are skipped (the 2x file is then the best there is).
 
+Animation frames (touches nothing else): python3 tools/graftwork_art_build.py --frames [--combat] [--out=DIR] [RAW_DIR]
+actor_<id>_walk1..walk4.png (a walk cycle: all four or none), actor_<id>_atk1..atk3.png (monsters may have only atk2), actor_<id>_hit.png and
+actor_<id>_die.png: 1920 or 2048 px RGBA, the SAME canvas, scale, costume and feet position as the standing actor_<id>.png (any other size is
+scaled to the standing raw's width). Each frame gets the STANDING frame's transform (same crop box and scale, so the figure keeps its size) and is
+then aligned by FEET: the contact point (lowest opaque row, centre of the bottom 12 percent band, like contactOf in ui/ward_iso.js) is moved onto the
+standing frame's contact point, so the manifest anchor and the renderer's measured contact stay valid for every frame. A frame whose size differs
+from the standing figure by more than FRAME_TOL only warns; it is still exported. Output: actors/<id>_<frame>@1x|@2x.webp (walk 4 frames and
+combat frames atk/hit/die; with --combat the combat frames also get a 512 px @3x). The manifest entry gains
+actors[id].frames = { walk:[stem...], atk:[stem...], hit:stem, die:stem, hi3x:bool } where a stem is the file name without size tag
+('marrow_walk1'); a group with no raw is left out and an actor with no frame raws keeps whatever it had. Nothing else in the entry changes. The pass
+checks the whole assets folder against the 12 MB budget. --out=DIR writes to another assets/ward folder (tests, dry runs).
+
 Lowered-wall variant (touches nothing else): python3 tools/graftwork_art_build.py --low [RAW_DIR]
 rm_<room>_low.png (2048 px RGBA, same room with lowered walls, made with another model, so its floor diamond is NOT identical to the tall
 set) becomes the room id `rm_<room>_low` (rooms/rm_<room>_low@1x|@2x.webp) with its OWN measured floorCx/floorCy/floorW/floorH in the manifest
@@ -37,11 +49,20 @@ import numpy as np
 ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
 COMBAT = '--combat' in sys.argv
 LOW = '--low' in sys.argv
+FRAMES = '--frames' in sys.argv
 RAW = ARGS[0] if ARGS else '/tmp/claude-0/art/raw'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'graftwork', 'assets', 'ward')
 OUT = os.path.normpath(OUT)
+for _a in sys.argv[1:]:
+    if _a.startswith('--out='):
+        OUT = os.path.abspath(_a[6:])
 SIZES = {'rooms': (512, 256), 'actors': (256, 128), 'icons': (128, 64), 'cards': (256, 128)}
 Q = 82
+BUDGET = 12 * 1024 * 1024
+FRAME_TOL = 0.35   # relative size difference of a frame vs the standing figure that triggers a warning
+WALK = ['walk1', 'walk2', 'walk3', 'walk4']
+ATK = ['atk1', 'atk2', 'atk3']
+COMBAT_FRAMES = ATK + ['hit', 'die']
 
 # rejected by eye (id -> reason); the automatic checks in low_pass catch the rest
 LOW_REJECT = {}
@@ -157,6 +178,117 @@ def low_pass():
     print('low variants built:', len(ok), ok)
     print('REJECTED:', rej)
 
+
+def contact_of(im):
+    """(fx, bottom, top, fw, area) of the opaque figure, measured like contactOf() in ui/ward_iso.js: bottom = one past the lowest row with alpha > 40,
+    fx = mean x of the bottom band (12 percent of the figure height), fw = its width. None for an empty image."""
+    a = np.array(im.convert('RGBA'))[..., 3] > 40
+    ys, xs = np.where(a)
+    if len(ys) == 0:
+        return None
+    top, bot = int(ys.min()), int(ys.max())
+    band = max(2, round((bot - top) * 0.12))
+    m = a[bot - band + 1: bot + 1]
+    by, bx = np.where(m)
+    return {'fx': float(bx.mean()) + 0.5, 'bottom': bot + 1, 'top': top, 'fw': int(bx.max() - bx.min() + 1), 'area': int(a.sum()), 'h': bot + 1 - top}
+
+def frame_canvas(std, fr, warn, walk=False):
+    """Place raw frame `fr` on the 1024 canvas with the STANDING frame's scale, feet on the standing contact point. Returns the canvas (RGBA)."""
+    S = 1024
+    bb = np.array(std)[..., 3] > 20
+    ys, xs = np.where(bb)
+    x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+    k = 900 / max(x1 - x0, y1 - y0)
+    cw, ch = max(1, round((x1 - x0) * k)), max(1, round((y1 - y0) * k))
+    cs = contact_of(std)
+    tx = (S - cw) // 2 + (cs['fx'] - x0) * (cw / (x1 - x0))   # standing feet on the canvas
+    ty = int(S * 0.95)
+    if fr.size != std.size:
+        warn.append(f'raw is {fr.width}x{fr.height}, standing is {std.width}x{std.height}: scaled to the standing size')
+        fr = fr.resize(std.size, Image.LANCZOS)
+    cf = contact_of(fr)
+    if cf is None:
+        warn.append('empty frame')
+        return None
+    # size check against the standing figure (walk: height, other poses: area), warn only
+    if walk:
+        rel = cf['h'] / cs['h']
+    else:
+        rel = (cf['area'] / cs['area']) ** 0.5
+    if abs(rel - 1) > FRAME_TOL:
+        warn.append(f'scale differs from the standing frame by {abs(rel - 1) * 100:.0f} percent (limit {FRAME_TOL * 100:.0f}); exported anyway')
+    w, h = round(fr.width * k), round(fr.height * k)
+    sc = fr.resize((w, h), Image.LANCZOS)
+    ox, oy = round(tx - cf['fx'] * k), round(ty - cf['bottom'] * k)
+    can = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    can.paste(sc, (ox, oy), sc)
+    lost = float(np.array(sc)[..., 3].sum() - np.array(can)[..., 3].sum()) / max(1.0, float(np.array(sc)[..., 3].sum()))
+    if lost > 0.005:
+        warn.append(f'{lost * 100:.1f} percent of the figure falls off the canvas')
+    return can
+
+def folder_size(d):
+    return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(d) for f in fs)
+
+def frames_pass():
+    mp = os.path.join(OUT, 'manifest.json')
+    man = json.load(open(mp))
+    done, problems = {}, 0
+    for n, e in man['actors'].items():
+        found = {nm: os.path.join(RAW, f'actor_{n}_{nm}.png') for nm in WALK + COMBAT_FRAMES if os.path.exists(os.path.join(RAW, f'actor_{n}_{nm}.png'))}
+        if not found:
+            continue
+        sf = os.path.join(RAW, f'actor_{n}.png')
+        if not os.path.exists(sf):
+            print(f'  {n}: frames found but no standing raw actor_{n}.png: skipped'); problems += 1
+            continue
+        std = clean(Image.open(sf))
+        if contact_of(std) is None:
+            print(f'  {n}: standing raw is empty: skipped'); problems += 1
+            continue
+        if any(nm in found for nm in WALK) and not all(nm in found for nm in WALK):
+            print(f'  {n}: walk cycle needs all of {WALK}, got {[nm for nm in WALK if nm in found]}: walk skipped')
+            for nm in WALK:
+                found.pop(nm, None)
+        ok = {}
+        for nm, f in found.items():
+            warn = []
+            can = frame_canvas(std, clean(Image.open(f)), warn, nm in WALK)
+            for w_ in warn:
+                print(f'  {n}_{nm}: WARNING {w_}')
+            if can is None:
+                problems += 1
+                continue
+            save(can, 'actors', f'{n}_{nm}')
+            if COMBAT and nm in COMBAT_FRAMES:
+                clean(can.resize((512, 512), Image.LANCZOS)).save(os.path.join(OUT, 'actors', f'{n}_{nm}@3x.webp'), 'WEBP', quality=Q, method=4, exact=True)
+            ok[nm] = f'{n}_{nm}'
+        fr = {}
+        if all(nm in ok for nm in WALK):
+            fr['walk'] = [ok[nm] for nm in WALK]
+        atk = [ok[nm] for nm in ATK if nm in ok]
+        if atk:
+            fr['atk'] = atk
+        for nm in ('hit', 'die'):
+            if nm in ok:
+                fr[nm] = ok[nm]
+        if any(k in fr for k in ('atk', 'hit', 'die')):
+            fr['hi3x'] = all(os.path.exists(os.path.join(OUT, 'actors', st + '@3x.webp')) for st in [*fr.get('atk', []), *[fr[k] for k in ('hit', 'die') if k in fr]])
+        if fr:
+            e['frames'] = fr
+            done[n] = {k: (len(v) if isinstance(v, list) else v) for k, v in fr.items()}
+    json.dump(man, open(mp, 'w'), indent=1)
+    size = folder_size(OUT)
+    print('frames:', len(done), 'actors', done)
+    print(f'assets folder {size / 1048576:.2f} MB of {BUDGET / 1048576:.0f} MB')
+    if size >= BUDGET:
+        print('OVER BUDGET'); sys.exit(2)
+    if problems:
+        sys.exit(1)
+
+if FRAMES:
+    frames_pass()
+    sys.exit(0)
 if COMBAT:
     combat_pass()
     sys.exit(0)

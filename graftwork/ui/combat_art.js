@@ -8,7 +8,7 @@
 //   drawBackdrop(app, ctx, o)  the kit room behind the combatants (wall, trim, pieces, lamp cones, perspective floor); false = draw the old backdrop
 // The art faces down-right: the hero stands left facing right as drawn, enemies stand right and are flipped to face the hero.
 // Everything is a no-op in node (no Image / fetch): the procedural look is exercised there.
-import { assets } from './assets.js';
+import { assets, pickAtkFrame } from './assets.js';
 import { pose as atkPose } from '../art/attacks.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -56,14 +56,46 @@ export function spriteOf(id, app) {
   if (!img) return null;
   const w = d.w || 256, h = d.h || 256;
   const bbox = Array.isArray(d.bbox) && d.bbox.length === 4 ? d.bbox : [w * 0.08, h * 0.07, w * 0.92, h * 0.95];
-  return { img, def: d, bbox, ax: d.anchorX || w / 2, ay: d.anchorY || h * 0.95, kind: d.kind || 'normal' };
+  return { id, img, def: d, bbox, ax: d.anchorX || w / 2, ay: d.anchorY || h * 0.95, kind: d.kind || 'normal', frames: assets.frames(id) };
 }
+// ---- animation frames (assets.js normalizeFrames): atk1 / atk2 / atk3, hit, die share the standing canvas and feet. null = draw the standing figure with the procedural pose.
+export function frameImg(sp, stem) {
+  if (!sp || !stem || !sp.frames) return null;
+  const app = assets.app;
+  if (sp.frames.hi3x) { const e = loadHi(`actors/${stem}@3x.webp`); if (e.ok) return e.img; }
+  const f = assets.frame(sp.id, stem, app, false);
+  return f ? f.img : null;
+}
+// which frame a battle moment wants. enemy: P from enemyPoseOf + its display state; priority death > attack > hit.
+export function enemyFrameStem(F, P, ed) {
+  if (!F) return null;
+  const d = ed.dying || 0;
+  if (d > 0) return d >= DIE_AT.enemy ? F.die : (F.hit || null);
+  if (P.atkPhase) return pickAtkFrame(F.atkBy, P.atkPhase, P.atkK);
+  if (P.hit > 0.2 && F.hit) return F.hit;
+  return null;
+}
+// hero: u 0..1 over the attack (heroAttackPose timing), hit 0..1, dying 0..1
+export function heroFrameStem(F, hs) {
+  if (!F) return null;
+  const d = clamp(hs.dying || 0, 0, 1);
+  if (d > 0) return d >= DIE_AT.hero ? F.die : (F.hit || null);
+  const u = hs.attack > 0 ? clamp(hs.attack / 2, 0, 1) : 0;
+  if (u > 0) { const ph = u < 0.28 ? 'tell' : u < 0.46 ? 'act' : 'rec'; return pickAtkFrame(F.atkBy, ph, ph === 'rec' ? (u - 0.46) / 0.54 : 0); }
+  if ((hs.hit || 0) > 0.2 && F.hit) return F.hit;
+  return null;
+}
+const DIE_AT = { enemy: 0.34, hero: 0.3 }; // where the procedural collapse hands over to the die frame (the end of the crumple)
 // ask for the images of a fight (hero and enemies) so they are decoded by the first frame
 export function warm(app, ids) {
   try {
     assets.ensure(app);
     if (!assets.ready()) return;
-    for (const id of ids) { const d = assets.def('actors', id); if (!d) continue; assets.actor(id, app); if (d.file3x) loadHi(d.file3x); }
+    for (const id of ids) {
+      const d = assets.def('actors', id); if (!d) continue; assets.actor(id, app); if (d.file3x) loadHi(d.file3x);
+      const F = assets.frames(id); if (!F) continue;
+      for (const st of [...F.atk, F.hit, F.die]) if (st) { if (F.hi3x) loadHi(`actors/${st}@3x.webp`); assets.frame(id, st, app); }
+    }
   } catch (e) { /* art is optional */ }
 }
 export const kindK = (def) => KIND_K[def && def.kind] || 1;
@@ -100,9 +132,9 @@ function scratch(w, h) {
   if (SC.height !== h) SC.height = h;
   return SC;
 }
-function tint(ctx, sp, s, color, a) {
+function tint(ctx, sp, s, color, a, img) {
   if (!(a > 0.01)) return;
-  const im = sp.img, iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const im = img || sp.img, iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
   if (!(iw > 0) || !(ih > 0)) return;
   const c = scratch(iw, ih); if (!c) return;
   const g = c.getContext('2d'); if (!g) return;
@@ -169,10 +201,10 @@ function figure(ctx, sp, x, y, o) {
   ctx.scale((o.flip || 1) * (o.sx || 1), o.sy || 1);
   if (o.alpha !== undefined && o.alpha < 1) ctx.globalAlpha *= o.alpha;
   try { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; } catch (e) { /* fake ctx */ }
-  ctx.drawImage(sp.img, -sp.ax * s, -sp.ay * s, sp.def.w * s, sp.def.h * s);
-  if (o.wash) tint(ctx, sp, s, o.wash.color, o.wash.a);
-  if (o.glow) tint(ctx, sp, s, o.glow.color, o.glow.a);
-  if (o.flash > 0) tint(ctx, sp, s, '#ffffff', o.flash * 0.72);
+  ctx.drawImage(o.img || sp.img, -sp.ax * s, -sp.ay * s, sp.def.w * s, sp.def.h * s);
+  if (o.wash) tint(ctx, sp, s, o.wash.color, o.wash.a, o.img);
+  if (o.glow) tint(ctx, sp, s, o.glow.color, o.glow.a, o.img);
+  if (o.flash > 0) tint(ctx, sp, s, '#ffffff', o.flash * 0.72, o.img);
   ctx.restore();
 }
 
@@ -181,9 +213,10 @@ const bodyOf = (def) => (def && def.art && def.art.body) || '';
 // Enemy pose from its display state ed (ui/combat.js mkEd): the attack rig (tell = wind-up, act = lunge, hold = contact, rec = recoil), the cast pulse,
 // the hit reaction, the death collapse and the idle breath, which scales from the feet and never lifts the sprite.
 export function enemyPoseOf(ed, def, t, reduced) {
-  const P = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0, glow: 0, flash: 0, alpha: 1, shadowA: 1, lift: 0, cast: 0 };
+  const P = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0, glow: 0, flash: 0, alpha: 1, shadowA: 1, lift: 0, cast: 0, hit: 0, atkPhase: '', atkK: 0 };
   const a = ed.anim || {}, d = clamp(ed.dying || 0, 0, 1);
   const hitK = Math.max(a.hit || 0, clamp((ed.hurt || 0) * 3, 0, 1));
+  P.hit = hitK; P.atkPhase = ''; P.atkK = 0;
   P.flash = easeOut(hitK) * (d > 0 ? 0.0 : 1);
   if (d > 0) {
     // collapse: squash down at once, then settle and sink, then fade at the floor (never dissolve in the air)
@@ -201,7 +234,7 @@ export function enemyPoseOf(ed, def, t, reduced) {
     if (R) {
       P.dx = clamp(R.dx || 0, -120, 40) * s; P.dy = clamp(R.dy || 0, -50, 12) * s; P.rot = clamp(R.rot || 0, -0.5, 0.5);
       P.sy *= clamp(R.sy || 1, 0.7, 1.3); P.sx *= clamp(R.sx || 1, 0.7, 1.3); P.glow = clamp(R.glow || 0, 0, 1);
-      P.lift = Math.max(0, -P.dy);
+      P.lift = Math.max(0, -P.dy); P.atkPhase = k; P.atkK = ed.atk.k || 0;
     }
   } else if (ed.atkKind === 'cast' && ed.atkT >= 0) {
     const c = clamp(ed.atkT / 0.45, 0, 1), up = Math.sin(c * Math.PI);
@@ -222,7 +255,14 @@ export function drawEnemySprite(ctx, sp, def, ed, x, floorY, t, o = {}) {
   if ((kind === 'elite' || kind === 'boss') && !(ed.dying > 0.34)) aura(ctx, kind, px, floorY, bw, bh, t, reduced, P.alpha);
   const wash = washOf(st, t);
   const glow = P.glow > 0.02 ? { color: P.cast ? '#ffe9a8' : '#ff5a3a', a: P.glow * 0.34 } : null;
-  figure(ctx, sp, px, floorY, { s: k, flip: FACING.enemy, sx: P.sx, sy: P.sy, rot: P.rot, pivot: bh * 0.45, dy: P.dy, alpha: P.alpha, flash: P.flash, wash: wash && !(ed.dying > 0) ? wash : null, glow });
+  // painted frames carry the pose themselves: the figure keeps its lunge travel but only a fraction of the squash and lean; the die frame lies on the floor, so no collapse squash
+  const stem = enemyFrameStem(sp.frames, P, ed), fimg = stem ? frameImg(sp, stem) : null;
+  let { sx, sy, rot, dy } = P;
+  if (fimg) {
+    if (stem === sp.frames.die) { sx = 1; sy = 1; rot = 0; dy = 4 * easeOut(clamp((ed.dying - DIE_AT.enemy) / 0.66, 0, 1)); }
+    else { sx = 1 + (sx - 1) * 0.3; sy = 1 + (sy - 1) * 0.3; rot *= 0.3; }
+  }
+  figure(ctx, sp, px, floorY, { s: k, flip: FACING.enemy, sx, sy, rot, pivot: bh * 0.45, dy, alpha: P.alpha, flash: P.flash, wash: wash && !(ed.dying > 0) ? wash : null, glow, img: fimg });
   if (!(ed.dying > 0)) {
     if (ed.block > 0) shieldPlate(ctx, px, floorY, bw, bh, -1, ed.block, ed.bpulse || 0);
     if (!reduced && st.poison > 0) bubbles(ctx, px, floorY, bw, bh, t, '#7fe08a');
@@ -253,9 +293,15 @@ export function drawHeroSprite(ctx, sp, x, floorY, hs) {
     const q = easeOut(d / 0.3), p2 = clamp((d - 0.3) / 0.7, 0, 1);
     sy = lerp(1, 0.78, q); sx = lerp(1, 1.08, q); rot = -1.35 * easeIn(p2) * (1 - 0.1 * p2); dy = 8 * easeOut(p2); dx -= 26 * easeOut(p2); alpha = 1 - 0.55 * p2; flash = (1 - q) * 0.6; sh = 1 - 0.4 * p2;
   }
+  // painted frames: anticipation / strike / recovery, the hit flinch and the die frame replace the procedural lean and topple (the lunge travel stays)
+  const stem = heroFrameStem(sp.frames, hs), fimg = stem ? frameImg(sp, stem) : null;
+  if (fimg) {
+    if (stem === sp.frames.die) { sx = 1; sy = 1; rot = 0; dy = 4 * easeOut(clamp((d - DIE_AT.hero) / 0.7, 0, 1)); dx = -(hs.kick || 0) * 14; alpha = 1 - 0.55 * clamp((d - DIE_AT.hero) / 0.7, 0, 1); }
+    else { sx = 1 + (sx - 1) * 0.3; sy = 1 + (sy - 1) * 0.3; rot *= 0.3; if (d > 0) { sx = 1; sy = 1; rot = 0; } }
+  }
   ctx.save();
   contactShadow(ctx, x + dx * 0.5, floorY - 1, clamp(bw * 0.9, 48, 120) * (d > 0 ? 1 + 0.5 * easeIn(clamp((d - 0.3) / 0.7, 0, 1)) : 1), sh);
-  figure(ctx, sp, x + dx, floorY, { s, flip: FACING.hero, sx, sy, rot, pivot: bh * 0.4, dy, alpha, flash });
+  figure(ctx, sp, x + dx, floorY, { s, flip: FACING.hero, sx, sy, rot, pivot: bh * 0.4, dy, alpha, flash, img: fimg });
   if (d === 0 && hs.block > 0) shieldPlate(ctx, x + dx, floorY, bw, bh, 1, hs.block, hs.bpulse || 0);
   if (d === 0 && !hs.reduced && hs.st) { if (hs.st.poison > 0) bubbles(ctx, x + dx, floorY, bw, bh, t, '#7fe08a'); if (hs.st.burn > 0) flames(ctx, x + dx, floorY, bw, bh, t); }
   ctx.restore();
