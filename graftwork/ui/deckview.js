@@ -253,6 +253,7 @@ function chip(app, label, x, y, w, active, o = {}) {
 }
 
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app, params) {
     this.o = params || {};
     this.pick = this.o.mode === 'pick';

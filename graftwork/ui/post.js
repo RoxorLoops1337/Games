@@ -17,6 +17,7 @@
 //   app.staticFrame = true                  optional hint from a screen: the 2D canvas did not change, skip the upload
 // Not thread-safe (main thread only). The frame loop (update/render) allocates nothing.
 import { flashGate } from './fx.js';
+import { FLAGS } from './perf_flags.js';
 import { VS, FS_THRESH, FS_DOWN, FS_UP, FS_COMP, GRADES } from './post_shaders.js';
 
 const W = 1280, H = 720;
@@ -88,11 +89,11 @@ export function installPost(app) {
   }
   function allocTargets() {
     const gl = R.gl; destroyTargets();
-    const shift = R.glW > 1800 ? 2 : 1;
+    const shift = FLAGS.bloomShift || (R.glW > 1800 ? 2 : 1);
     let cw = Math.max(2, R.glW >> shift), ch = Math.max(2, R.glH >> shift);
     const want = S.tier === 'high' ? 5 : 3;
     for (let pass = 0; pass < 2; pass++) { // pass 0: try half float; pass 1: RGBA8 fallback
-      const half = pass === 0 && R.half; let ok = true; let w = cw, h = ch;
+      const half = pass === 0 && R.half && !!FLAGS.bloomFloat; let ok = true; let w = cw, h = ch;
       for (let i = 0; i < want; i++) {
         const tex = mkTex(gl); gl.texStorage2D(gl.TEXTURE_2D, 1, half ? gl.RGBA16F : gl.RGBA8, w, h);
         const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
@@ -231,6 +232,8 @@ export function installPost(app) {
       if (g.t < 1) { g.t = Math.min(1, g.t + ms / g.ms); const e = g.t * g.t * (3 - 2 * g.t); for (let i = 0; i < 9; i++) gCur[i] = gFrom[i] + (gTo[i] - gFrom[i]) * e; }
     },
     render: () => renderFrame(),
+    // true while an effect, a grade ease or a pending GL refresh needs the next frame to be drawn (ui/frame_state.js asks before skipping a tick)
+    busy: () => S.tier !== 'off' && (fxActive() || S.dirty),
   };
   app.post = post;
 
@@ -264,10 +267,11 @@ export function installPost(app) {
     stats.frames++;
     if (ringN < 60) return;
     const avg = ringSum / 60; stats.avgFrame = avg;
-    if (post.autoQuality === false || t - S.lastChange < 5000) { if (avg >= 12) S.fastSince = 0; return; }
+    if (post.autoQuality === false || t - S.lastChange < 5000) { if (avg >= 17.4) S.fastSince = 0; return; }
     const ti = TIERS.indexOf(S.tier);
-    if (avg > 18 && ti > 0 && (ti > 1 || avg > 24)) { setTier(TIERS[ti - 1]); stats.drops++; resetRing(); return; }
-    if (avg < 12) { if (!S.fastSince) S.fastSince = t; else if (t - S.fastSince > 10000 && ti < TIERS.indexOf(S.ceiling)) { setTier(TIERS[ti + 1]); stats.rises++; resetRing(); } } else S.fastSince = 0;
+    if (avg > 18 && ti > 0 && (ti > 1 || avg > 24)) { setTier(TIERS[ti - 1]); stats.drops++; S.noRiseUntil = t + 60000; resetRing(); return; }
+    // a vsync-limited 60 Hz display averages about 16.7 ms even when it has headroom, so 'fast' means under 17.4 (the old 12 ms could never be met there and bloom stayed off for the whole session); after a drop, wait a minute before trying again so a borderline device does not flap
+    if (avg < 17.4 && t >= (S.noRiseUntil || 0)) { if (!S.fastSince) S.fastSince = t; else if (t - S.fastSince > 10000 && ti < TIERS.indexOf(S.ceiling)) { setTier(TIERS[ti + 1]); stats.rises++; resetRing(); } } else S.fastSince = 0;
   }
 
   // ---- frame ----

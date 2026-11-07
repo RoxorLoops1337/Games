@@ -8,6 +8,8 @@
 // Props are separate sprites, drawn every frame together with the actors sorted by depth (world y of the feet), so a monster or the hero walks
 // behind and in front of a bench. Shared walls belong to the room in FRONT (the L wall of (x, y) borders (x - 1, y), the R wall borders
 // (x, y - 1)); doors sit where the engine connects two rooms (engine/ward.js neighbors), see wallPlan in data/ward_kit.js.
+import { FLAGS } from './perf_flags.js';
+import { bucketOf as bucketOfZ, pickLayer, evictFor, isMoving } from './layer_cache.js';
 import { SUB, WALL_FULL, WALL_LOW, resolveRecipe, wallHeight, defaultWallMode, pathInRoom, pathOnGrid, propAt } from '../data/ward_kit.js';
 import { assets } from './assets.js';
 
@@ -171,24 +173,32 @@ function paintStatic(g, rc, p, app, px) {
   }
 }
 const EX = { x0: -HW - 5, y0: -(WALL_FULL + 16), x1: HW + 5, y1: TH + 12 };
-export const bucketOf = (z) => { const L = [0.5, 0.75, 1, 1.5, 2, 3, 4]; for (const b of L) if (z <= b * 1.08) return b; return 4; };
+export const bucketOf = bucketOfZ;
 // draw the static layer of a room with its top vertex at (tx, ty). `p` = { HL, HR, doorL, doorR, slabL, slabR, dark }. Cached per zoom bucket when a DOM exists.
 export function drawStatic(app, g, id, rc, tx, ty, p, zoomPx) {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   try { return drawStatic0(app, g, id, rc, tx, ty, p, zoomPx); } finally { if (t0) Q.stats.msStatic += performance.now() - t0; }
 }
+let builtFrame = -1, builtN = 0;
 function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
-  const bucket = bucketOf(zoomPx || 1), key = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0, bucket].join('|');
+  const want = bucketOfZ(zoomPx || 1), base = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0].join('|');
   let e = Q.layers.get(id);
-  if (!e || e.key !== key) {
-    const o = mk((EX.x1 - EX.x0) * bucket, (EX.y1 - EX.y0) * bucket);
+  if (!e || e.base !== base) { e = { base, by: new Map(), z: 0 }; Q.layers.set(id, e); }
+  if (app.frame === undefined || app.frame !== builtFrame) { builtFrame = app.frame; builtN = 0; }
+  const moving = isMoving(e.z, zoomPx || 1); e.z = zoomPx || 1;
+  const pick = FLAGS.layers ? pickLayer(want, [...e.by.keys()], { built: builtN, moving }) : { bucket: want, build: !e.by.has(want) }; // layers=0: the old one-bucket cache
+  let cv = e.by.get(pick.bucket);
+  if (!cv && pick.build) {
+    const bucket = pick.bucket, o = mk((EX.x1 - EX.x0) * bucket, (EX.y1 - EX.y0) * bucket);
     if (o) {
       o.x.scale(bucket, bucket); o.x.translate(-EX.x0, -EX.y0);
       paintStatic(o.x, rc, { ...p, HL: Math.round(p.HL), HR: Math.round(p.HR) }, app, bucket);
-      e = { key, c: o.c }; Q.layers.set(id, e); Q.stats.layers++; if (Q.layers.size > 96) { Q.layers.clear(); Q.layers.set(id, e); }
-    } else e = null;
-  } else Q.stats.hits++;
-  if (e) { g.drawImage(e.c, tx + EX.x0, ty + EX.y0, EX.x1 - EX.x0, EX.y1 - EX.y0); return true; }
+      cv = o.c; e.by.set(bucket, cv); builtN++; Q.stats.layers++;
+      if (FLAGS.layers) { for (const b of evictFor([...e.by.keys()], want)) e.by.delete(b); } else { for (const b of [...e.by.keys()]) if (b !== bucket) e.by.delete(b); }
+      if (Q.layers.size > 96) { Q.layers.clear(); Q.layers.set(id, e); }
+    }
+  } else if (cv) Q.stats.hits++;
+  if (cv) { g.drawImage(cv, tx + EX.x0, ty + EX.y0, EX.x1 - EX.x0, EX.y1 - EX.y0); return true; }
   g.save(); g.translate(tx, ty); paintStatic(g, rc, p, app, zoomPx || 1); g.restore();
   return false;
 }

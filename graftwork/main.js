@@ -26,7 +26,7 @@ import deckview from './ui/deckview.js';
 import codex from './ui/codex.js';
 import archive from './ui/archive.js';
 import wardrobe from './ui/wardrobe.js';
-import { setCardBack } from './art/cards.js';
+import { setCardBack, cardFrame } from './art/cards.js';
 import { setHeroTint } from './art/heroes.js';
 import settings from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
@@ -111,6 +111,8 @@ export function boot(canvas) {
     drawPauseOverlay(app);
   };
   try { if (/[?&]perf\b/.test(location.search)) app.perf.debug = true; } catch (e) { /* no location */ }
+  { let av = assets.ver; app.addBusyProbe(() => { const ch = assets.ver !== av; av = assets.ver; return ch || TRANS.busy(app) || (app.post && app.post.busy && app.post.busy()); }); }
+  { const pt = app.preTick; app.preTick = (a, dt) => { cardFrame(); if (pt) pt(a, dt); }; } // the per-frame budget of card face builds (art/face_lod.js)
   A11Y.installA11y(app);
   app.go('title');
   app.start();

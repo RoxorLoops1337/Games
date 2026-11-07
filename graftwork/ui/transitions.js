@@ -45,6 +45,10 @@ export function installTransitions(app) {
   const T = state(app); T.installed = true;
   const orig = app.go;
   app.go = (name, params) => {
+    // The snapshot the wipe fades from is taken HERE, once per screen change (round 2): a full-canvas copy every 4th frame was the top single cost of a frame on a
+    // software raster. Outside the draw phase the canvas still holds the last complete frame; inside it (a button click) the rest of the tick still draws the old screen,
+    // so the copy waits for drawTransitions at the end of this tick.
+    if (T.on && !T.wipe && app.current && app.current !== name && app.frame >= 3) { if (app.inDraw) T.snapNext = true; else capture(app, T); }
     try { beginWipe(app, app.current, name, params); } catch (e) { T.wipe = null; T.err = String(e && e.stack); }
     return orig(name, params);
   };
@@ -68,7 +72,7 @@ function capture(app, T) {
 
 function beginWipe(app, from, to, params) {
   const T = state(app);
-  if (!T.on || !from || from === to || app.frame < 3 || !T.haveSnap || T.wipe) return;
+  if (!T.on || !from || from === to || app.frame < 3 || !(T.haveSnap || T.snapNext) || T.wipe) return;
   const kind = wipeKind(from, to, app.shared && app.shared.run);
   const rd = reduced();
   const run = app.shared && app.shared.run;
@@ -267,6 +271,7 @@ function drawPhase(app, p) {
 export function drawTransitions(app) {
   const T = state(app); if (!T.on) return;
   const dt = Math.min(app.dt || 0.016, 0.05);
+  if (T.snapNext) { T.snapNext = false; capture(app, T); } // a screen change started during this tick's draw: the canvas now holds the complete old frame
   if (T.wipe) {
     const w = T.wipe; w.t += dt;
     if (app.mouse && app.mouse.pressed && w.t > 0.08) w.t = w.life; // a click skips; the click still reaches the new screen
@@ -274,10 +279,6 @@ export function drawTransitions(app) {
   }
   if (T.intro) { stepIntro(app, T, dt); if (T.intro) drawIntro(app, T.intro); }
   if (T.phase) { T.phase.t += dt; if (T.phase.t >= T.phase.life) T.phase = null; else drawPhase(app, T.phase); }
-  // The next transition wipes away this frame. A full-canvas copy every frame was the top CPU hotspot (software canvases: 10+ ms),
-  // so copy every 4th frame, and every frame while the player is pressing/typing (when a screen change is about to happen).
-  const m = app.mouse;
-  if (!T.wipe && (!T.haveSnap || (app.frame & (app.perf && app.perf.q.tier !== 'full' ? 7 : 3)) === 0 || (m && (m.down || m.pressed || m.released)) || (app.pressedKeys && app.pressedKeys.length))) capture(app, T);
 }
 export function busy(app) { const T = app.tr; return !!(T && (T.wipe || T.intro || T.phase)); }
 

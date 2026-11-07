@@ -1,6 +1,8 @@
 // Child process for tests/graftwork_templates.test.mjs: prints the card render hash. argv[2] = 'plain' (templates untouched)
 // | 'empty' (templates configured with a manifest holding no card frames) | 'broken' (manifest fetch fails).
-import { renderHash } from './graftwork_rec_lib.mjs';
+// The identity guard pins the ORIGINAL call sequence: the round 2 card face buckets are switched off here.
+globalThis.__gwFlags = { faceLod: 0 };
+const { renderHash } = await import('./graftwork_rec_lib.mjs');
 const mode = process.argv[2] || 'plain';
 if (mode !== 'plain') {
   const { templates } = await import('../graftwork/ui/templates.js');

@@ -28,6 +28,7 @@ graftwork/
             (title map combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
             seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), lights.js, audio.js,
             a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js,
+            perf round 2 (design/PERF.md): text_metrics.js (text width cache), smoothing.js (imageSmoothingQuality policy + the instance drawImage), frame_state.js (dirty-frame logic), layer_cache.js (Ward room layer buckets), perf_flags.js (A/B switches), art/face_lod.js (card face buckets, LRU, lamp sprites),
             assets.js (lazy image loader for assets/ward/manifest.json: get(id) is null until decoded, @1x on phones, @2x on desktop, a no-op in node),
             ward.js (the Ward screen and its rules plumbing), ward_iso.js (the isometric map: projection, picking, rooms, actors and their grounding, hero, thread, time-of-day light), ward_kit_iso.js (the modular room renderer: kit floors, walls, pieces, props, cached static layers, free-tile wander), ward_kit.js (cards, icons, glyphs)
   art/      procedural canvas drawing only: cards.js, icons.js, enemies.js, heroes.js, backgrounds.js, attacks.js (attack rigs). Also the fallback of every Ward image (enemies and heroes are cached to offscreen canvases when no sprite is there)
@@ -147,7 +148,7 @@ Run all: `node tests/run_graftwork.mjs` (or `npm run test:graftwork`). The runne
 | input and a11y | touch (phone stage 844x390, pointer events), a11y, monkey (seeded random UI fuzz), ui_core |
 | art | art_cards, art_chars, art_icons, attack_rigs |
 | fx and audio | fx, post (API in node plus real Chromium, skips if missing), audio (name tables), audio_mix (offline render in Chromium: clipping, loudness, masking) |
-| perf | perf (fake-ctx op counts, never wall time) |
+| perf | perf (fake-ctx op counts, never wall time), perf2 (text width cache, smoothing policy, dirty frames, card face buckets, room layer cache, calm governor: pure functions) |
 The fake canvas in tests/graftwork_lib.mjs (`fakeCtx`) has own no-op methods for the common Canvas2D calls and a Proxy prototype for anything else, because a Proxy trap per draw call used to cost about half of every UI suite. Keep new draw calls to real Canvas2D names.
 
 ## Balance tooling (tools/)

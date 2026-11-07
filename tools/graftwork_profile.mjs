@@ -246,6 +246,7 @@ async function newPage(browser, { cpu, net, ops = false, trace = false }) { // o
   const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: DPR, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' });
   await ctx.addInitScript(INIT);
   if (opt('init', false)) await ctx.addInitScript(String(opt('init'))); // --init '<js>': extra page script (experiments)
+  if (opt('flags', false)) await ctx.addInitScript(`window.__gwFlags = ${JSON.stringify(Object.fromEntries(String(opt('flags')).split(',').map((kv) => kv.split('=')).map(([k, v]) => [k, Number(v)])))};`); // --flags smooth=0,faceLod=0: A/B the round 2 levers (ui/perf_flags.js)
   if (GRAPHICS !== 'default') await ctx.addInitScript(`try { if (!localStorage.getItem('graftwork_meta_v1')) localStorage.setItem('graftwork_meta_v1', JSON.stringify({ v: 1, settings: { graphics: '${GRAPHICS}' } })); } catch (e) {}`);
   const page = await ctx.newPage();
   const cdp = (cpu > 1 || net || trace || ops === 'cpu') ? await ctx.newCDPSession(page) : null;
@@ -299,6 +300,7 @@ async function runOne0(browser, base, name, cpu, mode) {
     out = frameStats(col); out.tier = col.tier; out.tier_changes = col.drops === null ? null : [col.drops, col.rises]; out.dpr = col.dpr; out.backing = col.backing; out.graphics = GRAPHICS;
     out.mem = await page.evaluate(PAGE.mem);
     out.mem_before = mem0;
+    if (opt('dump', false)) { try { out.dump = await page.evaluate(String(opt('dump'))); } catch (e) { out.dump = String(e); } } // --dump '<expr>': evaluated in the page after the window (experiments)
     if (mode === 'trace') {
       const buf = await browser.stopTracing(); const ev = JSON.parse(buf.toString()).traceEvents || [];
       const xs = ev.filter((e) => e.ph === 'X'); const from = Math.min(...xs.map((e) => e.ts)), to = Math.max(...xs.map((e) => e.ts + e.dur));

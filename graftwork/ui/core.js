@@ -6,6 +6,10 @@ import * as CH from './chrome.js';
 import { setLineDevice } from '../art/linework.js';
 import { renderTip, resetTips, nextTipSeq } from './tooltips.js';
 import { createQuality, createGovernor, TIER_SPEC } from './quality.js';
+import { createTextMetrics } from './text_metrics.js';
+import { resetSmoothing, installSmartDraw } from './smoothing.js';
+import { FLAGS } from './perf_flags.js';
+import { createFrameState } from './frame_state.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -31,6 +35,7 @@ export function shade(hex, k) { const n = parseInt(hex.slice(1), 16); const f = 
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 export function createApp(canvas, opts = {}) {
   const ctx = canvas.getContext('2d');
+  if (FLAGS.smooth) installSmartDraw(ctx);
   const app = {
     canvas, ctx, w: W, h: H, t: 0, dt: 0, frame: 0,
     mouse: { x: -999, y: -999, down: false, pressed: false, released: false, wheel: 0, rx: 0, ry: 0 },
@@ -39,6 +44,7 @@ export function createApp(canvas, opts = {}) {
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
     // perf: the quality tier controller (ui/quality.js), the rAF governor and the backing-store cap the tier sets (read by app.resize)
     perf: { q: createQuality(), gov: createGovernor(), dprCap: 3, debug: false, lastRun: 0, lastTick: 0, expected: 16.7 },
+    frameState: createFrameState(), staticFrame: false,
     scale: 1, offX: 0, offY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
     chrome: CH,
@@ -65,6 +71,7 @@ export function createApp(canvas, opts = {}) {
     } catch { return z; }
   }
   app.resize = () => {
+    app.frameState.markDirty();
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
     app.scale = Math.min(iw / W, ih / H);
@@ -135,6 +142,7 @@ export function createApp(canvas, opts = {}) {
   const top = () => app.stack[app.stack.length - 1];
   app.register = (name, scr) => { scr.name = name; app.screens[name] = scr; };
   app.go = (name, params) => {
+    app.frameState.markDirty();
     for (const s of app.stack) if (s.leave) s.leave(app);
     app.stack = []; app.navButtons = false; app.focus.idx = -1; app.focus.active = false;
     app.tip = null; resetTips(app); // no tooltip state survives a screen change
@@ -143,8 +151,8 @@ export function createApp(canvas, opts = {}) {
     app.perf.gov.enter(nowMs()); app.perf.q.warmup(); // a new screen is not a verdict on the last one, and an idle screen starts awake
     if (s.enter) s.enter(app, params || {});
   };
-  app.push = (name, params) => { const s = app.screens[name]; if (!s) throw new Error('no screen ' + name); app.stack.push(s); if (s.enter) s.enter(app, params || {}); };
-  app.pop = () => { const s = app.stack.pop(); if (s && s.leave) s.leave(app); };
+  app.push = (name, params) => { app.frameState.markDirty(); const s = app.screens[name]; if (!s) throw new Error('no screen ' + name); app.stack.push(s); if (s.enter) s.enter(app, params || {}); };
+  app.pop = () => { app.frameState.markDirty(); const s = app.stack.pop(); if (s && s.leave) s.leave(app); };
   app.top = top;
 
   // ---- tweens and timers ----
@@ -178,8 +186,13 @@ export function createApp(canvas, opts = {}) {
   };
   app.sz = (size, o = NO) => fin(size, o);
   const spacing = (o) => { if (hasLS && o.engraved) ctx.letterSpacing = '0.5px'; };
-  function tabW(ln) { const cell = ctx.measureText('0').width; let w = 0; for (let i = 0; i < ln.length; i++) { const c = ln.charCodeAt(i); w += c >= 48 && c <= 57 ? cell : ctx.measureText(ln[i]).width; } return w; }
-  function lineW(ln, o) { return o.tab ? tabW(ln) : ctx.measureText(ln).width; }
+  // widths come from a cache keyed by font + letter spacing (ui/text_metrics.js): tabular text used to cost two measureText per character per frame
+  const TM = createTextMetrics((s) => ctx.measureText(s).width);
+  if (!FLAGS.metrics) { TM.str = (fk, s) => ctx.measureText(s).width; TM.char = (fk, c) => ctx.measureText(c).width; TM.cell = () => ctx.measureText('0').width; TM.tab = (fk, s) => { const cell = ctx.measureText('0').width; let w = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); w += c >= 48 && c <= 57 ? cell : ctx.measureText(s[i]).width; } return w; }; }
+  app.textMetrics = TM;
+  const fkey = () => (hasLS ? ctx.font + '|' + ctx.letterSpacing : ctx.font);
+  function tabW(ln) { return TM.tab(fkey(), ln); }
+  function lineW(ln, o) { return o.tab ? TM.tab(fkey(), ln) : TM.str(fkey(), ln); }
   // size here is the FINAL (already scaled) size
   function wrapRaw(str, maxW, size, o) {
     const key = str + '|' + maxW + '|' + size + '|' + (o.bold ? 1 : 0) + (o.ui ? 1 : 0) + (o.italic ? 1 : 0) + (o.engraved ? 1 : 0) + (o.tab ? 1 : 0);
@@ -251,12 +264,12 @@ export function createApp(canvas, opts = {}) {
   const ONE = [''];
   function put(stroke, ln, x, y, o) {
     if (!o.tab) { if (stroke) ctx.strokeText(ln, x, y); else ctx.fillText(ln, x, y); return; }
-    const al = ctx.textAlign, tw = tabW(ln), cell = ctx.measureText('0').width;
+    const al = ctx.textAlign, fk = fkey(), tw = TM.tab(fk, ln), cell = TM.cell(fk);
     let cx = al === 'center' ? x - tw / 2 : al === 'right' || al === 'end' ? x - tw : x;
     ctx.textAlign = 'left';
     for (let i = 0; i < ln.length; i++) {
-      const c = ln.charCodeAt(i), ch = ln[i], isD = c >= 48 && c <= 57, cw = isD ? cell : ctx.measureText(ch).width;
-      const dx = isD ? (cell - ctx.measureText(ch).width) / 2 : 0;
+      const c = ln.charCodeAt(i), ch = ln[i], isD = c >= 48 && c <= 57, cw = isD ? cell : TM.char(fk, ch);
+      const dx = isD ? (cell - TM.char(fk, ch)) / 2 : 0;
       if (stroke) ctx.strokeText(ch, cx + dx, y); else ctx.fillText(ch, cx + dx, y);
       cx += cw;
     }
@@ -385,7 +398,7 @@ export function createApp(canvas, opts = {}) {
   function frame(now) {
     if (!running) return;
     if (typeof document !== 'undefined' && document.hidden) { P.hiddenWait = true; return; } // the visibilitychange handler restarts the loop
-    if (P.gov.shouldRun(now, P.lastRun, app.current, P.q.tier, false)) {
+    if (P.gov.shouldRun(now, P.lastRun, app.current, P.q.tier, false, calmNow())) {
       const raw = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
       app.tick(raw);
       if (P.lastTick) P.q.sample(now - P.lastTick, P.gov.capped ? 33.3 : 16.7, now);
@@ -428,11 +441,37 @@ export function createApp(canvas, opts = {}) {
       } else if ((k === 'Enter' || k === ' ') && F.active && F.idx >= 0 && F.idx < F.n) F.fire = true;
     }
   }
+  // ---- idle pacing and static frames (round 2) ----
+  // A screen may define calm(app) (nothing on it moves fast: the governor idles it at 30 fps after 4 s without input) and still(app) (nothing on it changes
+  // at all without input: the whole frame is skipped, see ui/frame_state.js). Neither is defined by default, so an unmarked screen is drawn at full rate.
+  function calmNow() {
+    const st = app.stack; if (!st.length || app.tweens.length || app.timers.length) return false;
+    for (let i = 0; i < st.length; i++) if (typeof st[i].calm !== 'function' || !st[i].calm(app)) return false;
+    return true;
+  }
+  let lmx = -999, lmy = -999;
+  function stillNow() { const st = app.stack; if (!st.length) return false; for (let i = 0; i < st.length; i++) if (typeof st[i].still !== 'function' || !st[i].still(app)) return false; return true; }
+  function inputNow() {
+    const m = app.mouse, moved = m.x !== lmx || m.y !== lmy; lmx = m.x; lmy = m.y;
+    // a pointer resting on the stage keeps tooltips and hover alive; a touch that lifted parks the pointer off stage
+    return moved || m.pressed || m.released || m.down || m.wheel !== 0 || m.touchUp || app.pressedKeys.length > 0 || m.x > -900 || app.keys.size > 0;
+  }
+  const busyExt = []; // extra "something is animating" probes registered by installers (post effects, transitions): () => bool
+  app.addBusyProbe = (fn) => { busyExt.push(fn); };
+  app.markDirty = () => { app.frameState.markDirty(); };
+  function skipThisTick() {
+    if (!FLAGS.skip || app.noSkip) { inputNow(); return false; }
+    let ext = false; for (let i = 0; i < busyExt.length && !ext; i++) ext = !!busyExt[i](app);
+    const f = { forced: false, input: inputNow(), tweens: app.tweens.length, timers: app.timers.length, ripples: CH.ripplesActive(), transition: ext, fx: false, tip: !!app.tip, screenStill: stillNow() };
+    const skip = app.frameState.begin(f, nowMs());
+    app.staticFrame = skip; return skip;
+  }
   // one simulation + draw step (tests call this directly)
   app.tick = (raw) => {
     if (app.preTick) app.preTick(app, raw);
     const dt = raw * (app.timeScale === undefined ? 1 : app.timeScale);
     app.dt = dt; app.t += dt; app.sceneT += dt; app.frame++;
+    if (skipThisTick()) { if (app.post && app.post.render) app.post.render(); return; } // nothing changed: the last picture stays (static frame)
     // pointer click bookkeeping
     if (app.mouse.pressed) app.mouse.pressStart = { x: app.mouse.x, y: app.mouse.y };
     CH.frameStart(app);
@@ -449,17 +488,18 @@ export function createApp(canvas, opts = {}) {
     for (const tm of due) tm.fn();
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
-    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = app.perf.q.tier === 'full' ? 'high' : 'low'; // 'high' costs about a fifth of a title frame on a software raster: the lite and minimal tiers drop it // sprites are scaled down from bigger files: smooth, never nearest
+    if (FLAGS.smooth) resetSmoothing(ctx); // 'low' (bilinear) by default; a draw that shrinks a big source more than 2x asks for 'high' itself (ui/smoothing.js)
+    else { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = app.perf.q.tier === 'full' ? 'high' : 'low'; } // legacy: 'high' every frame cost about a fifth of a title frame on a software raster
     ctx.clearRect(0, 0, W, H);
     app.tip = null; app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
-    const stack = app.stack;
+    const stack = app.stack; app.inDraw = true;
     for (let i = 0; i < stack.length; i++) {
       const s = stack[i];
       app.blocked = i < stack.length - 1; // only the top screen takes pointer input
       if (s.update) s.update(app, dt);
       if (s.draw) s.draw(app);
     }
-    app.blocked = false;
+    app.blocked = false; app.inDraw = false;
     CH.drawRipples(app);
     drawTip();
     if (app.overlay) app.overlay(app);

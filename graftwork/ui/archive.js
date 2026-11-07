@@ -22,6 +22,7 @@ function bar(app, x, y, w, h, f, col) {
 }
 
 export default {
+  calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
     this.tab = 0; this.hero = 'all'; this.sts = {}; this.anim = (app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0; this.pending = null;
   },
