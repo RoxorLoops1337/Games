@@ -234,7 +234,9 @@ export function partsOf(e, devPerImg) { const P = e.parts.get(bucketFor(devPerIm
 // Pose units are figure heights; Hd is the figure height in def px.
 export function drawLegged(g, P, pose, s, ox, oy, dw, dh, Hd) {
   const k = s, Hk = Hd * k;
-  for (let i = 0; i < 2; i++) {
+  // LAYERS: the LEFT leg is the NEAR one (drawn last, in front of the right leg). Same rule as ui/rig.js. Positions are unchanged.
+  for (let k2 = 0; k2 < 2; k2++) {
+    const i = 1 - k2; // 1 = right leg first (far), then 0 = left leg (near)
     const part = i ? P.legR : P.legL, L = i ? pose.legR : pose.legL, pvx = i ? P.pivRx : P.pivLx;
     g.save();
     g.translate((pvx * dw - ox) * k + L.dx * Hk, (P.pivY * dh - oy) * k + L.dy * Hk); g.rotate(L.rot); g.scale(1, L.sy);
