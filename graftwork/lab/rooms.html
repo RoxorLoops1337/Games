@@ -16,6 +16,8 @@
   button, select { font:inherit; color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:5px 10px; min-height:32px; cursor:pointer; white-space:nowrap; }
   button:hover { border-color:var(--brass); }
   button.on { background:#5a4118; border-color:var(--brass); color:#fff3d0; }
+  a.lnk { color:var(--ink); text-decoration:none; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:5px 10px; min-height:32px; display:inline-flex; align-items:center; white-space:nowrap; }
+  a.lnk:hover { border-color:var(--brass); }
   main { position:relative; flex:1; min-height:0; }
   canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; cursor:grab; }
   canvas.drag { cursor:grabbing; }
@@ -53,6 +55,7 @@
   <h1>Ward Kit Lab</h1>
   <nav id="scenes"></nav>
   <button id="infoBtn" title="Notes and legend">Notes</button>
+  <a class="lnk" href="anim.html" title="The animation lab: actor frames, map walk, battle, rig">Animation lab</a>
 </header>
 <main>
   <canvas id="cv"></canvas>
