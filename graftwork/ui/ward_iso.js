@@ -16,7 +16,7 @@ import { ENEMIES } from '../data/index.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
-import { assets } from './assets.js';
+import { assets, walkIndex } from './assets.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
@@ -281,7 +281,7 @@ function drawBlock(g, type, cx, cy, lift, dark, theatre) {
 
 // ---------------- actors ----------------
 const MON_SLOTS = [[-0.26, -0.01], [0.26, -0.03], [-0.09, -0.1], [0.11, -0.11], [0.0, 0.07]];
-function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0 }); }
+function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false, pose: '', used: '' }); }
 function enemyCanvas(id, targetH) {
   const key = id + '|' + targetH, hit = V.mon.get(key);
   if (hit !== undefined) return hit;
@@ -302,14 +302,26 @@ function heroCanvas(heroId, targetH) {
 }
 // the actor art for a figure: the hero by its id, an enemy by its id (the_resident_l2 for a Level 2 elite), an NPC by name. An enemy the set does not paint yet
 // borrows a figure of the same kind (picked by hash) so the room is never empty; null means draw the procedural figure.
-function actorSprite(app, kind, id, run, lvl, alt) {
+function actorIdOf(kind, id, lvl) {
   if (!assets.ready()) return null;
-  if (kind === 'hero') return assets.actor(id, app, alt);
-  if (kind === 'npc') return assets.actor(id, app, alt);
+  if (kind === 'hero' || kind === 'npc') return assets.has('actors', id) ? id : null;
   const own = kind === 'elite' && lvl >= 2 && assets.has('actors', id + '_l2') ? id + '_l2' : id;
-  if (assets.has('actors', own)) return assets.actor(own, app, alt);
+  if (assets.has('actors', own)) return own;
   const pool = assets.kindIds(kind === 'elite' ? 'elite' : 'normal'); if (!pool.length) return null;
-  return assets.actor(pool[Math.floor(hash(id) * pool.length)], app, alt);
+  return pool[Math.floor(hash(id) * pool.length)];
+}
+function actorSprite(app, kind, id, run, lvl, alt) {
+  const aid = actorIdOf(kind, id, lvl);
+  return aid ? assets.actor(aid, app, alt) : null;
+}
+// Animation frames (assets.js, WARD.md 12c): the stem to draw instead of the standing / _b image, or null. A pose ('hit' | 'die') set by a map event wins over the walk;
+// the walk cycle runs only while the figure is really moving and only once every walk frame has decoded. Frames share the standing canvas and feet, so they use its contact.
+export function frameStemFor(F, rec) {
+  if (!F) return null;
+  if (rec.pose === 'die' && F.die) return F.die;
+  if (rec.pose === 'hit' && F.hit) return F.hit;
+  if (rec.cycle && F.walk.length >= 2) return F.walk[walkIndex(rec.stride, F.walk.length)];
+  return null;
 }
 // ---- grounding: where a sprite really touches the floor, and the soft contact shadow under it ----
 // The manifest anchor is a hand-set point; the real contact is measured once per image from its alpha: the lowest opaque row, and the centre
@@ -359,7 +371,14 @@ function groundShadow(g, x, y, rx, a) {
 }
 export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
 function drawActor(app, g, r, run) {
-  const sz = r.h, lvl = r.lvl, spr = actorSprite(app, r.kind, r.id, run, lvl, r.frame === 1);
+  const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
+  let spr = aid ? assets.actor(aid, app, false) : null, img = null;
+  r.used = '';
+  if (spr) {
+    const F = assets.frames(aid), stem = frameStemFor(F, r);
+    if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
+    if (!img && r.frame === 1) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
+  }
   let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
   if (spr) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
@@ -381,7 +400,7 @@ function drawActor(app, g, r, run) {
   if (r.alpha < 1) g.globalAlpha *= r.alpha;
   if (spr) {
     const d = spr.def;
-    g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
+    g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
     if (o) g.drawImage(o.c, -o.fx, -o.fy, o.w, o.h);
@@ -407,7 +426,7 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
   const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
-  if (calm) { g.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; return g; }
+  if (calm) { g.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
   if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
   const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
   g.vk += (target - g.vk) * Math.min(1, dt * (target ? 9 : 12)); if (g.vk < 0.01) g.vk = 0;
@@ -419,6 +438,7 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   const plant = Math.exp(-(S.t - g.plantT) * 13) * w;
   rec.stride = ph; // tests: the stride phase follows the distance moved
   rec.frame = w > 0.25 ? (step & 1) : 0;
+  rec.cycle = w > 0.25; // the animation frames (walk cycle) run on rec.stride while this is true
   rec.bob = Math.sin(Math.PI * frac) * HOP * (sz / 36 + 0.4) * w; // hop height in world px, 0 at rest
   const breathe = 1 + 0.02 * Math.sin(S.t * 2.2 + g.ph), shift = 0.012 * Math.sin(S.t * 0.9 + g.ph);
   rec.sq = (1 - w) * breathe + w * (1 - 0.07 * plant + 0.025 * Math.sin(Math.PI * frac));

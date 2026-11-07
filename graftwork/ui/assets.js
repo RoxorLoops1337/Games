@@ -2,6 +2,9 @@
 //
 //   manifest: { version, tile:{w,h}, rooms:{id:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}},
 //               actors:{id:{file1x,file2x,w,h,anchorX,anchorY,kind,scale,walk1x,walk2x}}, icons:{id:{file1x,file2x,w,h}}, cards:{artId:{...}}, cardsById:{b_x:{room}} }
+//   Optional animation frames (design/WARD.md 12c): actors[id].frames = { walk:[stem...], atk:[stem...], hit:stem, die:stem, hi3x?:bool }. A stem is the file name
+//   without size tag, e.g. 'marrow_walk1' -> actors/marrow_walk1@1x|@2x.webp (and @3x for combat frames when hi3x). Every frame shares the standing frame's canvas, w x h and
+//   feet anchor, so it is drawn with the STANDING def. assets.frames(id) normalises the entry, assets.frame(id, stem, app) answers { img, def } or null.
 //   Actor ids are hero ids (marrow), enemy ids (bedpan_slime, the_resident, the_resident_l2) and npc_*; walk1x / walk2x is the second step frame.
 //   All numbers are in sprite pixels (w x h is the frame both files are drawn into, so @1x and @2x are interchangeable).
 //
@@ -14,6 +17,30 @@
 // @1x is used on phone scales (app.scale < 0.8), @2x on desktop. Every failure is swallowed: callers draw their procedural fallback on null.
 const BASE_DEFAULT = 'assets/ward/';
 const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
+
+// ---- animation frames: pure helpers (no DOM), shared by the map and the battle ----
+const stemList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
+const stemOf = (v) => (typeof v === 'string' && v ? v : null);
+// a manifest `frames` entry -> { walk:[stems], atk:[stems], atkBy:{1,2,3}, hit, die, hi3x } or null when it holds nothing usable
+export function normalizeFrames(f) {
+  if (!f || typeof f !== 'object') return null;
+  const walk = stemList(f.walk), atk = stemList(f.atk), hit = stemOf(f.hit), die = stemOf(f.die), atkBy = {};
+  for (const st of atk) { const m = /atk([123])$/.exec(st); if (m) atkBy[m[1]] = st; }
+  if (!walk.length && !atk.length && !hit && !die) return null;
+  return { walk, atk, atkBy, hit, die, hi3x: !!f.hi3x };
+}
+// walk frame for a stride phase ph (counted in steps, a plant at every integer): with n frames the cycle is two steps, a frame per half step, frame 0 at contact.
+// n = 4: walk1 (contact), walk2 (passing), walk3 (contact, other foot), walk4 (passing). n = 2 behaves like the old step swap.
+export function walkIndex(ph, n) { if (!(n >= 2)) return 0; const i = Math.floor(Math.max(0, ph) * n / 2); return i % n; }
+// attack frame for a phase: tell (anticipation, atk1), act and hold (strike, atk2), rec (recovery, atk3; k 0..1 through the recovery). null = no frame, draw the standing pose.
+// Missing frames degrade: a strike falls back to atk3 then atk1; a recovery without atk3 holds the strike for its first third.
+export function pickAtkFrame(by, phase, k = 0) {
+  if (!by) return null;
+  if (phase === 'tell') return by[1] || null;
+  if (phase === 'act' || phase === 'hold') return by[2] || by[3] || by[1] || null;
+  if (phase === 'rec') return by[3] || (k < 0.35 ? (by[2] || by[1] || null) : null);
+  return null;
+}
 
 export function createAssets(opts = {}) {
   const A = {
@@ -104,13 +131,26 @@ export function createAssets(opts = {}) {
   A.kitSettled = (app) => { if (!A.kitReady()) return false; A.kitPreload(app); for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; const e = A.imgs.get('kit:' + f); if (!e || (!e.ok && !e.bad)) return false; } return true; };
   A.kitProgress = (app) => { let total = 0, loaded = 0; if (A.kitReady()) for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; total++; const e = A.imgs.get('kit:' + f); if (e && (e.ok || e.bad)) loaded++; } return { loaded, total, state: A.kitState }; };
   A.room = (id, app) => get('rooms', id, app);
+  // ---- animation frames (optional per actor) ----
+  A.frames = (id) => { const d = defOf('actors', id); return d ? normalizeFrames(d.frames) : null; };
+  // { img, def, stem } for a frame once decoded (the def is the STANDING one: same canvas and feet), else null. hi: prefer the 512 px @3x file (combat frames with hi3x).
+  A.frame = (id, stem, app, hi) => {
+    if (!A.ready() || !stem) return null;
+    const d = defOf('actors', id); if (!d || !normalizeFrames(d.frames)) return null;
+    const f2 = `actors/${stem}@2x.webp`, f1 = `actors/${stem}@1x.webp`, f3 = `actors/${stem}@3x.webp`;
+    const want = hi && d.frames.hi3x ? [f3, f2, f1] : A.use2x(app) ? [f2, f1] : [f1, f2];
+    for (const f of want) { const e = load(f); if (e.ok) return { img: e.img, def: d, stem }; if (!e.bad) return null; }
+    return null;
+  };
+  // true once every walk frame of an actor has decoded (a cycle never starts half loaded)
+  A.walkReady = (id, app) => { const F = A.frames(id); if (!F || F.walk.length < 2) return false; let ok = true; for (const st of F.walk) if (!A.frame(id, st, app)) ok = false; return ok; };
   A.actor = (id, app, alt) => get('actors', id, app, alt); // alt: the second walk frame (falls back to the first)
   A.icon = (id, app) => get('icons', id, app);
   A.card = (id, app) => get('cards', id, app);
   A.preload = (app, kinds = ['rooms', 'actors']) => {
     A.ensure(app);
     if (!A.ready()) return;
-    for (const g of kinds) for (const id of Object.keys(A.manifest[g] || {})) { get(g, id, app); if (g === 'actors') get(g, id, app, true); }
+    for (const g of kinds) for (const id of Object.keys(A.manifest[g] || {})) { get(g, id, app); if (g === 'actors') { get(g, id, app, true); const F = A.frames(id); if (F) for (const st of F.walk) A.frame(id, st, app); } }
   };
   A.progress = (kinds = ['rooms', 'actors']) => {
     let total = 0, loaded = 0;
