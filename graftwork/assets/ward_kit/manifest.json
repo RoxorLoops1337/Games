@@ -655,15 +655,15 @@
    "name": "Valve wheel",
    "file2x": "props/valve_wheel@2x.webp",
    "file1x": "props/valve_wheel@1x.webp",
-   "w": 80,
-   "h": 134,
-   "anchorX": 40.0,
-   "anchorY": 93.8,
+   "w": 96,
+   "h": 161,
+   "anchorX": 48.0,
+   "anchorY": 113.0,
    "footprint": [
     1,
     1
    ],
-   "sw": 10,
+   "sw": 12,
    "file": "props/valve_wheel@2x.webp"
   },
   "cable_coil": {
@@ -1165,15 +1165,15 @@
    "name": "Ore cart",
    "file2x": "props/ore_cart@2x.webp",
    "file1x": "props/ore_cart@1x.webp",
-   "w": 224,
-   "h": 222,
-   "anchorX": 112.0,
-   "anchorY": 155.4,
+   "w": 200,
+   "h": 199,
+   "anchorX": 100.0,
+   "anchorY": 139.3,
    "footprint": [
     2,
     1
    ],
-   "sw": 28,
+   "sw": 25,
    "file": "props/ore_cart@2x.webp"
   },
   "work_lamp": {

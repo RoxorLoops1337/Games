@@ -48,6 +48,8 @@ function bestCell(run, type) {
   };
   return cells.slice().sort((a, b) => score(b) - score(a))[0];
 }
+const EXPAND_W = { rm_ward: 4.2, rm_workshop: 3.2, rm_chapel: 3, rm_library: 2.8, rm_kitchen: 2.4 }; // how much the strong bot wants each Expand (GW_EXPAND=0 never expands)
+const EXPAND_OFF = process.env.GW_EXPAND === '0';
 function strongMorning(run) {
   const w = run.ward;
   for (let g = 0; g < 20; g++) {
@@ -58,6 +60,16 @@ function strongMorning(run) {
         const p = roomPriority(run, card.room); if (p <= 0) continue;
         const cell = bestCell(run, card.room); if (!cell) continue;
         opts.push({ p, uid: inst.uid, target: { x: cell[0], y: cell[1] } });
+      } else if (card.kind === 'expand') {
+        // Expand (design/WARD.md "Room sizes and Expand"): a bigger Ward holds 7 and stays on the same timer; the other rooms get quicker or richer. A powered room needs 1 more power.
+        const pw = W.wardPower(run);
+        for (const r of Object.values(w.rooms)) {
+          const want = EXPAND_W[r.type]; if (!want || EXPAND_OFF) continue;
+          const ex = W.expandOptions(run, r.id); if (!ex.ok) continue;
+          if (W.ROOMS[r.type].power && pw.free < 1) continue;
+          const c = ex.cost; if (w.res.wood - (c.wood || 0) < 1 || w.res.stone - (c.stone || 0) < 1 || run.gold - (c.gold || 0) < 40) continue;
+          opts.push({ p: want - (r.type === 'rm_ward' ? count(run, 'rm_ward') * 0.3 : 0), uid: inst.uid, target: r.id });
+        }
       } else if (card.kind === 'upgrade') {
         const rooms = Object.values(w.rooms).filter((r) => card.on.includes(r.type));
         const want = { b_reinforced_beds: 4, b_overtime: 3, b_scrub_in: 3, b_sterile_field: 2, b_iron_doors: 0.5, b_night_shift: 0, b_double_doors: 0.4, b_soundproofing: 1.5, b_fire_door: 0 }[card.id] || 0;

@@ -60,7 +60,7 @@ PROPS = {
     # batch 4 (the remaining rooms)
     'boiler_tank': {'sw': 22, 'fp': [2, 1], 'name': 'Boiler tank'},
     'coal_pile': {'sw': 26, 'fp': [2, 1], 'name': 'Coal pile'},
-    'valve_wheel': {'sw': 10, 'fp': [1, 1], 'name': 'Valve wheel'},
+    'valve_wheel': {'sw': 12, 'fp': [1, 1], 'name': 'Valve wheel'},
     'cable_coil': {'sw': 15, 'fp': [1, 1], 'name': 'Cable coil'},
     'fuse_box': {'sw': 13, 'fp': [1, 1], 'name': 'Fuse box'},
     'counting_desk': {'sw': 24, 'fp': [2, 1], 'name': 'Counting desk'},
@@ -94,12 +94,12 @@ PROPS = {
     'anvil': {'sw': 11, 'fp': [1, 1], 'name': 'Anvil'},
     'tool_chest': {'sw': 14, 'fp': [1, 1], 'name': 'Tool chest'},
     'pickaxe_rack': {'sw': 15, 'fp': [1, 1], 'name': 'Pickaxe rack'},
-    'ore_cart': {'sw': 28, 'fp': [2, 1], 'name': 'Ore cart'},
+    'ore_cart': {'sw': 25, 'fp': [2, 1], 'name': 'Ore cart'},
     'work_lamp': {'sw': 7, 'fp': [1, 1], 'name': 'Work lamp'},
 }
 # per-prop raw fixes: despeckle = key-colour magenta left in see-through ironwork becomes transparent;
 # fade_top = fraction of the trimmed height over which the top fades out (chains that ran off the canvas)
-FIX = {'hanging_pots': {'despeckle': True, 'fade_top': 0.12}}
+FIX = {'valve_wheel': {'steam': True}, 'hanging_pots': {'despeckle': True, 'fade_top': 0.12}}
 # wall pieces: height in world units, mount ('floor' = bottom on the floor line, 'mid' = centred at wall mid height), display name
 PIECES = {
     'window': {'h': 30, 'mount': 'mid', 'name': 'Gothic window'},
@@ -167,6 +167,12 @@ def fix_prop(im, fx):
         rgb = a[..., :3].astype(int)
         m = (a[..., 3] > 0) & (rgb[..., 0] > 140) & (rgb[..., 2] > 140) & (rgb[..., 1] < 120) & (rgb[..., 0] - rgb[..., 1] > 70)
         a[m] = 0
+    if fx.get('steam'):  # key-colour pink in a steam wisp becomes pale grey steam
+        rgb = a[..., :3].astype(int)
+        m = (a[..., 3] > 0) & (rgb[..., 0] > 140) & (rgb[..., 2] > 140) & (rgb[..., 1] < rgb[..., 0] - 40) & (rgb[..., 1] < rgb[..., 2] - 40)
+        lum = (rgb[..., 0] * 0.3 + rgb[..., 1] * 0.59 + rgb[..., 2] * 0.11)
+        for c, tint in enumerate((222, 228, 236)):
+            ch = a[..., c].astype(np.float32); ch[m] = np.clip(0.35 * tint + 0.65 * np.maximum(lum[m], 150), 0, 255); a[..., c] = ch.astype(np.uint8)
     if fx.get('fade_top'):
         n = int(a.shape[0] * fx['fade_top'])
         ramp = np.linspace(0, 1, n)[:, None]
