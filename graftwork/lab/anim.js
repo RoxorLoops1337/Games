@@ -55,7 +55,7 @@ const ST = {
   battle: { hero: Q.get('hero') || 'marrow', enemies: (Q.get('enemies') || 'gauze_mummy,bedpan_slime').split(',').filter(Boolean).slice(0, 3), act: clamp(qn('act', 1), 1, 3), status: false, aura: true, frames: true, target: 'enemies' },
   rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true },
 };
-const CLK = { t: 0, abs: 0, playing: !(Q.has('t') || Q.has('frame')) && qb('play', true), speed: qn('speed', 1), loop: qb('loop', true) };
+const CLK = { t: 0, abs: 0, playing: !((Q.has('t') || Q.has('frame')) && ['viewer', 'compare', 'rig'].includes(ST.scene)) && qb('play', true), speed: qn('speed', 1), loop: qb('loop', true) };
 if (Q.has('t')) CLK.t = qn('t', 0);
 let DT = 1 / 60;
 const SPS = 3.6; // walk steps (plants) per second at speed 1x: the hero at the game's normal pace
