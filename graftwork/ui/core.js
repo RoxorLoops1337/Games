@@ -4,7 +4,7 @@
 import * as LAYOUT from './layout_registry.js';
 import * as CH from './chrome.js';
 import { setLineDevice } from '../art/linework.js';
-import { renderTip, resetTips, drawPinnedTip } from './tooltips.js';
+import { renderTip, resetTips, nextTipSeq } from './tooltips.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -86,7 +86,7 @@ export function createApp(canvas, opts = {}) {
   const isTouchEv = (e) => !!e.pointerType && e.pointerType !== 'mouse';
   canvas.addEventListener('pointermove', (e) => {
     if (e.isPrimary === false) { if (app.mouse.second) app.mouse.p2 = toLogical(e); return; } // the second finger (pinch zoom on the Ward map)
-    const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y;
+    const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.touch = isTouchEv(e);
     if (pan && app.mouse.down && isTouchEv(e)) {
       if (!pan.moved && Math.abs(p.y - pan.y0) > PAN_START) { pan.moved = true; pan.last = pan.y0 + Math.sign(p.y - pan.y0) * PAN_START; }
       if (pan.moved) { if (app.touchPan !== false) app.mouse.wheel -= (p.y - pan.last) / 0.7; pan.last = p.y; }
@@ -111,6 +111,10 @@ export function createApp(canvas, opts = {}) {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); if (app.navButtons && e.key === 'Tab') e.preventDefault(); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
   window.addEventListener('keyup', (e) => app.keys.delete(e.key));
+  // Losing the window (alt-tab, a system dialog, the tab hiding) drops every tip, the held keys and the pointer: nothing stays on screen that nobody is pointing at.
+  app.blur = () => { app.mouse.down = false; app.mouse.released = false; app.mouse.x = -999; app.mouse.y = -999; app.keys.clear(); pan = null; resetTips(app); app.tip = null; };
+  window.addEventListener('blur', app.blur);
+  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => { if (document.hidden) app.blur(); });
   window.addEventListener('resize', app.resize);
   // Rotating a phone: iOS reports the old inner size for a moment, so measure again after the rotation settles; the URL bar showing or hiding fires visualViewport resize
   window.addEventListener('orientationchange', () => { app.resize(); setTimeout(app.resize, 120); setTimeout(app.resize, 400); });
@@ -122,7 +126,7 @@ export function createApp(canvas, opts = {}) {
   app.go = (name, params) => {
     for (const s of app.stack) if (s.leave) s.leave(app);
     app.stack = []; app.navButtons = false; app.focus.idx = -1; app.focus.active = false;
-    app.tip = null; resetTips(); // no tooltip state survives a screen change
+    app.tip = null; resetTips(app); // no tooltip state survives a screen change
     const s = app.screens[name]; if (!s) throw new Error('no screen ' + name);
     app.stack.push(s); app.current = name; app.sceneT = 0;
     if (s.enter) s.enter(app, params || {});
@@ -339,10 +343,10 @@ export function createApp(canvas, opts = {}) {
     return false;
   };
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.
-  app.tooltip = (title, text, o = NO) => { if (app.blocked) return; /* a screen or modal on top covers this widget */ app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o }; };
+  app.tooltip = (title, text, o = NO) => { if (app.blocked) return; /* a screen or modal on top covers this widget */ app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o, seq: nextTipSeq() }; };
   function drawTip() {
-    const tip = app.tip; if (!tip) { drawPinnedTip(app); return; } // a held tip outlives the finger
-    if (!app.forceTipFallback && renderTip(app, tip) !== false) return; // forceTipFallback: tests and debugging
+    if (!app.forceTipFallback && renderTip(app) !== false) return; // one lifecycle for every tip (ui/tooltips.js); forceTipFallback: tests and debugging
+    const tip = app.tip; if (!tip) return;
     const maxW = 300, pad = 12, lh = app.sz(20), tsz = app.sz(19);
     const body = tip.lines ? tip.lines.join('\n') : (tip.text || '');
     const bl = body ? app.wrap(body, maxW, 16, { ui: true }) : [];
@@ -420,7 +424,7 @@ export function createApp(canvas, opts = {}) {
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    app.tip = null; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
+    app.tip = null; app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
     const stack = app.stack;
     for (let i = 0; i < stack.length; i++) {
       const s = stack[i];

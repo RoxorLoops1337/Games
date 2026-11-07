@@ -6,6 +6,8 @@ import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as METAX from '../graftwork/engine/meta.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
+import { TIP_TIMING } from '../graftwork/ui/tooltips.js';
+TIP_TIMING.SHOW_DELAY = 0.1; // the sweeps hover for 11 frames (0.18 s): the real 0.25 s delay is covered by graftwork_tip_lifecycle
 import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES, ENEMIES, STATUSES } from '../graftwork/data/index.js';
 
 const SCREENS = {};

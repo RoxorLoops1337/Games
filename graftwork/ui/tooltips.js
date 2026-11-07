@@ -15,62 +15,64 @@ import { mult, scaleNum } from '../engine/combat.js';
 import { OVERLOAD_MULT, TITHE_MULT } from '../engine/cards.js';
 import { opText, srcName } from '../engine/text.js';
 import { lnw } from '../art/linework.js';
+import { getAll } from './layout_registry.js';
+import { FX_OPTS } from './fx.js';
 
 const K = (color, glyph, text) => ({ color, glyph, text });
 export const KEYWORDS = {
-  Block: K('#bcd0d8', 'square', 'Absorbs damage. Yours fades at the start of your next turn.'),
+  Block: K('#bcd0d8', 'square', 'Absorbs damage. Yours fades next turn.'),
   Vulnerable: K('#e0a050', 'tri', 'Takes 50% more attack damage.'),
   Weak: K('#9aa8b0', 'tri', 'Deals 25% less attack damage.'),
   Frail: K('#c9b07a', 'tri', 'Gains 25% less Block.'),
-  Burn: K('#ff6a2b', 'diamond', 'Damage at turn start, then Burn halves (rounded up). Ignores Block.'),
-  Bleed: K('#d12a44', 'circle', 'Lose HP at turn start, then Bleed drops by 1. Ignores Block.'),
-  Poison: K('#8fd14f', 'circle', 'Lose HP at turn start (ignores Block), then Poison rises by 1 up to its cap.'),
-  Brittle: K('#cfa3a3', 'tri', 'Block you gain shatters: when an attack empties it, you take 25% of the broken amount.'),
-  Tithe: K('#b3263a', 'cross', 'A Bare card taken by Strain (too much graft Weight). It fights at 75% numbers (-25%) this combat.'),
-  Strain: K('#ff7a7a', 'cross', 'Graft Weight over your Budget. Each point lands one Tithe on a Bare card.'),
-  Backfire: K('#c0713a', 'cross', 'Strain with no Bare card left to take it. Every 2 overflow jams a grafted card in your opening hand.'),
-  Overload: K('#f2c14e', 'star', 'A third graft. Damage and Block x1.5, and 25% to Shatter on its first play each combat.'),
+  Burn: K('#ff6a2b', 'diamond', 'Damage at turn start, then halves. Ignores Block.'),
+  Bleed: K('#d12a44', 'circle', 'HP loss at turn start, then drops by 1. Ignores Block.'),
+  Poison: K('#8fd14f', 'circle', 'HP loss at turn start, then grows by 1 (capped). Ignores Block.'),
+  Brittle: K('#cfa3a3', 'tri', 'Block shatters: when an attack empties it, you take 25% of that amount.'),
+  Tithe: K('#b3263a', 'cross', 'A Bare card taken by Strain: fights at -25% this combat.'),
+  Strain: K('#ff7a7a', 'cross', 'Graft Weight over Budget. Each point Tithes a Bare card.'),
+  Backfire: K('#c0713a', 'cross', 'Strain with no Bare card left. Every 2 overflow jams a card in your opening hand.'),
+  Overload: K('#f2c14e', 'star', 'A third graft: Damage and Block x1.5, 25% to Shatter on its first play.'),
   Shatter: K('#f2c14e', 'star', 'The card resolves, then is destroyed for the run.'),
-  Temper: K('#e8dcc4', 'hex', 'Forge: fuses a card\'s patches into it for good. Boons and prices stay, the slots empty.'),
-  Echo: K('#7fd1e0', 'diamond', 'Your next cards are played twice (Echo 2 = the next 2 cards). Draw, energy and gold do not repeat.'),
-  Exhaust: K('#a79bb5', 'hex', 'Removed for the rest of this combat once played.'),
+  Temper: K('#e8dcc4', 'hex', 'Forge: fuses a card\'s patches into it for good. Boons and prices stay.'),
+  Echo: K('#7fd1e0', 'diamond', 'Your next cards play twice. Draw, energy and gold do not repeat.'),
+  Exhaust: K('#a79bb5', 'hex', 'Removed from this combat once played.'),
   Retain: K('#7fcf8a', 'hex', 'Stays in your hand at end of turn.'),
   Innate: K('#7fcf8a', 'hex', 'Starts in your opening hand.'),
-  Ethereal: K('#a79bb5', 'hex', 'Exhausts if it is still in your hand at end of turn.'),
+  Ethereal: K('#a79bb5', 'hex', 'Exhausts if still in hand at end of turn.'),
   Unplayable: K('#9aa0a6', 'cross', 'Cannot be played.'),
-  Thread: K('#e8dcc4', 'diamond', 'Your hand is a thread. Cards that share a school extend the Line. Break the Line to cash it in.'),
-  Line: K('#e8dcc4', 'diamond', 'The chain of cards you play this turn that share a school: each one adds a Knot (max 5). It pays out when it is cut or when your turn ends.'),
-  Knot: K('#e8dcc4', 'circle', 'One card in the Line. A longer Line pays more when cut, and some cards and grafts count Knots.'),
-  Stitch: K('#e8dcc4', 'circle', 'What a Cut pays out: Knots minus 1 (max 4). Each Stitch gives the bonus of the Line\'s top school.'),
-  Cut: K('#e8dcc4', 'tri', 'Playing a card of a different school ends the Line and pays its Stitches. That card starts a new Line at 1 Knot.'),
-  Slack: K('#b9b09a', 'square', 'A card with no school. It changes nothing: the Line neither grows nor breaks.'),
-  Tied: K('#e8dcc4', 'hex', 'A Tied Line is kept for the next turn at full value instead of paying out. A Tempered card is Tied: it counts as Slack and never cuts.'),
-  Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed: it counts as Slack this turn, so it neither extends nor cuts the Line.'),
-  Claim: K('#c0713a', 'cross', 'The Matron takes your most grafted card for the fight: it fights at -25%, like a Tithe. A Tempered card cannot be Claimed.'),
-  Ringing: K('#a79bb5', 'hex', 'A junk card. Unplayable and Ethereal: it clogs your hand, then fades if it is still there at end of turn.'),
+  Thread: K('#e8dcc4', 'diamond', 'Your hand is a thread: same-school cards extend the Line.'),
+  Line: K('#e8dcc4', 'diamond', 'Same-school cards played in a row, one Knot each (max 5). Pays when cut or at turn end.'),
+  Knot: K('#e8dcc4', 'circle', 'One card in the Line. Longer Lines pay more.'),
+  Stitch: K('#e8dcc4', 'circle', 'What a Cut pays: Knots minus 1 (max 4), each giving the top school\'s bonus.'),
+  Cut: K('#e8dcc4', 'tri', 'A different school ends the Line and pays its Stitches. That card starts a new Line.'),
+  Slack: K('#b9b09a', 'square', 'No school: the Line neither grows nor breaks.'),
+  Tied: K('#e8dcc4', 'hex', 'Carried to next turn at full value. Tempered cards are Tied and never cut.'),
+  Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed: Slack this turn.'),
+  Claim: K('#c0713a', 'cross', 'The Matron takes your most grafted card: it fights at -25%. Tempered cards are safe.'),
+  Ringing: K('#a79bb5', 'hex', 'Junk. Unplayable and Ethereal: clogs your hand, then fades.'),
   Weight: K('#d6c7a6', 'square', 'What a graft counts against your Budget (1 to 3).'),
-  Budget: K('#d6c7a6', 'square', 'How much graft Weight the deck carries without Strain.'),
-  Resonance: K('#7fd1e0', 'star', 'A deck-wide bonus for carrying many grafts of one school: it unlocks at 3 grafts and again at 6.'),
+  Budget: K('#d6c7a6', 'square', 'Graft Weight the deck carries free of Strain.'),
+  Resonance: K('#7fd1e0', 'star', 'Deck bonus for many grafts of one school, at 3 and again at 6.'),
   Strength: K('#ff9a6a', 'tri', 'Attacks deal this much extra damage.'),
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),
 };
 // Rules words that are not statuses: types, schools, tiers and the loose words of the rules text.
-KEYWORDS.Jam = K('#d8a066', 'cross', 'Jammed: the card costs 1 more and counts as Slack (Frayed) this turn. The jam clears at the end of the turn.');
-KEYWORDS.Bare = K('#d6c7a6', 'square', 'A card with no grafts (junk does not count). Strain lands its Tithe on the cheapest, oldest Bare card.');
-KEYWORDS.Pierce = K('#bcd0d8', 'tri', 'Damage that ignores Block and goes straight to HP.');
-KEYWORDS['X cost'] = K('#7fd1e0', 'diamond', 'Spends all your remaining Energy when played. The effect repeats or scales with the Energy spent.');
-KEYWORDS.Attack = K('#e0a050', 'tri', 'A card that deals damage. Strength adds to it, Weak cuts it, Vulnerable raises it.');
-KEYWORDS.Skill = K('#8fb4d1', 'square', 'A card that defends or sets something up (Block, draw, buffs).');
-KEYWORDS.Power = K('#c58bff', 'star', 'Played once, then stays out of your deck for the rest of the combat.');
-KEYWORDS.Junk = K('#a79bb5', 'hex', 'A clog card added by a Price. Most are Unplayable and fade at end of turn. Rust grafts turn them into fuel.');
-KEYWORDS.Safe = K('#8fd18f', 'diamond', 'Safe patch: Weight 1, a small Boon and a simple Price.');
-KEYWORDS.Greedy = K('#e0a050', 'tri', 'Greedy patch: Weight 2 or 3, a big Boon. It pushes you toward Strain.');
-KEYWORDS.Weird = K('#c58bff', 'star', 'Weird patch: it changes how the card works, with a Price to match.');
-KEYWORDS.After = K('#f2c14e', 'square', 'The deck as it will be if you sew this graft: Weight, Budget, Strain and who gets Tithed.');
+KEYWORDS.Jam = K('#d8a066', 'cross', 'Costs 1 more and counts as Slack (Frayed) until end of turn.');
+KEYWORDS.Bare = K('#d6c7a6', 'square', 'A card with no grafts (junk excluded). Strain Tithes the cheapest, oldest.');
+KEYWORDS.Pierce = K('#bcd0d8', 'tri', 'Ignores Block.');
+KEYWORDS['X cost'] = K('#7fd1e0', 'diamond', 'Spends all your Energy. Scales with the Energy spent.');
+KEYWORDS.Attack = K('#e0a050', 'tri', 'Deals damage.');
+KEYWORDS.Skill = K('#8fb4d1', 'square', 'Defends or sets something up.');
+KEYWORDS.Power = K('#c58bff', 'star', 'Played once, then stays out of your deck this combat.');
+KEYWORDS.Junk = K('#a79bb5', 'hex', 'A clog card from a Price. Most are Unplayable and fade at end of turn.');
+KEYWORDS.Safe = K('#8fd18f', 'diamond', 'Weight 1, a small Boon, a simple Price.');
+KEYWORDS.Greedy = K('#e0a050', 'tri', 'Weight 2 or 3, a big Boon. Pushes you toward Strain.');
+KEYWORDS.Weird = K('#c58bff', 'star', 'Changes how the card works, with a Price to match.');
+KEYWORDS.After = K('#f2c14e', 'square', 'The deck if you sew this graft: Weight, Budget, Strain, Tithes.');
 for (const sc of Object.values(SCHOOLS)) {
   if (KEYWORDS[sc.name]) continue; // Echo is a status too: the status text wins, the school is named by o.school
-  KEYWORDS[sc.name] = K(sc.color, 'diamond', `${sc.name} school. ${sc.blurb} At 3 grafts of it: ${sc.resonance[3]} At 6: ${sc.resonance[6]}`);
+  KEYWORDS[sc.name] = K(sc.color, 'diamond', `${sc.name} school. ${sc.blurb} Resonance at 3 and 6 grafts.`);
 }
 // Every status (player afflictions included) is a glossary word too, so card text and tooltips can name it.
 export const THREAD_TERMS = ['Thread', 'Line', 'Knot', 'Stitch', 'Cut', 'Slack', 'Tied', 'Frayed'];
@@ -88,43 +90,43 @@ KEYWORDS.Charge.text = 'Stored by Static cards. Every 2 Charge adds 1 to each hi
 // THE WARD terms (design/WARD.md). Kept apart from KEYWORDS so card and event text never pick them up by accident ('Power' the card type,
 // 'night' in an event): a tip names them explicitly with o.terms (ui/ward.js, ui/ward_kit.js). glossaryEntry resolves them after KEYWORDS.
 export const WARD_GLOSSARY = {
-  Wood: K('#b07a44', 'square', 'A building resource. Sawmills make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
-  Stone: K('#a8a198', 'square', 'A building resource. Quarries make 2 each morning; fights and Requisition give more. Half carries to the next floor.'),
-  Power: K('#FFE9A0', 'circle', 'Capacity, not spent. Every lit room uses its power. Generators add 2. Switch a room off in the morning to free its power.'),
-  Morning: K('#F2C14E', 'diamond', 'Build stage. Timers tick and spawns appear, resource rooms produce, you draw 5 building plans. No walking.'),
+  Wood: K('#b07a44', 'square', 'Building resource. Sawmills make 2 each morning. Half carries to the next floor.'),
+  Stone: K('#a8a198', 'square', 'Building resource. Quarries make 2 each morning. Half carries to the next floor.'),
+  Power: K('#FFE9A0', 'circle', 'Capacity, not spent. Each lit room uses its power; Generators add 2. Switch a room off in the morning to free it.'),
+  Morning: K('#F2C14E', 'diamond', 'Build stage: timers tick, rooms produce, you draw 5 building plans. No walking.'),
   Midday: K('#F5E6A8', 'diamond', 'One walk. Fights pay +10% gold. Chapel events lean to gold and healing.'),
   Evening: K('#e0a050', 'diamond', 'One walk. Dinner: draw 1 more card on the first turn of every fight.'),
-  Night: K('#8fb4d1', 'diamond', 'One walk. Monsters +1 Strength, elites +2 and one more relic to choose from. Fights pay +25% gold. Events turn strange.'),
-  Ward: K('#B3263A', 'tri', 'Fight room. A monster checks in every day, up to 5. Walk in to fight them all: 3 at once, the rest as Reinforcements.'),
+  Night: K('#8fb4d1', 'diamond', 'One walk. Monsters +1 Strength, elites +2, one more relic. Fights pay +25% gold. Events turn strange.'),
+  Ward: K('#B3263A', 'tri', 'Fight room. A monster checks in each day (max 5). Walk in to fight 3 at once; the rest are Reinforcements.'),
   Isolation: K('#C9A227', 'tri', 'Elite room. An elite every 2 days. Left 3 days it becomes a Level 2 elite.'),
-  Chapel: K('#3E7C74', 'diamond', 'Event room. An event every 4 days. The phase you walk in at changes how it leans.'),
-  Dispensary: K('#5a8fd8', 'square', 'The shop as a room. Restocks every 3 days. Also sells building plans and strikes one for 50 gold.'),
+  Chapel: K('#3E7C74', 'diamond', 'Event room. An event every 4 days. The phase you walk in at changes its lean.'),
+  Dispensary: K('#5a8fd8', 'square', 'The shop as a room. Restocks every 3 days. Sells building plans and strikes one for 50 gold.'),
   Workshop: K('#E8571F', 'hex', 'The forge as a room. Recharges every 3 days.'),
-  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 30% of your max HP.'),
+  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 30% of max HP.'),
   Sawmill: K('#8F4A2A', 'square', '+2 wood each morning while lit.'),
   Quarry: K('#6f6a60', 'square', '+2 stone each morning while lit.'),
   'Counting House': K('#B8922A', 'square', '+15 gold each morning while lit.'),
   Generator: K('#b8c23a', 'star', '+2 power capacity. Uses none.'),
   Corridor: K('#8a7a5c', 'square', 'A cheap connector. Never spawns anything, never goes dark.'),
-  Pharmacy: K('#5a8fd8', 'circle', 'Service room. Every 3 days while lit it brews a potion (15 gold if your belt is full). No walking needed.'),
-  Library: K('#3E7C74', 'diamond', 'Service room. Each morning while lit, a 25% chance to upgrade a random card in your deck.'),
+  Pharmacy: K('#5a8fd8', 'circle', 'Service room. Every 3 days while lit it brews a potion (15 gold if your belt is full).'),
+  Library: K('#3E7C74', 'diamond', 'Service room. Each morning while lit, 25% to upgrade a random card.'),
   Morgue: K('#6f6a60', 'square', 'While lit, every monster you fight leaves 1 more stone.'),
   Kitchen: K('#e0a050', 'circle', 'While lit, dinner draws 2 more cards on the first turn of evening fights instead of 1.'),
   Boiler: K('#b8c23a', 'star', 'Uses no power. Adds 1 power capacity for every two lit Wards.'),
   Laundry: K('#6a9a6a', 'circle', 'Service room. Every 2 days while lit it washes one junk card out of your deck.'),
   'Isolation Ward II': K('#C9A227', 'tri', 'Elite room. An elite every 3 days, always Level 2. Uses 2 power.'),
-  Quarantine: K('#9aa0a6', 'cross', 'A room is cleared and stops spawning for 2 days.'),
+  Quarantine: K('#9aa0a6', 'cross', 'The room is cleared and stops spawning for 2 days.'),
   Fumigate: K('#9aa0a6', 'cross', 'Kills every monster waiting in a Ward. They pay nothing.'),
-  'Double Doors': K('#8a7a5c', 'square', 'Walking through the room costs no MOVE. Stopping in it still counts.'),
-  Soundproofing: K('#8fb4d1', 'diamond', 'No night modifiers in the room: no night Strength, gold bonus or relic.'),
+  'Double Doors': K('#8a7a5c', 'square', 'Walking through costs no MOVE. Stopping in it still counts.'),
+  Soundproofing: K('#8fb4d1', 'diamond', 'No night modifiers in the room.'),
   'Fire Door': K('#E8571F', 'tri', 'This Ward holds at most 3 monsters and leaves double wood and stone.'),
   Floodlights: K('#FFE9A0', 'circle', 'No night modifiers anywhere today.'),
-  Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next in line from the Ward steps in.'),
-  'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP and +2 Strength, and one more relic to choose from.'),
+  Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next steps in.'),
+  'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP, +2 Strength, one more relic to choose from.'),
   Die: K('#e0c27a', 'square', 'Each walk phase you roll your die (D4 to start). Loaded Dice and Bone Dice add sides.'),
-  Roll: K('#e0c27a', 'square', 'The number you rolled is the longest route you can plan this phase. Morning Rounds, Weighted Die and the Noon Dial add to it.'),
-  Route: K('#B3263A', 'tri', 'Click the rooms next to you one by one, up to your roll, never the same room twice. Every room you enter triggers in order. Click the last step to undo it, then Go.'),
-  'Dark room': K('#9aa0a6', 'cross', 'A room switched off. Its timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
+  Roll: K('#e0c27a', 'square', 'The longest route you can plan this phase. Morning Rounds, Weighted Die and the Noon Dial add to it.'),
+  Route: K('#B3263A', 'tri', 'Click neighbouring rooms one by one, up to your roll, never the same room twice. Click the last step to undo, then Go.'),
+  'Dark room': K('#9aa0a6', 'cross', 'A room switched off: timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
 };
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
 export function glossaryEntry(term) {
@@ -177,8 +179,8 @@ const rank = (name) => (TAGS.has(name) ? 4 : BASIC.has(name) ? 3 : SCHOOLS_BY_NA
 const SCHOOLS_BY_NAME = {}; for (const sc of Object.values(SCHOOLS)) SCHOOLS_BY_NAME[sc.name] = sc;
 export function defineTerm(name, n) {
   const k = KEYWORDS[name], d = STATUS_BY_NAME[name];
-  if (name === 'Echo' && n >= 1) return `Your next ${n === 1 ? 'card is' : n + ' cards are'} played twice. Draw, energy and gold do not repeat.`;
-  if (name === 'Weight' && n >= 1 && n <= 3) return `Weight ${n}: this patch counts ${n} against your Budget. Over the Budget is Strain.`;
+  if (name === 'Echo' && n >= 1) return `Your next ${n === 1 ? 'card plays' : n + ' cards play'} twice. Draw, energy and gold do not repeat.`;
+  if (name === 'Weight' && n >= 1 && n <= 3) return `This patch counts ${n} against your Budget. Over it is Strain.`;
   if (d && typeof n === 'number' && Number.isFinite(n)) {
     try { let t = String(d.desc(n)); if (k && /Ignores Block/.test(k.text) && !/Block/.test(t)) t += ' Ignores Block.'; return t; } catch (e) { /* fall through */ }
   }
@@ -200,10 +202,13 @@ export function glossaryFor(input, o = {}) {
   for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
   for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) add(h.name, numAround(ln, h)); // the tip's own prose: its rules words need a definition too (Weight and Budget included)
   for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
-  if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
-  if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
+  // o.types / o.school name what the hovered thing IS (a card's own type, a graft's school): its face already says so, so they are never defined
+  // (a word the text itself uses, such as 'Echo' the status, still is).
+  const self = new Set();
+  if (o.types) for (const t of [].concat(o.types)) if (t) self.add(String(t)[0].toUpperCase() + String(t).slice(1));
+  if (o.school && SCHOOLS[o.school] && !STATUS_BY_NAME[SCHOOLS[o.school].name]) self.add(SCHOOLS[o.school].name);
   for (const t of o.terms || []) if (WARD_GLOSSARY[t] && !found.has('ward:' + t)) found.set('ward:' + t, { name: t, ward: true, order: -100 + order++ }); // explicit Ward terms come first
-  const list = [...found.values()].filter((f) => !skip.has(f.name)).sort((a, b) => (b.ward ? 1 : 0) - (a.ward ? 1 : 0) || rank(a.name) - rank(b.name) || a.order - b.order);
+  const list = [...found.values()].filter((f) => !skip.has(f.name) && !self.has(f.name)).sort((a, b) => (b.ward ? 1 : 0) - (a.ward ? 1 : 0) || rank(a.name) - rank(b.name) || a.order - b.order);
   return list.slice(0, max).map((f) => {
     if (f.ward) { const k = WARD_GLOSSARY[f.name]; return { term: f.name, title: f.name, definition: k.text, text: k.text, color: k.color, glyph: k.glyph, n: undefined }; }
     const k = KEYWORDS[f.name], d = STATUS_BY_NAME[f.name];
@@ -359,232 +364,363 @@ export function statusSection(id, n, ent) {
   }
   return { title: `${d.name} ${n === undefined ? '' : n}`.trim(), text: d.desc(n || 1), color: col, glyph: KEYWORDS[d.name] ? KEYWORDS[d.name].glyph : (d.good === false ? 'tri' : 'diamond'), why };
 }
-// Panels for a card: [keywords on the card] then [number 'why' lines + statuses it applies]
+
+// ---- the compact card model ----
+// A tip is ONE panel: { groups: [{ title, color, glyph, lines: [{ label, text, color }] }], terms: [{ title, text, color, glyph }], details: [string] }.
+//   groups   what the thing itself says (its title row, then its own lines; a card's graft Boon / Price blocks; the computed totals)
+//   terms    one short definition per rules word, most important first (statuses and rules words, then basics, then tags)
+//   details  the arithmetic and stacking rules, shown only while the player HOLDS (Shift on desktop, press and hold on touch)
+// A card never defines its own type or school (the face says it), and the totals line appears only when it differs from the face.
+const BOON_COL = '#8fd18f', PRICE_COL = '#ff9a8a';
+const LABEL_RE = /^([A-Z][A-Za-z]+(?: [a-z]+)?):\s+(?=\S)/;
+function toLines(text, color) {
+  const out = [];
+  for (const raw of String(text || '').split('\n')) {
+    const ln = raw.trim(); if (!ln) continue;
+    const m = LABEL_RE.exec(ln);
+    if (m) out.push({ label: m[1] + ':', text: ln.slice(m[0].length), color, lc: m[1] === 'Boon' ? BOON_COL : m[1] === 'Price' ? PRICE_COL : undefined });
+    else out.push({ text: ln, color });
+  }
+  return out;
+}
+const GLOSS_MAX = 14; // the model carries every rules word the item names; the layout decides how many fit and says how many are behind 'hold'
+function sectionsText(secs) { const out = []; for (const s of secs) out.push(s.text || ''); return out; }
+function titleNames(secs) { const sk = new Set(); for (const s of secs) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
+const asTerm = (g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph });
+// the numbers the card prints versus the numbers it deals right now (Strength, Weak, Vulnerable...): only lines where they differ
+export function numberNow(spec, c, o = {}) {
+  const out = [];
+  if (!spec) return out;
+  walkOps(spec.fx, (op) => {
+    if (op.op !== 'dmg' && op.op !== 'block') return;
+    const kind = op.op, v = op.n, base = typeof v === 'number' ? v : (v && v.base) || 0;
+    if (typeof v === 'object' && v && v.per) return; // scales with something live: the arithmetic is in the details
+    const face = scaleNum(base, mult(spec, !!o.tithed));
+    const pm = playerMods(c && c.player, kind), parts = [];
+    let n = face + pm.add; for (const p of pm.parts) parts.push(p.t);
+    n *= pm.mul;
+    if (kind === 'dmg') { const tm = targetMods(o.target); for (const t of tm.parts) parts.push(t); n *= tm.mul; }
+    n = Math.max(0, Math.floor(n));
+    if (n === face || !parts.length) return;
+    const hits = op.hits && typeof op.hits === 'number' && op.hits > 1 ? ` x${op.hits}` : '';
+    out.push(`${kind === 'dmg' ? 'Damage' : 'Block'} ${n}${hits} now (${face} ${parts.join(' ')})`);
+  });
+  return out;
+}
+// Model for a card (hand, shop, deck...): groups = the graft / price blocks, then terms. o: { tithed, target, groups: [{ title, color, text }] }
 export function cardTipStack(spec, c, o = {}) {
-  if (!spec) return [];
-  const lines = cardLines(spec, !!o.tithed);
+  if (!spec) return null;
   const extra = [];
   if (spec.overload) extra.push('Overload');
   if (o.tithed) extra.push('Tithe');
   if (spec.cost === 'X') extra.push('X cost');
-  const gl = glossaryFor([specGloss(spec), extra], { max: GLOSS_MAX, school: spec.school, types: spec.type }); // the card's lines AND the Boon / Price words of every graft on it
-  const kws = gl.map((g) => g.term);
-  const p1 = gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
-  const p2 = [];
-  const why = explainNumber(spec, c, o);
-  if (why.length) p2.push({ title: 'The numbers', color: COL.lamp, glyph: 'square', text: '', why });
+  const groups = (o.groups || []).map((x) => ({ title: x.title, color: x.color, glyph: x.glyph || 'hex', lines: toLines(x.text, undefined) }));
+  const now = numberNow(spec, c, o);
+  if (now.length) groups.push({ title: '', color: COL.lamp, lines: now.map((t) => ({ text: t, color: COL.lamp })) });
+  const gl = glossaryFor([specGloss(spec), extra], { max: GLOSS_MAX, school: spec.school, types: spec.type, skip: titleNames(groups) });
+  const terms = gl.map(asTerm), kws = gl.map((g) => g.term);
   const seen = new Set();
-  walkOps(spec.fx, (op) => { if (op.s && STATUSES[op.s] && !seen.has(op.s) && !kws.includes(STATUSES[op.s].name)) { seen.add(op.s); p2.push(statusSection(op.s, typeof op.n === 'number' ? op.n : undefined)); } });
-  const out = [];
-  if (p1.length) out.push(p1);
-  if (p2.length) out.push(p2);
-  return out;
+  walkOps(spec.fx, (op) => { if (op.s && STATUSES[op.s] && !seen.has(op.s) && !kws.includes(STATUSES[op.s].name)) { seen.add(op.s); const ss = statusSection(op.s, typeof op.n === 'number' ? op.n : undefined); terms.push({ title: ss.title, text: ss.text, color: ss.color, glyph: ss.glyph }); } });
+  if (!groups.length && !terms.length) return null;
+  return { __model: true, groups, terms, details: explainNumber(spec, c, o), gloss: false };
 }
 
-// ---- rendering ----
-const MAXW = 320, PAD = 12, TI = 19, BO = 16, WH = 15, GAP = 8, EDGE = 6, RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
-let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
-// resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
-export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
-// ---- measured layout ----
-// Every section is measured with app.layoutText at the real (boosted) text size, and drawn from the SAME records, so the heights it reserves are the
-// heights it uses. Sections stack with a consistent gap into panels; panels flow into columns inside the free area (the stage minus the safe area), and
-// the block is placed beside the anchor, flipped to the other side or the nearest band when it would run off, and kept out of the reserved top-right zone.
-function measureSection(app, s, bw, cfg) {
-  const gx = s.glyph ? 18 : 0;
-  const title = app.layoutText(s.title || ' ', { size: cfg.ti, bold: true, maxW: bw - gx });
-  const bodyO = { size: cfg.bo, ui: true, maxW: bw, lineH: Math.round(cfg.bo * 1.25) };
-  const body = s.text ? app.layoutText(s.text, bodyO) : null;
-  const whyO = { size: WH, ui: true, maxW: bw, lineH: Math.round(WH * 1.25) };
-  const why = (s.why || []).map((w) => ({ str: w, L: app.layoutText(w, whyO) }));
-  const th = title.lines.length * title.lineH;
-  const bh = body ? body.lines.length * body.lineH : 0;
-  const wh = why.reduce((a, w) => a + w.L.lines.length * w.L.lineH + 3, 0);
-  return { s, gx, title, body, bodyO, why, whyO, th, bh, wh, h: th + cfg.tg + bh + wh };
+// ---- the tip model of every tip surface ----
+// tip: core's app.tip { title, text, lines, color, anchor, o:{ gloss, glossOnly, school, types, ids, terms } } or a queued { stack, anchor, o:{ gloss:false } }.
+// A stack is [[section]] (the first section is the thing, the rest are definitions) or a ready model from cardTipStack.
+function modelOf(tip) {
+  const o = tip.o || {};
+  if (tip.stack && tip.stack.__model) return tip.stack;
+  const flat = tip.stack ? tip.stack.flat() : (o.glossOnly ? [] : [{ title: tip.title, text: tip.lines ? tip.lines.join('\n') : (tip.text || ''), color: tip.color }]);
+  const head = flat[0], rest = flat.slice(1);
+  const groups = head && (head.title || head.text) ? [{ title: head.title || '', color: head.color, glyph: head.glyph, lines: toLines(head.text, undefined) }] : [];
+  if (o.glossOnly && tip.title) groups.push({ title: tip.title, color: tip.color, lines: toLines(tip.text, undefined) });
+  const terms = rest.filter((s) => s.title || s.text).map((s) => ({ title: s.title, text: s.text, color: s.color, glyph: s.glyph }));
+  const details = []; for (const s of flat) for (const w of s.why || []) details.push(w);
+  const single = !tip.stack || tip.stack.length === 1;
+  if (single && o.gloss !== false) {
+    const gl = glossaryFor(o.gloss || [], { weak: sectionsText(flat), max: GLOSS_MAX, skip: titleNames(flat), school: o.school, types: o.types, ids: o.ids, terms: o.terms });
+    for (const g of gl) if (!terms.some((t) => String(t.title).startsWith(g.term))) terms.push(asTerm(g));
+  }
+  return { groups, terms, details };
 }
-// Panels are cut at SECTION boundaries so that each fills what is left of its column (colH = the column's height so far): the block gets as many columns as it needs, never more.
-function buildPanels(app, panels, W, cfg, availH) {
-  const pad = cfg.pad || PAD, bw = W - pad * 2, out = []; let colH = 0;
-  for (const p of panels) {
-    const secs = p.map((s) => measureSection(app, s, bw, cfg));
-    let cur = [], h = pad * 2;
-    const close = () => { out.push({ secs: cur, h, w: W }); colH = (colH ? colH + GAP : 0) + h; cur = []; h = pad * 2; };
-    for (const m of secs) {
-      const room = availH - (colH ? colH + GAP : 0);
-      if (!cur.length && colH && pad * 2 + m.h > room) colH = 0; // the panel starts a new column
-      else if (cur.length && h + cfg.gap + m.h > room) { close(); if (pad * 2 + m.h > availH - colH - GAP) colH = 0; }
-      h += (cur.length ? cfg.gap : 0) + m.h; cur.push(m);
+// tests: the sections (title + text) a tip would show, as [[...]]
+export function tipSections(tip) {
+  const m = modelOf(tip);
+  const out = m.groups.map((g) => ({ title: g.title, text: g.lines.map((l) => (l.label ? l.label + ' ' : '') + l.text).join('\n') }));
+  for (const t of m.terms) out.push({ title: t.title, text: t.text });
+  return out.length ? [out] : [];
+}
+
+// ---- lifecycle ----
+// A tip exists only while its anchor is hovered (held, or focused) THIS frame. The state machine runs once per frame from core.js (renderTip):
+//   - it shows after SHOW_DELAY of steady hover (TOUCH_DELAY of a steady press), at once while Shift is down or when it follows a visible tip (GRACE),
+//   - it fades in and out (FADE_IN / FADE_OUT; instantly with reduced motion),
+//   - it is dropped at once on a press, Esc, a screen change, window blur, or when the screen sets app.tipBlock (enemy turn, drag...): and the
+//     same anchor stays quiet until the pointer has left it, so a click never leaves its tip behind,
+//   - touch tips live only while the finger is down; keeping it down (HOLD_TOUCH) is the 'hold' that opens the details.
+export const TIP_TIMING = { SHOW_DELAY: 0.25, TOUCH_DELAY: 0.3, GRACE: 0.2, GRACE_DELAY: 0.05, FADE_IN: 0.12, FADE_OUT: 0.09, HOLD_TOUCH: 0.9 };
+const TS = (app) => app._ts || (app._ts = { key: '', since: 0, alpha: 0, shown: false, last: null, ghost: null, suppress: '', lastShown: -9, cache: null, hold: false });
+let SEQ = 0;
+// resetTips(app): drop every tip, queued, fading or suppressed (core's app.go and app.blur call it).
+export function resetTips(app) { if (!app) return; app._queued = null; app._ts = null; app.tipLayout = null; }
+export function dismissTips(app) { const S = TS(app); S.shown = false; S.ghost = null; S.last = null; S.alpha = 0; S.key = ''; S.cache = null; }
+export function nextTipSeq() { return ++SEQ; }
+// queueTip(app, key, stack, anchor, o): HUD tips from anywhere in a frame; core draws the newest tip last. o: { gloss: false } for tips that carry their own definitions.
+export function queueTip(app, key, stack, anchor, o) { app._queued = { key, stack, anchor, o: o || {}, frame: app.frame, seq: ++SEQ }; }
+export function flushTips() { return false; } // kept for old callers: core.js draws every tip now
+export function drawPinnedTip() { /* tips are never pinned any more */ }
+// the tip candidate of this frame: the newest of app.tip and the queued one
+function candidate(app) {
+  const q = app._queued && app._queued.frame === app.frame ? app._queued : null, t = app.tip;
+  if (t && (!q || (t.seq || 0) > q.seq)) {
+    const a = t.anchor;
+    return { tip: t, anchor: a, key: t.key || `${t.title}|${a ? [a.x, a.y, a.w, a.h].map(Math.round).join(',') : ''}` };
+  }
+  return q ? { tip: q, anchor: q.anchor, key: q.key } : null;
+}
+const reduced = (app) => { const st = app.shared && app.shared.meta && app.shared.meta.settings; return !!(FX_OPTS.reduced || (st && (st.reducedMotion || st.reduceMotion))); };
+
+// ---- layout ----
+const EDGE = 8, PAD = 9, RESERVED = { x: 1128, y: 0, w: 144, h: 56 }, TAIL = 7, STAGE = { w: 1280, h: 720 };
+const EX = { exact: true, ui: true };
+// flow(app, parts, size, maxW): inline text with mixed styles, word-wrapped. parts: [{ t, bold, color }] -> { lines: [[{ t, x, bold, color }]], lh, w }
+function flow(app, parts, size, maxW) {
+  const lh = Math.round(size * 1.22), sp = app.measure(' ', size, EX), lines = []; let cur = [], cx = 0, w = 0;
+  for (const p of parts) {
+    for (const wd of String(p.t).split(/\s+/)) {
+      if (!wd) continue;
+      const ww = app.measure(wd, size, p.bold ? { ...EX, bold: true } : EX);
+      if (cx > 0 && cx + ww > maxW) { lines.push(cur); cur = []; cx = 0; }
+      const last = cur[cur.length - 1];
+      if (last && !!last.bold === !!p.bold && last.color === p.color) { last.t += ' ' + wd; } else cur.push({ t: wd, x: cx, bold: !!p.bold, color: p.color });
+      cx += ww + sp; w = Math.max(w, cx - sp);
     }
-    if (cur.length) close();
   }
-  return out;
+  if (cur.length) lines.push(cur);
+  return { lines, lh, w };
 }
-function flowColumns(panels, availH) {
-  const cols = []; let cur = null;
-  for (const p of panels) {
-    if (!cur || cur.h + GAP + p.h > availH) { cur = { items: [], h: 0, w: p.w }; cols.push(cur); }
-    cur.h += (cur.items.length ? GAP : 0) + p.h; cur.items.push(p);
+// build the panel for a model at width W with n terms: ops are relative to the panel origin
+function layout(app, M, W, n, hold, sz) {
+  const cw = W - PAD * 2, ops = [], secs = [];
+  let y = PAD, right = 0;
+  const hasTitle = M.groups.length && M.groups[0].title;
+  M.groups.forEach((g, gi) => {
+    const s0 = y, texts = [];
+    const first = gi === 0 && g.title, tsz = first ? sz.ti : sz.bo, gx = g.glyph && g.title ? Math.round(tsz * 0.9) : 0;
+    if (g.title) {
+      const L = app.layoutText(g.title, { size: tsz, bold: true, ui: true, exact: true, maxW: cw - gx });
+      if (g.glyph) ops.push({ k: 'glyph', g: g.glyph, x: PAD + gx / 2 - 1, y: y + L.lineH / 2, s: Math.round(tsz * 0.62), color: g.color || COL.lamp });
+      ops.push({ k: 'text', t: g.title, x: PAD + gx, y, size: tsz, bold: true, color: g.color || COL.lamp, maxW: cw - gx, lh: L.lineH });
+      y += L.lines.length * L.lineH; right = Math.max(right, PAD + gx + L.w); texts.push(g.title);
+    }
+    for (const ln of g.lines) {
+      const parts = []; if (ln.label) parts.push({ t: ln.label, bold: true, color: ln.lc || COL.lamp }); parts.push({ t: ln.text, color: ln.color || COL.vellum });
+      const F = flow(app, parts, sz.bo, cw);
+      F.lines.forEach((segs, i) => { for (const sg of segs) ops.push({ k: 'text', t: sg.t, x: PAD + sg.x, y: y + i * F.lh, size: sz.bo, bold: sg.bold, color: sg.color }); });
+      y += F.lines.length * F.lh; right = Math.max(right, PAD + F.w); texts.push((ln.label ? ln.label + ' ' : '') + ln.text);
+    }
+    secs.push({ x: PAD, y: s0, w: cw, h: y - s0, title: g.title || '', text: texts.slice(g.title ? 1 : 0).join('\n'), why: [] });
+    y += 5;
+  });
+  if (M.groups.length) y -= 5;
+  const shown = M.terms.slice(0, n), hidden = M.terms.length - shown.length;
+  if (shown.length) {
+    if (M.groups.length) { y += 4; ops.push({ k: 'rule', x1: PAD, x2: W - PAD, y }); y += 5; }
+    const gi = Math.round(sz.bo * 0.9);
+    shown.forEach((t, i) => {
+      const F = flow(app, [{ t: t.title, bold: true, color: t.color || COL.lamp }, { t: t.text, color: 'rgba(232,220,196,.88)' }], sz.bo, cw - gi), s0 = y;
+      if (t.glyph) ops.push({ k: 'glyph', g: t.glyph, x: PAD + gi / 2 - 1, y: y + F.lh / 2, s: Math.round(sz.bo * 0.62), color: t.color || COL.lamp });
+      F.lines.forEach((segs, li) => { for (const sg of segs) ops.push({ k: 'text', t: sg.t, x: PAD + gi + sg.x, y: y + li * F.lh, size: sz.bo, bold: sg.bold, color: sg.color }); });
+      y += F.lines.length * F.lh; right = Math.max(right, PAD + gi + F.w);
+      secs.push({ x: PAD, y: s0, w: cw, h: y - s0, title: t.title, text: t.text, why: [] });
+      y += i < shown.length - 1 ? 3 : 0;
+    });
   }
-  return cols;
+  if (hold && M.details.length) {
+    y += 4; ops.push({ k: 'rule', x1: PAD, x2: W - PAD, y }); y += 5;
+    for (const d of M.details) {
+      const F = flow(app, [{ t: d, color: COL.lamp }], sz.bo, cw), s0 = y;
+      F.lines.forEach((segs, li) => { for (const sg of segs) ops.push({ k: 'text', t: sg.t, x: PAD + sg.x, y: y + li * F.lh, size: sz.bo, bold: false, color: sg.color }); });
+      y += F.lines.length * F.lh; right = Math.max(right, PAD + F.w);
+      secs.push({ x: PAD, y: s0, w: cw, h: y - s0, title: 'Detail', text: d, why: [] }); y += 2;
+    }
+    y -= 2;
+  }
+  if (hidden > 0) {
+    y += shown.length || M.groups.length ? 4 : 0;
+    const t = `+${hidden} more (hold)`, tw = app.measure(t, sz.sm, EX);
+    ops.push({ k: 'text', t, x: PAD, y, size: sz.sm, bold: false, color: 'rgba(242,193,78,.85)' });
+    secs.push({ x: PAD, y, w: cw, h: Math.round(sz.sm * 1.22), title: t, text: '', why: [] });
+    y += Math.round(sz.sm * 1.22); right = Math.max(right, PAD + tw);
+  }
+  y += PAD;
+  const w = Math.max(Math.min(W, Math.ceil(right + PAD)), hasTitle ? 120 : 0);
+  return { w, h: y, ops, secs, hidden, shown: shown.length, W };
 }
-function fitBlock(app, panels, availW, availH) {
-  const phone = app.scale < 0.95;
-  const boost = Math.max(1, app.sz(BO) / BO);
-  const W0 = phone ? Math.round(Math.max(MAXW, Math.min(0.40 * 1280, MAXW * boost))) : MAXW;
-  const small = { ti: 16, bo: 15, gap: 4, tg: 2 }, tiny = { ti: 15, bo: 14, gap: 3, tg: 1, pad: 8 };
-  const tries = [
-    { W: W0, cfg: { ti: TI, bo: BO, gap: GAP, tg: 5 } },
-    { W: W0, cfg: small },
-    { W: Math.min(Math.round(W0 * 1.4), 520), cfg: small },
-    { W: Math.floor((availW - GAP) / 2), cfg: small }, // two columns, then three, before anything is cut
-    { W: Math.floor((availW - GAP) / 2), cfg: tiny },
-    { W: Math.floor((availW - 2 * GAP) / 3), cfg: tiny },
-    { W: Math.min(Math.round(W0 * 1.7), 620), cfg: small },
-    { W: Math.min(Math.round(W0 * 2), 760), cfg: tiny },
-  ].filter((t) => t.W >= 200);
-  const run = (W, cfg, ps) => { W = Math.min(W, Math.max(200, availW)); const bp = buildPanels(app, ps, W, cfg, availH), cols = flowColumns(bp, availH); const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h)); return { cols, w, h, cfg, W, ok: w <= availW + 0.5 && h <= availH + 0.5 }; };
-  let last = null, narrow = null; // narrow: the attempt that fits the width with the least height (where the last resort cuts words)
-  for (const t of tries) { last = run(t.W, t.cfg, panels); if (last.ok) return last; if (last.w <= availW + 0.5 && (!narrow || last.h < narrow.h)) narrow = { h: last.h, t }; }
-  // Last resort, never a dropped definition: shorten the longest trailing definition by whole words, with a soft ellipsis (the info card keeps the full text).
-  const two = Math.floor((availW - GAP) / 2), base = (narrow && narrow.t) || { W: two >= 200 ? two : Math.max(200, availW), cfg: tiny };
-  let rest = panels.map((p) => p.map((s) => ({ ...s })));
-  last = run(base.W, base.cfg, rest);
-  for (let i = 0; i < 80 && !last.ok; i++) {
-    let best = null;
-    rest.forEach((p, pi) => p.forEach((s, si) => { if ((pi > 0 || si > 0) && s.text && s.text.length > 24 && (!best || s.text.length >= best.s.text.length)) best = { s }; }));
-    if (!best) break;
-    const words = best.s.text.replace(/…$/, '').split(' '); words.length = Math.max(3, Math.floor(words.length * 0.85)); best.s.text = words.join(' ').replace(/[,.:;]$/, '') + '…';
-    last = run(base.W, base.cfg, rest); last.cut = true;
-  }
-  return last;
+// the width ladder: narrow first; never wider than 38% of the stage unless the player holds
+function fit(app, M, availW, availH, hold) {
+  const phone = app.scale < 0.95, sz = phone ? { ti: app.sz(16), bo: app.sz(14), sm: app.sz(14) } : { ti: app.sz(15), bo: app.sz(13), sm: app.sz(12) }; // phones: the core floor boosts text at most 1.5x, so start a little higher
+  const maxH = hold ? availH : Math.min(availH, phone ? 260 : 200);
+  const ladder = hold ? [420, 520, 600] : [300, 360, 420, Math.round(0.38 * STAGE.w)];
+  const Ws = ladder.map((w) => Math.min(w, Math.floor(availW))).filter((w, i, a) => w >= 200 && a.indexOf(w) === i);
+  if (!Ws.length) return null;
+  const nAll = M.terms.length; let R = null;
+  for (const W of Ws) { R = layout(app, M, W, nAll, hold, sz); if (R.h <= maxH + 0.5) return R; }
+  if (!hold) for (let n = nAll - 1; n >= 0; n--) { R = layout(app, M, Ws[Ws.length - 1], n, hold, sz); if (R.h <= maxH + 0.5) return R; }
+  R.big = true; return R;
 }
 const ovl = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-// keep a rect out of the reserved Pause / Fullscreen zone: slide it down under the zone, else left of it
-function clearReserved(r, B) {
-  if (!ovl(r, RESERVED)) return r;
-  if (r.y < RESERVED.y + RESERVED.h + 4 && RESERVED.y + RESERVED.h + 4 + r.h <= B.y1) return { ...r, y: RESERVED.y + RESERVED.h + 4 };
-  return { ...r, x: Math.max(B.x0, RESERVED.x - 4 - r.w) };
-}
-// free placement: right, left, below, above of the anchor; the candidate that covers the anchor and the pointer least, runs off least, wins
-function place(app, a, w, h, B) {
-  const m = app.mouse;
-  const cands = [
-    { x: a.x + a.w + 10, y: a.y }, { x: a.x - w - 10, y: a.y },
-    { x: a.x + a.w / 2 - w / 2, y: a.y + a.h + 10 }, { x: a.x + a.w / 2 - w / 2, y: a.y - h - 10 },
-  ];
-  let best = null;
-  cands.forEach((c, i) => {
-    const off = Math.max(0, B.x0 - c.x) + Math.max(0, c.x + w - B.x1) + Math.max(0, B.y0 - c.y) + Math.max(0, c.y + h - B.y1);
-    let r = { x: Math.max(B.x0, Math.min(B.x1 - w, c.x)), y: Math.max(B.y0, Math.min(B.y1 - h, c.y)), w, h };
-    r = clearReserved(r, B);
-    const under = m.x >= r.x - 4 && m.x <= r.x + w + 4 && m.y >= r.y - 4 && m.y <= r.y + h + 4 ? 1e6 : 0;
-    const cost = ovl(r, a) * 4 + under + off * 50 + ovl(r, RESERVED) * 4 + i;
-    if (!best || cost < best.cost) best = { cost, r };
-  });
-  return best.r;
-}
 export function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
-function drawStack(app, stack, anchor) {
-  const ctx = app.ctx;
-  let B = tipBounds(app);
-  // anchor.region = { x0, y0, x1, y1 }: the only part of the stage the floating panel may use (a screen keeps it off its button column)
-  if (anchor.region) { const g = anchor.region; B = { x0: Math.max(B.x0, g.x0), y0: Math.max(B.y0, g.y0), x1: Math.min(B.x1, g.x1), y1: Math.min(B.y1, g.y1) }; }
-  const secs = stack.slice(0, 2).map((p) => p.slice());
-  if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
-  // anchor.band = { x, y, bottom, dir }: a fixed band beside the item (+1 right / -1 left of x) the panels fill column by column. When the stack
-  // does not fit the band it is placed freely beside the item instead.
-  const band = anchor.band;
-  let blk = null, rect = null;
-  if (band) {
-    const bx = band.dir > 0 ? band.x : band.x - 1, availW = band.dir > 0 ? B.x1 - band.x : bx - B.x0;
-    const by = Math.max(B.y0, band.y), availH = Math.min(band.bottom, B.y1) - by;
-    if (availW > 200 && availH > 100) {
-      const f = fitBlock(app, secs, availW, availH);
-      if (f.ok && !f.cut) { blk = f; rect = clearReserved({ x: band.dir > 0 ? band.x : band.x - f.w, y: by, w: f.w, h: f.h }, B); }
-    }
+// what a tip should stay off: the HUD widgets of this frame (hand cards, the Thread rail, intents, buttons...), not the containers and not other tips
+function avoidList(app, anchor) {
+  const m = app.mouse, anchors = [anchor], avoid = [];
+  for (const r of getAll()) {
+    if (r.group === 'tip' || /^tip\d/.test(r.id) || r.w < 6 || r.h < 6 || r.w * r.h > 250000 || (r.w > 1000 && r.h > 90)) continue;
+    const world = r.layer === 'world', box = { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6, wt: world ? 160 : 1500 }; // the actors (hero, enemies) are worth keeping clear too, less than the HUD
+    if (!world && m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h && r.w * r.h < 120000) anchors.push(box); // the widget under the pointer is the thing being described
+    else if (ovl(box, anchor) / Math.min(box.w * box.h, anchor.w * anchor.h) < 0.6) avoid.push(box);
   }
-  if (!blk) {
-    blk = fitBlock(app, secs, B.x1 - B.x0, B.y1 - B.y0);
-    rect = place(app, anchor, blk.w, blk.h, B);
-    if (anchor.region) rect = { ...rect, x: Math.max(B.x0, Math.min(B.x1 - rect.w, rect.x)), y: Math.max(B.y0, Math.min(B.y1 - rect.h, rect.y)) };
+  return { anchors, avoid };
+}
+// candidate search: the free spot nearest to the anchor (gap about 8px) that covers the least of the anchor and of the other widgets, inside the region when given
+function search(app, a, w, h, Rg, B, A, touch) {
+  const m = app.mouse, pr = touch ? 40 : 8, ptr = { x: m.x - pr, y: m.y - pr, w: pr * 2, h: pr * 2 };
+  const x0 = Math.max(B.x0, Rg.x0), x1 = Math.min(B.x1, Rg.x1) - w, y0 = Math.max(B.y0, Rg.y0), y1 = Math.min(B.y1, Rg.y1) - h;
+  if (x1 < x0 - 0.5 || y1 < y0 - 0.5) return null;
+  const cands = [], push = (x, y) => cands.push({ x: Math.max(x0, Math.min(x1, x)), y: Math.max(y0, Math.min(y1, y)) });
+  const acx = a.x + a.w / 2, acy = a.y + a.h / 2, G = 8 + TAIL;
+  push(a.x + a.w + G, acy - h / 2); push(a.x - w - G, acy - h / 2); push(acx - w / 2, a.y - h - G); push(acx - w / 2, a.y + a.h + G);
+  push(a.x + a.w + G, a.y); push(a.x - w - G, a.y); push(a.x, a.y - h - G); push(a.x, a.y + a.h + G);
+  push(a.x + a.w - w, a.y - h - G); push(a.x + a.w - w, a.y + a.h + G);
+  for (let x = x0; x <= x1 + 0.5; x += 16) for (let y = y0; y <= y1 + 0.5; y += 16) push(x, y);
+  let best = null;
+  for (const c of cands) {
+    const r = { x: c.x, y: c.y, w, h };
+    const dx = Math.max(0, a.x - (r.x + w), r.x - (a.x + a.w)), dy = Math.max(0, a.y - (r.y + h), r.y - (a.y + a.h));
+    const gd = Math.hypot(dx, dy); let cost = (gd < G ? (G - gd) * 1.2 : (gd - G) * 3) + Math.hypot(r.x + w / 2 - acx, r.y + h / 2 - acy) * 0.12;
+    for (const b of A.anchors) cost += 12000 * ovl(r, b) / Math.min(w * h, b.w * b.h);
+    for (const b of A.avoid) { const o = ovl(r, b); if (o) cost += b.wt * o / Math.min(w * h, b.w * b.h); }
+    if (ovl(r, ptr)) cost += 4000;
+    cost += 8000 * ovl(r, RESERVED) / (w * h);
+    if (!best || cost < best.cost) best = { cost, r };
   }
-  const L = { rect, panels: [], anchor, frame: app.frame };
+  return best;
+}
+function place(app, anchor, w, h, B, region, touch) {
+  const A = avoidList(app, anchor);
+  let best = null;
+  if (region) best = search(app, anchor, w, h, region, B, A, touch);
+  if (!best || best.cost >= 10000) { const all = search(app, anchor, w, h, { x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9 }, B, A, touch); if (all && (!best || all.cost < best.cost)) best = all; }
+  return best ? best.r : { x: B.x0, y: B.y0, w, h };
+}
+// anchor.region = { x0, y0, x1, y1 } is where the panel should live (a screen keeps it off its button column); anchor.band = { x, y, bottom, dir } the older form of it
+function regionOf(anchor, B) {
+  if (anchor.region) return anchor.region;
+  const b = anchor.band; if (!b) return null;
+  return b.dir > 0 ? { x0: b.x, y0: Math.max(B.y0, b.y), x1: B.x1, y1: Math.min(B.y1, b.bottom) } : { x0: B.x0, y0: Math.max(B.y0, b.y), x1: b.x, y1: Math.min(B.y1, b.bottom) };
+}
+function arrange(app, M, anchor, hold, touch) {
+  const B = tipBounds(app), Rg = hold ? null : regionOf(anchor, B);
+  let R = null, region = null;
+  if (Rg) { const rw = Math.min(B.x1, Rg.x1) - Math.max(B.x0, Rg.x0), rh = Math.min(B.y1, Rg.y1) - Math.max(B.y0, Rg.y0); if (rw >= 200 && rh >= 60) { R = fit(app, M, rw, rh, hold); if (R && !R.big) region = Rg; else R = null; } }
+  if (!R) R = fit(app, M, B.x1 - B.x0, B.y1 - B.y0, hold);
+  if (!R) return null;
+  const rect = place(app, anchor, R.w, R.h, B, region, touch);
+  return { R, rect };
+}
+
+// ---- drawing ----
+function paint(app, L, alpha) {
+  const ctx = app.ctx, { rect, R } = L, col = L.color || COL.lamp;
+  ctx.save(); ctx.globalAlpha *= alpha;
+  const a = L.anchor, tail = L.tail;
+  if (tail) { // a small arrow on the edge facing the anchor
+    ctx.beginPath();
+    if (tail.side === 'b') { ctx.moveTo(tail.p - TAIL, rect.y + rect.h - 0.5); ctx.lineTo(tail.p, rect.y + rect.h + TAIL); ctx.lineTo(tail.p + TAIL, rect.y + rect.h - 0.5); }
+    else if (tail.side === 't') { ctx.moveTo(tail.p - TAIL, rect.y + 0.5); ctx.lineTo(tail.p, rect.y - TAIL); ctx.lineTo(tail.p + TAIL, rect.y + 0.5); }
+    else if (tail.side === 'r') { ctx.moveTo(rect.x + rect.w - 0.5, tail.p - TAIL); ctx.lineTo(rect.x + rect.w + TAIL, tail.p); ctx.lineTo(rect.x + rect.w - 0.5, tail.p + TAIL); }
+    else { ctx.moveTo(rect.x + 0.5, tail.p - TAIL); ctx.lineTo(rect.x - TAIL, tail.p); ctx.lineTo(rect.x + 0.5, tail.p + TAIL); }
+    ctx.closePath(); ctx.fillStyle = 'rgba(17,14,11,.97)'; ctx.fill(); ctx.strokeStyle = col; ctx.globalAlpha *= 0.7; ctx.lineWidth = lnw(1.5); ctx.stroke(); ctx.globalAlpha /= 0.7;
+  }
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 3;
+  app.rr(rect.x, rect.y, rect.w, rect.h, 8); ctx.fillStyle = 'rgba(17,14,11,.97)'; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.save(); ctx.globalAlpha *= 0.7; ctx.strokeStyle = col; ctx.lineWidth = lnw(1.5); app.rr(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1, 8); ctx.stroke(); ctx.restore();
+  if (tail) { ctx.save(); ctx.fillStyle = 'rgba(17,14,11,.97)'; ctx.beginPath(); // hide the border where the arrow joins
+    if (tail.side === 'b') ctx.rect(tail.p - TAIL + 1, rect.y + rect.h - 2, TAIL * 2 - 2, 3); else if (tail.side === 't') ctx.rect(tail.p - TAIL + 1, rect.y - 1, TAIL * 2 - 2, 3);
+    else if (tail.side === 'r') ctx.rect(rect.x + rect.w - 2, tail.p - TAIL + 1, 3, TAIL * 2 - 2); else ctx.rect(rect.x - 1, tail.p - TAIL + 1, 3, TAIL * 2 - 2);
+    ctx.fill(); ctx.restore(); }
+  void a;
   app._tipDraw = true;
-  let cx = rect.x, idx = 0;
-  for (const col of blk.cols) {
-    let y = rect.y;
-    for (const p of col.items) {
-      const first = p.secs[0] && p.secs[0].s, W = p.w, pl = { x: cx, y, w: W, h: p.h, secs: [] };
-      app.panel(cx, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
-      app.reg('tip' + idx++, cx, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
-      const pad = blk.cfg.pad || PAD;
-      let yy = y + pad;
-      p.secs.forEach((m, si) => {
-        const s = m.s, sy = yy;
-        if (s.glyph) drawGlyph(ctx, s.glyph, cx + pad + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
-        app.text(s.title || ' ', cx + pad + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - pad * 2 - m.gx, color: s.color || COL.lamp });
-        yy += m.th + blk.cfg.tg;
-        if (m.body) { app.text(s.text, cx + pad, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
-        for (const w of m.why) { app.text(w.str, cx + pad, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
-        pl.secs.push({ x: cx + pad, y: sy, w: W - pad * 2, h: yy - sy, title: s.title, text: s.text || '', why: (s.why || []).slice() }); // text: what was really drawn (tests compare it with the full definition)
-        yy += blk.cfg.gap;
-      });
-      L.panels.push(pl); y += p.h + GAP;
-    }
-    cx += col.w + GAP;
+  for (const op of R.ops) {
+    if (op.k === 'text') app.text(op.t, rect.x + op.x, rect.y + op.y, { size: op.size, bold: op.bold, color: op.color, ui: true, exact: true, maxW: op.maxW, lineH: op.lh });
+    else if (op.k === 'glyph') drawGlyph(ctx, op.g, rect.x + op.x, rect.y + op.y, op.s, op.color);
+    else if (op.k === 'rule') { ctx.fillStyle = 'rgba(232,220,196,.16)'; ctx.fillRect(rect.x + op.x1, rect.y + op.y, op.x2 - op.x1, 1); }
   }
-  app._tipDraw = false; app.tipLayout = L;
+  app._tipDraw = false;
+  ctx.restore();
 }
-// Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
-// live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
-// such as a graft's Boon and Price). Words already titled in the tip are not repeated. tip.o.glossOnly: the glossary IS the tip.
-const GLOSS_MAX = 14; // every rules word the item names gets its definition: the panel grows (columns, wider, smaller type), it never drops one
-function sectionsText(stack) { const out = []; for (const p of stack) for (const s of p) { out.push(s.text || ''); for (const w of s.why || []) out.push(w); } return out; }
-function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
-function glossPanel(stack, tip) {
-  const o = tip.o || tip;
-  const gl = glossaryFor(o.gloss || [], { weak: sectionsText(stack), max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids, terms: o.terms });
-  return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
-}
-export { toStack as tipSections }; // tests read the panels a tip would draw
-function toStack(tip) {
-  const o = tip.o || tip;
-  if (o.glossOnly && !tip.stack) {
-    const gl = glossPanel([[]], tip);
-    const sec = (tip.title ? [{ title: tip.title, text: tip.text || '', color: tip.color }] : []).concat(gl);
-    return sec.length ? [sec] : [];
+function finish(app, M, c, S, hold, touch) {
+  const anchor = c.anchor || { x: app.mouse.x - 8, y: app.mouse.y - 6, w: 16, h: 28 };
+  const m = app.mouse;
+  const sig = [c.key, hold ? 1 : 0, touch ? 1 : 0, app.scale, app.textScale, JSON.stringify(M), [anchor.x, anchor.y, anchor.w, anchor.h].map(Math.round).join(','), anchor.region ? JSON.stringify(anchor.region) : (anchor.band ? JSON.stringify(anchor.band) : ''), c.anchor ? '' : Math.round(m.x) + ',' + Math.round(m.y), getAll().length].join('|');
+  if (S.cache && S.cache.sig === sig) return S.cache.L;
+  const A = arrange(app, M, anchor, hold, touch); if (!A) return null;
+  const { R, rect } = A, a = anchor, acx = a.x + a.w / 2, acy = a.y + a.h / 2;
+  let tail = null;
+  const gx = Math.max(0, a.x - (rect.x + rect.w), rect.x - (a.x + a.w)), gy = Math.max(0, a.y - (rect.y + rect.h), rect.y - (a.y + a.h));
+  if (Math.hypot(gx, gy) < 420) { // the arrow sits on the edge that faces the anchor
+    const cl = (v, lo, hi) => Math.max(lo + 14, Math.min(hi - 14, v));
+    if (gy >= gx) tail = rect.y + rect.h <= a.y + a.h / 2 ? { side: 'b', p: cl(acx, rect.x, rect.x + rect.w) } : { side: 't', p: cl(acx, rect.x, rect.x + rect.w) };
+    else tail = rect.x + rect.w <= a.x + a.w / 2 ? { side: 'r', p: cl(acy, rect.y, rect.y + rect.h) } : { side: 'l', p: cl(acy, rect.y, rect.y + rect.h) };
   }
-  const text = tip.lines ? tip.lines.join('\n') : (tip.text || '');
-  const stack = tip.stack || [[{ title: tip.title, text, color: tip.color }]];
-  if (stack.length !== 1) return stack;
-  const gl = glossPanel(stack, tip);
-  return gl.length ? [stack[0], gl] : stack;
+  const first = M.groups[0] || M.terms[0];
+  const L = { rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: R.w, h: R.h }, R, anchor, tail, color: (first && first.color) || COL.lamp, hold, hidden: R.hidden, panels: [], frame: app.frame, sig };
+  L.panels.push({ x: L.rect.x, y: L.rect.y, w: R.w, h: R.h, secs: R.secs.map((s) => ({ ...s, x: s.x + L.rect.x, y: s.y + L.rect.y })) });
+  S.cache = { sig, L };
+  return L;
 }
-// Core hook: returns true when it drew the tip. A plain tip anchors on the pointer.
+// the one entry point (core.js, every frame): c is the frame's candidate or null
 export function renderTip(app, tip) {
-  if (!tip) return false;
-  const stack = toStack(tip);
-  if (!stack.length) return true;
-  const k = tip.key || JSON.stringify(stack).slice(0, 200);
-  if (app.frame - f0 > 1 || k !== key0) { key0 = k; t0 = app.t; }
-  f0 = app.frame;
-  const mo = app.mouse;
-  if (mo.down && app.t - t0 > 0.35 && mo.touchUp !== undefined) pin = { stack, anchor: tip.anchor || { x: mo.x - 8, y: mo.y - 8, w: 16, h: 30 } };
-  if (app.t - t0 < 0.15 && !pin) return true; // hover delay: swallow the default tip too
-  drawStack(app, stack, tip.anchor || { x: mo.x - 8, y: mo.y - 6, w: 16, h: 28 });
+  const S = TS(app), t = app.t, dt = Math.min(app.dt || 0.016, 0.05), m = app.mouse, T = TIP_TIMING, rm = reduced(app), touch = !!m.touch;
+  const c = tip ? candidateOf(app, tip) : candidate(app);
+  const shift = !!(app.keys && app.keys.has && app.keys.has('Shift'));
+  let cur = c;
+  // events that drop the tip at once; the same anchor stays quiet until the pointer has left it
+  if (S.suppress) { if (cur && cur.key === S.suppress) cur = null; else S.suppress = ''; }
+  const esc = app.pressedKeys && app.pressedKeys.some((e) => e && e.key === 'Escape');
+  if ((esc || (m.pressed && !touch)) && (cur || S.shown)) { if (cur) S.suppress = cur.key; else if (S.key) S.suppress = S.key; dismissTips(app); cur = null; }
+  if (cur && app.tipBlock && !shift) { dismissTips(app); cur = null; }
+  if (cur && touch && !m.down) cur = null; // touch: the tip lives while the finger is down
+  if (!cur) {
+    if (S.shown && S.last) { S.ghost = { L: S.last, alpha: S.alpha }; }
+    S.shown = false; S.key = ''; S.alpha = 0;
+  } else {
+    if (cur.key !== S.key) {
+      S.grace = !!((S.shown && S.last) || S.ghost || t - S.lastShown <= T.GRACE); // moving from one visible tip to the next shows it at once; the old one is dropped, never crossfaded
+      S.shown = false; S.ghost = null; S.key = cur.key; S.since = t; S.cache = null;
+    }
+    const delay = shift ? 0 : S.grace ? T.GRACE_DELAY : touch ? T.TOUCH_DELAY : T.SHOW_DELAY;
+    if (t - S.since >= delay) {
+      S.shown = true; S.lastShown = t;
+      S.hold = shift || (touch && m.down && t - S.since >= T.HOLD_TOUCH);
+      const M = modelOf(cur.tip);
+      const L = (M.groups.length || M.terms.length) ? finish(app, M, cur, S, S.hold, touch) : null;
+      if (L) {
+        S.last = L; S.alpha = rm ? 1 : Math.min(1, S.alpha + dt / T.FADE_IN);
+      } else S.shown = false;
+    }
+  }
+  if (S.ghost) {
+    S.ghost.alpha -= rm ? 1 : dt / T.FADE_OUT;
+    if (S.ghost.alpha <= 0) S.ghost = null; else { paint(app, S.ghost.L, S.ghost.alpha); }
+  }
+  if (S.shown && S.last) {
+    const L = S.last; paint(app, L, S.alpha);
+    app.reg('tip0', L.rect.x, L.rect.y, L.rect.w, L.rect.h, { layer: 'overlay', overlay: true, group: 'tip' });
+    L.frame = app.frame; app.tipLayout = L;
+  }
   return true;
 }
-// HUD tips: call from anywhere while hovering; flushTips draws the last one at the end of the frame.
-export function queueTip(app, key, stack, anchor) { queued = { key, stack, anchor, frame: app.frame }; }
-// A tip held with a finger stays after the finger lifts, until the next tap. core.js calls this on frames with no live tip.
-let pinFrame = -1;
-export function drawPinnedTip(app) {
-  if (pin && app.mouse.pressed && !(app.mouse.touchUp)) pin = null;
-  if (pin && pinFrame !== app.frame) { pinFrame = app.frame; drawStack(app, pin.stack, pin.anchor); }
-}
-export function flushTips(app) {
-  drawPinnedTip(app);
-  const q = queued; queued = null;
-  if (!q || q.frame !== app.frame) return false;
-  return renderTip(app, { stack: q.stack, anchor: q.anchor, key: q.key });
-}
+function candidateOf(app, tip) { const a = tip.anchor; return { __cand: true, tip, anchor: a, key: tip.key || `${tip.title}|${a ? [a.x, a.y, a.w, a.h].map(Math.round).join(',') : ''}` }; }

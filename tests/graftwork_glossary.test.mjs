@@ -149,8 +149,9 @@ function expectTip(app, label, sources, opts = {}) {
   void sp;
 }
 
-// ---- (4) COMPLETENESS: every hover tip names the full Boon / Price (or the rules text it is about) AND defines every rules word in it, at desktop and phone scales ----
-// A tip never drops a definition: the panel grows (columns, wider, smaller type). The drawn sections (app.tipLayout) are compared with what glossaryFor says the item's own text needs.
+// ---- (4) COMPLETENESS: every hover tip is ONE compact panel. It names the item's own Boon / Price (or rules text) and gives one short definition per rules word. ----
+// Space is limited, so a tip may show only the first definitions plus a visible '+N more (hold)' marker; while the player HOLDS (Shift) the panel shows every
+// definition in full. Nothing is silently dropped: shown + hidden = every word the item names, and the held panel has them all. A card never defines its own type or school.
 const SCALES = [1, 0.64, 0.54];
 async function bootScaled(run, name, mod, scale, extra = {}) {
   const app = await makeApp({ run, meta: { settings: { tips: false } }, audio: { sfx() {}, music() {} }, ...extra });
@@ -164,24 +165,36 @@ async function bootScaled(run, name, mod, scale, extra = {}) {
 const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;
 // the terms an item's own sources need, resolved exactly as the tip does (without the max-3 cap)
 const needed = (tip, extra = []) => { const o = tip.o || {}; return glossaryFor([tip.text || '', tip.lines || [], o.gloss || [], extra], { max: 99, school: o.school, types: o.types, ids: o.ids, terms: o.terms }); };
+const TYPE_NAMES = ['Attack', 'Skill', 'Power', 'Junk'];
 function tipComplete(app, label, { must = [], extra = [], titled = [], src = null, school, types } = {}) {
   const tip = app.tip || { o: { school, types } }, L = app.tipLayout; // combat HUD tips are queued (no app.tip): pass src, the item's own sources
-  assert.ok((app.tip || src) && L, `${label}: a tip is drawn`);
-  const secs = L.panels.flatMap((p) => p.secs);
-  const all = secs.map((x) => `${x.title}\n${x.text}\n${(x.why || []).join('\n')}`).join('\n');
+  assert.ok((app.tip || src) && L && L.frame === app.frame, `${label}: a tip is drawn`);
+  const secsOf = (Lx) => Lx.panels.flatMap((p) => p.secs);
+  const textOf = (secs) => secs.map((x) => `${x.title}\n${x.text}\n${(x.why || []).join('\n')}`).join('\n');
+  const secs = secsOf(L), all = textOf(secs);
+  assert.equal(L.panels.length, 1, `${label}: ONE panel, not stacked boxes`);
   for (const m of must) assert.ok(all.includes(m), `${label}: tip says "${m}"\n--- drawn:\n${all}`);
-  for (const g of (src ? glossaryFor([src, extra], { max: 99, school, types }) : needed(tip, extra))) {
-    if (titled.includes(g.term) || (tip.title && tip.title.replace(/\s*\d+$/, '') === g.term)) continue;
-    const sec = secs.find((x) => x.title.startsWith(g.term) && x.text.includes(g.definition));
-    assert.ok(sec, `${label}: tip defines ${g.term} in full ("${g.definition}")\n--- drawn:\n${all}`);
-  }
-  assert.ok(!/…/.test(all) || false, `${label}: no definition was cut with an ellipsis`);
+  const want = (src ? glossaryFor([src, extra], { max: 99, school, types }) : needed(tip, extra)).filter((g) => !(titled.includes(g.term) || (tip.title && tip.title.replace(/\s*\d+$/, '') === g.term)));
+  const drawn = want.filter((g) => secs.some((x) => x.title.startsWith(g.term) && x.text.includes(g.definition)));
+  const missing = want.length - drawn.length;
+  if (missing) { const mk = secs.find((x) => /^\+\d+ more \(hold\)$/.test(x.title)); assert.ok(mk, `${label}: ${missing} definitions are not shown and there is no '+N more (hold)' marker\n${all}`); assert.equal(+mk.title.match(/\d+/)[0], missing, `${label}: the marker counts the hidden words`); assert.equal(L.hidden, missing); }
+  else assert.ok(!secs.some((x) => /more \(hold\)/.test(x.title)), `${label}: no marker when nothing is hidden`);
+  assert.ok(!/…/.test(all), `${label}: no definition was cut with an ellipsis`);
+  for (const t of TYPE_NAMES) assert.ok(!secs.some((x) => x.title === t && x.text === KEYWORDS[t].text) || !types || String(types).toLowerCase() !== t.toLowerCase(), `${label}: the card's own type ${t} is not explained`);
+  if (school && SCHOOLS[school]) assert.ok(!secs.some((x) => x.title === SCHOOLS[school].name && /school\./.test(x.text)), `${label}: the own school is not explained`);
   const r = L.rect;
   assert.ok(r.x >= 5.5 && r.y >= 5.5 && r.x + r.w <= 1274.5 && r.y + r.h <= 714.5, `${label}: tip inside the stage ${JSON.stringify(r)}`);
-  for (const p of L.panels) {
-    p.secs.forEach((x, i) => { const n = p.secs[i + 1]; if (n) assert.ok(x.y + x.h <= n.y + 0.5, `${label}: sections "${x.title}" and "${n.title}" overlap`); assert.ok(x.y + x.h <= p.y + p.h - 4, `${label}: "${x.title}" inside its panel`); });
+  for (const p of L.panels) p.secs.forEach((x, i) => { const n = p.secs[i + 1]; if (n) assert.ok(x.y + x.h <= n.y + 0.5, `${label}: sections "${x.title}" and "${n.title}" overlap`); assert.ok(x.y + x.h <= p.y + p.h - 4, `${label}: "${x.title}" inside its panel`); });
+  // HOLD (Shift): every definition in full, no marker
+  if (missing) {
+    app.keys.add('Shift'); frames(app, 4);
+    const H = app.tipLayout; assert.ok(H && H.frame === app.frame && H.hold, `${label}: holding Shift opens the details`);
+    const hs = secsOf(H);
+    for (const g of want) assert.ok(hs.some((x) => x.title.startsWith(g.term) && x.text.includes(g.definition)), `${label}: held tip defines ${g.term} in full ("${g.definition}")\n--- drawn:\n${textOf(hs)}`);
+    assert.ok(!hs.some((x) => /more \(hold\)/.test(x.title)), `${label}: nothing is hidden while held`);
+    assert.ok(H.rect.x >= 5.5 && H.rect.y >= 5.5 && H.rect.x + H.rect.w <= 1274.5 && H.rect.y + H.rect.h <= 714.5, `${label}: held tip inside the stage`);
+    app.keys.delete('Shift'); frames(app, 3);
   }
-  for (let i = 0; i < L.panels.length; i++) for (let j = i + 1; j < L.panels.length; j++) assert.ok(!hit(L.panels[i], L.panels[j]), `${label}: panels ${i} and ${j} overlap`);
   return L;
 }
 // the richest grafts (most rules words in Boon + Price) plus the ones the owner reported
@@ -197,15 +210,15 @@ for (const sc of SCALES) {
         const g = GRAFTS[run.pending.offer.grafts[j]]; hover(app, reg('graft-patch' + j));
         const L = tipComplete(app, `graft ${g.id} @${sc}`, { must: [`Boon: ${g.boon}`, `Price: ${g.price}`], extra: ['W' + g.weight, String(g.tier).toUpperCase()] });
         for (const id of ['graft-patch0', 'graft-patch1', 'graft-patch2', 'graft-reroll', 'graft-decline', 'graft-sew']) { const r = reg(id); if (r) assert.ok(!hit(L.rect, r), `graft ${g.id} @${sc}: tip covers ${id}`); }
-        const want = glossaryFor([g.boon, g.price], { max: 99, school: g.school }).map((x) => x.term);
-        for (const t of want) if (t !== 'Echo' || /Echo/.test(g.boon + g.price)) assert.ok(L.panels.flatMap((p) => p.secs).some((x) => x.title.startsWith(t)), `graft ${g.id}: ${t} defined`);
       }
     }
     // the owner's report: Reef Knot explains Line, Cut, Jam, Echo as a status
     const run = RUN.newRun({ hero: 'marrow', seed: 'w5reef' }); RUN.startGraftPick(run); run.pending.offer.grafts[1] = 'g_reef_knot';
     const app = await bootScaled(run, 'graft', graft, sc); hover(app, reg('graft-patch1'));
+    app.keys.add('Shift'); frames(app, 4); // a rich patch: the compact panel keeps '+N more (hold)', the held panel explains every word
     const txt = app.tipLayout.panels.flatMap((p) => p.secs).map((x) => `${x.title}|${x.text}`).join('\n');
-    for (const t of ['Line', 'Cut', 'Jam', 'Echo 1|Your next card is played twice', 'Weight', 'Greedy']) assert.ok(txt.includes(t), `Reef Knot @${sc} explains ${t}\n${txt}`);
+    for (const t of ['Line', 'Cut', 'Jam', 'Echo 1|Your next card plays twice', 'Weight', 'Greedy']) assert.ok(txt.includes(t), `Reef Knot @${sc} explains ${t}\n${txt}`);
+    app.keys.delete('Shift');
   }
   { // shop: patches, relics, potions, cards
     const run = RUN.newRun({ hero: 'marrow', seed: 'w5s' }); run.gold = 999; run.phase = 'shop'; run.pending = RUN.makeShop(run);
@@ -252,7 +265,7 @@ for (const sc of SCALES) {
     const app = await bootScaled(run, 'combat', combat, sc, { audio: audioMod }); frames(app, 120);
     const rs = getAll().filter((r) => /^hand_/.test(r.id)); let seen = 0;
     const gs = ['g_reef_knot', 'g_scorch_thread'].map((id) => GRAFTS[id]), sp = cardSpec(inst);
-    for (const r of rs) { hover(app, r); if (app.tipLayout && JSON.stringify(app.tipLayout.panels).includes('Reef Knot')) { tipComplete(app, `combat hand card ${r.id} @${sc}`, { src: specGloss(sp), must: gs.flatMap((g) => [`Boon: ${g.boon}`, `Price: ${g.price}`]), school: sp.school, types: sp.type }); seen++; } }
+    for (const r of rs) { hover(app, r); if (app.tipLayout && app.tipLayout.frame === app.frame && JSON.stringify(app.tipLayout.panels).includes('Reef Knot')) { tipComplete(app, `combat hand card ${r.id} @${sc}`, { src: specGloss(sp), must: gs.flatMap((g) => [`Boon: ${g.boon}`, `Price: ${g.price}`]), school: sp.school, types: sp.type }); seen++; } }
     assert.ok(seen >= 1 || rs.length === 0, `combat hand: a grafted card tip was checked @${sc}`);
   }
 }
