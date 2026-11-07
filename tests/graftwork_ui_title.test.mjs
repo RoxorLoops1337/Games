@@ -205,7 +205,7 @@ async function endRun(phase, withInfo) {
 // THE NEW TITLE: live scene, sewn logo, intro, slab menu, hero card, pips, keyboard (ui/title_scene.js, ui/title_logo.js, ui/title.js)
 // =====================================================================================================================================
 const capture = (app) => { const out = [], raw = app.text; app.text = (str, ...r) => { out.push(String(str)); return raw(str, ...r); }; return out; };
-const KIT = JSON.parse(fs.readFileSync(new URL('./graftwork_kit_fixture.json', import.meta.url), 'utf8'));
+const KIT = JSON.parse(fs.readFileSync(new URL('../graftwork/assets/ward_kit/manifest.json', import.meta.url), 'utf8')); // the kit as delivered (the title cluster needs tile, slab and darkstone floors)
 const STUB = { width: 256, height: 256 };
 function installKit() { // the kit manifest and every image "loaded" (stubs), plus the painted actors the title cast uses
   assets.reset(); SCENE.reset();

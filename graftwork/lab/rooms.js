@@ -5,6 +5,7 @@
 //
 // Draw order: rooms back to front by x + y; per room: slab, floor, walls (shared walls belong to the room in front), wall pieces, prop shadows,
 // then props and actors in one pass sorted by depth (u + v of the feet), then the room's darkness overlay. Time of day is a multiply tint plus glows.
+import { RECIPES, resolveRecipe } from '../data/ward_kit.js';
 const TW = 92, TH = 48, HW = TW / 2, HH = TH / 2, SUB = 4, WALL = 46, LOW = 15, DOOR_H = 36, DOOR_S0 = 0.2, DOOR_S1 = 0.8;
 const KIT = '../assets/ward_kit/', WARD = '../assets/ward/';
 const $ = (id) => document.getElementById(id);
@@ -87,13 +88,33 @@ const KINDS = {
     props: [['bucket', 0, 0], ['stool', 3, 3]],
     pieces: [['sconce', 'L', 0.2], ['banner', 'R', 0.5], ['sconce', 'R', 0.82]] },
 };
-const HOSPITAL = [[0, 0, 'sawmill'], [1, 0, 'corridor'], [2, 0, 'quarry'], [3, 0, 'generator'], [0, 1, 'ward'], [1, 1, 'corridor'], [2, 1, 'store'], [0, 2, 'quarry'], [1, 2, 'sawmill'], [2, 2, 'ward']];
-const LINKS = ['0,0-1,0', '1,0-2,0', '2,0-3,0', '0,0-0,1', '2,0-2,1', '0,1-1,1', '1,1-2,1', '1,1-1,2', '0,2-1,2', '1,2-2,2'];
+const HOSPITAL0 = [[0, 0, 'sawmill'], [1, 0, 'corridor'], [2, 0, 'quarry'], [3, 0, 'generator'], [0, 1, 'ward'], [1, 1, 'corridor'], [2, 1, 'store'], [0, 2, 'quarry'], [1, 2, 'sawmill'], [2, 2, 'ward']];
+const LINKS0 = ['0,0-1,0', '1,0-2,0', '2,0-3,0', '0,0-0,1', '2,0-2,1', '0,1-1,1', '1,1-2,1', '1,1-1,2', '0,2-1,2', '1,2-2,2'];
+// the Hospital scene: a varied floor of the real room recipes (a room type that waits for art falls back to its neighbour in the list)
+const HOSPITAL_RM = [[0, 0, 'rm_entrance', 'rm_sawmill'], [1, 0, 'rm_corridor'], [2, 0, 'rm_chapel', 'rm_quarry'], [3, 0, 'rm_generator'], [0, 1, 'rm_workshop'], [1, 1, 'rm_ward'], [2, 1, 'rm_corridor'], [3, 1, 'rm_boiler'],
+  [0, 2, 'rm_pharmacy', 'rm_dispensary'], [1, 2, 'rm_morgue'], [2, 2, 'rm_isolation'], [3, 2, 'rm_laundry'], [1, 3, 'rm_linen'], [2, 3, 'rm_library', 'rm_dispensary']];
+const LINKS_RM = ['0,0-1,0', '1,0-2,0', '2,0-3,0', '0,0-0,1', '1,0-1,1', '3,0-3,1', '0,1-1,1', '1,1-2,1', '2,1-3,1', '0,1-0,2', '1,1-1,2', '2,1-2,2', '3,1-3,2', '1,2-2,2', '2,2-3,2', '1,2-1,3', '2,2-2,3'];
+const MONSTERS_RM = { '0,0': ['npc_patient'], '1,0': ['stitch_rat'], '2,0': ['candy_striper'], '3,0': ['surge_tick'], '0,1': ['gauze_mummy', 'bedpan_slime'], '1,1': ['fever_moth', 'crutchling'], '2,1': ['orderly'], '3,1': ['pill_swarm'],
+  '0,2': ['leech_jar'], '1,2': ['iron_lung'], '2,2': ['night_nurse'], '3,2': ['bedpan_slime'], '1,3': ['knitter'], '2,3': ['suture_wasp'] };
+let MON = null;
 const MONSTERS = { '0,0': ['gauze_mummy'], '1,0': ['stitch_rat'], '2,0': ['crutchling', 'bedpan_slime'], '3,0': ['pill_swarm'], '0,1': ['fever_moth'], '1,1': ['leech_jar'], '2,1': ['orderly'], '0,2': ['iron_lung'], '1,2': ['night_nurse', 'stitch_rat'], '2,2': ['bedpan_slime'] };
 
+// every room type of the game, built from the REAL recipes (data/ward_kit.js) against the kit manifest: the lab and the game cannot drift apart.
+// A room that waits for art (no usable variant) is simply left out; the planned variants appear here the moment their ids reach the manifest.
+const RM = []; // [{ kind: 'rm_chapel', name, planned }]
+const ROOM_NAMES = { rm_entrance: 'Entrance', rm_theatre: 'Theatre', rm_corridor: 'Corridor', rm_ward: 'Ward', rm_isolation: 'Isolation', rm_isolation2: 'Isolation II', rm_chapel: 'Chapel', rm_dispensary: 'Dispensary', rm_workshop: 'Workshop', rm_sawmill: 'Sawmill', rm_quarry: 'Quarry', rm_counting: 'Counting', rm_generator: 'Generator', rm_pharmacy: 'Pharmacy', rm_library: 'Library', rm_morgue: 'Morgue', rm_kitchen: 'Kitchen', rm_boiler: 'Boiler', rm_laundry: 'Laundry', rm_linen: 'Linen' };
+function deriveKinds() {
+  RM.length = 0;
+  for (const type of Object.keys(RECIPES)) {
+    const rc = resolveRecipe(type, KITM); if (!rc) continue;
+    KINDS[type] = { name: ROOM_NAMES[type] || type, floor: rc.floor, wall: rc.wall, power: type !== 'rm_generator' && type !== 'rm_boiler' && type !== 'rm_corridor' && type !== 'rm_entrance',
+      door: rc.doorPiece, props: rc.props.map((p) => [p.id, p.u, p.v, p.flip ? 1 : 0]), pieces: rc.pieces.map((p) => [p.id, p.wall, p.s]) };
+    RM.push({ kind: type, name: KINDS[type].name, variant: rc.variant });
+  }
+}
 function mkRoom(x, y, kind) {
   const k = KINDS[kind];
-  return { x, y, kind, name: k.name, floor: k.floor, wall: k.wall, power: k.power, props: k.props.map(([id, u, v, f]) => ({ id, u, v, flip: !!f })), pieces: k.pieces.map(([id, wall, s]) => ({ id, wall, s })), doors: { L: false, R: false } };
+  return { x, y, kind, door: k.door || 'door', name: k.name, floor: k.floor, wall: k.wall, power: k.power, props: k.props.map(([id, u, v, f]) => ({ id, u, v, flip: !!f })), pieces: k.pieces.map(([id, wall, s]) => ({ id, wall, s })), doors: { L: false, R: false } };
 }
 function mkScene(list, links) {
   const rooms = new Map();
@@ -248,7 +269,7 @@ function drawPieces(g, room, T, Hs, lights, dark, alpha = 1) {
   const L = lightAt(S.time);
   for (const side of ['L', 'R']) {
     const H = Hs[side];
-    if (room.doors[side]) { const d = pieceDef('door'); if (d) wallSprite(g, { ...d, pxu: 10 }, kitImg('pieces', 'door'), T, side, 0.5, H, clamp((H - 30) / 8, 0, 1)); }
+    if (room.doors[side]) { const dp = room.door || 'door', d = pieceDef(dp) || pieceDef('door'); if (d) wallSprite(g, { ...d, pxu: 10 }, kitImg('pieces', pieceDef(dp) ? dp : 'door'), T, side, 0.5, H, clamp((H - 30) / 8, 0, 1)); }
     for (const p of room.pieces) {
       if (p.wall !== side) continue; if (room.doors[side] && Math.abs(p.s - 0.5) < 0.3) continue;
       const d = pieceDef(p.id); if (!d) continue;
@@ -322,8 +343,11 @@ const SCENES = {
     note: 'A design toy. Pick a prop or a wall piece in the palette, then click the floor (props snap to the 4 x 4 sub-tile grid) or the wall (pieces snap along it). Tool Erase removes the item you click. Marrow wanders around what you build.',
     judge: ['Does the palette let you dress a believable room in under a minute?', 'Do props of different sizes sit at one scale?', 'Does Marrow walk behind and in front of the furniture?'] },
   hospital: { name: 'Hospital',
-    note: 'Ten modular rooms on the grid. Walls are shared between neighbours, doors only where rooms connect. Monsters stay in their rooms, Marrow and a nurse walk through the doors. Switch the wall mode to see the difference.',
+    note: 'Fourteen modular rooms on the grid, built from the real recipes (entrance, corridors, ward, chapel, workshop, pharmacy, morgue, isolation, laundry, linen, library, boiler, generator). Walls are shared between neighbours, doors only where rooms connect. Monsters stay in their rooms, Marrow and a nurse walk through the doors. Switch the wall mode to see the difference.',
     judge: ['Full: shared walls hide the back rooms, like Theme Hospital.', 'Low: everything is visible, rooms read as one floor plan.', 'Cutaway: only outer walls stay tall.'] },
+  rooms: { name: 'Room types',
+    note: 'Every room type of the game, built from the real recipes in data/ward_kit.js against the kit manifest. Pick a room in the bar; Cluster adds a corridor on each side so the doors and the lanes show. A room that still waits for art is not listed. Variant 2 means the recipe fell back from the planned art to the current one.',
+    judge: ['Does each room read as its own place at a glance?', 'Is a lane free from every door to the middle?', 'Are windows only where a window makes sense, and are the props one scale?'] },
   day: { name: 'Day cycle',
     note: 'Six rooms with the time of day: a multiply tint, warm lamp pools and window glow from the sconces and windows. Cut the Generator and the powered rooms go cold and dark, only the generator room keeps its light.',
     judge: ['Do evening and night look warm and readable?', 'Does a dark room still show its furniture?', 'Does the tint fit the painted Ward lighting?'] },
@@ -339,19 +363,27 @@ function setupScene(id) {
     S.rooms = mkScene([[0, 0, 'sawmill']]); const r = S.rooms.get('0,0'); r.props = r.props.filter((p) => ['sawbench', 'bucket'].includes(p.id)); r.pieces = r.pieces.filter((p) => p.id === 'window');
     S.actors = [mkActor('marrow', '0,0', 'hero', 0.5, 0.5, { speed: 1.4 })]; S.time = 1; S.auto = false;
   } else if (id === 'hospital') {
-    S.rooms = mkScene(HOSPITAL, LINKS); S.time = 1; S.auto = false; S.power = true; populate();
+    const rm = RM.length >= 8;
+    if (rm) { const list = HOSPITAL_RM.map(([x, y, ...c]) => [x, y, c.find((k) => KINDS[k]) || 'rm_corridor']); S.rooms = mkScene(list, LINKS_RM); MON = MONSTERS_RM; } else { S.rooms = mkScene(HOSPITAL0, LINKS0); MON = MONSTERS; }
+    S.time = 1; S.auto = false; S.power = true; populate();
+  } else if (id === 'rooms') {
+    const k = S.pick && KINDS[S.pick] ? S.pick : (RM[0] && RM[0].kind) || 'sawmill', cl = !!S.cluster;
+    S.pick = k; MON = { '1,1': ['gauze_mummy', 'stitch_rat'], '0,1': ['bedpan_slime'], '1,0': ['fever_moth'] };
+    S.rooms = cl ? mkScene([[1, 0, 'rm_corridor'], [0, 1, 'rm_corridor'], [1, 1, k]].map(([x, y, kk]) => [x, y, KINDS[kk] ? kk : k]), ['1,0-1,1', '0,1-1,1']) : mkScene([[1, 1, k]]);
+    if (!cl) MON = { '1,1': ['gauze_mummy', 'stitch_rat'] };
+    S.time = 1; S.auto = false; S.power = true; populate();
   } else {
-    S.rooms = mkScene(HOSPITAL.filter(([x, y]) => (y === 0) || (y === 1 && x < 2)), LINKS); S.time = 2.15; S.auto = true; S.power = true; populate(true);
+    MON = MONSTERS; S.rooms = mkScene(HOSPITAL0.filter(([x, y]) => (y === 0) || (y === 1 && x < 2)), LINKS0); S.time = 2.15; S.auto = true; S.power = true; populate(true);
   }
   S.dt = 0.016; renderScenes(); renderBar(); renderNote(); fitCam(true);
 }
 function populate(few) {
   for (const [key, room] of S.rooms) {
-    const ids = MONSTERS[key] || []; const occ = occupied(room);
+    const ids = MON[key] || []; const occ = occupied(room);
     ids.forEach((id, i) => { let u, v, n = 0; do { u = Math.floor(hash(key + id + n) * SUB); v = Math.floor(hash(key + id + 'v' + n) * SUB); n++; } while (occ[u][v] && n < 30); S.actors.push(mkActor(id, key, 'monster', room.x * SUB + u + 0.5, room.y * SUB + v + 0.5)); });
   }
   const first = [...S.rooms.values()][0], hero = (r, id, u, v) => S.actors.push(mkActor(id, null, 'hero', r.x * SUB + u + 0.5, r.y * SUB + v + 0.5, id === 'marrow' ? {} : { speed: 1.2 }));
-  const c = S.rooms.get('1,0') || first; hero(c, 'marrow', 1, 1); hero(c, 'npc_nurse', 2, 2);
+  const c = S.rooms.get(S.scene === 'rooms' ? '1,1' : '1,0') || first; hero(c, 'marrow', 1, 1); hero(c, 'npc_nurse', 2, 2);
   for (const a of S.actors) if (a.kind === 'hero') a.h = a.id === 'marrow' ? 44 : 38;
 }
 
@@ -476,14 +508,18 @@ function renderBar() {
     tools.appendChild(btn(S.build.flip ? 'Flipped' : 'Flip', S.build.flip, () => { S.build.flip = !S.build.flip; renderBar(); })); bar.appendChild(tools);
     const props = grp('Props'); for (const [id, d] of Object.entries(KITM ? KITM.props : {})) props.appendChild(thumb(d, id, 'prop'));
     bar.appendChild(props);
-    const pcs = grp('Wall'); for (const [id, d] of Object.entries(KITM ? KITM.pieces : {})) if (id !== 'door') pcs.appendChild(thumb(d, id, 'piece')); bar.appendChild(pcs);
-    const room = S.rooms.get('0,0'), th = grp('Floor'); for (const [id, d] of Object.entries(KITM ? KITM.floors : {})) th.appendChild(btn(d.name, room.floor === id, () => { room.floor = id; renderBar(); }));
-    const tw = grp('Wall'); for (const [id, d] of Object.entries(KITM ? KITM.walls : {})) tw.appendChild(btn(d.name, room.wall === id, () => { room.wall = id; renderBar(); }));
+    const pcs = grp('Wall pieces'); for (const [id, d] of Object.entries(KITM ? KITM.pieces : {})) if (id !== 'door') pcs.appendChild(thumb(d, id, 'piece')); bar.appendChild(pcs);
+    const room = S.rooms.get('0,0'), th = grp('Floor theme'); for (const [id, d] of Object.entries(KITM ? KITM.floors : {})) th.appendChild(btn(d.name, room.floor === id, () => { room.floor = id; renderBar(); }));
+    const tw = grp('Wall theme'); for (const [id, d] of Object.entries(KITM ? KITM.walls : {})) tw.appendChild(btn(d.name, room.wall === id, () => { room.wall = id; renderBar(); }));
     bar.appendChild(th); bar.appendChild(tw);
     const dr = grp('Doors'); dr.appendChild(btn(room.doors.L ? 'Left: on' : 'Left: off', room.doors.L, () => { room.doors.L = !room.doors.L; renderBar(); })); dr.appendChild(btn(room.doors.R ? 'Right: on' : 'Right: off', room.doors.R, () => { room.doors.R = !room.doors.R; renderBar(); })); bar.appendChild(dr);
     wallGroup(bar);
-    const ex = grp(); ex.appendChild(btn('Sawmill', false, () => { const k = KINDS[S.build.sub]; room.props = k.props.map(([id, u, v, f]) => ({ id, u, v, flip: !!f })); room.pieces = k.pieces.map(([id, wall, s]) => ({ id, wall, s })); }));
+    const ex = grp('Start from'); for (const [kind, nm] of [['sawmill', 'Sawmill'], ...RM.map((r) => [r.kind, r.name])]) ex.appendChild(btn(nm, false, () => { const k = KINDS[kind]; room.floor = k.floor; room.wall = k.wall; room.props = k.props.map(([id, u, v, f]) => ({ id, u, v, flip: !!f })); room.pieces = k.pieces.map(([id, wall, s]) => ({ id, wall, s })); renderBar(); }));
     ex.appendChild(btn('Clear', false, () => { room.props = []; room.pieces = []; })); bar.appendChild(ex);
+  } else if (S.scene === 'rooms') {
+    const rg = grp('Room'); for (const r of RM) rg.appendChild(btn(r.name + (r.variant ? ' *' : ''), S.pick === r.kind, () => { S.pick = r.kind; setupScene('rooms'); }));
+    bar.appendChild(rg); const cg = grp(); cg.appendChild(btn('Cluster', !!S.cluster, () => { S.cluster = !S.cluster; setupScene('rooms'); })); bar.appendChild(cg);
+    wallGroup(bar); timeGroup(bar);
   } else if (S.scene === 'compare') {
     wallGroup(bar);
     const t = grp('Light'); for (const [i, n] of PHASES.entries()) t.appendChild(btn(n, Math.round(S.time) === i && !S.auto, () => { S.time = i; renderBar(); })); bar.appendChild(t);
@@ -534,7 +570,10 @@ async function boot() {
   try { KITM = await getJson(KIT + 'manifest.json'); } catch (e) { showBanner('The kit manifest could not be loaded (' + e.message + '). Scenes that need kit art are blank.'); KITM = { floors: {}, walls: {}, pieces: {}, props: {} }; }
   try { WARDM = await getJson(WARD + 'manifest.json'); } catch (e) { showBanner('The Ward manifest could not be loaded (' + e.message + '). Painted rooms and actors are missing.'); WARDM = { rooms: {}, actors: {} }; }
   for (const k of ['floors', 'walls', 'pieces', 'props']) for (const [id] of Object.entries(KITM[k] || {})) kitImg(k, id);
-  setupScene('compare'); renderScenes(); resize(); fitCam(true);
+  deriveKinds(); MON = MONSTERS;
+  const q = new URLSearchParams(location.search); if (q.get('room') && KINDS[q.get('room')]) S.pick = q.get('room'); S.cluster = q.get('cluster') === '1';
+  if (q.get('mode') && ['full', 'low', 'cutaway'].includes(q.get('mode'))) S.wallMode = q.get('mode');
+  setupScene(SCENES[q.get('scene')] ? q.get('scene') : 'compare'); renderScenes(); if (q.get('actors') === '0') S.actors = []; resize(); fitCam(true);
   window.__lab = { S, setupScene, failed };
   requestAnimationFrame(frame);
 }

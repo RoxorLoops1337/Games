@@ -1,6 +1,6 @@
 // THE WARD, modular room kit: data-driven recipes + the pure geometry the renderer (ui/ward_kit_iso.js) and the tests share.
 // No DOM, no engine import. A recipe says how one room type (rm_*) is built from KIT pieces (assets/ward_kit/manifest.json):
-//   { floor, wall, pieces:[{id, wall:'L'|'R', s}], props:[{id, u, v, flip, fp?}], need?:[prop ids], clear?:[[u,v]] }
+//   { floor, wall, pieces:[{id, wall:'L'|'R', s}], props:[{id, u, v, flip, fp?}], need?:[prop ids], door?:piece id, clear?:[[u,v]] }
 // A room is a SUB x SUB (4 x 4) grid of sub-tiles. u runs along the right-down edge (the L wall stands on the u = 0 edge), v along the
 // left-down edge (the R wall stands on the v = 0 edge). A prop covers footprint [cols along u, rows along v] sub-tiles from (u, v); flip swaps them.
 // `s` is the position along a wall base, 0 to 1 (L wall: s 0 is the left corner, R wall: s 0 is the top corner).
@@ -16,114 +16,152 @@ export const SUB = 4;
 export const WALL_FULL = 46, WALL_LOW = 15;
 export const LANES = [[0, 1], [3, 1], [1, 0], [1, 3]];
 
-// ids the art pipeline has not delivered yet. Footprints are what the recipes below were laid out for (the manifest's own footprint wins once it exists).
+// ids the art pipeline has not delivered yet. Batch 3 delivered every floor, wall and wall piece; batch 4 (props) is still to come: the recipes below carry
+// a planned variant for each room that wants one (gated by `need`, so it switches on by itself the day the signature prop reaches the manifest).
+// Footprints are what the planned variants were laid out for (the manifest's own footprint wins once it exists).
 export const PLANNED = {
-  floors: ['tile', 'darkstone', 'carpet', 'brick', 'slab', 'stage'],
-  walls: ['tile', 'brick', 'plaster', 'velvet', 'slab'],
-  pieces: ['archdoor', 'clock', 'pipes', 'curtain', 'chalkboard', 'stainedglass', 'vent', 'notice'],
+  floors: [],
+  walls: [],
+  pieces: [],
   props: {
-    pew: [2, 1], altar: [2, 1], font: [1, 1], candelabra: [1, 1], desk: [2, 1], bookcase: [1, 1], table: [2, 1], stove: [2, 1], cauldron: [1, 1],
-    sink: [1, 1], washtub: [1, 1], gurney: [2, 1], mortuary_slab: [2, 1], cabinet: [1, 1], boiler_tank: [2, 1], coal: [1, 1], optable: [2, 1],
-    lamp_stand: [1, 1], chair: [1, 1], cage: [2, 1], barrel: [1, 1], bench: [2, 1], linen_stack: [1, 1], reception: [2, 1],
+    boiler_tank: [2, 1], coal_pile: [2, 1], valve_wheel: [1, 1], cable_coil: [1, 1], fuse_box: [1, 1],
+    counting_desk: [2, 1], coin_chest: [1, 1], abacus: [1, 1], pharmacy_counter: [2, 1], pill_jars: [1, 1],
+    padded_cot: [2, 1], restraint_chair: [1, 1], stove: [2, 1], prep_table: [2, 1], cauldron: [1, 1], hanging_pots: [1, 1],
+    wash_tub: [1, 1], mangle: [2, 1], drying_rack: [2, 1], bookcase: [2, 1], reading_desk: [2, 1], globe: [1, 1], library_ladder: [1, 1],
+    linen_shelf: [1, 1], linen_cart: [1, 1], slab_table: [2, 1], locker_wall: [2, 1], sheet_body: [2, 1],
+    operating_table: [2, 1], footlights: [2, 1], instrument_tray: [1, 1], throne: [1, 1],
+    workbench: [2, 1], anvil: [1, 1], tool_chest: [1, 1], pickaxe_rack: [1, 1], ore_cart: [2, 1], work_lamp: [1, 1],
   },
 };
 // animated props: an overlay the renderer draws over the sprite (never with reduced motion)
-export const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candelabra: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame' };
+export const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
 
 const P = (id, u, v, flip = 0) => ({ id, u, v, flip });
 const Wp = (id, wall, s) => ({ id, wall, s });
 
+// How the rooms are laid out (u runs along the right-down edge = the back-right wall, v along the left-down edge = the back-left wall):
+//   - the L wall is the column u = 0, the R wall the row v = 0; the lanes (0,1) (3,1) (1,0) (1,3) stay free (doors), so a 2 x 1 prop on a wall edge sits in the
+//     cells 2 and 3 of its row (or 2 and 3 of its column, flipped); the far edges (row 3, column 3) take only low things, so nobody hides behind them.
+//   - TALL props (shelf, toolrack, lamp, iv stand, coat stand, candle stand) stand in the corners (0,0) and (0,3), never in the middle of a wall edge
+//     under a window (a window on the L wall covers rows 1 to 2, on the R wall columns 1 to 2).
+//   - windows only where daylight makes sense (wards, workshops, laundry, library, kitchen), never in the morgue, cells, boiler, chapel (stained glass instead), theatre.
+//   - every room has its own floor + wall pair or its own prop mix: no two rooms look alike (tests/graftwork_ui_ward_kit.test.mjs).
+// Each room lists its PLANNED variant first (needs a batch 4 prop), then the one built from the art that exists today.
 export const RECIPES = {
-  // ---- the current kit (wood / stone floors and walls, 10 props, 4 pieces) ----
+  rm_entrance: [{
+    floor: 'tile', wall: 'wood', door: 'archdoor',
+    pieces: [Wp('archdoor', 'L', 0.5), Wp('notice', 'R', 0.22), Wp('clock', 'R', 0.62), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.88)],
+    props: [P('reception_desk', 2, 0), P('waiting_bench', 0, 2, 1), P('coat_stand', 0, 0), P('plant', 3, 3), P('lamp', 3, 2)],
+  }],
+  rm_corridor: [{
+    floor: 'tile', wall: 'plaster',
+    pieces: [Wp('sconce', 'L', 0.18), Wp('window', 'L', 0.5), Wp('clock', 'R', 0.5), Wp('sconce', 'R', 0.84)],
+    props: [P('gurney', 2, 3), P('wheelchair', 0, 3), P('plant', 0, 0), P('lamp', 3, 0)],
+  }],
+  rm_ward: [{
+    floor: 'tile', wall: 'tile',
+    pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('notice', 'R', 0.3), Wp('sconce', 'R', 0.86)],
+    props: [P('bed', 2, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('bedside_table', 2, 1), P('iv_stand', 0, 0)],
+  }],
+  rm_isolation: [
+    { floor: 'darkstone', wall: 'stone', need: ['restraint_chair'], pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7)],
+      props: [P('padded_cot', 0, 2, 1), P('restraint_chair', 2, 1), P('bucket', 3, 3), P('crate', 3, 0)] },
+    { floor: 'darkstone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7)],
+      props: [P('bed', 0, 2, 1), P('stool', 2, 2), P('bucket', 3, 3), P('crate', 3, 0)] },
+  ],
+  rm_isolation2: [
+    { floor: 'stone', wall: 'brick', need: ['padded_cot'], pieces: [Wp('vent', 'R', 0.5), Wp('sconce', 'L', 0.2), Wp('sconce', 'R', 0.84)],
+      props: [P('padded_cot', 0, 2, 1), P('padded_cot', 2, 3), P('restraint_chair', 3, 2), P('iv_stand', 0, 0), P('bucket', 2, 0)] },
+    { floor: 'stone', wall: 'brick', pieces: [Wp('vent', 'R', 0.5), Wp('sconce', 'L', 0.2), Wp('sconce', 'R', 0.84)],
+      props: [P('bed', 0, 2, 1), P('bed', 2, 3), P('screen', 2, 0), P('iv_stand', 0, 0), P('bucket', 3, 2)] },
+  ],
+  rm_chapel: [{
+    floor: 'stone', wall: 'plaster',
+    pieces: [Wp('stainedglass', 'L', 0.5), Wp('stainedglass', 'R', 0.5), Wp('sconce', 'L', 0.12), Wp('sconce', 'R', 0.88)],
+    props: [P('altar', 2, 0), P('pew', 2, 2), P('pew', 2, 3), P('candle_stand', 0, 0), P('candle_stand', 0, 3), P('lectern', 0, 2)],
+  }],
+  rm_dispensary: [{
+    floor: 'wood', wall: 'stone',
+    pieces: [Wp('sconce', 'L', 0.2), Wp('window', 'L', 0.55), Wp('banner', 'R', 0.5), Wp('sconce', 'R', 0.85)],
+    props: [P('shelf', 0, 0), P('shelf', 2, 0), P('shelf', 3, 0), P('shelf', 0, 3), P('crate', 3, 3), P('crate', 3, 2), P('stool', 2, 2)],
+  }],
+  rm_pharmacy: [
+    { floor: 'wood', wall: 'tile', need: ['pharmacy_counter'], pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.16), Wp('sconce', 'R', 0.86)],
+      props: [P('pharmacy_counter', 2, 2), P('pill_jars', 3, 3), P('shelf', 0, 0), P('shelf', 2, 0), P('shelf', 3, 0), P('stool', 0, 2), P('plant', 0, 3)] },
+    { floor: 'wood', wall: 'tile', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.16), Wp('sconce', 'R', 0.86)],
+      props: [P('reception_desk', 2, 2), P('shelf', 0, 0), P('shelf', 2, 0), P('shelf', 3, 0), P('stool', 0, 2), P('plant', 0, 3)] },
+  ],
+  rm_workshop: [
+    { floor: 'stone', wall: 'wood', need: ['workbench'], pieces: [Wp('sconce', 'L', 0.18), Wp('window', 'R', 0.5), Wp('sconce', 'R', 0.84)],
+      props: [P('workbench', 2, 2), P('anvil', 0, 2), P('tool_chest', 0, 3), P('toolrack', 0, 0), P('toolrack', 3, 0), P('work_lamp', 3, 3), P('bucket', 2, 0)] },
+    { floor: 'stone', wall: 'wood', pieces: [Wp('sconce', 'L', 0.18), Wp('window', 'R', 0.5), Wp('sconce', 'R', 0.84)],
+      props: [P('sawbench', 2, 2), P('toolrack', 0, 0), P('toolrack', 3, 0), P('crate', 0, 3), P('bucket', 3, 3), P('bucket', 2, 0)] },
+  ],
   rm_sawmill: [{
     floor: 'wood', wall: 'wood',
     pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('banner', 'R', 0.47), Wp('sconce', 'R', 0.84)],
-    props: [P('crate', 0, 0), P('toolrack', 3, 0), P('shelf', 0, 2), P('sawbench', 2, 2), P('planks', 2, 3), P('stool', 0, 3)],
+    props: [P('crate', 0, 0), P('toolrack', 3, 0), P('shelf', 0, 3), P('sawbench', 2, 2), P('planks', 2, 3), P('stool', 0, 2)],
   }],
-  rm_quarry: [{
-    floor: 'stone', wall: 'stone',
-    pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7), Wp('banner', 'L', 0.75)],
-    props: [P('rocks', 2, 0), P('crate', 0, 0), P('rocks', 2, 2), P('rocks', 2, 3), P('bucket', 0, 2), P('bucket', 0, 3)],
-  }],
-  rm_generator: [{
-    floor: 'stone', wall: 'wood',
-    pieces: [Wp('sconce', 'L', 0.2), Wp('window', 'R', 0.5), Wp('sconce', 'R', 0.85)],
-    props: [P('generator', 2, 2), P('crate', 0, 0), P('crate', 3, 0), P('bucket', 3, 3), P('crate', 0, 3)],
-  }],
+  rm_quarry: [
+    { floor: 'stone', wall: 'stone', need: ['ore_cart'], pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7), Wp('banner', 'L', 0.75)],
+      props: [P('ore_cart', 2, 2), P('rocks', 2, 0), P('pickaxe_rack', 0, 0), P('work_lamp', 3, 3), P('bucket', 0, 3), P('crate', 0, 2)] },
+    { floor: 'stone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7), Wp('banner', 'L', 0.75)],
+      props: [P('rocks', 2, 0), P('crate', 0, 0), P('rocks', 2, 2), P('rocks', 2, 3), P('bucket', 0, 2), P('bucket', 0, 3)] },
+  ],
+  rm_counting: [
+    { floor: 'carpet', wall: 'brick', need: ['counting_desk'], pieces: [Wp('clock', 'L', 0.5), Wp('chalkboard', 'R', 0.5), Wp('sconce', 'L', 0.12), Wp('sconce', 'R', 0.88)],
+      props: [P('counting_desk', 2, 2), P('coin_chest', 0, 0), P('coin_chest', 3, 0), P('abacus', 0, 3), P('stool', 0, 2), P('plant', 3, 3)] },
+    { floor: 'carpet', wall: 'brick', pieces: [Wp('clock', 'L', 0.5), Wp('chalkboard', 'R', 0.5), Wp('sconce', 'L', 0.12), Wp('sconce', 'R', 0.88)],
+      props: [P('reception_desk', 2, 2), P('shelf', 0, 0), P('lectern', 0, 3), P('stool', 0, 2), P('plant', 3, 3), P('crate', 3, 0)] },
+  ],
+  rm_generator: [
+    { floor: 'darkstone', wall: 'wood', need: ['cable_coil'], pieces: [Wp('pipes', 'L', 0.5), Wp('notice', 'R', 0.5), Wp('sconce', 'L', 0.16), Wp('sconce', 'R', 0.86)],
+      props: [P('generator', 2, 2), P('fuse_box', 2, 0), P('cable_coil', 0, 0), P('cable_coil', 3, 3), P('crate', 0, 3)] },
+    { floor: 'darkstone', wall: 'wood', pieces: [Wp('pipes', 'L', 0.5), Wp('notice', 'R', 0.5), Wp('sconce', 'L', 0.16), Wp('sconce', 'R', 0.86)],
+      props: [P('generator', 2, 2), P('crate', 0, 0), P('crate', 3, 0), P('bucket', 3, 3), P('crate', 0, 3)] },
+  ],
   rm_boiler: [
-    { floor: 'darkstone', wall: 'brick', pieces: [Wp('pipes', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('vent', 'R', 0.82), Wp('sconce', 'L', 0.15)], need: ['boiler_tank'],
-      props: [P('boiler_tank', 2, 2), P('coal', 0, 0), P('coal', 3, 0), P('barrel', 3, 3), P('bucket', 0, 3)] },
-    { floor: 'stone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.2), Wp('sconce', 'R', 0.8)],
-      props: [P('generator', 2, 2), P('rocks', 2, 3), P('bucket', 0, 3), P('crate', 3, 0), P('crate', 0, 0)] },
+    { floor: 'darkstone', wall: 'brick', need: ['boiler_tank'], pieces: [Wp('pipes', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('vent', 'R', 0.82), Wp('sconce', 'L', 0.15)],
+      props: [P('boiler_tank', 2, 2), P('coal_pile', 2, 0), P('valve_wheel', 0, 0), P('crate', 3, 3), P('bucket', 0, 3)] },
+    { floor: 'darkstone', wall: 'brick', pieces: [Wp('pipes', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('vent', 'R', 0.82), Wp('sconce', 'L', 0.15)],
+      props: [P('generator', 2, 2), P('rocks', 2, 0), P('bucket', 0, 3), P('crate', 0, 0), P('bucket', 3, 3)] },
   ],
-  rm_ward: [
-    { floor: 'tile', wall: 'plaster', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('notice', 'R', 0.3), Wp('clock', 'R', 0.62), Wp('sconce', 'R', 0.86)],
-      props: [P('bed', 2, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('stool', 2, 2), P('cabinet', 0, 0)] },
-    { floor: 'wood', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('banner', 'R', 0.5), Wp('sconce', 'R', 0.86)],
-      props: [P('bed', 2, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('stool', 2, 2), P('shelf', 0, 0)] },
+  rm_laundry: [
+    { floor: 'tile', wall: 'wood', need: ['wash_tub'], pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.2), Wp('sconce', 'R', 0.84)],
+      props: [P('wash_tub', 0, 0), P('wash_tub', 3, 0), P('mangle', 2, 2), P('drying_rack', 2, 3), P('bucket', 0, 3), P('crate', 0, 2)] },
+    { floor: 'tile', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.2), Wp('sconce', 'R', 0.84)],
+      props: [P('bucket', 0, 0), P('bucket', 3, 0), P('screen', 2, 2), P('crate', 0, 3), P('bucket', 3, 3), P('toolrack', 2, 0)] },
   ],
-  rm_dispensary: [{
-    floor: 'wood', wall: 'stone', pieces: [Wp('sconce', 'L', 0.2), Wp('banner', 'R', 0.5), Wp('window', 'L', 0.55), Wp('sconce', 'R', 0.85)],
-    props: [P('shelf', 0, 0), P('shelf', 2, 0), P('shelf', 3, 0), P('shelf', 0, 2), P('crate', 3, 3), P('crate', 3, 2), P('stool', 2, 2)],
-  }],
-  rm_pharmacy: [{
-    floor: 'wood', wall: 'stone', pieces: [Wp('window', 'R', 0.5), Wp('sconce', 'L', 0.25), Wp('sconce', 'R', 0.86)],
-    props: [P('shelf', 0, 0), P('shelf', 2, 0), P('shelf', 0, 3), P('crate', 3, 3), P('stool', 2, 2), P('bucket', 3, 2)],
-  }],
-  rm_corridor: [
-    { floor: 'tile', wall: 'plaster', pieces: [Wp('sconce', 'L', 0.2), Wp('clock', 'R', 0.5), Wp('sconce', 'R', 0.82)], props: [P('bench', 2, 3), P('lamp_stand', 3, 0)] },
-    { floor: 'stone', wall: 'wood', pieces: [Wp('sconce', 'L', 0.2), Wp('banner', 'R', 0.5), Wp('sconce', 'R', 0.82)], props: [P('bucket', 0, 0), P('stool', 3, 3)] },
+  rm_linen: [
+    { floor: 'wood', wall: 'plaster', need: ['linen_shelf'], pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.3), Wp('banner', 'R', 0.7)],
+      props: [P('bed', 2, 0), P('linen_shelf', 0, 0), P('linen_cart', 0, 3), P('screen', 2, 3), P('stool', 2, 2)] },
+    { floor: 'wood', wall: 'plaster', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.3), Wp('banner', 'R', 0.7)],
+      props: [P('bed', 2, 0), P('shelf', 0, 0), P('screen', 0, 2, 1), P('bedside_table', 3, 3), P('plant', 2, 3)] },
   ],
-  rm_workshop: [{
-    floor: 'stone', wall: 'wood', pieces: [Wp('sconce', 'L', 0.18), Wp('window', 'R', 0.5), Wp('sconce', 'R', 0.84)],
-    props: [P('sawbench', 2, 2), P('toolrack', 0, 0), P('toolrack', 3, 0), P('crate', 0, 3), P('planks', 2, 3), P('bucket', 2, 0)],
-  }],
-  rm_isolation: [{
-    floor: 'stone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.3), Wp('sconce', 'R', 0.7)],
-    props: [P('bed', 0, 2, 1), P('stool', 2, 2), P('bucket', 3, 3), P('crate', 3, 0), P('crate', 0, 0)],
-  }],
-  rm_isolation2: [{
-    floor: 'stone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.2), Wp('banner', 'R', 0.5), Wp('sconce', 'R', 0.8)],
-    props: [P('bed', 0, 2, 1), P('bed', 2, 3), P('stool', 2, 2), P('rocks', 2, 0), P('crate', 0, 0)],
-  }],
-  rm_linen: [{
-    floor: 'wood', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.3), Wp('banner', 'R', 0.7)],
-    props: [P('bed', 2, 0), P('bed', 0, 2, 1), P('shelf', 0, 0), P('shelf', 3, 3), P('stool', 2, 2)],
-  }],
-  rm_laundry: [{
-    floor: 'stone', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.2), Wp('sconce', 'R', 0.82)],
-    props: [P('bucket', 0, 0), P('bucket', 3, 0), P('crate', 0, 2), P('planks', 2, 3), P('bucket', 3, 2), P('stool', 2, 2)],
-  }],
-  rm_morgue: [{
-    floor: 'stone', wall: 'stone', pieces: [Wp('sconce', 'L', 0.25), Wp('sconce', 'R', 0.75)],
-    props: [P('bed', 2, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('bucket', 3, 2), P('crate', 0, 0)],
-  }],
-
-  // ---- planned: these rooms need art the kit does not have yet; they stay painted until the ids arrive ----
-  rm_entrance: [{
-    floor: 'tile', wall: 'plaster', pieces: [Wp('archdoor', 'L', 0.5), Wp('clock', 'R', 0.5), Wp('notice', 'R', 0.2), Wp('sconce', 'R', 0.86), Wp('sconce', 'L', 0.14)],
-    props: [P('reception', 2, 0), P('bench', 2, 3), P('lamp_stand', 0, 0), P('chair', 3, 2), P('barrel', 0, 3)], need: ['reception'],
-  }],
-  rm_theatre: [{
-    floor: 'stage', wall: 'velvet', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
-    props: [P('optable', 2, 2), P('lamp_stand', 0, 0), P('lamp_stand', 3, 0), P('cabinet', 3, 3), P('chair', 0, 3)], need: ['optable'],
-  }],
-  rm_chapel: [{
-    floor: 'carpet', wall: 'plaster', pieces: [Wp('stainedglass', 'L', 0.5), Wp('stainedglass', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
-    props: [P('altar', 2, 0), P('pew', 2, 2), P('pew', 2, 3), P('candelabra', 0, 0), P('font', 0, 2), P('candelabra', 0, 3)], need: ['altar'],
-  }],
-  rm_counting: [{
-    floor: 'carpet', wall: 'plaster', pieces: [Wp('clock', 'L', 0.5), Wp('window', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
-    props: [P('desk', 2, 0), P('desk', 2, 2), P('bookcase', 0, 0), P('cabinet', 0, 3), P('chair', 3, 3), P('chair', 2, 3)], need: ['desk'],
-  }],
-  rm_kitchen: [{
-    floor: 'tile', wall: 'brick', pieces: [Wp('vent', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
-    props: [P('stove', 2, 0), P('table', 2, 2), P('sink', 0, 0), P('barrel', 3, 3), P('stool', 0, 3)], need: ['stove'],
-  }],
-  rm_library: [{
-    floor: 'carpet', wall: 'plaster', pieces: [Wp('window', 'L', 0.5), Wp('chalkboard', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
-    props: [P('bookcase', 0, 0), P('bookcase', 3, 0), P('bookcase', 0, 2), P('desk', 2, 2), P('chair', 3, 3)], need: ['bookcase'],
-  }],
+  rm_morgue: [
+    { floor: 'slab', wall: 'slab', need: ['slab_table'], pieces: [Wp('vent', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('notice', 'R', 0.3), Wp('sconce', 'R', 0.86)],
+      props: [P('slab_table', 2, 0), P('slab_table', 2, 2), P('locker_wall', 0, 2, 1), P('sheet_body', 2, 3), P('bucket', 0, 0)] },
+    { floor: 'slab', wall: 'slab', pieces: [Wp('vent', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('notice', 'R', 0.3), Wp('sconce', 'R', 0.86)],
+      props: [P('gurney', 2, 0), P('gurney', 0, 2, 1), P('gurney', 2, 3), P('bucket', 3, 2), P('lamp', 0, 0)] },
+  ],
+  rm_kitchen: [
+    { floor: 'brick', wall: 'tile', need: ['stove'], pieces: [Wp('vent', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
+      props: [P('stove', 2, 0), P('prep_table', 2, 2), P('hanging_pots', 0, 0), P('cauldron', 0, 2), P('crate', 3, 3), P('stool', 0, 3)] },
+    { floor: 'brick', wall: 'tile', pieces: [Wp('vent', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('sconce', 'L', 0.14), Wp('sconce', 'R', 0.86)],
+      props: [P('shelf', 0, 0), P('shelf', 0, 3), P('planks', 2, 3), P('bucket', 3, 0), P('stool', 2, 0), P('plant', 3, 2)] },
+  ],
+  rm_library: [
+    { floor: 'carpet', wall: 'wood', need: ['bookcase'], pieces: [Wp('window', 'L', 0.68), Wp('chalkboard', 'R', 0.5), Wp('sconce', 'L', 0.12), Wp('sconce', 'R', 0.88)],
+      props: [P('bookcase', 2, 0), P('bookcase', 0, 2, 1), P('reading_desk', 2, 2), P('library_ladder', 0, 0), P('globe', 3, 3)] },
+    { floor: 'carpet', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('chalkboard', 'R', 0.5), Wp('sconce', 'L', 0.12), Wp('sconce', 'R', 0.88)],
+      props: [P('shelf', 0, 0), P('shelf', 0, 3), P('lectern', 2, 0), P('waiting_bench', 2, 3), P('lamp', 3, 2), P('plant', 3, 0)] },
+  ],
+  rm_theatre: [
+    { floor: 'stage', wall: 'velvet', need: ['operating_table'], door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
+      props: [P('operating_table', 2, 2), P('instrument_tray', 1, 2), P('throne', 3, 0), P('footlights', 2, 3), P('lamp', 0, 0)] },
+    { floor: 'stage', wall: 'velvet', door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
+      props: [P('gurney', 2, 2), P('bedside_table', 1, 2), P('iv_stand', 3, 0), P('lamp', 0, 0), P('plant', 3, 3)] },
+  ],
 };
 // a room type may also borrow the recipe of another (the same kit room, different plan)
 export const ROOM_ALIAS = {};
@@ -136,7 +174,7 @@ export function footprintOf(kit, id, flip) {
   return flip ? [f[1], f[0]] : [f[0], f[1]];
 }
 export const newGrid = (v = false) => Array.from({ length: SUB }, () => Array(SUB).fill(v));
-export function doorPieceId(kit) { for (const id of ['archdoor', 'door']) if (hasId(kit, 'pieces', id)) return id; return null; }
+export function doorPieceId(kit, want) { for (const id of [want, 'door', 'archdoor']) if (id && hasId(kit, 'pieces', id)) return id; return null; }
 
 const CACHE = new WeakMap();
 // the usable recipe of a room type for this kit manifest: { type, variant, key, floor, wall, pieces, props, occ, free, stand, doorPiece } or null (paint it)
@@ -169,11 +207,10 @@ function build(type, kit) {
     const free = []; for (let u = 0; u < SUB; u++) for (let w = 0; w < SUB; w++) if (!solid[u][w]) free.push([u, w]);
     const pieces = v.pieces.filter((p) => hasId(kit, 'pieces', p.id));
     let stand = free[0]; let bd = 1e9; for (const f of free) { const d = Math.hypot(f[0] - 1.5, f[1] - 1.5) + (f[0] + f[1]) * 0.001; if (d < bd) { bd = d; stand = f; } }
-    return { type, variant: vi, key: type + '#' + vi, floor: v.floor, wall: v.wall, pieces, props, occ: solid, free, stand, doorPiece: doorPieceId(kit), planned: vi > 0 || !!(list.length === 1 && isPlannedRecipe(v)) };
+    return { type, variant: vi, key: type + '#' + vi, floor: v.floor, wall: v.wall, pieces, props, occ: solid, free, stand, doorPiece: doorPieceId(kit, v.door), planned: (v.need || []).length > 0 };
   }
   return null;
 }
-function isPlannedRecipe(v) { return PLANNED.floors.includes(v.floor) || PLANNED.walls.includes(v.wall); }
 // every free sub-tile reachable from every other through 4-neighbours
 export function freeConnected(rc) {
   if (!rc.free.length) return false;
