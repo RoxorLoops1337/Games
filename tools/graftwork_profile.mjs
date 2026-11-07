@@ -35,7 +35,7 @@ const LABEL = opt('label', 'run');
 const VIEW = { width: 1000, height: 462 };
 const DPR = Number(opt('dpr', 2));
 const SLOW4G = { offline: false, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8, latency: 150 };
-const S = (sec) => (QUICK ? Math.max(2, sec / 3) : sec) * 1000;
+const S = (ms) => (QUICK ? Math.max(1500, ms / 3) : ms); // scenario durations in ms, a third of them with --quick
 
 // ---------------------------------------------------------------- static server (gzip for text like the CDN)
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
@@ -130,8 +130,19 @@ const PAGE = {
 };
 
 // ---------------------------------------------------------------- scenario drivers (run in node, talk to the page)
+const SCENE_READY = () => !!window.__scene && ['kit', 'keyart', 'fallback'].includes(window.__scene.mode);
+const SCENE_PAINTED = () => !!window.__scene && ['kit', 'keyart'].includes(window.__scene.mode);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-async function gwWait(page, expr, timeout = 60000) { if (opt('verbose', false)) console.log('    wait', expr.slice(0, 70)); try { await page.waitForFunction(expr, null, { timeout, polling: 250 }); } catch (e) { const st = await page.evaluate(() => ({ cur: window.__gw && window.__gw.app.current, frame: window.__gw && window.__gw.app.frame, mode: window.__scene && window.__scene.mode })).catch(() => null); console.log('    wait failed:', expr.slice(0, 60), JSON.stringify(st)); throw e; } }
+async function gwWait(page, expr, timeout = 60000) { // own poll loop: page.waitForFunction hung on string expressions under load
+  if (opt('verbose', false)) console.log('    wait', String(expr).slice(0, 70));
+  const end = Date.now() + timeout;
+  for (;;) {
+    let ok = false; try { ok = await (typeof expr === 'function' ? page.evaluate(expr) : page.evaluate(`!!(${expr})`)); } catch (e) { /* page busy or navigating */ }
+    if (ok) return;
+    if (Date.now() > end) { const st = await page.evaluate(() => ({ cur: window.__gw && window.__gw.app.current, frame: window.__gw && window.__gw.app.frame })).catch(() => null); throw new Error('wait failed: ' + String(expr).slice(0, 60) + ' ' + JSON.stringify(st)); }
+    await wait(250);
+  }
+}
 
 async function logical(page, x, y) { return page.evaluate(([x, y]) => { const a = window.__gw.app; return { x: a.offX + x * a.scale, y: a.offY + y * a.scale }; }, [x, y]); }
 async function tap(page, x, y) { const p = await logical(page, x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(); await wait(40); await page.mouse.up(); }
@@ -140,7 +151,7 @@ async function sweep(page, n = 6) { for (let i = 0; i < n; i++) { const p = awai
 const SC = {};
 // 1. title idle: the painted scene alone, 10 s, no input after the intro was used up
 SC.title_idle = { desc: 'title scene idle 10 s', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; }); if (opt('verbose', false)) for (let i = 0; i < 6; i++) { console.log('    state', JSON.stringify(await page.evaluate(() => ({ f: window.__gw.app.frame, m: window.__scene.mode })))); await wait(2000); }
- await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'||window.__scene.mode==='fallback'", 40000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
+ await gwWait(page, SCENE_READY, 40000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
 // 2. title intro: the needle sews the wordmark (first title of a page load)
 SC.title_intro = { desc: 'title intro (3.6 s needle) + 3 s', fresh: true, async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const m = await import('/graftwork/ui/title.js'); m.resetTitleIntro(); window.__gw.app.go('title', { intro: true }); }); }, async run(page) { await wait(S(6600)); } };
 
@@ -233,14 +244,13 @@ async function newPage(browser, { cpu, net, ops = false, trace = false }) {
   const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: DPR, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' });
   await ctx.addInitScript(INIT);
   const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send('Network.enable');
-  if (net) await cdp.send('Network.emulateNetworkConditions', net);
-  if (cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+  const cdp = (cpu > 1 || net || trace) ? await ctx.newCDPSession(page) : null;
+  if (net || trace) { await cdp.send('Network.enable'); if (net) await cdp.send('Network.emulateNetworkConditions', net); } // only the load runs count bytes
+  if (cdp && cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
   const net_ = { bytes: 0, reqs: 0, images: 0, imageBytes: 0, byType: {} };
   const types = new Map();
-  cdp.on('Network.responseReceived', (e) => types.set(e.requestId, e.response.mimeType));
-  cdp.on('Network.loadingFinished', (e) => { net_.reqs++; net_.bytes += e.encodedDataLength; const t = types.get(e.requestId) || '?'; net_.byType[t] = (net_.byType[t] || 0) + e.encodedDataLength; if (/image/.test(t)) { net_.images++; net_.imageBytes += e.encodedDataLength; } });
+  if (cdp) cdp.on('Network.responseReceived', (e) => types.set(e.requestId, e.response.mimeType));
+  if (cdp) cdp.on('Network.loadingFinished', (e) => { net_.reqs++; net_.bytes += e.encodedDataLength; const t = types.get(e.requestId) || '?'; net_.byType[t] = (net_.byType[t] || 0) + e.encodedDataLength; if (/image/.test(t)) { net_.images++; net_.imageBytes += e.encodedDataLength; } });
   const errs = []; page.on('pageerror', (e) => errs.push(String(e).slice(0, 200)));
   return { ctx, page, cdp, net: net_, errs };
 }
@@ -256,14 +266,16 @@ async function runOne0(browser, base, name, cpu, mode) {
   const h = await newPage(browser, { cpu, ops: mode === 'ops', net: null });
   const { page } = h;
   await page.goto(base + '/graftwork/', { waitUntil: 'commit' });
-  await S_.setup.call(S_, page);
+  const V = (m) => { if (opt('verbose', false)) console.log('    step', m); };
+  await S_.setup.call(S_, page); V('setup done');
   const calib = await calibrate(page);
-  const mem0 = await page.evaluate(PAGE.mem);
+  V('calib ' + calib);
+  const mem0 = await page.evaluate(PAGE.mem); V('mem0');
   await page.evaluate(PAGE.mark);
   if (mode === 'ops') await page.evaluate(() => { window.__pf.opsOn = true; window.__pf.opsFrames = []; });
   let tr = null, tFrom = 0;
   if (mode === 'trace') { await browser.startTracing(page, { categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'gpu', 'cc', 'viz', 'toplevel', 'v8.gc', 'blink'] }); }
-  await S_.run.call(S_, page);
+  await S_.run.call(S_, page); V('run done');
   let out;
   if (mode === 'ops') {
     const of = await page.evaluate(() => { window.__pf.opsOn = false; return window.__pf.opsFrames; });
@@ -303,7 +315,7 @@ async function loadMetrics(browser, base, cpu) {
   // painted title scene (kit/keyart mode) = visually complete
   await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; });
   let sceneMs = -1;
-  try { await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'", 240000); sceneMs = Date.now() - t0; } catch (e) { /* stays -1 */ }
+  try { await gwWait(page, SCENE_PAINTED, 240000); sceneMs = Date.now() - t0; } catch (e) { /* stays -1 */ }
   const bytesAtScene = h.net.bytes;
   await page.evaluate(WARD_SETUP);
   const tw0 = Date.now();
@@ -320,7 +332,7 @@ async function loadMetrics(browser, base, cpu) {
   await gwWait(page, "window.__gw && window.__gw.app.current==='title' && window.__gw.app.frame>3", 240000);
   const warmInteractive = Date.now() - w0;
   await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; });
-  let warmScene = -1; try { await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'", 240000); warmScene = Date.now() - w0; } catch (e) { /* -1 */ }
+  let warmScene = -1; try { await gwWait(page, SCENE_PAINTED, 240000); warmScene = Date.now() - w0; } catch (e) { /* -1 */ }
   await wait(1000);
   const warm = { t_title_interactive_ms: warmInteractive, t_title_scene_painted_ms: warmScene, bytes: h.net.bytes - b0, requests: h.net.reqs - r0 };
   const res = {
