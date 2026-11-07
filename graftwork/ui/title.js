@@ -255,7 +255,7 @@ export default {
       } else if (id === 'daily') {
         const seed = todaySeed(), hero = RUN.dailyHero(seed), played = (meta.daily ? dailyPlayed(meta, seed) : false);
         const hn = HEROES[hero].name;
-        const label = played ? 'Daily (played)' : 'Daily Run';
+        const label = played ? 'Daily Run (played)' : 'Daily Run';
         const modeTag = modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC';
         if (app.inRect(x, yy, bw, bh)) {
           const mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];

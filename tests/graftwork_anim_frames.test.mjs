@@ -203,11 +203,13 @@ await t('monster_pose_is_unchanged_without_frames_and_the_die_frame_is_not_squas
   for (const fr of [undefined, { walk: stems('orderly', ...W4) }, { hit: 'orderly_hit' }]) { const s2 = spriteWith('orderly', fr, 'normal'); assert.deepEqual(drawnEnemy(s2, edOf({ dying: 0.9 })), ['stand:orderly']); }
 });
 await t('battle_warm_requests_combat_frames_and_a_hi3x_flag_prefers_the_512_file', () => {
+  const prevApp = assets.app; assets.app = { px: 2, perf: null }; // wantHi (combat_art.js) asks for the 512 file only when the screen has the pixels for it
   CA.__resetHi(); install({ marrow: actor('hero', { ...HERO_FR, hi3x: true }) });
   const big = img('big:marrow_atk2'); CA.__setHi('actors/marrow_atk2@3x.webp', big);
   const sp = CA.spriteOf('marrow', null); assert.equal(CA.frameImg(sp, 'marrow_atk2').tag, 'big:marrow_atk2', '@3x preferred when hi3x'); assert.equal(CA.frameImg(sp, 'marrow_hit').tag, 'marrow_hit', 'else the 2x file');
   assert.equal(CA.frameImg(sp, 'marrow_nope'), null); assert.equal(CA.frameImg(null, 'x'), null);
   const sp2 = spriteWith('marrow', HERO_FR); assert.equal(CA.frameImg(sp2, 'marrow_atk2').tag, 'marrow_atk2', 'without hi3x the 3x file is never asked for');
+  assets.app = prevApp;
 });
 await t('real_battle_screen_draws_hero_attack_frames_end_to_end', async () => {
   const { default: combat } = await import('../graftwork/ui/combat.js'), audio = await import('../graftwork/ui/audio.js');

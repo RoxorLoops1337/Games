@@ -131,7 +131,7 @@ const PAGE = {
 
 // ---------------------------------------------------------------- scenario drivers (run in node, talk to the page)
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-async function gwWait(page, expr, timeout = 60000) { await page.waitForFunction(expr, null, { timeout, polling: 100 }); }
+async function gwWait(page, expr, timeout = 60000) { if (opt('verbose', false)) console.log('    wait', expr.slice(0, 70)); await page.waitForFunction(expr, null, { timeout, polling: 250 }); }
 
 async function logical(page, x, y) { return page.evaluate(([x, y]) => { const a = window.__gw.app; return { x: a.offX + x * a.scale, y: a.offY + y * a.scale }; }, [x, y]); }
 async function tap(page, x, y) { const p = await logical(page, x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(); await wait(40); await page.mouse.up(); }
