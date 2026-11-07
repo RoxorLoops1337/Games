@@ -1,0 +1,1045 @@
+{
+ "label": "after_auto",
+ "date": "2026-11-07T15:55:03.535Z",
+ "viewport": {
+  "width": 1000,
+  "height": 462
+ },
+ "dpr": 2,
+ "quick": false,
+ "chromium": "153.0.8010.12",
+ "scenarios": {
+  "title_idle": {
+   "desc": "title scene idle 10 s",
+   "cpu4": {
+    "ticks": 298,
+    "fps": 29.7,
+    "frame_p50": 33.3,
+    "frame_p95": 45,
+    "frame_p99": 61.7,
+    "frame_max": 70.1,
+    "dropped_frames": 304,
+    "dropped_pct": 50.6,
+    "js_p50": 15.5,
+    "js_p95": 40.8,
+    "js_p99": 50.7,
+    "long_tasks": 5,
+    "long_task_ms": 309,
+    "long_task_max": 70,
+    "heap_mb": 8.4,
+    "heap_delta_mb": -0.2,
+    "tier": "minimal",
+    "tier_changes": [
+     1,
+     0
+    ],
+    "dpr": 1,
+    "backing": [
+     821,
+     462
+    ],
+    "graphics": "auto",
+    "mem": {
+     "images": 70,
+     "imageBytes": 17064584,
+     "canvases": 93,
+     "canvasBytes": 54806144,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:16"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:43"
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 70,
+     "imageBytes": 17064584,
+     "canvases": 93,
+     "canvasBytes": 54806144,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:16"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:43"
+      ]
+     ]
+    },
+    "calib_ms": 504.7,
+    "loadavg1": 1.1,
+    "errors": []
+   },
+   "ops": {
+    "frames": 282,
+    "calls": {
+     "mean": 1877.5,
+     "p95": 2013,
+     "max": 5553
+    },
+    "draw": {
+     "mean": 43.7,
+     "p95": 83,
+     "max": 90
+    },
+    "grad": {
+     "mean": 8.5,
+     "p95": 11,
+     "max": 48
+    },
+    "text": {
+     "mean": 39.1,
+     "p95": 39,
+     "max": 75
+    },
+    "measure": {
+     "mean": 41,
+     "p95": 41,
+     "max": 41
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 1
+    },
+    "shadow": {
+     "mean": 0,
+     "p95": 0,
+     "max": 13
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 290.1,
+     "p95": 291,
+     "max": 570
+    },
+    "state": {
+     "mean": 309.1,
+     "p95": 374,
+     "max": 480
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 120.5,
+    "loadavg1": 0.9,
+    "errors": []
+   }
+  },
+  "ward12": {
+   "desc": "Ward map, 12 rooms, hero walking, monsters wandering",
+   "cpu4": {
+    "ticks": 125,
+    "fps": 11.1,
+    "frame_p50": 58.5,
+    "frame_p95": 292.3,
+    "frame_p99": 321,
+    "frame_max": 380.7,
+    "dropped_frames": 531,
+    "dropped_pct": 81.1,
+    "js_p50": 51.7,
+    "js_p95": 267.6,
+    "js_p99": 298.3,
+    "long_tasks": 124,
+    "long_task_ms": 10786,
+    "long_task_max": 379,
+    "heap_mb": 9.6,
+    "heap_delta_mb": 0.1,
+    "tier": "minimal",
+    "tier_changes": [
+     1,
+     0
+    ],
+    "dpr": 1,
+    "backing": [
+     821,
+     462
+    ],
+    "graphics": "auto",
+    "mem": {
+     "images": 164,
+     "imageBytes": 55595880,
+     "canvases": 135,
+     "canvasBytes": 67015116,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 142,
+     "imageBytes": 75201928,
+     "canvases": 142,
+     "canvasBytes": 78449864,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/transitions.js:57:23 < ui/transitions.js:63:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ]
+     ]
+    },
+    "calib_ms": 550.6,
+    "loadavg1": 1.1,
+    "ready_ms": 958.8,
+    "errors": []
+   },
+   "ops": {
+    "frames": 509,
+    "calls": {
+     "mean": 3326.6,
+     "p95": 3333,
+     "max": 6755
+    },
+    "draw": {
+     "mean": 183.3,
+     "p95": 186,
+     "max": 188
+    },
+    "grad": {
+     "mean": 20.1,
+     "p95": 21,
+     "max": 88
+    },
+    "text": {
+     "mean": 97,
+     "p95": 97,
+     "max": 97
+    },
+    "measure": {
+     "mean": 109,
+     "p95": 109,
+     "max": 109
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 2,
+     "p95": 2,
+     "max": 8
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 467.6,
+     "p95": 468,
+     "max": 956
+    },
+    "state": {
+     "mean": 860.9,
+     "p95": 862,
+     "max": 1014
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 118,
+    "loadavg1": 1.3,
+    "ready_ms": 530.7,
+    "errors": []
+   }
+  },
+  "combat3": {
+   "desc": "combat, 3 enemies, one full turn then idle",
+   "cpu4": {
+    "ticks": 245,
+    "fps": 17.5,
+    "frame_p50": 54.1,
+    "frame_p95": 86.8,
+    "frame_p99": 103.3,
+    "frame_max": 223.1,
+    "dropped_frames": 594,
+    "dropped_pct": 70.9,
+    "js_p50": 45.5,
+    "js_p95": 68.7,
+    "js_p99": 90.9,
+    "long_tasks": 159,
+    "long_task_ms": 9557,
+    "long_task_max": 123,
+    "heap_mb": 13.1,
+    "heap_delta_mb": 2,
+    "tier": "minimal",
+    "tier_changes": [
+     1,
+     0
+    ],
+    "dpr": 1,
+    "backing": [
+     821,
+     462
+    ],
+    "graphics": "auto",
+    "mem": {
+     "images": 37,
+     "imageBytes": 13289744,
+     "canvases": 97,
+     "canvasBytes": 64354904,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/combat_art.js:377:123 < ui/combat_art.js:396:33"
+      ],
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:16"
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 37,
+     "imageBytes": 13289744,
+     "canvases": 53,
+     "canvasBytes": 55895608,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/combat_art.js:377:123 < ui/combat_art.js:396:33"
+      ],
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       720,
+       680,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/heroes.js:219:41 < art/heroes.js:223:16"
+      ]
+     ]
+    },
+    "calib_ms": 497.9,
+    "loadavg1": 1.2,
+    "errors": []
+   },
+   "ops": {
+    "frames": 774,
+    "calls": {
+     "mean": 3573,
+     "p95": 4333,
+     "max": 5175
+    },
+    "draw": {
+     "mean": 33.8,
+     "p95": 53,
+     "max": 70
+    },
+    "grad": {
+     "mean": 56.6,
+     "p95": 72,
+     "max": 109
+    },
+    "text": {
+     "mean": 90.7,
+     "p95": 100,
+     "max": 105
+    },
+    "measure": {
+     "mean": 64.7,
+     "p95": 70,
+     "max": 93
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 1,
+     "p95": 3,
+     "max": 6
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 680.6,
+     "p95": 827,
+     "max": 954
+    },
+    "state": {
+     "mean": 670.6,
+     "p95": 774,
+     "max": 828
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 118.7,
+    "loadavg1": 1.4,
+    "errors": []
+   }
+  },
+  "deck40": {
+   "desc": "deck view with 40 cards, scrolling",
+   "cpu4": {
+    "ticks": 75,
+    "fps": 8.6,
+    "frame_p50": 109.4,
+    "frame_p95": 158.5,
+    "frame_p99": 267.8,
+    "frame_max": 267.8,
+    "dropped_frames": 439,
+    "dropped_pct": 85.6,
+    "js_p50": 96.3,
+    "js_p95": 149,
+    "js_p99": 178.2,
+    "long_tasks": 74,
+    "long_task_ms": 8464,
+    "long_task_max": 267,
+    "heap_mb": 9.4,
+    "heap_delta_mb": -0.8,
+    "tier": "minimal",
+    "tier_changes": [
+     1,
+     0
+    ],
+    "dpr": 1,
+    "backing": [
+     821,
+     462
+    ],
+    "graphics": "auto",
+    "mem": {
+     "images": 29,
+     "imageBytes": 11979024,
+     "canvases": 74,
+     "canvasBytes": 66206856,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 29,
+     "imageBytes": 11979024,
+     "canvases": 66,
+     "canvasBytes": 59117448,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ]
+     ]
+    },
+    "calib_ms": 506.9,
+    "loadavg1": 1.8,
+    "errors": []
+   },
+   "ops": {
+    "frames": 371,
+    "calls": {
+     "mean": 8210.1,
+     "p95": 8242,
+     "max": 11537
+    },
+    "draw": {
+     "mean": 49.7,
+     "p95": 52,
+     "max": 52
+    },
+    "grad": {
+     "mean": 69.4,
+     "p95": 71,
+     "max": 219
+    },
+    "text": {
+     "mean": 163.9,
+     "p95": 164,
+     "max": 216
+    },
+    "measure": {
+     "mean": 134.6,
+     "p95": 134,
+     "max": 181
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 1,
+     "p95": 1,
+     "max": 1
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 1442.8,
+     "p95": 1447,
+     "max": 1863
+    },
+    "state": {
+     "mean": 1436.5,
+     "p95": 1438,
+     "max": 1626
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 121.7,
+    "loadavg1": 1.5,
+    "errors": []
+   }
+  },
+  "graft": {
+   "desc": "graft screen with pointer sweeps",
+   "cpu4": {
+    "ticks": 131,
+    "fps": 16.1,
+    "frame_p50": 59.9,
+    "frame_p95": 77.5,
+    "frame_p99": 105.1,
+    "frame_max": 105.2,
+    "dropped_frames": 359,
+    "dropped_pct": 73.4,
+    "js_p50": 27.2,
+    "js_p95": 64.2,
+    "js_p99": 89.1,
+    "long_tasks": 129,
+    "long_task_ms": 7832,
+    "long_task_max": 103,
+    "heap_mb": 8,
+    "heap_delta_mb": 0.3,
+    "tier": "minimal",
+    "tier_changes": [
+     1,
+     0
+    ],
+    "dpr": 1,
+    "backing": [
+     821,
+     462
+    ],
+    "graphics": "auto",
+    "mem": {
+     "images": 29,
+     "imageBytes": 11979024,
+     "canvases": 35,
+     "canvasBytes": 34307964,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       821,
+       462,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/transitions.js:57:23 < ui/transitions.js:63:14"
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 29,
+     "imageBytes": 11979024,
+     "canvases": 35,
+     "canvasBytes": 34307964,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/post.js:154:27 < ui/post.js:183:23"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:19:9"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       1280,
+       720,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < art/backgrounds.js:14:40 < art/backgrounds.js:641:14"
+      ],
+      [
+       821,
+       462,
+       false,
+       "    at document.createElement (<anonymous>:9:109 < ui/transitions.js:57:23 < ui/transitions.js:63:14"
+      ]
+     ]
+    },
+    "calib_ms": 516.3,
+    "loadavg1": 1.5,
+    "errors": []
+   },
+   "ops": {
+    "frames": 402,
+    "calls": {
+     "mean": 1546.6,
+     "p95": 1563,
+     "max": 2116
+    },
+    "draw": {
+     "mean": 22.1,
+     "p95": 24,
+     "max": 24
+    },
+    "grad": {
+     "mean": 19,
+     "p95": 20,
+     "max": 29
+    },
+    "text": {
+     "mean": 80.6,
+     "p95": 82,
+     "max": 82
+    },
+    "measure": {
+     "mean": 51.3,
+     "p95": 52,
+     "max": 62
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 3.8,
+     "p95": 4,
+     "max": 5
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 167.2,
+     "p95": 169,
+     "max": 214
+    },
+    "state": {
+     "mean": 381.6,
+     "p95": 386,
+     "max": 406
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 119.7,
+    "loadavg1": 1.4,
+    "errors": []
+   }
+  }
+ },
+ "load": {},
+ "soak": null
+}

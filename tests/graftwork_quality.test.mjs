@@ -23,7 +23,7 @@ for (const ms of [16.7, 8.3, 20]) { const q = createQuality(); feed(q, 20000, ms
 // occasional hitches (1 in 25 frames at 60 ms) are not a verdict
 { const q = createQuality(); let c = 0; for (let i = 0; i < 6000; i++) { const ms = i % 25 === 0 ? 60 : 16.7; c += ms; q.sample(ms, 16.7, c); } assert.equal(q.tier, 'full', 'rare hitches keep full'); }
 // stalls (hidden tab, debugger) are ignored and re-warm
-{ const q = createQuality(); let c = feed(q, 100, 16.7, 0); for (let i = 0; i < 50; i++) { c += 5000; q.sample(5000, 16.7, c); } assert.equal(q.tier, 'full', 'stalls are not slow frames'); }
+{ const q = createQuality(); let c = feed(q, 100, 16.7, 0); for (let i = 0; i < 50; i++) { c += 8000; q.sample(8000, 16.7, c); } assert.equal(q.tier, 'full', 'stalls are not slow frames'); }
 
 // ---- 3. a slow device drops one tier at a time, then another, and stops at minimal
 {
@@ -35,6 +35,8 @@ for (const ms of [16.7, 8.3, 20]) { const q = createQuality(); feed(q, 20000, ms
 }
 // a catastrophic stretch (mean over 70 ms) goes straight to minimal
 { const q = createQuality(); feed(q, Q.warmFrames + 30, 120, 0); assert.equal(q.tier, 'minimal', 'panic drops two tiers at once'); }
+// a very slow device (3 fps) is judged in seconds, not after 100 frames: warm-up is capped in time, the panic window is 8 frames
+{ const q = createQuality(); let c = 0, n = 0; while (q.tier === 'full' && n < 200) { c += 350; q.sample(350, 16.7, c); n++; } assert.equal(q.tier, 'minimal'); assert.ok(n <= 16, 'at 350 ms frames the verdict comes within 16 frames, took ' + n); assert.ok(c <= 6000, 'and within 6 s, took ' + c); }
 // the verdict needs a full window after a tier change: no double drop from the same slow stretch
 { const q = createQuality(); let c = feed(q, Q.warmFrames + 61, 40, 0); assert.equal(q.tier, 'lite'); c = feed(q, Q.warmFrames + 30, 40, c); assert.equal(q.tier, 'lite', 'half a window later still lite'); }
 
@@ -64,6 +66,8 @@ for (const ms of [16.7, 8.3, 20]) { const q = createQuality(); feed(q, 20000, ms
 { const q = createQuality({ mode: 'low' }); feed(q, 3000, 16.7, 0); assert.equal(q.tier, 'minimal', 'Low stays low on a smooth device'); }
 // the expected interval counts: a capped 30 fps loop at 33 ms is NOT slow
 { const q = createQuality(); feed(q, 5000, 33.3, 0, 33.3); assert.equal(q.tier, 'full', '30 fps by design is not a slow device'); }
+// a lone 500 ms hitch is a stall, but a device that is ALWAYS at 600 ms per frame is judged
+{ const q = createQuality(); let c = feed(q, 100, 16.7, 0); c += 500; q.sample(500, 16.7, c); assert.equal(q.tier, 'full'); const q2 = createQuality(); let c2 = 0, n = 0; while (q2.tier === 'full' && n < 100) { c2 += 600; q2.sample(600, 16.7, c2); n++; } assert.equal(q2.tier, 'minimal', '600 ms frames reach minimal'); assert.ok(n < 30, 'in ' + n + ' frames'); }
 // warmup clears the window (screen change)
 { const q = createQuality(); let c = feed(q, Q.warmFrames + 40, 40, 0); q.warmup(); c = feed(q, Q.warmFrames - 1, 40, c); assert.equal(q.tier, 'full', 'after warmup the first frames are ignored'); }
 // debug line is short text

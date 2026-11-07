@@ -10,7 +10,7 @@ function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>>
 
 // ---- offscreen cache ----
 const cache = new Map();
-let cacheBytes = 0; const CACHE_MAX = 90 * 1024 * 1024;
+let cacheBytes = 0; const CACHE_MAX = 56 * 1024 * 1024; // 15 full-stage layers: the LRU below drops the oldest theme first (was 90 MB: a phone holds everything else too)
 function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function layer(key, fn, w = W, h = H) {
   if (typeof document === 'undefined' || !document.createElement) return null;

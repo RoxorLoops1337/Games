@@ -1,160 +1,2778 @@
 {
  "label": "baseline",
- "date": "2026-11-07T14:14:23.960Z",
+ "date": "2026-11-07T14:51:47.850Z",
  "viewport": {
   "width": 1000,
   "height": 462
  },
  "dpr": 2,
- "quick": true,
+ "quick": false,
  "chromium": "153.0.8010.12",
  "scenarios": {
   "title_idle": {
    "desc": "title scene idle 10 s",
    "cpu4": {
-    "error": "timeout: title_idle time"
+    "ticks": 68,
+    "fps": 6.8,
+    "frame_p50": 139.3,
+    "frame_p95": 180.7,
+    "frame_p99": 195.6,
+    "frame_max": 195.6,
+    "dropped_frames": 532,
+    "dropped_pct": 88.8,
+    "js_p50": 119.1,
+    "js_p95": 135.7,
+    "js_p99": 174.2,
+    "long_tasks": 67,
+    "long_task_ms": 9742,
+    "long_task_max": 194,
+    "heap_mb": 7.8,
+    "heap_delta_mb": -2,
+    "mem": {
+     "images": 60,
+     "imageBytes": 5955448,
+     "canvases": 80,
+     "canvasBytes": 48602260,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 57,
+     "imageBytes": 5758840,
+     "canvases": 86,
+     "canvasBytes": 48995476,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 504.6,
+    "loadavg1": 1.3,
+    "errors": []
    },
    "cpu6": {
-    "error": "timeout: title_idle time"
+    "ticks": 44,
+    "fps": 4.3,
+    "frame_p50": 232.6,
+    "frame_p95": 264.3,
+    "frame_p99": 272.2,
+    "frame_max": 272.2,
+    "dropped_frames": 553,
+    "dropped_pct": 92.8,
+    "js_p50": 186,
+    "js_p95": 209.7,
+    "js_p99": 230.5,
+    "long_tasks": 44,
+    "long_task_ms": 10049,
+    "long_task_max": 272,
+    "heap_mb": 8.3,
+    "heap_delta_mb": 0.6,
+    "mem": {
+     "images": 60,
+     "imageBytes": 5955448,
+     "canvases": 80,
+     "canvasBytes": 48602260,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 57,
+     "imageBytes": 5758840,
+     "canvases": 80,
+     "canvasBytes": 48602260,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 743.6,
+    "loadavg1": 1.6,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 966.8,
+    "detail": {
+     "RunTask": {
+      "ms": 11476.2,
+      "n": 7483
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 11352.3,
+      "n": 7453
+     },
+     "GPUTask": {
+      "ms": 961.3,
+      "n": 83
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 23,
+      "n": 21
+     },
+     "PrePaint": {
+      "ms": 15.7,
+      "n": 74
+     },
+     "Layerize": {
+      "ms": 0.3,
+      "n": 73
+     },
+     "Commit": {
+      "ms": 5322.9,
+      "n": 73
+     },
+     "FunctionCall": {
+      "ms": 4743,
+      "n": 125
+     },
+     "MajorGC": {
+      "ms": 14.6,
+      "n": 2
+     },
+     "Decode LazyPixelRef": {
+      "ms": 7,
+      "n": 3
+     },
+     "Decode Image": {
+      "ms": 5.5,
+      "n": 3
+     },
+     "MinorGC": {
+      "ms": 13.1,
+      "n": 6
+     },
+     "Paint": {
+      "ms": 0,
+      "n": 1
+     }
+    },
+    "window_ms": 10727.4
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 318,
+    "calls": {
+     "mean": 2124.6,
+     "p95": 2146,
+     "max": 2156
+    },
+    "draw": {
+     "mean": 80.2,
+     "p95": 85,
+     "max": 87
+    },
+    "grad": {
+     "mean": 7.3,
+     "p95": 10,
+     "max": 11
+    },
+    "text": {
+     "mean": 41,
+     "p95": 41,
+     "max": 41
+    },
+    "measure": {
+     "mean": 36,
+     "p95": 36,
+     "max": 36
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 293.6,
+     "p95": 295,
+     "max": 296
+    },
+    "state": {
+     "mean": 372.7,
+     "p95": 378,
+     "max": 380
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 120,
+    "loadavg1": 1.7,
+    "errors": []
    }
   },
   "title_intro": {
    "desc": "title intro (3.6 s needle) + 3 s",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 38,
+    "fps": 5.7,
+    "frame_p50": 165.9,
+    "frame_p95": 212.2,
+    "frame_p99": 361,
+    "frame_max": 361,
+    "dropped_frames": 355,
+    "dropped_pct": 90.6,
+    "js_p50": 122.5,
+    "js_p95": 170.6,
+    "js_p99": 293.4,
+    "long_tasks": 38,
+    "long_task_ms": 6512,
+    "long_task_max": 343,
+    "heap_mb": 8.2,
+    "heap_delta_mb": 0.6,
+    "mem": {
+     "images": 59,
+     "imageBytes": 5889912,
+     "canvases": 82,
+     "canvasBytes": 48733332,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 38,
+     "canvasBytes": 41421204,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 505.2,
+    "loadavg1": 1.6,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 28,
+    "fps": 4.2,
+    "frame_p50": 224.9,
+    "frame_p95": 293.5,
+    "frame_p99": 513.4,
+    "frame_max": 513.4,
+    "dropped_frames": 361,
+    "dropped_pct": 93,
+    "js_p50": 181.4,
+    "js_p95": 256.9,
+    "js_p99": 450.1,
+    "long_tasks": 27,
+    "long_task_ms": 6385,
+    "long_task_max": 495,
+    "heap_mb": 8.9,
+    "heap_delta_mb": 0.9,
+    "mem": {
+     "images": 59,
+     "imageBytes": 5889912,
+     "canvases": 82,
+     "canvasBytes": 48733332,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 38,
+     "canvasBytes": 41421204,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 770.9,
+    "loadavg1": 1.8,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1565.9,
+    "detail": {
+     "RunTask": {
+      "ms": 8467.8,
+      "n": 5309
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 8381.6,
+      "n": 5282
+     },
+     "GPUTask": {
+      "ms": 1468.9,
+      "n": 115
+     },
+     "PrePaint": {
+      "ms": 10.9,
+      "n": 40
+     },
+     "Layerize": {
+      "ms": 0.1,
+      "n": 40
+     },
+     "Commit": {
+      "ms": 1684.9,
+      "n": 40
+     },
+     "FunctionCall": {
+      "ms": 5027.8,
+      "n": 75
+     },
+     "Decode LazyPixelRef": {
+      "ms": 98.1,
+      "n": 33
+     },
+     "Decode Image": {
+      "ms": 97,
+      "n": 33
+     },
+     "MinorGC": {
+      "ms": 11.9,
+      "n": 4
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 7.5,
+      "n": 12
+     },
+     "MajorGC": {
+      "ms": 9.8,
+      "n": 1
+     }
+    },
+    "window_ms": 6996.2
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 155,
+    "calls": {
+     "mean": 2251,
+     "p95": 2659,
+     "max": 3217
+    },
+    "draw": {
+     "mean": 77.2,
+     "p95": 81,
+     "max": 106
+    },
+    "grad": {
+     "mean": 7.2,
+     "p95": 7,
+     "max": 28
+    },
+    "text": {
+     "mean": 41,
+     "p95": 41,
+     "max": 41
+    },
+    "measure": {
+     "mean": 36,
+     "p95": 36,
+     "max": 36
+    },
+    "getImage": {
+     "mean": 0.1,
+     "p95": 0,
+     "max": 6
+    },
+    "shadow": {
+     "mean": 0,
+     "p95": 0,
+     "max": 1
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 294.7,
+     "p95": 295,
+     "max": 455
+    },
+    "state": {
+     "mean": 365.6,
+     "p95": 372,
+     "max": 394
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 118.3,
+    "loadavg1": 2.2,
+    "errors": []
    }
   },
   "ward12": {
    "desc": "Ward map, 12 rooms, hero walking, monsters wandering",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 47,
+    "fps": 4.4,
+    "frame_p50": 232,
+    "frame_p95": 275.4,
+    "frame_p99": 282.6,
+    "frame_max": 282.6,
+    "dropped_frames": 585,
+    "dropped_pct": 92.7,
+    "js_p50": 188.8,
+    "js_p95": 219.7,
+    "js_p99": 230,
+    "long_tasks": 47,
+    "long_task_ms": 10575,
+    "long_task_max": 282,
+    "heap_mb": 9,
+    "heap_delta_mb": 0.4,
+    "mem": {
+     "images": 142,
+     "imageBytes": 18800504,
+     "canvases": 129,
+     "canvasBytes": 62274292,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 142,
+     "imageBytes": 18800504,
+     "canvases": 137,
+     "canvasBytes": 69934324,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 513.6,
+    "loadavg1": 1.9,
+    "ready_ms": 266.2,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 28,
+    "fps": 2.5,
+    "frame_p50": 391.4,
+    "frame_p95": 467,
+    "frame_p99": 474.7,
+    "frame_max": 474.7,
+    "dropped_frames": 624,
+    "dropped_pct": 95.9,
+    "js_p50": 335,
+    "js_p95": 399,
+    "js_p99": 418.9,
+    "long_tasks": 27,
+    "long_task_ms": 10717,
+    "long_task_max": 465,
+    "heap_mb": 8.7,
+    "heap_delta_mb": -0.9,
+    "mem": {
+     "images": 142,
+     "imageBytes": 18800504,
+     "canvases": 130,
+     "canvasBytes": 62364404,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 142,
+     "imageBytes": 18800504,
+     "canvases": 128,
+     "canvasBytes": 62233332,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 776.1,
+    "loadavg1": 1.6,
+    "ready_ms": 920.7,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1319.2,
+    "detail": {
+     "RunTask": {
+      "ms": 12749.1,
+      "n": 7629
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 12619.7,
+      "n": 7611
+     },
+     "GPUTask": {
+      "ms": 1315.1,
+      "n": 106
+     },
+     "PrePaint": {
+      "ms": 19.3,
+      "n": 51
+     },
+     "Layerize": {
+      "ms": 0.8,
+      "n": 50
+     },
+     "Commit": {
+      "ms": 3291.3,
+      "n": 50
+     },
+     "FunctionCall": {
+      "ms": 7691,
+      "n": 81
+     },
+     "MinorGC": {
+      "ms": 22.6,
+      "n": 9
+     },
+     "Decode LazyPixelRef": {
+      "ms": 4.5,
+      "n": 2
+     },
+     "Decode Image": {
+      "ms": 4.1,
+      "n": 2
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 21.7,
+      "n": 20
+     },
+     "MajorGC": {
+      "ms": 18.9,
+      "n": 2
+     },
+     "Paint": {
+      "ms": 0,
+      "n": 1
+     }
+    },
+    "window_ms": 11420.3
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 276,
+    "calls": {
+     "mean": 3306.4,
+     "p95": 3317,
+     "max": 3427
+    },
+    "draw": {
+     "mean": 182.3,
+     "p95": 184,
+     "max": 186
+    },
+    "grad": {
+     "mean": 19,
+     "p95": 19,
+     "max": 25
+    },
+    "text": {
+     "mean": 96,
+     "p95": 96,
+     "max": 96
+    },
+    "measure": {
+     "mean": 109,
+     "p95": 109,
+     "max": 133
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 2
+    },
+    "shadow": {
+     "mean": 2,
+     "p95": 2,
+     "max": 2
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 464.7,
+     "p95": 466,
+     "max": 484
+    },
+    "state": {
+     "mean": 856.6,
+     "p95": 858,
+     "max": 878
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 115.9,
+    "loadavg1": 1.6,
+    "ready_ms": 159.2,
+    "errors": []
    }
   },
   "combat3": {
    "desc": "combat, 3 enemies, one full turn then idle",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 91,
+    "fps": 6.3,
+    "frame_p50": 159.9,
+    "frame_p95": 239.9,
+    "frame_p99": 317.1,
+    "frame_max": 317.1,
+    "dropped_frames": 770,
+    "dropped_pct": 89.5,
+    "js_p50": 113.4,
+    "js_p95": 179.5,
+    "js_p99": 221.4,
+    "long_tasks": 91,
+    "long_task_ms": 13980,
+    "long_task_max": 263,
+    "heap_mb": 10.9,
+    "heap_delta_mb": 1.9,
+    "mem": {
+     "images": 55,
+     "imageBytes": 5627768,
+     "canvases": 65,
+     "canvasBytes": 52749804,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false
+      ],
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 55,
+     "imageBytes": 5627768,
+     "canvases": 50,
+     "canvasBytes": 45204812,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false
+      ],
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 519.3,
+    "loadavg1": 1.4,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 59,
+    "fps": 4.2,
+    "frame_p50": 236.6,
+    "frame_p95": 314.8,
+    "frame_p99": 405.6,
+    "frame_max": 405.6,
+    "dropped_frames": 776,
+    "dropped_pct": 93,
+    "js_p50": 182.6,
+    "js_p95": 255.4,
+    "js_p99": 297.3,
+    "long_tasks": 60,
+    "long_task_ms": 13783,
+    "long_task_max": 344,
+    "heap_mb": 9.9,
+    "heap_delta_mb": 2.3,
+    "mem": {
+     "images": 55,
+     "imageBytes": 5627768,
+     "canvases": 70,
+     "canvasBytes": 61862092,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false
+      ],
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 55,
+     "imageBytes": 5627768,
+     "canvases": 56,
+     "canvasBytes": 55339980,
+     "bigCanvas": [
+      [
+       1920,
+       1080,
+       false
+      ],
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       720,
+       680,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 759.8,
+    "loadavg1": 1.4,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1686,
+    "detail": {
+     "RunTask": {
+      "ms": 16491.4,
+      "n": 12003
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 16195.1,
+      "n": 11834
+     },
+     "PrePaint": {
+      "ms": 23.2,
+      "n": 158
+     },
+     "Layerize": {
+      "ms": 0.9,
+      "n": 102
+     },
+     "Commit": {
+      "ms": 5592.4,
+      "n": 102
+     },
+     "GPUTask": {
+      "ms": 1686,
+      "n": 134
+     },
+     "FunctionCall": {
+      "ms": 8421.3,
+      "n": 242
+     },
+     "MinorGC": {
+      "ms": 24.6,
+      "n": 12
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 54.2,
+      "n": 51
+     },
+     "MajorGC": {
+      "ms": 44.3,
+      "n": 5
+     },
+     "Paint": {
+      "ms": 0.1,
+      "n": 2
+     }
+    },
+    "window_ms": 14578.6
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 359,
+    "calls": {
+     "mean": 3392.4,
+     "p95": 3799,
+     "max": 4363
+    },
+    "draw": {
+     "mean": 29.1,
+     "p95": 54,
+     "max": 67
+    },
+    "grad": {
+     "mean": 54.4,
+     "p95": 62,
+     "max": 107
+    },
+    "text": {
+     "mean": 87.7,
+     "p95": 95,
+     "max": 101
+    },
+    "measure": {
+     "mean": 67.5,
+     "p95": 74,
+     "max": 93
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 1,
+     "p95": 4,
+     "max": 5
+    },
+    "filter": {
+     "mean": 0.1,
+     "p95": 0,
+     "max": 2
+    },
+    "path": {
+     "mean": 638.1,
+     "p95": 706,
+     "max": 786
+    },
+    "state": {
+     "mean": 641.2,
+     "p95": 682,
+     "max": 754
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 116.7,
+    "loadavg1": 1.3,
+    "errors": []
    }
   },
   "reward": {
    "desc": "reward screen with pointer sweeps",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 67,
+    "fps": 6.7,
+    "frame_p50": 154.8,
+    "frame_p95": 190.8,
+    "frame_p99": 269.5,
+    "frame_max": 269.5,
+    "dropped_frames": 524,
+    "dropped_pct": 88.8,
+    "js_p50": 116.1,
+    "js_p95": 148.1,
+    "js_p99": 222.5,
+    "long_tasks": 65,
+    "long_task_ms": 9562,
+    "long_task_max": 261,
+    "heap_mb": 7.3,
+    "heap_delta_mb": -0.7,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 36,
+     "canvasBytes": 35870436,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 36,
+     "canvasBytes": 35870436,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       true
+      ]
+     ]
+    },
+    "calib_ms": 503,
+    "loadavg1": 10.8,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 43,
+    "fps": 4.1,
+    "frame_p50": 240.9,
+    "frame_p95": 282.4,
+    "frame_p99": 299,
+    "frame_max": 299,
+    "dropped_frames": 567,
+    "dropped_pct": 93.1,
+    "js_p50": 190.2,
+    "js_p95": 228.2,
+    "js_p99": 252.8,
+    "long_tasks": 42,
+    "long_task_ms": 9983,
+    "long_task_max": 297,
+    "heap_mb": 9.1,
+    "heap_delta_mb": 0.8,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 51,
+     "canvasBytes": 53907300,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 51,
+     "canvasBytes": 53907300,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 748.9,
+    "loadavg1": 9,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1410.1,
+    "detail": {
+     "RunTask": {
+      "ms": 11836.2,
+      "n": 7865
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 11689.3,
+      "n": 7843
+     },
+     "GPUTask": {
+      "ms": 1410.1,
+      "n": 117
+     },
+     "PrePaint": {
+      "ms": 20.4,
+      "n": 124
+     },
+     "Layerize": {
+      "ms": 0.2,
+      "n": 69
+     },
+     "Commit": {
+      "ms": 4231.8,
+      "n": 69
+     },
+     "FunctionCall": {
+      "ms": 5668.4,
+      "n": 159
+     },
+     "MinorGC": {
+      "ms": 16.3,
+      "n": 7
+     },
+     "Paint": {
+      "ms": 0.7,
+      "n": 1
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 9.2,
+      "n": 11
+     },
+     "MajorGC": {
+      "ms": 7,
+      "n": 1
+     }
+    },
+    "window_ms": 10622.5
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 306,
+    "calls": {
+     "mean": 1151.1,
+     "p95": 1198,
+     "max": 1293
+    },
+    "draw": {
+     "mean": 20.2,
+     "p95": 21,
+     "max": 21
+    },
+    "grad": {
+     "mean": 13,
+     "p95": 13,
+     "max": 13
+    },
+    "text": {
+     "mean": 40.9,
+     "p95": 48,
+     "max": 48
+    },
+    "measure": {
+     "mean": 44.2,
+     "p95": 43,
+     "max": 76
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 1.5,
+     "p95": 3,
+     "max": 3
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 136.8,
+     "p95": 143,
+     "max": 143
+    },
+    "state": {
+     "mean": 295,
+     "p95": 314,
+     "max": 378
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 111.9,
+    "loadavg1": 5.8,
+    "errors": []
    }
   },
   "graft": {
    "desc": "graft screen with pointer sweeps",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 43,
+    "fps": 4.5,
+    "frame_p50": 219.3,
+    "frame_p95": 240.7,
+    "frame_p99": 248.6,
+    "frame_max": 248.6,
+    "dropped_frames": 516,
+    "dropped_pct": 92.5,
+    "js_p50": 176,
+    "js_p95": 192.9,
+    "js_p99": 200.3,
+    "long_tasks": 43,
+    "long_task_ms": 9356,
+    "long_task_max": 242,
+    "heap_mb": 8,
+    "heap_delta_mb": -0.8,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 40,
+     "canvasBytes": 37415256,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 44,
+     "canvasBytes": 37483864,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       true
+      ]
+     ]
+    },
+    "calib_ms": 528.6,
+    "loadavg1": 4.8,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 43,
+    "fps": 3.1,
+    "frame_p50": 322,
+    "frame_p95": 384.6,
+    "frame_p99": 453.2,
+    "frame_max": 453.2,
+    "dropped_frames": 774,
+    "dropped_pct": 94.9,
+    "js_p50": 266.4,
+    "js_p95": 338.4,
+    "js_p99": 395.1,
+    "long_tasks": 42,
+    "long_task_ms": 13499,
+    "long_task_max": 441,
+    "heap_mb": 7.7,
+    "heap_delta_mb": -1.3,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 54,
+     "canvasBytes": 55394520,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 58,
+     "canvasBytes": 55463128,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 736.6,
+    "loadavg1": 3.8,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1448.7,
+    "detail": {
+     "RunTask": {
+      "ms": 11418.2,
+      "n": 6913
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 11311.9,
+      "n": 6895
+     },
+     "GPUTask": {
+      "ms": 1448.7,
+      "n": 120
+     },
+     "PrePaint": {
+      "ms": 21,
+      "n": 82
+     },
+     "Layerize": {
+      "ms": 0.2,
+      "n": 45
+     },
+     "Commit": {
+      "ms": 2188.2,
+      "n": 45
+     },
+     "FunctionCall": {
+      "ms": 7376.1,
+      "n": 103
+     },
+     "MinorGC": {
+      "ms": 10.1,
+      "n": 5
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 8.7,
+      "n": 10
+     },
+     "MajorGC": {
+      "ms": 8,
+      "n": 1
+     },
+     "Paint": {
+      "ms": 0,
+      "n": 1
+     }
+    },
+    "window_ms": 9993.6
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 205,
+    "calls": {
+     "mean": 1543.1,
+     "p95": 1556,
+     "max": 1585
+    },
+    "draw": {
+     "mean": 21.2,
+     "p95": 22,
+     "max": 22
+    },
+    "grad": {
+     "mean": 18,
+     "p95": 18,
+     "max": 18
+    },
+    "text": {
+     "mean": 80.6,
+     "p95": 82,
+     "max": 82
+    },
+    "measure": {
+     "mean": 51.4,
+     "p95": 52,
+     "max": 62
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 3.8,
+     "p95": 4,
+     "max": 4
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 167.2,
+     "p95": 169,
+     "max": 169
+    },
+    "state": {
+     "mean": 381.9,
+     "p95": 386,
+     "max": 406
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 120.1,
+    "loadavg1": 3.1,
+    "errors": []
    }
   },
   "shop": {
    "desc": "shop screen with pointer sweeps",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 43,
+    "fps": 4.4,
+    "frame_p50": 224.6,
+    "frame_p95": 262.2,
+    "frame_p99": 272.4,
+    "frame_max": 272.4,
+    "dropped_frames": 526,
+    "dropped_pct": 92.6,
+    "js_p50": 173,
+    "js_p95": 205.2,
+    "js_p99": 223.5,
+    "long_tasks": 42,
+    "long_task_ms": 9341,
+    "long_task_max": 267,
+    "heap_mb": 8,
+    "heap_delta_mb": -0.5,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 48,
+     "canvasBytes": 38905624,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 53,
+     "canvasBytes": 38974376,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       822,
+       462,
+       true
+      ]
+     ]
+    },
+    "calib_ms": 522.7,
+    "loadavg1": 0.9,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 43,
+    "fps": 3,
+    "frame_p50": 334.1,
+    "frame_p95": 383.8,
+    "frame_p99": 420.7,
+    "frame_max": 420.7,
+    "dropped_frames": 792,
+    "dropped_pct": 95,
+    "js_p50": 273.3,
+    "js_p95": 325,
+    "js_p99": 361.5,
+    "long_tasks": 43,
+    "long_task_ms": 14008,
+    "long_task_max": 420,
+    "heap_mb": 7.7,
+    "heap_delta_mb": -2.2,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 62,
+     "canvasBytes": 56884888,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 67,
+     "canvasBytes": 56953640,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 765.2,
+    "loadavg1": 1,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "gpu_proxy_ms": 1629.3,
+    "detail": {
+     "RunTask": {
+      "ms": 11755.9,
+      "n": 7196
+     },
+     "ThreadControllerImpl::RunTask": {
+      "ms": 11642.4,
+      "n": 7180
+     },
+     "GPUTask": {
+      "ms": 1629.3,
+      "n": 126
+     },
+     "PrePaint": {
+      "ms": 17.2,
+      "n": 86
+     },
+     "Layerize": {
+      "ms": 0.6,
+      "n": 45
+     },
+     "Commit": {
+      "ms": 2259.8,
+      "n": 45
+     },
+     "FunctionCall": {
+      "ms": 7405.9,
+      "n": 102
+     },
+     "MinorGC": {
+      "ms": 11.8,
+      "n": 5
+     },
+     "V8.GC_MC_BACKGROUND_MARKING": {
+      "ms": 28.1,
+      "n": 23
+     },
+     "MajorGC": {
+      "ms": 27.2,
+      "n": 3
+     },
+     "Paint": {
+      "ms": 0.9,
+      "n": 1
+     }
+    },
+    "window_ms": 10519.1
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 205,
+    "calls": {
+     "mean": 4827.6,
+     "p95": 4859,
+     "max": 4865
+    },
+    "draw": {
+     "mean": 48.2,
+     "p95": 49,
+     "max": 49
+    },
+    "grad": {
+     "mean": 42.4,
+     "p95": 43,
+     "max": 43
+    },
+    "text": {
+     "mean": 82,
+     "p95": 82,
+     "max": 82
+    },
+    "measure": {
+     "mean": 279,
+     "p95": 279,
+     "max": 279
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 2.2,
+     "p95": 3,
+     "max": 3
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 440.2,
+     "p95": 443,
+     "max": 443
+    },
+    "state": {
+     "mean": 1000,
+     "p95": 1000,
+     "max": 1000
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 119.1,
+    "loadavg1": 1.3,
+    "errors": []
    }
   },
   "deck40": {
    "desc": "deck view with 40 cards, scrolling",
    "cpu4": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 18,
+    "fps": 0.4,
+    "frame_p50": 2242.2,
+    "frame_p95": 3089,
+    "frame_p99": 3089,
+    "frame_max": 3089,
+    "dropped_frames": 2289,
+    "dropped_pct": 99.3,
+    "js_p50": 1173.5,
+    "js_p95": 1983.8,
+    "js_p99": 1983.8,
+    "long_tasks": 18,
+    "long_task_ms": 40658,
+    "long_task_max": 3087,
+    "heap_mb": 8.1,
+    "heap_delta_mb": 0.5,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 84,
+     "canvasBytes": 81183940,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1618,
+       909,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 79,
+     "canvasBytes": 76753060,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1618,
+       909,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 1326.6,
+    "loadavg1": 15.7,
+    "errors": []
    },
    "cpu6": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "ticks": 16,
+    "fps": 0.3,
+    "frame_p50": 2932,
+    "frame_p95": 4229,
+    "frame_p99": 4229,
+    "frame_max": 4229,
+    "dropped_frames": 2732,
+    "dropped_pct": 99.5,
+    "js_p50": 1395.5,
+    "js_p95": 2609.2,
+    "js_p99": 2609.2,
+    "long_tasks": 15,
+    "long_task_ms": 45630,
+    "long_task_max": 4203,
+    "heap_mb": 8.4,
+    "heap_delta_mb": 0,
+    "mem": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 84,
+     "canvasBytes": 81183940,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1618,
+       909,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "mem_before": {
+     "images": 51,
+     "imageBytes": 5365624,
+     "canvases": 79,
+     "canvasBytes": 76753060,
+     "bigCanvas": [
+      [
+       1643,
+       924,
+       false
+      ],
+      [
+       1618,
+       909,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ],
+      [
+       1280,
+       720,
+       false
+      ]
+     ]
+    },
+    "calib_ms": 2414,
+    "loadavg1": 16.1,
+    "errors": []
    },
    "trace": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "error": "Maximum call stack size exceeded"
    },
    "ops": {
-    "error": "browser.newContext: Target page, context or browser has been closed"
+    "frames": 18,
+    "calls": {
+     "mean": 9026.7,
+     "p95": 13074,
+     "max": 13074
+    },
+    "draw": {
+     "mean": 55.1,
+     "p95": 59,
+     "max": 59
+    },
+    "grad": {
+     "mean": 95.6,
+     "p95": 263,
+     "max": 263
+    },
+    "text": {
+     "mean": 186.3,
+     "p95": 220,
+     "max": 220
+    },
+    "measure": {
+     "mean": 139.8,
+     "p95": 191,
+     "max": 191
+    },
+    "getImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "shadow": {
+     "mean": 1,
+     "p95": 1,
+     "max": 1
+    },
+    "filter": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "path": {
+     "mean": 1549.6,
+     "p95": 2077,
+     "max": 2077
+    },
+    "state": {
+     "mean": 1509.7,
+     "p95": 1674,
+     "max": 1674
+    },
+    "putImage": {
+     "mean": 0,
+     "p95": 0,
+     "max": 0
+    },
+    "calib_ms": 564.3,
+    "loadavg1": 17.4,
+    "errors": []
    }
   }
  },
  "load": {
   "cpu4": {
+   "warm_reload": {
+    "t_title_interactive_ms": 4369,
+    "t_title_scene_painted_ms": 8174,
+    "bytes": 65701,
+    "requests": 176
+   },
    "cpu": 4,
    "network": "slow4g(1.6Mbps,150ms)",
-   "t_first_frame_ms": 6795,
-   "t_title_interactive_ms": 6810,
-   "t_title_scene_painted_ms": 20226,
-   "t_ward_ready_after_enter_ms": 120,
-   "bytes_at_interactive": 774416,
-   "bytes_at_scene": 1246775,
-   "bytes_total": 1275281,
-   "requests": 174,
-   "image_requests": 57,
-   "image_bytes": 500865,
+   "t_first_frame_ms": 6400,
+   "t_title_interactive_ms": 6519,
+   "t_title_scene_painted_ms": 11912,
+   "t_ward_ready_after_enter_ms": 2460,
+   "bytes_at_interactive": 777167,
+   "bytes_at_scene": 1250714,
+   "bytes_total": 1894436,
+   "requests": 208,
+   "image_requests": 150,
+   "image_bytes": 1155683,
    "by_type": {
-    "text/html": 1051,
-    "text/javascript": 767892,
-    "application/json": 5473,
-    "image/webp": 500865
+    "text/html": 1301,
+    "text/javascript": 797192,
+    "application/json": 5961,
+    "image/webp": 1155683
    },
+   "calib_ms": 524.8,
+   "loadavg1": 0.5,
    "mem": {
     "images": 57,
     "imageBytes": 5758840,
-    "canvases": 126,
-    "canvasBytes": 66238820,
+    "canvases": 87,
+    "canvasBytes": 49283092,
     "bigCanvas": [
      [
       1643,
@@ -187,13 +2805,13 @@
       false
      ],
      [
-      1280,
       720,
+      680,
       false
      ],
      [
-      1280,
       720,
+      680,
       false
      ]
     ]
@@ -201,29 +2819,37 @@
    "errors": []
   },
   "cpu6": {
+   "warm_reload": {
+    "t_title_interactive_ms": 4810,
+    "t_title_scene_painted_ms": 8032,
+    "bytes": 39443,
+    "requests": 174
+   },
    "cpu": 6,
    "network": "slow4g(1.6Mbps,150ms)",
-   "t_first_frame_ms": 6536,
-   "t_title_interactive_ms": 6570,
-   "t_title_scene_painted_ms": 15746,
-   "t_ward_ready_after_enter_ms": 153,
-   "bytes_at_interactive": 774416,
-   "bytes_at_scene": 1246775,
-   "bytes_total": 1275281,
-   "requests": 174,
-   "image_requests": 57,
-   "image_bytes": 500865,
+   "t_first_frame_ms": 6733,
+   "t_title_interactive_ms": 6895,
+   "t_title_scene_painted_ms": 12070,
+   "t_ward_ready_after_enter_ms": 3505,
+   "bytes_at_interactive": 777167,
+   "bytes_at_scene": 1250714,
+   "bytes_total": 2033935,
+   "requests": 225,
+   "image_requests": 165,
+   "image_bytes": 1268924,
    "by_type": {
-    "text/html": 1051,
-    "text/javascript": 767892,
-    "application/json": 5473,
-    "image/webp": 500865
+    "text/html": 1301,
+    "text/javascript": 797192,
+    "application/json": 5961,
+    "image/webp": 1268924
    },
+   "calib_ms": 779.8,
+   "loadavg1": 0.9,
    "mem": {
     "images": 57,
     "imageBytes": 5758840,
-    "canvases": 126,
-    "canvasBytes": 66238820,
+    "canvases": 87,
+    "canvasBytes": 49283092,
     "bigCanvas": [
      [
       1643,
@@ -256,13 +2882,13 @@
       false
      ],
      [
-      1280,
       720,
+      680,
       false
      ],
      [
-      1280,
       720,
+      680,
       false
      ]
     ]

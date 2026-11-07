@@ -189,3 +189,8 @@ The owner authorised AI-generated raster art for the Ward (the hospital-building
 - Reduced motion (meta.settings.reducedMotion or reduceMotion, or FX_OPTS.reduced) removes wander, bob, squash, candle flicker, motes and the walk frame swap.
 - Each room registers `ward-room-<id>` on the `world` layer (a box covering the diorama), so the layout sweeps ignore it and tooltips anchor to it.
 
+
+## Performance and quality tiers (ui/quality.js, design/PERF.md)
+- Settings > Graphics (`meta.settings.graphics`: `auto` default | `high` | `low`) drives `app.perf.q` (created in core.js): tier `full | lite | minimal`, chosen in Auto from the measured interval between game ticks (hysteresis, one tier at a time). Read the tier, never time JS: `app.perf.q.tier !== 'full'` means no WebGL post, no motes, smoothing low, @1x sprites, lower DPR cap (`app.perf.dprCap` is read by `app.resize`). `app.perf.gov` holds the title at 30 fps when idle; `?perf` in the URL shows a tier readout.
+- Decoded images are budgeted and evicted LRU in `assets.js` (`maintain`); the kit loads per recipe (`kitRecipeSettled`), not as a whole. Do not hold an `{img}` result across frames, ask again.
+- Measure with `node tools/graftwork_profile.mjs` (see its header; results in design/PERF*.json). The sandbox has no GPU, compare ratios only. `tests/graftwork_quality.test.mjs` guards the policy.
