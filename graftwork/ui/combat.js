@@ -17,7 +17,7 @@ import { maybeTip } from './tutorial.js';
 import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
-import { queueTip, flushTips, cardTipStack, glossTip, specGloss } from './tooltips.js';
+import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import { drawCardZoom } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 
@@ -1498,7 +1498,7 @@ function draw(app) {
   drawSprites(app);
   drawCoins(app);
   { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
-  if (c.seam && app.inRect(L.SEAM.x, L.SEAM.y, L.SEAM.w, L.SEAM.h)) { const n = c.seam.len || 0; queueTip(app, 'seamrail' + n, [[{ title: `The Line: ${n} knot${n === 1 ? '' : 's'}`, text: 'Cards that share a school extend the Line. A Cut pays its Stitches and starts a new Line. Slack cards change nothing. A Tied Line carries over to the next turn.', color: '#e8dcc4', glyph: 'diamond' }]], { x: L.SEAM.x, y: L.SEAM.y, w: L.SEAM.w, h: L.SEAM.h }); } // the Thread rail names its own words: Line, Knot, Stitch, Cut, Slack, Tied
+  if (c.seam && app.inRect(L.SEAM.x, L.SEAM.y, L.SEAM.w, L.SEAM.h)) { const n = c.seam.len || 0; queueTip(app, 'seamrail' + n, [[{ title: `The Line: ${n} knot${n === 1 ? '' : 's'}`, text: 'Same-school cards extend it. Another school cuts it and pays Stitches. Slack cards change nothing. A Tied Line carries over.', color: '#e8dcc4', glyph: 'diamond' }]], { x: L.SEAM.x, y: L.SEAM.y, w: L.SEAM.w, h: L.SEAM.h }, { gloss: false }); } // the Thread rail names its own words: Line, Knot, Stitch, Cut, Slack, Tied
   drawHand(app);
   drawHudBottom(app);
   fx.draw(ctx);
@@ -1564,6 +1564,7 @@ function drawHeroAndHud(app) {
   const ctx = app.ctx, P = S.P;
   // shadow
   groundShadow(ctx, HERO_X, FOOT_Y - 2, 90, 1.25);
+  app.reg('hero:body', HERO_X - 85, FOOT_Y - 215, 170, 215, { layer: 'world' });
   const lunge = P.attack > 0 ? Math.sin(Math.min(1, P.attack / 2) * Math.PI) : 0;
   const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
   const dying = S.ending && !S.ending.win ? P.dying : 0;
@@ -1739,7 +1740,7 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   const ry0 = Math.max(pos.y - bh / 2 - 5, L.ORB.y + L.ORB.size / 2 + 1), R = { x: pos.x - bw / 2 - 5, y: ry0, w: bw + 24, h: H - ry0 };
   app.reg('pile_' + key, R.x, R.y, R.w, R.h, {});
   if (app.inRect(R.x, R.y, R.w, R.h)) {
-    app.cursor = 'pointer'; queueTip(app, 'pile' + key + count, [[{ title: label, text: `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`, color: COL.vellum, glyph: 'square' }]], R);
+    app.cursor = 'pointer'; queueTip(app, 'pile' + key + count, [[{ title: label, text: `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`, color: COL.vellum, glyph: 'square' }]], R, { gloss: false });
     if (onClick && app.clicked(R.x, R.y, R.w, R.h) && !S.modal && !S.ending) onClick();
   }
 }
@@ -1756,7 +1757,7 @@ function drawHudBottom(app) {
   const O = L.ORB, pulse = 1 + S.orbPulse * 0.22;
   ctx.save(); ctx.translate(O.x, O.y); ctx.scale(pulse, pulse); drawEnergyOrb(ctx, 0, 0, O.size, S.energy, S.maxEnergy); ctx.restore();
   app.reg('orb', O.x - O.size / 2, O.y - O.size / 2, O.size, O.size, {});
-  if (app.inRect(O.x - O.size / 2, O.y - O.size / 2, O.size, O.size)) queueTip(app, 'orb' + S.energy, [[{ title: 'Energy', text: `${S.energy} / ${S.maxEnergy}. Refills each turn.`, color: COL.energy, glyph: 'diamond' }]], { x: O.x - O.size / 2, y: O.y - O.size / 2, w: O.size, h: O.size });
+  if (app.inRect(O.x - O.size / 2, O.y - O.size / 2, O.size, O.size)) queueTip(app, 'orb' + S.energy, [[{ title: 'Energy', text: `${S.energy} / ${S.maxEnergy}. Refills each turn.`, color: COL.energy, glyph: 'diamond' }]], { x: O.x - O.size / 2, y: O.y - O.size / 2, w: O.size, h: O.size }, { gloss: false });
   // strain readout
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
@@ -1778,7 +1779,7 @@ function drawHudBottom(app) {
       for (const w of tithed.slice(0, 8)) lines.push(' - ' + (CARDS[w.inst.id] ? CARDS[w.inst.id].name : w.inst.id));
       if (st.backfire > 0) lines.push(`Backfire ${st.backfire}: grafted cards in your opening hand jam each turn.`);
     }
-    queueTip(app, 'strain' + st.strain + ':' + tithed.length, [[{ title: 'Strain', text: lines.join('\n'), color: over ? COL.bad : COL.good, glyph: 'cross' }], [{ title: 'Tithe', text: 'A Bare card taken by Strain. It fights at 75% numbers this combat.', color: '#b3263a', glyph: 'cross' }]], B);
+    queueTip(app, 'strain' + st.strain + ':' + tithed.length, [[{ title: 'Strain', text: lines.join('\n'), color: over ? COL.bad : COL.good, glyph: 'cross' }], [{ title: 'Tithe', text: 'A Bare card taken by Strain. It fights at 75% numbers this combat.', color: '#b3263a', glyph: 'cross' }]], B, { gloss: false });
   }
 
   // end turn
@@ -1798,23 +1799,23 @@ function drawZoomFace(app) {
   drawCardZoom(app, dcSpec(dc), { cost, tithed: dc.w.tithed, jam: dc.jam, mark: dc.w.reknit ? 'reknit' : undefined, hint: U().zoom ? 'Tap to close' : 'Release to close' });
 }
 function drawCardInfo(app) {
+  // enemy turn, a card in flight, a drag, the end-of-combat banner: no tip is shown (the lifecycle in ui/tooltips.js drops it) unless the player holds one
+  app.tipBlock = !!(S.ending || S.drag || busy() || S.banner);
   if (!S.modal && !zoomUid() && !S.ending && !S.drag && !S.c.pending) {
     const dc = S.hand.find((d) => d.uid === S.hov);
     if (dc && dc.alpha >= 0.8) {
       const spec = dcSpec(dc), l = liveEds();
-      const stack = cardTipStack(spec, S.c, { tithed: !!dc.w.tithed, target: l.length === 1 ? l[0].e : null });
-      const extra = cardSections(spec, dc.w, dc).filter((x) => /weight|^Price|^Jammed/.test(x.title)).map((x) => ({ title: x.title, text: x.text, color: x.color, glyph: 'hex' }));
-      if (extra.length) { if (stack.length) stack[0] = extra.concat(stack[0]); else stack.push(extra); } // the graft Boon / Price lines come first, then every definition (none is dropped)
-      if (stack.length) {
-        const r = dcRect(dc), right = r.x + r.w + 8 + 320 <= L.END_BTN.x - 6;
-        // keyword panels live in the hand band (below the Thread rail, beside the lifted card), never over the rail, End Turn or the enemies
-        const band = { x: right ? r.x + r.w + 8 : r.x - 8, y: L.SEAM.y + L.SEAM.h + 8, bottom: H - 6, dir: right ? 1 : -1 };
-        queueTip(app, 'card:' + dc.uid + ':' + (dc.w.tithed ? 1 : 0), stack, { x: r.x, y: r.y, w: r.w, h: r.h, band });
+      let groups = cardSections(spec, dc.w, dc).filter((x) => /weight|^Price|^Jammed/.test(x.title)).map((x) => ({ title: x.title, text: x.text, color: x.color })); // each graft's Boon and Price, a Jam, the blood Price
+      if (groups.some((x) => /weight/.test(x.title))) groups = groups.filter((x) => !/^Price: blood/.test(x.title)); // a graft already says it in its own Price line
+      const model = cardTipStack(spec, S.c, { tithed: !!dc.w.tithed, target: l.length === 1 ? l[0].e : null, groups });
+      if (model) {
+        const r = dcRect(dc);
+        // the panel lives in the empty wall above the Thread rail, straight over the lifted card: never over the hand, the rail, End Turn or the enemy plates
+        queueTip(app, 'card:' + dc.uid + ':' + (dc.w.tithed ? 1 : 0), model, { x: r.x, y: r.y, w: r.w, h: r.h, region: { x0: 16, y0: L.ENEMY_LANE_TOP, x1: L.END_BTN.x + L.END_BTN.w, y1: r.y - 6 } });
       }
     }
   }
   drawPopovers(app);
-  flushTips(app);
 }
 
 // first-run tips: one at a time, only while the player can act, never over a modal

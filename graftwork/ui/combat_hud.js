@@ -82,7 +82,7 @@ function drawOneStatus(app, ent, id, x, y, sz, band, label) {
   const nfs = Math.max(14, Math.min(20, Math.round(sz * 0.58)));
   app.text(String(n), x + sz / 2 + 2, y + sz / 2 - nfs - 1, { size: nfs, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 4, color: '#fff', fixed: true });
   if (label) { const lw = Math.max(label, 30); const nm = fitText(app, stName(id), lw, 14, 14, { ui: true }); app.text(nm.str, x, y + sz / 2 + 2, { size: nm.size, exact: true, ui: true, align: 'center', color: stCol(id), stroke: '#0e0e0e', strokeW: 3 }); }
-  if (app.inRect(x - sz / 2, y - sz / 2, sz, sz + (label ? 17 : 0))) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz, band });
+  if (app.inRect(x - sz / 2, y - sz / 2, sz, sz + (label ? 17 : 0))) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz, band }, { gloss: false });
 }
 // last icon size per status row key (read by the layout tests)
 export const statusSizes = {};
@@ -165,7 +165,7 @@ export function drawPopovers(app) {
       const iy = y + pad + i * rowH;
       drawStatus(ctx, it.id, x + pad + 11, iy + 12, 22, stGood(it.id));
       app.text(`${stName(it.id)} ${it.n}`, x + pad + 30, iy + 3, { size: 16, ui: true, bold: true, color: stCol(it.id), fixed: true });
-      if (app.inRect(x + pad, iy, w - pad * 2, rowH)) queueTip(app, 'stl:' + it.id, [[statusSection(it.id, it.n)]], { x, y: iy, w, h: rowH });
+      if (app.inRect(x + pad, iy, w - pad * 2, rowH)) queueTip(app, 'stl:' + it.id, [[statusSection(it.id, it.n)]], { x, y: iy, w, h: rowH }, { gloss: false });
     });
   }
   const r = pc.rect;
@@ -276,6 +276,7 @@ export function drawEnemyPlate(app, ed, o) {
   drawBar(app, bx, by, bw, 16, ed.shown, ed.trail, ed.maxHp, '#a8412f', `${Math.max(0, Math.ceil(ed.hp))}/${ed.maxHp}`);
   if (ed.block > 0) { const k = 1 + ed.bpulse * 0.35; ctx.save(); ctx.translate(left + 11, by + 9); ctx.scale(k, k); drawShield(ctx, 0, 0, 30, ed.block); ctx.restore(); }
   app.reg(grp + ':hp', left, by - 3, sw, 22, { group: grp });
+  app.reg(grp + ':body', ed.x - ed.w / 2, foot - ed.h, ed.w, ed.h, { layer: 'world' }); // the actor itself: tips keep off it when they can
   ctx.restore();
   // status rows
   ctx.save(); ctx.globalAlpha = o.alpha;
