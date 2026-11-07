@@ -32,10 +32,11 @@ const QUICK = !!opt('quick', false);
 const THROTTLES = String(opt('throttle', '4,6')).split(',').map(Number).filter(Boolean);
 const OUT = opt('out', 'graftwork/design/PERF_RESULT.json');
 const LABEL = opt('label', 'run');
+const GRAPHICS = String(opt('graphics', 'default')); // auto | high | low | default (leave the game's own default)
 const VIEW = { width: 1000, height: 462 };
 const DPR = Number(opt('dpr', 2));
 const SLOW4G = { offline: false, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8, latency: 150 };
-const S = (sec) => (QUICK ? Math.max(2, sec / 3) : sec) * 1000;
+const S = (ms) => (QUICK ? Math.max(1500, ms / 3) : ms); // scenario durations in ms, a third of them with --quick
 
 // ---------------------------------------------------------------- static server (gzip for text like the CDN)
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
@@ -70,7 +71,8 @@ const INIT = `(() => {
   const P = window.__pf = { ticks: [], tickMs: [], long: [], ops: null, opsOn: false, canv: [], t0: performance.now(), firstTick: 0, titleTick: 0, kitTick: 0 };
   try { new PerformanceObserver((l) => { for (const e of l.getEntries()) P.long.push([e.startTime, e.duration]); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
   // canvases: weak registry so backing-store memory can be summed later
-  const reg = (c) => { try { P.canv.push(new WeakRef(c)); } catch (e) {} return c; };
+  const reg = (c) => { try { P.canv.push(new WeakRef(c)); P.who.set(c, (new Error().stack || '').split('\\n').slice(2, 5).map((l) => l.replace(/^.*graftwork\\//, '').replace(/\\)$/, '')).join(' < ')); } catch (e) {} return c; };
+  P.who = new WeakMap();
   const ce = document.createElement.bind(document);
   document.createElement = function (n, o) { const el = ce(n, o); if (String(n).toLowerCase() === 'canvas') reg(el); return el; };
   if (window.OffscreenCanvas) { const OC = window.OffscreenCanvas; window.OffscreenCanvas = class extends OC { constructor(w, h) { super(w, h); reg(this); } }; }
@@ -114,7 +116,7 @@ const PAGE = {
   mark: () => { const P = window.__pf; P.m = { i: P.ticks.length, long: P.long.length, t: performance.now(), heap: performance.memory ? performance.memory.usedJSHeapSize : 0 }; },
   collect: () => {
     const P = window.__pf, m = P.m, t = P.ticks.slice(m.i), ms = P.tickMs.slice(m.i), now = performance.now();
-    return { t, ms, long: P.long.slice(m.long).filter((l) => l[0] >= m.t), dur: now - m.t, heap0: m.heap, heap1: performance.memory ? performance.memory.usedJSHeapSize : 0 };
+    const a = window.__gw.app; return { tier: a.perf ? a.perf.q.tier : null, drops: a.perf ? a.perf.q.drops : null, rises: a.perf ? a.perf.q.rises : null, dpr: a.dpr, backing: [a.canvas.width, a.canvas.height], ticksPerSec: null, t, ms, long: P.long.slice(m.long).filter((l) => l[0] >= m.t), dur: now - m.t, heap0: m.heap, heap1: performance.memory ? performance.memory.usedJSHeapSize : 0 };
   },
   mem: async () => {
     const P = window.__pf, out = { images: 0, imageBytes: 0, canvases: 0, canvasBytes: 0, bigCanvas: [] };
@@ -123,15 +125,26 @@ const PAGE = {
       for (const [k, e] of assets.imgs) if (e.ok && e.img) { const w = e.img.naturalWidth || e.img.width || 0, h = e.img.naturalHeight || e.img.height || 0; out.images++; out.imageBytes += w * h * 4; }
     } catch (e) { out.err = String(e); }
     const seen = new Set();
-    for (const r of P.canv) { const c = r.deref(); if (!c || seen.has(c)) continue; seen.add(c); const b = c.width * c.height * 4; out.canvases++; out.canvasBytes += b; if (b > 1.5e6) out.bigCanvas.push([c.width, c.height, !!c.isConnected]); }
+    for (const r of P.canv) { const c = r.deref(); if (!c || seen.has(c)) continue; seen.add(c); const b = c.width * c.height * 4; out.canvases++; out.canvasBytes += b; if (b > 1.5e6) out.bigCanvas.push([c.width, c.height, !!c.isConnected, P.who.get(c) || '']); }
     out.bigCanvas.sort((a, b) => b[0] * b[1] - a[0] * a[1]); out.bigCanvas = out.bigCanvas.slice(0, 8);
     return out;
   },
 };
 
 // ---------------------------------------------------------------- scenario drivers (run in node, talk to the page)
+const SCENE_READY = () => !!window.__scene && ['kit', 'keyart', 'fallback'].includes(window.__scene.mode);
+const SCENE_PAINTED = () => !!window.__scene && ['kit', 'keyart'].includes(window.__scene.mode);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-async function gwWait(page, expr, timeout = 60000) { if (opt('verbose', false)) console.log('    wait', expr.slice(0, 70)); try { await page.waitForFunction(expr, null, { timeout, polling: 250 }); } catch (e) { const st = await page.evaluate(() => ({ cur: window.__gw && window.__gw.app.current, frame: window.__gw && window.__gw.app.frame, mode: window.__scene && window.__scene.mode })).catch(() => null); console.log('    wait failed:', expr.slice(0, 60), JSON.stringify(st)); throw e; } }
+async function gwWait(page, expr, timeout = 60000) { // own poll loop: page.waitForFunction hung on string expressions under load
+  if (opt('verbose', false)) console.log('    wait', String(expr).slice(0, 70));
+  const end = Date.now() + timeout;
+  for (;;) {
+    let ok = false; try { ok = await (typeof expr === 'function' ? page.evaluate(expr) : page.evaluate(`!!(${expr})`)); } catch (e) { /* page busy or navigating */ }
+    if (ok) return;
+    if (Date.now() > end) { const st = await page.evaluate(() => ({ cur: window.__gw && window.__gw.app.current, frame: window.__gw && window.__gw.app.frame })).catch(() => null); throw new Error('wait failed: ' + String(expr).slice(0, 60) + ' ' + JSON.stringify(st)); }
+    await wait(250);
+  }
+}
 
 async function logical(page, x, y) { return page.evaluate(([x, y]) => { const a = window.__gw.app; return { x: a.offX + x * a.scale, y: a.offY + y * a.scale }; }, [x, y]); }
 async function tap(page, x, y) { const p = await logical(page, x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(); await wait(40); await page.mouse.up(); }
@@ -140,7 +153,7 @@ async function sweep(page, n = 6) { for (let i = 0; i < n; i++) { const p = awai
 const SC = {};
 // 1. title idle: the painted scene alone, 10 s, no input after the intro was used up
 SC.title_idle = { desc: 'title scene idle 10 s', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; }); if (opt('verbose', false)) for (let i = 0; i < 6; i++) { console.log('    state', JSON.stringify(await page.evaluate(() => ({ f: window.__gw.app.frame, m: window.__scene.mode })))); await wait(2000); }
- await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'||window.__scene.mode==='fallback'", 40000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
+ await gwWait(page, SCENE_READY, 40000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
 // 2. title intro: the needle sews the wordmark (first title of a page load)
 SC.title_intro = { desc: 'title intro (3.6 s needle) + 3 s', fresh: true, async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const m = await import('/graftwork/ui/title.js'); m.resetTitleIntro(); window.__gw.app.go('title', { intro: true }); }); }, async run(page) { await wait(S(6600)); } };
 
@@ -186,16 +199,16 @@ const COMBAT_STEP = async () => {
 SC.combat3 = { desc: 'combat, 3 enemies, one full turn then idle', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(COMBAT_SETUP); await gwWait(page, "window.__gw.app.current==='combat'"); await wait(S(3500)); },
   async run(page) { const end = Date.now() + S(14000); let endedTurn = -1; while (Date.now() < end) { const st = await page.evaluate(COMBAT_STEP); if (st.done) break; if (st.click) { for (const c of st.click) { await page.mouse.move(c.x, c.y, { steps: 3 }); await page.mouse.down(); await wait(30); await page.mouse.up(); await wait(150); } if (st.ended) endedTurn = st.turn; } else await wait(120); } } };
 
-const SCREEN_RUN = (kind) => async () => {
+const SCREEN_RUN = async (kind) => {
   const RUN = await import('/graftwork/engine/run.js'), { app, flow } = window.__gw;
   const run = RUN.newRun({ hero: 'marrow', seed: 'prof3-' + kind });
   app.shared.run = run;
   if (kind === 'reward') { run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'elite', enemies: ['bedpan_slime'] }; RUN.resolveFight(run, { win: true, shattered: [], damageTaken: 0, turns: 3 }); }
   else if (kind === 'graft') RUN.startGraftPick(run);
-  else if (kind === 'shop') { run.gold = 400; run.phase = 'shop'; run.pending = { kind: 'shop', shop: RUN.makeShop(run) }; }
+  else if (kind === 'shop') { run.gold = 400; run.phase = 'shop'; run.pending = RUN.makeShop(run); }
   flow.route();
 };
-for (const k of ['reward', 'graft', 'shop']) SC[k] = { desc: k + ' screen with pointer sweeps', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(SCREEN_RUN(k)); await wait(S(2500)); }, async run(page) { const end = Date.now() + S(8000); while (Date.now() < end) await sweep(page, 3); } };
+for (const k of ['reward', 'graft', 'shop']) SC[k] = { desc: k + ' screen with pointer sweeps', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(SCREEN_RUN, k); await wait(S(2500)); }, async run(page) { const end = Date.now() + S(8000); while (Date.now() < end) await sweep(page, 3); } };
 SC.deck40 = { desc: 'deck view with 40 cards, scrolling', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const RUN = await import('/graftwork/engine/run.js'), { CARD_LIST } = await import('/graftwork/data/index.js'); const { app, flow } = window.__gw; const run = RUN.newRun({ hero: 'marrow', seed: 'prof4' }); const pool = CARD_LIST.filter((c) => c.hero === 'marrow' && c.rarity !== 'starter' && c.type !== 'junk'); let i = 0; while (run.deck.length < 40) { run.deck.push({ uid: RUN.nextUid(run), id: pool[i++ % pool.length].id, grafts: [], fused: [], up: false }); } app.shared.run = run; flow.route(); flow.openDeck(); }); await wait(S(2500)); },
   async run(page) { const end = Date.now() + S(8000); let d = 1; while (Date.now() < end) { const p = await logical(page, 640, 360); await page.mouse.move(p.x, p.y); for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 120 * d); await wait(90); } d = -d; } } };
 
@@ -229,18 +242,19 @@ function traceSummary(events, from, to) {
   return { gpu_proxy_ms: r1(gpuMs), detail: o };
 }
 
-async function newPage(browser, { cpu, net, ops = false, trace = false }) {
+async function newPage(browser, { cpu, net, ops = false, trace = false }) { // ops: 'cpu' also opens a CDP session for the sampling profiler
   const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: DPR, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' });
   await ctx.addInitScript(INIT);
+  if (opt('init', false)) await ctx.addInitScript(String(opt('init'))); // --init '<js>': extra page script (experiments)
+  if (GRAPHICS !== 'default') await ctx.addInitScript(`try { if (!localStorage.getItem('graftwork_meta_v1')) localStorage.setItem('graftwork_meta_v1', JSON.stringify({ v: 1, settings: { graphics: '${GRAPHICS}' } })); } catch (e) {}`);
   const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send('Network.enable');
-  if (net) await cdp.send('Network.emulateNetworkConditions', net);
-  if (cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+  const cdp = (cpu > 1 || net || trace || ops === 'cpu') ? await ctx.newCDPSession(page) : null;
+  if (net || trace) { await cdp.send('Network.enable'); if (net) await cdp.send('Network.emulateNetworkConditions', net); } // only the load runs count bytes
+  if (cdp && cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
   const net_ = { bytes: 0, reqs: 0, images: 0, imageBytes: 0, byType: {} };
   const types = new Map();
-  cdp.on('Network.responseReceived', (e) => types.set(e.requestId, e.response.mimeType));
-  cdp.on('Network.loadingFinished', (e) => { net_.reqs++; net_.bytes += e.encodedDataLength; const t = types.get(e.requestId) || '?'; net_.byType[t] = (net_.byType[t] || 0) + e.encodedDataLength; if (/image/.test(t)) { net_.images++; net_.imageBytes += e.encodedDataLength; } });
+  if (cdp) cdp.on('Network.responseReceived', (e) => types.set(e.requestId, e.response.mimeType));
+  if (cdp) cdp.on('Network.loadingFinished', (e) => { net_.reqs++; net_.bytes += e.encodedDataLength; const t = types.get(e.requestId) || '?'; net_.byType[t] = (net_.byType[t] || 0) + e.encodedDataLength; if (/image/.test(t)) { net_.images++; net_.imageBytes += e.encodedDataLength; } });
   const errs = []; page.on('pageerror', (e) => errs.push(String(e).slice(0, 200)));
   return { ctx, page, cdp, net: net_, errs };
 }
@@ -253,26 +267,36 @@ async function runOne(browser, base, name, cpu, mode) {
 }
 async function runOne0(browser, base, name, cpu, mode) {
   const S_ = SC[name];
-  const h = await newPage(browser, { cpu, ops: mode === 'ops', net: null });
+  const h = await newPage(browser, { cpu, ops: mode === 'cpu' ? 'cpu' : mode === 'ops', net: null });
   const { page } = h;
   await page.goto(base + '/graftwork/', { waitUntil: 'commit' });
-  await S_.setup.call(S_, page);
+  const V = (m) => { if (opt('verbose', false)) console.log('    step', m); };
+  await S_.setup.call(S_, page); V('setup done');
+  if (opt('settle', false)) await wait(Number(opt('settle'))); // let the Auto quality controller converge before the window starts
   const calib = await calibrate(page);
-  const mem0 = await page.evaluate(PAGE.mem);
+  V('calib ' + calib);
+  const mem0 = await page.evaluate(PAGE.mem); V('mem0');
   await page.evaluate(PAGE.mark);
   if (mode === 'ops') await page.evaluate(() => { window.__pf.opsOn = true; window.__pf.opsFrames = []; });
   let tr = null, tFrom = 0;
   if (mode === 'trace') { await browser.startTracing(page, { categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'gpu', 'cc', 'viz', 'toplevel', 'v8.gc', 'blink'] }); }
-  await S_.run.call(S_, page);
+  if (mode === 'cpu') { await h.cdp.send('Profiler.enable'); await h.cdp.send('Profiler.setSamplingInterval', { interval: 500 }); await h.cdp.send('Profiler.start'); }
+  await S_.run.call(S_, page); V('run done');
   let out;
   if (mode === 'ops') {
     const of = await page.evaluate(() => { window.__pf.opsOn = false; return window.__pf.opsFrames; });
     const keys = of.length ? Object.keys(of[0]) : [];
     out = { frames: of.length };
     for (const k of keys) { const a = of.map((f) => f[k]); out[k] = { mean: r1(a.reduce((s, x) => s + x, 0) / a.length), p95: pct(a, 95), max: Math.max(...a) }; }
+  } else if (mode === 'cpu') {
+    const { profile } = await h.cdp.send('Profiler.stop'); const self = new Map(), byId = new Map(profile.nodes.map((n) => [n.id, n]));
+    profile.samples.forEach((id, i) => { self.set(id, (self.get(id) || 0) + (profile.timeDeltas[i] || 0)); });
+    const agg = new Map(); for (const [id, us] of self) { const n = byId.get(id), cf = n.callFrame, key = `${cf.functionName || '(anon)'} ${cf.url.replace(/^.*\/graftwork\//, '')}:${cf.lineNumber + 1}`; agg.set(key, (agg.get(key) || 0) + us); }
+    const tot = [...agg.values()].reduce((a, b) => a + b, 0);
+    out = { total_ms: r1(tot / 1000), top: [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, us]) => [k, r1(us / 1000), r1((us / tot) * 100)]) };
   } else {
     const col = await page.evaluate(PAGE.collect);
-    out = frameStats(col);
+    out = frameStats(col); out.tier = col.tier; out.tier_changes = col.drops === null ? null : [col.drops, col.rises]; out.dpr = col.dpr; out.backing = col.backing; out.graphics = GRAPHICS;
     out.mem = await page.evaluate(PAGE.mem);
     out.mem_before = mem0;
     if (mode === 'trace') {
@@ -303,7 +327,7 @@ async function loadMetrics(browser, base, cpu) {
   // painted title scene (kit/keyart mode) = visually complete
   await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; });
   let sceneMs = -1;
-  try { await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'", 240000); sceneMs = Date.now() - t0; } catch (e) { /* stays -1 */ }
+  try { await gwWait(page, SCENE_PAINTED, 240000); sceneMs = Date.now() - t0; } catch (e) { /* stays -1 */ }
   const bytesAtScene = h.net.bytes;
   await page.evaluate(WARD_SETUP);
   const tw0 = Date.now();
@@ -320,7 +344,7 @@ async function loadMetrics(browser, base, cpu) {
   await gwWait(page, "window.__gw && window.__gw.app.current==='title' && window.__gw.app.frame>3", 240000);
   const warmInteractive = Date.now() - w0;
   await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; });
-  let warmScene = -1; try { await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'", 240000); warmScene = Date.now() - w0; } catch (e) { /* -1 */ }
+  let warmScene = -1; try { await gwWait(page, SCENE_PAINTED, 240000); warmScene = Date.now() - w0; } catch (e) { /* -1 */ }
   await wait(1000);
   const warm = { t_title_interactive_ms: warmInteractive, t_title_scene_painted_ms: warmScene, bytes: h.net.bytes - b0, requests: h.net.reqs - r0 };
   const res = {
@@ -335,7 +359,7 @@ async function loadMetrics(browser, base, cpu) {
 
 // leak soak: repeat combat <-> Ward cycles, force GC, watch heap / canvases / DOM counters
 async function soak(browser, base, cycles) {
-  const h = await newPage(browser, { cpu: 1, net: null });
+  const h = await newPage(browser, { cpu: 1, net: null, trace: true });
   const { page, cdp } = h;
   await page.goto(base + '/graftwork/', { waitUntil: 'commit' });
   await gwWait(page, "window.__gw && window.__gw.app.current==='title'");
@@ -367,12 +391,14 @@ async function soak(browser, base, cycles) {
 async function main() {
   if (opt('list', false)) { for (const [k, v] of Object.entries(SC)) console.log(k.padEnd(14), v.desc); return; }
   if (opt('cache-headers', false)) HEADERS.cacheArt = true;
+  if (opt('cpu', false)) { const { chromium } = require('playwright'); const srv0 = await serve(); const base0 = 'http://127.0.0.1:' + srv0.address().port; const br = await chromium.launch({ headless: true, args: ['--enable-precise-memory-info'] }); for (const n of String(opt('cpu')).split(',')) { const r = await runOne(br, base0, n, Number(opt('throttle', 1)), 'cpu'); console.log('== ' + n + ' total ' + r.total_ms + ' ms'); for (const [k, ms, pc] of r.top || []) console.log(String(pc).padStart(5) + '%  ' + String(ms).padStart(8) + ' ms  ' + k); } await br.close(); srv0.close(); return; } // --cpu <scenarios>: self-time profile
   if (opt('serve', false)) { const sv = await serve(); console.log('http://127.0.0.1:' + sv.address().port + '/graftwork/'); return; } // just the static server (debugging)
   const { chromium } = require('playwright');
   const srv = await serve(); const base = 'http://127.0.0.1:' + srv.address().port;
   const browser = await chromium.launch({ headless: true, args: ['--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
-  let prev = null; if (String(opt('scenarios', '')) === 'none') { try { prev = JSON.parse(fs.readFileSync(path.resolve(REPO, OUT), 'utf8')); } catch (e) { /* none */ } }
-  const result = prev ? Object.assign(prev, { load: {} }) : { label: LABEL, date: new Date().toISOString(), viewport: VIEW, dpr: DPR, quick: QUICK, chromium: browser.version(), scenarios: {}, load: {}, soak: null };
+  let prev = null; if (opt('merge', false) || String(opt('scenarios', '')) === 'none') { // --merge: keep what an earlier run wrote and replace only what this run measures
+    try { prev = JSON.parse(fs.readFileSync(path.resolve(REPO, OUT), 'utf8')); } catch (e) { /* none */ } }
+  const result = prev ? Object.assign(prev, { load: String(opt('scenarios', '')) === 'none' || !opt('noload', false) ? {} : prev.load || {} }) : { label: LABEL, date: new Date().toISOString(), viewport: VIEW, dpr: DPR, quick: QUICK, chromium: browser.version(), scenarios: {}, load: {}, soak: null };
   try {
     if (opt('soak', false)) { result.soak = await soak(browser, base, Number(opt('soak', 20))); console.log(JSON.stringify(result.soak, null, 1)); }
     else {

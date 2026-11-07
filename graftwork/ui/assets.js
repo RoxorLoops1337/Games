@@ -55,7 +55,9 @@ export function createAssets(opts = {}) {
   const live = () => !!(A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
   A.available = live;
   A.app = null;
-  A.use2x = (app) => { const a = app || A.app; return !(a && a.px > 0 && a.px < 0.8); }; // by device pixels per logical px, not by CSS scale: a phone draws sprites at 1.2 to 2.5 device px per logical px and @1x there was the pixelated look
+  // Data saver, 2G/3G or a 2 GB device: @1x files (a quarter of the bytes and of the decoded memory). Read once; no navigator.connection (Safari, node) means no opinion.
+  A.lowData = (() => { try { const n = typeof navigator !== 'undefined' ? navigator : null, c = n && n.connection; return !!((c && (c.saveData || /(^|-)(2g|3g)$/.test(c.effectiveType || ''))) || (n && n.deviceMemory && n.deviceMemory <= 2)); } catch (e) { return false; } })();
+  A.use2x = (app) => { const a = app || A.app; if (A.lowData || (a && a.perf && a.perf.q.tier !== 'full')) return false; /* lite and minimal: a quarter of the decoded memory */ return !(a && a.px > 0 && a.px < 0.8); }; // by device pixels per logical px, not by CSS scale: a phone draws sprites at 1.2 to 2.5 device px per logical px and @1x there was the pixelated look
   A.setBase = (b) => { A.base = b.endsWith('/') ? b : b + '/'; };
   A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.failed = 0; A.kit = null; A.kitState = 'idle'; };
   A.ensure = (app) => {

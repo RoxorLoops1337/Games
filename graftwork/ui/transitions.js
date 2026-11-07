@@ -277,7 +277,7 @@ export function drawTransitions(app) {
   // The next transition wipes away this frame. A full-canvas copy every frame was the top CPU hotspot (software canvases: 10+ ms),
   // so copy every 4th frame, and every frame while the player is pressing/typing (when a screen change is about to happen).
   const m = app.mouse;
-  if (!T.wipe && (!T.haveSnap || (app.frame & 3) === 0 || (m && (m.down || m.pressed || m.released)) || (app.pressedKeys && app.pressedKeys.length))) capture(app, T);
+  if (!T.wipe && (!T.haveSnap || (app.frame & (app.perf && app.perf.q.tier !== 'full' ? 7 : 3)) === 0 || (m && (m.down || m.pressed || m.released)) || (app.pressedKeys && app.pressedKeys.length))) capture(app, T);
 }
 export function busy(app) { const T = app.tr; return !!(T && (T.wipe || T.intro || T.phase)); }
 

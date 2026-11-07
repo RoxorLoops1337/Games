@@ -449,7 +449,7 @@ export function createApp(canvas, opts = {}) {
     for (const tm of due) tm.fn();
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
-    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; // sprites are scaled down from bigger files: smooth, never nearest
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = app.perf.q.tier === 'full' ? 'high' : 'low'; // 'high' costs about a fifth of a title frame on a software raster: the lite and minimal tiers drop it // sprites are scaled down from bigger files: smooth, never nearest
     ctx.clearRect(0, 0, W, H);
     app.tip = null; app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
     const stack = app.stack;
