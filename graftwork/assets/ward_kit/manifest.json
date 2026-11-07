@@ -410,6 +410,216 @@
    ],
    "sw": 27,
    "file": "props/generator@2x.webp"
+  },
+  "bedside_table": {
+   "name": "Bedside table",
+   "file2x": "props/bedside_table@2x.webp",
+   "file1x": "props/bedside_table@1x.webp",
+   "w": 80,
+   "h": 98,
+   "anchorX": 40.0,
+   "anchorY": 68.6,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 10,
+   "file": "props/bedside_table@2x.webp"
+  },
+  "iv_stand": {
+   "name": "IV drip stand",
+   "file2x": "props/iv_stand@2x.webp",
+   "file1x": "props/iv_stand@1x.webp",
+   "w": 64,
+   "h": 175,
+   "anchorX": 32.0,
+   "anchorY": 127.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 8,
+   "file": "props/iv_stand@2x.webp"
+  },
+  "screen": {
+   "name": "Privacy screen",
+   "file2x": "props/screen@2x.webp",
+   "file1x": "props/screen@1x.webp",
+   "w": 176,
+   "h": 176,
+   "anchorX": 88.0,
+   "anchorY": 123.2,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 22,
+   "file": "props/screen@2x.webp"
+  },
+  "gurney": {
+   "name": "Gurney",
+   "file2x": "props/gurney@2x.webp",
+   "file1x": "props/gurney@1x.webp",
+   "w": 256,
+   "h": 259,
+   "anchorX": 128.0,
+   "anchorY": 187.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 32,
+   "file": "props/gurney@2x.webp"
+  },
+  "wheelchair": {
+   "name": "Wheelchair",
+   "file2x": "props/wheelchair@2x.webp",
+   "file1x": "props/wheelchair@1x.webp",
+   "w": 112,
+   "h": 137,
+   "anchorX": 56.0,
+   "anchorY": 95.9,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/wheelchair@2x.webp"
+  },
+  "lamp": {
+   "name": "Floor lamp",
+   "file2x": "props/lamp@2x.webp",
+   "file1x": "props/lamp@1x.webp",
+   "w": 64,
+   "h": 206,
+   "anchorX": 32.0,
+   "anchorY": 158.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 8,
+   "file": "props/lamp@2x.webp"
+  },
+  "plant": {
+   "name": "Potted plant",
+   "file2x": "props/plant@2x.webp",
+   "file1x": "props/plant@1x.webp",
+   "w": 112,
+   "h": 118,
+   "anchorX": 56.0,
+   "anchorY": 82.6,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/plant@2x.webp"
+  },
+  "reception_desk": {
+   "name": "Reception desk",
+   "file2x": "props/reception_desk@2x.webp",
+   "file1x": "props/reception_desk@1x.webp",
+   "w": 240,
+   "h": 240,
+   "anchorX": 120.0,
+   "anchorY": 168.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 30,
+   "file": "props/reception_desk@2x.webp"
+  },
+  "waiting_bench": {
+   "name": "Waiting bench",
+   "file2x": "props/waiting_bench@2x.webp",
+   "file1x": "props/waiting_bench@1x.webp",
+   "w": 224,
+   "h": 198,
+   "anchorX": 112.0,
+   "anchorY": 138.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/waiting_bench@2x.webp"
+  },
+  "coat_stand": {
+   "name": "Coat stand",
+   "file2x": "props/coat_stand@2x.webp",
+   "file1x": "props/coat_stand@1x.webp",
+   "w": 64,
+   "h": 146,
+   "anchorX": 32.0,
+   "anchorY": 102.2,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 8,
+   "file": "props/coat_stand@2x.webp"
+  },
+  "altar": {
+   "name": "Altar",
+   "file2x": "props/altar@2x.webp",
+   "file1x": "props/altar@1x.webp",
+   "w": 192,
+   "h": 202,
+   "anchorX": 96.0,
+   "anchorY": 141.4,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 24,
+   "file": "props/altar@2x.webp"
+  },
+  "pew": {
+   "name": "Pew",
+   "file2x": "props/pew@2x.webp",
+   "file1x": "props/pew@1x.webp",
+   "w": 240,
+   "h": 249,
+   "anchorX": 120.0,
+   "anchorY": 177.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 30,
+   "file": "props/pew@2x.webp"
+  },
+  "candle_stand": {
+   "name": "Candle stand",
+   "file2x": "props/candle_stand@2x.webp",
+   "file1x": "props/candle_stand@1x.webp",
+   "w": 80,
+   "h": 144,
+   "anchorX": 40.0,
+   "anchorY": 100.8,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 10,
+   "file": "props/candle_stand@2x.webp"
+  },
+  "lectern": {
+   "name": "Lectern",
+   "file2x": "props/lectern@2x.webp",
+   "file1x": "props/lectern@1x.webp",
+   "w": 96,
+   "h": 132,
+   "anchorX": 48.0,
+   "anchorY": 92.4,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 12,
+   "file": "props/lectern@2x.webp"
   }
  }
 }
