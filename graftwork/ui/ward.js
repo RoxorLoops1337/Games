@@ -613,7 +613,7 @@ export default {
 
   // ---- the room card: name, power, spawn timer, what is inside, anchored beside the hovered room and kept on the map panel ----
   roomCard(app) {
-    const run = S.run, w = run.ward, r = S.hoverRoom && !app.blocked && !S.drag ? w.rooms[S.hoverRoom] : null;
+    const run = S.run, w = run.ward, r = S.hoverRoom && !app.blocked && !S.drag && !(S.toastT > 0) ? w.rooms[S.hoverRoom] : null; // a toast owns the map while it shows: never stack the two
     if (!r) return;
     const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y), CWd = 208, X0 = 10;
     const every = WD.everyOf(r), body = roomTip(run, r), bo = { size: 13, ui: true, color: 'rgba(232,220,196,.85)', fit: { w: CWd - 2 * X0, lines: 7, soft: true } }, Lb = app.layoutText(body, bo);

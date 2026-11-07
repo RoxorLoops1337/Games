@@ -425,6 +425,18 @@ await t('z5: Rest of day waits out every walk left today and stops in the mornin
   assert.equal(run.hp, 30 + 3 * WD.WARD_TUNE.waitHeal);
 });
 
+await t('z11: the room hover card is hidden while a toast shows, so the two never overlap', async () => {
+  const { app, run, flow } = await setup({ seed: 'z11toast' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const c = cellCenter(1, 2); app.mouse.x = c.x; app.mouse.y = c.y; frames(app, 4);
+  assert.ok(reg('ward-roomcard'), 'arrange: the card shows on a plain hover');
+  app.screens.ward.toast('Each step must be a room next to the last one (shared wall).'); frames(app, 2);
+  assert.equal(reg('ward-roomcard'), undefined, 'a toast owns the map: no room card under it');
+  frames(app, 200);
+  assert.ok(reg('ward-roomcard'), 'the card returns once the toast is gone');
+});
+
 await t('z5: a route through two fight rooms plays both, the token walks the steps between, and the die is there again afterwards', async () => {
   const { app, run, flow, seen } = await setup({ seed: 'z5multi' });
   const m = () => [{ kind: 'monster', id: NORMAL1[0] }];
