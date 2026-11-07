@@ -227,7 +227,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/bedpan_slime_b@1x.webp",
-   "walk2x": "actors/bedpan_slime_b@2x.webp"
+   "walk2x": "actors/bedpan_slime_b@2x.webp",
+   "bbox": [
+    19,
+    18,
+    237,
+    243
+   ],
+   "file3x": "actors/bedpan_slime@3x.webp"
   },
   "candy_striper": {
    "file1x": "actors/candy_striper@1x.webp",
@@ -239,7 +246,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/candy_striper_b@1x.webp",
-   "walk2x": "actors/candy_striper_b@2x.webp"
+   "walk2x": "actors/candy_striper_b@2x.webp",
+   "bbox": [
+    68,
+    18,
+    188,
+    243
+   ],
+   "file3x": "actors/candy_striper@3x.webp"
   },
   "crutchling": {
    "file1x": "actors/crutchling@1x.webp",
@@ -251,7 +265,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/crutchling_b@1x.webp",
-   "walk2x": "actors/crutchling_b@2x.webp"
+   "walk2x": "actors/crutchling_b@2x.webp",
+   "bbox": [
+    70,
+    18,
+    186,
+    243
+   ],
+   "file3x": "actors/crutchling@3x.webp"
   },
   "defibrillator": {
    "file1x": "actors/defibrillator@1x.webp",
@@ -263,7 +284,14 @@
    "kind": "elite",
    "scale": 1.2,
    "walk1x": "actors/defibrillator_b@1x.webp",
-   "walk2x": "actors/defibrillator_b@2x.webp"
+   "walk2x": "actors/defibrillator_b@2x.webp",
+   "bbox": [
+    16,
+    18,
+    240,
+    243
+   ],
+   "file3x": "actors/defibrillator@3x.webp"
   },
   "fever_moth": {
    "file1x": "actors/fever_moth@1x.webp",
@@ -275,7 +303,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/fever_moth_b@1x.webp",
-   "walk2x": "actors/fever_moth_b@2x.webp"
+   "walk2x": "actors/fever_moth_b@2x.webp",
+   "bbox": [
+    15,
+    42,
+    241,
+    243
+   ],
+   "file3x": "actors/fever_moth@3x.webp"
   },
   "gauze_mummy": {
    "file1x": "actors/gauze_mummy@1x.webp",
@@ -287,7 +322,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/gauze_mummy_b@1x.webp",
-   "walk2x": "actors/gauze_mummy_b@2x.webp"
+   "walk2x": "actors/gauze_mummy_b@2x.webp",
+   "bbox": [
+    53,
+    18,
+    203,
+    243
+   ],
+   "file3x": "actors/gauze_mummy@3x.webp"
   },
   "gurney_foot": {
    "file1x": "actors/gurney_foot@1x.webp",
@@ -299,7 +341,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/gurney_foot_b@1x.webp",
-   "walk2x": "actors/gurney_foot_b@2x.webp"
+   "walk2x": "actors/gurney_foot_b@2x.webp",
+   "bbox": [
+    49,
+    18,
+    207,
+    243
+   ],
+   "file3x": "actors/gurney_foot@3x.webp"
   },
   "iron_lung": {
    "file1x": "actors/iron_lung@1x.webp",
@@ -311,7 +360,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/iron_lung_b@1x.webp",
-   "walk2x": "actors/iron_lung_b@2x.webp"
+   "walk2x": "actors/iron_lung_b@2x.webp",
+   "bbox": [
+    46,
+    18,
+    210,
+    243
+   ],
+   "file3x": "actors/iron_lung@3x.webp"
   },
   "knitter": {
    "file1x": "actors/knitter@1x.webp",
@@ -323,7 +379,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/knitter_b@1x.webp",
-   "walk2x": "actors/knitter_b@2x.webp"
+   "walk2x": "actors/knitter_b@2x.webp",
+   "bbox": [
+    64,
+    18,
+    192,
+    243
+   ],
+   "file3x": "actors/knitter@3x.webp"
   },
   "leech_jar": {
    "file1x": "actors/leech_jar@1x.webp",
@@ -335,7 +398,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/leech_jar_b@1x.webp",
-   "walk2x": "actors/leech_jar_b@2x.webp"
+   "walk2x": "actors/leech_jar_b@2x.webp",
+   "bbox": [
+    71,
+    18,
+    186,
+    243
+   ],
+   "file3x": "actors/leech_jar@3x.webp"
   },
   "marrow": {
    "file1x": "actors/marrow@1x.webp",
@@ -345,7 +415,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0
+   "scale": 1.0,
+   "bbox": [
+    85,
+    18,
+    171,
+    243
+   ],
+   "file3x": "actors/marrow@3x.webp"
   },
   "night_nurse": {
    "file1x": "actors/night_nurse@1x.webp",
@@ -355,7 +432,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "normal",
-   "scale": 1.0
+   "scale": 1.0,
+   "bbox": [
+    78,
+    18,
+    178,
+    243
+   ],
+   "file3x": "actors/night_nurse@3x.webp"
   },
   "npc_nurse": {
    "file1x": "actors/npc_nurse@1x.webp",
@@ -365,7 +449,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "npc",
-   "scale": 0.9
+   "scale": 0.9,
+   "bbox": [
+    79,
+    18,
+    177,
+    243
+   ],
+   "file3x": "actors/npc_nurse@3x.webp"
   },
   "npc_patient": {
    "file1x": "actors/npc_patient@1x.webp",
@@ -375,7 +466,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "npc",
-   "scale": 0.9
+   "scale": 0.9,
+   "bbox": [
+    83,
+    18,
+    173,
+    243
+   ],
+   "file3x": "actors/npc_patient@3x.webp"
   },
   "npc_porter": {
    "file1x": "actors/npc_porter@1x.webp",
@@ -385,7 +483,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "npc",
-   "scale": 0.9
+   "scale": 0.9,
+   "bbox": [
+    48,
+    18,
+    208,
+    243
+   ],
+   "file3x": "actors/npc_porter@3x.webp"
   },
   "odile": {
    "file1x": "actors/odile@1x.webp",
@@ -395,7 +500,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0
+   "scale": 1.0,
+   "bbox": [
+    79,
+    18,
+    177,
+    243
+   ],
+   "file3x": "actors/odile@3x.webp"
   },
   "orderly": {
    "file1x": "actors/orderly@1x.webp",
@@ -407,7 +519,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/orderly_b@1x.webp",
-   "walk2x": "actors/orderly_b@2x.webp"
+   "walk2x": "actors/orderly_b@2x.webp",
+   "bbox": [
+    39,
+    18,
+    217,
+    243
+   ],
+   "file3x": "actors/orderly@3x.webp"
   },
   "pill_swarm": {
    "file1x": "actors/pill_swarm@1x.webp",
@@ -419,7 +538,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/pill_swarm_b@1x.webp",
-   "walk2x": "actors/pill_swarm_b@2x.webp"
+   "walk2x": "actors/pill_swarm_b@2x.webp",
+   "bbox": [
+    46,
+    18,
+    210,
+    243
+   ],
+   "file3x": "actors/pill_swarm@3x.webp"
   },
   "stitch_rat": {
    "file1x": "actors/stitch_rat@1x.webp",
@@ -429,7 +555,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "normal",
-   "scale": 1.0
+   "scale": 1.0,
+   "bbox": [
+    15,
+    41,
+    239,
+    243
+   ],
+   "file3x": "actors/stitch_rat@3x.webp"
   },
   "surge_tick": {
    "file1x": "actors/surge_tick@1x.webp",
@@ -441,7 +574,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/surge_tick_b@1x.webp",
-   "walk2x": "actors/surge_tick_b@2x.webp"
+   "walk2x": "actors/surge_tick_b@2x.webp",
+   "bbox": [
+    15,
+    25,
+    239,
+    243
+   ],
+   "file3x": "actors/surge_tick@3x.webp"
   },
   "suture_wasp": {
    "file1x": "actors/suture_wasp@1x.webp",
@@ -453,7 +593,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/suture_wasp_b@1x.webp",
-   "walk2x": "actors/suture_wasp_b@2x.webp"
+   "walk2x": "actors/suture_wasp_b@2x.webp",
+   "bbox": [
+    15,
+    21,
+    241,
+    243
+   ],
+   "file3x": "actors/suture_wasp@3x.webp"
   },
   "the_matron": {
    "file1x": "actors/the_matron@1x.webp",
@@ -463,7 +610,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "boss",
-   "scale": 1.6
+   "scale": 1.6,
+   "bbox": [
+    32,
+    18,
+    223,
+    243
+   ],
+   "file3x": "actors/the_matron@3x.webp"
   },
   "the_resident": {
    "file1x": "actors/the_resident@1x.webp",
@@ -473,7 +627,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "elite",
-   "scale": 1.2
+   "scale": 1.2,
+   "bbox": [
+    52,
+    18,
+    204,
+    243
+   ],
+   "file3x": "actors/the_resident@3x.webp"
   },
   "the_resident_l2": {
    "file1x": "actors/the_resident_l2@1x.webp",
@@ -483,7 +644,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "elite",
-   "scale": 1.2
+   "scale": 1.2,
+   "bbox": [
+    51,
+    18,
+    205,
+    243
+   ],
+   "file3x": "actors/the_resident_l2@3x.webp"
   },
   "two_gurneys": {
    "file1x": "actors/two_gurneys@1x.webp",
@@ -495,7 +663,14 @@
    "kind": "elite",
    "scale": 1.2,
    "walk1x": "actors/two_gurneys_b@1x.webp",
-   "walk2x": "actors/two_gurneys_b@2x.webp"
+   "walk2x": "actors/two_gurneys_b@2x.webp",
+   "bbox": [
+    15,
+    21,
+    241,
+    243
+   ],
+   "file3x": "actors/two_gurneys@3x.webp"
   },
   "ward_clerk": {
    "file1x": "actors/ward_clerk@1x.webp",
@@ -507,7 +682,14 @@
    "kind": "normal",
    "scale": 1.0,
    "walk1x": "actors/ward_clerk_b@1x.webp",
-   "walk2x": "actors/ward_clerk_b@2x.webp"
+   "walk2x": "actors/ward_clerk_b@2x.webp",
+   "bbox": [
+    76,
+    18,
+    180,
+    243
+   ],
+   "file3x": "actors/ward_clerk@3x.webp"
   },
   "wick": {
    "file1x": "actors/wick@1x.webp",
@@ -517,7 +699,14 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0
+   "scale": 1.0,
+   "bbox": [
+    79,
+    18,
+    177,
+    243
+   ],
+   "file3x": "actors/wick@3x.webp"
   }
  },
  "icons": {

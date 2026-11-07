@@ -23,13 +23,13 @@ graftwork/
     text.js         rules text generated from specs (cardLines, statusText)
     run.js          run state: map, rewards, offers, shop, forge, events, ascension, save payload
     save.js meta.js meta2.js   persistence (see Save keys), meta progression, Credit, cosmetics, Daily Case, boss practice
-  data/     content, one author per file (table below); data/index.js builds the id maps (CARDS, GRAFTS, ENEMIES, STATUSES...) and throws on duplicate ids
+  data/     content, one author per file (table below); ward_kit.js = the modular room recipes (rm_* -> kit floor, wall, pieces, props) + pure grid geometry; data/index.js builds the id maps (CARDS, GRAFTS, ENEMIES, STATUSES...) and throws on duplicate ids
   ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), one file per screen
             (title map combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
             seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), lights.js, audio.js,
             a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js,
             assets.js (lazy image loader for assets/ward/manifest.json: get(id) is null until decoded, @1x on phones, @2x on desktop, a no-op in node),
-            ward.js (the Ward screen and its rules plumbing), ward_iso.js (the isometric map: projection, picking, rooms, actors, hero, thread, time-of-day light), ward_kit.js (cards, icons, glyphs)
+            ward.js (the Ward screen and its rules plumbing), ward_iso.js (the isometric map: projection, picking, rooms, actors and their grounding, hero, thread, time-of-day light), ward_kit_iso.js (the modular room renderer: kit floors, walls, pieces, props, cached static layers, free-tile wander), ward_kit.js (cards, icons, glyphs)
   art/      procedural canvas drawing only: cards.js, icons.js, enemies.js, heroes.js, backgrounds.js, attacks.js (attack rigs). Also the fallback of every Ward image (enemies and heroes are cached to offscreen canvases when no sprite is there)
   assets/ward/   the Ward's generated WebP art + manifest.json (see Ward art exception below); owned by the art pipeline, never edited by hand; read only through ui/assets.js
   design/   ART_BIBLE THREAD ENEMY_DEPTH UX_SPEC JUICE BUILD_PLAN (+ README.md index)
@@ -166,6 +166,12 @@ Current targets and measured numbers (strong bot, 10 to 40 runs per hero, noisy)
 
 ## Ward art exception (AI-generated, Ward only)
 The owner authorised AI-generated raster art for the Ward (the hospital-building layer) only. This overrides the old "procedural art only" rule for the Ward; every other screen stays procedural. The generated set is committed in `graftwork/assets/ward/` (about 3 MB WebP, budget 12 MB): `rooms/` (isometric cutaway dioramas, one per `rm_*` id plus `plot_empty`, all on the same canvas so they share one floor diamond), `actors/` (heroes, Act 1 monsters, The Resident + `the_resident_l2`, The Matron, `npc_*`; `<id>_b` is the walk-step frame), `icons/` (wood, stone, gold, power, morning, midday, evening, night) and `cards/` (illustrations keyed by the `art` ids in `data/ward.js`, room arts alias to a room diorama). Each asset has `@1x.webp` (phone) and `@2x.webp` (desktop). `assets/ward/manifest.json` is the contract (tile ratio, floor diamond per room, feet anchor per actor, `cardsById` for the b_* cards). The dark/unpowered look is a code tint, never a second image. Raw generations are NOT in the repo; `tools/graftwork_art_build.py` documents and runs raw -> WebP -> manifest. Test: `tests/graftwork_art_assets.test.mjs`. No em dashes in any of it.
+
+## Modular room kit (design/WARD.md section 13)
+- A room type with a recipe in `data/ward_kit.js` is drawn from `assets/ward_kit/` pieces by `ui/ward_kit_iso.js` (cached static layer, shared walls, doors from `engine/ward.js neighbors`, props depth sorted with actors, monsters on free sub-tiles); anything without a usable recipe stays painted. Wall modes auto/full/low/cutaway (key W). Add art by adding ids to the kit manifest; planned ids live in `PLANNED`. Tests: `graftwork_ui_ward_kit` (fixture `tests/graftwork_kit_fixture.json`). Actors are grounded in ward_iso.js: measured contact point, flat contact shadow, a step cycle tied to distance.
+
+## Combat art (ui/combat_art.js, design/WARD.md section 12b)
+- Battles draw the painted Ward actors (hero and enemies whose id is in the manifest) at battle size from the 512 px `file3x` (`tools/graftwork_art_build.py --combat`), enemies flipped to face the hero, grounded by one contact shadow, with lunge / hit / block / death poses, plus a modular-kit backdrop; ids without a sprite keep the procedural figure (graded) and a missing kit keeps the old backdrop. The list of enemies still lacking sprites is in WARD.md 12b. Test: `graftwork_ui_combat_art`.
 
 ## Ward isometric view (ui/ward_iso.js, design/WARD.md "Isometric view and art pipeline")
 - The 9 x 6 grid is a 2:1 diamond grid in WORLD space (TW 92 x TH 48). A camera (`ISO.CAM`, `toScreen`/`toWorld`) auto-fits the built rooms, the hero and (mornings) the buildable cells with eased zoom up to 2.4 (rooms about 150 to 220 px wide); wheel, pinch, drag and the +/-/C buttons make it manual until Recenter (key C). `cellCenter(x, y)` from ui/ward.js is the SCREEN centre of a cell's floor (tests and clicks use it; zoom out first with `ISO.camZoomBy` for far cells); `ISO.cellW` is world space (actor positions in `ISO.lastActors()` are world). Picking is `ISO.pick(w, sx, sy)` in screen space, inside the map panel only: floors first (exact diamonds), then the wall volume of a room.

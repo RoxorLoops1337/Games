@@ -18,6 +18,8 @@ import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
 import { assets } from './assets.js';
 import * as K from './ward_kit.js';
+import * as KR from './ward_kit_iso.js';
+import { wallPlan } from '../data/ward_kit.js';
 
 export const TW = 92, TH = 48; // floor tile of the 2:1 projection (world px; the camera scales them on screen)
 export const MAPR = { x: 284, y: 64, w: 712, h: 484 }; // the map panel (same rectangle as the old sheet)
@@ -54,9 +56,17 @@ function inVolume(px, py, cx, cy, hw, hh, up) {
   const dy = py - cy, a = dy, b = dy + up, lo = a <= 0 && b >= 0 ? 0 : Math.min(Math.abs(a), Math.abs(b));
   return Math.abs(px - cx) / hw + lo / hh <= 1;
 }
+// the standing wall slabs of a modular room (only while they are tall: a low wall never takes a click from the floor behind it)
+function inKitWall(mx, my, k) {
+  const HW = TW / 2, HH = TH / 2, X = mx - k.tx, Y = my - k.ty;
+  const inQuad = (q) => { let sg = 0; for (let i = 0; i < 4; i++) { const a = q[i], b = q[(i + 1) % 4], cr = (b[0] - a[0]) * (Y - a[1]) - (b[1] - a[1]) * (X - a[0]); if (cr !== 0) { if (sg && (cr > 0) !== (sg > 0)) return false; sg = cr; } } return true; };
+  if (k.HL > 17 && inQuad([[-HW, HH], [0, 0], [0, -k.HL - 4], [-HW, HH - k.HL - 4]])) return true;
+  return k.HR > 17 && inQuad([[0, 0], [HW, HH], [HW, HH - k.HR - 4], [0, -k.HR - 4]]);
+}
 export function pick(w, sx, sy) {
   if (!inMap(sx, sy)) return null;
   const g = geo(w), p = toWorld(sx, sy), mx = p.x, my = p.y, u = (mx - g.ox) / (TW / 2), v = (my - g.oy) / (TH / 2), gxf = (u + v) / 2, gyf = (v - u) / 2;
+  for (let i = V.kw.length - 1; i >= 0; i--) { const k = V.kw[i]; if (w.grid[k.y] && w.grid[k.y][k.x] === k.id && inKitWall(mx, my, k)) return { x: k.x, y: k.y }; } // a tall modular wall is in front of the floor behind it
   const gx = Math.round(gxf) || 0, gy = Math.round(gyf) || 0;
   if (gx >= 0 && gy >= 0 && gx < w.w && gy < w.h) return { x: gx, y: gy };
   const gr = w.grid;
@@ -110,9 +120,10 @@ function mk(w, h) {
 const V = {
   ground: null, groundKey: '', dark: new WeakMap(), glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
+  gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitOK: false, kitInfo: null, fvHero: 1, rcOf: null,
   lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
 };
-export function resetIso() { V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
+export function resetIso() { V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
 function glowSprite() {
   if (V.glow || V.glowTried) return V.glow;
   V.glowTried = true;
@@ -270,7 +281,7 @@ function drawBlock(g, type, cx, cy, lift, dark, theatre) {
 
 // ---------------- actors ----------------
 const MON_SLOTS = [[-0.26, -0.01], [0.26, -0.03], [-0.09, -0.1], [0.11, -0.11], [0.0, 0.07]];
-function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null }); }
+function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0 }); }
 function enemyCanvas(id, targetH) {
   const key = id + '|' + targetH, hit = V.mon.get(key);
   if (hit !== undefined) return hit;
@@ -300,23 +311,77 @@ function actorSprite(app, kind, id, run, lvl, alt) {
   const pool = assets.kindIds(kind === 'elite' ? 'elite' : 'normal'); if (!pool.length) return null;
   return assets.actor(pool[Math.floor(hash(id) * pool.length)], app, alt);
 }
-function drawShadow(g, x, y, rw, a) { g.fillStyle = `rgba(0,0,0,${a})`; g.beginPath(); g.ellipse(x, y + 1, rw, rw * 0.38, 0, 0, TAU); g.fill(); }
+// ---- grounding: where a sprite really touches the floor, and the soft contact shadow under it ----
+// The manifest anchor is a hand-set point; the real contact is measured once per image from its alpha: the lowest opaque row, and the centre
+// and width of the bottom band of the body (the feet). Falls back to the manifest anchor when pixels cannot be read (headless, a failed decode).
+const CONTACT = new WeakMap();
+export function contactOf(spr) {
+  const img = spr.img; let v = CONTACT.get(img);
+  if (v !== undefined) return v;
+  v = null;
+  const d = spr.def, iw = img.naturalWidth || img.width || 0, ih = img.naturalHeight || img.height || 0;
+  if (iw && ih) {
+    const k = Math.min(1, 160 / Math.max(iw, ih)), o = mk(iw * k, ih * k);
+    if (o && o.x.getImageData) {
+      try {
+        const W2 = o.c.width, H2 = o.c.height; o.x.drawImage(img, 0, 0, W2, H2);
+        const px = o.x.getImageData(0, 0, W2, H2).data;
+        if (px.length >= W2 * H2 * 4) {
+          let top = -1, bot = -1;
+          for (let y = 0; y < H2 && top < 0; y++) for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4 + 3] > 40) { top = y; break; }
+          for (let y = H2 - 1; y >= 0 && bot < 0; y--) for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4 + 3] > 40) { bot = y; break; }
+          if (top >= 0 && bot >= top) {
+            const band = Math.max(2, Math.round((bot - top) * 0.12)); let x0 = W2, x1 = -1, sum = 0, cnt = 0;
+            for (let y = bot - band + 1; y <= bot; y++) for (let x = 0; x < W2; x++) if (px[(y * W2 + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; sum += x; cnt++; }
+            if (cnt) v = { fx: (sum / cnt + 0.5) / W2 * d.w, fy: (bot + 1) / H2 * d.h, fw: Math.max(2, x1 - x0 + 1) / W2 * d.w };
+          }
+        }
+      } catch (e) { v = null; }
+    }
+  }
+  CONTACT.set(img, v); return v;
+}
+let SHADOW = null, shadowTried = false;
+function shadowSprite() { // a soft dark ellipse flattened to the iso diamond (2:1), blurred core, made once
+  if (SHADOW || shadowTried) return SHADOW;
+  shadowTried = true;
+  const o = mk(64, 32); if (!o) return null;
+  o.x.translate(32, 16); o.x.scale(1, 0.5);
+  const gr = o.x.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.45, 'rgba(0,0,0,.72)'); gr.addColorStop(0.8, 'rgba(0,0,0,.2)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  o.x.fillStyle = gr; o.x.fillRect(-32, -32, 64, 64);
+  SHADOW = o.c; return SHADOW;
+}
+// flat on the floor at the feet point: it never moves with a hop, it only shrinks and fades a little (rx: half width in world px)
+function groundShadow(g, x, y, rx, a) {
+  const s = shadowSprite();
+  if (s) { g.save(); g.globalAlpha *= a; g.drawImage(s, x - rx, y - rx * 0.5, rx * 2, rx); g.restore(); }
+  else { g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); }
+}
+export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
 function drawActor(app, g, r, run) {
-  const sz = r.h;
-  drawShadow(g, r.x, r.y, sz * 0.3, 0.38);
+  const sz = r.h, lvl = r.lvl, spr = actorSprite(app, r.kind, r.id, run, lvl, r.frame === 1);
+  let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
+  if (spr) {
+    const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
+    fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
+  }
+  const hopK = clamp(r.bob / 3, 0, 1), rx = clamp(fwW * 0.8, sz * 0.24, sz * 0.62) * (1 - 0.18 * hopK);
+  r.shadow = { x: r.x, y: r.y, rx, a: 0.5 * (1 - 0.3 * hopK) }; // tests read what was drawn
+  groundShadow(g, r.x, r.y, rx, r.shadow.a);
   if (r.ring) { g.save(); g.strokeStyle = rgba(COL.lamp, 0.7); g.lineWidth = 1.6; g.beginPath(); g.ellipse(r.x, r.y + 1, sz * 0.5, sz * 0.2, 0, 0, TAU); g.stroke(); g.restore(); }
-  const lvl = r.lvl;
   if (r.kind === 'elite') { // an aura pulses round an elite: gold at Level 1, red at Level 2
-    const pu = 0.5 + 0.5 * Math.sin(r.ph + (r.bob || 0) * 0.4 + Date.now() / 420);
+    const pu = 0.5 + 0.5 * Math.sin(r.ph + Date.now() / 420);
     glowAt(g, r.x, r.y - sz * 0.4, sz * (lvl >= 2 ? 1.0 : 0.8), (lvl >= 2 ? 0.34 : 0.2) + 0.1 * pu, true);
     g.save(); g.strokeStyle = lvl >= 2 ? 'rgba(255,90,100,.75)' : 'rgba(255,210,100,.6)'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(r.x, r.y + 1, sz * (0.42 + 0.06 * pu), sz * 0.17, 0, 0, TAU); g.stroke(); g.restore();
   }
-  const spr = actorSprite(app, r.kind, r.id, run, lvl, r.frame === 1);
-  g.save(); g.translate(r.x, r.y - r.bob); g.scale(r.flip * (1 / Math.max(0.2, r.sq)) * 1, r.sq); if (r.tilt) g.rotate(r.tilt);
+  // the body pivots on the feet: hop lifts it (the shadow stays), squash and lean scale and rotate about the feet point
+  g.save(); g.translate(r.x, r.y - r.bob);
+  const fl = Math.abs(r.flip) < 0.14 ? (r.flip < 0 ? -0.14 : 0.14) : r.flip; // a turn passes through a narrow body, never zero
+  g.scale(fl / Math.max(0.2, r.sq), r.sq); if (r.tilt) g.rotate(r.tilt);
   if (r.alpha < 1) g.globalAlpha *= r.alpha;
   if (spr) {
-    const d = spr.def, s = sz * (d.scale || 1) / (d.h || 1);
-    g.drawImage(spr.img, -(d.anchorX === undefined ? d.w / 2 : d.anchorX) * s, -(d.anchorY === undefined ? d.h : d.anchorY) * s, d.w * s, d.h * s);
+    const d = spr.def;
+    g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
     if (o) g.drawImage(o.c, -o.fx, -o.fy, o.w, o.h);
@@ -333,6 +398,33 @@ function drawActor(app, g, r, run) {
   }
 }
 
+// ---- gait: one place turns movement into the body language, for monsters, elites and the hero ----
+// The step cycle follows the DISTANCE moved (not time): every stride = 0.42 x the figure height, the two walk frames swap at each plant, the body
+// hops a little between plants (the shadow stays flat), squashes when a foot lands and leans into the heading; at rest nothing leaves the
+// ground: a slow breathing scale about the feet and a small weight shift. With reduced motion the figure just stands.
+const HOP = 2.2, STRIDE = 0.42;
+function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
+  let g = V.gt.get(key);
+  if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
+  const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
+  if (calm) { g.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; return g; }
+  if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
+  const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
+  g.vk += (target - g.vk) * Math.min(1, dt * (target ? 9 : 12)); if (g.vk < 0.01) g.vk = 0;
+  const ph = g.dist / (sz * STRIDE), step = Math.floor(ph), frac = ph - step, w = g.vk;
+  if (step !== g.step) {
+    if (w > 0.3) { g.plantT = S.t; if (dustN && (dustN > 1 || (step & 1) === 0)) { const p = toScreen(nx, ny); S.fx.burst(p.x, p.y, 'dust', { n: dustN > 1 ? 2 : 1 }); } }
+    g.step = step;
+  }
+  const plant = Math.exp(-(S.t - g.plantT) * 13) * w;
+  rec.stride = ph; // tests: the stride phase follows the distance moved
+  rec.frame = w > 0.25 ? (step & 1) : 0;
+  rec.bob = Math.sin(Math.PI * frac) * HOP * (sz / 36 + 0.4) * w; // hop height in world px, 0 at rest
+  const breathe = 1 + 0.02 * Math.sin(S.t * 2.2 + g.ph), shift = 0.012 * Math.sin(S.t * 0.9 + g.ph);
+  rec.sq = (1 - w) * breathe + w * (1 - 0.07 * plant + 0.025 * Math.sin(Math.PI * frac));
+  rec.tilt = (1 - w) * shift + w * (0.055 + ((step & 1) ? 0.014 : -0.014)); // lean into the heading (positive = forward in the figure's own space)
+  return g;
+}
 // ---------------- the room pass ----------------
 function drawCandle(app, g, x, y, r, t, calm) {
   const every = WD.everyOf(r), left = r.timers.spawn, full = r.contents.length >= WD.capOf(r);
@@ -364,39 +456,64 @@ export function depthOrder(w, focus, out = []) {
 }
 // A monster wanders inside the floor diamond in grid coordinates (u, v in -0.34..0.34): walks to a spot near its home, stands a while, picks the next.
 const HOME = MON_SLOTS.map(([dx, dy]) => [clamp((dx * 2 + dy * 4) / 2, -0.32, 0.32), clamp((dy * 4 - dx * 2) / 2, -0.32, 0.32)]);
-function monState(key, i, calm, dt, speed = 0.15) {
+function monState(key, i, calm, dt, speed = 0.3) {
   let st = V.act.get(key);
-  if (!st) { const h = HOME[i % HOME.length], ph = hash(key) * TAU; st = { u: h[0], v: h[1], hu: h[0], hv: h[1], tu: h[0], tv: h[1], wait: hash(key + 'w') * 2, mv: false, face: i % 2 ? -1 : 1, s: (hash(key + 's') * 4294967295) | 1, ph }; V.act.set(key, st); }
-  if (calm) { st.u = st.hu; st.v = st.hv; st.mv = false; return st; }
+  if (!st) { const h = HOME[i % HOME.length], ph = hash(key) * TAU; st = { u: h[0], v: h[1], hu: h[0], hv: h[1], tu: h[0], tv: h[1], wait: hash(key + 'w') * 2, mv: false, face: i % 2 ? -1 : 1, fv: i % 2 ? -1 : 1, sp: 0, s: (hash(key + 's') * 4294967295) | 1, ph }; V.act.set(key, st); }
+  if (calm) { st.u = st.hu; st.v = st.hv; st.mv = false; st.fv = st.face; st.sp = 0; return st; }
   const rnd = () => { st.s ^= st.s << 13; st.s ^= st.s >>> 17; st.s ^= st.s << 5; return ((st.s >>> 0) % 10000) / 10000; };
-  if (st.wait > 0) { st.wait -= dt; st.mv = false; return st; }
+  st.fv += (st.face - st.fv) * Math.min(1, dt * 10); if (Math.abs(st.fv - st.face) < 0.02) st.fv = st.face; // a turn swings through a narrow body
+  if (st.wait > 0) { st.wait -= dt; st.mv = false; st.sp = 0; return st; }
   const du = st.tu - st.u, dv = st.tv - st.v, d = Math.hypot(du, dv);
-  if (d < 0.012) { st.wait = 1.2 + rnd() * 3; st.tu = clamp(st.hu + (rnd() - 0.5) * 0.4, -0.34, 0.34); st.tv = clamp(st.hv + (rnd() - 0.5) * 0.4, -0.34, 0.34); st.mv = false; return st; }
-  const stp = Math.min(speed * dt, d); st.u += du / d * stp; st.v += dv / d * stp; st.mv = true; if (Math.abs(du - dv) > 0.004) st.face = du - dv >= 0 ? 1 : -1;
+  if (d < 0.012) { st.wait = 1.2 + rnd() * 3; st.tu = clamp(st.hu + (rnd() - 0.5) * 0.4, -0.34, 0.34); st.tv = clamp(st.hv + (rnd() - 0.5) * 0.4, -0.34, 0.34); st.mv = false; st.sp = 0; return st; }
+  st.sp += (1 - st.sp) * Math.min(1, dt * 6); // ease in; ease out into the stop
+  const stp = Math.min(speed * st.sp * clamp(d / 0.07, 0.35, 1) * dt, d); st.u += du / d * stp; st.v += dv / d * stp; st.mv = true;
+  if (Math.abs(du - dv) > 0.004) st.face = du - dv >= 0 ? 1 : -1;
   return st;
 }
 function dust(g, id, c, t) { // a few motes drifting up through the light of each lit room
   for (let i = 0; i < 3; i++) { const q = (t * 0.1 + hash(id + 'd' + i)) % 1, x = c.x + (hash(id + 'x' + i) - 0.5) * TW * 0.7 + Math.sin(q * 6 + i) * 3, y = c.y + TH * 0.1 - q * UP * 0.85; g.fillStyle = `rgba(255,232,176,${Math.sin(q * Math.PI) * 0.4})`; g.beginPath(); g.arc(x, y, 1.1, 0, TAU); g.fill(); }
 }
+// ---- the modular kit: which room types are drawn from kit pieces (data/ward_kit.js recipes against assets/ward_kit/manifest.json) ----
+function kitUsable(app) { if (V.kitOK) return true; if (assets.kitReady() && assets.kitSettled(app)) V.kitOK = true; return V.kitOK; }
+const roomIdAt = (w, x, y) => { const id = w.grid[y] && w.grid[y][x]; return id && id !== 'rubble' ? id : null; };
+// global sub-tile coordinates (x * 4 + u, y * 4 + v) to world
+function subWorld(w, gu, gv) { const g = geo(w); return { x: g.ox + (gu - gv) * TW / 8, y: g.oy - TH / 2 + (gu + gv) * TH / 8 }; }
+function roomAtWorld(w, x, y) { const g = geo(w), u = (x - g.ox) / (TW / 2), v = (y - g.oy) / (TH / 2); return roomIdAt(w, Math.round((u + v) / 2), Math.round((v - u) / 2)); }
+export const lastKit = () => V.kitInfo; // tests: { mode, rooms: Map id -> { key, HL, HR, doorL, doorR, slabL, slabR, dark } }
+export const kitLog = (on) => { KR.KITS.log = on ? [] : null; return KR.KITS.log; };
+export const setWallMode = (m) => { KR.KITS.mode = m; };
+export const cycleWallMode = () => KR.cycleWallMode();
+export const wallMode = () => KR.KITS.mode;
+
 export const lastActors = () => V.list; // tests: what stood where in the last frame
 export function drawRooms(host, inter) {
   const { app, run, S, MEM } = host, g = app.ctx, w = run.ward, calm = host.reduced, dt = clamp(S.t - V.lastT, 0, 0.1); V.lastT = S.t;
   const light = lightState(w.phase, S.trans);
   const legalRooms = new Set(inter && inter.legal ? inter.legal.rooms : []), pulse = 0.5 + 0.5 * Math.sin(S.t * 5);
   let n = 0;
-  V.list.length = 0;
+  V.list.length = 0; V.kw.length = 0;
   const focus = (id) => id === S.hoverRoom || id === S.selRoom || id === w.hero.room; // these rooms are drawn last: never hidden behind a neighbour
   // which rooms must stay visible (focus rooms, rooms with monsters) and which front neighbours cut their walls down to show them
   const tk = V.tk; for (const k in tk) delete tk[k];
-  const nRooms = Object.keys(w.rooms).length, dense = nRooms >= 9;
-  for (const r of Object.values(w.rooms)) {
+  const roomList = Object.values(w.rooms), nRooms = roomList.length, dense = nRooms >= 9;
+  for (const r of roomList) {
     const def0 = ROOMS[r.type], awake = !(!r.on && def0.power > 0), pr = focus(r.id) ? 2 : awake && r.contents.length && r.type !== 'rm_theatre' && (r.contents[0].kind === 'monster' || r.contents[0].kind === 'elite') ? 1 : 0;
     if (!pr) continue;
     for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[r.y + ddy] && w.grid[r.y + ddy][r.x + ddx]; if (oid && oid !== 'rubble' && !focus(oid)) tk[oid] = Math.max(tk[oid] || 0, pr); }
   }
+  // modular rooms: a recipe per type (null = painted), doors and shared walls from the engine's connections, the wall mode by density
+  const kitOn = kitUsable(app); V.rcm.clear();
+  const rcOf = (type) => { if (!kitOn) return null; let v = V.rcm.get(type); if (v === undefined) { v = KR.recipeFor(type, app); V.rcm.set(type, v); } return v; };
+  V.rcOf = rcOf;
+  const anyKit = kitOn && roomList.some((r) => rcOf(r.type));
+  const plan = anyKit ? wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)) : null;
+  const mode = KR.wallModeFor(roomList.filter((r) => r.type !== 'rm_theatre').length); // the Theatre sits far away: it does not make the floor dense
+  V.kitInfo = { mode, rooms: new Map() };
+  const hero = heroRec(host, n++, rcOf, dt); V.list.push(hero);
+  { const hid = roomAtWorld(w, hero.x, hero.y); hero.room = hid && rcOf(w.rooms[hid].type) ? hid : null; }
   const room = (x, y, id) => {
     const r = w.rooms[id]; if (!r) return;
-    const c = cellW(w, x, y), def = ROOMS[r.type], theatre = r.type === 'rm_theatre', dark = !r.on && def.power > 0;
+    const c = cellW(w, x, y), def = ROOMS[r.type], theatre = r.type === 'rm_theatre', dark = !r.on && def.power > 0, rc = rcOf(r.type), T = { x: c.x, y: c.y - TH / 2 };
     const hov = S.hoverRoom === id && !app.blocked, sel = S.selRoom === id;
     // hover lift: eases up 6 px
     const lt = (hov || sel) ? 1 : 0, lv = V.lift[id] || 0; V.lift[id] = calm ? lt : lv + (lt - lv) * Math.min(1, dt * 14);
@@ -405,14 +522,60 @@ export function drawRooms(host, inter) {
     const tp = tk[id] || 0, tKeep = focus(id) ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : dense ? 0.85 : 1, tFade = tp === 2 ? 0.55 : 1;
     const kv = V.keep[id] === undefined ? tKeep : V.keep[id], fv = V.fadeA[id] === undefined ? tFade : V.fadeA[id];
     const keep = V.keep[id] = calm ? tKeep : kv + (tKeep - kv) * Math.min(1, dt * 7), fade = V.fadeA[id] = calm ? tFade : fv + (tFade - fv) * Math.min(1, dt * 7);
-        const alpha = (st < 1 ? clamp(st * 2.5, 0, 1) : 1) * fade;
-    const spr = assets.room(r.type, app);
+    const alpha = (st < 1 ? clamp(st * 2.5, 0, 1) : 1) * (rc ? 1 : fade);
+    const spr = rc ? null : assets.room(r.type, app);
+    // ---- collect the actors that stand in this room (kit rooms draw them with their props, the others in the actor pass) ----
+    const items = V.items; items.length = 0;
+    const kitPos = (rec, s2) => { const p = KR.subPt(s2.gu, s2.gv); rec.x = T.x + p.x; rec.y = T.y + p.y; };
+    const collect = () => {
+      if (dark || st < 1 || !r.contents.length || theatre) { V.cnt[id] = r.contents.length; return; }
+      const k0 = r.contents[0].kind;
+      if (k0 === 'monster') {
+        const cnt = Math.min(5, r.contents.length), popAt = MEM.pops[id], prev = V.cnt[id];
+        for (let i = 0; i < cnt; i++) {
+          const key = id + '#' + i, e = r.contents[i], rec = poolRec(n++); V.list.push(rec);
+          let st2;
+          if (rc) { st2 = KR.monsterAt(key, i, rc, calm, dt, 1.25); kitPos(rec, st2); rec.flip = st2.fv; }
+          else { st2 = monState(key, i, calm, dt); rec.x = c.x + (st2.u - st2.v) * TW / 2; rec.y = c.y + (st2.u + st2.v) * TH / 2; rec.flip = st2.fv; }
+          if (prev !== undefined && cnt > prev && i >= prev) { V.born[key] = S.t; const sp0 = toScreen(rec.x, rec.y); S.fx.burst(sp0.x, sp0.y, 'dust', { n: calm ? 3 : 10 }); } // spawn-in puff
+          const born = V.born[key] || 0, ph = hash(key) * TAU;
+          rec.kind = 'monster'; rec.id = e.id; rec.h = 30; rec.ph = ph; rec.lvl = 0; rec.ring = 0; rec.kitDrawn = false; rec.room = rc ? id : null;
+          gait(key, rec, rec.x, rec.y, dt, calm, rec.h, S, 1);
+          rec.alpha = born && S.t - born < 0.35 ? clamp((S.t - born) / 0.35, 0, 1) : 1;
+          if (popAt !== undefined && S.t < popAt && i === cnt - 1) rec.alpha = 0;
+          if (rc) items.push({ y: rec.y, rec });
+        }
+      } else if (k0 === 'elite') {
+        const e = r.contents[0], rec = poolRec(n++), ph = hash(id) * TAU, key = id + '#e'; V.list.push(rec);
+        let st2;
+        if (rc) { st2 = KR.monsterAt(key, 2, rc, calm, dt, 1.0); kitPos(rec, st2); } else { st2 = monState(key, 2, calm, dt, 0.26); rec.x = c.x + (st2.u - st2.v) * TW / 2; rec.y = c.y + (st2.u + st2.v) * TH / 2; }
+        rec.kind = 'elite'; rec.id = e.id; rec.lvl = e.level || 1; rec.h = e.level >= 2 ? 46 : 42; rec.ph = ph; rec.flip = st2.fv; rec.alpha = 1; rec.ring = 0; rec.kitDrawn = false; rec.room = rc ? id : null;
+        gait(key, rec, rec.x, rec.y, dt, calm, rec.h, S, 2);
+        if (rc) items.push({ y: rec.y, rec });
+      } else { // event / shop / forge / rest: a floating token over the floor
+        const rec = poolRec(n++); V.list.push(rec);
+        rec.kind = 'token'; rec.id = k0; rec.x = c.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = c.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
+      }
+      V.cnt[id] = r.contents.length;
+    };
+    collect();
+    if (rc && hero.room === id) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); }
     g.save();
     if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(c.x, c.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-c.x, -c.y); }
-    if (spr) {
+    if (rc) {
+      const pl = plan.get(id), hs = KR.wallHeights(id, pl, mode, tp, dt, calm), info = { key: rc.key, HL: hs.HL, HR: hs.HR, doorL: pl.L, doorR: pl.R, slabL: pl.slabL, slabR: pl.slabR, dark };
+      V.kitInfo.rooms.set(id, info); V.kw.push({ x, y, id, tx: T.x, ty: T.y, HL: hs.HL, HR: hs.HR });
+      if (alpha < 1) g.globalAlpha *= alpha;
+      KR.drawStatic(app, g, id, rc, T.x, T.y - lift, info, CAM.z * (app.px || app.scale || 1));
+      for (const it of items) it.rec.kitDrawn = true;
+      const pg = V.pg; pg.length = 0;
+      KR.drawItems(app, g, rc, T.x, T.y, lift, items, { dark, calm, t: S.t, glow: pg, actor: (rec) => drawActor(app, g, rec, run) });
+      if (!dark) for (let i = 0; i < pg.length; i += 3) host.glows.push(pg[i], pg[i + 1] - lift, pg[i + 2]);
+    } else if (spr) {
       let img = spr.img;
       if (dark) { const dk = darkOf(spr); if (dk) img = dk; }
-      drawSprite(g, spr, c.x, c.y, lift, alpha, img, keep);
+      if (alpha < 1) g.globalAlpha *= alpha;
+      drawSprite(g, spr, c.x, c.y, lift, 1, img, keep);
     } else {
       g.globalAlpha *= alpha; drawBlock(g, r.type, c.x, c.y, lift, dark, theatre);
       if (dark) { g.globalAlpha = 0.5; diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.fillStyle = '#0c0a10'; g.fill(); }
@@ -424,8 +587,12 @@ export function drawRooms(host, inter) {
     if (theatre && host.bossOpen) { diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = 2.6; g.stroke(); glowAt(g, c.x, c.y - UP * 0.45, 46, 0.25 + 0.2 * pulse, true); }
     if (sel || hov) { diamond(g, c.x, c.y - lift + 1, TW * FILL / 2 + 1, TH * FILL / 2 + 0.5); g.strokeStyle = sel ? COL.scar : 'rgba(255,240,190,.85)'; g.lineWidth = sel ? 2.6 : 1.6; g.stroke(); }
     // lamps: warm pools in evening and night, cold dark rooms get a snuffed lantern
-    if (dark) snuffed(g, c.x - TW * 0.14, c.y - UP * 0.4 - lift, S.t, calm);
-    else if (light.glow > 0.02 && !theatre) { const fl = calm ? 1 : 0.9 + 0.1 * Math.sin(S.t * 6 + x * 2.1 + y); host.glows.push(c.x, c.y - UP * 0.36 - lift, light.glow * fl); }
+    if (dark) snuffed(g, rc ? c.x - TW * 0.16 : c.x - TW * 0.14, rc ? c.y + TH * 0.02 - lift : c.y - UP * 0.4 - lift, S.t, calm);
+    else if (light.glow > 0.02 && !theatre) {
+      const fl = calm ? 1 : 0.9 + 0.1 * Math.sin(S.t * 6 + x * 2.1 + y);
+      if (rc) { const gp = KR.glowPoints(rc, V.kitInfo.rooms.get(id), app, V.gp); host.glows.push(c.x, c.y - 14 - lift, light.glow * fl * 0.5); for (let i = 0; i < gp.length; i += 3) host.glows.push(T.x + gp[i], T.y + gp[i + 1] - lift, light.glow * fl * gp[i + 2]); }
+      else host.glows.push(c.x, c.y - UP * 0.36 - lift, light.glow * fl);
+    }
     // spawn timer candle, upgrades, overtime
     const every = WD.everyOf(r);
     if (every && !theatre && !dark && st >= 1) drawCandle(app, g, c.x - TW * 0.3, c.y + TH * 0.12, r, S.t, calm);
@@ -435,42 +602,12 @@ export function drawRooms(host, inter) {
     { const rb = roomBox(w, x, y); app.reg('ward-room-' + id, rb.x, rb.y, rb.w, rb.h, { layer: 'world' }); }
     if (!dark && !calm) dust(g, id, c, S.t);
     if (theatre && host.bossOpen && !calm && ((S.t * 2) | 0) !== V.rum) { V.rum = (S.t * 2) | 0; const sp = toScreen(c.x, c.y + 6); S.fx.burst(sp.x, sp.y, 'dust', { n: 3 }); }
-    // collect the actors that stand in this room
-    if (dark || st < 1 || !r.contents.length || theatre) { V.cnt[id] = r.contents.length; return; }
-    const k0 = r.contents[0].kind;
-    if (k0 === 'monster') {
-      const cnt = Math.min(5, r.contents.length), popAt = MEM.pops[id], prev = V.cnt[id];
-      for (let i = 0; i < cnt; i++) {
-        const key = id + '#' + i, e = r.contents[i], st2 = monState(key, i, calm, dt), rec = poolRec(n++); V.list.push(rec);
-        if (prev !== undefined && cnt > prev && i >= prev) { V.born[key] = S.t; const sp0 = toScreen(c.x + (st2.u - st2.v) * TW / 2, c.y + (st2.u + st2.v) * TH / 2); S.fx.burst(sp0.x, sp0.y, 'dust', { n: calm ? 3 : 10 }); } // spawn-in puff
-        const born = V.born[key] || 0, ph = st2.ph;
-        rec.kind = 'monster'; rec.id = e.id; rec.x = c.x + (st2.u - st2.v) * TW / 2; rec.y = c.y + (st2.u + st2.v) * TH / 2; rec.h = 30; rec.ph = ph; rec.lvl = 0; rec.ring = 0;
-        rec.flip = st2.face;
-        if (calm) { rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.frame = 0; }
-        else if (st2.mv) { rec.frame = Math.floor(S.t * 7 + ph) % 2; rec.bob = Math.abs(Math.sin(S.t * 7 + ph)) * 2.4; rec.sq = 1 + 0.03 * Math.sin(S.t * 14 + ph); rec.tilt = (rec.frame ? 1 : -1) * 0.03; }
-        else { rec.frame = 0; rec.bob = Math.abs(Math.sin(S.t * 1.8 + ph)) * 0.8; rec.sq = ((S.t * 0.9 + ph) % 4.3) < 0.13 ? 0.86 : 1 + 0.02 * Math.sin(S.t * 2.6 + ph); rec.tilt = Math.sin(S.t * 1.4 + ph) * 0.035; } // idle: breathe, blink, sway
-        rec.alpha = born && S.t - born < 0.35 ? clamp((S.t - born) / 0.35, 0, 1) : 1;
-        if (popAt !== undefined && S.t < popAt && i === cnt - 1) rec.alpha = 0;
-      }
-    } else if (k0 === 'elite') {
-      const e = r.contents[0], rec = poolRec(n++), ph = hash(id) * TAU, st2 = monState(id + '#e', 2, calm, dt, 0.18); V.list.push(rec);
-      rec.kind = 'elite'; rec.id = e.id; rec.lvl = e.level || 1; rec.h = e.level >= 2 ? 46 : 42; rec.ph = ph;
-      rec.x = c.x + (st2.u - st2.v) * TW / 2; rec.y = c.y + (st2.u + st2.v) * TH / 2; rec.flip = st2.face; rec.alpha = 1; rec.ring = 0;
-      if (calm) { rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.frame = 0; }
-      else if (st2.mv) { rec.frame = Math.floor(S.t * 5 + ph) % 2; rec.bob = Math.abs(Math.sin(S.t * 5 + ph)) * 2.8; rec.sq = 1 + 0.025 * Math.sin(S.t * 10); rec.tilt = (rec.frame ? 1 : -1) * 0.025; }
-      else { rec.frame = 0; rec.bob = (0.5 + 0.5 * Math.sin(S.t * 2.2 + ph)) * 1.4; rec.sq = 1 + 0.03 * Math.sin(S.t * 3.2 + ph); rec.tilt = 0; }
-    } else { // event / shop / forge / rest: a floating token over the floor
-      const rec = poolRec(n++); V.list.push(rec);
-      rec.kind = 'token'; rec.id = k0; rec.x = c.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = c.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length;
-    }
-    V.cnt[id] = r.contents.length;
-    };
+  };
   for (const id of depthOrder(w, focus, V.order)) { const r = w.rooms[id]; if (r) room(r.x, r.y, id); }
-  // the hero: walks cell to cell with the walk animation, otherwise breathes in its room
-  const hr = heroRec(host, n++); V.list.push(hr);
+  hero.kitDrawn = hero.kitDrawn === true && !!hero.room;
   V.list.sort(byY);
-  for (let i = 0; i < V.list.length; i++) { const r = V.list[i]; if (r.kind === 'token') drawToken(app, g, r, S.t); else drawActor(app, g, r, run); }
-  return hr;
+  for (let i = 0; i < V.list.length; i++) { const r = V.list[i]; if (r.kitDrawn) continue; if (r.kind === 'token') drawToken(app, g, r, S.t); else drawActor(app, g, r, run); }
+  return hero;
 }
 const byY = (a, b) => a.y - b.y;
 function drawToken(app, g, r, t) {
@@ -480,19 +617,48 @@ function drawToken(app, g, r, t) {
   else { g.save(); g.fillStyle = r.id === 'shop' ? '#5a8fd8' : r.id === 'forge' ? '#E8571F' : '#6a9a6a'; g.beginPath(); g.arc(r.x, y, 9, 0, TAU); g.fill(); g.strokeStyle = '#2B1E1A'; g.lineWidth = 1.2; g.stroke(); g.strokeStyle = '#fff6e0'; g.lineWidth = 2; g.beginPath(); g.moveTo(r.x - 4, y); g.lineTo(r.x - 1, y + 3); g.lineTo(r.x + 5, y - 4); g.stroke(); g.restore(); }
   if (r.id === 'event' && r.data > 1) app.text('x' + r.data, r.x + 12, y - 4, { size: 11, ui: true, bold: true, color: '#9fe0d6', stroke: '#1a1210', strokeW: 3, fixed: true });
 }
-function heroRec(host, n) {
+// where the hero stands in a room: the free sub-tile nearest the middle of a modular room, the old offset spot on a painted one
+function heroStand(w, r, rcOf, off = true) {
+  const rc = r && rcOf(r.type);
+  if (rc) return { ...subWorld(w, r.x * 4 + rc.stand[0] + 0.5, r.y * 4 + rc.stand[1] + 0.5), kit: true };
+  const c = r ? cellW(w, r.x, r.y) : cellW(w, 0, 0);
+  return { x: c.x + (off ? TW * 0.03 : 0), y: c.y + (off ? TH * 0.04 : 0), kit: false };
+}
+// the walk between two rooms when either is modular: from stand to stand on the global sub-tile grid, through the door lane, around the props
+function heroLine(host, ra, rb, rcOf) {
+  const w = host.run.ward, rA = rcOf(ra.type), rB = rcOf(rb.type);
+  const key = ra.id + '>' + rb.id + '|' + (rA ? rA.key : '-') + '|' + (rB ? rB.key : '-') + '|' + w.w;
+  const sc = (r, rc) => (rc ? [r.x * 4 + rc.stand[0], r.y * 4 + rc.stand[1]] : [r.x * 4 + 2, r.y * 4 + 2]);
+  const ex = (r, rc) => (rc ? [r.x * 4 + rc.stand[0] + 0.5, r.y * 4 + rc.stand[1] + 0.5] : [r.x * 4 + 2.28, r.y * 4 + 2.04]);
+  const info = (gx, gy) => {
+    const id = roomIdAt(w, Math.floor(gx / 4), Math.floor(gy / 4)); if (!id) return null;
+    const r2 = w.rooms[id], rc = rcOf(r2.type); if (!rc) return { room: true, solid: false };
+    return { room: true, solid: !!rc.occ[gx - r2.x * 4][gy - r2.y * 4] };
+  };
+  const cells = KR.heroPolyline(key, sc(ra, rA), sc(rb, rB), info);
+  return cells ? [ex(ra, rA), ...cells, ex(rb, rB)] : null;
+}
+function heroRec(host, n, rcOf, dt) {
   const { app, run, S } = host, w = run.ward, rec = poolRec(n), wk = S.walk, calm = host.reduced;
-  let pos = cellW(w, ...hxy(w, w.hero.room)), moving = false, kk = 0, dx = 0;
+  const hroom = w.rooms[w.hero.room];
+  let pos, moving = false, kk = 0, dx = 0; rec.kitWalk = false;
   if (wk) {
-    const a = cellW(w, ...hxy(w, wk.cells[wk.i])), b = cellW(w, ...hxy(w, wk.cells[Math.min(wk.i + 1, wk.cells.length - 1)]));
+    const ra = w.rooms[wk.cells[wk.i]], rb = w.rooms[wk.cells[Math.min(wk.i + 1, wk.cells.length - 1)]];
     kk = wk.i < wk.stop ? EASE.inOut(clamp(wk.t / host.stepS, 0, 1)) : 0; moving = wk.i < wk.stop;
-    pos = { x: lerp(a.x, b.x, kk), y: lerp(a.y, b.y, kk) }; dx = b.x - a.x; if (moving && Math.abs(dx) > 1) V.faceHero = dx > 0 ? 1 : -1;
-  }
-  rec.kind = 'hero'; rec.id = run.hero; rec.h = 44; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null;
-  rec.x = pos.x + (moving ? 0 : TW * 0.03); rec.y = pos.y + TH * 0.04; rec.flip = V.faceHero;
-  if (moving) { rec.frame = calm ? 0 : Math.floor(S.t * 9) % 2; rec.bob = Math.abs(Math.sin(kk * Math.PI * 2)) * 4; rec.sq = 1 - 0.07 * Math.abs(Math.sin(kk * Math.PI * 2 + 0.6)); rec.tilt = (rec.frame ? 1 : -1) * 0.05; }
-  else { rec.frame = 0; rec.bob = calm ? 0 : (0.5 + 0.5 * Math.sin(S.t * 2.2)) * 1.1; rec.sq = calm ? 1 : 1 + 0.02 * Math.sin(S.t * 2.2); rec.tilt = 0; }
-  if (moving && !calm) { const f = Math.floor(S.t * 9); if (f !== V.hf) { V.hf = f; const sp = toScreen(rec.x, rec.y); S.fx.burst(sp.x, sp.y, 'dust', { n: 2 }); } } // footstep dust
+    const poly = ra && rb && ra !== rb && (rcOf(ra.type) || rcOf(rb.type)) ? heroLine(host, ra, rb, rcOf) : null;
+    if (poly) { const q = KR.alongPolyline(poly, kk), p = subWorld(w, q.gu, q.gv); pos = p; dx = q.du - q.dv; rec.kitWalk = true; }
+    else {
+      rec.kitWalk = false;
+      const a = ra ? heroStand(w, ra, rcOf, !moving) : heroStand(w, hroom, rcOf, !moving), b = rb ? heroStand(w, rb, rcOf, !moving) : a;
+      pos = { x: lerp(a.x, b.x, kk), y: lerp(a.y, b.y, kk) }; dx = b.x - a.x;
+    }
+    if (moving && Math.abs(dx) > 0.02) V.faceHero = dx > 0 ? 1 : -1;
+  } else pos = heroStand(w, hroom, rcOf);
+  rec.kind = 'hero'; rec.id = run.hero; rec.h = 44; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null; rec.kitDrawn = false; rec.room = null;
+  rec.x = pos.x; rec.y = pos.y;
+  V.fvHero += (V.faceHero - V.fvHero) * (calm ? 1 : Math.min(1, dt * 10)); if (Math.abs(V.fvHero - V.faceHero) < 0.02) V.fvHero = V.faceHero;
+  rec.flip = V.fvHero;
+  gait('hero', rec, rec.x, rec.y, dt, calm, rec.h, S, 2);
   rec.ring = 1; rec.moving = moving;
   return rec;
 }
@@ -573,9 +739,10 @@ export function drawGhost(host, inter) {
   const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === S.drag.uid) || {}).id];
   if (!card || card.kind !== 'room') return;
   const x = inter.hoverCell.x, y = inter.hoverCell.y; if (w.grid[y][x]) return;
-  const c = cellW(w, x, y), spr = assets.room(card.room, app);
+  const c = cellW(w, x, y), rc = kitUsable(app) ? KR.recipeFor(card.room, app) : null, spr = rc ? null : assets.room(card.room, app);
   g.save(); g.globalAlpha = inter.drop.ok ? 0.62 : 0.3;
-  if (spr) drawSprite(g, spr, c.x, c.y, 0, 1); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
+  if (rc) { KR.drawStatic(app, g, 'ghost', rc, c.x, c.y - TH / 2, { HL: 24, HR: 24, doorL: false, doorR: false, slabL: true, slabR: true, dark: false }, CAM.z * (app.px || app.scale || 1)); KR.drawItems(app, g, rc, c.x, c.y - TH / 2, 0, [], { dark: false, calm: true, t: 0, glow: [], actor() {} }); }
+  else if (spr) drawSprite(g, spr, c.x, c.y, 0, 1); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
   if (!inter.drop.ok) { g.globalAlpha = 0.5; diamond(g, c.x, c.y, TW / 2, TH / 2); g.fillStyle = '#a3142f'; g.fill(); }
   g.restore();
 }
@@ -595,7 +762,7 @@ export function drawWorld(host, inter) {
   camEnd(host.app);
   return hr;
 }
-export const pending = (host) => assets.state === 'loading' || (assets.ready() && assets.progress().loaded < assets.progress().total);
+export const pending = (host) => assets.state === 'loading' || assets.kitState === 'loading' || (assets.ready() && assets.progress().loaded < assets.progress().total) || (assets.kitReady() && !assets.kitSettled(host.app));
 export function drawLoading(host) {
   const { app, S, run } = host, g = app.ctx, w = run.ward;
   const th = Object.values(w.rooms).find((r) => r.type === 'rm_theatre');
@@ -608,8 +775,9 @@ export function drawLoading(host) {
       app.text('Theatre ' + (Math.cos(ang) > 0.3 ? '>' : Math.cos(ang) < -0.3 ? '<' : Math.sin(ang) > 0 ? 'v' : '^'), ex, ey - 7, { size: 11, ui: true, bold: true, align: 'center', color: '#ffb3bd', fixed: true });
     }
   }
-  if (!assets.available() || assets.state === 'none' || !assets.ready()) { if (assets.state !== 'loading') return; }
-  const p = assets.progress(); if (assets.state === 'ready' && p.loaded >= p.total) return;
+  if (!assets.available() || assets.state === 'none' || !assets.ready()) { if (assets.state !== 'loading' && assets.kitState !== 'loading') return; }
+  const p0 = assets.progress(), kp = assets.kitProgress(app), p = { loaded: p0.loaded + kp.loaded, total: p0.total + kp.total, state: p0.state };
+  if (assets.state === 'ready' && p.loaded >= p.total && assets.kitState !== 'loading') return;
   const x = MAPR.x + MAPR.w - 118, y = MAPR.y + 8, bw = 108;
   g.save(); g.fillStyle = 'rgba(14,11,10,.8)'; app.rr(x, y, bw, 22, 6); g.fill();
   const k = p.total ? p.loaded / p.total : 0.1 + 0.1 * Math.sin(S.t * 3);

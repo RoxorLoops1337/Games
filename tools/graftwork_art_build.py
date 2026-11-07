@@ -15,12 +15,20 @@ Steps: (1) matte clean: alpha below 20 -> 0, RGB of alpha 0 pixels zeroed (no fr
 (4) icons and cards are trimmed and centred on a square;
 (5) every asset is exported twice as WebP q82 with alpha: <id>@2x.webp (desktop) and <id>@1x.webp (phone).
 Sizes: rooms 512/256 wide, actors 256/128, icons 128/64, cards 256/128.
+
+Combat variant (Run with --combat, touches nothing else): python3 tools/graftwork_art_build.py --combat [RAW_DIR]
+Battles draw the actors big (up to ~300 px tall), so every standing actor also gets a 512 px `actors/<id>@3x.webp` made from the same raw
+with the same trim and bottom-centre anchor as the 2x file (so anchorX/anchorY and `scale` still apply, in 2x pixel units). The manifest entry
+gains `file3x` and `bbox` = [x0, y0, x1, y1], the opaque box of the standing frame in 2x pixel units (combat sizes the figure from it).
+The existing manifest is patched in place; raws below 1024 px are skipped (the 2x file is then the best there is).
 """
 import json, os, sys, glob
 from PIL import Image
 import numpy as np
 
-RAW = sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/art/raw'
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+COMBAT = '--combat' in sys.argv
+RAW = ARGS[0] if ARGS else '/tmp/claude-0/art/raw'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'graftwork', 'assets', 'ward')
 OUT = os.path.normpath(OUT)
 SIZES = {'rooms': (512, 256), 'actors': (256, 128), 'icons': (128, 64), 'cards': (256, 128)}
@@ -69,6 +77,32 @@ def trim_square(im, fit, bottom_frac=None):
     by = int(S * bottom_frac)
     can.paste(c, ((S - c.width) // 2, by - c.height), c)
     return can, by
+
+def combat_pass():
+    mp = os.path.join(OUT, 'manifest.json')
+    man = json.load(open(mp))
+    n3 = 0
+    for n, e in man['actors'].items():
+        a = np.array(Image.open(os.path.join(OUT, e['file2x'])).convert('RGBA'))[..., 3] > 20
+        ys, xs = np.where(a)
+        e['bbox'] = [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
+        f = os.path.join(RAW, f'actor_{n}.png')
+        if not os.path.exists(f):
+            continue
+        im = Image.open(f)
+        if im.width < 1024:
+            continue
+        can, by = trim_square(clean(im), 900, 0.95)
+        r = clean(can.resize((512, 512), Image.LANCZOS))
+        r.save(os.path.join(OUT, 'actors', f'{n}@3x.webp'), 'WEBP', quality=Q, method=4, exact=True)
+        e['file3x'] = f'actors/{n}@3x.webp'
+        n3 += 1
+    json.dump(man, open(mp, 'w'), indent=1)
+    print('combat variant:', n3, 'actors')
+
+if COMBAT:
+    combat_pass()
+    sys.exit(0)
 
 man = {'version': 1, 'tile': {'w': 2, 'h': 1}, 'rooms': {}, 'actors': {}, 'icons': {}, 'cards': {}}
 ratios = []
