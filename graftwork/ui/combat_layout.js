@@ -55,15 +55,16 @@ export function handStrip(i, n) {
 }
 
 // Slots for the enemy lane (defs in order). Returns [{x, scale, w, h, sw}]; sw = slot width (>= 110) the HUD may use, slots never overlap.
-export function enemySlots(defs) {
+export function enemySlots(defs, spriteBox) {
   const n = defs.length;
   if (!n) return [];
   const gap = n > 3 ? 10 : 40;
-  const bs = defs.map((d) => { const b = enemyBounds(d) || { w: 150, h: 170 }; return { w: Math.max(40, b.w), h: Math.max(40, b.h) }; });
+  const bs = defs.map((d) => { const b = (spriteBox && spriteBox(d)) || enemyBounds(d) || { w: 150, h: 170 }; return { w: Math.max(40, b.w), h: Math.max(40, b.h) }; });
   const regionW = ENEMY_REGION.x1 - ENEMY_REGION.x0;
   const maxH = Math.max(...bs.map((b) => b.h));
   // Art height budget: a lone enemy or a duo stands big (bosses and elites bigger still), 3+ keep the clear 195 lane.
-  const tallest = Math.max(...defs.map((d) => (d.kind === 'boss' ? 0.94 : d.kind === 'elite' ? 1 : 1) * 1));
+  // painted figures: a lone normal stands a little smaller than an elite, a boss the biggest (their layout boxes already carry the kind scale)
+  const tallest = Math.max(...defs.map((d) => (spriteBox && spriteBox(d) ? (d.kind === 'boss' ? 0.94 : d.kind === 'elite' ? 0.94 : 0.86) : d.kind === 'boss' ? 0.94 : 1)));
   const budget = n === 1 ? 212 : n === 2 ? 206 : n === 3 ? 200 : ENEMY_ART_H;
   let sc = Math.min(2.1, (budget * tallest) / maxH);
   const widths = (k) => bs.map((b) => Math.max(ENEMY_SLOT_MIN, b.w * k + 34));

@@ -586,6 +586,7 @@ export default {
     else if (k >= '1' && k <= '5' && w.phase === 'morning') { const c = w.deck.hand[+k - 1]; if (c) { S.sel = S.sel === c.uid ? null : c.uid; S.kb = -1; } }
     else if ((k === 'p' || k === 'P') && !S.plans) S.plans = true;
     else if (k === 'c' || k === 'C') ISO.camRecenter();
+    else if (k === 'w' || k === 'W') { ISO.cycleWallMode(); sfx(app, 'uiClick', { vol: 0.5 }); }
   },
 
   // ---- the isometric map: ground, rooms (back to front), actors, ghost, tooltip of the hovered room ----
@@ -654,11 +655,12 @@ export default {
     if (!m.down) { if (S.panning) { m.released = false; m.pressed = false; } S.panning = false; S.panStart = null; }
   },
   camButtons(app) {
-    const x = SHEET.x + 8, y = SHEET.y + 8, sz = 40, defs = [['+', () => ISO.camZoomBy(1.3, 640, 306), 'ward-zoom-in'], ['-', () => ISO.camZoomBy(1 / 1.3, 640, 306), 'ward-zoom-out'], ['C', () => ISO.camRecenter(), 'ward-recenter']];
+    const x = SHEET.x + 8, y = SHEET.y + 8, sz = 40, defs = [['+', () => ISO.camZoomBy(1.3, 640, 306), 'ward-zoom-in'], ['-', () => ISO.camZoomBy(1 / 1.3, 640, 306), 'ward-zoom-out'], ['C', () => ISO.camRecenter(), 'ward-recenter'], ['W', () => ISO.cycleWallMode(), 'ward-walls']];
     defs.forEach(([lab, fn, id], i) => {
       const by = y + i * (sz + 4);
       app.reg(id, x, by, sz, sz, { group: 'map-ctl' });
-      if (app.button(lab, x, by, sz, sz, { size: 18, fill: id === 'ward-recenter' && ISO.CAM.manual ? '#5a3f10' : undefined, stroke: id === 'ward-recenter' && ISO.CAM.manual ? COL.lamp : undefined })) { fn(); sfx(app, 'uiClick', { vol: 0.5 }); }
+      if (app.button(lab, x, by, sz, sz, { size: 18, fill: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') ? '#5a3f10' : undefined, stroke: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') ? COL.lamp : undefined })) { fn(); sfx(app, 'uiClick', { vol: 0.5 }); }
+      if (id === 'ward-walls' && app.inRect(x, by, sz, sz)) { app.tooltip('Walls: ' + ISO.wallMode() + ' (W)', 'Cycles the wall height of the modular rooms: auto (full for one room, cutaway then low as the hospital grows), full, low, cutaway.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } }); return; }
       if (app.inRect(x, by, sz, sz)) app.tooltip(id === 'ward-recenter' ? 'Recenter (C)' : id === 'ward-zoom-in' ? 'Zoom in' : 'Zoom out', id === 'ward-recenter' ? 'Frame the rooms you built and the hero again. Wheel or pinch to zoom, drag to pan.' : 'Wheel or pinch also zooms; drag the map to pan.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } });
     });
   },

@@ -791,4 +791,12 @@ await t('camera: wheel and pinch zoom, a drag pans without tapping a room, C and
   click(app, ISO.MAPR.x + 24, ISO.MAPR.y + 8 + 2 * 44 + 20); frames(app, 3); assert.ok(!ISO.CAM.manual, 'the Recenter button');
 });
 
+await t('kit: without a kit manifest (headless) every room stays painted, the wall mode button sits under Recenter, and the iso map still registers ward-room-<id>', async () => {
+  const { app, run, flow } = await setup({ seed: 'kit0' });
+  const ids = layout(run, [['rm_entrance', 0, 2], ['rm_sawmill', 1, 2], ['rm_ward', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 30);
+  assert.equal(ISO.lastKit().rooms.size, 0, 'no kit manifest: painted rooms only');
+  for (const id of ids) assert.ok(reg('ward-room-' + id), 'ward-room-' + id);
+  const b = reg('ward-walls'); assert.ok(b && b.y > reg('ward-recenter').y && b.group === 'map-ctl', 'the W button joins the map controls');
+});
+
 console.log(`${n} ward UI checks passed`);

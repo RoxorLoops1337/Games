@@ -20,6 +20,7 @@ import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, dra
 import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import { drawCardZoom } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
+import * as CA from './combat_art.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
@@ -42,8 +43,10 @@ function tickEnt(en, d) {
   en.hurt = Math.max(0, en.hurt - d * 16); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
   for (const s of Object.keys(en.pop)) { en.pop[s] -= d * 2.2; if (en.pop[s] <= 0) delete en.pop[s]; }
 }
+// layout box of a painted enemy (null = procedural): the lane is sized from the sprite's own opaque box
+const sbox = (def) => CA.spriteBounds(def, APP);
 function mkEd(e) {
-  const b = L.enemySlots([e.def])[0];
+  const b = L.enemySlots([e.def], sbox)[0];
   const ed = mkEnt(e.maxHp, e.maxHp, 0, e.st);
   Object.assign(ed, { e, id: e.uid, visible: false, reserve: false, spawnT: 0, x: 0, scale: b.scale, w: b.w, h: b.h, sw: b.sw, placed: false, move: null, intentT: 0, intentOut: 0, atk: { phase: 'idle', k: 0 }, lunge: 0, anim: { sq: 0, sqv: 0, hold: 0, hit: 0, seamLit: 0 }, atkTm: null, atkT: -1, dying: 0, dyingOn: false, gone: false, phase: Math.random() * 6, callout: null, stunT: 0, drop: 0 });
   return ed;
@@ -88,7 +91,8 @@ function enter(app, params) {
     banner: null, vig: 0, lamp: 0, dark: 0, modal: null, pend: new Set(), ending: null, finalized: false,
     seenTithe: new Set(), pulse: { draw: 0, disc: 0, exh: 0 }, atkHero: 0, heroDy: 0, intentSfxAt: -9, deckHover: null, cardTip: null, finalBlow: false,
   };
-  S.P.pop = {}; S.P.attack = 0; S.P.dying = 0; juiceInit();
+  S.P.pop = {}; S.P.attack = 0; S.P.dying = 0; S.heroHit = 0; juiceInit();
+  CA.warm(app, [run.hero, ...c.enemies.map((e) => e.def.id)]); // painted actors (ui/combat_art.js) decode while the intro plays
   refreshKnown(); syncEds();
   for (const ed of S.eds) ed.reserve = true;
   absorb();
@@ -417,7 +421,7 @@ function onDmg(ev) {
       const hopt = { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol };
       if (typeof (jau() || {}).hit === 'function') audioCall('hit', slam ? Math.max(ev.n, en.maxHp * 0.2) : ev.n, en.maxHp, hopt); else sfx(slam ? 'hitBig' : T.body, hopt);
       if (isP) {
-        S.vig = Math.max(S.vig, T.vig); sfx('loseHp', { vol: 0.7 }); S.heroKick = Math.max(S.heroKick || 0, T.kick);
+        S.vig = Math.max(S.vig, T.vig); sfx('loseHp', { vol: 0.7 }); S.heroKick = Math.max(S.heroKick || 0, T.kick); S.heroHit = 1;
         if (killing) setKiller(ev, null);
         else if (en.hp > 0 && en.hp <= 5 && !c.over) nearMiss(p);
       }
@@ -612,11 +616,21 @@ function enemyPose(ed) {
   ed.lunge = 0; a.phase = 'idle'; a.k = 0;
 }
 function drawEnemyJ(ctx, ed, def, x, y) {
+  if (ed.melee && ed.atkT >= 0 && ed.atkKind === 'attack' && ed.atkTm && !calm() && !rmotion()) x -= Math.max(0, ed.x - (HERO_X + 90)) * J.REACH_FRAC * J.reachK(ed.atkTm, ed.atkT * 1000);
+  const spr = CA.spriteOf(def.id, APP);
+  if (spr) {
+    // painted creature: faces the hero (flipped), grounded on the floor line, breathes from the feet, lunges with a wind-up
+    const P = CA.drawEnemySprite(ctx, spr, def, ed, x, y, S.t + ed.phase, { reduced: rmotion() || FX_OPTS.reduced });
+    if (ed.anim.seamLit > 0) J.drawSeams(ctx, x + P.dx, y, ed.w, ed.h, ed.anim.seamLit, S.t, 1 - ed.dying);
+    return;
+  }
   const a = ed.anim, idl = rmotion() || ed.dying > 0 ? 0 : Math.sin((S.t + ed.phase) * 2.1) * 0.014, sy = 1 + a.sq + idl, sx = 1 / (1 + a.sq) * (1 - idl * 0.6);
   ctx.save();
-  if (ed.melee && ed.atkT >= 0 && ed.atkKind === 'attack' && ed.atkTm && !calm() && !rmotion()) x -= Math.max(0, ed.x - (HERO_X + 90)) * J.REACH_FRAC * J.reachK(ed.atkTm, ed.atkT * 1000);
+  CA.contactShadow(ctx, x, y - 1, Math.max(50, ed.w * 0.68), 1 - clamp(ed.dying * 1.4, 0, 1)); // the same grounding shadow the painted ones get
+  CA.gradeProcedural(ctx, true); // a matching colour grade until the creature is painted
   if (a.sq || idl) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
   drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac });
+  CA.gradeProcedural(ctx, false);
   if (a.seamLit > 0) J.drawSeams(ctx, x, y, ed.w, ed.h, a.seamLit, S.t, 1 - ed.dying);
   ctx.restore();
 }
@@ -1339,7 +1353,7 @@ function drawPendingModal(app) {
 // ---------------------------------------------------------------- layout of enemies
 function fixLayout(snap) {
   const res = S.eds.filter((ed) => ed.reserve && !ed.gone);
-  const sl = L.enemySlots(res.map((ed) => ed.e.def));
+  const sl = L.enemySlots(res.map((ed) => ed.e.def), sbox);
   res.forEach((ed, i) => { ed.tx = sl[i].x; ed.tscale = sl[i].scale; ed.w = sl[i].w; ed.h = sl[i].h; ed.sw = sl[i].sw; if (snap || !ed.placed) { ed.x = ed.tx; ed.scale = ed.tscale; ed.placed = true; } });
 }
 
@@ -1368,7 +1382,7 @@ function update(app, dt) {
   const P = S.P;
   tickEnt(P, ad);
   P.attack = P.attack > 0 ? (P.attack += ad * 4, P.attack >= 2 ? 0 : P.attack) : 0;
-  S.heroKick = Math.max(0, (S.heroKick || 0) - ad * 5);
+  S.heroKick = Math.max(0, (S.heroKick || 0) - ad * 5); S.heroHit = Math.max(0, (S.heroHit || 0) - ad * 4);
   juiceTick(ad, raw);
   for (const ed of S.eds) {
     tickEnt(ed, ad);
@@ -1490,7 +1504,7 @@ function draw(app) {
   ctx.save();
   ctx.fillStyle = COL.slab; ctx.fillRect(0, 0, W, H);
   ctx.translate(so.x, so.y); applyCam(ctx);
-  drawBackground(ctx, theme(), S.t);
+  if (!CA.drawBackdrop(app, ctx, { act: S.run.act, kind: S.kind, t: S.t, reduced: rmotion() || FX_OPTS.reduced })) drawBackground(ctx, theme(), S.t); // the kit room, else the old backdrop
   if (S.boss) { ctx.fillStyle = 'rgba(120,10,24,.2)'; ctx.fillRect(-20, -20, W + 40, H + 40); }
   const tgtMode = targeting() || (S.drag && selNeedsTarget());
   drawHeroAndHud(app);
@@ -1552,26 +1566,27 @@ function drawPlayZone(app) {
   ctx.restore();
 }
 const HERO_SCALE = 1.12;
-// soft ground shadow: a radial gradient squashed into an ellipse (no hard edge), rx = half width
-function groundShadow(ctx, x, y, rx, a) {
-  const ry = Math.max(10, rx * 0.26);
-  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
-  const g = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
-  g.addColorStop(0, `rgba(0,0,0,${0.55 * a})`); g.addColorStop(0.6, `rgba(0,0,0,${0.28 * a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, 6.283); ctx.fill(); ctx.restore();
-}
 function drawHeroAndHud(app) {
   const ctx = app.ctx, P = S.P;
-  // shadow
-  groundShadow(ctx, HERO_X, FOOT_Y - 2, 90, 1.25);
-  app.reg('hero:body', HERO_X - 85, FOOT_Y - 215, 170, 215, { layer: 'world' });
-  const lunge = P.attack > 0 ? Math.sin(Math.min(1, P.attack / 2) * Math.PI) : 0;
-  const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
   const dying = S.ending && !S.ending.win ? P.dying : 0;
-  ctx.save();
-  if (dying) ctx.globalAlpha = 1 - dying * 0.6;
-  drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying });
-  ctx.restore();
+  const spr = CA.spriteOf(S.run.hero, app);
+  if (spr) {
+    const hs = { attack: P.attack, kick: S.heroKick || 0, hit: S.heroHit || 0, block: P.block, bpulse: P.bpulse, dying, t: S.t, reduced: rmotion() || FX_OPTS.reduced, st: P.st };
+    const bw = (spr.bbox[2] - spr.bbox[0]) * CA.HERO_S, bh = (spr.bbox[3] - spr.bbox[1]) * CA.HERO_S;
+    app.reg('hero:body', HERO_X - bw / 2 - 10, FOOT_Y - bh, bw + 20, bh, { layer: 'world' });
+    CA.drawHeroSprite(ctx, spr, HERO_X, FOOT_Y, hs);
+  } else {
+    CA.contactShadow(ctx, HERO_X, FOOT_Y - 1, 90, 1);
+    app.reg('hero:body', HERO_X - 85, FOOT_Y - 215, 170, 215, { layer: 'world' });
+    const lunge = P.attack > 0 ? Math.sin(Math.min(1, P.attack / 2) * Math.PI) : 0;
+    const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
+    ctx.save();
+    if (dying) ctx.globalAlpha = 1 - dying * 0.6;
+    CA.gradeProcedural(ctx, true);
+    drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying });
+    CA.gradeProcedural(ctx, false);
+    ctx.restore();
+  }
   const lethal = !S.ending && !S.modal && canAct() ? { ...lethalIncoming(S.c), rm: FX_OPTS.reduced || rmotion() } : null; // intents this turn >= your HP after Block: pulse the bar, show the chip
   drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t, S.dgr && S.dgr.on ? { pulse: S.dgr.pulse, level: S.dgr.level, rm: FX_OPTS.reduced || rmotion() } : null, lethal); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
 }
@@ -1587,7 +1602,8 @@ function drawEnemies(app, tgtMode) {
     if (!ed.visible || ed.gone) continue;
     const def = ed.e.def;
     const sp = EASE.out(ed.spawnT);
-    const fade = 1 - clamp((ed.dying - 0.55) / 0.45, 0, 1);
+    const painted = !!CA.spriteOf(def.id, APP);
+    const fade = painted ? 1 : 1 - clamp((ed.dying - 0.55) / 0.45, 0, 1); // painted ones collapse and fade on the floor themselves
     const alpha = clamp(sp * 1.5, 0, 1) * fade;
     const drop = (1 - sp) * ed.drop * -140;
     // target highlight
@@ -1599,9 +1615,8 @@ function drawEnemies(app, tgtMode) {
       ctx.restore();
     }
     ctx.save(); ctx.globalAlpha = alpha;
-    groundShadow(ctx, ed.x, EF - 2, Math.max(50, ed.w * 0.68), 1.25);
     const stun = ed.stunT > 0 ? Math.sin(S.t * 60) * 4 * ed.stunT : 0;
-    const x = ed.x - ed.lunge * 46 * ed.scale + ed.kick * 12 + stun;
+    const x = ed.x - (painted ? 0 : ed.lunge * 46 * ed.scale) + ed.kick * 12 + stun;
     drawEnemyJ(ctx, ed, def, x, EF + drop);
     ctx.restore();
     if (ed.dyingOn) continue;

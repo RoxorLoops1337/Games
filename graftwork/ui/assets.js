@@ -10,6 +10,7 @@
 //   assets.room(id, app)        { img, def } or null while loading / missing   (also actor, icon, card)
 //   assets.preload(app, kinds)  queue every image of the given groups (rooms, actors by default); progress() says how far it is
 //   assets.progress()           { loaded, total, failed, state }  state: 'idle' | 'loading' | 'ready' | 'none'
+//   assets.kitReady() / kitImg(kind, id, app) / kitSettled(app): the modular room kit (assets/ward_kit/manifest.json), see data/ward_kit.js
 // @1x is used on phone scales (app.scale < 0.8), @2x on desktop. Every failure is swallowed: callers draw their procedural fallback on null.
 const BASE_DEFAULT = 'assets/ward/';
 const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
@@ -19,15 +20,19 @@ export function createAssets(opts = {}) {
     base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, hits: 0,
     // test / tool hooks: a fetch and an image factory can be injected
     fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null,
+    // the modular room kit (assets/ward_kit/manifest.json): floors, walls, pieces, props. Optional: no kit means every room is painted.
+    kit: null, kitState: 'idle', kitBase: opts.kitBase || '',
   };
+  const kitBaseOf = () => A.kitBase || (A.base.endsWith('ward/') ? A.base.slice(0, -5) + 'ward_kit/' : A.base + 'kit/');
   const live = () => !!(A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
   A.available = live;
   A.app = null;
   A.use2x = (app) => { const a = app || A.app; return !(a && a.scale > 0 && a.scale < 0.8); };
   A.setBase = (b) => { A.base = b.endsWith('/') ? b : b + '/'; };
-  A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.failed = 0; };
+  A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.failed = 0; A.kit = null; A.kitState = 'idle'; };
   A.ensure = (app) => {
     if (app) A.app = app;
+    ensureKit();
     if (A.state !== 'idle') return;
     if (!live()) { A.state = 'none'; return; }
     A.state = 'loading';
@@ -38,6 +43,20 @@ export function createAssets(opts = {}) {
       A.state = 'ready';
     }).catch(() => { A.state = 'none'; });
   };
+  function ensureKit() {
+    if (A.kitState !== 'idle') return;
+    if (!live()) { A.kitState = 'none'; return; }
+    A.kitState = 'loading';
+    const url = kitBaseOf() + 'manifest.json';
+    const go = A.fetchJson ? A.fetchJson(url) : fetch(url, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('kit manifest ' + r.status))));
+    Promise.resolve(go).then((m) => {
+      const ok = (o) => o && typeof o === 'object' && !Array.isArray(o);
+      if (!ok(m) || !ok(m.floors) || !ok(m.walls) || !ok(m.pieces) || !ok(m.props)) throw new Error('bad kit manifest');
+      A.kit = { version: m.version || 1, world: m.world || {}, floors: m.floors, walls: m.walls, pieces: m.pieces, props: m.props };
+      A.kitState = 'ready';
+    }).catch(() => { A.kitState = 'none'; });
+  }
+  A.kitReady = () => A.kitState === 'ready' && !!A.kit;
   A.ready = () => A.state === 'ready' && !!A.manifest;
   const defOf = (group, id) => (A.manifest && A.manifest[group] && A.manifest[group][id]) || null;
   A.def = (group, id) => defOf(group, id);
@@ -69,6 +88,21 @@ export function createAssets(opts = {}) {
     }
     return null;
   }
+  // ---- the kit: images are keyed 'kit:<file>'; pieces, props, floors and walls come back as { img, def } | null ----
+  const KIT_GROUPS = ['floors', 'walls', 'pieces', 'props'];
+  function kitLoad(file) {
+    const key = 'kit:' + file; let e = A.imgs.get(key); if (e) return e;
+    e = { img: null, ok: false, bad: false }; A.imgs.set(key, e);
+    try { const img = A.makeImage ? A.makeImage() : new Image(); img.onload = () => { e.ok = true; A.hits++; }; img.onerror = () => { e.bad = true; A.failed++; }; img.src = kitBaseOf() + file; e.img = img; } catch (err) { e.bad = true; A.failed++; }
+    return e;
+  }
+  const kitFile = (d, app) => (A.use2x(app) ? d.file2x || d.file1x || d.file : d.file1x || d.file2x || d.file);
+  A.kitDef = (kind, id) => (A.kit && A.kit[kind] && A.kit[kind][id]) || null;
+  A.kitImg = (kind, id, app) => { const d = A.kitDef(kind, id); if (!d) return null; const f = kitFile(d, app); if (!f) return null; const e = kitLoad(f); return e.ok ? { img: e.img, def: d } : null; };
+  A.kitPreload = (app) => { if (!A.kitReady()) return; for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (f) kitLoad(f); } };
+  // true once every kit image of this scale has loaded or failed (the renderer waits for it so a room never flips from painted to modular piece by piece)
+  A.kitSettled = (app) => { if (!A.kitReady()) return false; A.kitPreload(app); for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; const e = A.imgs.get('kit:' + f); if (!e || (!e.ok && !e.bad)) return false; } return true; };
+  A.kitProgress = (app) => { let total = 0, loaded = 0; if (A.kitReady()) for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; total++; const e = A.imgs.get('kit:' + f); if (e && (e.ok || e.bad)) loaded++; } return { loaded, total, state: A.kitState }; };
   A.room = (id, app) => get('rooms', id, app);
   A.actor = (id, app, alt) => get('actors', id, app, alt); // alt: the second walk frame (falls back to the first)
   A.icon = (id, app) => get('icons', id, app);
