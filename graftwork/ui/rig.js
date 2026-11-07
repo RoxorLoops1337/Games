@@ -12,15 +12,16 @@
 export const HUMANOID = {
   id: 'humanoid', height: 64,
   // name, parent, local offset from the parent's origin (pivot), length used by the placeholder, draw order z (low = behind)
+  // LAYERS: the LEFT leg and arm are the NEAR side (in front of the body), the right ones the far side (behind it). Layers only: positions are unchanged.
   bones: [
     { n: 'hips', p: null, x: 0, y: -30, len: 0, z: 5 },
     { n: 'torso', p: 'hips', x: 0, y: 0, len: -20, z: 5 },
     { n: 'head', p: 'torso', x: 0, y: -20, len: -12, z: 7 },
-    { n: 'armL_up', p: 'torso', x: -8, y: -18, len: 11, z: 2 }, { n: 'armL_lo', p: 'armL_up', x: 0, y: 11, len: 10, z: 2 }, { n: 'handL', p: 'armL_lo', x: 0, y: 10, len: 4, z: 2 },
-    { n: 'armR_up', p: 'torso', x: 8, y: -18, len: 11, z: 8 }, { n: 'armR_lo', p: 'armR_up', x: 0, y: 11, len: 10, z: 8 }, { n: 'handR', p: 'armR_lo', x: 0, y: 10, len: 4, z: 8 },
-    { n: 'weapon', p: 'handR', x: 0, y: 2, len: 14, z: 9 },
-    { n: 'legL_up', p: 'hips', x: -4, y: 0, len: 15, z: 1 }, { n: 'legL_lo', p: 'legL_up', x: 0, y: 15, len: 13, z: 1 }, { n: 'footL', p: 'legL_lo', x: 0, y: 13, len: 3, z: 1 },
-    { n: 'legR_up', p: 'hips', x: 4, y: 0, len: 15, z: 6 }, { n: 'legR_lo', p: 'legR_up', x: 0, y: 15, len: 13, z: 6 }, { n: 'footR', p: 'legR_lo', x: 0, y: 13, len: 3, z: 6 },
+    { n: 'armL_up', p: 'torso', x: -8, y: -18, len: 11, z: 8 }, { n: 'armL_lo', p: 'armL_up', x: 0, y: 11, len: 10, z: 8 }, { n: 'handL', p: 'armL_lo', x: 0, y: 10, len: 4, z: 8 },
+    { n: 'armR_up', p: 'torso', x: 8, y: -18, len: 11, z: 2 }, { n: 'armR_lo', p: 'armR_up', x: 0, y: 11, len: 10, z: 2 }, { n: 'handR', p: 'armR_lo', x: 0, y: 10, len: 4, z: 2 },
+    { n: 'weapon', p: 'handR', x: 0, y: 2, len: 14, z: 3 }, // the weapon hand is the far one now: the sword sits behind the torso, with that arm
+    { n: 'legL_up', p: 'hips', x: -4, y: 0, len: 15, z: 6 }, { n: 'legL_lo', p: 'legL_up', x: 0, y: 15, len: 13, z: 6 }, { n: 'footL', p: 'legL_lo', x: 0, y: 13, len: 3, z: 6 },
+    { n: 'legR_up', p: 'hips', x: 4, y: 0, len: 15, z: 1 }, { n: 'legR_lo', p: 'legR_up', x: 0, y: 15, len: 13, z: 1 }, { n: 'footR', p: 'legR_lo', x: 0, y: 13, len: 3, z: 1 },
   ],
 };
 

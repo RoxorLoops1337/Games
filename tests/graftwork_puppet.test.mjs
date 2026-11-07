@@ -19,6 +19,22 @@ const worldL = (ph) => { at(ph); return ph * S + pose.footLx; };
 const worldR = (ph) => { at(ph); return ph * S + pose.footRx; };
 const DPH = 0.002;
 
+await t('layers_the_left_leg_is_in_front_of_the_right_leg_in_the_puppet_and_in_the_rig', async () => {
+  // puppet: record which leg part is drawn last
+  const mk = (tag) => ({ c: { tag }, x: 0, y: 0, w: 0.1, h: 0.2 });
+  const Pp = { legL: mk('L'), legR: mk('R'), upper: { c: { tag: 'U' }, x: 0, y: 0, w: 0.3, h: 0.5 }, pivLx: 0.4, pivRx: 0.6, pivY: 0.5, hipX: 0.5, hipY: 0.5 };
+  const drawn = [];
+  const g = new Proxy({}, { get: (_o, k) => (k === 'drawImage' ? (c) => drawn.push(c.tag) : () => {}) });
+  const ps = P.newPose(); P.walkPuppet(0.3, 1, 'legged', T, ps, geom);
+  P.drawLegged(g, Pp, ps, 1, 0, 0, 100, 100, 100);
+  assert.deepEqual(drawn, ['R', 'L', 'U'], 'the far (right) leg first, then the near (left) leg, then the upper body');
+  // rig: the left leg and arm have a higher z than the right ones
+  const { HUMANOID } = await import('../graftwork/ui/rig.js');
+  const z = (n) => HUMANOID.bones.find((b) => b.n === n).z;
+  assert.ok(z('legL_up') > z('legR_up') && z('legL_lo') > z('legR_lo') && z('footL') > z('footR'), 'left leg in front of the right leg');
+  assert.ok(z('armL_up') > z('armR_up'), 'the near arm goes with the near leg');
+});
+
 await t('planted_foot_ground_speed_is_zero', () => {
   let stance = 0, worst = 0;
   for (let ph = 0.02; ph < 8; ph += DPH) {
