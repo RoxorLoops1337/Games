@@ -51,7 +51,7 @@ export function handRects(n) {
   for (let i = 0; i < n; i++) out.push({ x: x0 + i * (CW + gap), y: HAND.y + 2, w: CW, h: CH });
   return out;
 }
-const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return cellCenter(r.x, r.y); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
+const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return ISO.roomCS(run.ward, r); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
 export const fastWalk = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.fastWalk);
 const walkPace = (app) => (reduced(app) ? PACE.reduced : fastWalk(app) ? PACE.fast : PACE.normal);
 const reduced = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(FX_OPTS.reduced || (s && (s.reducedMotion || s.reduceMotion))); };
@@ -627,7 +627,7 @@ export default {
       const pt = MEM.pops[r.id]; if (pt === undefined || S.t < pt) continue;
       const k = (S.t - pt) / 0.5;
       if (k >= 1) { delete MEM.pops[r.id]; continue; }
-      const cc = cellCenter(r.x, r.y);
+      const cc = ISO.roomCS(S.run.ward, r);
       g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.ellipse(cc.x, cc.y, (10 + 30 * EASE.out(k)) * ISO.CAM.z, (10 + 30 * EASE.out(k)) * ISO.CAM.z / 2, 0, 0, Math.PI * 2); g.stroke(); g.restore();
       if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x, cc.y - 10, 'spark', { n: 8 }); }
     }
@@ -638,7 +638,7 @@ export default {
   roomCard(app) {
     const run = S.run, w = run.ward, r = S.hoverRoom && !app.blocked && !S.drag && !(S.toastT > 0) ? w.rooms[S.hoverRoom] : null; // a toast owns the map while it shows: never stack the two
     if (!r) return;
-    const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y), CWd = 208, X0 = 10;
+    const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y, r.w || 1, r.h || 1), CWd = 208, X0 = 10;
     const every = WD.everyOf(r), body = roomTip(run, r), bo = { size: 13, ui: true, color: 'rgba(232,220,196,.85)', fit: { w: CWd - 2 * X0, lines: 7, soft: true } }, Lb = app.layoutText(body, bo);
     const hasBar = every && r.type !== 'rm_theatre', head = 24, barH = hasBar ? 22 : 0, Hh = head + barH + Lb.h + 16;
     let x = b.x + b.w + 6; if (x + CWd > SHEET.x + SHEET.w - 4) x = b.x - CWd - 6;

@@ -48,6 +48,14 @@ export const ZMIN = 0.55, ZMAX_AUTO = 2.4, ZMAX = 3.4;
 const MCX = MAPR.x + MAPR.w / 2, MCY = MAPR.y + MAPR.h / 2;
 export const toScreen = (wx, wy) => ({ x: (wx - CAM.x) * CAM.z + MCX, y: (wy - CAM.y) * CAM.z + MCY });
 export const toWorld = (sx, sy) => ({ x: (sx - MCX) / CAM.z + CAM.x, y: (sy - MCY) / CAM.z + CAM.y });
+// ---- footprints: a room covers fw x fh cells with its anchor (x, y) at the top. roomCW is the world centre of its floor, rectDiam traces the diamond of any rectangle of cells ----
+export const fpOf = (r) => [r.w || 1, r.h || 1];
+export function roomCW(w, r) { const [fw, fh] = fpOf(r); return cellW(w, r.x + (fw - 1) / 2, r.y + (fh - 1) / 2); }
+export function roomCS(w, r) { const c = roomCW(w, r); return toScreen(c.x, c.y); }
+function rectDiam(g, w, x, y, fw, fh, lift = 0, inset = 0) {
+  const a = cellW(w, x, y), b = cellW(w, x + fw - 1, y), d = cellW(w, x + fw - 1, y + fh - 1), l = cellW(w, x, y + fh - 1);
+  g.beginPath(); g.moveTo(a.x, a.y - TH / 2 + inset * 0.5 - lift); g.lineTo(b.x + TW / 2 - inset, b.y - lift); g.lineTo(d.x, d.y + TH / 2 - inset * 0.5 - lift); g.lineTo(l.x - TW / 2 + inset, l.y - lift); g.closePath();
+}
 export function cellC(w, x, y) { const c = cellW(w, x, y); return toScreen(c.x, c.y); } // the screen centre of a cell's floor
 const inMap = (sx, sy) => sx >= MAPR.x && sx <= MAPR.x + MAPR.w && sy >= MAPR.y && sy <= MAPR.y + MAPR.h;
 export const overMap = inMap;
@@ -60,8 +68,9 @@ function inVolume(px, py, cx, cy, hw, hh, up) {
 function inKitWall(mx, my, k) {
   const HW = TW / 2, HH = TH / 2, X = mx - k.tx, Y = my - k.ty;
   const inQuad = (q) => { let sg = 0; for (let i = 0; i < 4; i++) { const a = q[i], b = q[(i + 1) % 4], cr = (b[0] - a[0]) * (Y - a[1]) - (b[1] - a[1]) * (X - a[0]); if (cr !== 0) { if (sg && (cr > 0) !== (sg > 0)) return false; sg = cr; } } return true; };
-  if (k.HL > 17 && inQuad([[-HW, HH], [0, 0], [0, -k.HL - 4], [-HW, HH - k.HL - 4]])) return true;
-  return k.HR > 17 && inQuad([[0, 0], [HW, HH], [HW, HH - k.HR - 4], [0, -k.HR - 4]]);
+  const fw = k.fw || 1, fh = k.fh || 1;
+  if (k.HL > 17 && inQuad([[-fh * HW, fh * HH], [0, 0], [0, -k.HL - 4], [-fh * HW, fh * HH - k.HL - 4]])) return true;
+  return k.HR > 17 && inQuad([[0, 0], [fw * HW, fw * HH], [fw * HW, fw * HH - k.HR - 4], [0, -k.HR - 4]]);
 }
 export function pick(w, sx, sy) {
   if (!inMap(sx, sy)) return null;
@@ -77,7 +86,10 @@ export function pick(w, sx, sy) {
   }
   return null;
 }
-export function roomBox(w, x, y) { const c = cellW(w, x, y), s = toScreen(c.x - TW / 2, c.y - UP); return { x: s.x, y: s.y, w: TW * CAM.z, h: (UP + TH / 2 + 4) * CAM.z }; }
+export function roomBox(w, x, y, fw = 1, fh = 1) {
+  const a = cellW(w, x, y), b = cellW(w, x + fw - 1, y), d = cellW(w, x + fw - 1, y + fh - 1), l = cellW(w, x, y + fh - 1), s = toScreen(l.x - TW / 2, a.y - UP);
+  return { x: s.x, y: s.y, w: (b.x - l.x + TW) * CAM.z, h: (d.y + TH / 2 + 4 - (a.y - UP)) * CAM.z };
+}
 export const cellBox = (w, x, y) => { const c = cellW(w, x, y), s = toScreen(c.x - TW / 2, c.y - TH / 2); return { x: s.x, y: s.y, w: TW * CAM.z, h: TH * CAM.z }; };
 const diamond = (g, cx, cy, hw, hh) => { g.beginPath(); g.moveTo(cx, cy - hh); g.lineTo(cx + hw, cy); g.lineTo(cx, cy + hh); g.lineTo(cx - hw, cy); g.closePath(); };
 
@@ -87,8 +99,8 @@ function fitTarget(host) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   const add = (cx, cy, up) => { x0 = Math.min(x0, cx - TW / 2); x1 = Math.max(x1, cx + TW / 2); y0 = Math.min(y0, cy - up); y1 = Math.max(y1, cy + TH / 2 + 6); };
   const rooms = Object.values(w.rooms), far = (r) => r.type === 'rm_theatre' && !host.bossForced && !rooms.some((o) => o !== r && Math.max(Math.abs(o.x - r.x), Math.abs(o.y - r.y)) <= 2);
-  for (const r of rooms) { if (far(r)) continue; const c = cellW(w, r.x, r.y); add(c.x, c.y, UP); }
-  const hr = w.rooms[w.hero.room]; if (hr) { const c = cellW(w, hr.x, hr.y); add(c.x, c.y, UP); }
+  for (const r of rooms) { if (far(r)) continue; for (const [cx, cy] of WD.cellsOf(r)) { const c = cellW(w, cx, cy); add(c.x, c.y, UP); } }
+  const hr = w.rooms[w.hero.room]; if (hr) for (const [cx, cy] of WD.cellsOf(hr)) { const c = cellW(w, cx, cy); add(c.x, c.y, UP); }
   if (w.phase === 'morning') for (const k of host.buildable) { const [bx, by] = k.split(','), c = cellW(w, +bx, +by); add(c.x, c.y, 8); }
   if (x0 > x1) { const c = cellW(w, 0, 0); add(c.x, c.y, UP); }
   const bw = x1 - x0 + 36, bh = y1 - y0 + 30;
@@ -172,8 +184,7 @@ function drawPlinth(g, w) {
 }
 // flagstones: full next to the built rooms, a faint grid far from them
 function drawFlags(g, w, host) {
-  const rl = V.rl; rl.length = 0; for (const r of Object.values(w.rooms)) rl.push(r.x, r.y);
-  const hr = w.rooms[w.hero.room]; if (hr) rl.push(hr.x, hr.y);
+  const rl = V.rl; rl.length = 0; for (const r of Object.values(w.rooms)) for (const [cx, cy] of WD.cellsOf(r)) rl.push(cx, cy);
   for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) {
     let d = 9; for (let i = 0; i < rl.length; i += 2) { const q = Math.max(Math.abs(rl[i] - x), Math.abs(rl[i + 1] - y)); if (q < d) d = q; }
     const al = d <= 1 ? 1 : d === 2 ? 0.55 : 0.22, c = cellW(w, x, y), sh = (x + y) % 2;
@@ -276,6 +287,17 @@ function drawBlock(g, type, cx, cy, lift, dark, theatre) {
   // corner posts and rim
   g.fillStyle = '#2a1e16'; g.fillRect(cx - 2, y0 - hh - H - 3, 4, H + 6); g.fillRect(cx - hw - 2, y0 - H - 2, 4, H + 4); g.fillRect(cx + hw - 2, y0 - H - 2, 4, H + 4);
   g.strokeStyle = theatre ? '#c9a227' : 'rgba(232,220,196,.35)'; g.lineWidth = 1; diamond(g, cx, y0, hw, hh); g.stroke();
+  g.restore();
+}
+
+// a big room with no kit and no painting (headless, a failed download): the footprint floor with two back walls
+function drawBigBlock(g, w, r, lift, dark, theatre) {
+  const [fw, fh] = fpOf(r), a = cellW(w, r.x, r.y), top = { x: a.x, y: a.y - TH / 2 - lift }, R = { x: top.x + fw * TW / 2, y: top.y + fw * TH / 2 }, L = { x: top.x - fh * TW / 2, y: top.y + fh * TH / 2 }, H = WALL + (theatre ? 8 : 0), tint = K.ROOM_TINT[r.type] || '#8a7a5c';
+  g.save();
+  rectDiam(g, w, r.x, r.y, fw, fh, lift); g.fillStyle = theatre ? '#3a1c20' : '#7a6548'; g.fill(); g.fillStyle = rgba(tint, 0.22); g.fill(); g.strokeStyle = '#1b1410'; g.lineWidth = 1.3; g.stroke();
+  g.fillStyle = '#4a3a2e'; g.beginPath(); g.moveTo(L.x, L.y); g.lineTo(top.x, top.y); g.lineTo(top.x, top.y - H); g.lineTo(L.x, L.y - H); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = '#5b4636'; g.beginPath(); g.moveTo(top.x, top.y); g.lineTo(R.x, R.y); g.lineTo(R.x, R.y - H); g.lineTo(top.x, top.y - H); g.closePath(); g.fill(); g.stroke();
+  K.roomGlyph(g, r.type, top.x + fw * TW * 0.25, top.y + fw * TH * 0.25 - H * 0.45, 24, theatre ? '#e8d6b0' : '#2B1E1A', tint);
   g.restore();
 }
 
@@ -472,6 +494,7 @@ export function depthOrder(w, focus, out = []) {
   out.length = 0;
   for (let d = 0; d <= w.w + w.h - 2; d++) for (let x = Math.min(d, w.w - 1); x >= 0 && d - x < w.h; x--) {
     const id = w.grid[d - x][x]; if (!id || id === 'rubble') continue;
+    const r = w.rooms && w.rooms[id]; if (r && (r.w || 1) * (r.h || 1) > 1 && !(x === r.x + (r.w || 1) - 1 && d - x === r.y + (r.h || 1) - 1)) continue; // a big room is placed once, at its front-most cell
     out.push(id);
   }
   return out;
@@ -522,21 +545,22 @@ export function drawRooms(host, inter) {
   for (const r of roomList) {
     const def0 = ROOMS[r.type], awake = !(!r.on && def0.power > 0), pr = focus(r.id) ? 2 : awake && r.contents.length && r.type !== 'rm_theatre' && (r.contents[0].kind === 'monster' || r.contents[0].kind === 'elite') ? 1 : 0;
     if (!pr) continue;
-    for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[r.y + ddy] && w.grid[r.y + ddy][r.x + ddx]; if (oid && oid !== 'rubble') tk[oid] = Math.max(tk[oid] || 0, pr); }
+    for (const [cx, cy] of WD.cellsOf(r)) for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[cy + ddy] && w.grid[cy + ddy][cx + ddx]; if (oid && oid !== 'rubble' && oid !== r.id) tk[oid] = Math.max(tk[oid] || 0, pr); }
   }
   // modular rooms: a recipe per type (null = painted), doors and shared walls from the engine's connections, the wall mode by density
   const kitOn = kitUsable(app); V.rcm.clear();
-  const rcOf = (type) => { if (!kitOn) return null; let v = V.rcm.get(type); if (v === undefined) { v = KR.recipeFor(type, app); V.rcm.set(type, v); } return v; };
+  const rcOf = (r) => { if (!kitOn) return null; const o = typeof r === 'string' ? { type: r } : r, big = (o.w || 1) * (o.h || 1) > 1, k = o.type + (big ? '@' + (o.w || 1) + 'x' + (o.h || 1) : ''); let v = V.rcm.get(k); if (v === undefined) { v = KR.recipeFor(o.type, app, o.w || 1, o.h || 1); V.rcm.set(k, v); } return v; };
   V.rcOf = rcOf;
-  const anyKit = kitOn && roomList.some((r) => rcOf(r.type));
+  const anyKit = kitOn && roomList.some((r) => rcOf(r));
   const plan = anyKit ? wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)) : null;
   const mode = KR.wallModeFor(roomList.filter((r) => r.type !== 'rm_theatre').length); // the Theatre sits far away: it does not make the floor dense
   V.kitInfo = { mode, rooms: new Map() };
   const hero = heroRec(host, n++, rcOf, dt); V.list.push(hero);
-  { const hid = roomAtWorld(w, hero.x, hero.y); hero.room = hid && rcOf(w.rooms[hid].type) ? hid : null; }
+  { const hid = roomAtWorld(w, hero.x, hero.y); hero.room = hid && rcOf(w.rooms[hid]) ? hid : null; }
   const room = (x, y, id) => {
     const r = w.rooms[id]; if (!r) return;
-    const c = cellW(w, x, y), def = ROOMS[r.type], theatre = r.type === 'rm_theatre', dark = !r.on && def.power > 0, rc = rcOf(r.type), T = { x: c.x, y: c.y - TH / 2 };
+    const c = cellW(w, x, y), def = ROOMS[r.type], theatre = r.type === 'rm_theatre', dark = !r.on && def.power > 0, rc = rcOf(r), T = { x: c.x, y: c.y - TH / 2 };
+    const [fw, fh] = fpOf(r), big = fw * fh > 1, cc = big ? roomCW(w, r) : c, cl = big ? cellW(w, x, y + fh - 1) : c, cr = big ? cellW(w, x + fw - 1, y) : c; // cc: middle of the floor, cl / cr: the front-left and front-right cell
     const hov = S.hoverRoom === id && !app.blocked, sel = S.selRoom === id;
     // hover lift: eases up 6 px
     const lt = (hov || sel) ? 1 : 0, lv = V.lift[id] || 0; V.lift[id] = calm ? lt : lv + (lt - lv) * Math.min(1, dt * 14);
@@ -562,12 +586,12 @@ export function drawRooms(host, inter) {
       if (dark || st < 1 || !r.contents.length || theatre) { V.cnt[id] = r.contents.length; return; }
       const k0 = r.contents[0].kind;
       if (k0 === 'monster') {
-        const cnt = Math.min(5, r.contents.length), popAt = MEM.pops[id], prev = V.cnt[id];
+        const cnt = Math.min(big ? 7 : 5, r.contents.length), popAt = MEM.pops[id], prev = V.cnt[id];
         for (let i = 0; i < cnt; i++) {
           const key = id + '#' + i, e = r.contents[i], rec = poolRec(n++); V.list.push(rec);
           let st2;
           if (rc) { st2 = KR.monsterAt(key, i, rc, calm, dt, 1.25); kitPos(rec, st2); rec.flip = st2.fv; }
-          else { st2 = monState(key, i, calm, dt); rec.x = c.x + (st2.u - st2.v) * TW / 2; rec.y = c.y + (st2.u + st2.v) * TH / 2; rec.flip = st2.fv; }
+          else { st2 = monState(key, i, calm, dt); rec.x = cc.x + (st2.u * fw - st2.v * fh) * TW / 2; rec.y = cc.y + (st2.u * fw + st2.v * fh) * TH / 2; rec.flip = st2.fv; }
           if (prev !== undefined && cnt > prev && i >= prev) { V.born[key] = S.t; const sp0 = toScreen(rec.x, rec.y); S.fx.burst(sp0.x, sp0.y, 'dust', { n: calm ? 3 : 10 }); } // spawn-in puff
           const born = V.born[key] || 0, ph = hash(key) * TAU;
           rec.kind = 'monster'; rec.id = e.id; rec.h = 30; rec.ph = ph; rec.lvl = 0; rec.ring = 0; rec.kitDrawn = false; rec.room = rc ? id : null;
@@ -585,17 +609,17 @@ export function drawRooms(host, inter) {
         if (rc) items.push({ y: rec.y, rec });
       } else { // event / shop / forge / rest: a floating token over the floor
         const rec = poolRec(n++); V.list.push(rec);
-        rec.kind = 'token'; rec.id = k0; rec.x = c.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = c.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
+        rec.kind = 'token'; rec.id = k0; rec.x = cc.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = cc.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
       }
       V.cnt[id] = r.contents.length;
     };
     collect();
     if (rc && hero.room === id && !heroAtEdge(w, hero, id)) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); } // a hero crossing a doorway is drawn in the final pass: a room in front must not wall him off
     g.save();
-    if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(c.x, c.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-c.x, -c.y); }
+    if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(cc.x, cc.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-cc.x, -cc.y); }
     if (rc) {
-      const pl = plan.get(id), hs = KR.wallHeights(id, pl, mode, tp, dt, calm), info = { key: rc.key, HL: hs.HL, HR: hs.HR, doorL: pl.L, doorR: pl.R, slabL: pl.slabL, slabR: pl.slabR, dark };
-      V.kitInfo.rooms.set(id, info); V.kw.push({ x, y, id, tx: T.x, ty: T.y, HL: hs.HL, HR: hs.HR });
+      const pl = plan.get(id), hs = KR.wallHeights(id, pl, mode, tp, dt, calm), info = { key: rc.key, HL: hs.HL, HR: hs.HR, doorL: pl.L, doorR: pl.R, slabL: pl.slabL, slabR: pl.slabR, dark, dL: pl.Ls, dR: pl.Rs, slabLs: pl.slabLs, slabRs: pl.slabRs };
+      V.kitInfo.rooms.set(id, info); V.kw.push({ x, y, id, tx: T.x, ty: T.y, HL: hs.HL, HR: hs.HR, fw, fh });
       if (alpha < 1) g.globalAlpha *= alpha;
       KR.drawStatic(app, g, id, rc, T.x, T.y - lift, info, CAM.z * (app.px || app.scale || 1));
       for (const it of items) it.rec.kitDrawn = true;
@@ -609,31 +633,31 @@ export function drawRooms(host, inter) {
       if (sprLow && lowK > 0.01) drawSprite(g, sprLow, c.x, c.y, lift, lowK, imgOf(sprLow), 1);
       V.paint[id] = lowK > 0.5 ? 'low' : 'tall';
     } else {
-      g.globalAlpha *= alpha; drawBlock(g, r.type, c.x, c.y, lift, dark, theatre);
-      if (dark) { g.globalAlpha = 0.5; diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.fillStyle = '#0c0a10'; g.fill(); }
+      g.globalAlpha *= alpha; if (big) drawBigBlock(g, w, r, lift, dark, theatre); else drawBlock(g, r.type, c.x, c.y, lift, dark, theatre);
+      if (dark) { g.globalAlpha = 0.5; rectDiam(g, w, x, y, fw, fh, lift); g.fillStyle = '#0c0a10'; g.fill(); }
     }
     g.restore();
-    if (st >= 1 && V.landed[id] === 0) { V.landed[id] = 1; S.fx.burst(c.x, c.y + 6, 'dust', { n: calm ? 3 : 12 }); } // landing puff once the drop-in finishes
+    if (st >= 1 && V.landed[id] === 0) { V.landed[id] = 1; S.fx.burst(cc.x, cc.y + 6, 'dust', { n: calm ? 3 : 12 }); } // landing puff once the drop-in finishes
     // legal target (upgrade / effect card) and the Theatre's open glow
-    if (legalRooms.has(id)) { diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.strokeStyle = rgba('#ffd870', 0.6 + 0.4 * pulse); g.lineWidth = 2.4; g.setLineDash([6, 4]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]); }
-    if (theatre && host.bossOpen) { diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = 2.6; g.stroke(); glowAt(g, c.x, c.y - UP * 0.45, 46, 0.25 + 0.2 * pulse, true); }
-    if (sel || hov) { diamond(g, c.x, c.y - lift + 1, TW * FILL / 2 + 1, TH * FILL / 2 + 0.5); g.strokeStyle = sel ? COL.scar : 'rgba(255,240,190,.85)'; g.lineWidth = sel ? 2.6 : 1.6; g.stroke(); }
+    if (legalRooms.has(id)) { rectDiam(g, w, x, y, fw, fh, lift); g.strokeStyle = rgba('#ffd870', 0.6 + 0.4 * pulse); g.lineWidth = 2.4; g.setLineDash([6, 4]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]); }
+    if (theatre && host.bossOpen) { rectDiam(g, w, x, y, fw, fh, lift); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = 2.6; g.stroke(); glowAt(g, cc.x, cc.y - UP * 0.45, 46 * Math.max(fw, fh), 0.25 + 0.2 * pulse, true); }
+    if (sel || hov) { rectDiam(g, w, x, y, fw, fh, lift - 1, -1); g.strokeStyle = sel ? COL.scar : 'rgba(255,240,190,.85)'; g.lineWidth = sel ? 2.6 : 1.6; g.stroke(); }
     // lamps: warm pools in evening and night, cold dark rooms get a snuffed lantern
-    if (dark) snuffed(g, rc ? c.x - TW * 0.16 : c.x - TW * 0.14, rc ? c.y + TH * 0.02 - lift : c.y - UP * 0.4 - lift, S.t, calm);
+    if (dark) snuffed(g, rc ? cc.x - TW * 0.16 : cc.x - TW * 0.14, rc ? cc.y + TH * 0.02 - lift : cc.y - UP * 0.4 - lift, S.t, calm);
     else if (light.glow > 0.02 && !theatre) {
       const fl = calm ? 1 : 0.9 + 0.1 * Math.sin(S.t * 6 + x * 2.1 + y);
-      if (rc) { const gp = KR.glowPoints(rc, V.kitInfo.rooms.get(id), app, V.gp); host.glows.push(c.x, c.y - 14 - lift, light.glow * fl * 0.5); for (let i = 0; i < gp.length; i += 3) host.glows.push(T.x + gp[i], T.y + gp[i + 1] - lift, light.glow * fl * gp[i + 2]); }
-      else host.glows.push(c.x, c.y - UP * 0.36 - lift, light.glow * fl);
+      if (rc) { const gp = KR.glowPoints(rc, V.kitInfo.rooms.get(id), app, V.gp); host.glows.push(cc.x, cc.y - 14 - lift, light.glow * fl * 0.5 * (big ? 1.4 : 1)); for (let i = 0; i < gp.length; i += 3) host.glows.push(T.x + gp[i], T.y + gp[i + 1] - lift, light.glow * fl * gp[i + 2]); }
+      else host.glows.push(cc.x, cc.y - UP * 0.36 - lift, light.glow * fl);
     }
     // spawn timer candle, upgrades, overtime
     const every = WD.everyOf(r);
-    if (every && !theatre && !dark && st >= 1) drawCandle(app, g, c.x - TW * 0.3, c.y + TH * 0.12, r, S.t, calm);
-    r.upgrades.slice(0, 3).forEach((u, i) => { const bc = BUILD_CARDS[u]; if (!bc) return; const bx = c.x + TW * 0.3 - i * 13, by = c.y + TH * 0.1; g.save(); g.fillStyle = '#f3e9d2'; g.beginPath(); g.arc(bx, by, 6, 0, TAU); g.fill(); g.strokeStyle = '#7A5F12'; g.lineWidth = 1; g.stroke(); K.roomGlyph(g, bc.art, bx, by, 9, K.INK); g.restore(); });
-    if (r.overtime) app.text('x2', c.x + TW * 0.36, c.y - TH * 0.2, { size: 11, ui: true, bold: true, align: 'right', color: '#ffe9a8', stroke: '#1a1210', strokeW: 3, fixed: true });
-    if (theatre && st >= 1) app.text(host.bossLine(run, false), c.x, c.y - UP - 6, { size: 11, ui: true, bold: true, align: 'center', color: host.bossOpen ? '#ffb3bd' : '#f2d98a', stroke: '#1a1210', strokeW: 3, fit: { w: TW + 20, lines: 1, soft: true } });
-    { const rb = roomBox(w, x, y); app.reg('ward-room-' + id, rb.x, rb.y, rb.w, rb.h, { layer: 'world' }); }
-    if (!dark && !calm) dust(g, id, c, S.t);
-    if (theatre && host.bossOpen && !calm && ((S.t * 2) | 0) !== V.rum) { V.rum = (S.t * 2) | 0; const sp = toScreen(c.x, c.y + 6); S.fx.burst(sp.x, sp.y, 'dust', { n: 3 }); }
+    if (every && !theatre && !dark && st >= 1) drawCandle(app, g, cl.x - TW * 0.3, cl.y + TH * 0.12, r, S.t, calm);
+    r.upgrades.slice(0, 3).forEach((u, i) => { const bc = BUILD_CARDS[u]; if (!bc) return; const bx = cr.x + TW * 0.3 - i * 13, by = cr.y + TH * 0.1; g.save(); g.fillStyle = '#f3e9d2'; g.beginPath(); g.arc(bx, by, 6, 0, TAU); g.fill(); g.strokeStyle = '#7A5F12'; g.lineWidth = 1; g.stroke(); K.roomGlyph(g, bc.art, bx, by, 9, K.INK); g.restore(); });
+    if (r.overtime) app.text('x2', cr.x + TW * 0.36, cr.y - TH * 0.2, { size: 11, ui: true, bold: true, align: 'right', color: '#ffe9a8', stroke: '#1a1210', strokeW: 3, fixed: true });
+    if (theatre && st >= 1) app.text(host.bossLine(run, false), cc.x, T.y - UP + TH / 2 - 6, { size: 11, ui: true, bold: true, align: 'center', color: host.bossOpen ? '#ffb3bd' : '#f2d98a', stroke: '#1a1210', strokeW: 3, fit: { w: TW * Math.max(1, fw) + 20, lines: 1, soft: true } });
+    { const rb = roomBox(w, x, y, fw, fh); app.reg('ward-room-' + id, rb.x, rb.y, rb.w, rb.h, { layer: 'world' }); }
+    if (!dark && !calm) dust(g, id, cc, S.t);
+    if (theatre && host.bossOpen && !calm && ((S.t * 2) | 0) !== V.rum) { V.rum = (S.t * 2) | 0; const sp = toScreen(cc.x, cc.y + 6); S.fx.burst(sp.x, sp.y, 'dust', { n: 3 }); }
   };
   for (const id of depthOrder(w, focus, V.order)) { const r = w.rooms[id]; if (r) room(r.x, r.y, id); }
   hero.kitDrawn = hero.kitDrawn === true && !!hero.room;
@@ -651,21 +675,21 @@ function drawToken(app, g, r, t) {
 }
 // where the hero stands in a room: the free sub-tile nearest the middle of a modular room, the old offset spot on a painted one
 function heroStand(w, r, rcOf, off = true) {
-  const rc = r && rcOf(r.type);
+  const rc = r && rcOf(r);
   if (rc) return { ...subWorld(w, r.x * 4 + rc.stand[0] + 0.5, r.y * 4 + rc.stand[1] + 0.5), kit: true };
-  const c = r ? cellW(w, r.x, r.y) : cellW(w, 0, 0);
+  const c = r ? roomCW(w, r) : cellW(w, 0, 0);
   return { x: c.x + (off ? TW * 0.03 : 0), y: c.y + (off ? TH * 0.04 : 0), kit: false };
 }
 // the walk between two rooms when either is modular: from stand to stand on the global sub-tile grid, through the door lane, around the props
 function heroLine(host, ra, rb, rcOf) {
-  const w = host.run.ward, rA = rcOf(ra.type), rB = rcOf(rb.type);
+  const w = host.run.ward, rA = rcOf(ra), rB = rcOf(rb);
   const key = ra.id + '>' + rb.id + '|' + (rA ? rA.key : '-') + '|' + (rB ? rB.key : '-') + '|' + w.w;
   const sc = (r, rc) => (rc ? [r.x * 4 + rc.stand[0], r.y * 4 + rc.stand[1]] : [r.x * 4 + 2, r.y * 4 + 2]);
   const ex = (r, rc) => (rc ? [r.x * 4 + rc.stand[0] + 0.5, r.y * 4 + rc.stand[1] + 0.5] : [r.x * 4 + 2.28, r.y * 4 + 2.04]);
   const info = (gx, gy) => {
     const id = roomIdAt(w, Math.floor(gx / 4), Math.floor(gy / 4)); if (!id) return null;
-    const r2 = w.rooms[id], rc = rcOf(r2.type); if (!rc) return { room: true, solid: false };
-    return { room: true, solid: !!rc.occ[gx - r2.x * 4][gy - r2.y * 4] };
+    const r2 = w.rooms[id], rc = rcOf(r2); if (!rc) return { room: true, solid: false, rid: id };
+    return { room: true, solid: !!rc.occ[gx - r2.x * 4][gy - r2.y * 4], rid: id };
   };
   const cells = KR.heroPolyline(key, sc(ra, rA), sc(rb, rB), info);
   return cells ? [ex(ra, rA), ...cells, ex(rb, rB)] : null;
@@ -681,7 +705,7 @@ function heroRec(host, n, rcOf, dt) {
       const u = clamp(wk.t / (wk.step || host.stepS), 0, 1), a0 = wk.a === undefined ? wk.i : wk.a, first = wk.i <= a0, last = wk.i >= wk.stop - 1;
       kk = !moving ? 0 : first && last ? EASE.inOut(u) : first ? u * u : last ? 2 * u - u * u : u;
     }
-    const poly = ra && rb && ra !== rb && (rcOf(ra.type) || rcOf(rb.type)) ? heroLine(host, ra, rb, rcOf) : null;
+    const poly = ra && rb && ra !== rb && (rcOf(ra) || rcOf(rb)) ? heroLine(host, ra, rb, rcOf) : null;
     if (poly) { const q = KR.alongPolyline(poly, kk), p = subWorld(w, q.gu, q.gv); pos = p; dx = q.du - q.dv; rec.kitWalk = true; }
     else {
       rec.kitWalk = false;
@@ -737,7 +761,7 @@ export function drawLight(host) {
 // ---------------- the walk preview: a stitched, glowing thread across the floors ----------------
 export function drawThread(host, path, dest, curP) {
   const { app, run, S } = host, g = app.ctx, w = run.ward, calm = host.reduced;
-  const pts = path.map((rid) => { const r = w.rooms[rid]; return r ? cellW(w, r.x, r.y) : cellW(w, 0, 0); });
+  const pts = path.map((rid) => { const r = w.rooms[rid]; return r ? roomCW(w, r) : cellW(w, 0, 0); });
   camBegin(app);
   g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
   if (pts.length > 1) {
@@ -752,7 +776,7 @@ export function drawThread(host, path, dest, curP) {
       app.text(String(i + 1), p.x, p.y + 6, { size: 11, ui: true, bold: true, align: 'center', color: '#ffe6d8', fixed: true });
     });
   }
-  const dr = w.rooms[dest], dp = dr ? cellW(w, dr.x, dr.y) : null;
+  const dr = w.rooms[dest], dp = dr ? roomCW(w, dr) : null;
   if (dp) { const k = calm ? 0 : Math.sin(S.t * 4) * 2; g.strokeStyle = '#ff5a4a'; g.lineWidth = 2; g.setLineDash([4, 4]); g.beginPath(); g.ellipse(dp.x, dp.y, TW * 0.4 + k, TH * 0.4 + k * 0.5, 0, 0, TAU); g.stroke(); g.setLineDash([]); }
   g.restore();
   // trigger seals float above the rooms they fire in
@@ -760,7 +784,7 @@ export function drawThread(host, path, dest, curP) {
   let n = 0;
   for (const t of p.triggers || []) {
     const r = w.rooms[t.room]; if (!r) continue;
-    const c = cellW(w, r.x, r.y), sx = c.x + 2, sy = c.y - TH * 0.5 - 12;
+    const c = roomCW(w, r), sx = c.x + 2, sy = c.y - TH * 0.5 - 12;
     g.save(); g.fillStyle = t.bribed ? '#6a625a' : '#1f1914'; g.beginPath(); g.arc(sx, sy, 14, 0, TAU); g.fill(); g.strokeStyle = t.bribed ? '#9a9088' : COL.scar; g.lineWidth = 1.4; g.stroke(); g.restore();
     drawNodeIcon(g, host.TRIG[t.kind] ? host.TRIG[t.kind][0] : 'event', sx, sy, 24, t.bribed ? 'locked' : 'available');
     if (!t.bribed) n++;
@@ -772,17 +796,30 @@ export function drawThread(host, path, dest, curP) {
 
 // ---------------- overlays: the ghost of the room being dragged, the keyboard focus ring ----------------
 export function drawGhost(host, inter) {
-  const { app, run, S } = host, g = app.ctx, w = run.ward;
-  if (!S.drag || !inter.hoverCell || !inter.drop) return;
-  const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === S.drag.uid) || {}).id];
-  if (!card || card.kind !== 'room') return;
+  const { app, run, S } = host, g = app.ctx, w = run.ward, uid = S.drag ? S.drag.uid : S.sel;
+  if (uid === null || uid === undefined || !inter.hoverCell || !inter.drop) return;
+  const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === uid) || {}).id];
+  if (!card) return;
+  const pulse = 0.5 + 0.5 * Math.sin(S.t * 6), ok = inter.drop.ok;
+  if (card.kind === 'expand') { // the room that would grow: the new cell glows, a dashed outline shows the whole new floor
+    const tgt = inter.drop.tgt, rid = tgt && typeof tgt === 'object' ? tgt.room : tgt, room = rid && w.rooms[rid]; if (!room) return;
+    const ex = WD.expandOptions(run, rid), opt = ex.ok ? (tgt && tgt.dir ? ex.dirs.find((d) => d.dir === tgt.dir) : ex.dirs[0]) : null; if (!opt) return;
+    g.save();
+    for (const [cx, cy] of opt.cells) { const c = cellW(w, cx, cy); diamond(g, c.x, c.y, TW / 2 - 1, TH / 2 - 0.5); g.fillStyle = rgba(ok ? '#ffd060' : '#a3142f', 0.38 + 0.2 * pulse); g.fill(); }
+    rectDiam(g, w, opt.f.x, opt.f.y, opt.f.w, opt.f.h, 0, 1); g.strokeStyle = ok ? '#fff2b8' : '#ff8a96'; g.lineWidth = 2.4; g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]);
+    const cc = cellW(w, opt.cells[0][0], opt.cells[0][1]); app.text('+1 cell', cc.x, cc.y - 7, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3d0', stroke: '#1a1210', strokeW: 3, fixed: true });
+    g.restore(); return;
+  }
+  if (card.kind !== 'room') return;
   const x = inter.hoverCell.x, y = inter.hoverCell.y; if (w.grid[y][x]) return;
-  const c = cellW(w, x, y), rc = kitUsable(app) ? KR.recipeFor(card.room, app) : null, spr = rc ? null : assets.room(card.room, app);
-  g.save(); g.globalAlpha = inter.drop.ok ? 0.62 : 0.3;
+  const size = card.size || [1, 1], pl = WD.placement(run, size, x, y), f = pl.f || { x, y, w: 1, h: 1 };
+  const c = cellW(w, f.x, f.y), rc = kitUsable(app) ? KR.recipeFor(card.room, app, f.w, f.h) : null, spr = rc || f.w * f.h > 1 ? null : assets.room(card.room, app);
+  g.save(); g.globalAlpha = ok ? 0.62 : 0.3;
   if (rc) { KR.drawStatic(app, g, 'ghost', rc, c.x, c.y - TH / 2, { HL: 24, HR: 24, doorL: false, doorR: false, slabL: true, slabR: true, dark: false }, CAM.z * (app.px || app.scale || 1)); KR.drawItems(app, g, rc, c.x, c.y - TH / 2, 0, [], { dark: false, calm: true, t: 0, glow: [], actor() {} }); }
-  else if (spr) drawSprite(g, spr, c.x, c.y, 0, 1); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
-  if (!inter.drop.ok) { g.globalAlpha = 0.5; diamond(g, c.x, c.y, TW / 2, TH / 2); g.fillStyle = '#a3142f'; g.fill(); }
+  else if (spr) drawSprite(g, spr, c.x, c.y, 0, 1); else if (f.w * f.h > 1) drawBigBlock(g, w, { type: card.room, x: f.x, y: f.y, w: f.w, h: f.h }, 0, false, false); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
+  if (!ok) { g.globalAlpha = 0.5; rectDiam(g, w, f.x, f.y, f.w, f.h); g.fillStyle = '#a3142f'; g.fill(); }
   g.restore();
+  if (f.w * f.h > 1) { g.save(); rectDiam(g, w, f.x, f.y, f.w, f.h, 0, 1); g.strokeStyle = ok ? '#fff2b8' : '#ff8a96'; g.lineWidth = 2.4; g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]); g.restore(); }
 }
 export function drawFocus(host, cellX, cellY) {
   const { app, S } = host, g = app.ctx, c = cellW(S.run.ward, cellX, cellY);

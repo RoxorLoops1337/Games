@@ -19,7 +19,7 @@ export const UP = {
   ASSIST_MULT: 0.5,    // Assist runs pay half (the floor still applies)
   ABANDON_MIN_FLOORS: 3,
 };
-export const TARGET_TOTAL = 906;    // total UP that opens every locked item (cost curve is normalised to this)
+export const TARGET_TOTAL = 930;    // total UP that opens every locked item (cost curve is normalised to this)
 export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
 export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
 export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
