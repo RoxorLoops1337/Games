@@ -229,6 +229,18 @@
    "walk1x": "actors/bedpan_slime_b@1x.webp",
    "walk2x": "actors/bedpan_slime_b@2x.webp"
   },
+  "candy_striper": {
+   "file1x": "actors/candy_striper@1x.webp",
+   "file2x": "actors/candy_striper@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/candy_striper_b@1x.webp",
+   "walk2x": "actors/candy_striper_b@2x.webp"
+  },
   "crutchling": {
    "file1x": "actors/crutchling@1x.webp",
    "file2x": "actors/crutchling@2x.webp",
@@ -240,6 +252,18 @@
    "scale": 1.0,
    "walk1x": "actors/crutchling_b@1x.webp",
    "walk2x": "actors/crutchling_b@2x.webp"
+  },
+  "defibrillator": {
+   "file1x": "actors/defibrillator@1x.webp",
+   "file2x": "actors/defibrillator@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "elite",
+   "scale": 1.2,
+   "walk1x": "actors/defibrillator_b@1x.webp",
+   "walk2x": "actors/defibrillator_b@2x.webp"
   },
   "fever_moth": {
    "file1x": "actors/fever_moth@1x.webp",
@@ -265,6 +289,18 @@
    "walk1x": "actors/gauze_mummy_b@1x.webp",
    "walk2x": "actors/gauze_mummy_b@2x.webp"
   },
+  "gurney_foot": {
+   "file1x": "actors/gurney_foot@1x.webp",
+   "file2x": "actors/gurney_foot@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/gurney_foot_b@1x.webp",
+   "walk2x": "actors/gurney_foot_b@2x.webp"
+  },
   "iron_lung": {
    "file1x": "actors/iron_lung@1x.webp",
    "file2x": "actors/iron_lung@2x.webp",
@@ -276,6 +312,18 @@
    "scale": 1.0,
    "walk1x": "actors/iron_lung_b@1x.webp",
    "walk2x": "actors/iron_lung_b@2x.webp"
+  },
+  "knitter": {
+   "file1x": "actors/knitter@1x.webp",
+   "file2x": "actors/knitter@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/knitter_b@1x.webp",
+   "walk2x": "actors/knitter_b@2x.webp"
   },
   "leech_jar": {
    "file1x": "actors/leech_jar@1x.webp",
@@ -297,9 +345,7 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0,
-   "walk1x": "actors/marrow_b@1x.webp",
-   "walk2x": "actors/marrow_b@2x.webp"
+   "scale": 1.0
   },
   "night_nurse": {
    "file1x": "actors/night_nurse@1x.webp",
@@ -349,9 +395,7 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0,
-   "walk1x": "actors/odile_b@1x.webp",
-   "walk2x": "actors/odile_b@2x.webp"
+   "scale": 1.0
   },
   "orderly": {
    "file1x": "actors/orderly@1x.webp",
@@ -387,6 +431,30 @@
    "kind": "normal",
    "scale": 1.0
   },
+  "surge_tick": {
+   "file1x": "actors/surge_tick@1x.webp",
+   "file2x": "actors/surge_tick@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/surge_tick_b@1x.webp",
+   "walk2x": "actors/surge_tick_b@2x.webp"
+  },
+  "suture_wasp": {
+   "file1x": "actors/suture_wasp@1x.webp",
+   "file2x": "actors/suture_wasp@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/suture_wasp_b@1x.webp",
+   "walk2x": "actors/suture_wasp_b@2x.webp"
+  },
   "the_matron": {
    "file1x": "actors/the_matron@1x.webp",
    "file2x": "actors/the_matron@2x.webp",
@@ -417,6 +485,30 @@
    "kind": "elite",
    "scale": 1.2
   },
+  "two_gurneys": {
+   "file1x": "actors/two_gurneys@1x.webp",
+   "file2x": "actors/two_gurneys@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "elite",
+   "scale": 1.2,
+   "walk1x": "actors/two_gurneys_b@1x.webp",
+   "walk2x": "actors/two_gurneys_b@2x.webp"
+  },
+  "ward_clerk": {
+   "file1x": "actors/ward_clerk@1x.webp",
+   "file2x": "actors/ward_clerk@2x.webp",
+   "w": 256,
+   "h": 256,
+   "anchorX": 128.0,
+   "anchorY": 243.0,
+   "kind": "normal",
+   "scale": 1.0,
+   "walk1x": "actors/ward_clerk_b@1x.webp",
+   "walk2x": "actors/ward_clerk_b@2x.webp"
+  },
   "wick": {
    "file1x": "actors/wick@1x.webp",
    "file2x": "actors/wick@2x.webp",
@@ -425,9 +517,7 @@
    "anchorX": 128.0,
    "anchorY": 243.0,
    "kind": "hero",
-   "scale": 1.0,
-   "walk1x": "actors/wick_b@1x.webp",
-   "walk2x": "actors/wick_b@2x.webp"
+   "scale": 1.0
   }
  },
  "icons": {

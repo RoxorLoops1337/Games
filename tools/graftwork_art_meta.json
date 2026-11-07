@@ -1,6 +1,54 @@
 {
- "marrow": {"kind": "hero"}, "wick": {"kind": "hero"}, "odile": {"kind": "hero"},
- "the_resident": {"kind": "elite"}, "the_resident_l2": {"kind": "elite", "level": 2},
- "the_matron": {"kind": "boss"},
- "npc_patient": {"kind": "npc"}, "npc_nurse": {"kind": "npc"}, "npc_porter": {"kind": "npc"}
+ "marrow": {
+  "kind": "hero"
+ },
+ "wick": {
+  "kind": "hero"
+ },
+ "odile": {
+  "kind": "hero"
+ },
+ "the_resident": {
+  "kind": "elite"
+ },
+ "the_resident_l2": {
+  "kind": "elite",
+  "level": 2
+ },
+ "the_matron": {
+  "kind": "boss"
+ },
+ "npc_patient": {
+  "kind": "npc"
+ },
+ "npc_nurse": {
+  "kind": "npc"
+ },
+ "npc_porter": {
+  "kind": "npc"
+ },
+ "candy_striper": {
+  "kind": "normal"
+ },
+ "knitter": {
+  "kind": "normal"
+ },
+ "surge_tick": {
+  "kind": "normal"
+ },
+ "suture_wasp": {
+  "kind": "normal"
+ },
+ "ward_clerk": {
+  "kind": "normal"
+ },
+ "gurney_foot": {
+  "kind": "normal"
+ },
+ "defibrillator": {
+  "kind": "elite"
+ },
+ "two_gurneys": {
+  "kind": "elite"
+ }
 }
