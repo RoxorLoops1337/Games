@@ -480,7 +480,7 @@ function drawAfter(app, c) {
   app.text('STRAIN', lx, rowStrain + 5, { size: 14, ui: true, bold: true, color: DIM });
   const sCol = A.strain > B.strain ? COL.bad : A.strain > 0 ? '#ffb36b' : COL.good;
   app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, vx, rowStrain, { size: 24, bold: true, color: sCol });
-  let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} land${A.tithed.length === 1 ? 's' : ''} on Bare cards.`;
+  let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} on Bare cards.`;
   // max hp
   let hpMod = null;
   if (pair) { const m = c.g.mods.find((k) => k.k === 'maxHp'); if (m && !(c.inst.waived && c.inst.waived.includes(c.g.id))) hpMod = m; }

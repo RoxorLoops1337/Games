@@ -182,7 +182,7 @@ export default {
       drawRelic(g, this.gotRelic, FRAME.x + 110, FRAME.y + 205, 56);
       app.text('Relic gained', FRAME.x + 156, FRAME.y + 166, { size: 13, ui: true, bold: true, color: COL.lamp });
       app.text(r.name, FRAME.x + 156, FRAME.y + 184, { size: 22, bold: true });
-      wrapLimit(app, r.text, FRAME.w - 240, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, FRAME.x + 156, FRAME.y + 210 + q * Math.round(17 * tscale(app)), { size: 14, ui: true, color: 'rgba(232,220,196,.8)' }));
+      wrapLimit(app, r.text, FRAME.w - 240, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, FRAME.x + 156, FRAME.y + 210 + q * Math.max(Math.round(17 * tscale(app)), Math.ceil(app.sz(14, { ui: true }) * 1.2)), { size: 14, ui: true, color: 'rgba(232,220,196,.8)' })); // the line pitch follows the real (phone-inflated) text height
       g.restore();
     }
   },

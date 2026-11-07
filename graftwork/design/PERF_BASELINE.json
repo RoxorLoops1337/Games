@@ -1,0 +1,274 @@
+{
+ "label": "baseline",
+ "date": "2026-11-07T14:14:23.960Z",
+ "viewport": {
+  "width": 1000,
+  "height": 462
+ },
+ "dpr": 2,
+ "quick": true,
+ "chromium": "153.0.8010.12",
+ "scenarios": {
+  "title_idle": {
+   "desc": "title scene idle 10 s",
+   "cpu4": {
+    "error": "timeout: title_idle time"
+   },
+   "cpu6": {
+    "error": "timeout: title_idle time"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "title_intro": {
+   "desc": "title intro (3.6 s needle) + 3 s",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "ward12": {
+   "desc": "Ward map, 12 rooms, hero walking, monsters wandering",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "combat3": {
+   "desc": "combat, 3 enemies, one full turn then idle",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "reward": {
+   "desc": "reward screen with pointer sweeps",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "graft": {
+   "desc": "graft screen with pointer sweeps",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "shop": {
+   "desc": "shop screen with pointer sweeps",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  },
+  "deck40": {
+   "desc": "deck view with 40 cards, scrolling",
+   "cpu4": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "cpu6": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "trace": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   },
+   "ops": {
+    "error": "browser.newContext: Target page, context or browser has been closed"
+   }
+  }
+ },
+ "load": {
+  "cpu4": {
+   "cpu": 4,
+   "network": "slow4g(1.6Mbps,150ms)",
+   "t_first_frame_ms": 6795,
+   "t_title_interactive_ms": 6810,
+   "t_title_scene_painted_ms": 20226,
+   "t_ward_ready_after_enter_ms": 120,
+   "bytes_at_interactive": 774416,
+   "bytes_at_scene": 1246775,
+   "bytes_total": 1275281,
+   "requests": 174,
+   "image_requests": 57,
+   "image_bytes": 500865,
+   "by_type": {
+    "text/html": 1051,
+    "text/javascript": 767892,
+    "application/json": 5473,
+    "image/webp": 500865
+   },
+   "mem": {
+    "images": 57,
+    "imageBytes": 5758840,
+    "canvases": 126,
+    "canvasBytes": 66238820,
+    "bigCanvas": [
+     [
+      1643,
+      924,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ]
+    ]
+   },
+   "errors": []
+  },
+  "cpu6": {
+   "cpu": 6,
+   "network": "slow4g(1.6Mbps,150ms)",
+   "t_first_frame_ms": 6536,
+   "t_title_interactive_ms": 6570,
+   "t_title_scene_painted_ms": 15746,
+   "t_ward_ready_after_enter_ms": 153,
+   "bytes_at_interactive": 774416,
+   "bytes_at_scene": 1246775,
+   "bytes_total": 1275281,
+   "requests": 174,
+   "image_requests": 57,
+   "image_bytes": 500865,
+   "by_type": {
+    "text/html": 1051,
+    "text/javascript": 767892,
+    "application/json": 5473,
+    "image/webp": 500865
+   },
+   "mem": {
+    "images": 57,
+    "imageBytes": 5758840,
+    "canvases": 126,
+    "canvasBytes": 66238820,
+    "bigCanvas": [
+     [
+      1643,
+      924,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ],
+     [
+      1280,
+      720,
+      false
+     ]
+    ]
+   },
+   "errors": []
+  }
+ },
+ "soak": null
+}
