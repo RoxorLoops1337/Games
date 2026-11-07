@@ -46,6 +46,8 @@ export function initAudio() {
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = rnd() * 2 - 1;
       applyVolumes(); applyIntensity(); applyLowpass(0);
       if (hb.on) hbStart();
+      // a hidden tab makes no sound and burns no audio thread (battery): suspend with the page, resume when it is back
+      if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => { try { if (!ctx) return; if (document.hidden) ctx.suspend(); else ctx.resume(); } catch (e) { /* gone */ } });
     }
     if (ctx.state === 'suspended') ctx.resume();
     return true;

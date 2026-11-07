@@ -441,23 +441,30 @@ export default {
     const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
     try { this.rightPanelInner(app, run); } finally { app.textScale = ts; }
   },
-  rightPanelInner(app, run) {
+  rightPanelInner(app, run, noNotes = false) {
     const g = app.ctx;
     const X = 968, PW = 300, Y0 = 64, PH = H - 12 - Y0; // starts under the global Pause / Fullscreen zone (x 1128..1272, y 0..56)
+    if (noNotes === false) { // phones: when the legend with its notes leaves too little height for the seven school rows, it drops the notes (they move into a tooltip)
+      const nH = Math.ceil(app.sz(16, { bold: true }) * 1.18), oH = Math.ceil(app.sz(14, { ui: true }) * 1.18), types0 = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'];
+      let ry0 = 64 + 34; for (const t of types0) ry0 += Math.max(36, nH + oH * (app.wrap(({ fight: 'gold and a graft', elite: 'relic reward', event: 'a story with choices', shop: 'buy with gold', forge: 'heal or upgrade a card', boss: 'the Act boss' })[t], 226, 14, { ui: true }).length) + 3);
+      const rs0 = ry0 + 22 + Math.max(22, oH + 2) + 16 + 8 + Math.ceil(app.sz(14, { ui: true, bold: true }) * 1.2) + 6, SP0 = Math.min(38, (H - 12 - 8 - rs0) / 7);
+      if (SP0 < Math.ceil(app.sz(16, { bold: true }) * 1.2) + 2) noNotes = true;
+    }
     app.panel(X, Y0, PW, PH, { fill: 'rgba(22,18,16,.94)', r: 12 });
     app.reg('map-right', X, Y0, PW, PH, { group: 'right' });
     app.text('LEGEND', X + 18, Y0 + 10, { size: 14, ui: true, bold: true, color: COL.lamp });
     const types = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'];
     const leg = { fight: 'Fight: gold and a graft', elite: 'Elite: relic reward', event: 'Event: a story with choices', shop: 'Shop: buy with gold', forge: 'Forge: heal or upgrade a card', boss: run.act === 3 ? 'Warden, then The Grafter' : 'Boss: ends the act' };
     // phones inflate the text: row pitch follows the real heights so name and note never overlap
-    const nameH = Math.ceil(app.sz(16, { bold: true }) * 1.18), noteH = Math.ceil(app.sz(14, { ui: true }) * 1.18), LP = Math.max(36, nameH + noteH + 3);
-    const noteL = types.map((t) => app.wrap(leg[t].split(': ')[1] || leg[t], 226, 14, { ui: true }).length), rowY = []; let ry = Y0 + 34; for (const n of noteL) { rowY.push(ry); ry += Math.max(36, nameH + noteH * n + 3); }
+    const nameH = Math.ceil(app.sz(16, { bold: true }) * 1.18), noteH = Math.ceil(app.sz(14, { ui: true }) * 1.18), LP = noNotes ? nameH + 6 : Math.max(36, nameH + noteH + 3);
+    const noteL = types.map((t) => app.wrap(leg[t].split(': ')[1] || leg[t], 226, 14, { ui: true }).length), rowY = []; let ry = Y0 + 34; for (const n of noteL) { rowY.push(ry); ry += noNotes ? LP : Math.max(36, nameH + noteH * n + 3); }
     types.forEach((t, i) => {
       const y = rowY[i];
       g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 15, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = lnw(2.4); g.stroke();
       drawNodeIcon(g, t, X + 34, y + 15, 22, 'available');
       app.text(NODE_INFO[t][0], X + 58, y, { size: 16, bold: true, color: NODE_COL[t] === COL.scar ? '#e07a86' : NODE_COL[t] });
-      app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + nameH, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
+      if (!noNotes) app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + nameH, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
+      else if (app.inRect(X + 10, y - 2, PW - 20, LP - 2)) app.tooltip(NODE_INFO[t][0], leg[t].split(': ')[1] || leg[t]);
     });
     // path key
     const ky = ry + 22, pk = Math.max(22, noteH + 2);
@@ -471,7 +478,8 @@ export default {
     app.text('SCHOOL RESONANCE', X + 18, divY + 8, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
     // rows: name over bar when the panel has the room, else name, bar and count on one line (phones inflate the text and the legend eats the height)
-    const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), nmSz = app.sz(16, { bold: true }), roomy = SP >= Math.ceil(nmSz * 1.2) + 14;
+    const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), nmSz = app.sz(16, { bold: true });
+    const roomy = SP >= Math.ceil(nmSz * 1.2) + 14;
     SCHOOLS_LIST().forEach((s, i) => {
       const y = rs + i * SP;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;

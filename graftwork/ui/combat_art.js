@@ -128,7 +128,8 @@ export function contactShadow(ctx, x, y, rx, a = 1, lift = 0) {
   ctx.restore();
 }
 // a matching colour grade for procedural fallbacks (ctx.filter where the canvas has it)
-export function gradeProcedural(ctx, on) { try { if ('filter' in ctx) ctx.filter = on ? GRADE : 'none'; } catch (e) { /* no filters */ } }
+// ctx.filter is a software pass per draw on many phones: only the full quality tier grades the procedural figures (lite and minimal draw them ungraded)
+export function gradeProcedural(ctx, on) { try { if ('filter' in ctx) ctx.filter = on && !(assets.app && assets.app.perf && assets.app.perf.q.tier !== 'full') ? GRADE : 'none'; } catch (e) { /* no filters */ } }
 
 // ------------------------------------------------------------------ tint overlays (silhouette-only colour: flash, poison, burn...)
 let SC = null;
