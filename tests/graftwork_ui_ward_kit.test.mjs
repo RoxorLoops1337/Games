@@ -323,6 +323,39 @@ await t('wall mode: auto is Full for one room, Cutaway for a few, Low once sever
   assert.ok(reg('ward-walls'), 'the wall mode button is registered'); removeKit();
 });
 
+await t('overlap: rooms draw strictly back to front and a front room never walls off a back room that holds the hero, the selection or monsters (any wall mode)', async () => {
+  installKit(); ISO.setWallMode('auto');
+  const { app, run, flow } = await setup({ seed: 'overlap' });
+  // the entrance at the back (hero inside), the chapel and the sawmill in front of it, a ward with monsters beside it
+  const ids = layout(run, [['rm_entrance', 2, 1], ['rm_chapel', 3, 1], ['rm_sawmill', 2, 2], ['rm_quarry', 3, 2], ['rm_ward', 1, 1, mons(0, 3)]]);
+  run.ward.hero.room = ids[0]; run.ward.deck.hand = []; flow.route(); frames(app, 30);
+  const w = run.ward, H = app.screens.ward.host(app), S = H.S;
+  const order = ISO.depthOrder(w, () => false, []).map((id) => w.rooms[id]);
+  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1].x + order[i - 1].y <= order[i].x + order[i].y, 'strictly back to front by x + y');
+  assert.deepEqual(ISO.depthOrder(w, (id) => id === ids[0], []), ISO.depthOrder(w, () => false, []), 'a focus room never reorders the rooms');
+  const protectedRoom = (r) => r.id === w.hero.room || r.id === S.selRoom || r.id === S.hoverRoom || (r.contents.length && r.contents[0].kind === 'monster');
+  const check = (label) => {
+    const k = ISO.lastKit(); assert.ok(k && k.rooms.size >= 4, label + ': kit rooms drawn');
+    let pairs = 0;
+    for (const A of Object.values(w.rooms)) {
+      if (!protectedRoom(A)) continue;
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) {
+        const bid = w.grid[A.y + dy] && w.grid[A.y + dy][A.x + dx]; if (!bid || bid === 'rubble' || !k.rooms.has(bid)) continue;
+        const B = k.rooms.get(bid); pairs++;
+        assert.ok(B.HL <= KD.WALL_LOW + 4 && B.HR <= KD.WALL_LOW + 4, label + ': the front room ' + w.rooms[bid].type + ' (walls ' + B.HL + '/' + B.HR + ') hides ' + A.type);
+      }
+    }
+    return pairs;
+  };
+  for (const mode of ['full', 'low', 'cutaway', 'auto']) {
+    ISO.setWallMode(mode); frames(app, 40);
+    S.selRoom = null; assert.ok(check(mode + ' hero room') >= 2, mode + ': the hero room has front neighbours');
+    S.selRoom = ids[1]; frames(app, 40); check(mode + ' selected chapel');
+    S.selRoom = ids[4]; frames(app, 40); check(mode + ' selected ward with monsters');
+  }
+  S.selRoom = null; ISO.setWallMode('auto'); removeKit();
+});
+
 // ======================================================= fallback and picking =======================================================
 await t('fallback: a room type with no recipe, or with a missing floor or wall, keeps its painted sprite; modular and painted rooms mix on one floor', async () => {
   installKit();

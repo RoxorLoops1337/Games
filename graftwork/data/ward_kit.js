@@ -160,7 +160,7 @@ export const RECIPES = {
   ],
   rm_theatre: [
     { floor: 'stage', wall: 'velvet', need: ['operating_table'], door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
-      props: [P('operating_table', 1, 1), P('instrument_tray', 0, 2), P('throne', 3, 0), P('footlights', 2, 3), P('lamp', 0, 0)] },
+      props: [P('operating_table', 0, 2), P('instrument_tray', 2, 1), P('throne', 3, 0), P('footlights', 2, 3), P('lamp', 0, 0)] },
     { floor: 'stage', wall: 'velvet', door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
       props: [P('gurney', 2, 2), P('bedside_table', 1, 2), P('iv_stand', 3, 0), P('lamp', 0, 0), P('plant', 3, 3)] },
   ],

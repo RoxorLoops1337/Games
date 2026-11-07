@@ -516,12 +516,13 @@ export function drawRooms(host, inter) {
   V.list.length = 0; V.kw.length = 0;
   const focus = (id) => id === S.hoverRoom || id === S.selRoom || id === w.hero.room; // these rooms are drawn last: never hidden behind a neighbour
   // which rooms must stay visible (focus rooms, rooms with monsters) and which front neighbours cut their walls down to show them
+  // (a front neighbour is lowered even when it is a focus room itself: rooms draw strictly back to front, so the room in front is the one that would cover)
   const tk = V.tk; for (const k in tk) delete tk[k];
   const roomList = Object.values(w.rooms), nRooms = roomList.length, dense = nRooms >= 9;
   for (const r of roomList) {
     const def0 = ROOMS[r.type], awake = !(!r.on && def0.power > 0), pr = focus(r.id) ? 2 : awake && r.contents.length && r.type !== 'rm_theatre' && (r.contents[0].kind === 'monster' || r.contents[0].kind === 'elite') ? 1 : 0;
     if (!pr) continue;
-    for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[r.y + ddy] && w.grid[r.y + ddy][r.x + ddx]; if (oid && oid !== 'rubble' && !focus(oid)) tk[oid] = Math.max(tk[oid] || 0, pr); }
+    for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[r.y + ddy] && w.grid[r.y + ddy][r.x + ddx]; if (oid && oid !== 'rubble') tk[oid] = Math.max(tk[oid] || 0, pr); }
   }
   // modular rooms: a recipe per type (null = painted), doors and shared walls from the engine's connections, the wall mode by density
   const kitOn = kitUsable(app); V.rcm.clear();
@@ -550,7 +551,7 @@ export function drawRooms(host, inter) {
     const wantLow = !!sprLow && (mode === 'low' || (mode === 'cutaway' && behind) || tp > 0 || (dense && behind && KR.KITS.mode !== 'full'));
     const lw = wantLow ? 1 : 0, lv0 = V.lowK[id] === undefined ? lw : V.lowK[id];
     const lowK = V.lowK[id] = calm || Math.abs(lw - lv0) < 0.02 ? lw : lv0 + (lw - lv0) * Math.min(1, dt * 7);
-    const tKeep = sprLow ? 1 : focus(id) ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : dense ? 0.85 : 1, tFade = tp === 2 && !sprLow ? 0.55 : 1;
+    const tKeep = sprLow ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : focus(id) ? 1 : dense ? 0.85 : 1, tFade = tp === 2 && !sprLow ? 0.55 : 1;
     const kv = V.keep[id] === undefined ? tKeep : V.keep[id], fv = V.fadeA[id] === undefined ? tFade : V.fadeA[id];
     const keep = V.keep[id] = calm ? tKeep : kv + (tKeep - kv) * Math.min(1, dt * 7), fade = V.fadeA[id] = calm ? tFade : fv + (tFade - fv) * Math.min(1, dt * 7);
     const alpha = (st < 1 ? clamp(st * 2.5, 0, 1) : 1) * (rc ? 1 : fade);
