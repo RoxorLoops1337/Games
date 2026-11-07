@@ -18,6 +18,7 @@ import { COL } from '../ui/core.js';
 import { cardLines, priceLines } from '../engine/text.js';
 import { GRAFTS } from '../data/index.js';
 import { lnw } from './linework.js';
+import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf } from '../ui/templates.js';
 
 export const CARD_W = 220, CARD_H = 310;
 const HW = CARD_W / 2, HH = CARD_H / 2;
@@ -666,10 +667,10 @@ function drawRing(g, I, w, compact) {
   if (I.sch && !compact) { circ(g, w.x + w.w - 13, w.y + 13, 10.5, 'rgba(232,220,196,.88)', 1.4); drawSchoolGlyph(g, I.sch, w.x + w.w - 13, w.y + 13, 7.5, COLX[I.sch]); }
   BB = null;
 }
-function drawIllustration(g, I, w) {
+function drawIllustration(g, I, w, compact = w === WINC) {
   g.save(); rr(g, w.x, w.y, w.w, w.h, 5); g.clip();
   drawBackLayer(g, I, w, 0); drawMotifLayer(g, I, w); drawForeLayer(g, I, w, 0);
-  g.restore(); drawRing(g, I, w, w === WINC);
+  g.restore(); drawRing(g, I, w, compact);
 }
 
 // ---------- thread, patches, brass ----------
@@ -889,6 +890,20 @@ function renderBody(g, spec, o, rarity) {
   [[-105, -150], [105, -150], [-105, 150], [105, 150]].forEach(([x, y]) => domeRivet(g, x, y, 3.6));
   return frame;
 }
+function drawKeyNumber(g, spec, lines, o, win) { // compact face: the one number that matters, big, with its kind icon
+  const ki = keyInfo(lines), ty = win.y + win.h;
+  if (ki) {
+    const gz = (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    const wN = g.measureText(ki.n).width, cx = 14, baseY = ty + 8 + size * 0.78;
+    const ncol = o.tithed ? '#7a6a60' : ki.kind === 'dmg' ? '#7a1c1c' : ki.kind === 'block' ? '#2f4a58' : ki.kind === 'heal' ? '#3a6a46' : '#4a3022';
+    g.fillStyle = 'rgba(20,10,5,.28)'; g.fillText(ki.n, cx + 2, baseY + 3);
+    g.fillStyle = ncol; g.fillText(ki.n, cx, baseY);
+    const hp = hatchPat(g, 2); if (hp) { g.save(); g.globalAlpha = 0.55; g.fillStyle = hp; g.fillText(ki.n, cx, baseY); g.restore(); }
+    g.lineJoin = 'round'; g.lineWidth = 1.3; g.strokeStyle = SEPIA; g.strokeText(ki.n, cx, baseY);
+    g.fillStyle = 'rgba(255,246,220,.5)'; g.fillRect(cx - wN / 2 + 3, baseY - size * 0.72, wN - 6, 1);
+    kindIcon(g, ki.kind, cx - wN / 2 - 24, baseY - size * 0.34, 20);
+  }
+}
 function plate(g, x, y, w, h, fill, up) { // engraved name plate
   rr(g, x, y, w, h, 6); fs(g, fill, 2, 2);
   if (up) { const gp = goldPat(g); if (gp) { rr(g, x, y, w, h, 6); g.save(); g.clip(); g.globalAlpha = 0.35; g.fillStyle = gp; g.fillRect(x, y, w, h); g.restore(); } rr(g, x + 2.5, y + 2.5, w - 5, h - 5, 4); g.lineWidth = lnw(1); g.strokeStyle = 'rgba(255,248,200,.85)'; g.stroke(); }
@@ -927,18 +942,7 @@ function renderFace(g, spec, lines, price, o, I, win) {
     else { g.font = font(19, { bold: true }); const wl = wrapText(g, nm, textW).slice(0, 2); wl.forEach((ln, i) => engrave(g, ln, cxn, by + bh / 2 + (i - (wl.length - 1) / 2) * 19, col, !spec.up)); }
     if (spec.up) { circ(g, bx + bw - 15, by + bh / 2, 9, INK, 1.5); g.fillStyle = COLX.lamp; g.font = font(16, { bold: true }); g.fillText('+', bx + bw - 15, by + bh / 2 + 0.5); }
     drawIllustration(g, I, win);
-    const ki = keyInfo(lines), ty = win.y + win.h;
-    if (ki) {
-      const gz = (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-      const wN = g.measureText(ki.n).width, cx = 14, baseY = ty + 8 + size * 0.78;
-      const ncol = o.tithed ? '#7a6a60' : ki.kind === 'dmg' ? '#7a1c1c' : ki.kind === 'block' ? '#2f4a58' : ki.kind === 'heal' ? '#3a6a46' : '#4a3022';
-      g.fillStyle = 'rgba(20,10,5,.28)'; g.fillText(ki.n, cx + 2, baseY + 3);
-      g.fillStyle = ncol; g.fillText(ki.n, cx, baseY);
-      const hp = hatchPat(g, 2); if (hp) { g.save(); g.globalAlpha = 0.55; g.fillStyle = hp; g.fillText(ki.n, cx, baseY); g.restore(); }
-      g.lineJoin = 'round'; g.lineWidth = 1.3; g.strokeStyle = SEPIA; g.strokeText(ki.n, cx, baseY);
-      g.fillStyle = 'rgba(255,246,220,.5)'; g.fillRect(cx - wN / 2 + 3, baseY - size * 0.72, wN - 6, 1);
-      kindIcon(g, ki.kind, cx - wN / 2 - 24, baseY - size * 0.34, 20);
-    }
+    drawKeyNumber(g, spec, lines, o, win);
     g.textBaseline = 'middle';
     typeGlyph(g, spec.type, -76, 130, 11, frame);
     const sch = schoolOf(spec); if (sch) { circ(g, 76, 130, 13, 'rgba(232,220,196,.9)', 1.4); drawSchoolGlyph(g, sch, 76, 130, 9, COLX[sch]); }
@@ -952,6 +956,65 @@ function renderFace(g, spec, lines, price, o, I, win) {
   if (o.mark) drawMark(g, o.mark, win, seed);
 }
 
+// ---------- template mode (ui/templates.js) ----------
+// When assets/ui/manifest.json holds a card frame for this card, the face is COMPOSED: frame image first, then each slot's painter (illustration,
+// name, type band, rules text, grafts, glyphs, pips) on top. Slots come from CARD_TEMPLATE (+ manifest overrides), so a new frame needs no code.
+// Without a frame (headless, no manifest, still loading) renderFace above runs unchanged.
+function pipsPaint(g, r, rarity, up) {
+  const n = rarity === 'rare' ? 3 : rarity === 'uncommon' ? 2 : rarity === 'common' ? 1 : 0, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  for (let i = 0; i < n; i++) { const x = cx + (i - (n - 1) / 2) * 14; g.beginPath(); g.moveTo(x, cy - 4.5); g.lineTo(x + 4, cy); g.lineTo(x, cy + 4.5); g.lineTo(x - 4, cy); g.closePath(); g.fillStyle = up ? BRASS_L : BRASS; g.fill(); g.lineWidth = lnw(0.9); g.strokeStyle = INK; g.stroke(); }
+}
+function renderFaceTemplate(g, spec, lines, price, o, I, T) {
+  const junk = spec.type === 'junk', seed = spec.id || spec.name || 'x', rarity = o.rarity || spec.rarity || 'common', compact = !!o.compact;
+  const frame = junk ? COLX.junk : (COLX[spec.type] || '#444'), win = T.slots.window;
+  const nm = String(spec.name || '').replace(/\+$/, '');
+  const painters = {
+    window: (gg, r) => drawIllustration(gg, I, r, compact),
+    namePlate: (gg, r, inf) => {
+      gg.textAlign = 'center'; gg.textBaseline = 'middle';
+      if (!inf.baked) plate(gg, r.x, r.y, r.w, r.h, spec.up ? '#d9b648' : mix(frame, INK, 0.5), spec.up);
+      const fit = r.fit || {}, textW = r.w - 18 - (spec.up ? 18 : 0), cx = r.x + r.w / 2 - (spec.up ? 8 : 0), cy = r.y + r.h / 2 + 0.5;
+      const ns = fitText(gg, nm, textW, fit.max || 17, fit.min || 9.5, { bold: true }); gg.font = font(ns, { bold: true });
+      const col = spec.up ? INK : COLX.vellum;
+      if (gg.measureText(nm).width <= textW || !(fit.lines > 1)) engrave(gg, nm, cx, cy, col, !spec.up);
+      else { gg.font = font(ns, { bold: true }); const wl = wrapText(gg, nm, textW).slice(0, fit.lines); wl.forEach((ln, i) => engrave(gg, ln, cx, cy + (i - (wl.length - 1) / 2) * ns, col, !spec.up)); }
+      if (spec.up) { circ(gg, r.x + r.w - 14, r.y + r.h / 2, Math.min(9, r.h / 3), INK, 1.5); gg.fillStyle = COLX.lamp; gg.font = font(15, { bold: true }); gg.fillText('+', r.x + r.w - 14, r.y + r.h / 2 + 0.5); }
+    },
+    typeBand: (gg, r, inf) => {
+      const label = String(spec.type || '').toUpperCase(), cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      gg.textAlign = 'center'; gg.textBaseline = 'middle';
+      if (!inf.baked) { gg.beginPath(); gg.moveTo(r.x, r.y); gg.lineTo(r.x + r.w, r.y); gg.lineTo(r.x + r.w - 6, cy); gg.lineTo(r.x + r.w, r.y + r.h); gg.lineTo(r.x, r.y + r.h); gg.lineTo(r.x + 6, cy); gg.closePath(); BB = { cx, cy, r: r.w / 2 }; fs(gg, mix(frame, INK, 0.2), 1.8, 1); }
+      try { if ('letterSpacing' in gg) gg.letterSpacing = '1.5px'; } catch (e) { /* none */ }
+      gg.font = font(11, { bold: true, ui: true }); gg.fillStyle = COLX.vellum; gg.fillText(label, cx, cy + 0.5);
+      try { if ('letterSpacing' in gg) gg.letterSpacing = '0px'; } catch (e) { /* none */ }
+    },
+    textBox: (gg, r) => layoutText(gg, spec, lines, price, o, r),
+    keyNumber: (gg) => drawKeyNumber(gg, spec, lines, o, win),
+    graftBand: (gg, r) => drawGraftBand(gg, spec.grafts || [], r.x, r.y, r.w, r.h),
+    graftSlots: (gg, r) => (spec.grafts || []).slice(0, 3).forEach((gid, i) => { const c = centerOf(r.items[i]); drawSmallPatch(gg, gid, c.x, c.y, i); }),
+    fusedSlots: (gg, r) => (spec.fused || []).slice(0, 4).forEach((gid, i) => { const c = centerOf(r.items[i]); drawRivet(gg, gid, c.x, c.y); }),
+    typeGlyph: (gg, r) => { const c = centerOf(r); typeGlyph(gg, spec.type, c.x, c.y, r.w / 2, frame); },
+    schoolGlyph: (gg, r) => { const sch = schoolOf(spec); if (!sch) return; const c = centerOf(r); circ(gg, c.x, c.y, r.w / 2, 'rgba(232,220,196,.9)', 1.4); drawSchoolGlyph(gg, sch, c.x, c.y, r.w * 0.35, COLX[sch]); },
+    pips: (gg, r) => pipsPaint(gg, r, rarity, !!spec.up),
+  };
+  g.textBaseline = 'middle';
+  composeCardFront(g, T.tpl, T.fr, { compact, grafts: (spec.grafts || []).length > 0 }, painters);
+  if (junk) drawBandages(g);
+  if (o.tithed) drawSeam(g, seed);
+  if (o.jam) drawClamp(g, seed, win.y + win.h);
+  if (o.mark) drawMark(g, o.mark, win, seed);
+}
+// the template (if any) a card face is drawn from: { fr, tpl, slots } or null
+function faceTemplate(spec, o) {
+  templates.ensure();
+  if (!templates.ready()) return null;
+  const fr = templates.pickFrame(cardFrameIds(spec, o.rarity || spec.rarity || 'common'));
+  if (!fr) return null;
+  const tpl = templates.cardTemplate(fr), slots = resolveSlots(tpl, { compact: !!o.compact, grafts: (spec.grafts || []).length > 0 });
+  if (!slots.window) return null;
+  return { fr, tpl, slots };
+}
+
 // ---------- caching ----------
 const S = 1.5, PAD = 26, LM = 14;
 const cache = new Map(); const CACHE_MAX = 110;
@@ -960,20 +1023,21 @@ function faceKey(spec, lines, price, o) {
 }
 function getFace(spec, o) {
   const lines = cardLines(spec, !!o.tithed), price = priceLines(spec);
-  const key = faceKey(spec, lines, price, o);
+  const T = faceTemplate(spec, o);
+  const key = faceKey(spec, lines, price, o) + (T ? '#T:' + T.fr.id : '');
   let ent = cache.get(key);
   if (ent) { cache.delete(key); cache.set(key, ent); return ent; }
-  const win = o.compact ? ((spec.grafts || []).length ? WINCG : WINC) : WIN, I = artInfo(spec);
+  const win = T ? T.slots.window : o.compact ? ((spec.grafts || []).length ? WINCG : WINC) : WIN, I = artInfo(spec);
   const cv = makeCanvas(Math.ceil((CARD_W + PAD * 2) * S), Math.ceil((CARD_H + PAD * 2) * S));
   if (cv) {
     cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + PAD, HH + PAD);
-    renderFace(cv.g, spec, lines, price, o, I, win);
-    ent = { cv: cv.c, win, info: I, layers: undefined };
+    if (T) renderFaceTemplate(cv.g, spec, lines, price, o, I, T); else renderFace(cv.g, spec, lines, price, o, I, win);
+    ent = { cv: cv.c, win, info: I, layers: undefined, T };
     cache.set(key, ent);
     if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
     return ent;
   }
-  return { direct: (g) => renderFace(g, spec, lines, price, o, I, win), win, info: I };
+  return { direct: (g) => (T ? renderFaceTemplate(g, spec, lines, price, o, I, T) : renderFace(g, spec, lines, price, o, I, win)), win, info: I, T };
 }
 export function clearCardCache() { cache.clear(); backCache = {}; }
 function buildLayers(ent) { // lazy: only cards that are ever tilted pay for the 3 parallax canvases
@@ -989,14 +1053,18 @@ function buildLayers(ent) { // lazy: only cards that are ever tilted pay for the
 }
 
 // ---------- cost orb (live: the specular follows the lamp) ----------
-function drawCostOrb(g, spec, o, L) {
+function drawCostOrb(g, spec, o, L, T) {
   const cost = o.cost === undefined ? spec.cost : o.cost, cp = !!o.compact;
-  const r = cp ? 25 : 20, ox = -HW + (cp ? 14 : 12), oy = -HH + (cp ? 16 : 14);
+  const gs = T && T.slots.costGem; // a template may move the gem (its slot) and bring its own gem image
+  const r = gs ? gs.w / 2 : cp ? 25 : 20, ox = gs ? gs.x + gs.w / 2 : -HW + (cp ? 14 : 12), oy = gs ? gs.y + gs.h / 2 : -HH + (cp ? 16 : 14);
+  const gem = gs && templates.frameImg('card_gem');
   const base = typeof spec.cost === 'number' ? spec.cost : null;
   let tint = '#2b3a44';
   if (typeof cost === 'number' && base !== null) { if (cost > base) tint = '#7a1c2c'; else if (cost < base) tint = '#2b6a3a'; }
   const unplay = spec.flags && spec.flags.unplayable;
   g.save();
+  if (gem) { drawNineSlice(g, gem, ox - r, oy - r, r * 2, r * 2); g.fillStyle = tint; g.globalAlpha = 0.28; g.beginPath(); g.arc(ox, oy, r * 0.8, 0, 6.3); g.fill(); g.globalAlpha = 1; }
+  else {
   g.beginPath(); g.arc(ox - L.x * 2.5, oy - L.y * 3.5, r, 0, 6.3); g.fillStyle = 'rgba(0,0,0,.4)'; g.fill();
   g.beginPath(); g.arc(ox, oy, r, 0, 6.3); g.fillStyle = tint; g.fill();
   g.beginPath(); g.arc(ox + 3, oy + 4, r - 3, 0, 6.3); g.fillStyle = mix(tint, '#000', 0.4); g.fill();
@@ -1006,6 +1074,7 @@ function drawCostOrb(g, spec, o, L) {
   g.lineWidth = lnw(3); g.strokeStyle = BRASS; g.beginPath(); g.arc(ox, oy, r, 0, 6.3); g.stroke();
   g.lineWidth = lnw(1.2); g.strokeStyle = INK; g.beginPath(); g.arc(ox, oy, r + 1.6, 0, 6.3); g.stroke(); g.beginPath(); g.arc(ox, oy, r - 2, 0, 6.3); g.stroke();
   g.lineWidth = lnw(1.2); g.strokeStyle = BRASS_L; g.beginPath(); g.arc(ox, oy, r - 0.2, 3.4, 4.8); g.stroke();
+  }
   const txt = unplay && cost === undefined ? '-' : String(cost === undefined || cost === null ? '-' : cost);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(txt.length > 1 ? (cp ? 26 : 20) : (cp ? 32 : 25), { bold: true }); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(txt, ox + 1, oy + 2);
   g.fillStyle = tint === '#7a1c2c' ? '#ffd6d6' : tint === '#2b6a3a' ? '#d6ffd9' : '#f6ecd2'; g.fillText(txt, ox, oy + 1);
@@ -1048,6 +1117,8 @@ function drawCardLive(g, spec, o, win, t, L, junk, id) {
     g.restore();
     if (rarity === 'rare') {
       drawFoil(g, win, t, (o.tilt && o.tilt.x) || 0, (o.tilt && o.tilt.y) || 0);
+      const fo = templates.ready() && templates.frameImg('card_foil'); // optional foil layer part: an overlay that slides with time and tilt
+      if (fo) { g.save(); rr(g, -HW, -HH, CARD_W, CARD_H, 12); g.clip(); g.globalCompositeOperation = 'overlay'; g.globalAlpha = 0.25 + 0.2 * Math.sin(t * 1.3 + ((o.tilt && o.tilt.x) || 0) * 2); drawNineSlice(g, fo, -HW + Math.sin(t * 0.4) * 6, -HH, CARD_W, CARD_H); g.restore(); }
       g.save(); g.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 3; i++) { const p = perim(t * 0.07 + i / 3), a = 0.5 + 0.5 * Math.sin(t * 3.1 + i * 2.1); glint(g, p.x, p.y, 3 + a * 5, 0.25 + a * 0.6); }
       g.restore();
@@ -1087,7 +1158,7 @@ export function drawCard(ctx, spec, x, y, o = {}) {
     }
   } else face.direct(ctx);
   drawCardLive(ctx, spec, o, win, t, L, junk, cid);
-  drawCostOrb(ctx, spec, o, L);
+  drawCostOrb(ctx, spec, o, L, face.T);
   if (o.hover && !o.selected) { cardPath(ctx, junk, cid); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = 'rgba(232,220,196,.45)'; ctx.stroke(); }
   if (o.selected || gl > 0.5) { cardPath(ctx, junk, cid); ctx.lineWidth = lnw(o.selected ? 4.5 : 2.5); ctx.strokeStyle = o.selected ? '#f2c14e' : COLX.lamp; ctx.stroke(); }
   if (o.preview) { rr(ctx, -HW - 3, -HH - 3, CARD_W + 6, CARD_H + 6, 14); ctx.lineWidth = lnw(2); setDash(ctx, [8, 5]); ctx.strokeStyle = COLX.lamp; ctx.stroke(); setDash(ctx, []); }
@@ -1209,14 +1280,30 @@ function renderBack(g, id = 'plain') {
   engrave(g, 'GRAFTWORK', 0, 124, P.txt, true);
   BB = null;
 }
+function backTemplate(bid, o) {
+  templates.ensure();
+  if (!templates.ready()) return null;
+  const fr = templates.pickFrame(cardBackIds(bid, o.hero, o.act));
+  return fr ? { fr, tpl: templates.cardBackTemplate(fr) } : null;
+}
+function renderBackTemplate(g, BT, P) {
+  const slots = resolveSlots(BT.tpl, {});
+  drawNineSlice(g, BT.fr, -HW, -HH, CARD_W, CARD_H);
+  if (slots.title && !(BT.fr.def.baked || []).includes('title')) {
+    g.font = font(11, { bold: true, ui: true }); g.textAlign = 'center'; g.textBaseline = 'middle'; try { if ('letterSpacing' in g) g.letterSpacing = '3px'; } catch (e) { /* none */ }
+    engrave(g, 'GRAFTWORK', slots.title.x + slots.title.w / 2, slots.title.y + slots.title.h / 2, P.txt, true);
+  }
+  BB = null;
+}
 export function drawCardBack(ctx, x, y, o = {}) {
   const t = o.t !== undefined ? o.t : nowT(), L = lightDir(t, _L);
   ctx.save(); ctx.translate(x, y); if (o.rot) ctx.rotate(o.rot); const s = o.scale || 1; ctx.scale(s, s); if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
   if (o.hover) ctx.translate(0, -6);
   ctx.save(); ctx.translate(-L.x * 7, -L.y * 10); rr(ctx, -HW, -HH, CARD_W, CARD_H, 12); ctx.fillStyle = 'rgba(0,0,0,.34)'; ctx.fill(); ctx.restore();
   const bid = BACK_IDS.includes(o.back) ? o.back : curBack, P = PAL[bid];
-  if (backCache[bid] === undefined) { const cv = makeCanvas(Math.ceil((CARD_W + 8) * S), Math.ceil((CARD_H + 8) * S)); if (cv) { cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + 4, HH + 4); renderBack(cv.g, bid); backCache[bid] = cv.c; } else backCache[bid] = false; }
-  if (backCache[bid]) ctx.drawImage(backCache[bid], -HW - 4, -HH - 4, CARD_W + 8, CARD_H + 8); else renderBack(ctx, bid);
+  const BT = backTemplate(bid, o), bkey = BT ? bid + '@' + BT.fr.id : bid; // a template back (per hero or act when the manifest has one) replaces the procedural one
+  if (backCache[bkey] === undefined) { const cv = makeCanvas(Math.ceil((CARD_W + 8) * S), Math.ceil((CARD_H + 8) * S)); if (cv) { cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + 4, HH + 4); if (BT) renderBackTemplate(cv.g, BT, P); else renderBack(cv.g, bid); backCache[bkey] = cv.c; } else backCache[bkey] = false; }
+  if (backCache[bkey]) ctx.drawImage(backCache[bkey], -HW - 4, -HH - 4, CARD_W + 8, CARD_H + 8); else if (BT) renderBackTemplate(ctx, BT, P); else renderBack(ctx, bid);
   const pulse = 0.5 + 0.5 * Math.sin(t * 1.6), pg = ctx.createRadialGradient(0, 0, 4, 0, 0, 84); pg.addColorStop(0, `rgba(${P.glow},${(bid === 'bone' ? 0.06 : 0.1) + 0.16 * pulse * (bid === 'bone' ? 0.4 : 1)})`); pg.addColorStop(1, `rgba(${P.glow},0)`); ctx.fillStyle = pg; ctx.fillRect(-90, -100, 180, 200);
   rr(ctx, -HW + 0.75, -HH + 0.75, CARD_W - 1.5, CARD_H - 1.5, 11.5);
   const rg = ctx.createLinearGradient(L.x * HW, L.y * HH, -L.x * HW, -L.y * HH); rg.addColorStop(0, 'rgba(255,244,212,.7)'); rg.addColorStop(0.35, 'rgba(255,244,212,.15)'); rg.addColorStop(0.6, 'rgba(255,244,212,0)'); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = rg; ctx.stroke();
@@ -1224,8 +1311,8 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.restore(); BB = null;
 }
 
-function layoutText(g, spec, lines, price, o) {
-  const MAXW = 176, TOP = 2, BOT = 143, AVAIL = BOT - TOP;
+function layoutText(g, spec, lines, price, o, box) { // box: the text slot of a template face; the default is the procedural layout
+  const MAXW = box ? box.w : 176, TOP = box ? box.y : 2, BOT = box ? box.y + box.h : 143, AVAIL = BOT - TOP, CX = box ? box.x + box.w / 2 : 0;
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   const flavor = spec.flavor ? String(spec.flavor) : '';
   let best = null;
@@ -1250,15 +1337,15 @@ function layoutText(g, spec, lines, price, o) {
   const zoneTop = TOP + 2, zoneBot = pH ? priceTop - 2 : lower;
   let y = zoneTop + Math.max(0, (zoneBot - zoneTop - rH) / 2);
   g.font = font(s); g.fillStyle = o.tithed ? '#5f5048' : INK;
-  rl.forEach((group) => { group.forEach((ln) => { y += lh; g.fillText(ln, 0, y - lh * 0.22); }); y += 2.5; });
+  rl.forEach((group) => { group.forEach((ln) => { y += lh; g.fillText(ln, CX, y - lh * 0.22); }); y += 2.5; });
   if (pH) {
     const dy = priceTop + 2;
-    g.beginPath(); g.moveTo(-80, dy); g.lineTo(80, dy); g.lineWidth = lnw(1.4); g.strokeStyle = '#0e0e0e'; setDash(g, [5, 3]); g.stroke(); setDash(g, []);
-    g.beginPath(); for (let x = -76; x <= 76; x += 10) { g.moveTo(x - 2, dy - 2.5); g.lineTo(x + 2, dy + 2.5); } g.lineWidth = lnw(1); g.stroke();
+    g.beginPath(); g.moveTo(CX - 80, dy); g.lineTo(CX + 80, dy); g.lineWidth = lnw(1.4); g.strokeStyle = '#0e0e0e'; setDash(g, [5, 3]); g.stroke(); setDash(g, []);
+    g.beginPath(); for (let x = CX - 76; x <= CX + 76; x += 10) { g.moveTo(x - 2, dy - 2.5); g.lineTo(x + 2, dy + 2.5); } g.lineWidth = lnw(1); g.stroke();
     g.font = font(ps, { bold: true }); g.fillStyle = o.tithed ? '#8a3a44' : COLX.scar; let py = dy + 7;
-    pl.forEach((group) => group.forEach((ln) => { py += ps * 1.2; g.fillText(ln, 0, py - ps * 0.25); }));
+    pl.forEach((group) => group.forEach((ln) => { py += ps * 1.2; g.fillText(ln, CX, py - ps * 0.25); }));
   }
-  if (flavorOk) { g.font = font(11, { italic: true }); g.fillStyle = 'rgba(43,30,26,.72)'; fl.forEach((ln, i) => g.fillText(ln, 0, BOT - fH + 11 + i * 12.5 + 3)); }
+  if (flavorOk) { g.font = font(11, { italic: true }); g.fillStyle = 'rgba(43,30,26,.72)'; fl.forEach((ln, i) => g.fillText(ln, CX, BOT - fH + 11 + i * 12.5 + 3)); }
   void spec;
 }
 

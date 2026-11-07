@@ -30,6 +30,7 @@ import settings from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
+import { installWings } from './ui/wings.js';
 
 const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -78,6 +79,7 @@ export function boot(canvas) {
   };
   if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
+  installWings(app); // wide phones: the picture runs on into the side bars (ui/wings.js)
   installTransitions(app);
   app.lightsApi = lights; app.shared.transitions = TRANS;
   installPause(app);

@@ -17,6 +17,10 @@ import { drawModeSwitch, modeOf } from './ward_kit.js';
 import { createScene } from './title_scene.js';
 import { createLogo, taglineAt, INTRO_S } from './title_logo.js';
 
+// The one-line goal under the tagline, per mode (no map in the Ward: it is a hospital you build and a route you walk).
+export const goalText = (mode) => (mode === 'ward' ? 'Goal: build your ward, sew your own cards, beat each Act boss.' : 'Goal: climb the map, sew your own cards, beat each Act boss.');
+const compact = (app) => app.scale < 0.95; // phone stage: a menu column on the left, the two cards on the right, the scene in the middle
+
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
 const TYPE_NAMES = { attack: 'Attack', skill: 'Skill', power: 'Power' };
@@ -134,10 +138,11 @@ export default {
     for (const ev of LOGO.take()) { if (ev.tk) this.tick(app, ev.tk); }
     if (menuState) {
       const tg = taglineAt(this.clock, cm), reveal = cm ? 1 : this.introPlanned ? clamp((p - 0.86) / 0.14, 0, 1) : clamp(this.introT / 0.5, 0, 1);
-      g.save(); g.globalAlpha = reveal * 0.8; g.translate(640, 266); g.scale(1, 0.1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 480); sg.addColorStop(0, 'rgba(8,6,10,.85)'); sg.addColorStop(0.6, 'rgba(8,6,10,.5)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
+      const cp = compact(app), ty = cp ? 226 : 250, tw = cp ? 480 : 760, gw = cp ? 480 : 1000; // phones: tight under the thread, between the menu column and the cards
+      g.save(); g.globalAlpha = reveal * 0.8; g.translate(640, ty + 16); g.scale(1, 0.1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 480); sg.addColorStop(0, 'rgba(8,6,10,.85)'); sg.addColorStop(0.6, 'rgba(8,6,10,.5)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
       g.fillStyle = sg; g.fillRect(-480, -480, 960, 960); g.restore(); // a soft dark pool keeps the two lines readable over the lit rooms
-      app.text(tg.text, 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: 760, lines: 1 } });
-      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 274, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: 1000, lines: 1 } });
+      const th = app.text(tg.text, 640, ty, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: tw, lines: 1 } });
+      app.text(goalText(modeOf(meta)), 640, ty + th + 2, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: gw, lines: cp ? 2 : 1 } });
     }
     // keys
     const nav0 = app.navButtons; app.navButtons = !app.blocked; // Tab, arrows and Enter walk the buttons of this screen, never the ones of a modal on top
@@ -219,15 +224,15 @@ export default {
     if (keys.some((e) => e.key === 'Escape') && this.confirmAbandon) this.confirmAbandon = false;
     if (!this.confirmAbandon && flow.openWardrobe && keys.some((e) => e.key === 'w' || e.key === 'W')) flow.openWardrobe();
     const nav0 = app.navButtons; if (this.confirmAbandon) app.navButtons = false; // the buttons behind the dialog are not for the keyboard
-    const bw = 330, bh = 48, step = (this.hasSave ? 1 : 0) + 5 + (canFullscreen() ? 1 : 0) > 6 ? 52 : 56, x = 640 - bw / 2;
-    let y = 306;
+    const cp = compact(app), fsOK = canFullscreen() && !cp; // phones have the fullscreen button in the corner: no menu row for it
+    const bw = cp ? 330 : 330, bh = cp ? 46 : 48, step = cp ? 50 : (this.hasSave ? 1 : 0) + 5 + (fsOK ? 1 : 0) > 6 ? 52 : 56, x = cp ? 44 : 640 - bw / 2;
+    let y = cp ? 288 : 306;
     const k = EASE.out(clamp(this.menuK, 0, 1));
     g.save(); g.globalAlpha = k;
     // the plate behind the menu: a dark glass slab so the live scene never fights the labels
     const items = [];
     if (this.hasSave) items.push('continue');
     items.push('new', 'daily', 'codex', 'settings');
-    const fsOK = canFullscreen();
     if (fsOK) items.push('fullscreen');
     items.push('credits');
     const plateH = items.length * step + 14 + (this.hasSave ? 14 : 0);
@@ -238,8 +243,9 @@ export default {
       const yy = y + (1 - k) * 18;
       if (id === 'continue') {
         const s = this.saveInfo;
-        const sub = s ? (s.day ? `${s.hero}, Act ${s.act}, Day ${s.day} of ${s.dayLimit}, ${s.hp}/${s.maxHp} HP` : `${s.hero}, Act ${s.act}, Floor ${s.floor}, ${s.hp}/${s.maxHp} HP`) : 'Resume your last run';
-        if (this.slab(app, id, 'Continue', x, yy, bw, bh + 12, { size: 24, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0', sub, subColor: '#e3d3a4', glow: 0.5 })) { if (!flow.resume()) { this.hasSave = false; } }
+        const who = cp ? '' : s && s.hero + ', '; // phones: the hero card on the right already names the grafter
+        const sub = s ? (s.day ? `${who}Act ${s.act}, Day ${s.day} of ${s.dayLimit}, ${s.hp}/${s.maxHp} HP` : `${who}Act ${s.act}, Floor ${s.floor}, ${s.hp}/${s.maxHp} HP`) : 'Resume your last run';
+        if (this.slab(app, id, 'Continue', x, yy, bw, bh + 12, { size: 24, fit: true, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0', sub, subColor: '#e3d3a4', glow: 0.5 })) { if (!flow.resume()) { this.hasSave = false; } }
         y += step + 14; continue;
       }
       if (id === 'new') {
@@ -247,16 +253,19 @@ export default {
       } else if (id === 'daily') {
         const seed = todaySeed(), hero = RUN.dailyHero(seed), played = (meta.daily ? dailyPlayed(meta, seed) : false);
         const hn = HEROES[hero].name;
-        const label = played ? 'Daily Run (played)' : 'Daily Run';
+        const label = played ? 'Daily (played)' : 'Daily Run';
+        const modeTag = modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC';
         if (app.inRect(x, yy, bw, bh)) {
           const mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
           app.tooltip(mod.name, `${hn}, seed ${seed}.\nMode: ${modeOf(meta) === 'ward' ? 'The Ward' : 'Classic map'} (change it on the New Run screen).\n${mod.text}`, { color: COL.lamp });
         }
-        if (this.slab(app, id, label, x, yy, bw, bh, { size: 22, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
+        if (this.slab(app, id, label, x, yy, bw, bh, { size: 22, fit: true, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
           this.startDaily(app);
         }
         // the mode this Daily will be played in, on the slab itself
-        app.text(modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC', x + bw - 14, yy + 18, { size: 11, ui: true, bold: true, align: 'right', color: 'rgba(232,220,196,.5)', fit: { w: 70, lines: 1 } });
+        // (only when it fits beside the centred label: the tag never touches the words)
+        const tagO = { size: 11, ui: true, bold: true, align: 'right', color: 'rgba(232,220,196,.5)', fit: { w: 70, lines: 1 } }, tagW = app.layoutText(modeTag, tagO).w, lblW = app.measure(label, 22, { bold: true });
+        if (lblW / 2 + tagW + 22 <= bw / 2 - 14) app.text(modeTag, x + bw - 14, yy + bh / 2 - 7, tagO);
       } else if (id === 'codex') {
         const hw = Math.floor((bw - 10) / 2);
         if (this.slab(app, 'codex', 'Codex', x, yy, hw, bh, { size: 22 })) flow.openCodex();
@@ -279,15 +288,15 @@ export default {
     g.restore();
     if (!canFullscreen() && isIPhone()) app.text('Add to Home Screen for fullscreen', 640, y + 6, { size: 13, ui: true, italic: true, align: 'center', color: 'rgba(232,220,196,.6)', fit: { w: 400, lines: 1 } });
     // the hero card on the left, the daily card on the right
-    this.drawHeroCard(app, 28, 626);
-    this.drawDailyCard(app, 930, 312);
+    if (cp) { const dh = this.dailyH(app); this.drawDailyCard(app, 900, 232); this.drawHeroCard(app, 900, 712, 232 + dh + 8); }
+    else { this.drawHeroCard(app, 28, 626); this.drawDailyCard(app, 930, 312); }
     app.navButtons = nav0;
     if (this.confirmAbandon) this.drawConfirm(app, 'Start a new run?', 'Your saved run will be replaced. This cannot be undone.', 'Replace saved run', () => { this.confirmAbandon = false; this.openSelect(app); }, () => { this.confirmAbandon = false; });
   },
   // a small card for the hero you left off with (the saved run's hero, else the last run's, else Marrow): portrait, name, school, passive
-  drawHeroCard(app, x, bottom) {
+  drawHeroCard(app, x, bottom, minY = 0) {
     const g = app.ctx, id = this.previewHero || 'marrow', h = HEROES[id]; if (!h) return;
-    const big = (settingsOf(app).textScale || 100) >= 125 || app.scale < 0.95, w = 300, ph = big ? 224 : 168, y = bottom - ph, k = EASE.out(clamp((this.menuK - 0.1) / 0.9, 0, 1)), school = SCHOOLS[h.school], cm = calm(app), dv = big ? 150 : 106;
+    const big = (settingsOf(app).textScale || 100) >= 125 || app.scale < 0.95, w = 300, ph = Math.min(big ? 224 : 168, bottom - minY), y = bottom - ph, k = EASE.out(clamp((this.menuK - 0.1) / 0.9, 0, 1)), school = SCHOOLS[h.school], cm = calm(app), dv = big ? Math.max(92, Math.min(150, ph - 112)) : 106; // the card never runs past `bottom`: a short card trades header height for text room
     app.reg('title-hero-card', x, y, w, ph, { group: 'herocard' });
     g.save(); g.globalAlpha = k; g.translate(-(1 - k) * 40, 0);
     app.panel(x, y, w, ph, { r: 12, fill: 'rgba(12,9,9,.72)', stroke: rgba(h.color, 0.7) });
@@ -312,26 +321,31 @@ export default {
     if (modeOf(meta) === 'ward') opts.mode = 'ward'; // same seeded case, played in the Ward; classic keeps the exact old options
     this.begin(app, opts);
   },
+  dailyH(app) { return app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; },
   drawDailyCard(app, x, y) {
     const g = app.ctx, meta = app.shared.meta;
     const seed = todaySeed(), hero = RUN.dailyHero(seed), mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
     const played = (meta.daily ? dailyPlayed(meta, seed) : false), h = HEROES[hero];
     const k = EASE.out(clamp(this.menuK - 0.2, 0, 1) / 0.8);
     g.save(); g.globalAlpha = k; g.translate((1 - k) * 40, 0);
-    const ph = app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; // phones: the inflated rules text needs the extra rows
+    const ph = this.dailyH(app); // phones: the inflated rules text needs the extra rows
     app.panel(x, y, 300, ph, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
-    app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp, fit: { w: 140, lines: 1 } });
-    app.text((modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC'), x + 284, y + 12, { fit: { w: 120, lines: 1 }, bold: true, size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
+    const modeTxt = modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC', sO = { size: 13, bold: true, ui: true }, sL = app.layoutText('PLAYED', sO), stW = Math.ceil(sL.w) + 14, stH = Math.ceil(sL.size * 1.22) + 6;
+    const mnO = { size: 17, bold: true, fit: { w: 268, lines: 1 } }, mnL = app.layoutText(mod.name, mnO), mnH = Math.ceil(mnL.size * 1.22);
+    const stampFree = played && 284 - (16 + mnL.w) - 10 >= stW; // the stamp goes beside the modifier name when there is room, else it takes the place of the mode tag
+    app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp, fit: { w: 170, lines: 1 } });
+    if (played && !stampFree) app.text('PLAYED', x + 284, y + 12, { size: 13, ui: true, bold: true, align: 'right', color: COL.scar, fit: { w: 90, lines: 1 } });
+    else app.text(modeTxt, x + 284, y + 12, { fit: { w: 84, lines: 1 }, bold: true, size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
     drawPortrait(g, hero, x + 16 + 32, y + 66, 64);
     app.text(h.name, x + 100, y + 38, { size: 22, bold: true });
     app.text(h.title, x + 100, y + 64, { size: 14, italic: true, color: '#cdbf9d' });
     stitchLine(g, x + 16, y + 106, x + 284, y + 106, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
-    const mnO = { size: 17, bold: true, fit: { w: 268, lines: 1 } }, mnL = app.layoutText(mod.name, mnO), my = y + 116 + Math.ceil(mnL.size * 1.22) + 3;
+    const my = y + 116 + mnH + 3;
     app.text(mod.name, x + 16, y + 116, { ...mnO, color: '#f0d27a' });
     app.text(mod.text, x + 16, my, { size: 14, ui: true, color: '#d9cba8', fit: { w: 268, h: y + ph - 8 - my, soft: true } });
-    if (played) {
-      g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.strokeRect(-40, -13, 80, 26);
-      app.text('PLAYED', 0, -8, { size: 14, bold: true, ui: true, align: 'center', color: COL.scar }); g.restore();
+    if (stampFree) {
+      g.save(); g.translate(x + 284 - stW / 2 - 2, y + 116 + mnH / 2); g.rotate(-0.12); g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.strokeRect(-stW / 2, -stH / 2, stW, stH);
+      app.text('PLAYED', 0, -sL.size * 0.62, { ...sO, align: 'center', color: COL.scar, exact: false, fit: { w: stW - 8, lines: 1 } }); g.restore();
     }
     g.restore();
   },

@@ -21,6 +21,7 @@ export const EASE = {
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
 // fitMinPx: the smallest on-screen size (CSS px) a FITTED label may shrink to when the boosted size would not fit its box (app.text option fit).
 export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
+export const MAX_BACKING_PX = 9.5e6; // canvas backing store budget in device pixels (about a 4K screen)
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
@@ -63,13 +64,19 @@ export function createApp(canvas, opts = {}) {
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
     app.scale = Math.min(iw / W, ih / H);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const cw = W * app.scale, ch = H * app.scale;
-    app.offX = (iw - cw) / 2; app.offY = (ih - ch) / 2;
+    // Backing store: the device pixel ratio up to 3 (phones are 2.6 to 3.5; a cap of 2 upscaled the whole picture and softened every letter), limited
+    // by a pixel budget so a 4K desktop screen keeps its old cost. The canvas box is snapped to whole device pixels so the browser never resamples it.
+    let dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const cw0 = W * app.scale, ch0 = H * app.scale;
+    if (cw0 * ch0 * dpr * dpr > MAX_BACKING_PX) dpr = Math.max(1, Math.sqrt(MAX_BACKING_PX / (cw0 * ch0)));
+    const bw = Math.max(1, Math.round(cw0 * dpr)), bh = Math.max(1, Math.round(ch0 * dpr));
+    const cw = bw / dpr, ch = bh / dpr;
+    app.offX = Math.round(((iw - cw) / 2) * dpr) / dpr; app.offY = Math.round(((ih - ch) / 2) * dpr) / dpr;
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
     canvas.style.left = app.offX + 'px'; canvas.style.top = app.offY + 'px';
-    canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+    canvas.width = bw; canvas.height = bh;
     app.dpr = dpr; app.px = canvas.width / W; setLineDevice(app.px, app.scale);
+    app.wing = Math.max(0, app.offX / app.scale); // logical width of the black bar on each side of a wide screen (see ui/wings.js)
     // logical margins (from the canvas edges) that are visible AND clear of notches
     const I = insets(), s = app.scale;
     app.safe = {
