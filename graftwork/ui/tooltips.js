@@ -1,13 +1,11 @@
-// Keyword glossary and PINNED tooltip stacks (design/UX_SPEC.md section 2).
-//   KEYWORDS                  { name: { color, glyph, text } } glossary of every rules word
-//   keywordsIn(lines)         the keywords that appear in a card's text lines, in order of appearance
-//   drawCardText(app, ctx, lines, x, y, w, size)  card text with dotted-underlined keywords (returns height)
-//   explainNumber(spec, c, o) 'why' lines for every damage / block number: "Base 6, +3 Strength, x1.5 Overload = 13"
-//   explainIntent(c, e, info) the same for an enemy move
-//   renderTip(app, tip)       draws a pinned stack beside the item. tip = { title, text, color, lines } (core's app.tip) or
-//                             { stack: [[section]], anchor: {x,y,w,h} }; a section = { title, text, color, glyph, why: [] }
-//   queueTip(app, key, stack, anchor) / flushTips(app)  combat HUD tips: one per frame, drawn last, 150 ms hover delay
-//   statusPanel / keywordPanel / cardTipStack helpers build the sections.
+// Keyword glossary and the ONE tooltip system (design/UX_SPEC.md section 2).
+//   KEYWORDS / WARD_GLOSSARY  one short definition per rules word; glossaryFor() resolves text to definitions (never the hovered thing's own type or school)
+//   cardTipStack(spec, c, o)  model for a card: graft Boon / Price blocks, totals only when they differ from the face, terms, hold-details
+//   explainNumber / numberNow / explainIntent  the arithmetic ('Base 6, +3 Strength = 9') and the 'now' line
+//   queueTip(app, key, stack, anchor, { gloss:false })  HUD tips from anywhere in a frame;  app.tooltip() from core is the other source
+//   renderTip(app)  core.js calls it once per frame: the lifecycle (delay, fade, dismiss on press / Esc / blur / app.tipBlock / screen change,
+//                   touch tips live only while the finger is down, Shift or a long press HOLDS open the details) and the compact panel
+//                   (one panel, width <= 38% of the stage, placed beside the anchor and clear of the HUD, with an arrow at the anchor)
 import { COL } from './core.js';
 import { STATUSES, SCHOOLS, GRAFTS } from '../data/index.js';
 import { cardLines } from '../engine/text.js';
@@ -440,7 +438,8 @@ function modelOf(tip) {
   const single = !tip.stack || tip.stack.length === 1;
   if (single && o.gloss !== false) {
     const gl = glossaryFor(o.gloss || [], { weak: sectionsText(flat), max: GLOSS_MAX, skip: titleNames(flat), school: o.school, types: o.types, ids: o.ids, terms: o.terms });
-    for (const g of gl) if (!terms.some((t) => String(t.title).startsWith(g.term))) terms.push(asTerm(g));
+    const said = (term) => flat.some((x) => new RegExp('^' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b[^:\\n]{0,10}:', 'm').test(String(x.text || ''))); // a word the text already explains as a 'Term: ...' line is not defined twice
+    for (const g of gl) if (!terms.some((t) => String(t.title).startsWith(g.term)) && !said(g.term)) terms.push(asTerm(g));
   }
   return { groups, terms, details };
 }
