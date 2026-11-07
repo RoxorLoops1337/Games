@@ -660,7 +660,7 @@ await t('iso: a click at a room\'s iso position switches its power, a click on a
   const box = ISO.roomBox(run.ward, 1, 2); assert.ok(box.w > 0 && box.h > ISO.TH, 'the room box covers the wall');
 });
 
-await t('iso: depth order is back to front (x + y), the hovered, selected and hero rooms come last', async () => {
+await t('iso: depth order is strictly back to front (x + y): a focus room never paints over the rooms in front of it', async () => {
   const { app, run, flow } = await setup({ seed: 'iso3' });
   const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 2, 1], ['rm_chapel', 1, 3], ['rm_sawmill', 3, 3], ['rm_quarry', 6, 0], ['rm_linen', 0, 4]]);
   const w = run.ward, key = (id) => w.rooms[id].x + w.rooms[id].y;
@@ -668,8 +668,8 @@ await t('iso: depth order is back to front (x + y), the hovered, selected and he
   for (let i = 1; i < plain.length; i++) assert.ok(key(plain[i]) >= key(plain[i - 1]), 'non-decreasing depth');
   assert.equal(plain.length, Object.keys(w.rooms).length);
   const foc = ISO.depthOrder(w, (id) => id === ids[0]).slice();
-  assert.equal(foc[foc.length - 1], ids[0], 'the focus room is drawn last');
-  assert.deepEqual(foc.slice(0, -1), plain.filter((id) => id !== ids[0]), 'everything else keeps its order');
+  assert.deepEqual(foc, plain, 'the focus room keeps its place: drawn last it painted over the rooms in front of it (entrance over chapel and sawmill)');
+  assert.equal(foc.indexOf(ids[0]), 0, 'the back-most room (x + y = 0) is drawn first even when it is the focus room');
   flow.route(); frames(app, 5);
 });
 

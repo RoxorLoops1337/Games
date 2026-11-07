@@ -465,12 +465,14 @@ function snuffed(g, x, y, t, calm) { // a cold lantern with a thread of smoke
   g.strokeStyle = 'rgba(190,190,200,.5)'; g.lineWidth = 1.2; g.beginPath();
   for (let i = 0; i <= 8; i++) { const yy = y - 10 - i * 2.4, xx = x + Math.sin(i * 0.9 + (calm ? 0 : t * 2)) * (1 + i * 0.35); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); } g.stroke(); g.restore();
 }
-// Back to front: by x + y (then x), the focus rooms (hovered, selected, the hero's) after all the others so a neighbour never hides them.
+// Strictly back to front: by x + y (then x). The focus rooms (hovered, selected, the hero's) used to be drawn LAST so a neighbour never hid them, but that
+// let a back room's floor and plinth paint over the rooms in front of it (the entrance covering the chapel and the sawmill). A front neighbour of a focus room
+// already drops its walls (lowered walls, below), so nothing needs the reorder. `focus` is kept in the signature for callers and tests: it no longer reorders.
 export function depthOrder(w, focus, out = []) {
   out.length = 0;
-  for (let pass = 0; pass < 2; pass++) for (let d = 0; d <= w.w + w.h - 2; d++) for (let x = Math.min(d, w.w - 1); x >= 0 && d - x < w.h; x--) {
+  for (let d = 0; d <= w.w + w.h - 2; d++) for (let x = Math.min(d, w.w - 1); x >= 0 && d - x < w.h; x--) {
     const id = w.grid[d - x][x]; if (!id || id === 'rubble') continue;
-    if (!!(focus && focus(id)) === (pass === 1)) out.push(id);
+    out.push(id);
   }
   return out;
 }
