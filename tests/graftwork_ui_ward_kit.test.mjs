@@ -107,29 +107,30 @@ await t('recipes: every rm_* recipe is valid against the pilot kit, the current 
   for (const type of ['rm_sawmill', 'rm_quarry', 'rm_generator', 'rm_ward', 'rm_dispensary', 'rm_pharmacy', 'rm_chapel', 'rm_entrance', 'rm_theatre', 'rm_counting', 'rm_kitchen', 'rm_library']) assert.ok(KD.resolveRecipe(type, CUR), type + ' works with the current kit');
   assert.ok(KD.resolveRecipe('rm_sawmill', PILOT) && !KD.resolveRecipe('rm_chapel', PILOT), 'the pilot kit has no stained glass: the chapel needs the new floor and wall');
 });
-await t('planned art: batch 4 props are declared with footprints and gate their variant by `need`; every room keeps a variant that needs nothing, so no room ever waits', async () => {
+await t('batch 4 art: every signature prop is in the manifest, each room shows its signature variant, and still falls back to the older art when a prop is missing', async () => {
   const BATCH4 = 'boiler_tank coal_pile valve_wheel cable_coil fuse_box counting_desk coin_chest abacus pharmacy_counter pill_jars padded_cot restraint_chair stove prep_table cauldron hanging_pots wash_tub mangle drying_rack bookcase reading_desk globe library_ladder linen_shelf linen_cart slab_table locker_wall sheet_body operating_table footlights instrument_tray throne workbench anvil tool_chest pickaxe_rack ore_cart work_lamp'.split(' ');
-  for (const id of BATCH4) { assert.ok(KD.PLANNED.props[id], 'planned prop ' + id); assert.ok(!CUR.props[id], id + ' is not delivered yet: remove it from PLANNED once it is in the manifest'); }
-  assert.deepEqual(Object.keys(KD.PLANNED.props).sort(), [...BATCH4].sort(), 'PLANNED lists exactly the batch 4 props');
-  assert.deepEqual([KD.PLANNED.floors, KD.PLANNED.walls, KD.PLANNED.pieces], [[], [], []], 'every floor, wall and wall piece has been delivered');
+  for (const id of BATCH4) { assert.ok(CUR.props[id], 'delivered prop ' + id); assert.ok(!KD.PLANNED.props[id], id + ' left PLANNED'); }
+  assert.deepEqual([KD.PLANNED.floors, KD.PLANNED.walls, KD.PLANNED.pieces, Object.keys(KD.PLANNED.props)], [[], [], [], []], 'nothing is still planned');
+  // scale: a 2 x 1 prop is about a bed wide, a 1 x 1 prop is never wider than a crate and a half, nothing is wider than its footprint (23 world px per sub-tile along each axis, a diamond)
+  for (const id of BATCH4) { const d = CUR.props[id]; const [c, r] = d.footprint; assert.ok(d.sw <= (c + r) * 23 * 0.75 + 4, id + ' fits its footprint (sw ' + d.sw + ')'); if (c * r === 2) assert.ok(d.sw >= 22 && d.sw <= 34, id + ' is about a bed wide: ' + d.sw); else assert.ok(d.sw <= 20, id + ' is crate sized or smaller: ' + d.sw); }
   const used = new Set();
   for (const [type, list] of Object.entries(KD.RECIPES)) {
-    assert.ok(list.some((v) => !(v.need || []).length), type + ' has a variant that needs no planned art');
-    assert.ok(!(list[list.length - 1].need || []).length, type + ': the last variant is the one that works today');
-    list.forEach((v, i) => {
-      for (const id of v.need || []) { assert.ok(KD.PLANNED.props[id], type + ' need ' + id + ' must be a planned prop'); used.add(id); }
-      for (const p of v.props) if (KD.PLANNED.props[p.id]) assert.ok((v.need || []).length, type + ' variant ' + i + ' uses the planned prop ' + p.id + ' without a need gate');
-      if ((v.need || []).length) assert.ok(i < list.length - 1, type + ': a gated variant comes before the fallback');
-    });
-    const cur = KD.resolveRecipe(type, CUR), full = KD.resolveRecipe(type, fullKit());
-    assert.ok(cur && full); if (list.length > 1) { assert.equal(cur.variant, list.length - 1, type + ' shows the fallback today'); assert.equal(full.variant, 0, type + ' upgrades by itself once its props arrive'); assert.equal(full.planned, true); }
+    assert.ok(list.some((v) => !(v.need || []).length), type + ' has a variant that needs nothing');
+    assert.ok(!(list[list.length - 1].need || []).length, type + ': the last variant is the fallback');
+    list.forEach((v, i) => { for (const id of v.need || []) { assert.ok(BATCH4.includes(id), type + ' need ' + id + ' is a batch 4 prop'); used.add(id); } if ((v.need || []).length) assert.ok(i < list.length - 1, type + ': a gated variant comes before the fallback'); });
+    const cur = KD.resolveRecipe(type, CUR); assert.ok(cur);
+    if (list.length > 1) {
+      assert.equal(cur.variant, 0, type + ' shows its signature variant'); assert.equal(cur.planned, true);
+      const old = clone(CUR); for (const id of BATCH4) delete old.props[id]; const fb = KD.resolveRecipe(type, old);
+      assert.ok(fb && fb.variant === list.length - 1, type + ' falls back to the older art without batch 4');
+    }
+    for (const v of list) for (const need of v.need || []) assert.ok(CUR.props[need]);
+    // every prop of the chosen variant is placed (the layout was made for these footprints)
+    assert.equal(cur.props.length, list[cur.variant].props.length, type + ': no prop of the signature variant was dropped by the resolver');
   }
-  // each batch 4 prop is placed by at least one planned variant (nothing planned is forgotten)
   const placed = new Set(); for (const list of Object.values(KD.RECIPES)) for (const v of list) for (const p of v.props) placed.add(p.id);
-  for (const id of BATCH4) assert.ok(placed.has(id), 'batch 4 prop ' + id + ' is used by a planned variant');
-  // upgrading is per room: with only the boiler tank delivered the boiler switches and the rooms that wait for other props stay as they are
-  const one = clone(CUR); one.props.boiler_tank = { name: 'x', file2x: 'a', file1x: 'a', w: 100, h: 100, anchorX: 50, anchorY: 80, footprint: [2, 1], sw: 27 };
-  assert.equal(KD.resolveRecipe('rm_boiler', one).variant, 0); assert.equal(KD.resolveRecipe('rm_morgue', one).variant, KD.RECIPES.rm_morgue.length - 1);
+  for (const id of BATCH4) assert.ok(placed.has(id), 'batch 4 prop ' + id + ' is used by a variant');
+  const one = without(CUR, 'props', ['boiler_tank']); assert.equal(KD.resolveRecipe('rm_boiler', one).variant, KD.RECIPES.rm_boiler.length - 1, 'a missing signature prop only demotes that room'); assert.equal(KD.resolveRecipe('rm_morgue', one).variant, 0);
 });
 await t('composition: no two rooms alike, tall props stay in the back half and clear of windows, windows only where daylight makes sense, the middle of the room stays open', async () => {
   for (const [name, kit] of [['current', CUR], ['full', fullKit()]]) {
@@ -168,7 +169,7 @@ await t('composition: no two rooms alike, tall props stay in the back half and c
   }
   // each room's identity props are on stage today
   const has = (type, id) => KD.resolveRecipe(type, CUR).props.some((p) => p.id === id);
-  for (const [type, ids] of [['rm_chapel', ['altar', 'pew', 'candle_stand', 'lectern']], ['rm_entrance', ['reception_desk', 'waiting_bench', 'coat_stand']], ['rm_ward', ['bed', 'bedside_table', 'iv_stand']], ['rm_corridor', ['gurney', 'wheelchair', 'plant']], ['rm_morgue', ['gurney']], ['rm_sawmill', ['sawbench', 'planks']]]) for (const id of ids) assert.ok(has(type, id), type + ' has ' + id);
+  for (const [type, ids] of [['rm_chapel', ['altar', 'pew', 'candle_stand', 'lectern']], ['rm_entrance', ['reception_desk', 'waiting_bench', 'coat_stand']], ['rm_ward', ['bed', 'bedside_table', 'iv_stand']], ['rm_corridor', ['gurney', 'wheelchair', 'plant']], ['rm_morgue', ['slab_table', 'sheet_body', 'locker_wall']], ['rm_sawmill', ['sawbench', 'planks']]]) for (const id of ids) assert.ok(has(type, id), type + ' has ' + id);
   const piece = (type, id) => KD.resolveRecipe(type, CUR).pieces.some((p) => p.id === id);
   assert.ok(piece('rm_chapel', 'stainedglass') && piece('rm_entrance', 'archdoor') && piece('rm_theatre', 'curtain') && piece('rm_boiler', 'pipes') && piece('rm_morgue', 'vent'), 'identity wall pieces');
   assert.equal(KD.resolveRecipe('rm_entrance', CUR).doorPiece, 'archdoor'); assert.equal(KD.resolveRecipe('rm_ward', CUR).doorPiece, 'door'); assert.equal(KD.resolveRecipe('rm_ward', PILOT), null);

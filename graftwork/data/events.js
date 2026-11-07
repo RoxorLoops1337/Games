@@ -720,6 +720,17 @@ export const EVENT_LIST = [
     ],
   },
   {
+    id: 'e_w_surveyor', name: 'The Surveyor', act: 0, ward: true, phase: ['midday', 'evening', 'night'],
+    text: 'A woman with a tape measure and no visible employer is pacing out your corridors. She stops at a wall, taps it twice, and tells you it is not load bearing. She would like to be paid, or not, depending on how you feel about walls.',
+    choices: [
+      { label: 'Pay for the survey', text: 'Midday 30 gold, evening 20, night 45. Gain an Expand building card.', cond: (run) => run.gold >= 45,
+        apply: (run, R) => { const p = phaseOf(run), c = p === 'midday' ? 30 : p === 'evening' ? 20 : 45; R.gold(run, -c); R.addBuild(run, 'b_expand'); return p === 'midday' ? 'A stamped plan, at the day rate. -30 gold, and a card that makes a room bigger.' : p === 'evening' ? 'She is packing up and sells the plan cheap. -20 gold.' : 'Night rate, paid in advance. -45 gold, and the plan.'; } },
+      { label: 'Knock the wall down yourself', text: 'Lose 6 HP (4 in the evening). Gain an Expand building card.',
+        apply: (run, R) => { const p = phaseOf(run); R.hurt(run, p === 'evening' ? 4 : 6); R.addBuild(run, 'b_expand'); return p === 'evening' ? 'The wall comes down in the lamplight. -4 HP, and the plan is yours.' : 'It was load bearing, a little. -6 HP, and the plan is yours.'; } },
+      leave('She measures you instead and writes something down.'),
+    ],
+  },
+  {
     id: 'e_w_wakeful_patient', name: 'The Wakeful Patient', act: 1, ward: true, phase: 'night',
     text: 'Bed nine is awake and has been for some time. At noon they chat. At dusk they ask for water. After midnight they ask for something else, and the monitor next to them does not beep.',
     choices: [

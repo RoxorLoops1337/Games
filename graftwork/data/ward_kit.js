@@ -18,23 +18,10 @@ export const SUB = 4;
 export const WALL_FULL = 46, WALL_LOW = 15;
 export const LANES = [[0, 1], [3, 1], [1, 0], [1, 3]];
 
-// ids the art pipeline has not delivered yet. Batch 3 delivered every floor, wall and wall piece; batch 4 (props) is still to come: the recipes below carry
-// a planned variant for each room that wants one (gated by `need`, so it switches on by itself the day the signature prop reaches the manifest).
-// Footprints are what the planned variants were laid out for (the manifest's own footprint wins once it exists).
-export const PLANNED = {
-  floors: [],
-  walls: [],
-  pieces: [],
-  props: {
-    boiler_tank: [2, 1], coal_pile: [2, 1], valve_wheel: [1, 1], cable_coil: [1, 1], fuse_box: [1, 1],
-    counting_desk: [2, 1], coin_chest: [1, 1], abacus: [1, 1], pharmacy_counter: [2, 1], pill_jars: [1, 1],
-    padded_cot: [2, 1], restraint_chair: [1, 1], stove: [2, 1], prep_table: [2, 1], cauldron: [1, 1], hanging_pots: [1, 1],
-    wash_tub: [1, 1], mangle: [2, 1], drying_rack: [2, 1], bookcase: [2, 1], reading_desk: [2, 1], globe: [1, 1], library_ladder: [1, 1],
-    linen_shelf: [1, 1], linen_cart: [1, 1], slab_table: [2, 1], locker_wall: [2, 1], sheet_body: [2, 1],
-    operating_table: [2, 1], footlights: [2, 1], instrument_tray: [1, 1], throne: [1, 1],
-    workbench: [2, 1], anvil: [1, 1], tool_chest: [1, 1], pickaxe_rack: [1, 1], ore_cart: [2, 1], work_lamp: [1, 1],
-  },
-};
+// ids the art pipeline has not delivered yet. Batches 3 and 4 delivered every floor, wall, wall piece and prop, so nothing is planned today. A future batch
+// adds its ids here (with the footprints its recipe variants were laid out for) and gates the variant by `need`: it switches on by itself the day the
+// prop reaches the manifest. The manifest's own footprint wins once it exists.
+export const PLANNED = { floors: [], walls: [], pieces: [], props: {} };
 // animated props: an overlay the renderer draws over the sprite (never with reduced motion)
 export const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
 
@@ -48,7 +35,7 @@ const Wp = (id, wall, s) => ({ id, wall, s });
 //     under a window (a window on the L wall covers rows 1 to 2, on the R wall columns 1 to 2).
 //   - windows only where daylight makes sense (wards, workshops, laundry, library, kitchen), never in the morgue, cells, boiler, chapel (stained glass instead), theatre.
 //   - every room has its own floor + wall pair or its own prop mix: no two rooms look alike (tests/graftwork_ui_ward_kit.test.mjs).
-// Each room lists its PLANNED variant first (needs a batch 4 prop), then the one built from the art that exists today.
+// Each room lists its signature variant first (gated by `need`: the batch 4 props), then a fallback built from the older art that needs nothing (a kit without batch 4 still works).
 export const RECIPES = {
   rm_entrance: [{
     floor: 'tile', wall: 'wood', door: 'archdoor',
@@ -160,7 +147,7 @@ export const RECIPES = {
   ],
   rm_theatre: [
     { floor: 'stage', wall: 'velvet', need: ['operating_table'], door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
-      props: [P('operating_table', 0, 2), P('instrument_tray', 2, 1), P('throne', 3, 0), P('footlights', 2, 3), P('lamp', 0, 0)] },
+      props: [P('operating_table', 2, 2), P('instrument_tray', 1, 2), P('throne', 3, 0), P('footlights', 2, 3), P('lamp', 0, 0)] },
     { floor: 'stage', wall: 'velvet', door: 'archdoor', pieces: [Wp('curtain', 'L', 0.5), Wp('curtain', 'R', 0.5), Wp('sconce', 'L', 0.1), Wp('sconce', 'R', 0.9)],
       props: [P('gurney', 2, 2), P('bedside_table', 1, 2), P('iv_stand', 3, 0), P('lamp', 0, 0), P('plant', 3, 3)] },
   ],

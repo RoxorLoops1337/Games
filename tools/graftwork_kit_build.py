@@ -95,7 +95,7 @@ PROPS = {
     'tool_chest': {'sw': 14, 'fp': [1, 1], 'name': 'Tool chest'},
     'pickaxe_rack': {'sw': 15, 'fp': [1, 1], 'name': 'Pickaxe rack'},
     'ore_cart': {'sw': 25, 'fp': [2, 1], 'name': 'Ore cart'},
-    'work_lamp': {'sw': 7, 'fp': [1, 1], 'name': 'Work lamp'},
+    'work_lamp': {'sw': 8, 'fp': [1, 1], 'name': 'Work lamp'},
 }
 # per-prop raw fixes: despeckle = key-colour magenta left in see-through ironwork becomes transparent;
 # fade_top = fraction of the trimmed height over which the top fades out (chains that ran off the canvas)

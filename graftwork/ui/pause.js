@@ -47,6 +47,8 @@ export const GLOSSARY = [
   ['Overload', 'The 3rd graft on a card: numbers x1.5, but a 25% Shatter chance on its first play.'],
   ['Shatter', 'The card resolves, then is destroyed for the run.'],
   ['Temper', 'A Forge option: fuses a card\'s patches into it for good, lighter and out of the slots.'],
+  ['Expand', 'A Ward plan: a Ward, Chapel, Workshop, Library or Kitchen grows to 2 cells for its Expand cost. A Ward then holds 7 monsters.'],
+  ['Big room', 'A room of 2 cells (the Theatre is 2 x 2). Crossing it is one route step, however many cells it covers.'],
   ['Thread', 'Chain cards of one school, then cut the thread to cash the stitches.'],
   ['Vulnerable', 'Takes 50% more attack damage.'],
   ['Weak', 'Deals 25% less attack damage.'],

@@ -259,7 +259,7 @@ export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
     const A = acts[run.act];
     switch (run.phase) {
       case 'ward': {
-        if (run.ward.phase === 'morning') { morningFn(run, R); break; }
+        if (run.ward.phase === 'morning') { morningFn(run, R); if (o.onMorning) o.onMorning(run); break; }
         A.walks++;
         const r = walkFn(run, R);
         if (r === false) throw new Error('illegal walk ' + run.ward.why);

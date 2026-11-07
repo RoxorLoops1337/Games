@@ -124,6 +124,8 @@ export const WARD_GLOSSARY = {
   Die: K('#e0c27a', 'square', 'Each walk phase you roll your die (D4 to start). Loaded Dice and Bone Dice add sides.'),
   Roll: K('#e0c27a', 'square', 'The longest route you can plan this phase. Morning Rounds, Weighted Die and the Noon Dial add to it.'),
   Route: K('#B3263A', 'tri', 'Click neighbouring rooms one by one, up to your roll, never the same room twice. Click the last step to undo, then Go.'),
+  Expand: K('#8a5fb0', 'hex', 'A plan that grows a Ward, Chapel, Workshop, Library or Kitchen into a free cell beside it. Pay that room\'s Expand cost; it then uses 2 power.'),
+  'Big room': K('#8a5fb0', 'hex', 'A room of 2 cells (the Theatre is 2 x 2). It touches neighbours along its whole edge, and a route still enters it in ONE step.'),
   'Dark room': K('#9aa0a6', 'cross', 'A room switched off: timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
 };
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.

@@ -1,6 +1,6 @@
 // Ward relics (design/WARD.md section 9). `ward: true` keeps them out of classic runs (engine/run.js relicPool).
 // Combat ones read the phase the Ward passes into the fight (A.c.wardMods.phase); the rest are run-level `perk`s read by engine/ward.js.
-// perks: eveningHeal nightGold powerCap wardCap firstFree startRes handPlus move noDark shopBuild. Voice: no em dashes.
+// perks: eveningHeal nightGold powerCap wardCap firstFree startRes handPlus move noDark shopBuild expandCost. Voice: no em dashes.
 const ph = (A) => (A.c.wardMods && A.c.wardMods.phase) || null;
 export const RELICS_WARD = [
   { id: 'r_w_noon_ration', name: 'Noon Ration', rarity: 'common', ward: true, text: 'At midday, draw 1 extra card on the first turn of each fight.',
@@ -22,6 +22,7 @@ export const RELICS_WARD = [
   { id: 'r_w_walking_shoes', name: 'Walking Shoes', rarity: 'rare', ward: true, perk: 'move', n: 1, text: '+1 MOVE on every walk.' },
   { id: 'r_w_hard_hat', name: 'Hard Hat', rarity: 'uncommon', ward: true, perk: 'noDark', n: 1, text: 'Dark rooms cost no HP to cross.' },
   { id: 'r_w_dispatch_ledger', name: 'Dispatch Ledger', rarity: 'shop', ward: true, perk: 'shopBuild', n: 1, text: 'The Dispensary offers 1 more building card.' },
+  { id: 'r_w_surveyors_tape', name: "Surveyor's Tape", rarity: 'uncommon', ward: true, perk: 'expandCost', n: 1, text: 'Expand costs 1 less wood and 1 less stone.' },
   { id: 'r_w_noon_dial', name: 'Noon Dial', rarity: 'uncommon', ward: true, perk: 'dieMidday', n: 1, text: 'Add 1 to your walk roll at midday.' },
   { id: 'r_w_lucky_coin', name: 'Lucky Coin', rarity: 'rare', ward: true, perk: 'rerollDay', n: 1, text: 'Once a day you may reroll your walk die.' },
   { id: 'r_w_bone_dice', name: 'Bone Dice', rarity: 'boss', ward: true, perk: 'dieSides', n: 2, text: 'Your walk die has 2 more sides (D4 becomes D6).' },

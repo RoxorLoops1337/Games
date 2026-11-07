@@ -77,8 +77,9 @@ t('animation_frames_are_optional_and_valid_when_present', () => {
     if (f.walk) for (const s of f.walk) assert.match(s, new RegExp('^' + id + '_walk[1-4]$'));
     for (const s of frameStems(f)) for (const t2 of ['1x', '2x']) assert.ok(existsSync(join(root, `actors/${s}@${t2}.webp`)), s + '@' + t2);
     if (f.hi3x) for (const s of frameStems(f).filter((x) => !/walk/.test(x))) assert.ok(existsSync(join(root, `actors/${s}@3x.webp`)), 'hi3x promises ' + s + '@3x');
-    for (const k of Object.keys(f)) assert.ok(['walk', 'atk', 'hit', 'die', 'hi3x'].includes(k), 'unknown frames key ' + k);
-    for (const k of ['file1x', 'file2x', 'w', 'h', 'anchorX', 'anchorY']) assert.ok(e[k] > 0, id + ' keeps its standing ' + k);
+    for (const k of Object.keys(f)) assert.ok(['walk', 'atk', 'hit', 'die', 'hi3x', 'walkOk'].includes(k), 'unknown frames key ' + k);
+    for (const k of ['file1x', 'file2x']) assert.ok(typeof e[k] === 'string' && e[k], id + ' keeps its standing ' + k); for (const k of ['w', 'h', 'anchorX', 'anchorY']) assert.ok(e[k] > 0, id + ' keeps its standing ' + k);
+    if (f.walkOk !== undefined) assert.equal(f.walkOk, false, id + ': walkOk is only ever written as false');
   }
 });
 t('all_files_are_webp_with_alpha', () => {

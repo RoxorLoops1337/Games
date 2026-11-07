@@ -80,6 +80,7 @@ function newRoom(run, type, x, y, fw = 1, fh = 1) {
   wardPower(run);
   return r;
 }
+export function addBuildCard(run, id) { if (!W(run) || !BUILD_CARDS[id]) return null; return addCard(run, id); }
 function addCard(run, id, to = 'discard') { const w = W(run); const c = { uid: w.cardNext++, id }; w.deck[to].push(c); return c; }
 
 // ---------------- floor ----------------
@@ -163,7 +164,7 @@ export function placement(run, size, x, y, dir) {
   // pointed cell itself is the problem: say so; otherwise the second cell has no room
   const w0 = W(run);
   const cellWhy = w0.grid[y][x] === 'rubble' ? 'rubble' : w0.grid[y][x] ? 'occupied' : null;
-  return { ok: false, why: cellWhy || (one ? first.why : first.why === 'adjacent' ? 'adjacent' : 'space'), f: first.f, cells: rectCells(first.f) };
+  return { ok: false, why: cellWhy || (one || dir ? first.why : first.why === 'adjacent' ? 'adjacent' : 'space'), f: first.f, cells: rectCells(first.f) };
 }
 // Expand: the sides a room can grow toward. { ok, why, to: [w, h], dirs: [{dir, cells, f}], cost }. why: type already norecipe space
 export function expandOptions(run, rid) {
@@ -182,9 +183,13 @@ export function expandOptions(run, rid) {
     dirs.push({ dir, cells: [[cx, cy]], f });
   }
   if (!dirs.length) { const any = DIR_NAMES.some((dir) => hasBigRecipe(room.type, dir === 'e' || dir === 'w' ? 2 : 1, dir === 'e' || dir === 'w' ? 1 : 2)); return no(any ? 'space' : 'norecipe'); }
-  return { ok: true, why: null, dirs, to: [dirs[0].f.w, dirs[0].f.h], cost: d.expand.cost };
+  return { ok: true, why: null, dirs, to: [dirs[0].f.w, dirs[0].f.h], cost: expandCostOf(room, run) };
 }
-export const expandCostOf = (room) => (ROOMS[room.type].expand || {}).cost || {};
+export function expandCostOf(room, run) { // the room's Expand cost; the Surveyor's Tape takes 1 wood and 1 stone off
+  const c = { ...((ROOMS[room.type].expand || {}).cost || {}) }, k = run ? perkN(run, 'expandCost') : 0;
+  if (k) for (const r of ['wood', 'stone']) if (c[r]) c[r] = Math.max(0, c[r] - k);
+  return c;
+}
 function adjacentRoom(run, x, y) {
   const w = W(run);
   return DIRS.some(([dx, dy]) => { const r = inside(w, x + dx, y + dy) && roomAt(run, x + dx, y + dy); return r && r.type !== 'rm_theatre'; });
@@ -360,15 +365,15 @@ export function playBuildCard(run, uid, target) {
   const w = W(run), d = w.deck;
   const inst = d.hand.find((c) => c.uid === uid), card = BUILD_CARDS[inst.id];
   pay(run, costOf(run, card));
-  if (card.kind === 'expand') pay(run, expandCostOf(w.rooms[typeof target === 'object' ? target.room : target]));
+  if (card.kind === 'expand') pay(run, expandCostOf(w.rooms[typeof target === 'object' ? target.room : target], run));
   if (card.kind === 'room') w.freeUsed = true;
   d.hand.splice(d.hand.indexOf(inst), 1); d.discard.push(inst);
   let room = null;
   if (card.kind === 'room') { const f = chk.cells.length > 1 ? footprint(target.x, target.y, card.size, chk.dir) : { x: target.x, y: target.y, w: 1, h: 1 }; room = newRoom(run, card.room, f.x, f.y, f.w, f.h); log(run, `Built a ${def(room).name}${room.on ? '' : ' (dark: no spare power)'}.`); }
   else if (card.kind === 'expand') {
     room = w.rooms[typeof target === 'object' ? target.room : target]; const f = chk.f;
-    room.x = f.x; room.y = f.y; room.w = f.w; room.h = f.h; for (const [cx, cy] of cellsOf(room)) w.grid[cy][cx] = room.id;
-    wardPower(run); if (powerUse(room) > 0 && w.power.free < 0) room.on = false; wardPower(run); // no spare power for the bigger room: it goes dark
+    room.x = f.x; room.y = f.y; if (f.w > 1) room.w = f.w; if (f.h > 1) room.h = f.h; for (const [cx, cy] of cellsOf(room)) w.grid[cy][cx] = room.id;
+    if (powerUse(room) > 0 && wardPower(run).free < 0) room.on = false; wardPower(run); // no spare power for the bigger room: it goes dark
     log(run, `Expanded the ${def(room).name} to ${sizeKey(room)}${room.on ? '' : ' (dark: no spare power)'}.`);
   }
   else if (card.kind === 'upgrade') { room = w.rooms[target]; if (card.oneShot) room.overtime = 1; else room.upgrades.push(card.id); log(run, `${card.name} on the ${def(room).name}.`); }

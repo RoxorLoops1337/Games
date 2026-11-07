@@ -5,7 +5,7 @@ import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { runAllows, snapshotFor } from './unlock.js';
-import { wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
+import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
@@ -434,6 +434,7 @@ export const R = {
   hurt: (run, n) => { run.hp = Math.max(1, run.hp - n); },
   maxHp: (run, n) => { run.maxHp = Math.max(10, run.maxHp + n); run.hp = Math.min(run.maxHp, Math.max(1, run.hp + (n > 0 ? n : 0))); },
   addCard: (run, id) => { if (CARDS[id]) run.deck.push(newInst(id, () => run.uidNext++)); },
+  addBuild: (run, id) => addBuildCard(run, id), // a Ward building card (b_*) into the building deck; a no-op outside the Ward
   removeCard: (run, uid) => { run.deck = run.deck.filter((i) => i.uid !== uid); },
   upgrade: (run, uid) => { const i = findInst(run, uid); if (i && CARDS[i.id].up) i.up = 1; },
   addRelic: (run, id) => addRelic(run, id || rollRelicByAct(run)),

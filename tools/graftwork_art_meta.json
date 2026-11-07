@@ -6,7 +6,8 @@
   "kind": "hero"
  },
  "odile": {
-  "kind": "hero"
+  "kind": "hero",
+  "walkOk": false
  },
  "the_resident": {
   "kind": "elite"
@@ -50,5 +51,9 @@
  },
  "two_gurneys": {
   "kind": "elite"
+ },
+ "bedpan_slime": {
+  "kind": "normal",
+  "framesOk": false
  }
 }

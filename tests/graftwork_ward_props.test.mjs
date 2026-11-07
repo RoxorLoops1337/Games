@@ -24,9 +24,14 @@ export function checkInvariants(run, tag) {
   const hr = w.rooms[w.hero.room];
   assert.ok(hr, `${tag}: hero.room ${w.hero.room} is not a built room`);
   assert.equal(w.grid[hr.y][hr.x], hr.id, `${tag}: the hero's room is not on its grid cell (the hero would stand on an empty cell)`);
-  for (const r of Object.values(w.rooms)) assert.equal(w.grid[r.y][r.x], r.id, `${tag}: room ${r.id} not on its cell`);
+  // footprints: every cell of every room (w x h, absent = 1) holds the room's id, nothing else holds a room id, a size field is only written when above 1
+  let want = 0;
+  for (const r of Object.values(w.rooms)) {
+    assert.ok(r.w === undefined || r.w > 1, `${tag}: room ${r.id} w=${r.w}`); assert.ok(r.h === undefined || r.h > 1, `${tag}: room ${r.id} h=${r.h}`);
+    for (const [cx, cy] of W.cellsOf(r)) { assert.equal(w.grid[cy][cx], r.id, `${tag}: room ${r.id} not on its cell ${cx},${cy}`); want++; }
+  }
   const cells = w.grid.flat().filter((c) => c && c !== 'rubble').length;
-  assert.equal(cells, Object.keys(w.rooms).length, `${tag}: grid rooms and room table differ`);
+  assert.equal(cells, want, `${tag}: grid cells and the cells of the rooms differ`);
   if (w.phase !== 'morning') {
     assert.ok(w.roll, `${tag}: no roll in the ${w.phase} walk phase (die missing)`);
     assert.equal(w.roll.key, `${w.day}:${w.phase}`, `${tag}: stale roll ${w.roll.key} in ${w.day}:${w.phase}`);
@@ -53,7 +58,7 @@ function morning(run, rnd, tag) {
     const inst = pick(rnd, w.deck.hand), card = BUILD_CARDS[inst.id];
     let target = null;
     if (card.kind === 'room') { const cells = W.buildCells(run); if (!cells.length) continue; const [x, y] = pick(rnd, cells); target = { x, y }; }
-    else if (card.kind === 'upgrade') target = pick(rnd, Object.keys(w.rooms));
+    else if (card.kind === 'upgrade' || card.kind === 'expand') target = pick(rnd, Object.keys(w.rooms));
     else if (card.effect === 'res') target = rnd.chance(0.5) ? 'wood' : 'stone';
     else if (card.effect === 'demolish') {
       const rub = []; for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) if (w.grid[y][x] === 'rubble') rub.push({ x, y });

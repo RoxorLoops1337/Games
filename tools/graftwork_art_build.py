@@ -192,7 +192,7 @@ def contact_of(im):
     by, bx = np.where(m)
     return {'fx': float(bx.mean()) + 0.5, 'bottom': bot + 1, 'top': top, 'fw': int(bx.max() - bx.min() + 1), 'area': int(a.sum()), 'h': bot + 1 - top}
 
-def frame_canvas(std, fr, warn, walk=False):
+def frame_canvas(std, fr, warn, walk=False, zoom=1.0):
     """Place raw frame `fr` on the 1024 canvas with the STANDING frame's scale, feet on the standing contact point. Returns the canvas (RGBA)."""
     S = 1024
     bb = np.array(std)[..., 3] > 20
@@ -217,6 +217,7 @@ def frame_canvas(std, fr, warn, walk=False):
         rel = (cf['area'] / cs['area']) ** 0.5
     if abs(rel - 1) > FRAME_TOL:
         warn.append(f'scale differs from the standing frame by {abs(rel - 1) * 100:.0f} percent (limit {FRAME_TOL * 100:.0f}); exported anyway')
+    k *= zoom   # walk cycles drawn a little smaller or larger than the standing figure are brought to its height (the feet stay put)
     w, h = round(fr.width * k), round(fr.height * k)
     sc = fr.resize((w, h), Image.LANCZOS)
     ox, oy = round(tx - cf['fx'] * k), round(ty - cf['bottom'] * k)
@@ -226,6 +227,11 @@ def frame_canvas(std, fr, warn, walk=False):
     if lost > 0.005:
         warn.append(f'{lost * 100:.1f} percent of the figure falls off the canvas')
     return can
+
+def fit_size(fr, std):
+    return fr if fr.size == std.size else fr.resize(std.size, Image.LANCZOS)
+
+META = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'graftwork_art_meta.json')))
 
 def folder_size(d):
     return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(d) for f in fs)
@@ -250,10 +256,19 @@ def frames_pass():
             print(f'  {n}: walk cycle needs all of {WALK}, got {[nm for nm in WALK if nm in found]}: walk skipped')
             for nm in WALK:
                 found.pop(nm, None)
+        if META.get(n, {}).get('framesOk') is False:
+            print(f'  {n}: frames rejected by tools/graftwork_art_meta.json (framesOk false): skipped'); e.pop('frames', None); continue
         ok = {}
+        zoom = 1.0
+        wr = [contact_of(fit_size(clean(Image.open(found[nm])), std))['h'] / contact_of(std)['h'] for nm in WALK if nm in found]
+        if wr:
+            m_ = sum(wr) / len(wr)
+            if 0.04 < abs(m_ - 1) < 0.3:
+                zoom = 1 / m_
+                print(f'  {n}: walk cycle is {m_ * 100:.0f} percent of the standing height: scaled by {zoom:.2f} to match (art session: please draw it at the standing size)')
         for nm, f in found.items():
             warn = []
-            can = frame_canvas(std, clean(Image.open(f)), warn, nm in WALK)
+            can = frame_canvas(std, clean(Image.open(f)), warn, nm in WALK, zoom if nm in WALK else 1.0)
             for w_ in warn:
                 print(f'  {n}_{nm}: WARNING {w_}')
             if can is None:
@@ -274,6 +289,8 @@ def frames_pass():
                 fr[nm] = ok[nm]
         if any(k in fr for k in ('atk', 'hit', 'die')):
             fr['hi3x'] = all(os.path.exists(os.path.join(OUT, 'actors', st + '@3x.webp')) for st in [*fr.get('atk', []), *[fr[k] for k in ('hit', 'die') if k in fr]])
+        if fr and 'walk' in fr and META.get(n, {}).get('walkOk') is False:
+            fr['walkOk'] = False   # the renderer keeps the procedural walk for this actor (the painted cycle does not read as steps)
         if fr:
             e['frames'] = fr
             done[n] = {k: (len(v) if isinstance(v, list) else v) for k, v in fr.items()}

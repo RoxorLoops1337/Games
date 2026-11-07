@@ -71,7 +71,7 @@ export const START = {
   // The other new rooms (Pharmacy, Library, Morgue, Kitchen, Boiler, Isolation Ward II) and the sharper upgrades and effects are earned.
   build: new Set(L(`
     b_corridor b_ward b_isolation b_chapel b_dispensary b_workshop b_sawmill b_quarry b_counting b_generator b_linen b_scaffold b_laundry
-    b_overtime b_iron_doors b_reinforced_beds b_double_doors b_morning_rounds b_requisition b_triage b_lamp_oil b_overtime_pay b_open_ledger b_fresh_linens`)),
+    b_overtime b_iron_doors b_reinforced_beds b_double_doors b_morning_rounds b_requisition b_triage b_lamp_oil b_overtime_pay b_open_ledger b_fresh_linens b_expand`)),
 };
 
 // ============================ DERIVATION ============================

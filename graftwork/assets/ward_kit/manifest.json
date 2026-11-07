@@ -1180,15 +1180,15 @@
    "name": "Work lamp",
    "file2x": "props/work_lamp@2x.webp",
    "file1x": "props/work_lamp@1x.webp",
-   "w": 56,
-   "h": 132,
-   "anchorX": 28.0,
-   "anchorY": 92.4,
+   "w": 64,
+   "h": 150,
+   "anchorX": 32.0,
+   "anchorY": 105.0,
    "footprint": [
     1,
     1
    ],
-   "sw": 7,
+   "sw": 8,
    "file": "props/work_lamp@2x.webp"
   }
  }
