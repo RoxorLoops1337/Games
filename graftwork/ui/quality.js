@@ -12,7 +12,7 @@ export const TIERS = ['full', 'lite', 'minimal'];
 export const GRAPHICS = ['auto', 'high', 'low'];
 export const DEFAULT_GRAPHICS = 'auto';
 export const TIER_SPEC = {
-  full: { dprCap: 2, post: true, motes: true, sceneEvery: 1 },
+  full: { dprCap: 3, post: true, motes: true, sceneEvery: 1 },
   lite: { dprCap: 1.5, post: false, motes: false, sceneEvery: 3 },
   minimal: { dprCap: 1, post: false, motes: false, sceneEvery: 3 },
 };

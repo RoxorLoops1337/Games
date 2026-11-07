@@ -4,13 +4,14 @@
 //   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
 //   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
 import { defaultQuality } from './fx.js';
+import { cleanGraphics } from './quality.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
 import { lnw } from '../art/linework.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
+export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false };
 export const TEXT_STEPS = [100, 125, 150, 175];
 export const QUALITY = ['off', 'low', 'high'];
 
@@ -22,6 +23,7 @@ export function settingsOf(app) {
   if (!TEXT_STEPS.includes(s.textScale)) s.textScale = s.textSize === 'large' || s.largeText ? 125 : 100;
   for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined && k !== 'quality') s[k] = DEFAULTS[k];
   if (!QUALITY.includes(s.quality)) s.quality = defaultQuality();
+  s.graphics = cleanGraphics(s.graphics);
   return s;
 }
 
@@ -58,7 +60,7 @@ export default {
     const sy0 = y + 70;
     // sliders
     const sliders = [['master', 'Master volume'], ['sfx', 'Sound effects'], ['music', 'Music']];
-    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * 44, w - 64, s));
+    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * 40, w - 64, s));
     // toggles
     const toggles = [
       ['muted', 'Mute all sound', 'Silences everything. Volumes are kept.'],
@@ -68,13 +70,13 @@ export default {
       ['flashes', 'Screen flashes', 'Off removes every white or colored full-screen flash. Never more than 3 per second either way.'],
       ['highContrast', 'High contrast text', 'Dark outline behind all text.'],
     ];
-    const ty0 = sy0 + 3 * 44 + 14;
+    const ty0 = sy0 + 3 * 40 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
     toggles.forEach(([key, label, tip], i) => {
-      const yy = ty0 + 14 + i * 36;
+      const yy = ty0 + 14 + i * 31;
       const on = !!s[key];
-      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 34);
-      this.reg(app, x + 32, yy, w - 64, 34, label, tip, () => { s[key] = !s[key]; this.applyAudio(app); this.persist(app); });
+      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 30);
+      this.reg(app, x + 32, yy, w - 64, 30, label, tip, () => { s[key] = !s[key]; this.applyAudio(app); this.persist(app); });
       if (hov) { app.tooltip(label, tip); app.cursor = 'pointer'; }
       app.text(label, x + 32, yy + 9, { size: 20, color: hov ? '#fff' : COL.vellum });
       // switch
@@ -84,19 +86,20 @@ export default {
       g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), yy + 20, 10, 0, 6.283); g.fill();
       g.restore();
       app.text(on ? 'On' : 'Off', tx - 12, yy + 11, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
-      if (app.clicked(x + 32, yy, w - 64, 34) && live) {
+      if (app.clicked(x + 32, yy, w - 64, 30) && live) {
         s[key] = !on;
         this.applyAudio(app); this.persist(app);
         if (app.shared.audio && !s.muted) app.shared.audio.sfx('uiClick');
       }
     });
     // reset
-    const sy1 = ty0 + 14 + toggles.length * 36;
+    const sy1 = ty0 + 14 + toggles.length * 31;
     this.segRow(app, 'Text size', 'Scales text where the layout allows it.', x + 32, sy1, w - 64, TEXT_STEPS.map((v) => [v, v + '%']), s.textScale, (v) => { s.textScale = v; s.textSize = v > 100 ? 'large' : 'normal'; this.persist(app); }, live);
     this.segRow(app, 'Colorblind palette', 'Deuteranopia, protanopia or tritanopia. Used when Colorblind mode is on.', x + 32, sy1 + 40, w - 64, CB_MODES.map((v) => [v, v.slice(0, 3).toUpperCase()]), s.colorblindMode, (v) => { s.colorblindMode = v; this.persist(app); }, live);
     this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + 80, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
-    this.fsRow(app, x + 32, sy1 + 120, w - 64, s, live);
-    const ry = sy1 + 120 + 40 + 14;
+    this.segRow(app, 'Graphics', 'Auto adapts to how smooth the game runs on this device. High: always full detail. Low: lighter scene, no post effects, saves battery.', x + 32, sy1 + 120, w - 64, [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']], s.graphics, (v) => { s.graphics = v; this.persist(app); }, live);
+    this.fsRow(app, x + 32, sy1 + 160, w - 64, s, live);
+    const ry = sy1 + 160 + 40 + 14;
     stitch(g, x + 32, ry - 8, x + w - 32, ry - 8);
     if (this.reset === 0) {
       if (app.button('Reset all progress', x + 32, ry + 4, 240, 40, { size: 17, fill: '#3a2020', stroke: 'rgba(179,38,58,.7)' })) this.reset = 1;

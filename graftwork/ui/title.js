@@ -155,9 +155,11 @@ export default {
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
     // corner: version + credit line + mute (always)
     const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 400, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 400, lines: 1 } };
-    const vh = app.layoutText('GRAFTWORK ' + VERSION, vo).h, ch = app.layoutText('Cut and sewn by hand. See Credits.', co).h, fy = H - 10 - vh - ch;
-    app.text('GRAFTWORK ' + VERSION, 16, fy, vo);
-    app.text('Cut and sewn by hand. See Credits.', 16, fy + vh + 1, co);
+    if (!(compact(app) && this.state !== 'menu')) { // phones: the select and credits panels use the whole stage, the corner credit line would sit under their buttons
+      const vh = app.layoutText('GRAFTWORK ' + VERSION, vo).h, ch = app.layoutText('Cut and sewn by hand. See Credits.', co).h, fy = H - 10 - vh - ch;
+      app.text('GRAFTWORK ' + VERSION, 16, fy, vo);
+      app.text('Cut and sewn by hand. See Credits.', 16, fy + vh + 1, co);
+    }
     const st = settingsOf(app);
     const mx = W - 54, my = H - 54;
     const over = app.inRect(mx, my, 38, 38);

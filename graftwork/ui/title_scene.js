@@ -272,10 +272,12 @@ export function createScene(opts = {}) {
     S.frame++; if (!calm) S.t += dt; const t = S.t;
     S.ensure(app);
     // slow device: three frames of dt over 30 ms in a row for 90 frames flips `lite`; it never flips back
-    if (t0) { S.slow = S.slow * 0.97 + (S.stats.ms > 7 ? 1 : 0) * 0.03; if (!S.lite && S.frame > 90 && S.slow > 0.6) S.lite = true; }
+    // the quality tier (ui/quality.js, measured from real frame deltas) drives lite both ways; without a controller (tests) the old JS-time detector decides, sticky
+    if (app.perf && app.perf.q) { const tl = app.perf.q.tier; if (tl !== S.lastTier) { S.lastTier = tl; S.lite = tl !== 'full'; } } // on a tier change only
+    else if (t0) { S.slow = S.slow * 0.97 + (S.stats.ms > 7 ? 1 : 0) * 0.03; if (!S.lite && S.frame > 90 && S.slow > 0.6) S.lite = true; }
     const useKeyart = !!(S.keyart && S.keyart.ok), useKit = !useKeyart && resolveKit(app);
     // images still on their way (a real browser, first seconds): a dark room instead of the fallback, so the scene fades in once instead of flashing the old one first
-    const waiting = !useKeyart && !useKit && S.frame < 420 && (assets.kitState === 'loading' || assets.state === 'loading' || (assets.kitReady() && !assets.kitSettled(app)));
+    const waiting = !useKeyart && !useKit && S.frame < 420 && (assets.kitState === 'loading' || assets.state === 'loading' || (assets.kitReady() && !KR.recipesSettled(CLUSTER.map((r) => r.type), app)));
     S.mode = useKeyart ? 'keyart' : useKit ? 'kit' : waiting ? 'loading' : 'fallback';
     S.age = S.mode === 'kit' || S.mode === 'keyart' ? (calm ? 1 : Math.min(1, (S.age || 0) + dt / 0.9)) : 0;
     const mx = app.mouse && app.mouse.x > -900 ? clamp((app.mouse.x - 640) / 640, -1, 1) : 0, my = app.mouse && app.mouse.y > -900 ? clamp((app.mouse.y - 360) / 360, -1, 1) : 0;
@@ -286,7 +288,7 @@ export function createScene(opts = {}) {
     // lite: update the scene into an offscreen copy every third frame, blit it in between
     let tg = g, blit = false;
     if (S.lite && typeof document !== 'undefined') {
-      if (!S.off || S.off.w !== Math.round(W * (app.px || 1)) ) { const px = Math.min(1, app.px || 1), c = mkCanvas(W * px, H * px); S.off = c ? { ...c, w: Math.round(W * (app.px || 1)), px } : null; }
+      if (!S.off || S.off.w !== Math.round(W * (app.px || 1)) ) { const px = Math.min(2, app.px || 1), c = mkCanvas(W * px, H * px); S.off = c ? { ...c, w: Math.round(W * (app.px || 1)), px } : null; }
       if (S.off) { if (S.frame % 3 !== 0 && S.off.ready) { g.drawImage(S.off.c, 0, 0, W, H); S.stats.liteFrames++; return S.mode; } tg = S.off.x; tg.setTransform(S.off.px, 0, 0, S.off.px, 0, 0); tg.clearRect(0, 0, W, H); blit = true; }
     }
     const z = CAM.z * zk, ox = CAM.sx - CAM.cx * z + ox0, oy = CAM.sy - CAM.cy * z + oy0;

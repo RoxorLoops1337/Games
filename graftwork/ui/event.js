@@ -13,6 +13,7 @@ import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin, drawRelic, drawEventSeal } from '../art/icons.js';
 import { lnw } from '../art/linework.js';
 import { eventSource } from './ward_kit.js';
+import { drawCardZoom } from './card_zoom.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
@@ -311,36 +312,62 @@ export default {
     if (app.button('Continue', ix + iw - 240, by, 240, 56, { size: 24, fill: '#5a1a22', stroke: COL.scar, key: 'enter' })) this.cont(app);
     if (app.pressedKeys.some((e) => e.key === ' ')) this.cont(app);
   },
+  // The card picker (remove / upgrade / transform / choose): a full opaque screen, so the event under it never shows through.
+  // Card size is chosen by pickerLayout(): the largest scale that shows every card (no scroll) but never under the readable size for this screen
+  // (phones: about 0.58 device-independent scale, so the rules text is legible); a longer list scrolls (wheel, or a finger drag). A finger held on a card
+  // (0.35 s) opens the big zoom face; lifting closes it without choosing.
   drawPicker(app, run, ev) {
     const g = app.ctx, mouse = app.mouse, pk = this.picker;
-    const blocked0 = app.blocked;
     app.reg('event-picker', 0, 0, W, H, { overlay: true });
-    g.fillStyle = 'rgba(8,6,5,.95)'; g.fillRect(0, 0, W, H);
-    app.text(pk.label, 640, 22, { size: 34, bold: true, align: 'center' });
-    app.text(pk.text || 'Choose a card.', 640, 64, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', maxW: 800 });
-    const sc = 0.56, cw = CARD_W * sc, ch = CARD_H * sc, gap = 16, per = Math.max(1, Math.floor((W - 120 + gap) / (cw + gap)));
-    const rows = Math.ceil(pk.cards.length / per);
-    const cols = Math.min(per, pk.cards.length), gridW = cols * cw + (cols - 1) * gap, gx = (W - gridW) / 2;
-    const viewTop = 100, viewH = H - viewTop - 90;
-    const contentH = rows * (ch + gap);
-    const maxS = Math.max(0, contentH - viewH), yoff = contentH < viewH ? (viewH - contentH) / 2 - 20 : 0;
-    if (mouse.wheel) pk.scroll += mouse.wheel * 0.6;
-    pk.scroll = clamp(pk.scroll, 0, maxS);
+    g.fillStyle = '#0b0807'; g.fillRect(0, 0, W, H);
+    const vg = g.createRadialGradient(W / 2, H / 2, 160, W / 2, H / 2, 760); vg.addColorStop(0, 'rgba(60,44,34,.35)'); vg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    const th = app.text(pk.label, 640, 14, { size: 30, bold: true, align: 'center', fit: { w: 960, lines: 1 } });
+    app.text(pk.text || 'Choose a card.', 640, 14 + th + 2, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', fit: { w: 960, lines: 2 } });
+    const L = pickerLayout(app, pk.cards.length), { sc, cw, ch, gap, per, gx, viewTop, viewH, maxS } = L;
+    pk.scroll = clamp((pk.scroll || 0) + (mouse.wheel ? mouse.wheel * 0.6 : 0), 0, maxS);
+    const rowTop = (r) => viewTop + gap / 2 + r * (ch + gap) - pk.scroll + L.yoff;
+    const zoomed = pk.zoom !== undefined && pk.zoom >= 0;
     let hover = -1;
     app.reg('scroll-picker', 0, viewTop, W, viewH, { overlay: true });
     g.save(); g.beginPath(); g.rect(0, viewTop, W, viewH); g.clip();
     pk.cards.forEach((inst, i) => {
-      const cx = gx + (i % per) * (cw + gap) + cw / 2, cy = viewTop + Math.floor(i / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll;
-      if (cy < viewTop - ch || cy > viewTop + viewH + ch) return;
-      const over = mouse.y > viewTop && mouse.y < viewTop + viewH && Math.abs(mouse.x - cx) < cw / 2 && Math.abs(mouse.y - cy) < ch / 2;
+      const cx = gx + (i % per) * (cw + gap) + cw / 2, top = rowTop(Math.floor(i / per)), cy = top + ch / 2;
+      if (top > viewTop + viewH || top + ch < viewTop) return;
+      const over = !zoomed && mouse.y > viewTop && mouse.y < viewTop + viewH && Math.abs(mouse.x - cx) < cw / 2 && Math.abs(mouse.y - cy) < ch / 2;
       if (over) hover = i;
       let spec; try { spec = cardSpec(inst); } catch (e) { return; }
-      drawCard(g, spec, cx, cy, { scale: sc * (over ? 1.07 : 1), glow: over ? 1 : 0, selected: over });
-      if (over && pk.f !== app.frame && mouse.released && mouse.pressStart && Math.abs(mouse.pressStart.x - cx) < cw / 2 + 4) { if (app.onClick) app.onClick(); this.choose(app, pk.i, inst.uid); }
+      drawCard(g, spec, cx, cy, { scale: sc * (over && !mouse.touch ? 1.05 : 1), glow: over ? 1 : 0, selected: over && !mouse.touch });
+      if (over && mouse.touch && mouse.down) { g.save(); app.rr(cx - cw / 2 - 2, cy - ch / 2 - 2, cw + 4, ch + 4, 8); g.lineWidth = 3; g.strokeStyle = COL.lamp; g.stroke(); g.restore(); }
+      if (over && pk.f !== app.frame && mouse.released && mouse.pressStart && Math.abs(mouse.pressStart.x - cx) < cw / 2 + 4 && !pk.zoomed) { if (app.onClick) app.onClick(); this.choose(app, pk.i, inst.uid); }
     });
     g.restore();
-    if (hover >= 0) { app.cursor = 'pointer'; const hi = pk.cards[hover]; try { const cx0 = gx + (hover % per) * (cw + gap) + cw / 2, cy0 = viewTop + Math.floor(hover / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll; cardGlossTip(app, cardSpec(hi), { x: cx0 - cw / 2, y: cy0 - ch / 2, w: cw, h: ch }); } catch (e) { /* unreadable card: no tip */ } }
-    if (maxS > 0) { g.fillStyle = 'rgba(232,220,196,.15)'; g.fillRect(W - 24, viewTop, 5, viewH); g.fillStyle = 'rgba(232,220,196,.6)'; g.fillRect(W - 25, viewTop + (pk.scroll / maxS) * (viewH - 80), 7, 80); app.text('scroll for more', 640, H - 80, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.45)' }); }
-    if (app.button('Cancel', 540, H - 62, 200, 46, { size: 20, key: 'escape' }) && pk.f !== app.frame) this.picker = null;
+    // hold to zoom (touch and mouse): the finger or button must stay on the same card, still, for HOLD_S
+    if (hover >= 0 && mouse.down && !zoomed) {
+      if (pk.hold && pk.hold.i === hover) { if (app.t - pk.hold.t0 >= PICK_HOLD_S && Math.abs(mouse.y - pk.hold.y) < 10) { pk.zoom = hover; pk.zoomed = true; } } else pk.hold = { i: hover, t0: app.t, y: mouse.y };
+    } else if (!mouse.down) { pk.hold = null; }
+    if (zoomed) {
+      let spec = null; try { spec = cardSpec(pk.cards[pk.zoom]); } catch (e) { /* unreadable card */ }
+      if (spec) drawCardZoom(app, spec, { hint: 'Release to close' });
+      if (!mouse.down) { pk.zoom = undefined; app.mouse.released = false; pk.zoomedUntil = app.frame + 1; }
+    } else if (pk.zoomed && !mouse.down) pk.zoomed = false;
+    if (!zoomed && hover >= 0 && !mouse.touch) { app.cursor = 'pointer'; const hi = pk.cards[hover]; try { const cx0 = gx + (hover % per) * (cw + gap) + cw / 2, cy0 = rowTop(Math.floor(hover / per)) + ch / 2; cardGlossTip(app, cardSpec(hi), { x: cx0 - cw / 2, y: cy0 - ch / 2, w: cw, h: ch }); } catch (e) { /* unreadable card: no tip */ } }
+    if (maxS > 0) {
+      const sh = Math.max(40, viewH * viewH / (viewH + maxS)); g.fillStyle = 'rgba(232,220,196,.15)'; g.fillRect(W - 14, viewTop, 5, viewH); g.fillStyle = 'rgba(232,220,196,.6)'; g.fillRect(W - 15, viewTop + (pk.scroll / maxS) * (viewH - sh), 7, sh);
+      if (pk.scroll < maxS - 1) app.text('Scroll for more. Hold a card to read it.', 640, viewTop + viewH + 4, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.6)', fit: { w: 600, lines: 1 } });
+    } else app.text('Hold a card to read it.', 640, viewTop + viewH + 4, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.45)', fit: { w: 600, lines: 1 } });
+    if (!zoomed && app.button('Cancel', 540, H - 52, 200, 40, { size: 20, key: 'escape' }) && pk.f !== app.frame) this.picker = null;
   },
 };
+
+const PICK_HOLD_S = 0.35;
+// Pure layout of the picker grid (exported for tests). n cards in the stage space 1280x720.
+export function pickerLayout(app, n) {
+  const viewTop = 88, viewH = H - viewTop - 74, gap = 14, side = 28, availW = W - 2 * side;
+  const s0 = app.scale > 0 ? app.scale : 1, want = clamp(0.58 / s0, 0.62, 1), maxS0 = app.scale < 0.95 ? 1 : 0.9;
+  const shape = (sc) => { const cw = CARD_W * sc, ch = CARD_H * sc, per = Math.max(1, Math.min(n || 1, Math.floor((availW + gap) / (cw + gap)))), rows = Math.ceil((n || 1) / per); return { sc, cw, ch, per, rows, contentH: rows * (ch + gap) }; };
+  let best = null;
+  for (let sc = maxS0; sc >= 0.5; sc -= 0.02) { const q = shape(sc); if (q.contentH <= viewH) { best = q; break; } }
+  const S = best && best.sc >= Math.min(want, maxS0) - 1e-6 ? best : shape(Math.min(want, maxS0)); // readable size first, scrolling when the list is longer
+  const gridW = S.per * S.cw + (S.per - 1) * gap, maxS = Math.max(0, S.contentH - viewH);
+  return { ...S, gap, gx: (W - gridW) / 2, viewTop, viewH, maxS, yoff: S.contentH < viewH ? (viewH - S.contentH) / 2 : 0 };
+}

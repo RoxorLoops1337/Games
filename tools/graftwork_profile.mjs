@@ -19,12 +19,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
+let ROOT = REPO;
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i < 0 ? d : (args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : true); };
+if (args.includes('--root')) ROOT = path.resolve(args[args.indexOf('--root') + 1]); // serve another copy of the repo (a baseline snapshot)
 const QUICK = !!opt('quick', false);
 const THROTTLES = String(opt('throttle', '4,6')).split(',').map(Number).filter(Boolean);
 const OUT = opt('out', 'graftwork/design/PERF_RESULT.json');
@@ -48,8 +51,11 @@ function serve() {
       const text = /\.(html|js|mjs|json|css|svg)$/.test(ext);
       const h = { 'Content-Type': ct, 'Cache-Control': 'public, max-age=0, must-revalidate' };
       // honour the repo's _headers immutable rules so cache behaviour matches production
-      if (/^\/graftwork\/assets\/.*\.webp$/.test(p) && HEADERS.immutableAssets) h['Cache-Control'] = 'public, max-age=31536000, immutable';
+      // --cache-headers: the _headers rule for painted art (fresh 10 min, then served stale while it revalidates); the default mimics Cloudflare Pages (ETag revalidation)
+      if (/^\/graftwork\/assets\//.test(p) && !/manifest\.json$/.test(p) && HEADERS.cacheArt) h['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=86400';
       let buf = fs.readFileSync(f);
+      const etag = '"' + buf.length + '-' + fs.statSync(f).mtimeMs.toString(36) + '"'; h.ETag = etag;
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, h); res.end(); return; }
       if (text && /gzip/.test(req.headers['accept-encoding'] || '')) { let z = gz.get(f); if (!z) { z = zlib.gzipSync(buf, { level: 6 }); gz.set(f, z); } buf = z; h['Content-Encoding'] = 'gzip'; }
       h['Content-Length'] = buf.length;
       res.writeHead(200, h); res.end(buf);
@@ -57,7 +63,7 @@ function serve() {
     srv.listen(0, '127.0.0.1', () => resolve(srv));
   });
 }
-const HEADERS = { immutableAssets: false };
+const HEADERS = { cacheArt: false };
 
 // ---------------------------------------------------------------- page instrumentation
 const INIT = `(() => {
@@ -238,12 +244,19 @@ async function newPage(browser, { cpu, net, ops = false, trace = false }) {
   return { ctx, page, cdp, net: net_, errs };
 }
 
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout: ' + what)), ms))]);
+// a fixed JS workload: how fast this machine is RIGHT NOW (the sandbox is shared, so runs are only comparable when calib_ms is similar)
+async function calibrate(page) { return page.evaluate(() => { const t = performance.now(); let x = 0; for (let i = 0; i < 3e7; i++) x = (x + i * 7) % 1000003; return performance.now() - t + (x < 0 ? 1 : 0); }); }
 async function runOne(browser, base, name, cpu, mode) {
+  try { return await withTimeout(runOne0(browser, base, name, cpu, mode), Number(opt('timeout', 240)) * 1000, name + ' ' + mode); } catch (e) { console.log('  ' + e.message); return { error: e.message }; }
+}
+async function runOne0(browser, base, name, cpu, mode) {
   const S_ = SC[name];
   const h = await newPage(browser, { cpu, ops: mode === 'ops', net: null });
   const { page } = h;
   await page.goto(base + '/graftwork/', { waitUntil: 'commit' });
   await S_.setup.call(S_, page);
+  const calib = await calibrate(page);
   const mem0 = await page.evaluate(PAGE.mem);
   await page.evaluate(PAGE.mark);
   if (mode === 'ops') await page.evaluate(() => { window.__pf.opsOn = true; window.__pf.opsFrames = []; });
@@ -267,6 +280,7 @@ async function runOne(browser, base, name, cpu, mode) {
       out.trace = traceSummary(ev, from, to); out.trace.window_ms = r1((to - from) / 1000);
     }
   }
+  out.calib_ms = r1(calib); out.loadavg1 = r1(os.loadavg()[0]);
   if (S_.readyMs !== undefined) out.ready_ms = r1(S_.readyMs);
   out.errors = h.errs;
   await h.ctx.close();
@@ -298,9 +312,20 @@ async function loadMetrics(browser, base, cpu) {
   await page.evaluate(async () => { const { assets } = await import('/graftwork/ui/assets.js'); window.__wardOk = false; const iv = setInterval(() => { if (assets.ready() && assets.kitSettled(window.__gw.app)) { window.__wardOk = true; clearInterval(iv); } }, 50); });
   try { await gwWait(page, 'window.__wardOk===true', 300000); wardMs = Date.now() - tw0; } catch (e) { /* stays -1 */ }
   await wait(1500);
+  const cold = { bytes: h.net.bytes, reqs: h.net.reqs };
+  // repeat visit: same browser cache, reload the page; title interactive and scene painted again, bytes and requests actually transferred
+  const b0 = h.net.bytes, r0 = h.net.reqs, w0 = Date.now();
+  await page.reload({ waitUntil: 'commit' });
+  await gwWait(page, "window.__gw && window.__gw.app.current==='title' && window.__gw.app.frame>3", 240000);
+  const warmInteractive = Date.now() - w0;
+  await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; });
+  let warmScene = -1; try { await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'", 240000); warmScene = Date.now() - w0; } catch (e) { /* -1 */ }
+  await wait(1000);
+  const warm = { t_title_interactive_ms: warmInteractive, t_title_scene_painted_ms: warmScene, bytes: h.net.bytes - b0, requests: h.net.reqs - r0 };
   const res = {
+    warm_reload: warm,
     cpu, network: 'slow4g(1.6Mbps,150ms)', t_first_frame_ms: tFirst, t_title_interactive_ms: tInteractive, t_title_scene_painted_ms: sceneMs, t_ward_ready_after_enter_ms: wardMs,
-    bytes_at_interactive: bytesAtTitle, bytes_at_scene: bytesAtScene, bytes_total: h.net.bytes, requests: h.net.reqs, image_requests: h.net.images, image_bytes: h.net.imageBytes, by_type: h.net.byType,
+    bytes_at_interactive: bytesAtTitle, bytes_at_scene: bytesAtScene, bytes_total: cold.bytes, requests: cold.reqs, image_requests: h.net.images, image_bytes: h.net.imageBytes, by_type: h.net.byType, calib_ms: r1(await calibrate(page)), loadavg1: r1(os.loadavg()[0]),
     mem: await page.evaluate(PAGE.mem), errors: h.errs,
   };
   await h.ctx.close();
@@ -340,15 +365,16 @@ async function soak(browser, base, cycles) {
 // ---------------------------------------------------------------- main
 async function main() {
   if (opt('list', false)) { for (const [k, v] of Object.entries(SC)) console.log(k.padEnd(14), v.desc); return; }
-  if (opt('immutable', false)) HEADERS.immutableAssets = true;
+  if (opt('cache-headers', false)) HEADERS.cacheArt = true;
   const { chromium } = require('playwright');
   const srv = await serve(); const base = 'http://127.0.0.1:' + srv.address().port;
   const browser = await chromium.launch({ headless: true, args: ['--enable-precise-memory-info', '--js-flags=--expose-gc', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
-  const result = { label: LABEL, date: new Date().toISOString(), viewport: VIEW, dpr: DPR, quick: QUICK, chromium: browser.version(), scenarios: {}, load: {}, soak: null };
+  let prev = null; if (String(opt('scenarios', '')) === 'none') { try { prev = JSON.parse(fs.readFileSync(path.resolve(REPO, OUT), 'utf8')); } catch (e) { /* none */ } }
+  const result = prev ? Object.assign(prev, { load: {} }) : { label: LABEL, date: new Date().toISOString(), viewport: VIEW, dpr: DPR, quick: QUICK, chromium: browser.version(), scenarios: {}, load: {}, soak: null };
   try {
     if (opt('soak', false)) { result.soak = await soak(browser, base, Number(opt('soak', 20))); console.log(JSON.stringify(result.soak, null, 1)); }
     else {
-      const names = String(opt('scenarios', Object.keys(SC).join(','))).split(',');
+      const names = String(opt('scenarios', Object.keys(SC).join(','))).split(',').filter((n) => n !== 'none');
       if (!opt('noload', false)) for (const cpu of THROTTLES.slice(0, 2)) { process.stdout.write(`load cpu${cpu} ... `); result.load['cpu' + cpu] = await loadMetrics(browser, base, cpu); console.log(`interactive ${result.load['cpu' + cpu].t_title_interactive_ms} ms, ${(result.load['cpu' + cpu].bytes_total / 1048576).toFixed(1)} MB`); }
       for (const name of names) {
         if (!SC[name]) { console.error('unknown scenario', name); continue; }
@@ -357,14 +383,15 @@ async function main() {
           process.stdout.write(`${name} cpu${cpu} ... `);
           const r = await runOne(browser, base, name, cpu, 'time');
           result.scenarios[name]['cpu' + cpu] = r;
+          if (r.error) continue;
           console.log(`fps ${r.fps} p50 ${r.frame_p50} p95 ${r.frame_p95} p99 ${r.frame_p99} dropped ${r.dropped_pct}% js_p95 ${r.js_p95} long ${r.long_tasks} heap ${r.heap_mb}MB img ${(r.mem.imageBytes / 1048576).toFixed(0)}MB cv ${(r.mem.canvasBytes / 1048576).toFixed(0)}MB`);
         }
-        if (!opt('notrace', false)) { process.stdout.write(`${name} trace ... `); const t = await runOne(browser, base, name, THROTTLES[0], 'trace'); result.scenarios[name].trace = t.trace; console.log('gpu proxy ' + (t.trace && t.trace.gpu_proxy_ms) + ' ms'); }
-        process.stdout.write(`${name} ops ... `); const o = await runOne(browser, base, name, 1, 'ops'); result.scenarios[name].ops = o; console.log(`calls/frame ${o.calls && o.calls.mean} draw ${o.draw && o.draw.mean} grad ${o.grad && o.grad.mean} text ${o.text && o.text.mean} measure ${o.measure && o.measure.mean}`);
+        if (!opt('notrace', false)) { process.stdout.write(`${name} trace ... `); const t = await runOne(browser, base, name, THROTTLES[0], 'trace'); result.scenarios[name].trace = t.trace || t; console.log('gpu proxy ' + (t.trace && t.trace.gpu_proxy_ms) + ' ms'); }
+        process.stdout.write(`${name} ops ... `); const o = await runOne(browser, base, name, 1, 'ops'); result.scenarios[name].ops = o; if (!o.error) console.log(`calls/frame ${o.calls && o.calls.mean} draw ${o.draw && o.draw.mean} grad ${o.grad && o.grad.mean} text ${o.text && o.text.mean} measure ${o.measure && o.measure.mean}`);
       }
     }
   } finally { await browser.close(); srv.close(); }
-  if (!opt('soak', false)) { fs.mkdirSync(path.dirname(path.resolve(ROOT, OUT)), { recursive: true }); fs.writeFileSync(path.resolve(ROOT, OUT), JSON.stringify(result, null, 1) + '\n'); console.log('wrote', OUT); }
-  else if (opt('out', false)) fs.writeFileSync(path.resolve(ROOT, OUT), JSON.stringify(result, null, 1) + '\n');
+  if (!opt('soak', false)) { fs.mkdirSync(path.dirname(path.resolve(REPO, OUT)), { recursive: true }); fs.writeFileSync(path.resolve(REPO, OUT), JSON.stringify(result, null, 1) + '\n'); console.log('wrote', OUT); }
+  else if (opt('out', false)) fs.writeFileSync(path.resolve(REPO, OUT), JSON.stringify(result, null, 1) + '\n');
 }
 main().catch((e) => { console.error(e); process.exit(1); });

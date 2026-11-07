@@ -135,17 +135,17 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
 {
   const { app, meta, log } = await rig();
   app.go('title'); frames(app, 10); app.push('settings'); frames(app, 30);
-  click(app, 640, 297);  // screen shake
+  click(app, 640, 278);  // screen shake
   assert.equal(meta.settings.screenShake, false);
-  click(app, 640, 333);  // reduced motion
+  click(app, 640, 309);  // reduced motion
   assert.equal(meta.settings.reducedMotion, true);
-  click(app, 640, 369);  // colorblind
+  click(app, 640, 340);  // colorblind
   assert.equal(meta.settings.colorblind, true);
-  click(app, 806, 478);  // text size 150%
+  click(app, 806, 436);  // text size 150%
   assert.equal(meta.settings.textScale, 150); assert.equal(meta.settings.textSize, 'large');
-  click(app, 640, 261);  // mute
+  click(app, 640, 247);  // mute
   assert.equal(meta.settings.muted, true);
-  click(app, 640, 261);
+  click(app, 640, 247);
   assert.equal(meta.settings.muted, false);
   const saves = log.saved;
   click(app, 562 + 145, 102);  // master slider to 50%
@@ -155,7 +155,7 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   assert.equal(JSON.parse(globalThis.localStorage ? globalThis.localStorage.getItem('graftwork_meta_v1') : JSON.stringify(meta)).settings.master, meta.settings.master);
   // reset needs two confirms
   meta.stats.wins = 5; saveRun(RUN.newRun({ seed: 'x' }));
-  const ry = 460 + 120 + 40 + 14;
+  const ry = 418 + 160 + 40 + 14; // Graphics row added: toggles 31 px apart
   click(app, 450, ry + 4 + 20); frames(app, 2); assert.equal(settings.reset, 1);
   assert.equal(meta.stats.wins, 5, 'not erased after one confirm');
   click(app, 420, ry + 26 + 19); frames(app, 2); assert.equal(settings.reset, 2);

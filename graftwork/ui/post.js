@@ -277,7 +277,7 @@ export function installPost(app) {
     const frameMs = S.lastNow ? Math.min(100, t0 - S.lastNow) : 16.7; S.lastNow = t0;
     const dt = frameMs / 1000;
     const st = settings();
-    const want = st.quality;
+    const want = app.perf && app.perf.q.tier !== 'full' ? 'off' : st.quality; // lite and minimal tiers (ui/quality.js) switch the WebGL post off
     if (want !== S.lastWant) { S.lastWant = want; if (TIERS.includes(want)) { S.ceiling = want; stats.ceiling = want; if (want !== S.tier) setTier(want); resetRing(); } }
     post.update(dt);
     autoGrade();
