@@ -50,9 +50,17 @@ PIECES = {
     'door': {'h': 36, 'mount': 'floor', 'name': 'Doorway'},
     'banner': {'h': 30, 'mount': 'mid', 'name': 'Red cross banner'},
     'sconce': {'h': 15, 'mount': 'mid', 'name': 'Candle sconce'},
+    'archdoor': {'h': 38, 'mount': 'floor', 'name': 'Gothic double door'},
+    'clock': {'h': 13, 'mount': 'mid', 'name': 'Wall clock'},
+    'pipes': {'h': 14, 'mount': 'mid', 'name': 'Pipes and valve'},
+    'curtain': {'h': 36, 'mount': 'floor', 'name': 'Velvet curtains'},
+    'chalkboard': {'h': 17, 'mount': 'mid', 'name': 'Chalkboard'},
+    'stainedglass': {'h': 36, 'mount': 'mid', 'name': 'Stained glass window'},
+    'vent': {'h': 10, 'mount': 'mid', 'name': 'Iron vent'},
+    'notice': {'h': 15, 'mount': 'mid', 'name': 'Notice board'},
 }
-FLOORS = {'wood': 'Wood planks', 'stone': 'Flagstones'}
-WALLS = {'wood': 'Panelled wood', 'stone': 'Stone blocks'}
+FLOORS = {'wood': 'Wood planks', 'stone': 'Flagstones', 'tile': 'Clinic tile', 'darkstone': 'Dark flagstones', 'carpet': 'Worn carpet', 'brick': 'Sooty brick', 'slab': 'Morgue slabs', 'stage': 'Stage boards'}
+WALLS = {'wood': 'Panelled wood', 'stone': 'Stone blocks', 'tile': 'Clinic tile', 'brick': 'Sooty brick', 'plaster': 'Damp plaster', 'velvet': 'Red velvet', 'slab': 'Morgue tile'}
 
 
 def clean(im):
@@ -112,7 +120,10 @@ for kind, table, key in (('floor', FLOORS, 'floors'), ('wall', WALLS, 'walls')):
             continue
         im = make_seamless(Image.open(f).convert('RGB'))
         im = wrap_resize(im, TEX)
-        gain = GAIN.get(f'{key}/{id_}', 1.0)
+        gain = GAIN.get(f'{key}/{id_}')
+        if gain is None:  # auto: bring a dark texture up to the lighting the painted rooms use (mean luma about 112), never darken
+            luma = float(np.array(im.convert('L')).mean())
+            gain = round(min(1.8, max(1.0, 112.0 / max(luma, 1.0))), 3)
         if gain != 1.0:
             im = Image.fromarray(np.clip(np.array(im).astype(np.float32) * gain, 0, 255).astype(np.uint8), 'RGB')
         os.makedirs(os.path.join(OUT, key), exist_ok=True)

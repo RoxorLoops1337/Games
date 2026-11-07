@@ -392,3 +392,12 @@ export function stopMusic() {
   if (mus) { if (ctx) endVoice(mus); mus = null; }
   if (timer) { clearInterval(timer); timer = 0; }
 }
+
+// ---------- TITLE ambience (ui/title.js): quiet, never masks the music bed. Every one is a plain sfx, so mute and the autoplay rule apply by themselves ----------
+Object.assign(S, {
+  stitchTk: ['one needle tick: a short triangle knock plus a bandpassed noise tick (the title plays two, "tk tk")', () => { T(900, 0.05, { type: 'triangle', v: 0.11, to: 600 }); N(0.04, { v: 0.1, ft: 'bandpass', f: 2200, q: 1 }); }],
+  threadPull: ['thread pulled through cloth: a short rising bandpass hiss', () => { N(0.3, { v: 0.16, ft: 'bandpass', f: 1500, to: 3600, q: 3, rise: true }); }],
+  roomTone: ['low room tone: 55 Hz sine and lowpassed noise swell, about 4 s', () => { T(55, 4.2, { v: 0.05, a: 1.4 }); N(4.2, { v: 0.022, f: 240, rise: true }); }],
+  candleCrackle: ['distant candle crackle: four small bandpassed noise pops with a soft low body, random spacing', () => { for (let i = 0; i < 4; i++) { N(0.035 + rnd() * 0.03, { v: 0.13 + rnd() * 0.06, ft: 'bandpass', f: 1500 + rnd() * 1800, q: 0.9, at: i * (0.06 + rnd() * 0.1) }); } T(150, 0.2, { type: 'triangle', v: 0.05, to: 110 }); }],
+});
+SFX_NAMES.length = 0; SFX_NAMES.push(...Object.keys(S));

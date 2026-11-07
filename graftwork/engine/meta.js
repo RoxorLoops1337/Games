@@ -14,7 +14,7 @@ export const KEY = 'graftwork_meta_v1';
 export const HISTORY_MAX = 20;
 export const MAX_ASC = 10;
 export const SEEN_KINDS = ['cards', 'grafts', 'enemies', 'relics', 'potions', 'statuses', 'events'];
-export const DEFAULT_SETTINGS = { master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, colorblind: false, flashes: true, highContrast: false, colorblindMode: "deuteranopia", largeText: false, tips: true, muted: false, assist: { on: false, sturdy: true, gentle: true, kind: true, mercy: true } };
+export const DEFAULT_SETTINGS = { master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, flashes: true, highContrast: false, colorblindMode: "deuteranopia", largeText: false, tips: true, muted: false, assist: { on: false, sturdy: true, gentle: true, kind: true, mercy: true } };
 export { ACHIEVEMENTS };
 
 // ---------- storage (injectable) ----------

@@ -695,7 +695,7 @@ await t('iso: the hero stands on its room and walks smoothly cell to cell (betwe
   run.ward.deck.hand = []; flow.route(); frames(app, 200);
   const ca = ISO.cellW(run.ward, 0, 2), cb = ISO.cellW(run.ward, 1, 2), H0 = () => ISO.lastActors().find((x) => x.kind === 'hero');
   assert.ok(Math.abs(H0().x - ca.x) < 8 && Math.abs(H0().y - ca.y) < 10, 'standing on the entrance');
-  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.12, done: null, wait: false }; frames(app, 1);
+  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.05, done: null, wait: false }; frames(app, 1);
   const h = H0(); assert.ok(h.x > ca.x + 3 && h.x < cb.x, 'between the two centres'); assert.equal(h.flip, 1, 'faces right-down'); assert.ok(h.moving);
   S.walk = null;
 });
@@ -797,6 +797,77 @@ await t('kit: without a kit manifest (headless) every room stays painted, the wa
   assert.equal(ISO.lastKit().rooms.size, 0, 'no kit manifest: painted rooms only');
   for (const id of ids) assert.ok(reg('ward-room-' + id), 'ward-room-' + id);
   const b = reg('ward-walls'); assert.ok(b && b.y > reg('ward-recenter').y && b.group === 'map-ctl', 'the W button joins the map controls');
+});
+
+// ---- painted fallback: the lowered-wall paintings (rm_<id>_low) and the hero's walk pacing ----
+await t('painted low: the low painting replaces the tall one wherever the tall one would hide a neighbour, each by its own measured floor diamond, the tall one stays for a lone room or a room without a low painting', async () => {
+  const mkRun = async (spec, seed) => { const o = await setup({ seed }); const ids = layout(o.run, spec); o.run.ward.deck.hand = []; o.flow.route(); frames(o.app, 100); return { ...o, ids }; };
+  const tall = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 }, low = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 };
+  const T = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 200, floorCy: 300, floorW: 380, floorH: 190 });
+  const L = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 190, floorCy: 310, floorW: 360, floorH: 180, low: true }); // NOT the tall diamond
+  const install = (app) => {
+    assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_entrance: T('e.webp'), rm_corridor: T('c.webp'), rm_ward: T('w.webp'), rm_quarry: T('q.webp'), rm_entrance_low: L('el.webp'), rm_corridor_low: L('cl.webp'), rm_ward_low: L('wl.webp') }, actors: {}, icons: {}, cards: {}, cardsById: {} };
+    assets.state = 'ready';
+    for (const f of ['e', 'c', 'w', 'q']) assets.imgs.set(f + '.webp', { ok: true, img: tall });
+    for (const f of ['el', 'cl', 'wl']) assets.imgs.set(f + '.webp', { ok: true, img: low });
+  };
+  const calls = []; let dI;
+  try {
+    // a lone room: the tall painting
+    const one = await mkRun([['rm_entrance', 2, 2]], 'lowone'); dI = one.app.ctx.drawImage; one.app.ctx.drawImage = (...a) => { calls.push(a); };
+    install(one.app); ISO.setWallMode('auto'); frames(one.app, 4);
+    assert.equal(ISO.paintedKind(one.ids[0]), 'tall', 'a lone room keeps the tall painting'); assert.ok(calls.some((c) => c[0] === tall), 'tall drawn'); assert.ok(!calls.some((c) => c[0] === low), 'no low painting for a lone room');
+    one.app.ctx.drawImage = dI; assets.reset(); ISO.resetIso();
+    // a row of four (a hero in the entrance): cutaway lowers what has a room behind it, low lowers all, full keeps the tall ones except in front of the hero
+    const row = await mkRun([['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]], 'lowrow'); dI = row.app.ctx.drawImage; row.app.ctx.drawImage = (...a) => { calls.push(a); };
+    install(row.app); const kinds = () => row.ids.map((i) => ISO.paintedKind(i));
+    ISO.setWallMode('low'); frames(row.app, 40); assert.deepEqual(kinds(), ['low', 'low', 'low', 'tall'], 'Low: every room that has a low painting (the quarry has none: tall + crop)');
+    ISO.setWallMode('cutaway'); frames(row.app, 40); assert.deepEqual(kinds(), ['tall', 'low', 'low', 'tall'], 'Cutaway: the hero room has nothing behind it and stays tall, rooms with a room behind are lowered');
+    ISO.setWallMode('full'); frames(row.app, 40); assert.deepEqual(kinds().slice(0, 3), ['tall', 'low', 'tall'], 'Full: tall, except the front neighbour of the hero room');
+    // aligned by its OWN diamond: the low painting of the corridor is placed with floorCx 190 / floorCy 310 / floorW 360
+    ISO.setWallMode('low'); frames(row.app, 40); calls.length = 0; frames(row.app, 1);
+    const c1 = ISO.cellW(row.run.ward, 1, 2), s = ISO.TW / 360, hit = calls.filter((c) => c[0] === low && c.length === 5).find((c) => Math.abs(c[1] - (c1.x - 190 * s)) < 1);
+    assert.ok(hit, 'the low painting is placed by its own floor centre'); assert.ok(Math.abs(hit[2] - (c1.y - 310 * s)) < 1 && Math.abs(hit[3] - 400 * s) < 1, 'and scaled by its own floor width');
+    // a dark room is drawn from the cold copy of the LOW painting, never the tall one plain
+    row.run.ward.rooms[row.ids[2]].on = false; frames(row.app, 3); assert.equal(ISO.paintedKind(row.ids[2]), 'low');
+    // picking and the hero are untouched: the floor of every cell still resolves, the hero stands in the entrance
+    let picked = 0; for (let x = 0; x < 4; x++) { const c = ISO.cellC(row.run.ward, x, 2); if (!ISO.overMap(c.x, c.y)) continue; picked++; assert.deepEqual(ISO.pick(row.run.ward, c.x, c.y), { x, y: 2 }, 'pick ' + x); } assert.ok(picked >= 3, 'cells on the panel: ' + picked);
+    assert.ok(ISO.lastActors().some((a) => a.kind === 'hero'), 'the hero is drawn');
+  } finally { assets.reset(); ISO.resetIso(); ISO.setWallMode('auto'); }
+});
+
+await t('walk pacing: about 0.6 s per room, a beat at the room that fires, half of it with Fast walk, quick with reduced motion, no beat on a wait; the F key saves the setting', async () => {
+  const run1 = async (mode) => {
+    const { app, run, flow } = await setup({ seed: 'pace' + mode });
+    const [a, b, c] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_corridor', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 60);
+    const st = app.screens.ward.st, set = app.shared.meta.settings; let saved = 0; flow.saveMeta = () => { saved++; };
+    set.reduceMotion = set.reducedMotion = mode === 'reduced'; set.fastWalk = mode === 'fast';
+    let finished = null, f0 = 0, moveEnd = null; st.walk = { cells: [a, b, c], i: 0, a: 0, stop: 2, t: 0, done: () => { finished = f0; }, wait: false };
+    for (f0 = 1; f0 < 400 && finished === null; f0++) { frames(app, 1); if (moveEnd === null && st.walk && st.walk.i >= st.walk.stop) moveEnd = f0; }
+    return { total: finished / 60, move: (moveEnd === null ? finished : moveEnd) / 60, saved, app, flow, st, set };
+  };
+  const nrm = await run1('normal'), fast = await run1('fast'), red = await run1('reduced');
+  assert.ok(nrm.move > 1.15 && nrm.move < 1.4, 'two rooms take about 0.62 s each: ' + nrm.move.toFixed(2));
+  assert.ok(nrm.total - nrm.move > 0.28 && nrm.total - nrm.move < 0.45, 'a beat of about 0.35 s where the room fires: ' + (nrm.total - nrm.move).toFixed(2));
+  assert.ok(fast.total < nrm.total * 0.65 && fast.total > 0.6, 'Fast walk is clearly quicker but not a teleport: ' + fast.total.toFixed(2));
+  assert.ok(red.total < 0.4 && red.total - red.move < 0.03, 'reduced motion is quick and has no beat: ' + red.total.toFixed(2));
+  // a wait (the hero stays put) never pauses
+  const w1 = await setup({ seed: 'pacewait' }); const [r0] = layout(w1.run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]); w1.run.ward.deck.hand = []; w1.flow.route(); frames(w1.app, 30);
+  w1.app.shared.meta.settings.reduceMotion = w1.app.shared.meta.settings.reducedMotion = false;
+  let fin = false; w1.app.screens.ward.st.walk = { cells: [r0], i: 0, a: 0, stop: 0, t: 0, done: () => { fin = true; }, wait: true }; frames(w1.app, 2); assert.ok(fin, 'a wait finishes at once');
+  // the setting: the F key toggles meta.settings.fastWalk and asks the flow to save it; the default is normal
+  const k = await setup({ seed: 'pacekey' }); layout(k.run, [['rm_entrance', 0, 2]]); k.run.ward.deck.hand = []; k.flow.route(); frames(k.app, 30);
+  k.app.screens.ward.st.banner = null; let saves = 0; k.flow.saveMeta = () => { saves++; }; assert.ok(!k.app.shared.meta.settings.fastWalk, 'default: normal pace');
+  key(k.app, 'f'); assert.equal(k.app.shared.meta.settings.fastWalk, true); assert.equal(saves, 1); key(k.app, 'F'); assert.equal(k.app.shared.meta.settings.fastWalk, false); assert.equal(saves, 2);
+  assert.equal((await import('../graftwork/engine/meta.js')).DEFAULT_SETTINGS.fastWalk, false, 'in the meta defaults'); assert.equal((await import('../graftwork/ui/settings.js')).DEFAULTS.fastWalk, false, 'and the settings defaults');
+});
+
+await t('walk pacing: the hero on the move is drawn in the final actor pass (a wall in front never hides him), at rest he stays with the props', async () => {
+  const { app, run, flow } = await setup({ seed: 'pacefinal' });
+  const [a, b] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 60);
+  app.shared.meta.settings.reduceMotion = app.shared.meta.settings.reducedMotion = false;
+  const H = () => ISO.lastActors().find((x) => x.kind === 'hero'), st = app.screens.ward.st;
+  st.walk = { cells: [a, b], i: 0, a: 0, stop: 1, t: 0, done: null, wait: false }; frames(app, 10); assert.ok(H().moving, 'moving'); st.walk = null; frames(app, 5); assert.ok(!H().moving);
 });
 
 console.log(`${n} ward UI checks passed`);

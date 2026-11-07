@@ -399,6 +399,11 @@ for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 
   h.app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   h.app.go('title'); look(h, 80, T('title') + '/menu');
   hoverAt(h, 640, 330); look(h, 3, T('title') + '/hover');
+  { // continue present, both pips, a saved hero card, the sewing intro at four moments
+    const hv = await make(o); const fv = flowFor(hv); hv.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; fv.hasSave = () => true; fv.resume = () => true; fv.openSettings = () => {}; hv.meta.history = [{ hero: 'wick' }]; hv.meta.unlocked.fresh = { a: 1, b: 1, c: 1 };
+    hv.app.shared.audio = h.app.shared.audio; hv.app.go('title'); look(hv, 80, T('title') + '/save'); hoverAt(hv, 640, 336); look(hv, 3, T('title') + '/savehover'); hoverAt(hv, 725, 466); look(hv, 3, T('title') + '/pip');
+    const hi = await make(o); const fi = flowFor(hi); fi.hasSave = () => false; hi.app.shared.audio = h.app.shared.audio; hi.app.go('title', { intro: true }); for (const n of [20, 50, 60, 120]) look(hi, n, T('title') + '/intro' + n);
+  }
   const tm = h.app.top(); tm.openSelect(h.app); look(h, 40, T('title') + '/select');
   for (let i = 0; i < 3; i++) { click(h.app, 50 + i * 400 + 190, 300); look(h, 5, T('title') + '/select' + i); hoverAt(h, 50 + i * 400 + 190, 300); look(h, 3, T('title') + '/selhover' + i); }
   const hl = await make(o); const fl = flowFor(hl); fl.hasSave = () => false; fl.start = () => {}; hl.meta.unlocked.heroes = ['marrow']; hl.meta.settings.assist = { on: true, a: true, b: true, c: true, d: true };

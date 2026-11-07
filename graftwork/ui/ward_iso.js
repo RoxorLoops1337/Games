@@ -121,9 +121,9 @@ const V = {
   ground: null, groundKey: '', dark: new WeakMap(), glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
   gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitOK: false, kitInfo: null, fvHero: 1, rcOf: null,
-  lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
+  lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
 };
-export function resetIso() { V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
+export function resetIso() { V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
 function glowSprite() {
   if (V.glow || V.glowTried) return V.glow;
   V.glowTried = true;
@@ -399,10 +399,10 @@ function drawActor(app, g, r, run) {
 }
 
 // ---- gait: one place turns movement into the body language, for monsters, elites and the hero ----
-// The step cycle follows the DISTANCE moved (not time): every stride = 0.42 x the figure height, the two walk frames swap at each plant, the body
+// The step cycle follows the DISTANCE moved (not time): every stride = 0.5 x the figure height, the two walk frames swap at each plant, the body
 // hops a little between plants (the shadow stays flat), squashes when a foot lands and leans into the heading; at rest nothing leaves the
 // ground: a slow breathing scale about the feet and a small weight shift. With reduced motion the figure just stands.
-const HOP = 2.2, STRIDE = 0.42;
+const HOP = 2.2, STRIDE = 0.5;
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
@@ -519,11 +519,19 @@ export function drawRooms(host, inter) {
     const lt = (hov || sel) ? 1 : 0, lv = V.lift[id] || 0; V.lift[id] = calm ? lt : lv + (lt - lv) * Math.min(1, dt * 14);
     const st = host.buildAge(MEM.stamps[id], S.t), drop = st < 1 ? (1 - EASE.out(st)) * 70 : 0, lift = V.lift[id] * 6 + drop + (theatre && host.bossOpen && !calm ? Math.sin(S.t * 47) * 0.7 : 0);
     if (MEM.stamps[id] !== undefined && st < 1) V.landed[id] = 0;
-    const tp = tk[id] || 0, tKeep = focus(id) ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : dense ? 0.85 : 1, tFade = tp === 2 ? 0.55 : 1;
+    const tp = tk[id] || 0, spr = rc ? null : assets.room(r.type, app);
+    // painted fallback: the tall diorama for a lone room, the LOWERED-WALL painting (rm_<id>_low) wherever the tall one would hide a neighbour
+    // (wall mode Low, Cutaway with a room behind, a front neighbour of a focus room or of a room with monsters, a dense floor); the old crop
+    // of the tall sprite remains the fallback while a room has no low painting. The two cross-fade when the choice changes.
+    const sprLow = rc || !spr ? null : assets.room(r.type + '_low', app);
+    const behind = !!(roomIdAt(w, x - 1, y) || roomIdAt(w, x, y - 1) || roomIdAt(w, x - 1, y - 1));
+    const wantLow = !!sprLow && (mode === 'low' || (mode === 'cutaway' && behind) || tp > 0 || (dense && behind && KR.KITS.mode !== 'full'));
+    const lw = wantLow ? 1 : 0, lv0 = V.lowK[id] === undefined ? lw : V.lowK[id];
+    const lowK = V.lowK[id] = calm || Math.abs(lw - lv0) < 0.02 ? lw : lv0 + (lw - lv0) * Math.min(1, dt * 7);
+    const tKeep = sprLow ? 1 : focus(id) ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : dense ? 0.85 : 1, tFade = tp === 2 && !sprLow ? 0.55 : 1;
     const kv = V.keep[id] === undefined ? tKeep : V.keep[id], fv = V.fadeA[id] === undefined ? tFade : V.fadeA[id];
     const keep = V.keep[id] = calm ? tKeep : kv + (tKeep - kv) * Math.min(1, dt * 7), fade = V.fadeA[id] = calm ? tFade : fv + (tFade - fv) * Math.min(1, dt * 7);
     const alpha = (st < 1 ? clamp(st * 2.5, 0, 1) : 1) * (rc ? 1 : fade);
-    const spr = rc ? null : assets.room(r.type, app);
     // ---- collect the actors that stand in this room (kit rooms draw them with their props, the others in the actor pass) ----
     const items = V.items; items.length = 0;
     const kitPos = (rec, s2) => { const p = KR.subPt(s2.gu, s2.gv); rec.x = T.x + p.x; rec.y = T.y + p.y; };
@@ -559,7 +567,7 @@ export function drawRooms(host, inter) {
       V.cnt[id] = r.contents.length;
     };
     collect();
-    if (rc && hero.room === id) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); }
+    if (rc && hero.room === id && !heroAtEdge(w, hero, id)) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); } // a hero crossing a doorway is drawn in the final pass: a room in front must not wall him off
     g.save();
     if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(c.x, c.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-c.x, -c.y); }
     if (rc) {
@@ -572,10 +580,11 @@ export function drawRooms(host, inter) {
       KR.drawItems(app, g, rc, T.x, T.y, lift, items, { dark, calm, t: S.t, glow: pg, actor: (rec) => drawActor(app, g, rec, run) });
       if (!dark) for (let i = 0; i < pg.length; i += 3) host.glows.push(pg[i], pg[i + 1] - lift, pg[i + 2]);
     } else if (spr) {
-      let img = spr.img;
-      if (dark) { const dk = darkOf(spr); if (dk) img = dk; }
+      const imgOf = (sp) => { let im = sp.img; if (dark) { const dk = darkOf(sp); if (dk) im = dk; } return im; };
       if (alpha < 1) g.globalAlpha *= alpha;
-      drawSprite(g, spr, c.x, c.y, lift, 1, img, keep);
+      if (lowK < 0.98) drawSprite(g, spr, c.x, c.y, lift, 1, imgOf(spr), keep);
+      if (sprLow && lowK > 0.01) drawSprite(g, sprLow, c.x, c.y, lift, lowK, imgOf(sprLow), 1);
+      V.paint[id] = lowK > 0.5 ? 'low' : 'tall';
     } else {
       g.globalAlpha *= alpha; drawBlock(g, r.type, c.x, c.y, lift, dark, theatre);
       if (dark) { g.globalAlpha = 0.5; diamond(g, c.x, c.y - lift, TW * FILL / 2, TH * FILL / 2); g.fillStyle = '#0c0a10'; g.fill(); }
@@ -644,7 +653,11 @@ function heroRec(host, n, rcOf, dt) {
   let pos, moving = false, kk = 0, dx = 0; rec.kitWalk = false;
   if (wk) {
     const ra = w.rooms[wk.cells[wk.i]], rb = w.rooms[wk.cells[Math.min(wk.i + 1, wk.cells.length - 1)]];
-    kk = wk.i < wk.stop ? EASE.inOut(clamp(wk.t / host.stepS, 0, 1)) : 0; moving = wk.i < wk.stop;
+    moving = wk.i < wk.stop;
+    { // constant speed between rooms, easing only out of the first and into the last step of a walk (no stop at every doorway)
+      const u = clamp(wk.t / (wk.step || host.stepS), 0, 1), a0 = wk.a === undefined ? wk.i : wk.a, first = wk.i <= a0, last = wk.i >= wk.stop - 1;
+      kk = !moving ? 0 : first && last ? EASE.inOut(u) : first ? u * u : last ? 2 * u - u * u : u;
+    }
     const poly = ra && rb && ra !== rb && (rcOf(ra.type) || rcOf(rb.type)) ? heroLine(host, ra, rb, rcOf) : null;
     if (poly) { const q = KR.alongPolyline(poly, kk), p = subWorld(w, q.gu, q.gv); pos = p; dx = q.du - q.dv; rec.kitWalk = true; }
     else {
@@ -656,12 +669,14 @@ function heroRec(host, n, rcOf, dt) {
   } else pos = heroStand(w, hroom, rcOf);
   rec.kind = 'hero'; rec.id = run.hero; rec.h = 44; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null; rec.kitDrawn = false; rec.room = null;
   rec.x = pos.x; rec.y = pos.y;
-  V.fvHero += (V.faceHero - V.fvHero) * (calm ? 1 : Math.min(1, dt * 10)); if (Math.abs(V.fvHero - V.faceHero) < 0.02) V.fvHero = V.faceHero;
+  V.fvHero += (V.faceHero - V.fvHero) * (calm ? 1 : Math.min(1, dt * 18)); if (Math.abs(V.fvHero - V.faceHero) < 0.02) V.fvHero = V.faceHero;
   rec.flip = V.fvHero;
   gait('hero', rec, rec.x, rec.y, dt, calm, rec.h, S, 2);
   rec.ring = 1; rec.moving = moving;
   return rec;
 }
+// a hero on the move is drawn in the final pass (over every wall): a room in front walls him off in its doorway otherwise; at rest he is sorted with the props
+const heroAtEdge = (w, rec, id) => !!rec.moving;
 const hxy = (w, rid) => { const r = w.rooms[rid]; return r ? [r.x, r.y] : [0, 0]; };
 
 // ---------------- lighting over the whole map ----------------
@@ -784,3 +799,4 @@ export function drawLoading(host) {
   g.fillStyle = COL.lamp; app.rr(x + 4, y + 16, (bw - 8) * clamp(k, 0.04, 1), 3, 1.5); g.fill(); g.restore();
   app.text('Stitching rooms', x + bw / 2, y + 2, { size: 11, ui: true, align: 'center', color: 'rgba(232,220,196,.85)', fixed: true });
 }
+export const paintedKind = (id) => V.paint[id] || null; // tests: which painting a room used last frame (tall | low)

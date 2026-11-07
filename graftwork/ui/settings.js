@@ -1,6 +1,6 @@
 // Settings modal (app.push('settings')). Persists into app.shared.meta.settings, then flow.saveMeta().
 // Flags other screens may read from app.shared.meta.settings:
-//   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false),
+//   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false), fastWalk bool (default false; the Ward's F button, halves the hero's walk pacing),
 //   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
 //   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
 import { defaultQuality } from './fx.js';
@@ -10,7 +10,7 @@ import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
 import { lnw } from '../art/linework.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
+export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
 export const TEXT_STEPS = [100, 125, 150, 175];
 export const QUALITY = ['off', 'low', 'high'];
 
