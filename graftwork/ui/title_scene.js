@@ -49,7 +49,7 @@ function glowSprite() { // warm radial glow, white core, used additive
   if (GLOW !== null) return GLOW;
   const o = mkCanvas(128, 128); if (!o) return (GLOW = false);
   const gr = o.x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gr.addColorStop(0, 'rgba(255,236,190,1)'); gr.addColorStop(0.18, 'rgba(255,200,110,.62)'); gr.addColorStop(0.5, 'rgba(255,150,60,.2)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
+  gr.addColorStop(0, 'rgba(255,226,170,.85)'); gr.addColorStop(0.18, 'rgba(255,196,104,.5)'); gr.addColorStop(0.5, 'rgba(255,150,60,.2)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
   o.x.fillStyle = gr; o.x.fillRect(0, 0, 128, 128); return (GLOW = o.c);
 }
 function shadowSprite() {
@@ -66,7 +66,7 @@ function gradeSprite() {
   const o = mkCanvas(320, 180); if (!o) return (GRADE = false);
   const g = o.x, k = 320 / W;
   const r = g.createRadialGradient(330 * k, 470 * k, 40 * k, 560 * k, 400 * k, 780 * k);
-  r.addColorStop(0, 'rgb(255,236,206)'); r.addColorStop(0.3, 'rgb(188,160,142)'); r.addColorStop(0.62, 'rgb(86,74,86)'); r.addColorStop(1, 'rgb(22,19,30)');
+  r.addColorStop(0, 'rgb(236,212,184)'); r.addColorStop(0.3, 'rgb(170,144,130)'); r.addColorStop(0.62, 'rgb(86,74,86)'); r.addColorStop(1, 'rgb(22,19,30)');
   g.fillStyle = r; g.fillRect(0, 0, 320, 180);
   const top = g.createLinearGradient(0, 0, 0, 180 * 0.46); top.addColorStop(0, 'rgba(10,8,14,.92)'); top.addColorStop(0.6, 'rgba(10,8,14,.6)'); top.addColorStop(1, 'rgba(10,8,14,0)');
   g.fillStyle = top; g.fillRect(0, 0, 320, 180 * 0.46);
@@ -196,7 +196,7 @@ export function createScene(opts = {}) {
         if (spr) g.drawImage(spr, x - rx, y - ry, rx * 2, ry * 2); continue;
       }
       const cool = k < 0.6, r = (cool ? 40 : 34) * z * (0.5 + k) * (0.96 + 0.06 * fl);
-      g.globalAlpha = (cool ? 0.1 : 0.4) * fl * clamp(k + 0.3, 0.3, 1);
+      g.globalAlpha = (cool ? 0.05 : 0.3) * fl * clamp(k + 0.3, 0.3, 1);
       if (spr) g.drawImage(spr, x - r, y - r, r * 2, r * 2); // cool window glow is the same sprite, dimmer, tinted by the multiply grade
     }
     g.restore();
