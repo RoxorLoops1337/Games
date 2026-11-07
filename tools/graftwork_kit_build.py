@@ -29,17 +29,20 @@ PX_PER_UNIT = 8.0    # props: sprite px per world unit
 PX_PER_UNIT_PIECE = 10.0
 
 # prop id -> on-screen width in world units (bbox), footprint [cols, rows] in sub-tiles (23 x 12 world px each), display name
+# brightness gain per texture (the AI floors come out darker than the painted rooms; the lab and the game share one lighting model)
+GAIN = {'floors/wood': 1.55, 'floors/stone': 1.2, 'walls/wood': 1.2, 'walls/stone': 1.05}
+
 PROPS = {
-    'sawbench': {'sw': 36, 'fp': [2, 1], 'name': 'Saw bench'},
-    'planks': {'sw': 28, 'fp': [2, 1], 'name': 'Plank stack'},
-    'toolrack': {'sw': 20, 'fp': [1, 1], 'name': 'Tool rack'},
-    'bed': {'sw': 40, 'fp': [2, 1], 'name': 'Iron bed'},
-    'stool': {'sw': 11, 'fp': [1, 1], 'name': 'Stool'},
-    'crate': {'sw': 22, 'fp': [1, 1], 'name': 'Crate'},
-    'bucket': {'sw': 12, 'fp': [1, 1], 'name': 'Bucket'},
-    'shelf': {'sw': 17, 'fp': [1, 1], 'name': 'Bottle shelf'},
-    'rocks': {'sw': 30, 'fp': [2, 1], 'name': 'Rock pile'},
-    'generator': {'sw': 30, 'fp': [2, 1], 'name': 'Generator coil'},
+    'sawbench': {'sw': 31, 'fp': [2, 1], 'name': 'Saw bench'},
+    'planks': {'sw': 24, 'fp': [2, 1], 'name': 'Plank stack'},
+    'toolrack': {'sw': 17, 'fp': [1, 1], 'name': 'Tool rack'},
+    'bed': {'sw': 31, 'fp': [2, 1], 'name': 'Iron bed'},
+    'stool': {'sw': 9, 'fp': [1, 1], 'name': 'Stool'},
+    'crate': {'sw': 18, 'fp': [1, 1], 'name': 'Crate'},
+    'bucket': {'sw': 10, 'fp': [1, 1], 'name': 'Bucket'},
+    'shelf': {'sw': 14, 'fp': [1, 1], 'name': 'Bottle shelf'},
+    'rocks': {'sw': 26, 'fp': [2, 1], 'name': 'Rock pile'},
+    'generator': {'sw': 27, 'fp': [2, 1], 'name': 'Generator coil'},
 }
 # wall pieces: height in world units, mount ('floor' = bottom on the floor line, 'mid' = centred at wall mid height), display name
 PIECES = {
@@ -109,6 +112,9 @@ for kind, table, key in (('floor', FLOORS, 'floors'), ('wall', WALLS, 'walls')):
             continue
         im = make_seamless(Image.open(f).convert('RGB'))
         im = wrap_resize(im, TEX)
+        gain = GAIN.get(f'{key}/{id_}', 1.0)
+        if gain != 1.0:
+            im = Image.fromarray(np.clip(np.array(im).astype(np.float32) * gain, 0, 255).astype(np.uint8), 'RGB')
         os.makedirs(os.path.join(OUT, key), exist_ok=True)
         im.save(os.path.join(OUT, key, f'{id_}@2x.webp'), 'WEBP', quality=Q, method=4)
         im.resize((TEX // 2, TEX // 2), Image.LANCZOS).save(os.path.join(OUT, key, f'{id_}@1x.webp'), 'WEBP', quality=Q, method=4)
