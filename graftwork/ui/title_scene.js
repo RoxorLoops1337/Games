@@ -241,10 +241,20 @@ export function createScene(opts = {}) {
     }
     g.restore();
     // a flat lit floor and the hero in the pool
-    g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5; g.fillStyle = 'rgba(255,200,120,.12)'; g.beginPath(); g.ellipse(330, 560, 190, 44, 0, 0, TAU); g.fill(); g.restore();
-    groundShadow(g, 330, 560, 52, 0.55);
-    const br = calm ? 0 : Math.sin(t * 1.7);
-    try { g.save(); g.translate(330, 560); g.scale(1 - 0.006 * br, 1 + 0.014 * br); g.translate(-330, -560); drawHero(g, 'marrow', 330, 560, { scale: 1.25, t: calm ? 0.2 : t }); g.restore(); } catch (e) { /* art is optional here */ }
+    g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5; g.fillStyle = 'rgba(255,200,120,.12)'; g.beginPath(); g.ellipse(1090, 650, 190, 44, 0, 0, TAU); g.fill(); g.restore();
+    groundShadow(g, 1090, 650, 52, 0.55);
+    const br = calm ? 0 : Math.sin(t * 1.7), hc = heroCanvas();
+    g.save(); g.translate(1090, 650); g.scale(1 - 0.006 * br, 1 + 0.014 * br);
+    if (hc) g.drawImage(hc, -150, -340, 300, 360); else { try { drawHero(g, 'marrow', 0, 0, { scale: 1.0, t: calm ? 0.2 : t }); } catch (e) { /* art is optional here */ } }
+    g.restore();
+  }
+  // the procedural hero baked once (feet at the middle bottom), so the fallback scene costs a blit
+  let HERO = null;
+  function heroCanvas() {
+    if (HERO !== null) return HERO;
+    const o = mkCanvas(300, 360); if (!o) return (HERO = false);
+    try { drawHero(o.x, 'marrow', 150, 340, { scale: 1.0, t: 0.2 }); } catch (e) { return (HERO = false); }
+    return (HERO = o.c);
   }
 
   function keyartPass(app, g, o) {
@@ -264,11 +274,15 @@ export function createScene(opts = {}) {
     // slow device: three frames of dt over 30 ms in a row for 90 frames flips `lite`; it never flips back
     if (t0) { S.slow = S.slow * 0.97 + (S.stats.ms > 7 ? 1 : 0) * 0.03; if (!S.lite && S.frame > 90 && S.slow > 0.6) S.lite = true; }
     const useKeyart = !!(S.keyart && S.keyart.ok), useKit = !useKeyart && resolveKit(app);
-    S.mode = useKeyart ? 'keyart' : useKit ? 'kit' : 'fallback';
+    // images still on their way (a real browser, first seconds): a dark room instead of the fallback, so the scene fades in once instead of flashing the old one first
+    const waiting = !useKeyart && !useKit && S.frame < 420 && (assets.kitState === 'loading' || assets.state === 'loading' || (assets.kitReady() && !assets.kitSettled(app)));
+    S.mode = useKeyart ? 'keyart' : useKit ? 'kit' : waiting ? 'loading' : 'fallback';
+    S.age = S.mode === 'kit' || S.mode === 'keyart' ? (calm ? 1 : Math.min(1, (S.age || 0) + dt / 0.9)) : 0;
     const mx = app.mouse && app.mouse.x > -900 ? clamp((app.mouse.x - 640) / 640, -1, 1) : 0, my = app.mouse && app.mouse.y > -900 ? clamp((app.mouse.y - 360) / 360, -1, 1) : 0;
     S.mx += (mx - S.mx) * Math.min(1, dt * 2.5); S.my += (my - S.my) * Math.min(1, dt * 2.5);
     const drift = calm ? 0 : 1, ox0 = (Math.sin(t * 0.09) * 16 - S.mx * 9) * drift, oy0 = (Math.sin(t * 0.063 + 1) * 6 - S.my * 5) * drift, zk = 1 + (calm ? 0 : 0.012 * Math.sin(t * 0.05));
-    if (S.mode === 'fallback') { fallbackPass(app, g, t, calm); S.stats.draws++; S.stats.ms += (((t0 ? performance.now() - t0 : 0)) - S.stats.ms) * 0.1; return S.mode; }
+    if (S.mode === 'loading') { tg0(g); const gs0 = gradeSprite(); if (gs0) { g.save(); g.globalCompositeOperation = 'multiply'; g.drawImage(gs0, 0, 0, W, H); g.restore(); } return S.mode; }
+    if (S.mode === 'fallback') { fallbackPass(app, g, t, calm); if (o.fade !== undefined && o.fade < 1) { g.save(); g.fillStyle = `rgba(5,4,7,${clamp(1 - o.fade, 0, 1).toFixed(3)})`; g.fillRect(0, 0, W, H); g.restore(); } S.stats.draws++; S.stats.ms += (((t0 ? performance.now() - t0 : 0)) - S.stats.ms) * 0.1; return S.mode; }
     // lite: update the scene into an offscreen copy every third frame, blit it in between
     let tg = g, blit = false;
     if (S.lite && typeof document !== 'undefined') {
@@ -292,11 +306,13 @@ export function createScene(opts = {}) {
     motePass(app, tg, t, calm);
     tg.restore();
     if (blit) { S.off.ready = true; g.drawImage(S.off.c, 0, 0, W, H); }
-    if (o.fade !== undefined && o.fade < 1) { g.save(); g.fillStyle = `rgba(5,4,7,${clamp(1 - o.fade, 0, 1).toFixed(3)})`; g.fillRect(0, 0, W, H); g.restore(); }
+    const fadeK = Math.min(o.fade === undefined ? 1 : o.fade, S.age);
+    if (fadeK < 1) { g.save(); g.fillStyle = `rgba(5,4,7,${clamp(1 - fadeK, 0, 1).toFixed(3)})`; g.fillRect(0, 0, W, H); g.restore(); }
     S.stats.frames++; if (t0) { const ms = performance.now() - t0; S.stats.ms += (ms - S.stats.ms) * 0.1; S.stats.last = ms; }
     return S.mode;
   };
 
+  const tg0 = (g) => { g.save(); g.fillStyle = '#07060a'; g.fillRect(0, 0, W, H); backdrop(g, S.t, 0, 0); g.restore(); };
   // far wall: dark arched moonlit windows, cached once (it is the only layer behind the rooms; parallax 0.35)
   let BACK = null;
   function backdrop(g, t, px, py) {

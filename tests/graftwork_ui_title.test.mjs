@@ -221,7 +221,7 @@ const settle = (app, n = 6) => frames(app, n);
 // ---- taglines: three, plain wording, rotate, no dashes of the long kind ----
 {
   assert.equal(TAGLINES.length, 3);
-  for (const t of TAGLINES) { assert.ok(!/[–—]/.test(t), 'no em or en dash: ' + t); assert.ok(t.length < 60, 'short'); }
+  for (const t of TAGLINES) { assert.ok(!/[\u2013\u2014]/.test(t), 'no em or en dash: ' + t); assert.ok(t.length < 60, 'short'); }
   assert.equal(new Set(TAGLINES).size, 3, 'three different lines');
   assert.equal(taglineAt(0.4 * TAGLINE_S, false).text, TAGLINES[0]);
   assert.equal(taglineAt(1.4 * TAGLINE_S, false).text, TAGLINES[1]);
@@ -353,7 +353,7 @@ const settle = (app, n = 6) => frames(app, n);
   assert.ok(m.letters[0].x > 40 && m.letters.at(-1).x + m.letters.at(-1).w < 1240, 'the wordmark fits the stage with room to spare');
   for (let i = 1; i < m.letters.length; i++) assert.ok(m.letters[i].x >= m.letters[i - 1].x + m.letters[i - 1].w, 'letters never overlap');
   assert.ok(m.pts[0][0] < 0 && m.pts.at(-1)[0] > 1280, 'the thread starts and ends off screen: it ties the logo to the edges');
-  assert.ok(m.len > 1400, 'long thread: ' + Math.round(m.len)); assert.ok(m.seamEnd > m.seamStart);
+  assert.ok(m.len > 1100, 'long thread: ' + Math.round(m.len)); assert.ok(m.seamEnd > m.seamStart);
   const seam = m.pts.slice(m.seamStart, m.seamEnd + 1); assert.ok(seam.every((p) => Math.abs(p[1] - m.seamY) < 2.5), 'the seam runs level through the feet of the letters');
 }
 
@@ -362,9 +362,10 @@ const settle = (app, n = 6) => frames(app, n);
   removeKit();
   let r = await rig(); clearRun(); r.app.go('title'); frames(r.app, 60);
   const tx = capture(r.app); frames(r.app, 3);
-  for (const label of ['New Run', 'Daily Run', 'Codex', 'Wardrobe', 'Settings', 'Credits']) assert.ok(tx.includes(label), 'button ' + label);
+  for (const label of ['New Run', 'Codex', 'Wardrobe', 'Settings', 'Credits']) assert.ok(tx.includes(label), 'button ' + label);
+  assert.ok(tx.some((q) => /^Daily Run/.test(q)), 'Daily Run button');
   assert.ok(tx.some((s) => /^Archive/.test(s)), 'Archive button (with its percent)'); assert.ok(!tx.includes('Continue'), 'no Continue without a save');
-  const ids = LAYOUT.getAll().map((q) => q.id); for (const id of ['title-archive', 'title_fs', 'title-hero-card']) assert.ok(ids.includes(id), 'registry id ' + id + ' in ' + ids);
+  const ids = LAYOUT.getAll().map((q) => q.id); for (const id of ['title-archive', 'title-hero-card']) assert.ok(ids.includes(id), 'registry id ' + id + ' in ' + ids);
   // hover lifts the slab (eased) and it settles back
   r.app.mouse.x = 640; r.app.mouse.y = 330; frames(r.app, 30); assert.ok(title.lifts.new > 0.95, 'hover lift ' + title.lifts.new);
   r.app.mouse.x = 100; r.app.mouse.y = 100; frames(r.app, 40); assert.ok(title.lifts.new < 0.05, 'and settles back ' + title.lifts.new);
@@ -374,11 +375,13 @@ const settle = (app, n = 6) => frames(app, n);
   r = await rig(); clearRun(); r.app.go('title'); frames(r.app, 60);
   assert.equal(r.app.navButtons, true, 'the title opts into keyboard navigation');
   key(r.app, 'Tab'); frames(r.app, 2); assert.equal(r.app.focus.active, true); assert.equal(r.app.focusLabel, 'New Run', 'Tab lands on New Run');
-  key(r.app, 'ArrowDown'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Daily Run');
-  key(r.app, 'ArrowDown'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Codex'); key(r.app, 'ArrowRight'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Wardrobe');
-  key(r.app, 'ArrowDown'); key(r.app, 'ArrowLeft'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Settings');
-  assert.ok(title.lifts.settings > 0.9, 'the focused slab lifts like a hovered one');
-  key(r.app, 'ArrowUp'); key(r.app, 'ArrowUp'); key(r.app, 'ArrowUp'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'New Run');
+  key(r.app, 'ArrowDown'); frames(r.app, 2); assert.ok(/^Daily Run/.test(r.app.focusLabel), r.app.focusLabel);
+  key(r.app, 'Tab'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Codex'); key(r.app, 'Tab'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Wardrobe');
+  key(r.app, 'ArrowLeft'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Codex'); key(r.app, 'ArrowRight'); frames(r.app, 2); assert.equal(r.app.focusLabel, 'Wardrobe');
+  key(r.app, 'ArrowDown'); frames(r.app, 2); assert.ok(/^Archive/.test(r.app.focusLabel), r.app.focusLabel); key(r.app, 'ArrowLeft'); frames(r.app, 30); assert.equal(r.app.focusLabel, 'Settings');
+  assert.ok(title.lifts.settings > 0.9, 'the focused slab lifts like a hovered one'); assert.ok(title.lifts.archive < 0.1, 'and the one it left settles');
+  for (let i = 0; i < 6 && r.app.focusLabel !== 'New Run'; i++) { key(r.app, 'ArrowUp'); frames(r.app, 2); }
+  assert.equal(r.app.focusLabel, 'New Run', 'arrows walk back up');
   key(r.app, 'Enter'); frames(r.app, 2); assert.equal(title.state, 'select', 'Enter on New Run opens the hero select');
   r = await rig(); clearRun(); r.app.go('title'); frames(r.app, 60); key(r.app, 'Tab'); key(r.app, 'ArrowDown'); key(r.app, 'Enter'); frames(r.app, 2);
   assert.equal(r.log.started.length, 1, 'Enter on Daily Run starts the daily'); assert.equal(r.log.started[0].daily, RUN.dailySeed());

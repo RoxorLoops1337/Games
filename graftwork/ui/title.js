@@ -137,7 +137,7 @@ export default {
       g.save(); g.globalAlpha = reveal * 0.8; g.translate(640, 266); g.scale(1, 0.1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 480); sg.addColorStop(0, 'rgba(8,6,10,.85)'); sg.addColorStop(0.6, 'rgba(8,6,10,.5)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
       g.fillStyle = sg; g.fillRect(-480, -480, 960, 960); g.restore(); // a soft dark pool keeps the two lines readable over the lit rooms
       app.text(tg.text, 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: 760, lines: 1 } });
-      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 274, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: 760, lines: 1 } });
+      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 274, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: 1000, lines: 1 } });
     }
     // keys
     const nav0 = app.navButtons; app.navButtons = !app.blocked; // Tab, arrows and Enter walk the buttons of this screen, never the ones of a modal on top
@@ -149,7 +149,7 @@ export default {
     // top right: fullscreen (reserved zone 1128..1272 x 0..56)
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
     // corner: version + credit line + mute (always)
-    const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 300, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 300, lines: 1 } };
+    const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 400, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 400, lines: 1 } };
     const vh = app.layoutText('GRAFTWORK ' + VERSION, vo).h, ch = app.layoutText('Cut and sewn by hand. See Credits.', co).h, fy = H - 10 - vh - ch;
     app.text('GRAFTWORK ' + VERSION, 16, fy, vo);
     app.text('Cut and sewn by hand. See Credits.', 16, fy + vh + 1, co);
@@ -268,7 +268,7 @@ export default {
         const hw = Math.floor((bw - 10) / 2), al = percentLabel(meta);
         if (this.slab(app, 'settings', 'Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
         if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.' + (fresh ? `\n${fresh} new since you last looked.` : ''), { color: COL.lamp });
-        app.reg('title-archive', x + hw + 10, yy, hw, bh, { group: 'archive' });
+        app.reg('title-archive', x + hw + 10, yy - 12, hw, bh + 12, { group: 'archive' }); // includes the pip that hangs on its top edge
         if (this.slab(app, 'archive', app.measure(al, 20, { bold: true }) > hw - 16 ? 'Archive' : al, x + hw + 10, yy, hw, bh, { size: 20, fit: true }) && flow.openArchive) flow.openArchive();
         if (fresh > 0) this.pip(app, fresh > 99 ? '99+' : String(fresh), x + hw + 10 + hw - 14, yy + 1, { size: 12, maxW: 40, fill: '#e8c25a' });
       }
@@ -279,15 +279,15 @@ export default {
     g.restore();
     if (!canFullscreen() && isIPhone()) app.text('Add to Home Screen for fullscreen', 640, y + 6, { size: 13, ui: true, italic: true, align: 'center', color: 'rgba(232,220,196,.6)', fit: { w: 400, lines: 1 } });
     // the hero card on the left, the daily card on the right
-    this.drawHeroCard(app, 28, 458);
+    this.drawHeroCard(app, 28, 626);
     this.drawDailyCard(app, 930, 312);
     app.navButtons = nav0;
     if (this.confirmAbandon) this.drawConfirm(app, 'Start a new run?', 'Your saved run will be replaced. This cannot be undone.', 'Replace saved run', () => { this.confirmAbandon = false; this.openSelect(app); }, () => { this.confirmAbandon = false; });
   },
   // a small card for the hero you left off with (the saved run's hero, else the last run's, else Marrow): portrait, name, school, passive
-  drawHeroCard(app, x, y) {
+  drawHeroCard(app, x, bottom) {
     const g = app.ctx, id = this.previewHero || 'marrow', h = HEROES[id]; if (!h) return;
-    const w = 300, ph = 168, k = EASE.out(clamp((this.menuK - 0.1) / 0.9, 0, 1)), school = SCHOOLS[h.school], cm = calm(app);
+    const big = (settingsOf(app).textScale || 100) >= 125 || app.scale < 0.95, w = 300, ph = big ? 224 : 168, y = bottom - ph, k = EASE.out(clamp((this.menuK - 0.1) / 0.9, 0, 1)), school = SCHOOLS[h.school], cm = calm(app), dv = big ? 150 : 106;
     app.reg('title-hero-card', x, y, w, ph, { group: 'herocard' });
     g.save(); g.globalAlpha = k; g.translate(-(1 - k) * 40, 0);
     app.panel(x, y, w, ph, { r: 12, fill: 'rgba(12,9,9,.72)', stroke: rgba(h.color, 0.7) });
@@ -297,10 +297,11 @@ export default {
     const sway = cm ? 0 : Math.sin(app.t * 1.5) * 1.5;
     g.save(); g.beginPath(); g.arc(x + 16 + 36, y + 76, 38, 0, 6.283); g.fillStyle = rgba(h.color, 0.22); g.fill(); g.restore();
     drawPortrait(g, id, x + 16 + 36, y + 78 + sway, 72);
-    app.text(h.name, x + 104, y + 40, { size: 24, bold: true, shadow: true, fit: { w: w - 120, lines: 1 } });
-    app.text(h.title, x + 104, y + 70, { size: 14, italic: true, color: '#cdbf9d', fit: { w: w - 120, lines: 1 } });
-    stitchLine(g, x + 16, y + 106, x + w - 16, y + 106, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
-    app.text(h.passive, x + 16, y + 114, { size: 13, ui: true, color: '#e0d4b8', fit: { w: w - 32, h: ph - 114 - 8, soft: true } });
+    const nh = app.text(h.name, x + 104, y + 34, { size: 24, bold: true, shadow: true, fit: { w: w - 120, lines: 1 } });
+    const tO = { size: 14, italic: true, color: '#cdbf9d', fit: { w: w - 120, h: dv - 34 - nh - 8, lines: 2 } };
+    if (!app.layoutText(h.title, tO).trunc) app.text(h.title, x + 104, y + 34 + nh + 4, tO); // a title that cannot fit whole is left out (the school badge says who it is), never cut
+    stitchLine(g, x + 16, y + dv, x + w - 16, y + dv, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
+    app.text(h.passive, x + 16, y + dv + 8, { size: 13, ui: true, color: '#e0d4b8', fit: { w: w - 32, h: ph - dv - 8 - 8, soft: true } });
     g.restore();
   },
   startDaily(app) {

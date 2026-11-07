@@ -45,6 +45,10 @@ export function createLogo() {
 
   // glyph metrics and positions (centre cx, baseline y)
   L.metrics = (app, cx, base) => {
+    if (L.mcache && L.mcache.cx === cx && L.mcache.baseY === base) return L.mcache.m;
+    const m = L.metrics0(app, cx, base); L.mcache = { cx, baseY: base, m }; return m;
+  };
+  L.metrics0 = (app, cx, base) => {
     const g = app.ctx; g.save(); g.font = `bold ${SIZE}px ${FONT}`;
     const ws = [...WORD].map((c) => Math.max(20, g.measureText(c).width)); g.restore();
     const total = ws.reduce((a, b) => a + b, 0) + SPACE * (ws.length - 1);
@@ -61,7 +65,11 @@ export function createLogo() {
     const seamEnd = pts.length - 1;
     bez([x1 + 14, seamY], [x1 + 120, seamY - 6], [x1 + 250, seamY - 50], [W + 30, seamY - 74], 40);
     const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    return { letters, total, x0, x1, base, seamY, pts, cum, len: cum[cum.length - 1], seamStart, seamEnd };
+    const m = { letters, total, x0, x1, base, seamY, pts, cum, len: cum[cum.length - 1], seamStart, seamEnd, paths: null };
+    if (typeof Path2D !== 'undefined') { // the finished thread as three Path2D segments: idle frames stroke them without walking the polyline
+      try { const cuts = [0, seamStart, seamEnd, pts.length - 1]; m.paths = [0, 1, 2].map((k) => { const q = new Path2D(); for (let i = cuts[k]; i <= cuts[k + 1]; i++) (i === cuts[k] ? q.moveTo(pts[i][0], pts[i][1]) : q.lineTo(pts[i][0], pts[i][1])); return q; }); } catch (e) { m.paths = null; }
+    }
+    return m;
   };
   const pointAt = (m, d) => { // point at arc length d along the thread
     const { pts, cum } = m; d = clamp(d, 0, m.len); let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
@@ -99,6 +107,15 @@ export function createLogo() {
       L.lastStitch = stitchN;
     }
     g.save(); g.translate(0, bob); if (st.alpha !== undefined) g.globalAlpha *= st.alpha;
+    // ---- the gauze strip the seam is sewn into: a pale woven band under the letters, so the black thread reads on the dark room (it grows with the needle) ----
+    { const gx = done ? W : clamp(needle.x, 0, W);
+      if (gx > 2) {
+        g.save(); g.beginPath(); g.rect(0, m.seamY - 17, gx, 34); g.clip();
+        const gr = g.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, 'rgba(232,220,196,0)'); gr.addColorStop(0.2, 'rgba(232,220,196,.15)'); gr.addColorStop(0.8, 'rgba(232,220,196,.15)'); gr.addColorStop(1, 'rgba(232,220,196,0)');
+        g.fillStyle = gr; g.fillRect(0, m.seamY - 17, W, 34);
+        g.strokeStyle = 'rgba(232,220,196,.22)'; g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, m.seamY - 14.5); g.lineTo(W, m.seamY - 14.5); g.moveTo(0, m.seamY + 14.5); g.lineTo(W, m.seamY + 14.5); g.stroke(); g.setLineDash([]);
+        g.restore();
+      } }
     // ---- letters: each appears as the needle passes it ----
     m.letters.forEach((l, i) => {
       const r = done ? 1 : ease(clamp((needle.x - (l.cx - 40)) / 120, 0, 1)) * (reveal > m.cum[m.seamStart] ? 1 : 0);
@@ -136,7 +153,7 @@ export function createLogo() {
   L.thread = (app, g, m, reveal, done, t, calm, needle) => {
     const { pts, cum } = m; if (reveal < 2) return;
     // polyline up to `reveal`
-    const upto = (a, b) => { // a stroke path from arc length a to b
+    const upto = (a, b) => { // a path from arc length a to b
       g.beginPath(); let started = false;
       for (let i = 0; i < pts.length; i++) {
         if (cum[i] < a - 0.001 && !(i + 1 < pts.length && cum[i + 1] > a)) continue;
@@ -147,14 +164,15 @@ export function createLogo() {
     };
     const segs = [[0, m.cum[m.seamStart], [12, 16]], [m.cum[m.seamStart], m.cum[m.seamEnd], [14, 9]], [m.cum[m.seamEnd], m.len, [12, 16]]];
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    for (const [a, b, dash] of segs) {
-      const e = Math.min(b, reveal); if (e <= a + 0.5) continue;
+    for (let si = 0; si < segs.length; si++) {
+      const [a, b, dash] = segs[si], e = Math.min(b, reveal); if (e <= a + 0.5) continue;
+      const P = done && m.paths ? m.paths[si] : null, line = () => { if (P) g.stroke(P); else { upto(a, e); g.stroke(); } }; // finished: the cached Path2D, no walking the polyline
       g.setLineDash(dash);
       g.lineDashOffset = -(a % (dash[0] + dash[1]));
       // a faint light edge above (the thread stands proud of the cloth), the thread itself, a soft shadow below
-      g.strokeStyle = 'rgba(255,238,200,.38)'; g.lineWidth = 1.4; g.save(); g.translate(0, -2.4); upto(a, e); g.stroke(); g.restore();
-      g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 5; g.save(); g.translate(0.8, 2.2); upto(a, e); g.stroke(); g.restore();
-      g.strokeStyle = '#070505'; g.lineWidth = 3.6; upto(a, e); g.stroke();
+      g.strokeStyle = 'rgba(255,238,200,.38)'; g.lineWidth = 1.4; g.save(); g.translate(0, -2.4); line(); g.restore();
+      g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 5; g.save(); g.translate(0.8, 2.2); line(); g.restore();
+      g.strokeStyle = '#070505'; g.lineWidth = 3.6; line();
     }
     g.setLineDash([]);
     // a glint pulse running along the seam now and then (idle, never with reduced motion): the thread catches the light, the needle jiggles

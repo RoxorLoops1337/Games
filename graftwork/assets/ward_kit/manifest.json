@@ -19,6 +19,48 @@
    "file1x": "floors/stone@1x.webp",
    "tile": 512,
    "file": "floors/stone@2x.webp"
+  },
+  "tile": {
+   "name": "Clinic tile",
+   "file2x": "floors/tile@2x.webp",
+   "file1x": "floors/tile@1x.webp",
+   "tile": 512,
+   "file": "floors/tile@2x.webp"
+  },
+  "darkstone": {
+   "name": "Dark flagstones",
+   "file2x": "floors/darkstone@2x.webp",
+   "file1x": "floors/darkstone@1x.webp",
+   "tile": 512,
+   "file": "floors/darkstone@2x.webp"
+  },
+  "carpet": {
+   "name": "Worn carpet",
+   "file2x": "floors/carpet@2x.webp",
+   "file1x": "floors/carpet@1x.webp",
+   "tile": 512,
+   "file": "floors/carpet@2x.webp"
+  },
+  "brick": {
+   "name": "Sooty brick",
+   "file2x": "floors/brick@2x.webp",
+   "file1x": "floors/brick@1x.webp",
+   "tile": 512,
+   "file": "floors/brick@2x.webp"
+  },
+  "slab": {
+   "name": "Morgue slabs",
+   "file2x": "floors/slab@2x.webp",
+   "file1x": "floors/slab@1x.webp",
+   "tile": 512,
+   "file": "floors/slab@2x.webp"
+  },
+  "stage": {
+   "name": "Stage boards",
+   "file2x": "floors/stage@2x.webp",
+   "file1x": "floors/stage@1x.webp",
+   "tile": 512,
+   "file": "floors/stage@2x.webp"
   }
  },
  "walls": {
@@ -35,6 +77,41 @@
    "file1x": "walls/stone@1x.webp",
    "tile": 512,
    "file": "walls/stone@2x.webp"
+  },
+  "tile": {
+   "name": "Clinic tile",
+   "file2x": "walls/tile@2x.webp",
+   "file1x": "walls/tile@1x.webp",
+   "tile": 512,
+   "file": "walls/tile@2x.webp"
+  },
+  "brick": {
+   "name": "Sooty brick",
+   "file2x": "walls/brick@2x.webp",
+   "file1x": "walls/brick@1x.webp",
+   "tile": 512,
+   "file": "walls/brick@2x.webp"
+  },
+  "plaster": {
+   "name": "Damp plaster",
+   "file2x": "walls/plaster@2x.webp",
+   "file1x": "walls/plaster@1x.webp",
+   "tile": 512,
+   "file": "walls/plaster@2x.webp"
+  },
+  "velvet": {
+   "name": "Red velvet",
+   "file2x": "walls/velvet@2x.webp",
+   "file1x": "walls/velvet@1x.webp",
+   "tile": 512,
+   "file": "walls/velvet@2x.webp"
+  },
+  "slab": {
+   "name": "Morgue tile",
+   "file2x": "walls/slab@2x.webp",
+   "file1x": "walls/slab@1x.webp",
+   "tile": 512,
+   "file": "walls/slab@2x.webp"
   }
  },
  "pieces": {
@@ -85,6 +162,102 @@
    "wallSlot": "mid",
    "sw": 9.9,
    "file": "pieces/sconce@2x.webp"
+  },
+  "archdoor": {
+   "name": "Gothic double door",
+   "file2x": "pieces/archdoor@2x.webp",
+   "file1x": "pieces/archdoor@1x.webp",
+   "w": 293,
+   "h": 380,
+   "anchorX": 146.5,
+   "anchorY": 380,
+   "wallSlot": "floor",
+   "sw": 29.3,
+   "file": "pieces/archdoor@2x.webp"
+  },
+  "clock": {
+   "name": "Wall clock",
+   "file2x": "pieces/clock@2x.webp",
+   "file1x": "pieces/clock@1x.webp",
+   "w": 124,
+   "h": 130,
+   "anchorX": 62.0,
+   "anchorY": 65.0,
+   "wallSlot": "mid",
+   "sw": 12.4,
+   "file": "pieces/clock@2x.webp"
+  },
+  "pipes": {
+   "name": "Pipes and valve",
+   "file2x": "pieces/pipes@2x.webp",
+   "file1x": "pieces/pipes@1x.webp",
+   "w": 333,
+   "h": 140,
+   "anchorX": 166.5,
+   "anchorY": 70.0,
+   "wallSlot": "mid",
+   "sw": 33.3,
+   "file": "pieces/pipes@2x.webp"
+  },
+  "curtain": {
+   "name": "Velvet curtains",
+   "file2x": "pieces/curtain@2x.webp",
+   "file1x": "pieces/curtain@1x.webp",
+   "w": 326,
+   "h": 360,
+   "anchorX": 163.0,
+   "anchorY": 360,
+   "wallSlot": "floor",
+   "sw": 32.6,
+   "file": "pieces/curtain@2x.webp"
+  },
+  "chalkboard": {
+   "name": "Chalkboard",
+   "file2x": "pieces/chalkboard@2x.webp",
+   "file1x": "pieces/chalkboard@1x.webp",
+   "w": 173,
+   "h": 170,
+   "anchorX": 86.5,
+   "anchorY": 85.0,
+   "wallSlot": "mid",
+   "sw": 17.3,
+   "file": "pieces/chalkboard@2x.webp"
+  },
+  "stainedglass": {
+   "name": "Stained glass window",
+   "file2x": "pieces/stainedglass@2x.webp",
+   "file1x": "pieces/stainedglass@1x.webp",
+   "w": 232,
+   "h": 360,
+   "anchorX": 116.0,
+   "anchorY": 180.0,
+   "wallSlot": "mid",
+   "sw": 23.2,
+   "file": "pieces/stainedglass@2x.webp"
+  },
+  "vent": {
+   "name": "Iron vent",
+   "file2x": "pieces/vent@2x.webp",
+   "file1x": "pieces/vent@1x.webp",
+   "w": 101,
+   "h": 100,
+   "anchorX": 50.5,
+   "anchorY": 50.0,
+   "wallSlot": "mid",
+   "sw": 10.1,
+   "file": "pieces/vent@2x.webp"
+  },
+  "notice": {
+   "name": "Notice board",
+   "file2x": "pieces/notice@2x.webp",
+   "file1x": "pieces/notice@1x.webp",
+   "w": 147,
+   "h": 150,
+   "anchorX": 73.5,
+   "anchorY": 75.0,
+   "wallSlot": "mid",
+   "sw": 14.7,
+   "file": "pieces/notice@2x.webp"
   }
  },
  "props": {
