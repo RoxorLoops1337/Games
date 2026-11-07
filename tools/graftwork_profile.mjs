@@ -131,7 +131,7 @@ const PAGE = {
 
 // ---------------------------------------------------------------- scenario drivers (run in node, talk to the page)
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-async function gwWait(page, expr, timeout = 60000) { if (opt('verbose', false)) console.log('    wait', expr.slice(0, 70)); await page.waitForFunction(expr, null, { timeout, polling: 250 }); }
+async function gwWait(page, expr, timeout = 60000) { if (opt('verbose', false)) console.log('    wait', expr.slice(0, 70)); try { await page.waitForFunction(expr, null, { timeout, polling: 250 }); } catch (e) { const st = await page.evaluate(() => ({ cur: window.__gw && window.__gw.app.current, frame: window.__gw && window.__gw.app.frame, mode: window.__scene && window.__scene.mode })).catch(() => null); console.log('    wait failed:', expr.slice(0, 60), JSON.stringify(st)); throw e; } }
 
 async function logical(page, x, y) { return page.evaluate(([x, y]) => { const a = window.__gw.app; return { x: a.offX + x * a.scale, y: a.offY + y * a.scale }; }, [x, y]); }
 async function tap(page, x, y) { const p = await logical(page, x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(); await wait(40); await page.mouse.up(); }
@@ -366,9 +366,10 @@ async function soak(browser, base, cycles) {
 async function main() {
   if (opt('list', false)) { for (const [k, v] of Object.entries(SC)) console.log(k.padEnd(14), v.desc); return; }
   if (opt('cache-headers', false)) HEADERS.cacheArt = true;
+  if (opt('serve', false)) { const sv = await serve(); console.log('http://127.0.0.1:' + sv.address().port + '/graftwork/'); return; } // just the static server (debugging)
   const { chromium } = require('playwright');
   const srv = await serve(); const base = 'http://127.0.0.1:' + srv.address().port;
-  const browser = await chromium.launch({ headless: true, args: ['--enable-precise-memory-info', '--js-flags=--expose-gc', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
+  const browser = await chromium.launch({ headless: true, args: ['--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
   let prev = null; if (String(opt('scenarios', '')) === 'none') { try { prev = JSON.parse(fs.readFileSync(path.resolve(REPO, OUT), 'utf8')); } catch (e) { /* none */ } }
   const result = prev ? Object.assign(prev, { load: {} }) : { label: LABEL, date: new Date().toISOString(), viewport: VIEW, dpr: DPR, quick: QUICK, chromium: browser.version(), scenarios: {}, load: {}, soak: null };
   try {

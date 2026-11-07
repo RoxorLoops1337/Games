@@ -318,7 +318,7 @@ export default {
     const title = this.o.title || (this.pick ? 'Choose a card' : 'Your Deck');
     app.text(title, 36, 20, { size: 28, bold: true, color: COL.lamp });
     const sub = this.pick ? 'Click a card. Esc to cancel.' : `${run.deck.length} cards`;
-    app.text(sub, 38, 56, { size: 15, ui: true, color: 'rgba(232,220,196,.7)' });
+    app.text(sub, 38, 56, { size: 15, ui: true, color: 'rgba(232,220,196,.7)', fit: { w: 222, lines: 1 } }); // never runs into the Budget gauge label
     // gauge
     const gx = 270, gy = 24;
     const gb = gaugeCells(app, gx, gy, info, { maxW: 330 });
