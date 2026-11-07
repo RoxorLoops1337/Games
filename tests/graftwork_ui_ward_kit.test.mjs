@@ -24,8 +24,9 @@ let n = 0;
 const t = async (name, fn) => { try { await fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
 const NORMAL1 = Object.values(ENEMIES).filter((e) => e.act === 1 && e.kind === 'normal' && !e.summonOnly && !e.minion).map((e) => e.id);
 
-// ---------------- fixtures: "the current kit" (a copy of the manifest of the first modular pilot) and "everything planned is delivered" ----------------
-const CUR = JSON.parse(fs.readFileSync(new URL('./graftwork_kit_fixture.json', import.meta.url), 'utf8'));
+// ---------------- fixtures: "the pilot kit" (a copy of the manifest of the first modular pilot), "the current kit" (the manifest on disk) and "everything planned is delivered" ----------------
+const PILOT = JSON.parse(fs.readFileSync(new URL('./graftwork_kit_fixture.json', import.meta.url), 'utf8')); // the first pilot kit: wood and stone, 4 pieces, 10 props
+const CUR = JSON.parse(fs.readFileSync(new URL('../graftwork/assets/ward_kit/manifest.json', import.meta.url), 'utf8')); // the kit as delivered: 8 floors, 7 walls, 12 pieces, 24 props (batch 4 props are still to come)
 const clone = (o) => JSON.parse(JSON.stringify(o));
 function fullKit() { // the current kit plus every planned id (footprints as laid out in data/ward_kit.js)
   const m = clone(CUR);
@@ -87,42 +88,106 @@ function checkRecipe(rc, kit, label) {
   for (const pc of rc.pieces) { assert.ok(kit.pieces[pc.id], label + ': piece ' + pc.id + ' exists'); assert.ok(pc.s >= 0 && pc.s <= 1 && (pc.wall === 'L' || pc.wall === 'R')); }
   assert.ok(rc.free.length >= 6, label + ': enough free floor for 5 monsters');
 }
-await t('recipes: every rm_* recipe is valid against the current kit, against everything delivered, and against the real manifest on disk', async () => {
-  const real = JSON.parse(fs.readFileSync(new URL('../graftwork/assets/ward_kit/manifest.json', import.meta.url), 'utf8'));
-  for (const [name, kit] of [['current', CUR], ['full', fullKit()], ['disk', real]]) {
+await t('recipes: every rm_* recipe is valid against the pilot kit, the current kit and against everything delivered; every room is modular today', async () => {
+  for (const [name, kit] of [['pilot', PILOT], ['current', CUR], ['full', fullKit()]]) {
     let usable = 0;
     for (const type of Object.keys(KD.RECIPES)) { assert.ok(ROOMS[type], type + ' is a real room type'); const rc = KD.resolveRecipe(type, kit); if (!rc) continue; usable++; checkRecipe(rc, kit, name + ' ' + type); }
-    if (name === 'current') assert.ok(usable >= 14, 'the current kit expresses 14 or more rooms: ' + usable);
+    if (name === 'pilot') assert.ok(usable >= 3, 'the pilot kit still expresses the wood rooms: ' + usable);
+    if (name === 'current') assert.equal(usable, Object.keys(KD.RECIPES).length, 'every room type has a modular recipe with the art that exists today: ' + usable);
     if (name === 'full') assert.equal(usable, Object.keys(KD.RECIPES).length, 'with every planned id delivered every recipe switches on');
   }
-  // every id a recipe names is either in the current kit or declared as planned (a typo would silently stay painted forever)
+  // every id a recipe names is either in the current kit or declared as planned (a typo would silently stay on the fallback variant forever)
   const known = { floors: new Set([...Object.keys(CUR.floors), ...KD.PLANNED.floors]), walls: new Set([...Object.keys(CUR.walls), ...KD.PLANNED.walls]), pieces: new Set([...Object.keys(CUR.pieces), ...KD.PLANNED.pieces]), props: new Set([...Object.keys(CUR.props), ...Object.keys(KD.PLANNED.props)]) };
   for (const [type, list] of Object.entries(KD.RECIPES)) for (const v of list) {
     assert.ok(known.floors.has(v.floor), type + ' floor ' + v.floor); assert.ok(known.walls.has(v.wall), type + ' wall ' + v.wall);
     for (const p of v.pieces) assert.ok(known.pieces.has(p.id), type + ' piece ' + p.id); for (const p of v.props) assert.ok(known.props.has(p.id), type + ' prop ' + p.id);
     for (const id of v.need || []) assert.ok(known.props.has(id), type + ' need ' + id);
+    if (v.door) assert.ok(CUR.pieces[v.door], type + ' door piece ' + v.door);
   }
-  // the named rooms from the brief
-  for (const type of ['rm_sawmill', 'rm_quarry', 'rm_generator', 'rm_ward', 'rm_dispensary', 'rm_pharmacy']) assert.ok(KD.resolveRecipe(type, CUR), type + ' works with the current kit');
-  for (const type of ['rm_chapel', 'rm_entrance', 'rm_theatre', 'rm_counting', 'rm_kitchen', 'rm_library']) assert.equal(KD.resolveRecipe(type, CUR), null, type + ' waits for new art');
+  for (const type of ['rm_sawmill', 'rm_quarry', 'rm_generator', 'rm_ward', 'rm_dispensary', 'rm_pharmacy', 'rm_chapel', 'rm_entrance', 'rm_theatre', 'rm_counting', 'rm_kitchen', 'rm_library']) assert.ok(KD.resolveRecipe(type, CUR), type + ' works with the current kit');
+  assert.ok(KD.resolveRecipe('rm_sawmill', PILOT) && !KD.resolveRecipe('rm_chapel', PILOT), 'the pilot kit has no stained glass: the chapel needs the new floor and wall');
 });
-await t('recipes degrade gracefully: a missing prop or piece is skipped, a missing floor or wall falls back to the next variant or to the painted room', async () => {
-  const noProps = without(CUR, 'props', ['sawbench', 'shelf']), a = KD.resolveRecipe('rm_sawmill', noProps);
-  assert.ok(a && !a.props.some((p) => p.id === 'sawbench' || p.id === 'shelf') && a.props.length === KD.RECIPES.rm_sawmill[0].props.length - 2, 'props skipped');
-  checkRecipe(a, noProps, 'sawmill without a bench');
-  const noPieces = without(CUR, 'pieces', ['window', 'banner']), b = KD.resolveRecipe('rm_sawmill', noPieces);
-  assert.ok(b && !b.pieces.some((p) => p.id === 'window' || p.id === 'banner') && b.pieces.length === 2, 'pieces skipped');
-  assert.equal(KD.resolveRecipe('rm_sawmill', without(CUR, 'floors', ['wood'])), null, 'no wood floor: painted');
-  assert.equal(KD.resolveRecipe('rm_sawmill', without(CUR, 'walls', ['wood'])), null, 'no wood wall: painted');
-  // a planned variant is first in line: the ward uses tile and plaster when they arrive, the wood variant until then
-  assert.equal(KD.resolveRecipe('rm_ward', CUR).variant, 1); assert.equal(KD.resolveRecipe('rm_ward', fullKit()).variant, 0);
-  assert.equal(KD.resolveRecipe('rm_ward', without(fullKit(), 'floors', ['tile'])).variant, 1, 'a planned floor that is missing again drops back to the wood ward');
-  // a room whose identity needs a prop that is missing stays painted
-  assert.equal(KD.resolveRecipe('rm_chapel', without(fullKit(), 'props', ['altar'])), null);
-  for (const m of [null, undefined, {}, { floors: {}, walls: {} }, { floors: { wood: {} }, walls: { wood: {} }, props: {}, pieces: {} }]) { for (const type of Object.keys(KD.RECIPES)) assert.doesNotThrow(() => KD.resolveRecipe(type, m)); }
-  assert.equal(KD.resolveRecipe('rm_sawmill', { floors: {}, walls: {}, props: {}, pieces: {} }), null);
-  // a prop whose real footprint is bigger than planned never overlaps: it is dropped rather than drawn on top of its neighbour
-  const big = clone(CUR); big.props.crate.footprint = [4, 4]; const c = KD.resolveRecipe('rm_sawmill', big); checkRecipe(c, big, 'oversized crate'); assert.ok(c.props.length < 6);
+await t('planned art: batch 4 props are declared with footprints and gate their variant by `need`; every room keeps a variant that needs nothing, so no room ever waits', async () => {
+  const BATCH4 = 'boiler_tank coal_pile valve_wheel cable_coil fuse_box counting_desk coin_chest abacus pharmacy_counter pill_jars padded_cot restraint_chair stove prep_table cauldron hanging_pots wash_tub mangle drying_rack bookcase reading_desk globe library_ladder linen_shelf linen_cart slab_table locker_wall sheet_body operating_table footlights instrument_tray throne workbench anvil tool_chest pickaxe_rack ore_cart work_lamp'.split(' ');
+  for (const id of BATCH4) { assert.ok(KD.PLANNED.props[id], 'planned prop ' + id); assert.ok(!CUR.props[id], id + ' is not delivered yet: remove it from PLANNED once it is in the manifest'); }
+  assert.deepEqual(Object.keys(KD.PLANNED.props).sort(), [...BATCH4].sort(), 'PLANNED lists exactly the batch 4 props');
+  assert.deepEqual([KD.PLANNED.floors, KD.PLANNED.walls, KD.PLANNED.pieces], [[], [], []], 'every floor, wall and wall piece has been delivered');
+  const used = new Set();
+  for (const [type, list] of Object.entries(KD.RECIPES)) {
+    assert.ok(list.some((v) => !(v.need || []).length), type + ' has a variant that needs no planned art');
+    assert.ok(!(list[list.length - 1].need || []).length, type + ': the last variant is the one that works today');
+    list.forEach((v, i) => {
+      for (const id of v.need || []) { assert.ok(KD.PLANNED.props[id], type + ' need ' + id + ' must be a planned prop'); used.add(id); }
+      for (const p of v.props) if (KD.PLANNED.props[p.id]) assert.ok((v.need || []).length, type + ' variant ' + i + ' uses the planned prop ' + p.id + ' without a need gate');
+      if ((v.need || []).length) assert.ok(i < list.length - 1, type + ': a gated variant comes before the fallback');
+    });
+    const cur = KD.resolveRecipe(type, CUR), full = KD.resolveRecipe(type, fullKit());
+    assert.ok(cur && full); if (list.length > 1) { assert.equal(cur.variant, list.length - 1, type + ' shows the fallback today'); assert.equal(full.variant, 0, type + ' upgrades by itself once its props arrive'); assert.equal(full.planned, true); }
+  }
+  // each batch 4 prop is placed by at least one planned variant (nothing planned is forgotten)
+  const placed = new Set(); for (const list of Object.values(KD.RECIPES)) for (const v of list) for (const p of v.props) placed.add(p.id);
+  for (const id of BATCH4) assert.ok(placed.has(id), 'batch 4 prop ' + id + ' is used by a planned variant');
+  // upgrading is per room: with only the boiler tank delivered the boiler switches and the rooms that wait for other props stay as they are
+  const one = clone(CUR); one.props.boiler_tank = { name: 'x', file2x: 'a', file1x: 'a', w: 100, h: 100, anchorX: 50, anchorY: 80, footprint: [2, 1], sw: 27 };
+  assert.equal(KD.resolveRecipe('rm_boiler', one).variant, 0); assert.equal(KD.resolveRecipe('rm_morgue', one).variant, KD.RECIPES.rm_morgue.length - 1);
+});
+await t('composition: no two rooms alike, tall props stay in the back half and clear of windows, windows only where daylight makes sense, the middle of the room stays open', async () => {
+  for (const [name, kit] of [['current', CUR], ['full', fullKit()]]) {
+    const sig = new Map(), types = Object.keys(KD.RECIPES);
+    for (const type of types) {
+      const rc = KD.resolveRecipe(type, kit);
+      const key = [rc.floor, rc.wall, rc.props.map((p) => p.id + p.u + p.v + (p.flip ? 'f' : '')).sort().join(','), rc.pieces.map((p) => p.id + p.wall + p.s).sort().join(',')].join('|');
+      assert.ok(!sig.has(key), name + ': ' + type + ' looks exactly like ' + sig.get(key)); sig.set(key, type);
+      // the prop mix differs too, not only the layout: no two rooms share the same set of props and the same theme pair
+      const mix = [rc.floor, rc.wall, [...new Set(rc.props.map((p) => p.id))].sort().join(',')].join('|');
+      for (const other of types) if (other !== type) { const o = KD.resolveRecipe(other, kit); assert.notEqual([o.floor, o.wall, [...new Set(o.props.map((p) => p.id))].sort().join(',')].join('|'), mix, name + ': ' + type + ' and ' + other + ' share theme and props'); }
+    }
+    // distinct floor + wall pairs: at least 15 of 20 rooms own their pair
+    const pairs = new Map(); for (const type of types) { const rc = KD.resolveRecipe(type, kit), k = rc.floor + '/' + rc.wall; pairs.set(k, (pairs.get(k) || 0) + 1); }
+    assert.ok(pairs.size >= 14, name + ': floor and wall pairs in use: ' + pairs.size);
+    assert.ok(new Set(types.map((ty) => KD.resolveRecipe(ty, kit).floor)).size >= 8, name + ': every floor theme is used'); assert.ok(new Set(types.map((ty) => KD.resolveRecipe(ty, kit).wall)).size >= 7, name + ': every wall theme is used');
+    const usedProps = new Set(), usedPieces = new Set(); for (const ty of types) { const rc = KD.resolveRecipe(ty, kit); rc.props.forEach((p) => usedProps.add(p.id)); rc.pieces.forEach((p) => usedPieces.add(p.id)); }
+    for (const id of Object.keys(CUR.props)) assert.ok(usedProps.has(id), name + ': prop ' + id + ' is used by some room');
+    for (const id of Object.keys(CUR.pieces)) if (id !== 'door') assert.ok(usedPieces.has(id), name + ': piece ' + id + ' is used by some room');
+    const TALL = new Set(['shelf', 'toolrack', 'bookcase', 'locker_wall', 'linen_shelf', 'pickaxe_rack', 'hanging_pots']);
+    const NO_WINDOW = ['rm_morgue', 'rm_isolation', 'rm_isolation2', 'rm_boiler', 'rm_chapel', 'rm_theatre', 'rm_quarry', 'rm_generator', 'rm_entrance'];
+    for (const type of types) {
+      const rc = KD.resolveRecipe(type, kit), label = name + ' ' + type;
+      for (const p of rc.props) if (TALL.has(p.id)) assert.ok(p.u + p.v <= 3, label + ': tall ' + p.id + ' stays in the back half so nobody hides behind it');
+      for (const pc of rc.pieces) {
+        const d = kit.pieces[pc.id], half = (d.sw || 14) / 46 * KD.SUB / 2; // cells covered along the wall
+        if (['window', 'stainedglass'].includes(pc.id)) for (const p of rc.props) if (TALL.has(p.id)) {
+          const at = pc.wall === 'L' ? KD.SUB * (1 - pc.s) : KD.SUB * pc.s, onWall = pc.wall === 'L' ? p.u === 0 : p.v === 0, cell = pc.wall === 'L' ? p.v : p.u;
+          if (onWall) assert.ok(cell + 1 <= at - half + 0.05 || cell >= at + half - 0.05, label + ': tall ' + p.id + ' stands in front of the ' + pc.id + ' on the ' + pc.wall + ' wall');
+        }
+        if (pc.id === 'window') assert.ok(!NO_WINDOW.includes(type), label + ': a window where a window makes no sense');
+      }
+      const centre = [[1, 1], [2, 1], [1, 2], [2, 2]].filter(([u, v]) => rc.occ[u][v]).length; assert.ok(centre <= 2, label + ': the middle stays open for the fight and the walk (' + centre + ' of 4 centre tiles used)');
+      const sides = rc.pieces.filter((p) => !['door', 'archdoor'].includes(p.id) || true).map((p) => p.wall); assert.ok(sides.includes('L') || sides.includes('R'), label + ': has wall pieces');
+    }
+  }
+  // each room's identity props are on stage today
+  const has = (type, id) => KD.resolveRecipe(type, CUR).props.some((p) => p.id === id);
+  for (const [type, ids] of [['rm_chapel', ['altar', 'pew', 'candle_stand', 'lectern']], ['rm_entrance', ['reception_desk', 'waiting_bench', 'coat_stand']], ['rm_ward', ['bed', 'bedside_table', 'iv_stand']], ['rm_corridor', ['gurney', 'wheelchair', 'plant']], ['rm_morgue', ['gurney']], ['rm_sawmill', ['sawbench', 'planks']]]) for (const id of ids) assert.ok(has(type, id), type + ' has ' + id);
+  const piece = (type, id) => KD.resolveRecipe(type, CUR).pieces.some((p) => p.id === id);
+  assert.ok(piece('rm_chapel', 'stainedglass') && piece('rm_entrance', 'archdoor') && piece('rm_theatre', 'curtain') && piece('rm_boiler', 'pipes') && piece('rm_morgue', 'vent'), 'identity wall pieces');
+  assert.equal(KD.resolveRecipe('rm_entrance', CUR).doorPiece, 'archdoor'); assert.equal(KD.resolveRecipe('rm_ward', CUR).doorPiece, 'door'); assert.equal(KD.resolveRecipe('rm_ward', PILOT), null);
+  assert.equal(KD.resolveRecipe('rm_sawmill', PILOT).doorPiece, 'door', 'the pilot kit has no archdoor: the plain doorway');
+  assert.equal(KD.resolveRecipe('rm_chapel', CUR).floor, 'stone'); assert.equal(KD.resolveRecipe('rm_theatre', CUR).floor, 'stage'); assert.equal(KD.resolveRecipe('rm_morgue', CUR).floor, 'slab');
+});
+await t('scale sanity: every prop fits its footprint, stands between knee and wall height, and slim tall things are tall enough to read next to the hero', async () => {
+  const bed = CUR.props.bed, drawn = (d) => d.h * d.sw / d.w, HERO = 44;
+  for (const [id, d] of Object.entries(CUR.props)) {
+    const [c, r] = d.footprint, h = drawn(d);
+    assert.ok(d.sw <= (c + r) * 11.5 + 1, id + ': ' + d.sw + ' wide does not fit a ' + c + 'x' + r + ' footprint');
+    assert.ok(h >= 11 && h <= KD.WALL_FULL - 6, id + ': drawn height ' + h.toFixed(1) + ' between a stool and the wall');
+    if (d.footprint[0] * d.footprint[1] === 2) assert.ok(d.sw >= 22 && d.sw <= 34, id + ' (2x1) is about a bed wide: ' + d.sw + ' vs ' + bed.sw);
+  }
+  for (const id of ['lamp', 'iv_stand', 'coat_stand']) assert.ok(drawn(CUR.props[id]) >= 24, id + ' is tall and slim, at least 24 units: ' + drawn(CUR.props[id]).toFixed(1));
+  for (const id of ['stool', 'bucket', 'bedside_table', 'plant', 'wheelchair']) assert.ok(drawn(CUR.props[id]) <= 0.5 * HERO, id + ' stays low (under half a hero): ' + drawn(CUR.props[id]).toFixed(1));
+  assert.ok(drawn(CUR.props.bedside_table) >= 0.35 * drawn(bed) && drawn(CUR.props.bedside_table) <= 0.9 * drawn(bed), 'a bedside table is bed-mattress sized');
+  assert.ok(drawn(CUR.props.shelf) > drawn(bed) && drawn(CUR.props.shelf) < HERO, 'a shelf is taller than a bed and shorter than the hero');
+  assert.ok(CUR.props.gurney.sw / bed.sw > 0.9 && CUR.props.gurney.sw / bed.sw < 1.15, 'a gurney is about a bed');
 });
 
 // ======================================================= loader =======================================================
@@ -265,11 +330,14 @@ await t('fallback: a room type with no recipe, or with a missing floor or wall, 
   const ids = layout(run, HOSPITAL); run.ward.deck.hand = []; flow.route(); frames(app, 10);
   let k = ISO.lastKit(); const kitIds = [...k.rooms.keys()];
   for (const id of ids) { const type = run.ward.rooms[id].type; assert.equal(k.rooms.has(id), !!KD.resolveRecipe(type, assets.kit), type + ' is modular exactly when it has a usable recipe'); }
-  assert.ok(!k.rooms.has(ids[0]) && !k.rooms.has(ids[8]), 'the Entrance and the Chapel have no recipe in the current kit: painted'); assert.ok(kitIds.length >= 8);
+  assert.equal(kitIds.length, ids.length + 1, 'every room type (and the far Theatre) is modular with the kit as delivered'); assert.ok(k.rooms.has(ids[0]) && k.rooms.has(ids[8]), 'the Entrance and the Chapel are modular now');
   // without the wood floor the sawmill, the ward, the dispensary and the linen room are painted again
   installKit(without(CUR, 'floors', ['wood'])); flow.route(); frames(app, 10); k = ISO.lastKit();
   for (const id of ids) { const type = run.ward.rooms[id].type; if (['rm_sawmill', 'rm_dispensary', 'rm_linen'].includes(type)) assert.ok(!k.rooms.has(id), type + ' painted without a wood floor'); }
   assert.ok(k.rooms.has(ids[5]), 'the quarry (stone) still modular');
+  // without the stone floor the chapel, the quarry and the workshop are painted again while the tile and wood rooms stay modular: painted and modular rooms mix on one floor
+  installKit(without(CUR, 'floors', ['stone'])); flow.route(); frames(app, 10); k = ISO.lastKit();
+  assert.ok(!k.rooms.has(ids[8]) && !k.rooms.has(ids[5]) && !k.rooms.has(ids[7]), 'chapel, quarry and workshop painted without a stone floor'); assert.ok(k.rooms.has(ids[0]) && k.rooms.has(ids[2]), 'the entrance (tile) and the ward stay modular');
   // a texture that fails to load: painted
   installKit(); assets.imgs.get('kit:walls/stone@2x.webp').ok = false; assets.imgs.get('kit:walls/stone@2x.webp').bad = true; frames(app, 10); k = ISO.lastKit(); assert.ok(!k.rooms.has(ids[5]), 'a failed stone wall texture: the quarry is painted');
   // no kit at all: nothing modular, nothing throws
@@ -319,7 +387,7 @@ await t('perf: a floor of 20 modular rooms with 5 monsters each stays within a c
   const types = ['rm_sawmill', 'rm_quarry', 'rm_generator', 'rm_ward', 'rm_dispensary', 'rm_pharmacy', 'rm_corridor', 'rm_workshop', 'rm_isolation', 'rm_linen'], spec = [];
   for (let i = 0; i < 20; i++) spec.push([types[i % types.length], i % 5, 1 + Math.floor(i / 5), mons(i, 5)]);
   const ids = layout(run, spec); run.ward.deck.hand = []; flow.route(); frames(app, 60);
-  assert.equal(ISO.lastKit().rooms.size, 20); assert.equal(ISO.lastActors().filter((a) => a.kind === 'monster').length, 100);
+  assert.equal(ISO.lastKit().rooms.size, 21, '20 rooms and the far Theatre'); assert.equal(ISO.lastActors().filter((a) => a.kind === 'monster').length, 100);
   const c0 = app.ctx.__calls; frames(app, 20); const per = (app.ctx.__calls - c0) / 20; assert.ok(per < 7000, 'canvas calls per frame ' + Math.round(per)); removeKit();
 });
 await t('reduced motion: modular rooms freeze (no wander, no hop, no animated props); with motion monsters wander the free tiles', async () => {
