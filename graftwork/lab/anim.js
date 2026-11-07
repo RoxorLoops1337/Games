@@ -67,7 +67,7 @@ const UI = (() => {
   const api = {
     reset() { root.textContent = ''; syncs = []; },
     sync() { for (const f of syncs) f(); },
-    note(title, text, judge) { const d = mk('details'); d.open = true; d.append(mk('summary', null, title), mk('p', null, text), mk('p', 'judge', 'What to judge: ' + judge)); root.append(d); },
+    note(title, text, judge) { const d = mk('details'); d.open = innerHeight > 560; d.append(mk('summary', null, title), mk('p', null, text), mk('p', 'judge', 'What to judge: ' + judge)); root.append(d); },
     group(label) { const gg = mk('div', 'grp'); if (label) gg.append(mk('span', 'lbl', label)); const r = mk('div', 'row'); gg.append(r); root.append(gg); return r; },
     button(row, label, fn, isOn, title) { const b = mk('button', null, label); if (title) b.title = title; b.onclick = () => { fn(); api.sync(); }; if (isOn) syncs.push(() => b.classList.toggle('on', !!isOn())); row.append(b); return b; },
     toggle(row, label, get, set, title) { return api.button(row, label, () => set(!get()), get, title); },
@@ -224,7 +224,7 @@ function walkLabel(m, source) {
   return 'procedural walk: standing frame with hop, squash and lean' + note;
 }
 function combatLabel(m, anim, source) {
-  if (source === 'procedural' || source === 'swap') return 'procedural only (painted frames hidden by the lab)';
+  if (source === 'procedural' || source === 'swap') return 'procedural only (frames hidden)';
   const F = m.F, by = (F && F.atkBy) || {};
   if (anim === 'attack') { const n = [1, 2, 3].filter((i) => by[i]).length; return n === 3 ? 'painted atk1, atk2, atk3 on the attack timing' : n >= 1 ? `painted ${[1, 2, 3].filter((i) => by[i]).map((i) => 'atk' + i).join(', ')} + procedural ${by[1] ? '' : 'wind-up'}` : 'procedural lunge only (attack rig, no atk frames)'; }
   if (anim === 'hit') return F && F.hit ? 'painted hit frame during the flinch' : 'procedural flinch (flash and shake)';
@@ -350,31 +350,29 @@ function overlays(info, cx, fy, z) {
   const m = info.m, st = assets.actor(m.id, APP); if (!st) return;
   const d = st.def, c0 = ISO.contactOf(st) || { fx: d.anchorX || d.w / 2, fy: d.anchorY || d.h, fw: d.w * 0.4 };
   const im = curImg(m, info.key), cm = (im && ISO.contactOf({ img: im, def: d })) || c0;
-  let s, ox, oy;
-  if (info.space === 'map') { s = info.rec.h * (d.scale || 1) / d.h; ox = 0; oy = 0; } else { s = info.s; const ax = d.anchorX || d.w / 2, ay = d.anchorY || d.h * 0.95; ox = (c0.fx - ax) * s * (ST.flip ? -1 : 1) * (m.hero ? 1 : -1); oy = (c0.fy - ay) * s; if (!m.hero) ox = (c0.fx - ax) * s * (ST.flip ? 1 : -1); }
-  // sprite rectangle: its top left is the contact point minus the contact offset
-  const tl = { x: -c0.fx * s * z + ox * z, y: -c0.fy * s * z + oy * z }, W = d.w * s * z, H = d.h * s * z;
-  g.save(); g.translate(cx, fy);
-  if (info.space === 'battle' && !m.hero) { /* enemies are mirrored: mirror the rectangle about the feet */ tl.x = (ST.flip ? -1 : 1) * 0 + (-c0.fx * s * z); const fl = ST.flip ? 1 : -1; g.scale(fl, 1); tl.x = -c0.fx * s * z; g.translate(ox * z * fl * 0 + 0, 0); }
-  else if (ST.flip) g.scale(-1, 1);
-  const y0 = info.space === 'map' ? 0 : oy * z, x0 = 0;
+  // origin = the point the game puts on the floor: the measured contact on the map, the manifest anchor in battle (enemies are mirrored there)
+  const battle = info.space === 'battle', s = battle ? info.s : info.rec.h * (d.scale || 1) / d.h;
+  const ax = battle ? (d.anchorX || d.w / 2) : c0.fx, ay = battle ? (d.anchorY || d.h * 0.95) : c0.fy;
+  const fl = (battle && !m.hero ? -1 : 1) * (ST.flip ? -1 : 1), k = s * z;
+  const W = d.w * k, H = d.h * k, gx = (c0.fx - ax) * k, gy = (c0.fy - ay) * k, fxx = (cm.fx - ax) * k, fyy = (cm.fy - ay) * k;
+  g.save(); g.translate(cx, fy); g.scale(fl, 1);
   if (ST.grid) {
     g.lineWidth = 1;
-    for (let i = 0; i <= d.w; i += 16) { g.strokeStyle = i % 64 === 0 ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.1)'; g.beginPath(); g.moveTo(-c0.fx * s * z + i * s * z + (info.space === 'map' ? 0 : 0), y0 - c0.fy * s * z); g.lineTo(-c0.fx * s * z + i * s * z, y0 - c0.fy * s * z + H); g.stroke(); }
-    for (let j = 0; j <= d.h; j += 16) { g.strokeStyle = j % 64 === 0 ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.1)'; g.beginPath(); g.moveTo(-c0.fx * s * z, y0 - c0.fy * s * z + j * s * z); g.lineTo(-c0.fx * s * z + W, y0 - c0.fy * s * z + j * s * z); g.stroke(); }
+    for (let i = 0; i <= d.w; i += 16) { g.strokeStyle = i % 64 === 0 ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.1)'; g.beginPath(); g.moveTo((i - ax) * k, -ay * k); g.lineTo((i - ax) * k, (d.h - ay) * k); g.stroke(); }
+    for (let j = 0; j <= d.h; j += 16) { g.strokeStyle = j % 64 === 0 ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.1)'; g.beginPath(); g.moveTo(-ax * k, (j - ay) * k); g.lineTo((d.w - ax) * k, (j - ay) * k); g.stroke(); }
   }
-  const gy = y0, fyy = y0 + (cm.fy - c0.fy) * s * z, fxx = x0 + (cm.fx - c0.fx) * s * z;
   if (ST.feet) {
     g.lineWidth = 1.2; g.setLineDash([6, 4]);
-    g.strokeStyle = 'rgba(224,100,80,.9)'; g.beginPath(); g.moveTo(-W * 0.7, gy); g.lineTo(W * 0.7, gy); g.stroke();
-    g.strokeStyle = 'rgba(90,200,230,.95)'; g.beginPath(); g.moveTo(-W * 0.7, fyy); g.lineTo(W * 0.7, fyy); g.stroke(); g.setLineDash([]);
-    g.font = '10px Georgia'; g.textAlign = 'left'; g.fillStyle = 'rgba(224,100,80,.95)'; g.fillText('feet line (standing contact)', -W * 0.7, gy - 3); g.fillStyle = 'rgba(90,200,230,.95)'; g.fillText('this frame lowest row', -W * 0.7, fyy + 11);
+    g.strokeStyle = 'rgba(224,100,80,.9)'; g.beginPath(); g.moveTo(-W * 0.6, gy); g.lineTo(W * 0.6, gy); g.stroke();
+    g.strokeStyle = 'rgba(90,200,230,.95)'; g.beginPath(); g.moveTo(-W * 0.6, fyy); g.lineTo(W * 0.6, fyy); g.stroke(); g.setLineDash([]);
   }
   if (ST.contact) {
-    g.strokeStyle = '#ffd24a'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(fxx, fyy, Math.max(4, cm.fw * s * z * 0.5), Math.max(2, cm.fw * s * z * 0.25), 0, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = '#ffd24a'; g.lineWidth = 1.6; const rx = Math.max(4, cm.fw * k * 0.5); g.beginPath(); g.ellipse(fxx, fyy, rx, rx * 0.35, 0, 0, Math.PI * 2); g.stroke();
     g.beginPath(); g.moveTo(fxx - 7, fyy); g.lineTo(fxx + 7, fyy); g.moveTo(fxx, fyy - 7); g.lineTo(fxx, fyy + 7); g.stroke();
   }
   g.restore();
+  if (ST.feet) { g.save(); g.font = '10px Georgia'; g.textAlign = 'left'; const x0 = cx - W * 0.6 * Math.abs(fl); g.fillStyle = 'rgba(224,100,80,.95)'; g.fillText('feet line (standing contact)', x0, fy + gy - 3); g.fillStyle = 'rgba(90,200,230,.95)'; g.fillText('this frame lowest row', x0, fy + fyy + 11); g.restore(); }
+  void gx;
   info.c0 = c0; info.cm = cm; info.img = im;
 }
 
@@ -394,9 +392,10 @@ function stripPaint(m0) {
     if (e.done) continue;
     const it = e.it, x = e.c.getContext('2d'); x.clearRect(0, 0, 128, 128);
     if (it.draw) { it.draw(x, 128, 128); e.done = true; continue; }
+    if (!m0) continue;
     const im = it.img && it.img(); if (!im) continue;
     x.drawImage(im, 0, 0, 128, 128);
-    const m = m0, st = assets.actor(m.id, APP), d = st && st.def, c = d && ISO.contactOf({ img: im, def: d });
+    const m = m0, st = m && assets.actor(m.id, APP), d = st && st.def, c = d && ISO.contactOf({ img: im, def: d });
     if (c) { x.strokeStyle = 'rgba(224,100,80,.9)'; x.beginPath(); x.moveTo(0, c.fy / d.h * 128); x.lineTo(128, c.fy / d.h * 128); x.stroke(); }
     const ms = d && measure(im, d), m0s = st && measure(st.img, d);
     if (ms && m0s) { const dr = (ms.h / m0s.h - 1) * 100; e.dd.textContent = (dr >= 0 ? '+' : '') + dr.toFixed(1) + '% h'; e.dd.style.color = Math.abs(dr) > 8 ? '#e0a050' : ''; }
@@ -431,13 +430,16 @@ function pickItem(m, anim, source, it) {
 // ---------------- readout ----------------
 const READ = $('read');
 let readT = 0;
+const SMALLV = () => innerHeight < 560;
+const SKIP_SMALL = new Set(['actor', 'image', 'contact', 'pace', 'shadow', 'clock']);
 function setRead(rows) {
   READ.textContent = '';
+  if (SMALLV()) rows = rows.filter((r) => typeof r === 'string' || !SKIP_SMALL.has(r[0]));
   for (const r of rows) { const d = mk('div'); if (typeof r === 'string') d.textContent = r; else { const k = mk('span', 'k', r[0] + ' '); const v = mk('span', r[2] || null, r[1]); d.append(k, v); } READ.append(d); }
 }
 function flagRows(m) {
   const walkOk = m.raw ? m.raw.walkOk !== false : null, metaFO = m.meta.framesOk;
-  return [['flags', `framesOk ${metaFO === false ? 'false (rejected by the art meta)' : metaFO === true ? 'true' : m.raw ? 'true (frames in the manifest)' : 'n/a (no frames)'}, walkOk ${walkOk === null ? 'n/a' : walkOk}`, metaFO === false || walkOk === false ? 'warn' : null]];
+  return [['flags', `framesOk ${metaFO === false ? 'false (rejected)' : m.raw ? 'true' : 'n/a'}, walkOk ${walkOk === null ? 'n/a' : walkOk}`, metaFO === false || walkOk === false ? 'warn' : null]];
 }
 function viewerRead(info, P, anim) {
   const m = info.m, rows = [];
@@ -674,6 +676,7 @@ function btBuild() {
 function btStatus(on) { BT.hs.st = on ? { poison: 2, burn: 2 } : {}; BT.eds.forEach((e, i) => { e.st = on ? { ...stNames } : {}; e.stunT = on && i === 0 ? 99 : 0; }); }
 const btTargets = () => (ST.battle.target === 'hero' ? 'hero' : 'enemies');
 function btAct(what) {
+  btBuild();
   const hs = BT.hs, fx = BT.fx, F = ST.battle;
   if (what === 'attack') { if (hs.dyingOn) return; hs.attack = 0.0001; BT.hitDone = false; }
   else if (what === 'eattack') BT.eds.forEach((e, i) => { if (!e.dyingOn) e.pendingAtk = i * 0.35; });
@@ -807,7 +810,7 @@ SC.rig = {
     // foot markers on the ground and slide of the planted foot (ground fixed point moves left by dist * s)
     for (const [f, nm, col] of [[fl, 'L', '#5aa0ff'], [fr, 'R', '#ff9a4a']]) { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.moveTo(f.x - 7, f.y); g.lineTo(f.x + 7, f.y); g.stroke(); g.fillStyle = col; g.font = 'bold 12px Georgia'; g.textAlign = 'center'; g.fillText(nm, f.x, f.y + 20); }
     const gx = lp.x + dist * s;
-    if (RG.prevGround && RG.prevGround.foot === low && dt > 0) { const sl = ((gx - RG.prevGround.x) / s) / dt; RG.slide = lerp(RG.slide, sl, 0.12); } else if (dt > 0) RG.slide = RG.slide * 0.9;
+    if (RG.prevGround && RG.prevGround.foot === low && dt > 0) { const sl = ((gx - RG.prevGround.x) / s) / dt; RG.slide = lerp(RG.slide, Math.abs(sl), 0.1); } else if (dt > 0) RG.slide = RG.slide * 0.9;
     RG.prevGround = { foot: low, x: gx };
     if (R.trail && dt > 0 && RG.lastFoot !== low) { RG.lastFoot = low; RG.trail.push({ x: lp.x + dist * s, foot: low }); if (RG.trail.length > 10) RG.trail.shift(); }
     if (R.trail) for (const f of RG.trail) { const x = f.x - dist * s; g.fillStyle = f.foot === 'L' ? 'rgba(90,160,255,.7)' : 'rgba(255,150,70,.7)'; g.beginPath(); g.ellipse(x, gy + 3, 7, 2.4, 0, 0, 7); g.fill(); }
@@ -837,6 +840,7 @@ function mountScene(id) {
   if (curScene && SC[curScene].leave) SC[curScene].leave();
   curScene = ST.scene = id; $('plant').style.display = 'none'; STRIP.key = ''; STRIP.el.classList.add('none'); bannerExtra = '';
   SC[id].build(); UI.sync();
+  READ.style.top = id === 'compare' ? '32px' : '8px';
   document.querySelectorAll('#scenes button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
   const url = new URL(location.href); url.searchParams.set('scene', id); history.replaceState(null, '', url);
   $('hint').textContent = id === 'map' ? 'space: play or pause' : 'space: play or pause, comma and period: step';
@@ -866,7 +870,7 @@ function loop(ts) {
       if (!jumped) { jumped = true; SC[curScene].build(); UI.sync(); initJump(); }
       SC[curScene].draw(CW, CH);
       const m = ST.scene === 'viewer' || ST.scene === 'compare' ? metaOf(ST.actor) : null;
-      if (m && STRIP.els.length) stripPaint(m);
+      if (STRIP.els.length) stripPaint(m);
       lastErr = '';
     } else { g.fillStyle = '#a8977a'; g.font = '14px Georgia'; g.textAlign = 'center'; g.fillText(assets.state === 'none' ? 'The art manifest could not be loaded.' : 'Loading the art manifest...', CW / 2, CH / 2); }
   } catch (e) { lastErr = String(e && e.message || e); bannerExtra = 'Drawing error: ' + lastErr; window.__lab.err = (e && e.stack) || lastErr; }
@@ -882,7 +886,7 @@ function initJump() {
   if (ST.anim === 'walk') { const nn = walkN(m, ST.source); CLK.t = ((n % nn + 0.5) * 2 / nn) / SPS; }
   else { const ks = keysOf(m, ST.anim); if (ks.length) CLK.t = ks[clamp(n, 0, ks.length - 1)].t; }
 }
-window.__lab = { ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
+window.__lab = { BT, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
 mountScene(ST.scene);
 requestAnimationFrame(loop);
 setInterval(() => { UI.sync(); }, 1500);
