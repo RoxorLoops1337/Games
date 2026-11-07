@@ -30,7 +30,11 @@ const RIGHT = { x: 1008, y: 64, w: 260, h: 484 };
 const ACT = { x: 1008, y: 556, w: 260, h: 156 };
 const HAND = { x: 284, y: 556, w: 712, h: 164 };
 const CW = 124, CH = 156; // resting building card
-const STEP_S = 0.25; // a room per step
+// Walk pacing (seconds). The hero strides about two plants a second like a person (ward_iso.js STRIDE = 0.5 x figure height), so a room takes
+// about 0.6 s, and it stops a beat where the walk meets a room that fires (the engine already decided; this only holds the animation).
+// Fast walk (setting fastWalk, button F on the map) halves both; reduced motion keeps the old quick hop and no pause.
+export const PACE = { normal: { step: 0.62, dwell: 0.35 }, fast: { step: 0.3, dwell: 0.12 }, reduced: { step: 0.12, dwell: 0 } };
+const STEP_S = PACE.normal.step;
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };
 const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
@@ -48,6 +52,8 @@ export function handRects(n) {
   return out;
 }
 const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return cellCenter(r.x, r.y); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
+export const fastWalk = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.fastWalk);
+const walkPace = (app) => (reduced(app) ? PACE.reduced : fastWalk(app) ? PACE.fast : PACE.normal);
 const reduced = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(FX_OPTS.reduced || (s && (s.reducedMotion || s.reduceMotion))); };
 const sfx = (app, n, o) => { const a = app.shared.audio; if (a && a.sfx) { try { a.sfx(n, o); } catch (e) { /* audio is optional */ } } };
 const post = (app, fn, ...a) => { const p = app.post; if (p && typeof p[fn] === 'function') { try { p[fn](...a); } catch (e) { /* post is optional */ } } };
@@ -210,20 +216,25 @@ export default {
     }
     const wk = S.walk;
     if (wk) {
-      wk.t += dt / (reduced(app) ? 0.2 : 1);
-      while (wk && wk.t >= STEP_S && wk.i < wk.stop) {
-        wk.t -= STEP_S; wk.i++;
+      const pc = walkPace(app); wk.step = pc.step;
+      if (wk.i < wk.stop) wk.t += dt;
+      while (wk && wk.t >= pc.step && wk.i < wk.stop) {
+        wk.t -= pc.step; wk.i++; wk.moved = true;
         const rid = wk.cells[wk.i], room = S.run.ward.rooms[rid], c = roomCenter(S.run, rid);
         sfx(app, 'mapStep', { vol: 0.55 });
         if (room && DARKW(room) && !S.run.ward.effects.some((e) => e.id === 'lamp') && !wk.wait) { S.fx.float('-3 HP', c.x, c.y - 24, { color: COL.bad, size: 22 }); sfx(app, 'loseHp', { vol: 0.5 }); }
       }
-      if (wk.i >= wk.stop) { const done = wk.done; S.walk = null; if (done) done(); }
+      if (wk.i >= wk.stop) { // arrived: stand a beat in the room that fires (not for a wait, not with reduced motion), then hand over
+        if (wk.hold === undefined) wk.hold = wk.moved && !wk.wait ? pc.dwell : 0;
+        else wk.hold -= dt;
+        if (wk.hold <= 0) { const done = wk.done; S.walk = null; if (done) done(); }
+      }
     }
   },
   // the walk animation: token steps along P.cells from index a to b, then done()
   animate(app, a, b, done) {
     const P = MEM.plan; if (!P) { if (done) done(); return; }
-    S.walk = { cells: P.cells, i: a, stop: b, t: 0, done, wait: P.wait };
+    S.walk = { cells: P.cells, i: a, a, stop: b, t: 0, done, wait: P.wait, step: walkPace(app).step };
   },
 
   draw(app) {
@@ -587,6 +598,7 @@ export default {
     else if ((k === 'p' || k === 'P') && !S.plans) S.plans = true;
     else if (k === 'c' || k === 'C') ISO.camRecenter();
     else if (k === 'w' || k === 'W') { ISO.cycleWallMode(); sfx(app, 'uiClick', { vol: 0.5 }); }
+    else if (k === 'f' || k === 'F') { this.toggleFast(app); sfx(app, 'uiClick', { vol: 0.5 }); }
   },
 
   // ---- the isometric map: ground, rooms (back to front), actors, ghost, tooltip of the hovered room ----
@@ -654,12 +666,19 @@ export default {
     }
     if (!m.down) { if (S.panning) { m.released = false; m.pressed = false; } S.panning = false; S.panStart = null; }
   },
+  toggleFast(app) {
+    const m = app.shared.meta; if (!m) return;
+    if (!m.settings || typeof m.settings !== 'object') m.settings = {};
+    m.settings.fastWalk = !m.settings.fastWalk;
+    if (app.shared.flow && app.shared.flow.saveMeta) app.shared.flow.saveMeta();
+  },
   camButtons(app) {
-    const x = SHEET.x + 8, y = SHEET.y + 8, sz = 40, defs = [['+', () => ISO.camZoomBy(1.3, 640, 306), 'ward-zoom-in'], ['-', () => ISO.camZoomBy(1 / 1.3, 640, 306), 'ward-zoom-out'], ['C', () => ISO.camRecenter(), 'ward-recenter'], ['W', () => ISO.cycleWallMode(), 'ward-walls']];
+    const x = SHEET.x + 8, y = SHEET.y + 8, sz = 40, defs = [['+', () => ISO.camZoomBy(1.3, 640, 306), 'ward-zoom-in'], ['-', () => ISO.camZoomBy(1 / 1.3, 640, 306), 'ward-zoom-out'], ['C', () => ISO.camRecenter(), 'ward-recenter'], ['W', () => ISO.cycleWallMode(), 'ward-walls'], ['F', () => this.toggleFast(app), 'ward-fastwalk']];
     defs.forEach(([lab, fn, id], i) => {
       const by = y + i * (sz + 4);
       app.reg(id, x, by, sz, sz, { group: 'map-ctl' });
-      if (app.button(lab, x, by, sz, sz, { size: 18, fill: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') ? '#5a3f10' : undefined, stroke: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') ? COL.lamp : undefined })) { fn(); sfx(app, 'uiClick', { vol: 0.5 }); }
+      if (app.button(lab, x, by, sz, sz, { size: 18, fill: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') || (id === 'ward-fastwalk' && fastWalk(app)) ? '#5a3f10' : undefined, stroke: (id === 'ward-recenter' && ISO.CAM.manual) || (id === 'ward-walls' && ISO.wallMode() !== 'auto') || (id === 'ward-fastwalk' && fastWalk(app)) ? COL.lamp : undefined })) { fn(); sfx(app, 'uiClick', { vol: 0.5 }); }
+      if (id === 'ward-fastwalk' && app.inRect(x, by, sz, sz)) { app.tooltip('Walk speed: ' + (fastWalk(app) ? 'fast' : 'normal') + ' (F)', 'Fast walk halves the time the hero takes per room and the pause where a room fires. Reduced motion is always quick.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } }); return; }
       if (id === 'ward-walls' && app.inRect(x, by, sz, sz)) { app.tooltip('Walls: ' + ISO.wallMode() + ' (W)', 'Cycles the wall height of the modular rooms: auto (full for one room, cutaway then low as the hospital grows), full, low, cutaway.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } }); return; }
       if (app.inRect(x, by, sz, sz)) app.tooltip(id === 'ward-recenter' ? 'Recenter (C)' : id === 'ward-zoom-in' ? 'Zoom in' : 'Zoom out', id === 'ward-recenter' ? 'Frame the rooms you built and the hero again. Wheel or pinch to zoom, drag to pan.' : 'Wheel or pinch also zooms; drag the map to pan.', { color: COL.lamp, anchor: { x, y: by, w: sz, h: sz } });
     });

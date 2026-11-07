@@ -21,6 +21,14 @@ Battles draw the actors big (up to ~300 px tall), so every standing actor also g
 with the same trim and bottom-centre anchor as the 2x file (so anchorX/anchorY and `scale` still apply, in 2x pixel units). The manifest entry
 gains `file3x` and `bbox` = [x0, y0, x1, y1], the opaque box of the standing frame in 2x pixel units (combat sizes the figure from it).
 The existing manifest is patched in place; raws below 1024 px are skipped (the 2x file is then the best there is).
+
+Lowered-wall variant (touches nothing else): python3 tools/graftwork_art_build.py --low [RAW_DIR]
+rm_<room>_low.png (2048 px RGBA, same room with lowered walls, made with another model, so its floor diamond is NOT identical to the tall
+set) becomes the room id `rm_<room>_low` (rooms/rm_<room>_low@1x|@2x.webp) with its OWN measured floorCx/floorCy/floorW/floorH in the manifest
+(the renderer scales each sprite by its own diamond). The painted renderer uses it in dense layouts and wall modes Low / Cutaway; the tall
+sprite stays the fallback for a lone room. Low variants never enter the `tile` ratio. The manifest is patched in place. A file is REJECTED
+(skipped, reported, any old entry of that id removed) when it has magenta chroma spill, a floor diamond that is not a 2:1-ish diamond
+centred on the canvas, or is listed in LOW_REJECT (hand-checked by eye).
 """
 import json, os, sys, glob
 from PIL import Image
@@ -28,11 +36,15 @@ import numpy as np
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
 COMBAT = '--combat' in sys.argv
+LOW = '--low' in sys.argv
 RAW = ARGS[0] if ARGS else '/tmp/claude-0/art/raw'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'graftwork', 'assets', 'ward')
 OUT = os.path.normpath(OUT)
 SIZES = {'rooms': (512, 256), 'actors': (256, 128), 'icons': (128, 64), 'cards': (256, 128)}
 Q = 82
+
+# rejected by eye (id -> reason); the automatic checks in low_pass catch the rest
+LOW_REJECT = {}
 
 def clean(im):
     a = np.array(im.convert('RGBA'))
@@ -100,14 +112,64 @@ def combat_pass():
     json.dump(man, open(mp, 'w'), indent=1)
     print('combat variant:', n3, 'actors')
 
+def low_check(im, id_):
+    """None when the file is usable, else the reason it is rejected."""
+    if id_ in LOW_REJECT:
+        return LOW_REJECT[id_]
+    a = np.array(im).astype(int)
+    r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+    mag = (al > 20) & (r > 150) & (b > 150) & (g < 90) & (r - g > 90) & (b - g > 90)
+    if mag.sum() >= 3:
+        return f'magenta chroma spill ({int(mag.sum())} px)'
+    cx, cy, fw, fh = floor_of(im)
+    if not (1.75 <= fw / fh <= 2.1):
+        return f'floor diamond ratio {fw / fh:.2f}'
+    if abs(cx - im.width / 2) > im.width * 0.03 or fw < im.width * 0.8 or cy < im.height * 0.5:
+        return 'floor diamond off centre or too small'
+    if (al > 128).sum() < im.width * im.height * 0.12:
+        return 'nearly empty'
+    return None
+
+def low_pass():
+    mp = os.path.join(OUT, 'manifest.json')
+    man = json.load(open(mp))
+    ok, rej = [], {}
+    for f in sorted(glob.glob(os.path.join(RAW, 'rm_*_low.png'))):
+        id_ = os.path.basename(f)[:-4]
+        im = clean(Image.open(f))
+        why = low_check(im, id_)
+        if why:
+            rej[id_] = why
+            if id_ in man['rooms']:
+                del man['rooms'][id_]
+            for sfx in ('@1x', '@2x'):
+                p = os.path.join(OUT, 'rooms', id_ + sfx + '.webp')
+                if os.path.exists(p):
+                    os.remove(p)
+            continue
+        cx, cy, fw, fh = floor_of(im)
+        w, h = save(im, 'rooms', id_)
+        k = w / im.width
+        man['rooms'][id_] = {'file1x': f'rooms/{id_}@1x.webp', 'file2x': f'rooms/{id_}@2x.webp', 'w': w, 'h': h,
+                             'floorCx': round(cx * k, 1), 'floorCy': round(cy * k, 1), 'floorW': round(fw * k, 1), 'floorH': round(fh * k, 1), 'low': True}
+        ok.append(id_)
+    json.dump(man, open(mp, 'w'), indent=1)
+    print('low variants built:', len(ok), ok)
+    print('REJECTED:', rej)
+
 if COMBAT:
     combat_pass()
+    sys.exit(0)
+if LOW:
+    low_pass()
     sys.exit(0)
 
 man = {'version': 1, 'tile': {'w': 2, 'h': 1}, 'rooms': {}, 'actors': {}, 'icons': {}, 'cards': {}}
 ratios = []
 for f in sorted(glob.glob(os.path.join(RAW, 'rm_*.png')) + glob.glob(os.path.join(RAW, 'plot_*.png'))):
     id_ = os.path.basename(f)[:-4]
+    if id_.endswith('_low'):
+        continue  # lowered-wall variants have their own pass (--low) so a full rebuild never needs them
     im = clean(Image.open(f))
     cx, cy, fw, fh = floor_of(im)
     w, h = save(im, 'rooms', id_)

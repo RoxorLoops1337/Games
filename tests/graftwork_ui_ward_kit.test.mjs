@@ -231,7 +231,7 @@ await t('the hero rests on a free sub-tile of a modular room and the walk betwee
   const [a, b] = layout(run, [['rm_sawmill', 0, 2], ['rm_ward', 1, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 5);
   const w = run.ward, H = () => ISO.lastActors().find((x) => x.kind === 'hero'), rc = KD.resolveRecipe('rm_sawmill', assets.kit);
   const q = localSub(w, 0, 2, H().x, H().y); assert.equal(rc.occ[Math.floor(q.u)][Math.floor(q.v)], false, 'resting on a free sub-tile');
-  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.125, done: null, wait: false }; frames(app, 1);
+  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.05, done: null, wait: false }; frames(app, 1);
   const ca = ISO.cellW(w, 0, 2), cb = ISO.cellW(w, 1, 2), h = H(); assert.ok(h.moving && h.x > ca.x - 10 && h.x < cb.x + 10, 'in between the two rooms'); S.walk = null;
   removeKit();
 });
@@ -393,7 +393,7 @@ await t('grounding: the step cycle follows the DISTANCE moved (stride phase = di
   let px = H().x, py = H().y;
   for (let f = 0; f < 40 && S.walk; f++) { frames(app, 1); const h = H(); rows.push({ d: Math.hypot(h.x - px, h.y - py), st: h.stride, fr: h.frame, flip: h.flip, tilt: h.tilt, bob: h.bob, sq: h.sq }); px = h.x; py = h.y; }
   const mv = rows.filter((r) => r.d > 0.5); assert.ok(mv.length > 8, 'it walked ' + mv.length + ' frames');
-  const k = (44 * 0.42); let prev = rows[0].st, dsum = 0;
+  const k = (44 * 0.5); let prev = rows[0].st, dsum = 0;
   for (let i = 1; i < rows.length; i++) { dsum += rows[i].d; const dst = rows[i].st - prev; prev = rows[i].st; assert.ok(Math.abs(dst - rows[i].d / k) < 0.02, 'stride advanced ' + dst.toFixed(3) + ' for a move of ' + rows[i].d.toFixed(2) + ' px (expected ' + (rows[i].d / k).toFixed(3) + ')'); }
   assert.ok(Math.abs((rows[rows.length - 1].st - rows[0].st) - dsum / k) < 0.05, 'total stride = total distance / stride length');
   const frs = new Set(mv.map((r) => r.fr)); assert.ok(frs.has(0) && frs.has(1), 'the two walk frames alternate');

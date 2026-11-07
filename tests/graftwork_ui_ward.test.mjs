@@ -695,7 +695,7 @@ await t('iso: the hero stands on its room and walks smoothly cell to cell (betwe
   run.ward.deck.hand = []; flow.route(); frames(app, 200);
   const ca = ISO.cellW(run.ward, 0, 2), cb = ISO.cellW(run.ward, 1, 2), H0 = () => ISO.lastActors().find((x) => x.kind === 'hero');
   assert.ok(Math.abs(H0().x - ca.x) < 8 && Math.abs(H0().y - ca.y) < 10, 'standing on the entrance');
-  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.12, done: null, wait: false }; frames(app, 1);
+  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.05, done: null, wait: false }; frames(app, 1);
   const h = H0(); assert.ok(h.x > ca.x + 3 && h.x < cb.x, 'between the two centres'); assert.equal(h.flip, 1, 'faces right-down'); assert.ok(h.moving);
   S.walk = null;
 });
