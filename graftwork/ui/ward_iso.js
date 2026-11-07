@@ -17,6 +17,9 @@ import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
 import { assets, walkIndex } from './assets.js';
+import * as PUP from './puppet.js';
+import { deviceScale } from './smoothing.js';
+import { wantsPuppet, gaitEntry } from '../data/gaits.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
@@ -338,11 +341,11 @@ function actorSprite(app, kind, id, run, lvl, alt) {
 }
 // Animation frames (assets.js, WARD.md 12c): the stem to draw instead of the standing / _b image, or null. A pose ('hit' | 'die') set by a map event wins over the walk;
 // the walk cycle runs only while the figure is really moving and only once every walk frame has decoded. Frames share the standing canvas and feet, so they use its contact.
-export function frameStemFor(F, rec) {
+export function frameStemFor(F, rec, noWalk) {
   if (!F) return null;
   if (rec.pose === 'die' && F.die) return F.die;
   if (rec.pose === 'hit' && F.hit) return F.hit;
-  if (rec.cycle && F.walk.length >= 2) return F.walk[walkIndex(rec.stride, F.walk.length)];
+  if (!noWalk && rec.cycle && F.walk.length >= 2) return F.walk[walkIndex(rec.stride, F.walk.length)];
   return null;
 }
 // ---- grounding: where a sprite really touches the floor, and the soft contact shadow under it ----
@@ -392,20 +395,37 @@ function groundShadow(g, x, y, rx, a) {
   else { g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); }
 }
 export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
+// PUPPET WALK (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Wanted unless the owner approved the
+// painted cycle (data/gaits.js PUPPET_PREF false) or the caller forces it off (r.pm = 'off', the animation lab). Returns the prepared info or null.
+function puppetInfo(g, r, aid, spr, s) {
+  const pm = r.pm; if (pm === 'off' || !(pm === 'on' || wantsPuppet(aid))) return null;
+  const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g), dev = (dsc === dsc ? dsc : 1) * s * d.w / iw;
+  const e = PUP.prepare(spr.img, aid, dev); return e && e.kind ? e : null;
+}
+const tuneOf = (id) => { const e = gaitEntry(id); if (!e || !e.tune) return PUP.TUNE; return e.tuneObj || (e.tuneObj = Object.assign(Object.create(PUP.TUNE), e.tune)); };
 function drawActor(app, g, r, run) {
   const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
-  let spr = aid ? assets.actor(aid, app, false) : null, img = null;
-  r.used = '';
-  if (spr) {
-    const F = assets.frames(aid), stem = frameStemFor(F, r);
-    if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
-    if (!img && r.frame === 1) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
-  }
+  let spr = aid ? assets.actor(aid, app, false) : null, img = null, pe = null, parts = null;
+  r.used = ''; r.pp = r.pp || null;
   let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
   if (spr) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
     fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
+    pe = r.kind === 'token' ? null : puppetInfo(g, r, aid, spr, s);
+    const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(pe.geom, tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
+    const F = assets.frames(aid), stem = frameStemFor(F, r, !!pe);
+    if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
+    if (!img && r.frame === 1 && !pe) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
   }
+  // the puppet pose of this frame (only while really walking; at rest and in poses the standing / painted image is drawn as before)
+  let pose = null, Hw = 0;
+  if (pe && r.cycle && !r.pose && !img) {
+    pose = r.pp || (r.pp = PUP.newPose()); Hw = pe.geom.H * spr.def.h * s;
+    PUP.walkPuppet(r.pph === undefined ? r.stride : r.pph, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, pe.geom);
+    if (pe.kind === 'legged') { parts = PUP.partsOf(pe, 0) ; if (!parts) { const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g); parts = PUP.partsOf(pe, (dsc === dsc ? dsc : 1) * s * d.w / iw); } if (!parts) pose = null; }
+    if (pose) { if (pe.kind === 'legged') { r.bob = 0; r.tilt = 0; r.sq = pose.sq; } else { r.bob = pose.hop * Hw; r.sq = pose.sq; r.tilt = pose.lean + pose.rock; } }
+  } else r.pp = null;
+  r.pHw = pose ? Hw : 0;
   const hopK = clamp(r.bob / 3, 0, 1), rx = clamp(fwW * 0.8, sz * 0.24, sz * 0.62) * (1 - 0.18 * hopK);
   r.shadow = { x: r.x, y: r.y, rx, a: 0.5 * (1 - 0.3 * hopK) }; // tests read what was drawn
   groundShadow(g, r.x, r.y, rx, r.shadow.a);
@@ -422,7 +442,9 @@ function drawActor(app, g, r, run) {
   if (r.alpha < 1) g.globalAlpha *= r.alpha;
   if (spr) {
     const d = spr.def;
-    g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
+    if (pose && parts) PUP.drawLegged(g, parts, pose, s, fx, fy, d.w, d.h, pe.geom.H * d.h);
+    else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
+    else g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
     if (o) g.drawImage(o.c, -o.fx, -o.fy, o.w, o.h);
@@ -449,11 +471,12 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
   const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
-  if (calm) { g.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
+  rec.gk = key; rec.dist = g.dist;
+  if (calm) { g.vk = 0; rec.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
   if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
   const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
   g.vk += (target - g.vk) * Math.min(1, dt * (target ? 9 : 12)); if (g.vk < 0.01) g.vk = 0;
-  const ph = g.dist / (sz * STRIDE), step = Math.floor(ph), frac = ph - step, w = g.vk;
+  const ph = g.dist / (sz * (g.sl || STRIDE)), step = Math.floor(ph), frac = ph - step, w = g.vk; rec.vk = w; rec.dist = g.dist;
   if (step !== g.step) {
     if (w > 0.3) { g.plantT = S.t; if (dustN && (dustN > 1 || (step & 1) === 0)) { const p = toScreen(nx, ny); S.fx.burst(p.x, p.y, 'dust', { n: dustN > 1 ? 2 : 1 }); } }
     g.step = step;

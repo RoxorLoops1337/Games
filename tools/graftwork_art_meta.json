@@ -1,13 +1,16 @@
 {
  "marrow": {
-  "kind": "hero"
+  "kind": "hero",
+  "puppet": true
  },
  "wick": {
-  "kind": "hero"
+  "kind": "hero",
+  "puppet": true
  },
  "odile": {
   "kind": "hero",
-  "walkOk": false
+  "walkOk": false,
+  "puppet": true
  },
  "the_resident": {
   "kind": "elite"
@@ -55,5 +58,20 @@
  "bedpan_slime": {
   "kind": "normal",
   "framesOk": false
+ },
+ "crutchling": {
+  "puppet": true
+ },
+ "gauze_mummy": {
+  "puppet": true
+ },
+ "leech_jar": {
+  "puppet": true
+ },
+ "night_nurse": {
+  "puppet": true
+ },
+ "orderly": {
+  "puppet": true
  }
 }
