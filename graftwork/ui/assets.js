@@ -39,7 +39,7 @@ export function createAssets(opts = {}) {
     const go = A.fetchJson ? A.fetchJson(A.base + 'manifest.json') : fetch(A.base + 'manifest.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('manifest ' + r.status))));
     Promise.resolve(go).then((m) => {
       if (!m || typeof m !== 'object' || !m.rooms) throw new Error('bad manifest');
-      A.manifest = { version: m.version || 1, tile: m.tile || { w: 128, h: 64 }, rooms: m.rooms || {}, actors: m.actors || {}, icons: m.icons || {}, cards: m.cards || {} };
+      A.manifest = { version: m.version || 1, tile: m.tile || { w: 128, h: 64 }, rooms: m.rooms || {}, actors: m.actors || {}, icons: m.icons || {}, cards: m.cards || {}, title: m.title && typeof m.title === 'object' ? m.title : {} };
       A.state = 'ready';
     }).catch(() => { A.state = 'none'; });
   };

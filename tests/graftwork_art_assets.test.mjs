@@ -31,8 +31,23 @@ t('every_room_has_entry_and_files', () => {
   assert.ok(man.rooms.plot_empty, 'plot tile');
 });
 t('floor_diamonds_are_consistent_so_rooms_tile', () => {
-  const ws = Object.entries(man.rooms).filter(([k]) => k !== 'plot_empty').map(([, e]) => e.floorW);
+  const ws = Object.entries(man.rooms).filter(([k, e]) => k !== 'plot_empty' && !e.low).map(([, e]) => e.floorW);
   assert.ok(Math.max(...ws) - Math.min(...ws) < 8);
+});
+t('low_wall_variants_have_their_own_measured_floor_and_a_tall_twin', () => {
+  const lows = Object.entries(man.rooms).filter(([, e]) => e.low);
+  assert.ok(lows.length >= 15, 'the lowered-wall paintings are in: ' + lows.length);
+  for (const [id, e] of lows) {
+    assert.ok(id.endsWith('_low') && man.rooms[id.slice(0, -4)], id + ' has a tall twin');
+    assert.ok(id.slice(0, -4) in ROOMS || id.slice(0, -4) === 'rm_isolation2', id + ' is a room type');
+    for (const f of [e.file1x, e.file2x]) assert.ok(existsSync(join(root, f)), f);
+    for (const k of ['w', 'h', 'floorCx', 'floorCy', 'floorW', 'floorH']) assert.ok(Number.isFinite(e[k]) && e[k] > 0, id + '.' + k);
+    const r = e.floorW / e.floorH; assert.ok(r > 1.75 && r < 2.1, id + ' floor diamond ratio ' + r);
+    assert.ok(Math.abs(e.floorCx - e.w / 2) < e.w * 0.03 && e.floorW > e.w * 0.8, id + ' floor centred');
+    assert.ok(e.floorCy < e.h && e.floorCy > e.h * 0.5, id + ' floor centre');
+  }
+  // rejected by the build (magenta steam on the boiler): no entry, no file, so the renderer falls back to the tall painting
+  assert.ok(!man.rooms.rm_boiler_low && !existsSync(join(root, 'rooms/rm_boiler_low@2x.webp')), 'rm_boiler_low was rejected');
 });
 t('every_building_card_resolves_to_an_image', () => {
   for (const c of Object.values(BUILD_CARDS)) {

@@ -127,7 +127,7 @@ A tip exists only while its anchor is hovered, held or focused THIS frame. Show 
 ## Save keys (never rename)
 - `graftwork_run_v1` (engine/save.js): the run in progress, written by `flow.route()` after every state change, deleted on death or win.
 - `graftwork_meta_v1` (engine/meta.js): meta progression plus settings. Base shape is `v: 1` and final; additive revisions use `rev` (meta2.js `defaults2`, `migrate2`). Fields: unlocked, bestAsc, wins, winAsc, stats, seen, achievements, daily, tips, settings, history, then rev 2 credit, cosmetics, loadout, practice. `migrate()` fills missing fields from defaults, so adding a field is safe, changing a field type is not.
-- Settings (`meta.settings`): master sfx music muted screenShake reducedMotion colorblind colorblindMode flashes highContrast largeText textSize textScale (100|125|150|175) quality ('off'|'low'|'high') fullscreen tips announce. Defaults are in engine/meta.js `DEFAULT_SETTINGS`, ui/settings.js `DEFAULTS` and ui/a11y.js `A11Y_DEFAULTS`; main.js copies them into FX_OPTS and the audio bus each frame.
+- Settings (`meta.settings`): master sfx music muted screenShake reducedMotion fastWalk (Ward walk pacing) colorblind colorblindMode flashes highContrast largeText textSize textScale (100|125|150|175) quality ('off'|'low'|'high') fullscreen tips announce. Defaults are in engine/meta.js `DEFAULT_SETTINGS`, ui/settings.js `DEFAULTS` and ui/a11y.js `A11Y_DEFAULTS`; main.js copies them into FX_OPTS and the audio bus each frame.
 - Other test-only names: `graftwork_audio_check`, `graftwork_motion` are not storage keys.
 
 ## Test map (which suite guards what)
@@ -169,6 +169,8 @@ The owner authorised AI-generated raster art for the Ward (the hospital-building
 
 ## Modular room kit (design/WARD.md section 13)
 - A room type with a recipe in `data/ward_kit.js` is drawn from `assets/ward_kit/` pieces by `ui/ward_kit_iso.js` (cached static layer, shared walls, doors from `engine/ward.js neighbors`, props depth sorted with actors, monsters on free sub-tiles); anything without a usable recipe stays painted. Wall modes auto/full/low/cutaway (key W). Add art by adding ids to the kit manifest; planned ids live in `PLANNED`. Tests: `graftwork_ui_ward_kit` (fixture `tests/graftwork_kit_fixture.json`). Actors are grounded in ward_iso.js: measured contact point, flat contact shadow, a step cycle tied to distance.
+
+- Painted fallback uses `rm_<id>_low` (lowered-wall paintings, `tools/graftwork_art_build.py --low`) in dense layouts and Low/Cutaway, the tall painting for a lone room; walk pacing is `PACE` in ui/ward.js (WARD.md section 13).
 
 ## Combat art (ui/combat_art.js, design/WARD.md section 12b)
 - Battles draw the painted Ward actors (hero and enemies whose id is in the manifest) at battle size from the 512 px `file3x` (`tools/graftwork_art_build.py --combat`), enemies flipped to face the hero, grounded by one contact shadow, with lunge / hit / block / death poses, plus a modular-kit backdrop; ids without a sprite keep the procedural figure (graded) and a missing kit keeps the old backdrop. The list of enemies still lacking sprites is in WARD.md 12b. Test: `graftwork_ui_combat_art`.

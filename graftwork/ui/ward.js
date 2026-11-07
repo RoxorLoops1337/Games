@@ -33,7 +33,7 @@ const CW = 124, CH = 156; // resting building card
 // Walk pacing (seconds). The hero strides about two plants a second like a person (ward_iso.js STRIDE = 0.5 x figure height), so a room takes
 // about 0.6 s, and it stops a beat where the walk meets a room that fires (the engine already decided; this only holds the animation).
 // Fast walk (setting fastWalk, button F on the map) halves both; reduced motion keeps the old quick hop and no pause.
-export const PACE = { normal: { step: 0.62, dwell: 0.35 }, fast: { step: 0.3, dwell: 0.12 }, reduced: { step: 0.12, dwell: 0 } };
+export const PACE = { normal: { step: 0.62, dwell: 0.35 }, fast: { step: 0.38, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } };
 const STEP_S = PACE.normal.step;
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };

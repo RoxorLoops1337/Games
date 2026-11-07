@@ -15,11 +15,18 @@ import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
 import { lnw } from '../art/linework.js';
 import { drawModeSwitch, modeOf } from './ward_kit.js';
+import { createScene } from './title_scene.js';
+import { createLogo, taglineAt, INTRO_S } from './title_logo.js';
 
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
 const TYPE_NAMES = { attack: 'Attack', skill: 'Skill', power: 'Power' };
 
+// one scene and one logo for the whole session: their caches (room layers, baked letters) survive leaving and re-entering the title
+export const SCENE = createScene(), LOGO = createLogo();
+let INTRO_SEEN = false;                       // the sewing intro plays on the first title of a page load only
+export const resetTitleIntro = () => { INTRO_SEEN = false; };
+const REAL_BROWSER = () => typeof window !== 'undefined' && !!window.location && typeof window.location.href === 'string';
 const settingsOf = (app) => (app.shared.meta && app.shared.meta.settings) || {};
 const calm = (app) => !!settingsOf(app).reducedMotion;
 const todaySeed = () => RUN.dailySeed();
@@ -50,105 +57,6 @@ function staple(g, x, y, ang = 0, s = 1) {
   g.restore();
 }
 
-// ---------- logo ----------
-function drawLogo(app, cx, cy, k) {
-  const g = app.ctx, t = app.t;
-  const size = 132;
-  g.save();
-  g.font = `bold ${size}px ${FONT}`; g.textBaseline = 'alphabetic';
-  const w1 = g.measureText('GRAFT').width, w2 = g.measureText('WORK').width;
-  const gap = 30 * (1 - 0 * k) + (1 - k) * 220;
-  const total = w1 + w2 + gap;
-  const x1 = cx - total / 2, x2 = x1 + w1 + gap;
-  const base = cy + size * 0.34;
-  const bob = calm(app) ? 0 : Math.sin(t * 1.1) * 1.2;
-  g.globalAlpha = clamp(k * 2, 0, 1);
-  const half = (txt, x, y, rot, fill, edge) => {
-    g.save(); g.translate(x, y + bob); g.rotate(rot);
-    g.textAlign = 'left';
-    g.lineJoin = 'round'; g.lineWidth = 12; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(txt, 4, 6);
-    g.lineWidth = 7; g.strokeStyle = edge; g.strokeText(txt, 0, 0);
-    const gr = g.createLinearGradient(0, -size * 0.75, 0, 0); gr.addColorStop(0, fill[0]); gr.addColorStop(1, fill[1]);
-    g.fillStyle = gr; g.fillText(txt, 0, 0);
-    // stitched incisions across the letters (clipped to a thin band, drawn on top of the glyphs)
-    g.globalCompositeOperation = 'source-atop';
-    g.restore();
-  };
-  half('GRAFT', x1, base, -0.012, ['#f3e8cf', '#c9b88f'], '#120d0b');
-  half('WORK', x2, base + 4, 0.01, ['#e2c98a', '#a68a4c'], '#120d0b');
-  g.globalCompositeOperation = 'source-over';
-  // stitched seams cut through the letters
-  const seamY = cy - 6 + bob;
-  g.globalAlpha = clamp(k * 2 - 0.4, 0, 1);
-  const seam = (x0, x3, y0, ang) => {
-    g.save(); g.translate(x0, y0); g.rotate(ang); const L = x3 - x0;
-    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw(6); g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.strokeStyle = '#0a0808'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.lineWidth = lnw(3); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
-    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = lnw(1); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
-    g.restore();
-  };
-  seam(x1 + w1 * 0.1, x1 + w1 * 0.9, seamY - 4, -0.04);
-  seam(x2 + w2 * 0.12, x2 + w2 * 0.88, seamY + 14, 0.035);
-  // vertical join between the halves
-  const jx = x1 + w1 + gap / 2;
-  g.globalAlpha = clamp((k - 0.6) / 0.4, 0, 1);
-  stitchLine(g, jx, base - size * 0.72, jx, base + 6, { size: 9, step: 13, lw: 3, color: '#0a0808' });
-  staple(g, jx, base - size * 0.5, Math.PI / 2, 1.5);
-  staple(g, jx, base - size * 0.16, Math.PI / 2, 1.5);
-  g.restore();
-  return { x1, x2, w1, w2, jx, base };
-}
-
-// ---------- scene ----------
-function drawScene(app, st) {
-  const g = app.ctx, t = app.t;
-  drawBackground(g, 'title', t);
-  const still = calm(app);
-  // lamp cone (additive) swaying from the ceiling
-  const sway = still ? 0 : Math.sin(t * 0.55) * 0.07;
-  g.save();
-  g.globalCompositeOperation = 'lighter';
-  g.translate(640, -20); g.rotate(sway);
-  const gr = g.createLinearGradient(0, 0, 0, 760); gr.addColorStop(0, 'rgba(255,214,120,.30)'); gr.addColorStop(0.6, 'rgba(255,190,90,.08)'); gr.addColorStop(1, 'rgba(255,190,90,0)');
-  g.fillStyle = gr; g.beginPath(); g.moveTo(-34, 0); g.lineTo(34, 0); g.lineTo(430, 760); g.lineTo(-430, 760); g.closePath(); g.fill();
-  g.restore();
-  // lamp fixture
-  g.save(); g.translate(640, -20); g.rotate(sway);
-  g.strokeStyle = '#0c0a09'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.stroke();
-  g.fillStyle = '#2b2622'; g.beginPath(); g.moveTo(-40, 62); g.quadraticCurveTo(-34, 30, 0, 28); g.quadraticCurveTo(34, 30, 40, 62); g.closePath(); g.fill();
-  g.fillStyle = '#fbe39a'; g.shadowColor = '#ffd36a'; g.shadowBlur = 30; g.beginPath(); g.ellipse(0, 62, 40, 7, 0, 0, 6.283); g.fill();
-  g.restore();
-  // vignette
-  const vg = g.createRadialGradient(640, 330, 220, 640, 360, 780); vg.addColorStop(0, 'rgba(8,6,5,0)'); vg.addColorStop(1, 'rgba(8,6,5,.78)');
-  g.fillStyle = vg; g.fillRect(0, 0, W, H);
-  // stitched card silhouettes drifting
-  if (!still || true) {
-    for (const c of st.ghosts) {
-      const p = still ? c.p0 : ((c.p0 + t * c.sp) % 1);
-      const x = -120 + p * (W + 240), y = c.y + Math.sin(t * 0.4 + c.ph) * (still ? 0 : 18);
-      g.save(); g.translate(x, y); g.rotate(c.rot + (still ? 0 : Math.sin(t * 0.3 + c.ph) * 0.08));
-      g.globalAlpha = c.a * Math.sin(p * Math.PI);
-      g.strokeStyle = '#e8dcc4'; g.lineWidth = lnw(2); g.setLineDash([7, 6]);
-      g.beginPath(); g.roundRect ? g.roundRect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s, 8) : g.rect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s); g.stroke();
-      g.setLineDash([]); g.beginPath(); g.moveTo(-30 * c.s, 0); g.lineTo(30 * c.s, 0); g.stroke();
-      g.restore();
-    }
-  }
-  // dust in the light
-  g.save();
-  for (const d of st.dust) {
-    const y = ((d.y0 - (still ? 0 : t * d.vy)) % 760 + 760) % 760 - 20;
-    const x = d.x0 + (still ? 0 : Math.sin(t * d.fx + d.ph) * d.amp);
-    const rel = (x - 640 - sway * y) / (30 + y * 0.52);
-    const inCone = clamp(1 - Math.abs(rel), 0, 1);
-    g.globalAlpha = 0.06 + inCone * 0.55 * (0.6 + 0.4 * Math.sin(t * 2 + d.ph));
-    g.fillStyle = inCone > 0.3 ? '#ffe9ae' : '#9d927c';
-    g.beginPath(); g.arc(x, y, d.r, 0, 6.283); g.fill();
-  }
-  g.restore();
-}
-
 // ---------- the screen ----------
 // Hero accent colours (Marrow's blood red) are too dark to read as small labels on the dark panel: mix them toward vellum.
 export function labelColor(hex, k = 0.62) {
@@ -166,26 +74,39 @@ export default {
     this.seed = ''; this.seedFocus = false;
     this.hero = null; this.asc = 0;
     this.credK = 0; this.confirmAbandon = false; this.toast = null;
-    this.ghosts = [{ p0: 0.15, sp: 0.012, y: 210, s: 1, rot: -0.2, ph: 0, a: 0.16 }, { p0: 0.7, sp: 0.008, y: 520, s: 0.75, rot: 0.25, ph: 2, a: 0.12 }, { p0: 0.4, sp: 0.016, y: 110, s: 0.55, rot: 0.1, ph: 4, a: 0.1 }];
-    let s = 7; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-    this.dust = Array.from({ length: 70 }, () => ({ x0: rnd() * W, y0: rnd() * 760, vy: 4 + rnd() * 10, fx: 0.2 + rnd() * 0.6, amp: 6 + rnd() * 22, ph: rnd() * 6, r: 0.8 + rnd() * 1.8 }));
+    this.lifts = {}; this.clock = 0; this.ambT = 2.5; this.crackT = 1.5;
+    // the sewing intro: first title of a page load, real browser only (headless tests pass `intro: true` to see it), never with reduced motion; any input skips it
+    const want = this.p.intro !== undefined ? !!this.p.intro : (!INTRO_SEEN && REAL_BROWSER());
+    this.introPlanned = want && !calm(app); INTRO_SEEN = true;
+    this.introT = 0; this.menuAt = this.introPlanned ? INTRO_S * 0.78 : 0; this.chimed = !this.introPlanned;
+    LOGO.reset(); SCENE.ensure(app);
     const flow = app.shared.flow;
     this.hasSave = flow ? flow.hasSave() : false;
     this.saveInfo = this.hasSave ? this.readSave(app) : null;
+    this.previewHero = this.pickPreviewHero(app);
     const a = app.shared.audio; if (a && a.mute) a.mute(!!settingsOf(app).muted);
-    app.tween(this, { logoK: 1 }, calm(app) ? 1 : 1400, 'out', () => { if (a) a.sfx('graftAttach', { vol: 0.5 }); });
-    app.tween(this, { menuK: 1 }, calm(app) ? 1 : 900, 'out');
-    app.timers.push({ ms: calm(app) ? 1 : 1100, fn: () => {} });
   },
   leave(app) { app.clearTweens(this); },
   readSave(app) {
     try {
       const r = loadRun(); if (!r) return null;
       const h = HEROES[r.hero];
-      return { hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, day: r.ward ? r.ward.day : 0, dayLimit: r.ward ? r.ward.dayLimit : 0, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
+      return { heroId: r.hero, hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, day: r.ward ? r.ward.day : 0, dayLimit: r.ward ? r.ward.dayLimit : 0, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
     } catch { return null; }
   },
   update(app, dt) { if (!this.p) return; },
+  // the hero card on the left: the hero of the saved run, else of the last run played, else Marrow
+  pickPreviewHero(app) {
+    const meta = app.shared.meta, ok = (id) => id && HEROES[id] && heroUnlocked(meta, id);
+    if (this.saveInfo && ok(this.saveInfo.heroId)) return this.saveInfo.heroId;
+    const h = meta && meta.history && meta.history[0] && meta.history[0].hero;
+    return ok(h) ? h : 'marrow';
+  },
+  skipIntro(app) {
+    if (!this.introPlanned) return;
+    this.introPlanned = false; this.menuAt = this.introT; this.chimed = true; LOGO.reset();
+    const a = app.shared.audio; if (a) a.sfx('uiClick', { vol: 0.5 });
+  },
   go(app, state) { this.state = state; app.mouse.released = false; app.mouse.pressed = false; },
   openSelect(app, hero) {
     this.go(app, 'select'); this.selK = 0; app.tween(this, { selK: 1 }, calm(app) ? 1 : 350, 'out');
@@ -199,27 +120,47 @@ export default {
     flow.start(opts);
   },
   draw(app) {
-    const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
-    drawScene(app, this);
-    const logoY = this.state === 'menu' ? 170 : 62;
-    const sc = this.state === 'menu' ? 1 : 0.42;
+    const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow, cm = calm(app), dt = Math.min(0.05, app.dt || 0.016);
+    // any input skips the intro and is used up by it (a click must not also press a button that is not there yet)
+    if (this.introPlanned && !app.blocked && (app.mouse.pressed || app.mouse.released || app.pressedKeys.length)) {
+      this.skipIntro(app); app.mouse.pressed = false; app.mouse.released = false; app.pressedKeys.length = 0;
+    }
+    this.introT += dt; this.clock += cm ? 0 : dt;
+    const p = this.introPlanned ? clamp(this.introT / INTRO_S, 0, 1) : 1;
+    if (this.introPlanned && p >= 1) this.introPlanned = false;
+    this.menuK = clamp((this.introT - this.menuAt) / (this.introPlanned || this.menuAt ? 0.9 : 0.9), 0, 1);
+    this.logoK = p;
+    if (!this.chimed && p >= 0.8) { this.chimed = true; const a = app.shared.audio; if (a) a.sfx('graftAttach', { vol: 0.5 }); }
+    const sceneK = this.introPlanned || this.menuAt ? clamp(this.introT / 1.8, 0, 1) : clamp(this.introT / 0.6, 0, 1);
+    SCENE.draw(app, { calm: cm, fade: sceneK });
+    this.audioTick(app, dt, cm);
+    // logo, thread and tagline (the thread is part of the big title only)
+    const menuState = this.state === 'menu';
+    const logoY = menuState ? 170 : 62, sc = menuState ? 1 : 0.42;
     g.save();
     if (sc !== 1) { g.translate(640, logoY); g.scale(sc, sc); g.translate(-640, -logoY); }
-    drawLogo(app, 640, logoY, this.logoK);
+    LOGO.draw(app, { cx: 640, cy: logoY, p, t: this.clock, calm: cm, thread: menuState });
     g.restore();
-    if (this.state === 'menu') {
-      app.text('Cut what you love. Stitch what you need.', 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
-      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 272, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((this.logoK - 0.7) * 3, 0, 1) });
+    for (const ev of LOGO.take()) { if (ev.tk) this.tick(app, ev.tk); }
+    if (menuState) {
+      const tg = taglineAt(this.clock, cm), reveal = this.introPlanned ? clamp((p - 0.86) / 0.14, 0, 1) : clamp(this.introT / 0.5, 0, 1);
+      g.save(); g.globalAlpha = reveal; const sg = g.createLinearGradient(220, 0, 1060, 0); sg.addColorStop(0, 'rgba(8,6,10,0)'); sg.addColorStop(0.2, 'rgba(8,6,10,.62)'); sg.addColorStop(0.8, 'rgba(8,6,10,.62)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
+      g.fillStyle = sg; g.fillRect(220, 236, 840, 56); g.restore(); // a soft dark band keeps the two lines readable over the lit rooms
+      app.text(tg.text, 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: 760, lines: 1 } });
+      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 274, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: 760, lines: 1 } });
     }
     // keys
+    const nav0 = app.navButtons; app.navButtons = !app.blocked; // Tab, arrows and Enter walk the buttons of this screen, never the ones of a modal on top
     const keys = app.blocked ? [] : app.pressedKeys;
     if (this.state === 'menu') this.drawMenu(app, keys);
     else if (this.state === 'select') this.drawSelect(app, keys);
     else if (this.state === 'credits') this.drawCredits(app, keys);
+    if (app.blocked) app.navButtons = nav0;
     // top right: fullscreen (reserved zone 1128..1272 x 0..56)
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
-    // corner: version + mute (always)
-    app.text('GRAFTWORK ' + VERSION, 16, H - 26, { size: 13, ui: true, color: 'rgba(232,220,196,.45)' });
+    // corner: version + credit line + mute (always)
+    app.text('GRAFTWORK ' + VERSION, 16, H - 38, { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 300, lines: 1 } });
+    app.text('Cut and sewn by hand. See Credits.', 16, H - 22, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.38)', fit: { w: 300, lines: 1 } });
     const st = settingsOf(app);
     const mx = W - 54, my = H - 54;
     const over = app.inRect(mx, my, 38, 38);
@@ -235,19 +176,62 @@ export default {
       if (app.shared.audio && app.shared.audio.mute) app.shared.audio.mute(meta.settings.muted);
       flow.saveMeta();
     }
-    if (this.toast && this.toast.t > 0) { this.toast.t -= app.dt; app.text(this.toast.msg, 640, H - 60, { size: 16, ui: true, align: 'center', color: COL.lamp, alpha: clamp(this.toast.t, 0, 1) }); }
+    if (this.toast && this.toast.t > 0) { this.toast.t -= app.dt; app.text(this.toast.msg, 640, H - 60, { size: 16, ui: true, align: 'center', color: COL.lamp, alpha: clamp(this.toast.t, 0, 1), fit: { w: 600, lines: 1 } }); }
+  },
+  // "tk tk": the needle ticks (the sound functions respect mute and the autoplay rule by themselves)
+  tick(app, n) {
+    const a = app.shared.audio; if (!a || !a.sfx) return;
+    a.sfx('stitchTk');
+    if (n > 1) app.timers.push({ ms: 120, fn: () => { if (app.current === 'title' || !app.current) a.sfx('stitchTk', { pitch: 0.9 }); } });
+  },
+  // the room tone swells now and then, a candle crackles in the distance; only on the menu and when nothing covers the title
+  audioTick(app, dt, cm) {
+    const a = app.shared.audio; if (!a || !a.sfx || app.blocked || this.state !== 'menu') return;
+    this.ambT -= dt; this.crackT -= dt;
+    if (this.ambT <= 0) { this.ambT = 5.2; a.sfx('roomTone', { vol: 0.7 }); }
+    if (this.crackT <= 0) { this.crackT = 2.2 + ((this.clock * 7.31) % 1) * 4.5; if (!cm) a.sfx('candleCrackle'); }
   },
 
   // ---- menu ----
+  // A brass-framed slab: app.button does the work (hit area, keyboard focus ring, press travel, ripple); this adds the lift on hover or focus (eased, drawn
+  // by moving the picture, never the hit area), a drop shadow that opens under the lifted slab, a sheen that crosses it, and stitched ends.
+  slab(app, key, label, x, y, w, h, o = {}) {
+    const g = app.ctx, F = app.focus, cm = calm(app), dt = Math.min(0.05, app.dt || 0.016);
+    const fo = !!(F.active && F.idx >= 0 && F.idx < F.n && F.list[F.idx] && F.list[F.idx].x === x && F.list[F.idx].y === y);
+    const hot = !o.disabled && (app.inRect(x, y, w, h) || fo), cur = this.lifts[key] || 0, to = hot ? 1 : 0;
+    const lift = this.lifts[key] = cm ? to : cur + (to - cur) * Math.min(1, dt * 14);
+    g.save(); // shadow under the slab: wider and softer as it lifts
+    g.globalAlpha *= 0.34 + 0.2 * lift; g.fillStyle = '#000'; app.rr(x + 3 - lift * 1.5, y + h - 5 + lift * 3, w - 6 + lift * 3, 10 + lift * 3, 6); g.fill(); g.restore();
+    g.save(); g.translate(0, -lift * 3);
+    if (o.glow) { g.save(); g.globalAlpha = (o.glow * (cm ? 0.7 : 0.55 + 0.25 * Math.sin(app.t * 2.2))) + 0.25 * lift; g.strokeStyle = COL.lamp; g.lineWidth = lnw(2.5); app.rr(x - 2, y - 2, w + 4, h + 4, 10); g.stroke(); g.restore(); }
+    const res = app.button(label, x, y, w, h, { ...o, glow: undefined });
+    // stitched ends (three short threads at each end, inside the frame)
+    g.save(); g.strokeStyle = 'rgba(232,220,196,.22)'; g.lineWidth = lnw(1.2); g.beginPath();
+    for (let i = 0; i < 3; i++) { const yy = y + h / 2 + (i - 1) * 7; g.moveTo(x + 9, yy); g.lineTo(x + 15, yy); g.moveTo(x + w - 15, yy); g.lineTo(x + w - 9, yy); }
+    g.stroke(); g.restore();
+    if (lift > 0.02 && !o.disabled) { // the sheen
+      g.save(); app.rr(x + 3, y + 3, w - 6, h - 6, 6); g.clip();
+      const sx = cm ? x + w * 0.5 : x - 40 + ((app.t * 150) % (w + 120)), gr = g.createLinearGradient(sx - 30, y, sx + 30, y + h); gr.addColorStop(0, 'rgba(255,236,190,0)'); gr.addColorStop(0.5, `rgba(255,236,190,${(0.16 * lift).toFixed(3)})`); gr.addColorStop(1, 'rgba(255,236,190,0)');
+      g.fillStyle = gr; g.fillRect(x, y, w, h); g.restore();
+    }
+    g.restore();
+    return res;
+  },
+  pip(app, text, cx, cy, o = {}) { // a small brass pill with a number or a short word: unlock count, Credit
+    const g = app.ctx, s = o.size || 12, tw = Math.max(18, Math.min(o.maxW || 60, app.measure(String(text), s, { ui: true, bold: true }) + 12)), th = Math.ceil(app.sz(s, { ui: true, bold: true }) * 1.2) + 4;
+    g.save(); g.fillStyle = o.fill || '#d6a94a'; g.strokeStyle = '#5a410c'; g.lineWidth = lnw(1.5); app.rr(cx - tw / 2, cy - th / 2, tw, th, th / 2); g.fill(); g.stroke(); g.restore();
+    app.text(String(text), cx, cy - th / 2 + 2, { size: s, ui: true, bold: true, align: 'center', color: '#2a1d05', fit: { w: tw - 6, lines: 1 } });
+  },
   drawMenu(app, keys) {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
     if (keys.some((e) => e.key === 'Escape') && this.confirmAbandon) this.confirmAbandon = false;
     if (!this.confirmAbandon && flow.openWardrobe && keys.some((e) => e.key === 'w' || e.key === 'W')) flow.openWardrobe();
+    const nav0 = app.navButtons; if (this.confirmAbandon) app.navButtons = false; // the buttons behind the dialog are not for the keyboard
     const bw = 330, bh = 48, step = (this.hasSave ? 1 : 0) + 5 + (canFullscreen() ? 1 : 0) > 6 ? 52 : 56, x = 640 - bw / 2;
     let y = 306;
     const k = EASE.out(clamp(this.menuK, 0, 1));
     g.save(); g.globalAlpha = k;
-    // dim plate behind menu for contrast
+    // the plate behind the menu: a dark glass slab so the live scene never fights the labels
     const items = [];
     if (this.hasSave) items.push('continue');
     items.push('new', 'daily', 'codex', 'settings');
@@ -255,17 +239,19 @@ export default {
     if (fsOK) items.push('fullscreen');
     items.push('credits');
     const plateH = items.length * step + 14 + (this.hasSave ? 14 : 0);
-    app.panel(x - 22, y - 12, bw + 44, plateH, { r: 14, fill: 'rgba(14,11,10,.62)', stroke: 'rgba(232,220,196,.12)' });
+    app.panel(x - 22, y - 12, bw + 44, plateH, { r: 14, fill: 'rgba(12,9,9,.7)', stroke: 'rgba(201,162,39,.5)' });
+    const fresh = meta && meta.unlocked && meta.unlocked.fresh && typeof meta.unlocked.fresh === 'object' ? Object.keys(meta.unlocked.fresh).length : 0;
+    const credit = meta && meta.credit ? Math.max(0, Math.floor(meta.credit.bal || 0)) : 0;
     for (const id of items) {
       const yy = y + (1 - k) * 18;
       if (id === 'continue') {
         const s = this.saveInfo;
         const sub = s ? (s.day ? `${s.hero}, Act ${s.act}, Day ${s.day} of ${s.dayLimit}, ${s.hp}/${s.maxHp} HP` : `${s.hero}, Act ${s.act}, Floor ${s.floor}, ${s.hp}/${s.maxHp} HP`) : 'Resume your last run';
-        if (app.button('Continue', x, yy, bw, bh + 12, { size: 24, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0', sub, subColor: '#e3d3a4' })) { if (!flow.resume()) { this.hasSave = false; } }
+        if (this.slab(app, id, 'Continue', x, yy, bw, bh + 12, { size: 24, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0', sub, subColor: '#e3d3a4', glow: 0.5 })) { if (!flow.resume()) { this.hasSave = false; } }
         y += step + 14; continue;
       }
       if (id === 'new') {
-        if (app.button('New Run', x, yy, bw, bh, { size: 22 })) { if (this.hasSave) { this.confirmAbandon = true; app.mouse.released = false; } else this.openSelect(app); }
+        if (this.slab(app, id, 'New Run', x, yy, bw, bh, { size: 22 })) { if (this.hasSave) { this.confirmAbandon = true; app.mouse.released = false; } else this.openSelect(app); }
       } else if (id === 'daily') {
         const seed = todaySeed(), hero = RUN.dailyHero(seed), played = (meta.daily ? dailyPlayed(meta, seed) : false);
         const hn = HEROES[hero].name;
@@ -274,31 +260,56 @@ export default {
           const mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
           app.tooltip(mod.name, `${hn}, seed ${seed}.\nMode: ${modeOf(meta) === 'ward' ? 'The Ward' : 'Classic map'} (change it on the New Run screen).\n${mod.text}`, { color: COL.lamp });
         }
-        if (app.button(label, x, yy, bw, bh, { size: 22, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
+        if (this.slab(app, id, label, x, yy, bw, bh, { size: 22, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
           this.startDaily(app);
         }
+        // the mode this Daily will be played in, on the slab itself
+        app.text(modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC', x + bw - 14, yy + 18, { size: 11, ui: true, bold: true, align: 'right', color: 'rgba(232,220,196,.5)', fit: { w: 70, lines: 1 } });
       } else if (id === 'codex') {
         const hw = Math.floor((bw - 10) / 2);
-        if (app.button('Codex', x, yy, hw, bh, { size: 22 })) flow.openCodex();
-        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Wardrobe', 'Spend Credit on card backs, tints, titles and a starting relic. Shortcut: W.');
-        if (app.button('Wardrobe', x + hw + 10, yy, hw, bh, { size: 22 }) && flow.openWardrobe) flow.openWardrobe();
+        if (this.slab(app, 'codex', 'Codex', x, yy, hw, bh, { size: 22 })) flow.openCodex();
+        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Wardrobe', 'Spend Credit on card backs, tints, titles and a starting relic. Shortcut: W.' + (credit ? `\nYou have ${credit} Credit.` : ''));
+        if (this.slab(app, 'wardrobe', 'Wardrobe', x + hw + 10, yy, hw, bh, { size: 22 }) && flow.openWardrobe) flow.openWardrobe();
+        if (credit > 0) this.pip(app, credit, x + hw + 10 + hw - 28, yy + 1, { size: 12, maxW: 52 });
       }
       else if (id === 'settings') {
         const hw = Math.floor((bw - 10) / 2), al = percentLabel(meta);
-        if (app.button('Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
-        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.', { color: COL.lamp });
+        if (this.slab(app, 'settings', 'Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
+        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.' + (fresh ? `\n${fresh} new since you last looked.` : ''), { color: COL.lamp });
         app.reg('title-archive', x + hw + 10, yy, hw, bh, { group: 'archive' });
-        if (app.button(app.measure(al, 20, { bold: true }) > hw - 16 ? 'Archive' : al, x + hw + 10, yy, hw, bh, { size: 20, fit: true }) && flow.openArchive) flow.openArchive();
+        if (this.slab(app, 'archive', app.measure(al, 20, { bold: true }) > hw - 16 ? 'Archive' : al, x + hw + 10, yy, hw, bh, { size: 20, fit: true }) && flow.openArchive) flow.openArchive();
+        if (fresh > 0) this.pip(app, fresh > 99 ? '99+' : String(fresh), x + hw + 10 + hw - 14, yy + 1, { size: 12, maxW: 40, fill: '#e8c25a' });
       }
-      else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (app.button('Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
-      else if (id === 'credits') { if (app.button('Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
+      else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (this.slab(app, id, 'Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
+      else if (id === 'credits') { if (this.slab(app, id, 'Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
       y += step;
     }
     g.restore();
-    if (!canFullscreen() && isIPhone()) app.text('Add to Home Screen for fullscreen', 640, y + 6, { size: 13, ui: true, italic: true, align: 'center', color: 'rgba(232,220,196,.6)' });
-    // daily card on the right
+    if (!canFullscreen() && isIPhone()) app.text('Add to Home Screen for fullscreen', 640, y + 6, { size: 13, ui: true, italic: true, align: 'center', color: 'rgba(232,220,196,.6)', fit: { w: 400, lines: 1 } });
+    // the hero card on the left, the daily card on the right
+    this.drawHeroCard(app, 28, 458);
     this.drawDailyCard(app, 930, 312);
+    app.navButtons = nav0;
     if (this.confirmAbandon) this.drawConfirm(app, 'Start a new run?', 'Your saved run will be replaced. This cannot be undone.', 'Replace saved run', () => { this.confirmAbandon = false; this.openSelect(app); }, () => { this.confirmAbandon = false; });
+  },
+  // a small card for the hero you left off with (the saved run's hero, else the last run's, else Marrow): portrait, name, school, passive
+  drawHeroCard(app, x, y) {
+    const g = app.ctx, id = this.previewHero || 'marrow', h = HEROES[id]; if (!h) return;
+    const w = 300, ph = 168, k = EASE.out(clamp((this.menuK - 0.1) / 0.9, 0, 1)), school = SCHOOLS[h.school], cm = calm(app);
+    app.reg('title-hero-card', x, y, w, ph, { group: 'herocard' });
+    g.save(); g.globalAlpha = k; g.translate(-(1 - k) * 40, 0);
+    app.panel(x, y, w, ph, { r: 12, fill: 'rgba(12,9,9,.72)', stroke: rgba(h.color, 0.7) });
+    app.text(this.saveInfo ? 'YOUR GRAFTER' : 'LAST GRAFTER', x + 16, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 150, lines: 1 } });
+    drawSchoolGlyph(g, h.school, x + w - 22, y + 20, 9, school.color);
+    app.text(school.name, x + w - 36, y + 12, { size: 11, ui: true, bold: true, align: 'right', color: labelColor(school.color, 0.4), fit: { w: 70, lines: 1 } });
+    const sway = cm ? 0 : Math.sin(app.t * 1.5) * 1.5;
+    g.save(); g.beginPath(); g.arc(x + 16 + 36, y + 76, 38, 0, 6.283); g.fillStyle = rgba(h.color, 0.22); g.fill(); g.restore();
+    drawPortrait(g, id, x + 16 + 36, y + 78 + sway, 72);
+    app.text(h.name, x + 104, y + 40, { size: 24, bold: true, shadow: true, fit: { w: w - 120, lines: 1 } });
+    app.text(h.title, x + 104, y + 70, { size: 14, italic: true, color: '#cdbf9d', fit: { w: w - 120, lines: 1 } });
+    stitchLine(g, x + 16, y + 106, x + w - 16, y + 106, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
+    app.text(h.passive, x + 16, y + 114, { size: 13, ui: true, color: '#e0d4b8', fit: { w: w - 32, h: ph - 114 - 8, soft: true } });
+    g.restore();
   },
   startDaily(app) {
     const meta = app.shared.meta, flow = app.shared.flow;

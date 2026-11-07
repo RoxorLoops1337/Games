@@ -567,7 +567,7 @@ export function drawRooms(host, inter) {
       V.cnt[id] = r.contents.length;
     };
     collect();
-    if (rc && hero.room === id) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); }
+    if (rc && hero.room === id && !heroAtEdge(w, hero, id)) { hero.kitDrawn = true; items.push({ y: hero.y, rec: hero }); } // a hero crossing a doorway is drawn in the final pass: a room in front must not wall him off
     g.save();
     if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(c.x, c.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-c.x, -c.y); }
     if (rc) {
@@ -669,12 +669,14 @@ function heroRec(host, n, rcOf, dt) {
   } else pos = heroStand(w, hroom, rcOf);
   rec.kind = 'hero'; rec.id = run.hero; rec.h = 44; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null; rec.kitDrawn = false; rec.room = null;
   rec.x = pos.x; rec.y = pos.y;
-  V.fvHero += (V.faceHero - V.fvHero) * (calm ? 1 : Math.min(1, dt * 10)); if (Math.abs(V.fvHero - V.faceHero) < 0.02) V.fvHero = V.faceHero;
+  V.fvHero += (V.faceHero - V.fvHero) * (calm ? 1 : Math.min(1, dt * 18)); if (Math.abs(V.fvHero - V.faceHero) < 0.02) V.fvHero = V.faceHero;
   rec.flip = V.fvHero;
   gait('hero', rec, rec.x, rec.y, dt, calm, rec.h, S, 2);
   rec.ring = 1; rec.moving = moving;
   return rec;
 }
+// a hero on the move is drawn in the final pass (over every wall): a room in front walls him off in its doorway otherwise; at rest he is sorted with the props
+const heroAtEdge = (w, rec, id) => !!rec.moving;
 const hxy = (w, rid) => { const r = w.rooms[rid]; return r ? [r.x, r.y] : [0, 0]; };
 
 // ---------------- lighting over the whole map ----------------
