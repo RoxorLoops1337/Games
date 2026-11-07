@@ -21,7 +21,7 @@ function chunk(type, data) {
   const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
   return Buffer.concat([len, td, crc]);
 }
-function decode(buf) {
+export function decode(buf) {
   let p = 8, w = 0, h = 0, ct = 0; const idat = [];
   while (p < buf.length) {
     const len = buf.readUInt32BE(p), type = buf.toString('ascii', p + 4, p + 8), d = buf.subarray(p + 8, p + 8 + len);
@@ -51,7 +51,7 @@ function decode(buf) {
   }
   return { w, h, px: out };
 }
-function encode(w, h, px) {
+export function encode(w, h, px) {
   const raw = Buffer.alloc((w * 4 + 1) * h);
   for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; px.copy(raw, y * (w * 4 + 1) + 1, y * w * 4, (y + 1) * w * 4); }
   const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;
@@ -66,6 +66,8 @@ export function key(inFile, outFile) {
   const seed = (x, y) => { const i = y * w + x; if (!bg[i] && isBg(px[i * 4], px[i * 4 + 1], px[i * 4 + 2])) { bg[i] = 1; q[qt++] = i; } };
   for (let x = 0; x < w; x++) { seed(x, 0); seed(x, h - 1); }
   for (let y = 0; y < h; y++) { seed(0, y); seed(w - 1, y); }
+  // enclosed pockets (gaps in pipes, lamps): near-pure magenta anywhere is background too
+  for (let i = 0; i < w * h; i++) { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; if (!bg[i] && r > 215 && b > 215 && g < 70) { bg[i] = 1; q[qt++] = i; } }
   while (qh < qt) {
     const i = q[qh++], x = i % w, y = (i / w) | 0;
     if (x > 0) seed(x - 1, y); if (x < w - 1) seed(x + 1, y); if (y > 0) seed(x, y - 1); if (y < h - 1) seed(x, y + 1);
