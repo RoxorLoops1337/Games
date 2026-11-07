@@ -318,7 +318,7 @@ export default {
     const title = this.o.title || (this.pick ? 'Choose a card' : 'Your Deck');
     app.text(title, 36, 20, { size: 28, bold: true, color: COL.lamp });
     const sub = this.pick ? 'Click a card. Esc to cancel.' : `${run.deck.length} cards`;
-    app.text(sub, 38, 56, { size: 15, ui: true, color: 'rgba(232,220,196,.7)' });
+    app.text(sub, 38, 56, { size: 15, ui: true, color: 'rgba(232,220,196,.7)', fit: { w: 222, lines: 1 } }); // never runs into the Budget gauge label
     // gauge
     const gx = 270, gy = 24;
     const gb = gaugeCells(app, gx, gy, info, { maxW: 330 });
@@ -392,7 +392,7 @@ export default {
       };
     });
     const emptyMsg = this.pick ? 'No card can take this.' : this.grafted ? 'No grafted cards yet. Graft one after a fight.' : this.bare ? 'Every card here has a graft.' : 'Nothing matches.';
-    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: 0.56, gap: 10, empty: emptyMsg, glossBand: { x: 940, y: MY, bottom: MY + MH, dir: 1 } });
+    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: app.scale < 0.95 ? 0.72 : 0.56, gap: 10, empty: emptyMsg, glossBand: { x: 940, y: MY, bottom: MY + MH, dir: 1 } });
     if (this.pick && g.hover >= 0 && items[g.hover].disabled) app.tooltip('Cannot choose', 'This card does not qualify.');
     this.hoverIdx = g.hover;
     const hv = g.hover >= 0 ? items[g.hover] : null;

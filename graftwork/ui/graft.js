@@ -274,7 +274,7 @@ function drawOfferCard(app, r, i, c) {
   const base = CARDS[inst.id];
   const twins = st.run.deck.filter((x) => x.id === inst.id);
   const gTxt = inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare';
-  const cap = twins.length > 1 ? `Copy #${twins.indexOf(inst) + 1} of ${twins.length}, ${gTxt}` : (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + gTxt; // copies of one card are told apart by number (the played count stays in the hover note)
+  const cap = twins.length > 1 ? `${st.small ? '' : 'Copy '}#${twins.indexOf(inst) + 1} of ${twins.length}, ${gTxt}` : (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + gTxt; // copies of one card are told apart by number (the played count stays in the hover note)
   // phones inflate the caption: lift it so it never touches the AFTER panel below
   const capO = { size: 14, ui: true, fit: { w: CW - 18, lines: 1 } }, capL = app.layoutText(cap, capO);
   const capH = Math.ceil(capL.size * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
@@ -480,7 +480,7 @@ function drawAfter(app, c) {
   app.text('STRAIN', lx, rowStrain + 5, { size: 14, ui: true, bold: true, color: DIM });
   const sCol = A.strain > B.strain ? COL.bad : A.strain > 0 ? '#ffb36b' : COL.good;
   app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, vx, rowStrain, { size: 24, bold: true, color: sCol });
-  let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} land${A.tithed.length === 1 ? 's' : ''} on Bare cards.`;
+  let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} on Bare cards.`;
   // max hp
   let hpMod = null;
   if (pair) { const m = c.g.mods.find((k) => k.k === 'maxHp'); if (m && !(c.inst.waived && c.inst.waived.includes(c.g.id))) hpMod = m; }

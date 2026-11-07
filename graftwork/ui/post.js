@@ -117,7 +117,7 @@ export function installPost(app) {
     R.tex = mkTex(gl); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, Math.max(1, R.texW), Math.max(1, R.texH));
   }
   function glSize() {
-    const dpr = S.tier === 'low' ? (app.dpr || 1) : 1;
+    const dpr = 1; // the GL canvas is the picture the player sees: it is as sharp as the 2D canvas (a 1 CSS px low tier made every phone half resolution)
     R.glW = Math.max(2, Math.round((canvas.width | 0) / dpr)); R.glH = Math.max(2, Math.round((canvas.height | 0) / dpr));
   }
   function syncBox() {
@@ -277,7 +277,7 @@ export function installPost(app) {
     const frameMs = S.lastNow ? Math.min(100, t0 - S.lastNow) : 16.7; S.lastNow = t0;
     const dt = frameMs / 1000;
     const st = settings();
-    const want = st.quality;
+    const want = app.perf && app.perf.q.tier !== 'full' ? 'off' : st.quality; // lite and minimal tiers (ui/quality.js) switch the WebGL post off
     if (want !== S.lastWant) { S.lastWant = want; if (TIERS.includes(want)) { S.ceiling = want; stats.ceiling = want; if (want !== S.tier) setTier(want); resetRing(); } }
     post.update(dt);
     autoGrade();

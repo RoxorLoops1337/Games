@@ -6,6 +6,7 @@ Index. Code rules and schemas live in `../CLAUDE.md`; this folder holds intent.
 |---|---|
 | THREAD.md | touching engine/seam.js, school payouts, the Line rail (ui/seam_ui.js) or Thread onboarding |
 | ENEMY_DEPTH.md | adding an enemy, an affliction (poison, Brittle, Rejection, Infection, Numb) or tuning damage per act |
+| ART_MODULAR.md | the modular art system: parts + manifest + templates, inventory, rig animation; ART_SHOPPING_LIST.md is its generation list |
 | ART_BIBLE.md | drawing anything: the Anatomical Plate look, palette, silhouettes, school glyph shapes |
 | UX_SPEC.md | combat input (drag, play line y=420, targets), HUD grid, pause, fullscreen, phone rules, layout registry |
 | JUICE.md | hit tiers, camera shake, hit-stop, multi-hit counter, card choreography, timing budgets (tests/graftwork_motion) |

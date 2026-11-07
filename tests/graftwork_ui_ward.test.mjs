@@ -703,12 +703,12 @@ await t('iso: the hero stands on its room and walks smoothly cell to cell (betwe
 await t('assets loader: lazy, @1x on phones and @2x on desktop, null while loading, failures swallowed, headless is a no-op', async () => {
   const fake = createAssets({ fetchJson: async () => ({ version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: { file1x: 'w1.webp', file2x: 'w2.webp', w: 100, h: 100, floorCx: 50, floorCy: 75, floorW: 96, floorH: 48 } }, actors: { marrow: { file1x: 'h1.webp', file2x: 'h2.webp', walk1x: 'hb1.webp', walk2x: 'hb2.webp', w: 40, h: 60, anchorX: 20, anchorY: 58, kind: 'hero' }, gone: { file1x: 'x.webp', w: 1, h: 1, kind: 'normal' } }, icons: {}, cards: {}, cardsById: { b_ward: { room: 'rm_ward' } } }), makeImage: () => ({}) });
   assert.equal(fake.room('rm_ward'), null, 'nothing before ensure'); assert.equal(fake.state, 'idle');
-  const desk = { scale: 1 }, phone = { scale: 0.6 };
+  const desk = { scale: 1, px: 2 }, phone = { scale: 0.6, px: 0.6 }; // @1x only when the backing store has under 0.8 device px per logical px (a DPR 2 phone has 1.2 and gets @2x)
   fake.ensure(desk); await new Promise((r) => setTimeout(r, 5)); assert.ok(fake.ready());
   assert.equal(fake.room('rm_ward', desk), null, 'requested, still loading');
   const e2 = fake.imgs.get('w2.webp'); assert.ok(e2, 'desktop asks for the @2x file'); assert.ok(!fake.imgs.has('w1.webp'));
   e2.img.onload(); const got = fake.room('rm_ward', desk); assert.ok(got && got.def.floorCx === 50);
-  fake.room('rm_ward', phone); assert.ok(fake.imgs.has('w1.webp'), 'phones ask for @1x');
+  fake.room('rm_ward', phone); assert.ok(fake.imgs.has('w1.webp'), 'a stage under 0.8 device px per logical px asks for @1x'); assert.equal(fake.use2x({ scale: 0.6, px: 1.3 }), true, 'a DPR 2 phone asks for @2x');
   fake.imgs.get('w1.webp').img.onerror(); assert.ok(fake.room('rm_ward', phone), 'a missing @1x falls back to the loaded @2x');
   fake.actor('marrow', phone, true); assert.ok(fake.imgs.has('hb1.webp'), 'the walk frame is its own file');
   fake.actor('gone', phone); fake.imgs.get('x.webp').img.onerror(); assert.equal(fake.actor('gone', phone), null); assert.ok(fake.failed >= 1);

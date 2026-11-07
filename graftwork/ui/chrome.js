@@ -1,4 +1,5 @@
 import { lnw } from '../art/linework.js';
+import { templates, drawNineSlice } from './templates.js';
 // Physical UI chrome (design/ART_BIBLE.md "UI chrome"): brass-framed slab panels with rivets, inset shadow and a lit top edge,
 // buttons with 2 px press travel, plus plate / rivet / vial / dial / badge helpers.
 // Textures are baked ONCE into offscreen canvases (keyed by size and colours, numeric keys so a hit allocates nothing);
@@ -45,6 +46,10 @@ function checkpx(app) {
   return px;
 }
 export function frameStart(app) { cache.frameBakes = 0; checkpx(app); }
+// Optional art skins (assets/ui/manifest.json, design/ART_MODULAR.md): a 9-slice frame named by o.frame ('panel' / 'button' by default, o.frame === false opts out)
+// replaces the baked vector chrome once its image is decoded. Without one (headless, no manifest, still loading) null comes back and nothing changes.
+const STATE_NAMES = ['normal', 'hover', 'down', 'disabled'];
+function skin(app, id) { templates.ensure(app); return templates.ready() ? templates.frameImg(id, app) : null; }
 
 // ---- panel ----
 function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
@@ -78,6 +83,7 @@ function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
   return o.c;
 }
 export function panel(app, x, y, w, h, o) {
+  if (o.frame !== false && !o.plain) { const fr = skin(app, o.frame || 'panel'); if (fr && drawNineSlice(app.ctx, fr, x, y, w, h)) return; }
   const ctx = app.ctx, r = o.r === undefined ? 10 : o.r, lw = o.lw || 2, fill = o.fill || 'rgba(26,22,20,.92)', stroke = o.stroke || 'brass';
   const W = Math.round(w), Hh = Math.round(h), R = Math.round(r), L = Math.round(lw * 2);
   if (!o.plain && W > 4 && Hh > 4 && W < 2048 && Hh < 1024 && R < 64 && L < 32) {
@@ -122,6 +128,16 @@ function bakeButton(s, w, h, r, fill, stroke, state, pad) {
 }
 // Draws the button body for a state and returns the vertical travel (2 when pressed) so the caller can offset its label.
 export function button(app, x, y, w, h, o, state) {
+  if (o.frame !== false) {
+    const base = o.frame || 'button', fr = skin(app, base + '.' + STATE_NAMES[state]) || skin(app, base);
+    if (fr) {
+      const dy = state === 2 ? 2 : 0, dim = state === 3 && !templates.has(base + '.disabled');
+      if (dim) app.ctx.globalAlpha *= 0.5;
+      drawNineSlice(app.ctx, fr, x, y + dy, w, h);
+      if (dim) app.ctx.globalAlpha /= 0.5;
+      return dy;
+    }
+  }
   const ctx = app.ctx, r = o.r === undefined ? 8 : o.r, fill = o.fill || '#26201c', stroke = o.stroke || 'brass';
   const W = Math.round(w), Hh = Math.round(h), R = Math.round(r);
   if (W > 4 && Hh > 4 && W < 2048 && Hh < 1024 && R < 64) {

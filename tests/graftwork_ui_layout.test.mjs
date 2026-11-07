@@ -137,7 +137,7 @@ function look(h, n = 3, tag) {
 function go(h, name, params = {}) { h.app.go(name, { run: h.run, ...params }); }
 // Violations still open on phone stage scales (the 0.64 / 0.54 / 0.46 sweep), by screen|kind. They are listed, not failed, so the sweep can gate every
 // NEW regression while these screens are fixed one by one (fit them with app.text fit:{w,h,lines}, then delete the entry). Desktop scale 1 has no exemptions.
-const OPEN_ON_PHONE = new Set(['map|text-overflow', 'map|text-hits', 'map|text-text', 'reward|text-text', 'graft|text-text', 'graft|text-truncated', 'graft|text-overflow', 'event|text-text']);
+const OPEN_ON_PHONE = new Set([]); // round 16: every phone violation is fixed
 const OPEN_DESK = new Set(['event|oob', 'graft|text-text']); // pre-existing on desktop: tooltips drawn past the stage, a dimmed card under its own label
 let openCount = 0, tipChecked = 0;
 function done(name) {

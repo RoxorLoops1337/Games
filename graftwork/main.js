@@ -4,6 +4,8 @@ import { createApp } from './ui/core.js';
 import { FX_OPTS, defaultQuality } from './ui/fx.js';
 import * as audio from './ui/audio.js';
 import { installPost } from './ui/post.js';
+import { cleanGraphics } from './ui/quality.js';
+import { assets } from './ui/assets.js';
 import * as TRANS from './ui/transitions.js';
 import { lights } from './ui/lights.js';
 import * as RUN from './engine/run.js';
@@ -30,6 +32,7 @@ import settings from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
+import { installWings } from './ui/wings.js';
 
 const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -78,6 +81,7 @@ export function boot(canvas) {
   };
   if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
+  installWings(app); // wide phones: the picture runs on into the side bars (ui/wings.js)
   installTransitions(app);
   app.lightsApi = lights; app.shared.transitions = TRANS;
   installPause(app);
@@ -97,11 +101,16 @@ export function boot(canvas) {
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
     const ts = [100, 125, 150, 175].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
     app.textScale = ts / 100;
+    const gm = cleanGraphics(st.graphics); if (app.perf.q.mode !== gm) app.perf.q.setMode(gm, performance.now()); // Settings > Graphics: Auto | High | Low
     app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
+    // decoded image memory: about 96 MB on phones (64 in the minimal tier), 192 MB on desktop; the least recently drawn images go first, every ~2 s
+    assets.budget = (FX_OPTS.mobile ? 96 : 192) * 1048576 * (app.perf.q.tier === 'minimal' ? 0.66 : 1);
+    if ((app.frame & 127) === 0) assets.maintain(performance.now());
     A11Y.applySettings(app);
     TRANS.drawTransitions(app);
     drawPauseOverlay(app);
   };
+  try { if (/[?&]perf\b/.test(location.search)) app.perf.debug = true; } catch (e) { /* no location */ }
   A11Y.installA11y(app);
   app.go('title');
   app.start();

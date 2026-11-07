@@ -35,10 +35,18 @@ function mk(w, h) {
 // ---------------- which rooms are modular ----------------
 // the recipe of a room type, or null (painted): needs the kit manifest, every kit image settled, and a variant whose floor and wall exist
 export function recipeFor(type, app) {
-  if (!assets.kitReady() || !assets.kitSettled(app)) return null;
+  if (!assets.kitReady()) return null;
   const rc = resolveRecipe(type, assets.kit); if (!rc) return null;
+  if (!assets.kitRecipeSettled(rc, app)) return null; // only THIS recipe's images are awaited (the title needs five rooms, not the whole kit)
   if (!assets.kitImg('floors', rc.floor, app) || !assets.kitImg('walls', rc.wall, app)) return null; // the texture failed to load: paint it
   return rc;
+}
+
+// true once every listed room type has its images settled (the title scene waits on its five rooms)
+export function recipesSettled(types, app) {
+  if (!assets.kitReady()) return false;
+  for (const t of types) { const rc = resolveRecipe(t, assets.kit); if (rc && !assets.kitRecipeSettled(rc, app)) return false; }
+  return true;
 }
 
 // ---------------- geometry (room-local: the top vertex of the floor diamond is the origin) ----------------

@@ -46,12 +46,19 @@ export function __setHi(file, img) { HI.set(file, { img, ok: true, bad: false })
 export function __resetHi() { HI.clear(); }
 
 // The painted figure of an actor id (hero id or enemy id). Prefers the 512 px combat file (file3x) and shows the 2x / 1x one while it decodes.
+// The 512 px combat files only pay when the sprite is drawn bigger than the 256 px ones can carry: device px per 2x sprite px above 1.3.
+// Enemies (U 0.8) on a 2x phone draw at about 1.0, so they keep the @2x file (a quarter of the decoded memory); the hero (1.2) and bosses use @3x. The lite and minimal quality tiers never load them.
+export function wantHi(d) {
+  const a = assets.app; if (!a || !(a.px > 0)) return true;
+  if (a.perf && a.perf.q.tier !== 'full') return false;
+  return a.px * (d && d.kind === 'hero' ? HERO_S : U * (KIND_K[d && d.kind] || 1)) > 1.3;
+}
 export function spriteOf(id, app) {
   if (!id || !assets.ready()) return null;
   const d = assets.def('actors', id);
   if (!d) return null;
   let img = null;
-  if (d.file3x) { const e = loadHi(d.file3x); if (e.ok) img = e.img; }
+  if (d.file3x && wantHi(d)) { const e = loadHi(d.file3x); if (e.ok) img = e.img; }
   if (!img) { const a = assets.actor(id, app); if (a) img = a.img; }
   if (!img) return null;
   const w = d.w || 256, h = d.h || 256;
@@ -62,7 +69,7 @@ export function spriteOf(id, app) {
 export function frameImg(sp, stem) {
   if (!sp || !stem || !sp.frames) return null;
   const app = assets.app;
-  if (sp.frames.hi3x) { const e = loadHi(`actors/${stem}@3x.webp`); if (e.ok) return e.img; }
+  if (sp.frames.hi3x && wantHi(sp.def)) { const e = loadHi(`actors/${stem}@3x.webp`); if (e.ok) return e.img; }
   const f = assets.frame(sp.id, stem, app, false);
   return f ? f.img : null;
 }
@@ -92,9 +99,9 @@ export function warm(app, ids) {
     assets.ensure(app);
     if (!assets.ready()) return;
     for (const id of ids) {
-      const d = assets.def('actors', id); if (!d) continue; assets.actor(id, app); if (d.file3x) loadHi(d.file3x);
+      const d = assets.def('actors', id); if (!d) continue; assets.actor(id, app); const hi = wantHi(d); if (d.file3x && hi) loadHi(d.file3x);
       const F = assets.frames(id); if (!F) continue;
-      for (const st of [...F.atk, F.hit, F.die]) if (st) { if (F.hi3x) loadHi(`actors/${st}@3x.webp`); assets.frame(id, st, app); }
+      for (const st of [...F.atk, F.hit, F.die]) if (st) { if (F.hi3x && hi) loadHi(`actors/${st}@3x.webp`); assets.frame(id, st, app); }
     }
   } catch (e) { /* art is optional */ }
 }
@@ -121,7 +128,8 @@ export function contactShadow(ctx, x, y, rx, a = 1, lift = 0) {
   ctx.restore();
 }
 // a matching colour grade for procedural fallbacks (ctx.filter where the canvas has it)
-export function gradeProcedural(ctx, on) { try { if ('filter' in ctx) ctx.filter = on ? GRADE : 'none'; } catch (e) { /* no filters */ } }
+// ctx.filter is a software pass per draw on many phones: only the full quality tier grades the procedural figures (lite and minimal draw them ungraded)
+export function gradeProcedural(ctx, on) { try { if ('filter' in ctx) ctx.filter = on && !(assets.app && assets.app.perf && assets.app.perf.q.tier !== 'full') ? GRADE : 'none'; } catch (e) { /* no filters */ } }
 
 // ------------------------------------------------------------------ tint overlays (silhouette-only colour: flash, poison, burn...)
 let SC = null;

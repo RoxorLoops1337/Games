@@ -14,7 +14,7 @@
 //   assets.preload(app, kinds)  queue every image of the given groups (rooms, actors by default); progress() says how far it is
 //   assets.progress()           { loaded, total, failed, state }  state: 'idle' | 'loading' | 'ready' | 'none'
 //   assets.kitReady() / kitImg(kind, id, app) / kitSettled(app): the modular room kit (assets/ward_kit/manifest.json), see data/ward_kit.js
-// @1x is used on phone scales (app.scale < 0.8), @2x on desktop. Every failure is swallowed: callers draw their procedural fallback on null.
+// @2x is used unless the backing store is under 0.8 device px per logical px (app.px), then @1x. Every failure is swallowed: callers draw their procedural fallback on null.
 const BASE_DEFAULT = 'assets/ward/';
 const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
 
@@ -49,12 +49,13 @@ export function createAssets(opts = {}) {
     fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null,
     // the modular room kit (assets/ward_kit/manifest.json): floors, walls, pieces, props. Optional: no kit means every room is painted.
     kit: null, kitState: 'idle', kitBase: opts.kitBase || '',
+    clock: 0, budget: opts.budget || 192 * 1048576, evicted: 0, // clock: ms of the last maintain() call, the LRU stamp; budget: decoded bytes kept
   };
   const kitBaseOf = () => A.kitBase || (A.base.endsWith('ward/') ? A.base.slice(0, -5) + 'ward_kit/' : A.base + 'kit/');
   const live = () => !!(A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
   A.available = live;
   A.app = null;
-  A.use2x = (app) => { const a = app || A.app; return !(a && a.scale > 0 && a.scale < 0.8); };
+  A.use2x = (app) => { const a = app || A.app; return !(a && a.px > 0 && a.px < 0.8); }; // by device pixels per logical px, not by CSS scale: a phone draws sprites at 1.2 to 2.5 device px per logical px and @1x there was the pixelated look
   A.setBase = (b) => { A.base = b.endsWith('/') ? b : b + '/'; };
   A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.failed = 0; A.kit = null; A.kitState = 'idle'; };
   A.ensure = (app) => {
@@ -88,18 +89,25 @@ export function createAssets(opts = {}) {
   const defOf = (group, id) => (A.manifest && A.manifest[group] && A.manifest[group][id]) || null;
   A.def = (group, id) => defOf(group, id);
   A.has = (group, id) => !!defOf(group, id);
+  // Start one image. Real browsers: img.decode() resolves once the bitmap is decoded OFF the main thread, so the first drawImage never pays a synchronous
+  // decode (the long task on the first frame of a screen). Injected image factories (tests) and old browsers keep the plain onload path.
+  function begin(e, url) {
+    const img = A.makeImage ? A.makeImage() : new Image();
+    const good = () => { if (e.ok || e.bad) return; e.ok = true; e.bytes = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4; e.used = A.clock; A.hits++; };
+    const fail = () => { if (e.ok || e.bad) return; e.bad = true; A.failed++; };
+    img.onerror = fail;
+    try { img.decoding = 'async'; } catch (err) { /* read-only in fakes */ }
+    img.src = url;
+    e.img = img;
+    if (!A.makeImage && typeof img.decode === 'function') img.decode().then(good, () => { if (img.complete && img.naturalWidth > 0) good(); else fail(); });
+    else img.onload = good;
+  }
   function load(file) {
     let e = A.imgs.get(file);
     if (e) return e;
-    e = { img: null, ok: false, bad: false };
+    e = { img: null, ok: false, bad: false, bytes: 0, used: A.clock };
     A.imgs.set(file, e);
-    try {
-      const img = A.makeImage ? A.makeImage() : new Image();
-      img.onload = () => { e.ok = true; A.hits++; };
-      img.onerror = () => { e.bad = true; A.failed++; };
-      img.src = A.base + file;
-      e.img = img;
-    } catch (err) { e.bad = true; A.failed++; }
+    try { begin(e, A.base + file); } catch (err) { e.bad = true; A.failed++; }
     return e;
   }
   function get(group, id, app, alt) {
@@ -110,7 +118,7 @@ export function createAssets(opts = {}) {
     for (const f of want) {
       if (!f) continue;
       const e = load(f);
-      if (e.ok) return { img: e.img, def: d };
+      if (e.ok) { e.used = A.clock; return { img: e.img, def: d }; }
       if (!e.bad) return null; // still loading: do not start the other size
     }
     return null;
@@ -119,17 +127,42 @@ export function createAssets(opts = {}) {
   const KIT_GROUPS = ['floors', 'walls', 'pieces', 'props'];
   function kitLoad(file) {
     const key = 'kit:' + file; let e = A.imgs.get(key); if (e) return e;
-    e = { img: null, ok: false, bad: false }; A.imgs.set(key, e);
-    try { const img = A.makeImage ? A.makeImage() : new Image(); img.onload = () => { e.ok = true; A.hits++; }; img.onerror = () => { e.bad = true; A.failed++; }; img.src = kitBaseOf() + file; e.img = img; } catch (err) { e.bad = true; A.failed++; }
+    e = { img: null, ok: false, bad: false, bytes: 0, used: A.clock }; A.imgs.set(key, e);
+    try { begin(e, kitBaseOf() + file); } catch (err) { e.bad = true; A.failed++; }
     return e;
   }
   const kitFile = (d, app) => (A.use2x(app) ? d.file2x || d.file1x || d.file : d.file1x || d.file2x || d.file);
   A.kitDef = (kind, id) => (A.kit && A.kit[kind] && A.kit[kind][id]) || null;
-  A.kitImg = (kind, id, app) => { const d = A.kitDef(kind, id); if (!d) return null; const f = kitFile(d, app); if (!f) return null; const e = kitLoad(f); return e.ok ? { img: e.img, def: d } : null; };
+  A.kitImg = (kind, id, app) => { const d = A.kitDef(kind, id); if (!d) return null; const f = kitFile(d, app); if (!f) return null; const e = kitLoad(f); if (e.ok) e.used = A.clock; return e.ok ? { img: e.img, def: d } : null; };
   A.kitPreload = (app) => { if (!A.kitReady()) return; for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (f) kitLoad(f); } };
   // true once every kit image of this scale has loaded or failed (the renderer waits for it so a room never flips from painted to modular piece by piece)
   A.kitSettled = (app) => { if (!A.kitReady()) return false; A.kitPreload(app); for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; const e = A.imgs.get('kit:' + f); if (!e || (!e.ok && !e.bad)) return false; } return true; };
   A.kitProgress = (app) => { let total = 0, loaded = 0; if (A.kitReady()) for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; total++; const e = A.imgs.get('kit:' + f); if (e && (e.ok || e.bad)) loaded++; } return { loaded, total, state: A.kitState }; };
+  // The kit images ONE recipe needs (floor, wall, its pieces, props, door). A screen that draws a few rooms waits for those only, not for the whole kit.
+  A.kitFilesFor = (rc, app) => {
+    const out = [], add = (kind, id) => { const d = A.kitDef(kind, id); const f = d && kitFile(d, app); if (f) out.push(f); };
+    if (!rc) return out;
+    add('floors', rc.floor); add('walls', rc.wall);
+    for (const p of rc.pieces || []) add('pieces', p.id);
+    for (const p of rc.props || []) add('props', p.id);
+    if (rc.doorPiece) add('pieces', rc.doorPiece);
+    return out;
+  };
+  // true once every image of this recipe has loaded or failed (starts them)
+  A.kitRecipeSettled = (rc, app) => { let ok = true; for (const f of A.kitFilesFor(rc, app)) { const e = kitLoad(f); if (!e.ok && !e.bad) ok = false; } return ok; };
+  // ---- decoded memory: LRU eviction ----
+  A.decodedBytes = () => { let n = 0; for (const e of A.imgs.values()) if (e.ok) n += e.bytes || 0; return n; };
+  // Drop the least recently drawn images until the decoded total is under 85% of the budget. Never touches an image drawn in the last `keepMs`
+  // (so nothing on screen goes away) or one still loading. A dropped image simply loads again (HTTP cache) if a screen asks for it later.
+  A.maintain = (nowMs, budget = A.budget, keepMs = 6000) => {
+    A.clock = nowMs;
+    let total = A.decodedBytes(); if (total <= budget) return 0;
+    const list = []; for (const [k, e] of A.imgs) if (e.ok && nowMs - (e.used || 0) > keepMs) list.push([k, e]);
+    list.sort((a, b) => (a[1].used || 0) - (b[1].used || 0));
+    let n = 0; const goal = budget * 0.85;
+    for (const [k, e] of list) { if (total <= goal) break; total -= e.bytes || 0; A.imgs.delete(k); n++; }
+    A.evicted += n; return n;
+  };
   A.room = (id, app) => get('rooms', id, app);
   // ---- animation frames (optional per actor) ----
   A.frames = (id) => { const d = defOf('actors', id); return d ? normalizeFrames(d.frames) : null; };
@@ -139,7 +172,7 @@ export function createAssets(opts = {}) {
     const d = defOf('actors', id); if (!d || !normalizeFrames(d.frames)) return null;
     const f2 = `actors/${stem}@2x.webp`, f1 = `actors/${stem}@1x.webp`, f3 = `actors/${stem}@3x.webp`;
     const want = hi && d.frames.hi3x ? [f3, f2, f1] : A.use2x(app) ? [f2, f1] : [f1, f2];
-    for (const f of want) { const e = load(f); if (e.ok) return { img: e.img, def: d, stem }; if (!e.bad) return null; }
+    for (const f of want) { const e = load(f); if (e.ok) { e.used = A.clock; return { img: e.img, def: d, stem }; } if (!e.bad) return null; }
     return null;
   };
   // true once every walk frame of an actor has decoded (a cycle never starts half loaded)

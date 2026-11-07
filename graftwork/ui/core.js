@@ -5,6 +5,7 @@ import * as LAYOUT from './layout_registry.js';
 import * as CH from './chrome.js';
 import { setLineDevice } from '../art/linework.js';
 import { renderTip, resetTips, nextTipSeq } from './tooltips.js';
+import { createQuality, createGovernor, TIER_SPEC } from './quality.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -21,11 +22,13 @@ export const EASE = {
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
 // fitMinPx: the smallest on-screen size (CSS px) a FITTED label may shrink to when the boosted size would not fit its box (app.text option fit).
 export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
+export const MAX_BACKING_PX = 9.5e6; // canvas backing store budget in device pixels (about a 4K screen)
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 export function shade(hex, k) { const n = parseInt(hex.slice(1), 16); const f = (v) => clamp(Math.round(v * k), 0, 255); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
 
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 export function createApp(canvas, opts = {}) {
   const ctx = canvas.getContext('2d');
   const app = {
@@ -34,6 +37,8 @@ export function createApp(canvas, opts = {}) {
     keys: new Set(), pressedKeys: [],
     screens: {}, stack: [], tweens: [], timers: [],
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
+    // perf: the quality tier controller (ui/quality.js), the rAF governor and the backing-store cap the tier sets (read by app.resize)
+    perf: { q: createQuality(), gov: createGovernor(), dprCap: 3, debug: false, lastRun: 0, lastTick: 0, expected: 16.7 },
     scale: 1, offX: 0, offY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
     chrome: CH,
@@ -63,13 +68,19 @@ export function createApp(canvas, opts = {}) {
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
     app.scale = Math.min(iw / W, ih / H);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const cw = W * app.scale, ch = H * app.scale;
-    app.offX = (iw - cw) / 2; app.offY = (ih - ch) / 2;
+    // Backing store: the device pixel ratio up to 3 (phones are 2.6 to 3.5; a cap of 2 upscaled the whole picture and softened every letter), limited
+    // by a pixel budget so a 4K desktop screen keeps its old cost. The canvas box is snapped to whole device pixels so the browser never resamples it.
+    let dpr = Math.min(window.devicePixelRatio || 1, 3, app.perf.dprCap || 3); // dprCap: the quality tier (ui/quality.js)
+    const cw0 = W * app.scale, ch0 = H * app.scale;
+    if (cw0 * ch0 * dpr * dpr > MAX_BACKING_PX) dpr = Math.max(1, Math.sqrt(MAX_BACKING_PX / (cw0 * ch0)));
+    const bw = Math.max(1, Math.round(cw0 * dpr)), bh = Math.max(1, Math.round(ch0 * dpr));
+    const cw = bw / dpr, ch = bh / dpr;
+    app.offX = Math.round(((iw - cw) / 2) * dpr) / dpr; app.offY = Math.round(((ih - ch) / 2) * dpr) / dpr;
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
     canvas.style.left = app.offX + 'px'; canvas.style.top = app.offY + 'px';
-    canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+    canvas.width = bw; canvas.height = bh;
     app.dpr = dpr; app.px = canvas.width / W; setLineDevice(app.px, app.scale);
+    app.wing = Math.max(0, app.offX / app.scale); // logical width of the black bar on each side of a wide screen (see ui/wings.js)
     // logical margins (from the canvas edges) that are visible AND clear of notches
     const I = insets(), s = app.scale;
     app.safe = {
@@ -129,6 +140,7 @@ export function createApp(canvas, opts = {}) {
     app.tip = null; resetTips(app); // no tooltip state survives a screen change
     const s = app.screens[name]; if (!s) throw new Error('no screen ' + name);
     app.stack.push(s); app.current = name; app.sceneT = 0;
+    app.perf.gov.enter(nowMs()); app.perf.q.warmup(); // a new screen is not a verdict on the last one, and an idle screen starts awake
     if (s.enter) s.enter(app, params || {});
   };
   app.push = (name, params) => { const s = app.screens[name]; if (!s) throw new Error('no screen ' + name); app.stack.push(s); if (s.enter) s.enter(app, params || {}); };
@@ -363,13 +375,27 @@ export function createApp(canvas, opts = {}) {
 
   // ---- frame loop ----
   let last = 0, running = false;
+  const P = app.perf;
+  // tier change: the backing store cap follows (one resize; the controller's warm-up hides the realloc frames)
+  P.q.on((tier) => { const cap = TIER_SPEC[tier].dprCap; if (cap !== P.dprCap) { P.dprCap = cap; if (typeof window !== 'undefined') app.resize(); } });
+  if (typeof window !== 'undefined' && window.addEventListener) for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => P.gov.input(nowMs()), { passive: true, capture: true });
   app.shake = { x: 0, y: 0 };
+  // One rAF callback. The governor decides whether it runs a tick (idle title at 30 fps, hidden tab: nothing); the quality controller
+  // sees the real interval between ticks, which includes raster and compositor stalls that JS timers never show.
   function frame(now) {
     if (!running) return;
-    const raw = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
-    app.tick(raw);
+    if (typeof document !== 'undefined' && document.hidden) { P.hiddenWait = true; return; } // the visibilitychange handler restarts the loop
+    if (P.gov.shouldRun(now, P.lastRun, app.current, P.q.tier, false)) {
+      const raw = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
+      app.tick(raw);
+      if (P.lastTick) P.q.sample(now - P.lastTick, P.gov.capped ? 33.3 : 16.7, now);
+      P.lastTick = now; P.lastRun = now;
+    }
     requestAnimationFrame(frame);
   }
+  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && P.hiddenWait && running) { P.hiddenWait = false; last = nowMs(); P.lastTick = 0; P.q.warmup(); requestAnimationFrame(frame); }
+  });
   // Arrow keys / D-pad: nearest enabled button in that direction (falls back to the first one when nothing is focused yet)
   function spatialNext(F, k) {
     if (!F.active || F.idx < 0 || F.idx >= F.n) { for (let i = 0; i < F.n; i++) if (!F.list[i].dis) return i; return -1; }
@@ -423,6 +449,7 @@ export function createApp(canvas, opts = {}) {
     for (const tm of due) tm.fn();
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; // sprites are scaled down from bigger files: smooth, never nearest
     ctx.clearRect(0, 0, W, H);
     app.tip = null; app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
     const stack = app.stack;
@@ -437,12 +464,18 @@ export function createApp(canvas, opts = {}) {
     drawTip();
     if (app.overlay) app.overlay(app);
     if (app.afterFrame) app.afterFrame(app);
+    if (P.debug) drawPerfDebug();
     canvas.style.cursor = app.cursor;
     if (app.mouse.touchUp) { app.mouse.touchUp = false; app.mouse.x = -999; app.mouse.y = -999; }
     app.focus.fire = false;
     app.mouse.pressed = false; app.mouse.released = false; app.mouse.wheel = 0; app.pressedKeys.length = 0;
   };
-  app.start = () => { app.resize(); running = true; last = performance.now(); requestAnimationFrame(frame); };
+  // debug only: a tiny readout of the quality tier (enable with ?perf in the URL or app.perf.debug = true)
+  function drawPerfDebug() {
+    ctx.save(); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); ctx.font = '12px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 250, 18);
+    ctx.fillStyle = '#9fe6a0'; ctx.fillText(`Q ${P.q.debug()} dpr${(app.dpr || 1).toFixed(1)}${P.gov.capped ? ' 30fps' : ''}`, 8, 7); ctx.restore();
+  }
+  app.start = () => { app.resize(); running = true; last = performance.now(); P.lastTick = 0; requestAnimationFrame(frame); };
   app.stop = () => { running = false; };
   return app;
 }

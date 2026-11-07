@@ -201,7 +201,7 @@ await t('assets loader: the kit manifest loads once, @1x on phones and @2x on de
   assert.ok(fake.kitReady()); assert.equal(fake.kitImg('floors', 'wood', { scale: 1 }), null, 'null while the image is loading'); assert.equal(fake.kitSettled({ scale: 1 }), false);
   const e = fake.imgs.get('kit:floors/w2.webp'); assert.ok(e, 'desktop asks for the @2x file'); e.ok = true; e.img.width = 512;
   const got = fake.kitImg('floors', 'wood', { scale: 1 }); assert.ok(got && got.img === e.img && got.def.tile === 512);
-  const e1 = (fake.kitImg('props', 'crate', { scale: 0.5 }), fake.imgs.get('kit:props/c1.webp')); assert.ok(e1, 'a phone (scale < 0.8) asks for the @1x file');
+  const e1 = (fake.kitImg('props', 'crate', { scale: 0.5, px: 0.5 }), fake.imgs.get('kit:props/c1.webp')); assert.ok(e1, 'a phone (scale < 0.8) asks for the @1x file');
   fake.imgs.get('kit:props/c2.webp').bad = true; e1.bad = true; assert.equal(fake.kitSettled({ scale: 1 }), true, 'settled = every image loaded or failed');
   assert.equal(fake.kitImg('floors', 'nope', { scale: 1 }), null); assert.equal(fake.kitImg('walls', 'wood', { scale: 1 }), null);
   const prog = fake.kitProgress({ scale: 1 }); assert.equal(prog.total, 2);
