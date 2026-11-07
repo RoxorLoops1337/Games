@@ -444,6 +444,7 @@ function drawActor(app, g, r, run) {
 // hops a little between plants (the shadow stays flat), squashes when a foot lands and leans into the heading; at rest nothing leaves the
 // ground: a slow breathing scale about the feet and a small weight shift. With reduced motion the figure just stands.
 const HOP = 2.2, STRIDE = 0.5;
+export { gait, drawActor, groundShadow, HOP, STRIDE }; // additive: lab/anim.html drives the real gait and the real actor draw
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }

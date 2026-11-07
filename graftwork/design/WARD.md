@@ -339,3 +339,81 @@ Tests: tests/graftwork_ui_ward_kit.test.mjs (recipes, degradation, loader, share
 Painted fallback, low walls. Each painted room also has a lowered-wall painting `rm_<id>_low` (19 of 20 shipped; `rm_boiler_low` was rejected for magenta spill in its steam, so the boiler keeps the tall painting and the old crop), built by `python3 tools/graftwork_art_build.py --low <raw dir>` (rm_<id>_low.png, 2048 px; each file's floor diamond is MEASURED, the manifest entry carries its own floorCx/floorCy/floorW/floorH and `low: true`; the renderer scales each sprite by its own diamond; rejects are skipped and reported). Choice per room in `ward_iso.js`: kit recipe first; else the LOW painting in wall mode Low, in Cutaway for a room with a room behind it ((x-1,y), (x,y-1), (x-1,y-1)), for a front neighbour of a focus room or a room with monsters, and on a dense floor unless the mode is Full; the TALL painting for a lone room, the hero room's back side, Full mode and any room without a low painting (the old crop and fade rules apply only then). The two cross-fade when the choice changes; dark tint, hover lift, picking and the final actor pass are unchanged. Tall vs low by eye: low is clearly better in every dense layout (no cropped walls, every room legible, no 0.55 fade over the focus room).
 
 Walk pacing. `PACE` in ui/ward.js: normal 0.62 s per room with a 0.35 s beat where the walk stops at a room that fires (the engine already decided; the animation only holds), Fast walk (`meta.settings.fastWalk`, button F or key F beside + - C W, default off) 0.38 s and 0.15 s, reduced motion 0.12 s and no beat; a wait never pauses. Speed is constant between rooms (ease only out of the first and into the last step). A stride is 0.5 x the figure height (about 4 plants a second at the normal pace). The hero on the move is drawn in the final actor pass so a wall of a room in front never hides him; at rest he sorts with the props.
+
+## 14. Room sizes and Expand
+
+Owner: "some rooms could be bigger". A room is no longer always one cell. Most stay 1 x 1, some are bigger, an Expand plan grows a room, and the boss room is 2 x 2. A big room is ONE room: one fight, one door set, one route step, one floor, drawn as one piece.
+
+### Data model
+- A room is a rectangle of `w x h` cells. `room.x, room.y` is its top-left cell (smallest x, smallest y). `room.w` and `room.h` are written ONLY when above 1, so a 1 x 1 room is byte identical to the old saves. `w.grid[y][x]` holds the room id in EVERY cell it covers (rubble is still `'rubble'`).
+- Helpers in engine/ward.js: `cellsOf(room)`, `sizeOf`, `cellCount`, `isBig`, `sizeKey` ('2x1'), `powerUse(room)`, `footprint(x, y, size, dir)`, `placement(run, size, x, y, dir)`, `expandOptions(run, roomId)`, `expandCostOf(room, run)`. Never use `room.x, room.y` as "the" cell of a room outside these.
+- Sizes are domino shapes. `[2, 1]` means "two cells, along either axis": 2 x 1 (`w = 2`) or 1 x 2 (`h = 2`). The kit has a plan for each orientation (1 x 2 is the 2 x 1 plan mirrored across the diagonal, so both look alike). The Theatre is `[2, 2]`.
+- Directions are `'e'` (+x), `'s'` (+y), `'w'` (-x), `'n'` (-y); growing west or north moves the anchor.
+- Save format and migration: nothing to migrate. A save from before has only 1 x 1 rooms and a 1 x 1 Theatre in column 8, and keeps working (`tests/graftwork_ward_big.test.mjs`, "old saves"); the next floor builds a 2 x 2 Theatre. A new save with big rooms round trips through `serializeRun` as plain JSON.
+
+### Which rooms are big, and what they give
+| room | size | cost | power | what the second cell gives |
+|---|---|---|---|---|
+| Theatre | 2 x 2 (x 7 to 8, from the first floor) | fixed | 0 | the boss room; entering it from any of its 4 cells is one step |
+| Generator | born 2 cells | 4 stone (was 3) | 0 | +3 power (a one cell Generator from an old save still gives +2) |
+| Boiler | born 2 cells | 1 wood 4 stone (was 3) | 0 | +1 power per two lit Wards and +1 flat |
+| Ward | 1, Expand to 2 (or the Ward Wing plan) | Expand 2 wood 1 stone | 1 per cell | holds 7 monsters (5); same spawn timer; the walk still enters once |
+| Chapel | Expand to 2 (or Grand Chapel) | Expand 2 wood 2 stone | 1 per cell | an event every 3 days (4) |
+| Workshop | Expand to 2 | Expand 2 stone 20 gold | 1 per cell | recharges every 2 days (3) |
+| Library | Expand to 2 | Expand 3 wood 1 stone | 1 per cell | 40 percent a morning to upgrade a card (25) |
+| Kitchen | Expand to 2 | Expand 3 wood 1 stone | 1 per cell | dinner draws 3 (2) |
+| Corridor, Isolation, Isolation II, Dispensary, Pharmacy, Linen, Laundry, Morgue, Sawmill, Quarry, Counting House | 1 x 1 always | | | no Expand: `why = 'type'` |
+
+Choices: the elite room stays 1 x 1 (a bigger Isolation would only move the Level 2 clock, which is already tuned); no room grows past 2 cells; Corridor stays 1 x 1 so a road is still a commitment. `ROOMS[type].expand = { cost }` and `ROOMS[type].big = { ... }` hold every number (`cap`, `every`, `upgrade`, `kitchen`, `powerAdd`, `boilerFlat`); `foot` marks a room that is born big. `b_ward_wing` (Ward that starts 2 cells, 4 wood 2 stone) and `b_grand_chapel` (Chapel that starts 2 cells, 4 wood 4 stone) are room plans with `size: [2, 1]`; their cost is the room's cost plus its Expand cost.
+
+### Placement and Expand rules
+- A room plan of size `[a, b]` needs all its cells inside the floor, empty and not rubble, and at least one of them edge-adjacent to a room that is not the Theatre. `canPlayBuild` why: `bounds rubble occupied adjacent`, and `space` when the pointed cell is fine but no second cell is free. Without a `dir` the first legal side of `e s w n` is used (a Generator or Wing drops on a cell, the side is picked for you; `{ x, y, dir }` names it).
+- The Expand plan (`b_expand`, kind `expand`, uncommon, in the start unlock set, also given by the Surveyor event) takes a room id (the free side is picked: `e s n w`) or `{ room, dir }`. Needs: the room type has `expand` and a kit plan for the new size (`hasBigRecipe`, otherwise why `norecipe`, "That room has no plan for a bigger size yet"), it is still 1 cell (`already`), a free cell beside it (`space`), the cost (`cost`: wood and stone of the room's Expand cost, minus 1 each with the Surveyor's Tape relic). The plan itself costs nothing: its card says VARIES.
+- A powered room uses `power x cells`. An Expand with no spare power still happens and the room goes DARK, exactly like a room built without power (the cost is paid either way; the room card and the bulbs say so; a Generator or switching another room off lights it).
+- Demolish removes every cell and refunds half of the build cost plus half of the Expand cost when the room grew (a Ward Wing or a born-big Generator already includes it in its cost). It never removes the Theatre, the hero's room or a room that would cut another off.
+- The hero room and rooms holding a spawn may Expand; contents, timers, upgrades and the power switch carry over. Upgrades apply to the whole room.
+
+### Adjacency, doors and the route
+- `neighbors(run, id)` walks every cell of the room and lists each other room once, so a big room meets a neighbour along its whole edge and a route may leave it from any boundary cell (`legalSteps`, `routeWhy`). A route step enters a room ONCE, however many cells it covers: `visited` still forbids entering it again, a fight in a 2 cell Ward fires once with all its monsters (board of 3, the rest reinforcements, as before). Crossing a big room is a free bonus of range: a 2 cell Corridor-like room spans more floor for the same step.
+- `wallPlan` (data/ward_kit.js) gives a big room one wall segment per cell: `Ls[h]` and `Rs[w]` door flags (a door wherever a neighbour meets that cell), `slabLs`, `slabRs` for the open front edges, plus the old `L R sharedL sharedR slabL slabR` booleans for 1 x 1 rooms and the title scene. Shared walls still belong to the room in front.
+
+### The Theatre (2 x 2) and the boss
+- `wardInit` places it at x 7 and a random y (0 to 4); rubble can no longer sit on its cells; `theatreReachable` asks whether any non-Theatre cell can reach any Theatre cell. Building beside the Theatre still does not count as touching a room (the Theatre never enables building).
+- Boss rules are unchanged: closed until day last - 2 (a walk through it is free), then a route entering it triggers the boss (early: HP x0.85, 60 gold, a building plan, a graft), the last night pulls you in from anywhere. It never goes dark and uses no power. Its label and glow are centred on the whole 2 x 2 floor.
+
+### UI
+- Building card: a sized room card shows its power for the whole footprint; the Expand card says VARIES and EXPAND on a violet ribbon. Aiming it shows the cost in the chip ("Expand the Ward (2 wood, 1 stone)"); the free cells it could grow into glow; hovering one grows the room toward that cell (`targetAt` returns `{ room, dir }`), hovering the room lets the engine pick; the preview is a gold new cell, a dashed outline of the whole new floor and "+1 cell".
+- Dragging (or having selected) a sized room plan over a free cell draws the ghost of the whole footprint (the kit plan for that size) with a dashed outline, red when illegal, and the chip says why (`space`, `adjacent`, ...).
+- Hover card: "Big room (2 cells): crossing it is one step", or on a small room that can grow "An Expand plan makes it 2 cells" / "No free cell beside it to Expand into". Glossary: Expand, Big room (pause menu and keyword tips); tutorial tip `ward_expand` (first morning an Expand plan is in hand); the Surveyor event teaches it.
+- Phone: no new widgets; the layout sweeps with a big Ward, a 2 x 2 Theatre and the Expand card selected pass at stage scales 1, 0.64, 0.46.
+
+### Renderer
+- data/ward_kit_big.js holds `BIG_RECIPES[type]['2x1' | '1x2' | '2x2']`: Ward (beds, a screen in the middle, a bed row on each side), Chapel (altar, two pews pairs, four candle stands), Workshop (two benches, three tool racks), Library (three bookcases, two desks), Kitchen (two stoves, two prep tables), Generator and Boiler (two machines each), Theatre (operating table, instrument trays, throne, footlights). A big plan has 4w x 4h sub-tiles, free lanes at every cell edge and cell boundary (`lanesFor`), one open floor, and tall props only against a back wall (tests).
+- ui/ward_kit_iso.js builds the static layer from the footprint: a floor diamond of w x h cells (one texture tile per cell), an L wall h cells long and an R wall w cells long with one door per cell that meets a neighbour, plinth runs on open front edges, shadows clipped to the big floor, per-footprint cache extents. Only shared outer walls are drawn: a wall between two connected rooms is one wall (front room's), doors where the engine connects.
+- ui/ward_iso.js treats a footprint as one room: depth order places it once at its front-most cell, hover / selection / legal outlines and the boss ring trace the whole footprint (`rectDiam`), the spawn candle sits at the front-left cell and upgrade pips at the front-right one, monsters wander the 8 x 4 (or 8 x 8) sub-tile floor (a 2 cell Ward shows up to 7 figures, a 1 cell Ward 5), the hero walks from stand to stand across the floor and through the doors, picking resolves any cell or any tall wall of the footprint to the room, `roomBox` registers the whole footprint, the thread, seals and camera use the footprint centre. A big room without a kit plan (headless, a failed download) draws a procedural block over its footprint; there is no painted fallback for big rooms.
+
+### Sim and balance
+tools/graftwork_ward_sim.mjs: the strong bot plays Expand (`EXPAND_W`: Ward 4.2, Workshop 3.2, Chapel 3, Library 2.8, Kitchen 2.4, only with a spare power, resources left over and 40 gold of margin); `GW_EXPAND=0` never expands (for comparison); `playWardRun(..., { onMorning })` is a per-morning hook (the property tests use it).
+
+Strong bot, A0, N = 500 per hero (the sim runs about 14 runs a second):
+
+| pool | marrow | wick | odile | spread |
+|---|---|---|---|---|
+| all, this change, Expand on | 31% | 36% | 37% | 6 |
+| all, this change, Expand off | 30% | 35% | 37% | 7 |
+| all, before this change | 29% | 30% | 32% | 3 |
+| start, this change, Expand on | 43% | 45% | 49% | 6 |
+| start, this change, Expand off | 40% | 44% | 50% | 10 |
+| start, before this change | 35% | 43% | 48% | 13 |
+
+Other policies, N = 100 per hero: random 0, 0, 0 (both pools); sloppy 0, 0, 0 (both pools); passive 0, 0, 1 (both pools); careful all 18, 31, 28 and start 29, 37, 40; fill (lets Wards fill) 1, 0, 0 with and without Expand. Act 1 to 3 per act: 8 to 9 normal fights, 9 to 10 monsters, about 2 elites (unchanged).
+
+Unlock pacing (GW_MODE=ward, 200 players, 30 runs per hero): strong median 39 runs to unlock everything (target 33 to 40), careful 45 (45 to 55). The new locked items (Ward Wing, Grand Chapel, the Surveyor's Tape, the Surveyor event) raised the locked set by 4 and `TARGET_TOTAL` went 906 to 930 so careful stays at 45; Expand is in the start set (`build:b_expand`, tier start).
+
+Why the numbers moved: the Theatre is easier to reach (any of 4 cells touches a neighbour) and a 2 cell Generator gives +3 power for 4 stone, which lifts the all pool by 1 to 6 points (marrow +2, wick +6, odile +5, noise at N = 500 is about 2 points) and leaves every hero inside 25 to 40 with a spread of 6. The start pool was already above 40 for wick and odile before this change (it is not a target in section 11) and still is; Expand moves it by +3, +1, -1, inside the noise. Expand itself is balance neutral in the bot's hands because the bot rarely uses it: in 450 all pool runs 21 percent got an expanded room, 0.32 expanded rooms per run (121 Wards, 11 Workshops, 8 Chapels, 2 Libraries), and a big Ward held 6 or more monsters in 2 runs: the bot walks into its Wards long before they fill. A player who lets a 2 cell Ward fill gets about 2.5x the gold of a 2 monster fight (gold +30 percent per monster beyond 2) and a 7 monster fight (board of 3, 4 reinforcements) at the price of the risk; the fight rules are unchanged.
+
+### Weak points
+- The bot is a poor test of Expand: it keeps Wards drained, so the 7 monster floor is almost never exercised. Balance of a hoarding player is unproven.
+- The side of a Generator, Boiler or Wing is picked automatically (first legal of e s w n); the player cannot rotate it. Expand can be aimed at a side by dropping on the free cell.
+- Big room plans are first drafts built from existing props; they were checked for lanes, collisions and connectivity by tests and by eye in Chromium, not tuned for taste. Wall pieces on a 2 cell wall are spread by hand (`s`).
+- A big room has no painted fallback and no low-wall painting; a failed kit download shows a block.

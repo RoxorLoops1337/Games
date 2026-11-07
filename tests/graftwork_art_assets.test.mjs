@@ -55,7 +55,7 @@ t('low_wall_variants_have_their_own_measured_floor_and_a_tall_twin', () => {
 });
 t('every_building_card_resolves_to_an_image', () => {
   for (const c of Object.values(BUILD_CARDS)) {
-    const m = man.cardsById[c.id]; assert.ok(m, c.id);
+    const m = man.cardsById[c.id] || { card: c.art }; assert.ok(m, c.id); // a card newer than the last art build (Expand, Ward Wing, Grand Chapel) resolves by its own art id, exactly as ui/assets.js cardArt does
     const e = m.room ? man.rooms[m.room] : man.cards[m.card];
     assert.ok(e && existsSync(join(root, e.file2x)), c.id);
   }

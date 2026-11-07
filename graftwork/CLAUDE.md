@@ -178,6 +178,11 @@ The owner authorised AI-generated raster art for the Ward (the hospital-building
 
 - Painted fallback uses `rm_<id>_low` (lowered-wall paintings, `tools/graftwork_art_build.py --low`) in dense layouts and Low/Cutaway, the tall painting for a lone room; walk pacing is `PACE` in ui/ward.js (WARD.md section 13).
 
+## Room sizes and Expand (design/WARD.md section 14)
+- A Ward room is a w x h rectangle of cells (`room.w`, `room.h`, both absent = 1; `room.x, room.y` is the top-left cell; `w.grid` holds the id in EVERY cell). Never read `r.x, r.y` as "the room's only cell": use `WD.cellsOf(r)`, `WD.neighbors`, `WD.sizeOf`. Old saves are all 1 x 1 and need no migration.
+- The Theatre is 2 x 2 (x 7 to 8), Generator and Boiler are born 2 cells (`foot` in data/ward.js), Ward / Chapel / Workshop / Library / Kitchen grow to 2 cells with the `b_expand` plan (`expand.cost`, `big` overrides in `ROOMS`), `b_ward_wing` and `b_grand_chapel` are room plans that start big. A powered room uses `power x cells`. A route enters a big room in ONE step; `neighbors` meets every cell edge.
+- Kit plans for big rooms: data/ward_kit_big.js (`BIG_RECIPES[type]['2x1' | '1x2' | '2x2']`, 1 x 2 is the 2 x 1 plan mirrored); a type without a plan for a size cannot Expand (`hasBigRecipe`, why `norecipe`). Renderer: ward_kit_iso.js generalises the static layer by `rc.fw, rc.fh`; ward_iso.js draws a footprint as ONE room (`rectDiam`, `roomCW`, `roomBox(w, x, y, fw, fh)`). Tests: `graftwork_ward_big` (engine, recipes, doors) and the big rooms block at the end of `graftwork_ui_ward`.
+
 ## Combat art (ui/combat_art.js, design/WARD.md section 12b)
 - Battles draw the painted Ward actors (hero and enemies whose id is in the manifest) at battle size from the 512 px `file3x` (`tools/graftwork_art_build.py --combat`), enemies flipped to face the hero, grounded by one contact shadow, with lunge / hit / block / death poses, plus a modular-kit backdrop; ids without a sprite keep the procedural figure (graded) and a missing kit keeps the old backdrop. The list of enemies still lacking sprites is in WARD.md 12b. Test: `graftwork_ui_combat_art`.
 

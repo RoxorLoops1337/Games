@@ -206,7 +206,7 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   // cost row
   const parts = costParts(card), ok = o.run ? affords(o.run, card) : null;
   let cx = x + 9 * k; const cy = y + 33 * k, isz = 15 * k;
-  if (card.kind === 'expand') app.text('COST VARIES', cx, cy - 7 * k, { size: Math.round(11 * k), ui: true, bold: true, color: '#5a3a7a', alpha: A, fit: { w: 80 * k, lines: 1 } });
+  if (card.kind === 'expand') app.text('VARIES', cx, cy - 7 * k, { size: Math.round(12 * k), ui: true, bold: true, color: '#5a3a7a', alpha: A, fit: { w: 80 * k, lines: 1 } });
   else if (!parts.length) app.text('FREE', cx, cy - 7 * k, { size: Math.round(11 * k), ui: true, bold: true, color: '#3E7C74', alpha: A, fit: { w: 48 * k, lines: 1 } });
   for (const [r, n] of parts) {
     g.save(); g.globalAlpha *= A; drawRes(g, r, cx + isz / 2, cy, isz); g.restore();

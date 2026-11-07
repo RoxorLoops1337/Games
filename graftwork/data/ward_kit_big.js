@@ -14,7 +14,7 @@ const PLAN_2x1 = {
   rm_ward: [{
     floor: 'tile', wall: 'tile',
     pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'L', 0.14), Wp('notice', 'R', 0.5), Wp('window', 'R', 0.2), Wp('sconce', 'R', 0.95), Wp('sconce', 'R', 0.05)],
-    props: [P('bed', 2, 0), P('bed', 6, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('bed', 6, 3), P('bedside_table', 2, 1), P('bedside_table', 7, 2), P('iv_stand', 0, 0), P('screen', 3, 2)],
+    props: [P('bed', 2, 0), P('bed', 6, 0), P('bed', 0, 2, 1), P('bed', 2, 3), P('bed', 6, 3), P('bedside_table', 6, 2), P('bedside_table', 7, 2), P('iv_stand', 0, 0), P('screen', 3, 2)],
   }],
   rm_chapel: [{
     floor: 'stone', wall: 'plaster',

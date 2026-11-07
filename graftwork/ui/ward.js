@@ -92,6 +92,7 @@ export function wardInterlude(app, run, scr) {
 }
 
 // plain-words reasons for every engine why
+const costLine = (c) => ['wood', 'stone', 'gold'].filter((k) => c[k]).map((k) => `${c[k]} ${k}`).join(', ') || 'free';
 export function whyText(run, why, card, target) {
   const w = run.ward;
   switch (why) {
@@ -343,7 +344,7 @@ export default {
           out.drop = { tgt, ok: chk.ok };
           if (!chk.ok && (S.drag ? S.drag.moved : true)) out.chip = { text: whyText(run, chk.why, card, tgt), x: m.x, y: m.y, bad: true };
           else if (chk.ok && K.wouldBuildDark(run, card)) { const pw = WD.wardPower(run); out.chip = { text: `No spare power (${pw.used} of ${pw.cap}): the ${ROOMS[card.room].name} would be built DARK. ${S.darkOk === darkKey(uid, tgt) ? 'Drop it again to confirm.' : 'Drop it to confirm, or switch a room off first.'}`, x: m.x, y: m.y, bad: true }; }
-          else if (chk.ok) out.chip = { text: card.kind === 'room' ? `Build the ${card.name} here` : card.target === 'room' ? `${card.name} on the ${ROOMS[hovRoom.type].name}` : `Play ${card.name}`, x: m.x, y: m.y, bad: false };
+          else if (chk.ok) out.chip = { text: card.kind === 'room' ? `Build the ${card.name} here` : card.kind === 'expand' ? `Expand the ${ROOMS[w.rooms[typeof tgt === 'object' ? tgt.room : tgt].type].name} (${WD.expandOptions(run, typeof tgt === 'object' ? tgt.room : tgt).cost ? costLine(WD.expandOptions(run, typeof tgt === 'object' ? tgt.room : tgt).cost) : ''})` : card.target === 'room' ? `${card.name} on the ${ROOMS[hovRoom.type].name}` : `Play ${card.name}`, x: m.x, y: m.y, bad: false };
         }
       }
       // release: drop a dragged plan, or a tap on the grid

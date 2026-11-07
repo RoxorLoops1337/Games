@@ -7,6 +7,8 @@ import { ROOMS, BUILD_CARDS, BUILD_LIST, WARD_TUNE } from '../graftwork/data/war
 import { BIG_RECIPES, hasBigRecipe } from '../graftwork/data/ward_kit_big.js';
 import { UNLOCKS, START } from '../graftwork/data/unlocks.js';
 import { playWardRun } from '../tools/graftwork_ward_sim.mjs';
+import { readFileSync } from 'node:fs';
+import { resolveRecipe, lanesFor, freeConnected, wallPlan, pathOnGrid } from '../graftwork/data/ward_kit.js';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -205,6 +207,46 @@ t('relic and event: the Surveyor\'s Tape takes 1 wood and 1 stone off an Expand;
   const ev = mk('sv'); ev.ward.phase = 'midday'; ev.phase = 'event'; ev.pending = { kind: 'event', id: 'e_w_surveyor', result: null };
   const have = () => [...ev.ward.deck.draw, ...ev.ward.deck.hand, ...ev.ward.deck.discard].filter((c) => c.id === 'b_expand').length; const b0 = have();
   RUN.eventChoose(ev, 1); assert.equal(have(), b0 + 1); assert.ok(ev.hp > 0);
+});
+
+t('kit recipes for big rooms: every size resolves against the kit on disk; lanes of every cell edge and cell boundary stay free; props inside, never overlapping; one open floor; tall props hug a back wall; 1 x 2 mirrors 2 x 1', () => {
+  const kit = JSON.parse(readFileSync(new URL('../graftwork/assets/ward_kit/manifest.json', import.meta.url), 'utf8'));
+  const TALL = ['shelf', 'toolrack', 'lamp', 'iv_stand', 'coat_stand', 'candle_stand', 'bookcase', 'locker_wall', 'linen_shelf', 'pickaxe_rack', 'hanging_pots', 'library_ladder', 'throne'];
+  let n = 0;
+  for (const [type, sizes] of Object.entries(BIG_RECIPES)) for (const key of Object.keys(sizes)) {
+    const [fw, fh] = key.split('x').map(Number), rc = resolveRecipe(type, kit, fw, fh); assert.ok(rc, type + ' ' + key + ' resolves'); n++;
+    assert.equal(rc.cu, 4 * fw); assert.equal(rc.cv, 4 * fh); assert.equal(rc.fw, fw); assert.ok(rc.key.endsWith('@' + key));
+    for (const [u, v] of lanesFor(fw, fh)) assert.ok(!rc.occ[u][v], `${type} ${key}: lane ${u},${v} is free`);
+    assert.ok(freeConnected(rc), `${type} ${key}: one open floor`);
+    for (const p of rc.props) { assert.ok(p.u >= 0 && p.v >= 0 && p.u + p.c <= rc.cu && p.v + p.r <= rc.cv, `${type} ${key} ${p.id} inside`); if (TALL.includes(p.id)) assert.ok(p.u === 0 || p.v === 0, `${type} ${key}: tall ${p.id} at ${p.u},${p.v} hugs a back wall`); }
+    assert.ok(rc.props.length >= (fw * fh >= 4 ? 7 : 6), `${type} ${key}: more props than a single cell room (${rc.props.length})`);
+    assert.ok(rc.free.length > 0 && rc.stand);
+  }
+  assert.ok(n >= 15, 'sizes checked: ' + n);
+  // the 1 x 2 plan is the 2 x 1 plan mirrored across the diagonal
+  const a = resolveRecipe('rm_ward', kit, 2, 1), b = resolveRecipe('rm_ward', kit, 1, 2);
+  assert.equal(a.props.length, b.props.length); for (let i = 0; i < a.props.length; i++) { assert.equal(a.props[i].u, b.props[i].v); assert.equal(a.props[i].v, b.props[i].u); assert.notEqual(a.props[i].flip, b.props[i].flip); }
+  assert.equal(resolveRecipe('rm_ward', kit, 2, 2), null, 'no 2 x 2 plan for a Ward');
+  assert.equal(resolveRecipe('rm_corridor', kit, 2, 1), null, 'a Corridor has no big plan: it never expands');
+  assert.equal(hasBigRecipe('rm_ward', 3, 1), false);
+  const one = resolveRecipe('rm_ward', kit); assert.ok(one && one.cu === 4 && one.key === 'rm_ward#0', 'the 1 x 1 plan and its key are untouched');
+});
+
+t('doors and walking: a big room has a door wherever a neighbour meets one of its cells; the hero crosses its inner cell boundary freely', () => {
+  const run = mk('doors'); const [ent, wd, up, dn, ch] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1], ['rm_corridor', 2, 1], ['rm_corridor', 1, 3], ['rm_chapel', 3, 2]]);
+  const list = Object.values(run.ward.rooms), at = (x, y) => (run.ward.grid[y] && run.ward.grid[y][x] && run.ward.grid[y][x] !== 'rubble' ? run.ward.grid[y][x] : null);
+  const plan = wallPlan(list, (id) => W.neighbors(run, id), at), p = plan.get(wd);
+  assert.deepEqual(p.Ls, [true], 'west: the Entrance meets its one L segment'); assert.deepEqual(p.Rs, [false, true], 'north: the corridor above the SECOND cell gives the second R segment a door');
+  assert.deepEqual(p.slabLs, [false, true], 'south: the corridor under the first cell closes that front edge, the second stays open'); assert.deepEqual(p.slabRs, [false], 'east: the Chapel');
+  assert.equal(p.L, true); assert.equal(p.R, true); assert.equal(p.w, 2);
+  const q = plan.get(ent); assert.deepEqual(q.Ls, [false]); assert.deepEqual(q.Rs, [false]);
+  // one door per touching neighbour cell, never a door in a wall nothing touches
+  const kit = JSON.parse(readFileSync(new URL('../graftwork/assets/ward_kit/manifest.json', import.meta.url), 'utf8')), rc = resolveRecipe('rm_ward', kit, 2, 1);
+  const info = (gx, gy) => { const id = at(Math.floor(gx / 4), Math.floor(gy / 4)); if (!id) return null; const r = run.ward.rooms[id]; if (r.type !== 'rm_ward') return { room: true, solid: false, rid: id }; return { room: true, solid: !!rc.occ[gx - r.x * 4][gy - r.y * 4], rid: id }; };
+  const from = [1 * 4 + rc.stand[0], 2 * 4 + rc.stand[1]], to = [1 * 4 + 7, 2 * 4 + 1];
+  const path = pathOnGrid(from, to, info); assert.ok(path && path.length > 2, 'a path across the two cells'); assert.ok(path.every(([gx, gy]) => info(gx, gy) && !info(gx, gy).solid));
+  assert.ok(path.some(([gx]) => gx === 4 + 3) && path.some(([gx]) => gx === 4 + 4), 'it crosses the inner boundary (columns 3 and 4 of the room)');
+  void dn; void ch; void up;
 });
 
 t('property: 80 random Ward runs with Expand on and off keep the grid consistent every morning, every route legal, every save round-trips', () => {
