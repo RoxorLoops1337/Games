@@ -1,7 +1,6 @@
 // Title screen: logo, menu, hero select (New Run), Daily Run, Credits. Owner: title/end/settings.
 // States: 'menu' | 'select' | 'credits'. Keys come from app.pressedKeys (works in the browser and in headless tests).
 import { COL, FONT, FONT_UI, EASE, W, H, rgba, clamp } from './core.js';
-import { drawBackground } from '../art/backgrounds.js';
 import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
@@ -48,15 +47,6 @@ function stitchLine(g, x1, y1, x2, y2, o = {}) {
   for (let i = 0; i <= n; i++) { const px = x1 + ux * (len * i / n), py = y1 + uy * (len * i / n); g.moveTo(px - nx * s, py - ny * s); g.lineTo(px + nx * s, py + ny * s); }
   g.stroke(); g.restore();
 }
-function staple(g, x, y, ang = 0, s = 1) {
-  g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
-  g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 6; g.shadowOffsetY = 2;
-  g.strokeStyle = '#d6a94a'; g.lineWidth = lnw(5); g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -3); g.lineTo(-14, 3); g.lineTo(14, 3); g.lineTo(14, -3); g.stroke();
-  g.shadowBlur = 0; g.shadowOffsetY = 0;
-  g.strokeStyle = '#fff1b8'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(-13, 1.5); g.lineTo(13, 1.5); g.stroke();
-  g.restore();
-}
-
 // ---------- the screen ----------
 // Hero accent colours (Marrow's blood red) are too dark to read as small labels on the dark panel: mix them toward vellum.
 export function labelColor(hex, k = 0.62) {
@@ -123,15 +113,15 @@ export default {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow, cm = calm(app), dt = Math.min(0.05, app.dt || 0.016);
     // any input skips the intro and is used up by it (a click must not also press a button that is not there yet)
     if (this.introPlanned && !app.blocked && (app.mouse.pressed || app.mouse.released || app.pressedKeys.length)) {
-      this.skipIntro(app); app.mouse.pressed = false; app.mouse.released = false; app.pressedKeys.length = 0;
+      this.skipIntro(app); app.mouse.pressed = false; app.mouse.released = false; app.mouse.pressStart = null; app.pressedKeys.length = 0;
     }
     this.introT += dt; this.clock += cm ? 0 : dt;
     const p = this.introPlanned ? clamp(this.introT / INTRO_S, 0, 1) : 1;
     if (this.introPlanned && p >= 1) this.introPlanned = false;
-    this.menuK = clamp((this.introT - this.menuAt) / (this.introPlanned || this.menuAt ? 0.9 : 0.9), 0, 1);
+    this.menuK = cm ? 1 : clamp((this.introT - this.menuAt) / 0.9, 0, 1);
     this.logoK = p;
     if (!this.chimed && p >= 0.8) { this.chimed = true; const a = app.shared.audio; if (a) a.sfx('graftAttach', { vol: 0.5 }); }
-    const sceneK = this.introPlanned || this.menuAt ? clamp(this.introT / 1.8, 0, 1) : clamp(this.introT / 0.6, 0, 1);
+    const sceneK = cm ? 1 : this.introPlanned || this.menuAt ? clamp(this.introT / 1.8, 0, 1) : clamp(this.introT / 0.6, 0, 1);
     SCENE.draw(app, { calm: cm, fade: sceneK });
     this.audioTick(app, dt, cm);
     // logo, thread and tagline (the thread is part of the big title only)
@@ -143,9 +133,9 @@ export default {
     g.restore();
     for (const ev of LOGO.take()) { if (ev.tk) this.tick(app, ev.tk); }
     if (menuState) {
-      const tg = taglineAt(this.clock, cm), reveal = this.introPlanned ? clamp((p - 0.86) / 0.14, 0, 1) : clamp(this.introT / 0.5, 0, 1);
-      g.save(); g.globalAlpha = reveal; const sg = g.createLinearGradient(220, 0, 1060, 0); sg.addColorStop(0, 'rgba(8,6,10,0)'); sg.addColorStop(0.2, 'rgba(8,6,10,.62)'); sg.addColorStop(0.8, 'rgba(8,6,10,.62)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
-      g.fillStyle = sg; g.fillRect(220, 236, 840, 56); g.restore(); // a soft dark band keeps the two lines readable over the lit rooms
+      const tg = taglineAt(this.clock, cm), reveal = cm ? 1 : this.introPlanned ? clamp((p - 0.86) / 0.14, 0, 1) : clamp(this.introT / 0.5, 0, 1);
+      g.save(); g.globalAlpha = reveal * 0.8; g.translate(640, 266); g.scale(1, 0.1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 480); sg.addColorStop(0, 'rgba(8,6,10,.85)'); sg.addColorStop(0.6, 'rgba(8,6,10,.5)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
+      g.fillStyle = sg; g.fillRect(-480, -480, 960, 960); g.restore(); // a soft dark pool keeps the two lines readable over the lit rooms
       app.text(tg.text, 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: 760, lines: 1 } });
       app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 274, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: 760, lines: 1 } });
     }
@@ -159,8 +149,10 @@ export default {
     // top right: fullscreen (reserved zone 1128..1272 x 0..56)
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
     // corner: version + credit line + mute (always)
-    app.text('GRAFTWORK ' + VERSION, 16, H - 38, { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 300, lines: 1 } });
-    app.text('Cut and sewn by hand. See Credits.', 16, H - 22, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.38)', fit: { w: 300, lines: 1 } });
+    const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 300, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 300, lines: 1 } };
+    const vh = app.layoutText('GRAFTWORK ' + VERSION, vo).h, ch = app.layoutText('Cut and sewn by hand. See Credits.', co).h, fy = H - 10 - vh - ch;
+    app.text('GRAFTWORK ' + VERSION, 16, fy, vo);
+    app.text('Cut and sewn by hand. See Credits.', 16, fy + vh + 1, co);
     const st = settingsOf(app);
     const mx = W - 54, my = H - 54;
     const over = app.inRect(mx, my, 38, 38);
