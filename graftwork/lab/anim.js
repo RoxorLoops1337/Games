@@ -5,7 +5,7 @@
 //   rooms       ui/ward_kit_iso.js (the modular kit floor) + data/ward_kit.js recipes
 //   rig         ui/rig.js (the placeholder humanoid and its step cycle)
 //   frames      ui/assets.js (frames, frame, walkIndex, pickAtkFrame, normalizeFrames)
-// URL params: ?scene=viewer|map|battle|rig|compare &actor=marrow &anim=idle|walk|attack|hit|die &source=auto|frames|swap|procedural
+// URL params: ?scene=viewer|map|battle|rig|compare &actor=marrow &anim=idle|walk|attack|hit|die &source=puppet|auto|frames|swap|procedural
 //   &t=1.2 (freeze at a time) &frame=2 (jump to a frame) &speed=0.5 &grid=1 &feet=1 &contact=1 &onion=1 &flip=1 &calm=1 &scale=1.5
 //   map: &pace=normal|fast|wander &tod=morning|midday|evening|night   battle: &hero=marrow &enemies=a,b,c &act=1..3 &do=attack|eattack|hit|block|die|heal|status
 //   compare: &actor2=wick &source2=procedural
@@ -14,6 +14,8 @@ import * as CA from '../ui/combat_art.js';
 import * as ISO from '../ui/ward_iso.js';
 import * as KR from '../ui/ward_kit_iso.js';
 import * as RIG from '../ui/rig.js';
+import * as PUP from '../ui/puppet.js';
+import { gaitEntry, wantsPuppet } from '../data/gaits.js';
 import * as J from '../ui/juice.js';
 import * as L from '../ui/combat_layout.js';
 import { Fx } from '../ui/fx.js';
@@ -48,9 +50,9 @@ const SCENE_LABEL = { viewer: 'Actor viewer', map: 'Map walk', battle: 'Battle',
 const ANIMS = ['idle', 'walk', 'attack', 'hit', 'die'];
 const ST = {
   scene: SCENES.includes(Q.get('scene')) ? Q.get('scene') : (Q.get('scene') === 'actor' ? 'viewer' : 'viewer'),
-  actor: Q.get('actor') || 'marrow', anim: ANIMS.includes(Q.get('anim')) ? Q.get('anim') : 'walk', source: Q.get('source') || 'auto',
+  actor: Q.get('actor') || 'marrow', anim: ANIMS.includes(Q.get('anim')) ? Q.get('anim') : 'walk', source: Q.get('source') || 'puppet',
   scale: qn('scale', 1), flip: qb('flip', false), grid: qb('grid', false), feet: qb('feet', true), contact: qb('contact', true), onion: qb('onion', false), calm: qb('calm', reducedOS),
-  actor2: Q.get('actor2') || 'wick', source2: Q.get('source2') || 'procedural',
+  actor2: Q.get('actor2') || 'wick', source2: Q.get('source2') || 'frames', split: qb('split', true),
   map: { actor: Q.get('actor') || 'marrow', pace: Q.get('pace') || 'normal', tod: Q.get('tod') || 'midday', zoom: qn('zoom', 1), trail: true },
   battle: { hero: Q.get('hero') || 'marrow', enemies: (Q.get('enemies') || 'gauze_mummy,bedpan_slime').split(',').filter(Boolean).slice(0, 3), act: clamp(qn('act', 1), 1, 3), status: false, aura: true, frames: true, target: 'enemies' },
   rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true },
@@ -198,7 +200,7 @@ function keysOf(m, anim) {
   if (anim === 'die') return m.hero ? [{ t: 0.02, stem: m.F && m.F.hit }, { t: 0.54 + E, stem: m.F && m.F.die }, { t: 1.7, stem: m.F && m.F.die }] : [{ t: 0.02, stem: m.F && m.F.hit }, { t: 0.289 + E, stem: m.F && m.F.die }, { t: 0.8, stem: m.F && m.F.die }];
   return [];
 }
-function walkN(m, source) { const s = walkSrc(m, source); return s === 'frames' ? m.F.walk.length : s === 'swap' ? 2 : 4; }
+function walkN(m, source) { const s = walkSrc(m, source); return s === 'puppet' ? 4 : s === 'frames' ? m.F.walk.length : s === 'swap' ? 2 : 4; }
 function stepFrame(m, anim, dir) {
   CLK.playing = false;
   if (anim === 'walk') {
@@ -212,13 +214,20 @@ function stepFrame(m, anim, dir) {
 
 // ---------------- sources: what the game would draw, and the override ----------------
 function walkSrc(m, source) {
+  if (source === 'puppet' || (source === 'auto' && wantsPuppet(m.id))) return 'puppet';
   const hasF = !!(m.F && m.F.walk.length >= 2);
   if ((source === 'auto' || source === 'frames') && hasF) return 'frames';
   if (source === 'procedural') return 'procedural';
   return m.swap ? 'swap' : 'procedural';
 }
+function puppetOf(m) { const a = assets.actor(m.id, APP); return a ? PUP.infoOf(a.img, m.id) : null; }
 function walkLabel(m, source) {
-  const s = walkSrc(m, source), note = source === 'frames' && s !== 'frames' ? ' (no walk frames for this actor, game fallback shown)' : '';
+  const s = walkSrc(m, source);
+  if (s === 'puppet') { const pe = puppetOf(m); return 'PUPPET walk: ' + (pe ? pe.kind + (pe.kind === 'legged' ? ', legs split at the hip, left foot then right' : ' gait, body only') : 'analysing the sprite') + (source === 'auto' ? ' (the game default)' : ''); }
+  return walkLabel2(m, source, s);
+}
+function walkLabel2(m, source, s) {
+  const note = source === 'frames' && s !== 'frames' ? ' (no walk frames for this actor, game fallback shown)' : '';
   if (s === 'frames') return `painted walk cycle, ${m.F.walk.length} frames` + (assets.walkReady(m.id, APP) ? '' : ' (decoding, step swap meanwhile)');
   if (s === 'swap') return 'step swap: standing + _b, 2 frames' + note;
   return 'procedural walk: standing frame with hop, squash and lean' + note;
@@ -243,7 +252,7 @@ function runGait(slot, rec, anim, ph, calm, dt) {
   if (!slot.g) slot.g = ISO.gait(slot.key, rec, slot.nx, 0, 1 / 60, calm, sz, S, 0);
   if (anim === 'walk' && !calm) {
     const n = slot.primed ? 1 : 40; slot.primed = true;
-    for (let i = 0; i < n; i++) { slot.g.dist = ph * sz * ISO.STRIDE - 0.5; slot.nx += 0.5; slot.g = ISO.gait(slot.key, rec, slot.nx, 0, 1 / 60, calm, sz, S, 0); }
+    for (let i = 0; i < n; i++) { slot.g.dist = ph * sz * (slot.g.sl || ISO.STRIDE) - 0.5; slot.nx += 0.5; slot.g = ISO.gait(slot.key, rec, slot.nx, 0, 1 / 60, calm, sz, S, 0); }
   } else { slot.primed = false; slot.g = ISO.gait(slot.key, rec, slot.nx, 0, Math.max(0.001, dt), calm, sz, S, 0); }
 }
 function setupRec(rec, m) { rec.kind = m.mapKind; rec.id = m.base; rec.lvl = m.lvl; rec.h = m.h; rec.alpha = 1; rec.ring = 0; rec.ph = 0; rec.pose = ''; }
@@ -252,6 +261,7 @@ function renderMap(gg, slot, m, anim, t, source, o) {
   const ph = anim === 'walk' ? t * SPS : 0;
   runGait(slot, rec, anim, ph, o.calm, o.dt === undefined ? DT : o.dt);
   const sw = walkSrc(m, source), hide = sw !== 'frames' && anim === 'walk' || source === 'swap' || source === 'procedural';
+  rec.pm = sw === 'puppet' && (anim === 'walk' || anim === 'idle') ? 'on' : 'off';
   if (anim !== 'walk') rec.frame = 0;
   if (source === 'procedural' || (anim === 'walk' && sw === 'procedural')) rec.frame = 0;
   withFramesHidden(hide, () => ISO.drawActor(APP, gg, rec, { hero: m.id }));
@@ -366,6 +376,15 @@ function overlays(info, cx, fy, z) {
     g.strokeStyle = 'rgba(224,100,80,.9)'; g.beginPath(); g.moveTo(-W * 0.6, gy); g.lineTo(W * 0.6, gy); g.stroke();
     g.strokeStyle = 'rgba(90,200,230,.95)'; g.beginPath(); g.moveTo(-W * 0.6, fyy); g.lineTo(W * 0.6, fyy); g.stroke(); g.setLineDash([]);
   }
+  if (ST.split && info.space === 'map' && im) {
+    const pe = PUP.infoOf(st.img, m.id), an = pe && pe.an;
+    if (an && an.ok && an.legs) {
+      const X = (u) => (u * d.w - ax) * k, Y = (v) => (v * d.h - ay) * k, pv = an.hip - 0.4 * (an.bot - an.hip);
+      g.lineWidth = 1.4; g.strokeStyle = '#ffe94a'; g.setLineDash([5, 3]); g.beginPath(); g.moveTo(X(an.left), Y(an.hip)); g.lineTo(X(an.right), Y(an.hip)); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = '#4af0ff'; g.beginPath(); g.moveTo(X(an.valley), Y(an.hip)); g.lineTo(X(an.valley), Y(an.bot)); g.stroke();
+      g.fillStyle = '#ff5ad0'; for (const px of [an.legTopL, an.legTopR]) { g.beginPath(); g.arc(X(px), Y(pv), 3, 0, 7); g.fill(); g.beginPath(); g.moveTo(X(px), Y(pv)); g.lineTo(X(px), Y(an.hip)); g.strokeStyle = '#ff5ad0'; g.stroke(); }
+    }
+  }
   if (ST.contact) {
     g.strokeStyle = '#ffd24a'; g.lineWidth = 1.6; const rx = Math.max(4, cm.fw * k * 0.5); g.beginPath(); g.ellipse(fxx, fyy, rx, rx * 0.35, 0, 0, Math.PI * 2); g.stroke();
     g.beginPath(); g.moveTo(fxx - 7, fyy); g.lineTo(fxx + 7, fyy); g.moveTo(fxx, fyy - 7); g.lineTo(fxx, fyy + 7); g.stroke();
@@ -441,11 +460,22 @@ function flagRows(m) {
   const walkOk = m.raw ? m.raw.walkOk !== false : null, metaFO = m.meta.framesOk;
   return [['flags', `framesOk ${metaFO === false ? 'false (rejected)' : m.raw ? 'true' : 'n/a'}, walkOk ${walkOk === null ? 'n/a' : walkOk}`, metaFO === false || walkOk === false ? 'warn' : null]];
 }
+function gaitRows(m, info) {
+  const a = assets.actor(m.id, APP), pe = a && PUP.infoOf(a.img, m.id), rows = [];
+  if (!pe) return [['gait', 'not analysed yet (or no readable pixels)', 'warn']];
+  const e = gaitEntry(m.id), how = e && e.gait ? 'table' : 'auto';
+  rows.push(['gait', `${pe.kind} (${how})`, 'good']);
+  if (pe.kind === 'legged' && pe.an) { const an = pe.an; rows.push(['split', `hip ${(an.hip * 100).toFixed(0)}% valley ${(an.valley * 100).toFixed(0)}% legs ${(an.legH * 100).toFixed(0)}% of height${an.manual ? ' (set by hand)' : ''}`, an.manual ? 'warn' : null]); }
+  else if (pe.an && !pe.an.legs) rows.push(['split', 'no legs: ' + (pe.an.reason || 'none'), null]);
+  const pp = info.rec && info.rec.pp; if (pp) rows.push(['pose', `bob ${(pp.down * 100).toFixed(1)}%  sway ${(pp.sway * 100).toFixed(1)}%  lean ${pp.lean.toFixed(3)}  squash ${pp.sq.toFixed(3)}  lift L ${(pp.footLy * 100).toFixed(1)}% R ${(pp.footRy * 100).toFixed(1)}%`]);
+  return rows;
+}
 function viewerRead(info, P, anim) {
   const m = info.m, rows = [];
   rows.push(['actor', `${m.name} (${m.id}), ${m.kind}`]);
   rows.push(['source', anim === 'walk' ? walkLabel(m, P.source) : anim === 'idle' ? 'standing frame, breathing from the gait (idle)' : combatLabel(m, anim, P.source), P.source === 'auto' ? 'good' : 'warn']);
   rows.push(...flagRows(m));
+  if (anim === 'walk' || anim === 'idle') rows.push(...gaitRows(m, info));
   const key = info.key, im = info.img, d = m.d;
   rows.push(['frame', key === '_stand' ? 'standing (' + m.id + ')' : key === '_b' ? m.id + '_b (step swap frame)' : key]);
   if (im && d) {
@@ -463,7 +493,9 @@ function viewerRead(info, P, anim) {
   } else rows.push(['image', 'not decoded yet', 'warn']);
   if (anim === 'walk' && info.space === 'map') {
     const n = walkN(m, P.source), ph = info.ph;
-    rows.push(['stride', `${ph.toFixed(2)} plants, foot ${Math.floor(ph) % 2 === 0 ? 'L' : 'R'} planted, frame ${walkIndex(ph, n) + 1} of ${n}`]);
+    const pp = info.rec && info.rec.pp;
+    if (walkSrc(m, P.source) === 'puppet') rows.push(['stride', pp ? `${info.rec.stride.toFixed(2)} steps, plant ${pp.plant || '-'} (read from the pose), step length ${(pp.stride * 100).toFixed(0)}% of height` : `${info.rec.stride.toFixed(2)} steps, no puppet pose`]);
+    else rows.push(['stride', `${ph.toFixed(2)} plants, foot ${Math.floor(ph) % 2 === 0 ? 'L' : 'R'} planted, frame ${walkIndex(ph, n) + 1} of ${n}`]);
   } else if (anim !== 'idle') rows.push(['time', `${CLK.t.toFixed(2)} s of ${durOf(m, anim).toFixed(2)} s`]);
   setRead(rows);
 }
@@ -476,15 +508,46 @@ function transport(row, getM) {
   UI.button(row, '▶', () => { const m = getM(); if (m) stepFrame(m, ST.anim, 1); }, null, 'Next frame (.)');
 }
 function animButtons(row) { for (const a of ANIMS) UI.button(row, a[0].toUpperCase() + a.slice(1), () => { ST.anim = a; CLK.t = 0; }, () => ST.anim === a); }
-function sourceSelect(row, get, set) { return UI.select(row, [{ v: 'auto', t: 'Source: auto (the game)' }, { v: 'frames', t: 'Source: painted frames' }, { v: 'swap', t: 'Source: step swap (_b)' }, { v: 'procedural', t: 'Source: procedural only' }], get, set); }
+function sourceSelect(row, get, set) { return UI.select(row, [{ v: 'puppet', t: 'Source: Puppet walk' }, { v: 'auto', t: 'Source: auto (the game)' }, { v: 'frames', t: 'Source: painted frames' }, { v: 'swap', t: 'Source: step swap (_b)' }, { v: 'procedural', t: 'Source: procedural only' }], get, set); }
 function commonControls() {
   const r = UI.group('Playback'); transport(r, () => metaOf(ST.scene === 'viewer' ? ST.actor : ST.actor));
   const r2 = UI.group(); UI.toggle(r2, 'Loop', () => CLK.loop, (v) => { CLK.loop = v; });
   UI.range(UI.group(), 'Speed', 0.1, 2, 0.05, () => CLK.speed, (v) => { CLK.speed = v; }, (v) => v.toFixed(2) + 'x');
   const o = UI.group('Overlays');
   UI.toggle(o, 'Grid', () => ST.grid, (v) => { ST.grid = v; }); UI.toggle(o, 'Feet line', () => ST.feet, (v) => { ST.feet = v; }); UI.toggle(o, 'Contact', () => ST.contact, (v) => { ST.contact = v; });
-  UI.toggle(o, 'Onion skin', () => ST.onion, (v) => { ST.onion = v; }, 'Blue = previous frame, orange = next frame'); UI.toggle(o, 'Flip', () => ST.flip, (v) => { ST.flip = v; }); UI.toggle(o, 'Reduced motion', () => ST.calm, (v) => { ST.calm = v; });
+  UI.toggle(o, 'Leg split', () => ST.split, (v) => { ST.split = v; }, 'Yellow: hip line, cyan: split column, pink: leg pivots (virtual hips)'); UI.toggle(o, 'Onion skin', () => ST.onion, (v) => { ST.onion = v; }, 'Blue = previous frame, orange = next frame'); UI.toggle(o, 'Flip', () => ST.flip, (v) => { ST.flip = v; }); UI.toggle(o, 'Reduced motion', () => ST.calm, (v) => { ST.calm = v; });
+  puppetControls();
   UI.range(UI.group(), 'Scale', 0.5, 2.5, 0.05, () => ST.scale, (v) => { ST.scale = v; }, (v) => v.toFixed(2) + 'x');
+}
+function puppetControls() {
+  const T = PUP.TUNE, D = PUP.TUNE_DEFAULT, r = UI.group('Puppet walk');
+  UI.range(r, 'Leg swing', 5, 40, 1, () => T.swing, (v) => { T.swing = v; }, (v) => v.toFixed(0) + '\u00b0');
+  UI.range(r, 'Lift', 0.02, 0.2, 0.005, () => T.lift, (v) => { T.lift = v; }, (v) => (v * 100).toFixed(1) + '%');
+  UI.range(r, 'Bob', 0, 0.08, 0.002, () => T.bob, (v) => { T.bob = v; }, (v) => (v * 100).toFixed(1) + '%');
+  UI.range(r, 'Sway', 0, 0.05, 0.002, () => T.sway, (v) => { T.sway = v; }, (v) => (v * 100).toFixed(1) + '%');
+  UI.range(r, 'Lean', 0, 0.15, 0.005, () => T.lean, (v) => { T.lean = v; }, (v) => v.toFixed(3));
+  UI.range(r, 'Twist', 0, 0.12, 0.005, () => T.twist, (v) => { T.twist = v; }, (v) => v.toFixed(3));
+  UI.button(r, 'Reset puppet', () => { Object.assign(T, D); });
+}
+// the L / R planted-foot panel and the foot-slide meter, driven by the REAL pose the game code just computed (rec.pp), never by a timer
+const SLIDE = { x: { L: 0, R: 0 }, t: 0, key: '', max: 0, cur: 0, walk: 0, d0: 0, hold: 0 };
+function plantPanel(rec, label) {
+  const pl = $('plant'); pl.style.display = 'flex';
+  if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
+  const pads = pl.children, pp = rec && rec.pp, Hw = rec && rec.pHw;
+  pads[0].classList.toggle('lit', !!(pp && pp.plantL)); pads[1].classList.toggle('lit', !!(pp && pp.plantR));
+  pads[2].style.whiteSpace = 'pre';
+  if (!pp || !Hw) { pads[2].textContent = (label || '') + '\nno puppet pose (painted or idle)'; SLIDE.key = ''; return null; }
+  // the foot position along the path in world px: distance walked + the foot offset; speed of the planted foot = its change per simulated second
+  const dt = Math.max(1e-4, CLK.playing ? DT * CLK.speed : 0), key = rec.gk, dist = rec.dist;
+  const fxL = dist + pp.footLx * Hw, fxR = dist + pp.footRx * Hw;
+  if (SLIDE.key === key && CLK.playing && pp.w >= 0.97 && (dist - SLIDE.d0) / dt > 20) { // steady walking only: the start and the stop blend the feet to the idle pose
+    const wk = (dist - SLIDE.d0) / dt; let sl = 0; if (pp.plantL && !pp.plantR) sl = Math.abs((fxL - SLIDE.x.L) / dt); else if (pp.plantR && !pp.plantL) sl = Math.abs((fxR - SLIDE.x.R) / dt); else if (pp.plantL && pp.plantR) sl = Math.max(0, Math.min(Math.abs((fxL - SLIDE.x.L) / dt), Math.abs((fxR - SLIDE.x.R) / dt)));
+    SLIDE.cur = sl; SLIDE.walk = wk; SLIDE.max = Math.max(SLIDE.max * 0.985, sl);
+  }
+  SLIDE.key = key; SLIDE.x.L = fxL; SLIDE.x.R = fxR; SLIDE.d0 = dist;
+  pads[2].textContent = `${label || 'puppet'}  plant ${pp.plant || '-'}  lead ${pp.lead}\nfoot slide ${SLIDE.cur.toFixed(1)} px/s (peak ${SLIDE.max.toFixed(1)})\nwalking speed ${SLIDE.walk.toFixed(0)} px/s${pp.w < 0.97 ? ' (starting or stopping)' : ''}`;
+  return SLIDE;
 }
 const viewerP = { P: null };
 const getP = (id, src) => { if (!viewerP.P || viewerP.P.actor !== id) viewerP.P = newPanel(id, src); viewerP.P.source = src; return viewerP.P; };
@@ -506,6 +569,7 @@ SC.viewer = {
     if (!info) { setRead([]); return; }
     stripSet(`${m.id}|${ST.anim}|${walkSrc(m, ST.source)}|${ST.source}`, stripItemsFor(m, ST.anim, ST.source), (it) => pickItem(m, ST.anim, ST.source, it));
     stripHighlight(info.key);
+    if (ST.anim === 'walk' && info.space === 'map') plantPanel(info.slot.rec, 'viewer'); else { $('plant').style.display = 'none'; SLIDE.key = ''; }
     if (performance.now() - readT > 90) { readT = performance.now(); viewerRead(info, P, ST.anim); }
     if (info.loading) { g.fillStyle = '#a8977a'; g.font = '14px Georgia'; g.textAlign = 'center'; g.fillText('Decoding the battle sprite...', w / 2, h / 2); }
   },
@@ -542,6 +606,7 @@ SC.compare = {
       }
     });
     g.strokeStyle = '#4a3624'; g.beginPath(); g.moveTo(hw, 0); g.lineTo(hw, h); g.stroke();
+    if (ST.anim === 'walk') plantPanel(cmpP.A.slots[0].rec, 'left'); else { $('plant').style.display = 'none'; }
     void col;
     if (performance.now() - readT > 90) { readT = performance.now(); setRead([['clock', `${CLK.t.toFixed(2)} s, ${CLK.speed.toFixed(2)}x, ${ST.anim}`], ...rows]); }
     STRIP.key = ''; STRIP.el.classList.add('none');
@@ -637,22 +702,24 @@ SC.map = {
     } else if (!rec.cycle) P.last = Math.floor(rec.stride + 1e-9) - 0;
     if (ST.map.trail) for (const f of MP.prints) { const a = clamp(1 - (CLK.abs - f.t) / 3, 0, 1) * 0.65; if (a <= 0) continue; g.fillStyle = f.foot === 'L' ? `rgba(90,170,255,${a})` : `rgba(255,150,70,${a})`; g.beginPath(); g.ellipse(f.x, f.y, 2.4, 1.2, 0, 0, 7); g.fill(); }
     const sw = walkSrc(m, ST.source), hide = ST.source === 'swap' || ST.source === 'procedural' || (sw !== 'frames' && ST.source !== 'auto');
+    rec.pm = sw === 'puppet' ? 'on' : 'off';
     withFramesHidden(hide, () => ISO.drawActor(APP, g, rec, { hero: m.id }));
     g.restore();
     // time of day: a multiply tint like the Ward's light pass
     const ls = ISO.lightState(ST.map.tod);
     if (ls.a > 0.01) { g.save(); g.globalCompositeOperation = 'multiply'; g.globalAlpha = ls.a; g.fillStyle = `rgb(${Math.round(ls.r)},${Math.round(ls.g)},${Math.round(ls.b)})`; g.fillRect(0, 0, w, h); g.restore(); }
     // indicators
-    const pl = $('plant'); pl.style.display = 'flex';
-    if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
-    const pads = pl.children; pads[0].classList.toggle('lit', P.lit === 'L' && CLK.abs - (P.litT || 0) < 0.18); pads[1].classList.toggle('lit', P.lit === 'R' && CLK.abs - (P.litT || 0) < 0.18);
-    const n4 = sw === 'frames' ? m.F.walk.length : 2;
-    pads[2].textContent = `plants ${P.n}  (L ${P.L} / R ${P.R})\nalternation breaks ${P.skips}\nwalk frame ${rec.cycle ? walkIndex(rec.stride, n4) + 1 : '-'} of ${n4}`;
-    pads[2].style.whiteSpace = 'pre';
+    if (rec.pp) plantPanel(rec, 'map');
+    else {
+      const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
+      const pads = pl.children; pads[0].classList.toggle('lit', P.lit === 'L' && CLK.abs - (P.litT || 0) < 0.18); pads[1].classList.toggle('lit', P.lit === 'R' && CLK.abs - (P.litT || 0) < 0.18);
+      const n4 = sw === 'frames' ? m.F.walk.length : 2;
+      pads[2].textContent = `plants ${P.n}  (L ${P.L} / R ${P.R})\nalternation breaks ${P.skips}\nwalk frame ${rec.cycle ? walkIndex(rec.stride, n4) + 1 : '-'} of ${n4}`; pads[2].style.whiteSpace = 'pre';
+    }
     if (performance.now() - readT > 90) {
       readT = performance.now();
       setRead([['actor', `${m.name} (${m.id}), h ${rec.h} world px`], ['walk source', walkLabel(m, ST.source), ST.source === 'auto' ? 'good' : 'warn'], ...flagRows(m),
-        ['pace', `${ST.calm ? 'reduced' : ST.map.pace}, ${mapSpeed().toFixed(0)} world px/s, stride ${(rec.h * ISO.STRIDE).toFixed(0)} px`], ['frame drawn', rec.used || (rec.frame === 1 ? m.id + '_b' : 'standing')],
+        ['pace', `${ST.calm ? 'reduced' : ST.map.pace}, ${mapSpeed().toFixed(0)} world px/s, stride ${(rec.h * ISO.STRIDE).toFixed(0)} px`], ...gaitRows(m, { rec }), ['frame drawn', rec.used || (rec.frame === 1 ? m.id + '_b' : 'standing')],
         ['gait', `stride ${rec.stride.toFixed(2)}  bob ${rec.bob.toFixed(2)}  squash ${rec.sq.toFixed(3)}  lean ${rec.tilt.toFixed(3)}`], ['shadow', rec.shadow ? `rx ${rec.shadow.rx.toFixed(1)} alpha ${rec.shadow.a.toFixed(2)}, flat on the floor` : '-']]);
     }
     STRIP.key = ''; STRIP.el.classList.add('none');
@@ -886,7 +953,7 @@ function initJump() {
   if (ST.anim === 'walk') { const nn = walkN(m, ST.source); CLK.t = ((n % nn + 0.5) * 2 / nn) / SPS; }
   else { const ks = keysOf(m, ST.anim); if (ks.length) CLK.t = ks[clamp(n, 0, ks.length - 1)].t; }
 }
-window.__lab = { BT, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
+window.__lab = { SLIDE, PUP, BT, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
 mountScene(ST.scene);
 requestAnimationFrame(loop);
 setInterval(() => { UI.sync(); }, 1500);
