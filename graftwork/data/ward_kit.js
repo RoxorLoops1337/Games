@@ -12,27 +12,16 @@
 //   - props stay inside the grid and never overlap each other,
 //   - the four LANE cells (0,1) (3,1) (1,0) (1,3) stay free: they are where a door leads out of the room (rows 1 to 2 of a wall are the door),
 //   - every free sub-tile is reachable from every other, so monsters and the hero can always walk.
+import { BIG_RECIPES, hasBigRecipe } from './ward_kit_big.js';
+export { hasBigRecipe };
 export const SUB = 4;
 export const WALL_FULL = 46, WALL_LOW = 15;
 export const LANES = [[0, 1], [3, 1], [1, 0], [1, 3]];
 
-// ids the art pipeline has not delivered yet. Batch 3 delivered every floor, wall and wall piece; batch 4 (props) is still to come: the recipes below carry
-// a planned variant for each room that wants one (gated by `need`, so it switches on by itself the day the signature prop reaches the manifest).
-// Footprints are what the planned variants were laid out for (the manifest's own footprint wins once it exists).
-export const PLANNED = {
-  floors: [],
-  walls: [],
-  pieces: [],
-  props: {
-    boiler_tank: [2, 1], coal_pile: [2, 1], valve_wheel: [1, 1], cable_coil: [1, 1], fuse_box: [1, 1],
-    counting_desk: [2, 1], coin_chest: [1, 1], abacus: [1, 1], pharmacy_counter: [2, 1], pill_jars: [1, 1],
-    padded_cot: [2, 1], restraint_chair: [1, 1], stove: [2, 1], prep_table: [2, 1], cauldron: [1, 1], hanging_pots: [1, 1],
-    wash_tub: [1, 1], mangle: [2, 1], drying_rack: [2, 1], bookcase: [2, 1], reading_desk: [2, 1], globe: [1, 1], library_ladder: [1, 1],
-    linen_shelf: [1, 1], linen_cart: [1, 1], slab_table: [2, 1], locker_wall: [2, 1], sheet_body: [2, 1],
-    operating_table: [2, 1], footlights: [2, 1], instrument_tray: [1, 1], throne: [1, 1],
-    workbench: [2, 1], anvil: [1, 1], tool_chest: [1, 1], pickaxe_rack: [1, 1], ore_cart: [2, 1], work_lamp: [1, 1],
-  },
-};
+// ids the art pipeline has not delivered yet. Batches 3 and 4 delivered every floor, wall, wall piece and prop, so nothing is planned today. A future batch
+// adds its ids here (with the footprints its recipe variants were laid out for) and gates the variant by `need`: it switches on by itself the day the
+// prop reaches the manifest. The manifest's own footprint wins once it exists.
+export const PLANNED = { floors: [], walls: [], pieces: [], props: {} };
 // animated props: an overlay the renderer draws over the sprite (never with reduced motion)
 export const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
 
@@ -46,7 +35,7 @@ const Wp = (id, wall, s) => ({ id, wall, s });
 //     under a window (a window on the L wall covers rows 1 to 2, on the R wall columns 1 to 2).
 //   - windows only where daylight makes sense (wards, workshops, laundry, library, kitchen), never in the morgue, cells, boiler, chapel (stained glass instead), theatre.
 //   - every room has its own floor + wall pair or its own prop mix: no two rooms look alike (tests/graftwork_ui_ward_kit.test.mjs).
-// Each room lists its PLANNED variant first (needs a batch 4 prop), then the one built from the art that exists today.
+// Each room lists its signature variant first (gated by `need`: the batch 4 props), then a fallback built from the older art that needs nothing (a kit without batch 4 still works).
 export const RECIPES = {
   rm_entrance: [{
     floor: 'tile', wall: 'wood', door: 'archdoor',
@@ -122,13 +111,13 @@ export const RECIPES = {
   ],
   rm_boiler: [
     { floor: 'darkstone', wall: 'brick', need: ['boiler_tank'], pieces: [Wp('pipes', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('vent', 'R', 0.82), Wp('sconce', 'L', 0.15)],
-      props: [P('boiler_tank', 2, 2), P('coal_pile', 2, 0), P('valve_wheel', 0, 0), P('crate', 3, 3), P('bucket', 0, 3)] },
+      props: [P('boiler_tank', 2, 2), P('coal_pile', 2, 0), P('valve_wheel', 0, 0), P('crate', 0, 2), P('bucket', 0, 3)] },
     { floor: 'darkstone', wall: 'brick', pieces: [Wp('pipes', 'L', 0.5), Wp('pipes', 'R', 0.5), Wp('vent', 'R', 0.82), Wp('sconce', 'L', 0.15)],
       props: [P('generator', 2, 2), P('rocks', 2, 0), P('bucket', 0, 3), P('crate', 0, 0), P('bucket', 3, 3)] },
   ],
   rm_laundry: [
     { floor: 'tile', wall: 'wood', need: ['wash_tub'], pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.2), Wp('sconce', 'R', 0.84)],
-      props: [P('wash_tub', 0, 0), P('wash_tub', 3, 0), P('mangle', 2, 2), P('drying_rack', 2, 3), P('bucket', 0, 3), P('crate', 0, 2)] },
+      props: [P('wash_tub', 0, 0), P('wash_tub', 3, 3), P('mangle', 2, 2), P('drying_rack', 2, 0), P('bucket', 0, 3), P('crate', 0, 2)] },
     { floor: 'tile', wall: 'wood', pieces: [Wp('window', 'L', 0.5), Wp('sconce', 'R', 0.2), Wp('sconce', 'R', 0.84)],
       props: [P('bucket', 0, 0), P('bucket', 3, 0), P('screen', 2, 2), P('crate', 0, 3), P('bucket', 3, 3), P('toolrack', 2, 0)] },
   ],
@@ -173,49 +162,58 @@ export function footprintOf(kit, id, flip) {
   const f = d && Array.isArray(d.footprint) ? d.footprint : PLANNED.props[id] || [1, 1];
   return flip ? [f[1], f[0]] : [f[0], f[1]];
 }
-export const newGrid = (v = false) => Array.from({ length: SUB }, () => Array(SUB).fill(v));
+export const newGrid = (v = false, cu = SUB, cv = SUB) => Array.from({ length: cu }, () => Array(cv).fill(v));
+// the lane cells of a w x h cell room: rows or columns 1 of every outer cell edge, and of every inner cell boundary (so a big room is one open floor)
+export function lanesFor(w = 1, h = 1) {
+  const out = [];
+  for (let j = 0; j < h; j++) { out.push([0, j * SUB + 1], [w * SUB - 1, j * SUB + 1]); if (w > 1) for (let i = 1; i < w; i++) out.push([i * SUB - 1, j * SUB + 1], [i * SUB, j * SUB + 1]); }
+  for (let i = 0; i < w; i++) { out.push([i * SUB + 1, 0], [i * SUB + 1, h * SUB - 1]); if (h > 1) for (let j = 1; j < h; j++) out.push([i * SUB + 1, j * SUB - 1], [i * SUB + 1, j * SUB]); }
+  return out;
+}
 export function doorPieceId(kit, want) { for (const id of [want, 'door', 'archdoor']) if (id && hasId(kit, 'pieces', id)) return id; return null; }
 
 const CACHE = new WeakMap();
 // the usable recipe of a room type for this kit manifest: { type, variant, key, floor, wall, pieces, props, occ, free, stand, doorPiece } or null (paint it)
-export function resolveRecipe(type, kit) {
+export function resolveRecipe(type, kit, fw = 1, fh = 1) {
   if (!kit || !kit.floors || !kit.walls) return null;
   let per = CACHE.get(kit); if (!per) { per = new Map(); CACHE.set(kit, per); }
-  if (per.has(type)) return per.get(type);
-  const out = build(type, kit); per.set(type, out); return out;
+  const ck = fw * fh > 1 ? type + '@' + fw + 'x' + fh : type;
+  if (per.has(ck)) return per.get(ck);
+  const out = build(type, kit, fw, fh); per.set(ck, out); return out;
 }
-function build(type, kit) {
-  const list = RECIPES[ROOM_ALIAS[type] || type]; if (!list) return null;
+function build(type, kit, fw = 1, fh = 1) {
+  const big = fw * fh > 1, cu = SUB * fw, cv = SUB * fh;
+  const list = big ? (BIG_RECIPES[type] || {})[fw + 'x' + fh] : RECIPES[ROOM_ALIAS[type] || type]; if (!list) return null;
   for (let vi = 0; vi < list.length; vi++) {
     const v = list[vi];
     if (!hasId(kit, 'floors', v.floor) || !hasId(kit, 'walls', v.wall)) continue;
     if ((v.need || []).some((id) => !hasId(kit, 'props', id))) continue;
-    const occ = newGrid(false), props = [];
-    for (const c of LANES) occ[c[0]][c[1]] = 'lane';
+    const occ = newGrid(false, cu, cv), props = [];
+    for (const c of big ? lanesFor(fw, fh) : LANES) occ[c[0]][c[1]] = 'lane';
     for (const c of v.clear || []) occ[c[0]][c[1]] = 'lane';
     for (const p of v.props) {
       if (!hasId(kit, 'props', p.id)) continue;
       const [c, r] = footprintOf(kit, p.id, p.flip);
-      if (p.u < 0 || p.v < 0 || p.u + c > SUB || p.v + r > SUB) continue;
+      if (p.u < 0 || p.v < 0 || p.u + c > cu || p.v + r > cv) continue;
       let ok = true; for (let i = 0; i < c && ok; i++) for (let j = 0; j < r; j++) if (occ[p.u + i][p.v + j]) { ok = false; break; }
       if (!ok) continue;
       for (let i = 0; i < c; i++) for (let j = 0; j < r; j++) occ[p.u + i][p.v + j] = true;
       props.push({ id: p.id, u: p.u, v: p.v, flip: !!p.flip, c, r, anim: PROP_ANIM[p.id] || '' });
     }
     // lanes are free ground, not props
-    const solid = newGrid(false); for (let u = 0; u < SUB; u++) for (let w = 0; w < SUB; w++) solid[u][w] = occ[u][w] === true;
-    const free = []; for (let u = 0; u < SUB; u++) for (let w = 0; w < SUB; w++) if (!solid[u][w]) free.push([u, w]);
+    const solid = newGrid(false, cu, cv); for (let u = 0; u < cu; u++) for (let w = 0; w < cv; w++) solid[u][w] = occ[u][w] === true;
+    const free = []; for (let u = 0; u < cu; u++) for (let w = 0; w < cv; w++) if (!solid[u][w]) free.push([u, w]);
     const pieces = v.pieces.filter((p) => hasId(kit, 'pieces', p.id));
-    let stand = free[0]; let bd = 1e9; for (const f of free) { const d = Math.hypot(f[0] - 1.5, f[1] - 1.5) + (f[0] + f[1]) * 0.001; if (d < bd) { bd = d; stand = f; } }
-    return { type, variant: vi, key: type + '#' + vi, floor: v.floor, wall: v.wall, pieces, props, occ: solid, free, stand, doorPiece: doorPieceId(kit, v.door), planned: (v.need || []).length > 0 };
+    let stand = free[0]; let bd = 1e9; for (const f of free) { const d = Math.hypot(f[0] - (cu - 1) / 2, f[1] - (cv - 1) / 2) + (f[0] + f[1]) * 0.001; if (d < bd) { bd = d; stand = f; } }
+    return { type, variant: vi, key: type + '#' + vi + (big ? '@' + fw + 'x' + fh : ''), fw, fh, cu, cv, floor: v.floor, wall: v.wall, pieces, props, occ: solid, free, stand, doorPiece: doorPieceId(kit, v.door), planned: (v.need || []).length > 0 };
   }
   return null;
 }
 // every free sub-tile reachable from every other through 4-neighbours
 export function freeConnected(rc) {
   if (!rc.free.length) return false;
-  const seen = newGrid(false), q = [rc.free[0]]; seen[q[0][0]][q[0][1]] = true; let n = 0;
-  while (q.length) { const [u, v] = q.pop(); n++; for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = u + du, b = v + dv; if (a < 0 || b < 0 || a >= SUB || b >= SUB || seen[a][b] || rc.occ[a][b]) continue; seen[a][b] = true; q.push([a, b]); } }
+  const cu = rc.cu || SUB, cv = rc.cv || SUB, seen = newGrid(false, cu, cv), q = [rc.free[0]]; seen[q[0][0]][q[0][1]] = true; let n = 0;
+  while (q.length) { const [u, v] = q.pop(); n++; for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = u + du, b = v + dv; if (a < 0 || b < 0 || a >= cu || b >= cv || seen[a][b] || rc.occ[a][b]) continue; seen[a][b] = true; q.push([a, b]); } }
   return n === rc.free.length;
 }
 // a prop covers (u, v)?
@@ -227,16 +225,19 @@ export function defaultWallMode(nRooms) { return nRooms <= 1 ? 'full' : nRooms <
 export const WALL_MODES = ['auto', 'full', 'low', 'cutaway'];
 
 // ---------------- doors and shared walls (the engine's neighbours are the single source of truth) ----------------
-// rooms: the list of { id, x, y }; nbrs(id) -> ids of the rooms connected to it (engine/ward.js neighbors). The wall between two connected rooms
+// rooms: the list of { id, x, y, w?, h? }; nbrs(id) -> ids of the rooms connected to it (engine/ward.js neighbors). The wall between two connected rooms
 // belongs to the one in front (the larger x or y): the L wall of (x, y) borders (x - 1, y), the R wall borders (x, y - 1). Each shared edge is
-// drawn once, with a door in it. Returns Map id -> { L: bool door, R: bool door, sharedL: bool, sharedR: bool, slabL, slabR }.
+// drawn once, with a door in it. A room w cells wide has w segments on its R wall and h on its L wall, each with its own door. Returns Map id ->
+// { L, R (any door), sharedL, sharedR, slabL, slabR (any), Ls[h], Rs[w] doors per segment, sharedLs[h], sharedRs[w], slabLs[w], slabRs[h] }.
 export function wallPlan(rooms, nbrs, roomAtXY) {
-  const out = new Map(), byId = new Map(rooms.map((q) => [q.id, q]));
+  const out = new Map();
   for (const r of rooms) {
-    const ns = nbrs(r.id).map((id) => byId.get(id)).filter(Boolean);
-    const doorL = ns.some((n) => n.x === r.x - 1 && n.y === r.y), doorR = ns.some((n) => n.y === r.y - 1 && n.x === r.x);
-    const sharedL = !!roomAtXY(r.x - 1, r.y), sharedR = !!roomAtXY(r.x, r.y - 1);
-    out.set(r.id, { L: doorL, R: doorR, sharedL, sharedR, slabL: !roomAtXY(r.x, r.y + 1), slabR: !roomAtXY(r.x + 1, r.y) });
+    const ns = new Set(nbrs(r.id)), w = r.w || 1, h = r.h || 1;
+    const Ls = [], Rs = [], sharedLs = [], sharedRs = [], slabLs = [], slabRs = [];
+    for (let j = 0; j < h; j++) { const n = roomAtXY(r.x - 1, r.y + j); Ls.push(!!n && ns.has(n)); sharedLs.push(!!n); slabRs.push(!roomAtXY(r.x + w, r.y + j)); }
+    for (let i = 0; i < w; i++) { const n = roomAtXY(r.x + i, r.y - 1); Rs.push(!!n && ns.has(n)); sharedRs.push(!!n); slabLs.push(!roomAtXY(r.x + i, r.y + h)); }
+    const any = (a) => a.some(Boolean);
+    out.set(r.id, { L: any(Ls), R: any(Rs), sharedL: any(sharedLs), sharedR: any(sharedRs), slabL: any(slabLs), slabR: any(slabRs), Ls, Rs, sharedLs, sharedRs, slabLs, slabRs, w, h });
   }
   return out;
 }
@@ -255,7 +256,7 @@ export function pathOnGrid(from, to, cellInfo, maxN = 4000) {
     if (b[0] !== a[0]) { const row = ((a[1] % SUB) + SUB) % SUB; return row >= 1 && row <= 2; }
     const col = ((a[0] % SUB) + SUB) % SUB; return col >= 1 && col <= 2;
   };
-  const roomOf = (c) => Math.floor(c[0] / SUB) + ',' + Math.floor(c[1] / SUB);
+  const roomOf = (c) => { const i = cellInfo(c[0], c[1]); return i && i.rid !== undefined ? i.rid : Math.floor(c[0] / SUB) + ',' + Math.floor(c[1] / SUB); }; // a big room is one room: its inner cell boundaries are open
   for (let qi = 0; qi < q.length && qi < maxN; qi++) {
     const c = q[qi]; if (key(c) === key(to)) break;
     for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -271,5 +272,5 @@ export function pathOnGrid(from, to, cellInfo, maxN = 4000) {
 }
 // walk inside one room's free cells (monsters): the path from one free sub-tile to another, or null
 export function pathInRoom(rc, from, to) {
-  return pathOnGrid([from[0], from[1]], [to[0], to[1]], (u, v) => (u < 0 || v < 0 || u >= SUB || v >= SUB ? null : { room: true, solid: rc.occ[u][v] }));
+  return pathOnGrid([from[0], from[1]], [to[0], to[1]], (u, v) => (u < 0 || v < 0 || u >= (rc.cu || SUB) || v >= (rc.cv || SUB) ? null : { room: true, solid: rc.occ[u][v], rid: 0 }));
 }

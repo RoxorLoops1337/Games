@@ -19,7 +19,7 @@ export const UP = {
   ASSIST_MULT: 0.5,    // Assist runs pay half (the floor still applies)
   ABANDON_MIN_FLOORS: 3,
 };
-export const TARGET_TOTAL = 906;    // total UP that opens every locked item (cost curve is normalised to this)
+export const TARGET_TOTAL = 930;    // total UP that opens every locked item (cost curve is normalised to this)
 export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
 export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
 export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
@@ -71,7 +71,7 @@ export const START = {
   // The other new rooms (Pharmacy, Library, Morgue, Kitchen, Boiler, Isolation Ward II) and the sharper upgrades and effects are earned.
   build: new Set(L(`
     b_corridor b_ward b_isolation b_chapel b_dispensary b_workshop b_sawmill b_quarry b_counting b_generator b_linen b_scaffold b_laundry
-    b_overtime b_iron_doors b_reinforced_beds b_double_doors b_morning_rounds b_requisition b_triage b_lamp_oil b_overtime_pay b_open_ledger b_fresh_linens`)),
+    b_overtime b_iron_doors b_reinforced_beds b_double_doors b_morning_rounds b_requisition b_triage b_lamp_oil b_overtime_pay b_open_ledger b_fresh_linens b_expand`)),
 };
 
 // ============================ DERIVATION ============================

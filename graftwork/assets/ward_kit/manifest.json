@@ -620,6 +620,576 @@
    ],
    "sw": 14,
    "file": "props/lectern@2x.webp"
+  },
+  "boiler_tank": {
+   "name": "Boiler tank",
+   "file2x": "props/boiler_tank@2x.webp",
+   "file1x": "props/boiler_tank@1x.webp",
+   "w": 176,
+   "h": 282,
+   "anchorX": 88.0,
+   "anchorY": 210.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 22,
+   "file": "props/boiler_tank@2x.webp"
+  },
+  "coal_pile": {
+   "name": "Coal pile",
+   "file2x": "props/coal_pile@2x.webp",
+   "file1x": "props/coal_pile@1x.webp",
+   "w": 208,
+   "h": 228,
+   "anchorX": 104.0,
+   "anchorY": 159.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 26,
+   "file": "props/coal_pile@2x.webp"
+  },
+  "valve_wheel": {
+   "name": "Valve wheel",
+   "file2x": "props/valve_wheel@2x.webp",
+   "file1x": "props/valve_wheel@1x.webp",
+   "w": 96,
+   "h": 161,
+   "anchorX": 48.0,
+   "anchorY": 113.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 12,
+   "file": "props/valve_wheel@2x.webp"
+  },
+  "cable_coil": {
+   "name": "Cable coil",
+   "file2x": "props/cable_coil@2x.webp",
+   "file1x": "props/cable_coil@1x.webp",
+   "w": 120,
+   "h": 105,
+   "anchorX": 60.0,
+   "anchorY": 73.5,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 15,
+   "file": "props/cable_coil@2x.webp"
+  },
+  "fuse_box": {
+   "name": "Fuse box",
+   "file2x": "props/fuse_box@2x.webp",
+   "file1x": "props/fuse_box@1x.webp",
+   "w": 104,
+   "h": 110,
+   "anchorX": 52.0,
+   "anchorY": 77.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 13,
+   "file": "props/fuse_box@2x.webp"
+  },
+  "counting_desk": {
+   "name": "Counting desk",
+   "file2x": "props/counting_desk@2x.webp",
+   "file1x": "props/counting_desk@1x.webp",
+   "w": 192,
+   "h": 257,
+   "anchorX": 96.0,
+   "anchorY": 185.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 24,
+   "file": "props/counting_desk@2x.webp"
+  },
+  "coin_chest": {
+   "name": "Coin chest",
+   "file2x": "props/coin_chest@2x.webp",
+   "file1x": "props/coin_chest@1x.webp",
+   "w": 112,
+   "h": 127,
+   "anchorX": 56.0,
+   "anchorY": 88.9,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/coin_chest@2x.webp"
+  },
+  "abacus": {
+   "name": "Abacus",
+   "file2x": "props/abacus@2x.webp",
+   "file1x": "props/abacus@1x.webp",
+   "w": 104,
+   "h": 117,
+   "anchorX": 52.0,
+   "anchorY": 81.9,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 13,
+   "file": "props/abacus@2x.webp"
+  },
+  "pharmacy_counter": {
+   "name": "Pharmacy counter",
+   "file2x": "props/pharmacy_counter@2x.webp",
+   "file1x": "props/pharmacy_counter@1x.webp",
+   "w": 224,
+   "h": 244,
+   "anchorX": 112.0,
+   "anchorY": 172.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/pharmacy_counter@2x.webp"
+  },
+  "pill_jars": {
+   "name": "Pill jar cabinet",
+   "file2x": "props/pill_jars@2x.webp",
+   "file1x": "props/pill_jars@1x.webp",
+   "w": 120,
+   "h": 147,
+   "anchorX": 60.0,
+   "anchorY": 102.9,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 15,
+   "file": "props/pill_jars@2x.webp"
+  },
+  "padded_cot": {
+   "name": "Padded cot",
+   "file2x": "props/padded_cot@2x.webp",
+   "file1x": "props/padded_cot@1x.webp",
+   "w": 248,
+   "h": 249,
+   "anchorX": 124.0,
+   "anchorY": 177.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 31,
+   "file": "props/padded_cot@2x.webp"
+  },
+  "restraint_chair": {
+   "name": "Restraint chair",
+   "file2x": "props/restraint_chair@2x.webp",
+   "file1x": "props/restraint_chair@1x.webp",
+   "w": 104,
+   "h": 142,
+   "anchorX": 52.0,
+   "anchorY": 99.4,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 13,
+   "file": "props/restraint_chair@2x.webp"
+  },
+  "stove": {
+   "name": "Iron stove",
+   "file2x": "props/stove@2x.webp",
+   "file1x": "props/stove@1x.webp",
+   "w": 176,
+   "h": 229,
+   "anchorX": 88.0,
+   "anchorY": 160.3,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 22,
+   "file": "props/stove@2x.webp"
+  },
+  "prep_table": {
+   "name": "Prep table",
+   "file2x": "props/prep_table@2x.webp",
+   "file1x": "props/prep_table@1x.webp",
+   "w": 224,
+   "h": 198,
+   "anchorX": 112.0,
+   "anchorY": 138.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/prep_table@2x.webp"
+  },
+  "cauldron": {
+   "name": "Cauldron",
+   "file2x": "props/cauldron@2x.webp",
+   "file1x": "props/cauldron@1x.webp",
+   "w": 112,
+   "h": 131,
+   "anchorX": 56.0,
+   "anchorY": 91.7,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/cauldron@2x.webp"
+  },
+  "hanging_pots": {
+   "name": "Hanging pot rack",
+   "file2x": "props/hanging_pots@2x.webp",
+   "file1x": "props/hanging_pots@1x.webp",
+   "w": 120,
+   "h": 153,
+   "anchorX": 60.0,
+   "anchorY": 107.1,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 15,
+   "file": "props/hanging_pots@2x.webp"
+  },
+  "wash_tub": {
+   "name": "Wash tub",
+   "file2x": "props/wash_tub@2x.webp",
+   "file1x": "props/wash_tub@1x.webp",
+   "w": 120,
+   "h": 132,
+   "anchorX": 60.0,
+   "anchorY": 92.4,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 15,
+   "file": "props/wash_tub@2x.webp"
+  },
+  "mangle": {
+   "name": "Mangle",
+   "file2x": "props/mangle@2x.webp",
+   "file1x": "props/mangle@1x.webp",
+   "w": 224,
+   "h": 231,
+   "anchorX": 112.0,
+   "anchorY": 161.7,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/mangle@2x.webp"
+  },
+  "drying_rack": {
+   "name": "Drying rack",
+   "file2x": "props/drying_rack@2x.webp",
+   "file1x": "props/drying_rack@1x.webp",
+   "w": 208,
+   "h": 229,
+   "anchorX": 104.0,
+   "anchorY": 160.3,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 26,
+   "file": "props/drying_rack@2x.webp"
+  },
+  "bookcase": {
+   "name": "Bookcase",
+   "file2x": "props/bookcase@2x.webp",
+   "file1x": "props/bookcase@1x.webp",
+   "w": 192,
+   "h": 306,
+   "anchorX": 96.0,
+   "anchorY": 234.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 24,
+   "file": "props/bookcase@2x.webp"
+  },
+  "reading_desk": {
+   "name": "Reading desk",
+   "file2x": "props/reading_desk@2x.webp",
+   "file1x": "props/reading_desk@1x.webp",
+   "w": 208,
+   "h": 234,
+   "anchorX": 104.0,
+   "anchorY": 163.8,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 26,
+   "file": "props/reading_desk@2x.webp"
+  },
+  "globe": {
+   "name": "Globe",
+   "file2x": "props/globe@2x.webp",
+   "file1x": "props/globe@1x.webp",
+   "w": 88,
+   "h": 142,
+   "anchorX": 44.0,
+   "anchorY": 99.4,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 11,
+   "file": "props/globe@2x.webp"
+  },
+  "library_ladder": {
+   "name": "Library ladder",
+   "file2x": "props/library_ladder@2x.webp",
+   "file1x": "props/library_ladder@1x.webp",
+   "w": 80,
+   "h": 155,
+   "anchorX": 40.0,
+   "anchorY": 108.5,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 10,
+   "file": "props/library_ladder@2x.webp"
+  },
+  "linen_shelf": {
+   "name": "Linen shelf",
+   "file2x": "props/linen_shelf@2x.webp",
+   "file1x": "props/linen_shelf@1x.webp",
+   "w": 112,
+   "h": 175,
+   "anchorX": 56.0,
+   "anchorY": 127.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/linen_shelf@2x.webp"
+  },
+  "linen_cart": {
+   "name": "Linen cart",
+   "file2x": "props/linen_cart@2x.webp",
+   "file1x": "props/linen_cart@1x.webp",
+   "w": 136,
+   "h": 124,
+   "anchorX": 68.0,
+   "anchorY": 86.8,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 17,
+   "file": "props/linen_cart@2x.webp"
+  },
+  "slab_table": {
+   "name": "Slab table",
+   "file2x": "props/slab_table@2x.webp",
+   "file1x": "props/slab_table@1x.webp",
+   "w": 248,
+   "h": 208,
+   "anchorX": 124.0,
+   "anchorY": 145.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 31,
+   "file": "props/slab_table@2x.webp"
+  },
+  "locker_wall": {
+   "name": "Locker wall",
+   "file2x": "props/locker_wall@2x.webp",
+   "file1x": "props/locker_wall@1x.webp",
+   "w": 240,
+   "h": 243,
+   "anchorX": 120.0,
+   "anchorY": 171.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 30,
+   "file": "props/locker_wall@2x.webp"
+  },
+  "sheet_body": {
+   "name": "Sheeted body",
+   "file2x": "props/sheet_body@2x.webp",
+   "file1x": "props/sheet_body@1x.webp",
+   "w": 248,
+   "h": 235,
+   "anchorX": 124.0,
+   "anchorY": 164.5,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 31,
+   "file": "props/sheet_body@2x.webp"
+  },
+  "operating_table": {
+   "name": "Operating table",
+   "file2x": "props/operating_table@2x.webp",
+   "file1x": "props/operating_table@1x.webp",
+   "w": 224,
+   "h": 270,
+   "anchorX": 112.0,
+   "anchorY": 198.0,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/operating_table@2x.webp"
+  },
+  "footlights": {
+   "name": "Footlights",
+   "file2x": "props/footlights@2x.webp",
+   "file1x": "props/footlights@1x.webp",
+   "w": 224,
+   "h": 188,
+   "anchorX": 112.0,
+   "anchorY": 131.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/footlights@2x.webp"
+  },
+  "instrument_tray": {
+   "name": "Instrument tray",
+   "file2x": "props/instrument_tray@2x.webp",
+   "file1x": "props/instrument_tray@1x.webp",
+   "w": 88,
+   "h": 123,
+   "anchorX": 44.0,
+   "anchorY": 86.1,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 11,
+   "file": "props/instrument_tray@2x.webp"
+  },
+  "throne": {
+   "name": "Throne",
+   "file2x": "props/throne@2x.webp",
+   "file1x": "props/throne@1x.webp",
+   "w": 88,
+   "h": 179,
+   "anchorX": 44.0,
+   "anchorY": 131.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 11,
+   "file": "props/throne@2x.webp"
+  },
+  "workbench": {
+   "name": "Workbench",
+   "file2x": "props/workbench@2x.webp",
+   "file1x": "props/workbench@1x.webp",
+   "w": 224,
+   "h": 218,
+   "anchorX": 112.0,
+   "anchorY": 152.6,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 28,
+   "file": "props/workbench@2x.webp"
+  },
+  "anvil": {
+   "name": "Anvil",
+   "file2x": "props/anvil@2x.webp",
+   "file1x": "props/anvil@1x.webp",
+   "w": 88,
+   "h": 105,
+   "anchorX": 44.0,
+   "anchorY": 73.5,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 11,
+   "file": "props/anvil@2x.webp"
+  },
+  "tool_chest": {
+   "name": "Tool chest",
+   "file2x": "props/tool_chest@2x.webp",
+   "file1x": "props/tool_chest@1x.webp",
+   "w": 112,
+   "h": 111,
+   "anchorX": 56.0,
+   "anchorY": 77.7,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 14,
+   "file": "props/tool_chest@2x.webp"
+  },
+  "pickaxe_rack": {
+   "name": "Pickaxe rack",
+   "file2x": "props/pickaxe_rack@2x.webp",
+   "file1x": "props/pickaxe_rack@1x.webp",
+   "w": 120,
+   "h": 148,
+   "anchorX": 60.0,
+   "anchorY": 103.6,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 15,
+   "file": "props/pickaxe_rack@2x.webp"
+  },
+  "ore_cart": {
+   "name": "Ore cart",
+   "file2x": "props/ore_cart@2x.webp",
+   "file1x": "props/ore_cart@1x.webp",
+   "w": 200,
+   "h": 199,
+   "anchorX": 100.0,
+   "anchorY": 139.3,
+   "footprint": [
+    2,
+    1
+   ],
+   "sw": 25,
+   "file": "props/ore_cart@2x.webp"
+  },
+  "work_lamp": {
+   "name": "Work lamp",
+   "file2x": "props/work_lamp@2x.webp",
+   "file1x": "props/work_lamp@1x.webp",
+   "w": 64,
+   "h": 150,
+   "anchorX": 32.0,
+   "anchorY": 105.0,
+   "footprint": [
+    1,
+    1
+   ],
+   "sw": 8,
+   "file": "props/work_lamp@2x.webp"
   }
  }
 }

@@ -21,13 +21,13 @@ const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
 // ---- animation frames: pure helpers (no DOM), shared by the map and the battle ----
 const stemList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 const stemOf = (v) => (typeof v === 'string' && v ? v : null);
-// a manifest `frames` entry -> { walk:[stems], atk:[stems], atkBy:{1,2,3}, hit, die, hi3x } or null when it holds nothing usable
+// a manifest `frames` entry (`walkOk: false` = the painted walk cycle does not read as steps: the walk list is ignored and the procedural walk stays) -> { walk:[stems], atk:[stems], atkBy:{1,2,3}, hit, die, hi3x } or null when it holds nothing usable
 export function normalizeFrames(f) {
   if (!f || typeof f !== 'object') return null;
-  const walk = stemList(f.walk), atk = stemList(f.atk), hit = stemOf(f.hit), die = stemOf(f.die), atkBy = {};
+  const walkOk = f.walkOk !== false, walk = walkOk ? stemList(f.walk) : [], atk = stemList(f.atk), hit = stemOf(f.hit), die = stemOf(f.die), atkBy = {};
   for (const st of atk) { const m = /atk([123])$/.exec(st); if (m) atkBy[m[1]] = st; }
   if (!walk.length && !atk.length && !hit && !die) return null;
-  return { walk, atk, atkBy, hit, die, hi3x: !!f.hi3x };
+  return { walk, walkOk, atk, atkBy, hit, die, hi3x: !!f.hi3x };
 }
 // walk frame for a stride phase ph (counted in steps, a plant at every integer): with n frames the cycle is two steps, a frame per half step, frame 0 at contact.
 // n = 4: walk1 (contact), walk2 (passing), walk3 (contact, other foot), walk4 (passing). n = 2 behaves like the old step swap.

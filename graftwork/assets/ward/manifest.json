@@ -481,7 +481,21 @@
     186,
     243
    ],
-   "file3x": "actors/crutchling@3x.webp"
+   "file3x": "actors/crutchling@3x.webp",
+   "frames": {
+    "walk": [
+     "crutchling_walk1",
+     "crutchling_walk2",
+     "crutchling_walk3",
+     "crutchling_walk4"
+    ],
+    "atk": [
+     "crutchling_atk2"
+    ],
+    "hit": "crutchling_hit",
+    "die": "crutchling_die",
+    "hi3x": true
+   }
   },
   "defibrillator": {
    "file1x": "actors/defibrillator@1x.webp",
@@ -538,7 +552,21 @@
     203,
     243
    ],
-   "file3x": "actors/gauze_mummy@3x.webp"
+   "file3x": "actors/gauze_mummy@3x.webp",
+   "frames": {
+    "walk": [
+     "gauze_mummy_walk1",
+     "gauze_mummy_walk2",
+     "gauze_mummy_walk3",
+     "gauze_mummy_walk4"
+    ],
+    "atk": [
+     "gauze_mummy_atk2"
+    ],
+    "hit": "gauze_mummy_hit",
+    "die": "gauze_mummy_die",
+    "hi3x": true
+   }
   },
   "gurney_foot": {
    "file1x": "actors/gurney_foot@1x.webp",
@@ -614,7 +642,21 @@
     186,
     243
    ],
-   "file3x": "actors/leech_jar@3x.webp"
+   "file3x": "actors/leech_jar@3x.webp",
+   "frames": {
+    "walk": [
+     "leech_jar_walk1",
+     "leech_jar_walk2",
+     "leech_jar_walk3",
+     "leech_jar_walk4"
+    ],
+    "atk": [
+     "leech_jar_atk2"
+    ],
+    "hit": "leech_jar_hit",
+    "die": "leech_jar_die",
+    "hi3x": true
+   }
   },
   "marrow": {
    "file1x": "actors/marrow@1x.webp",
@@ -631,7 +673,15 @@
     171,
     243
    ],
-   "file3x": "actors/marrow@3x.webp"
+   "file3x": "actors/marrow@3x.webp",
+   "frames": {
+    "walk": [
+     "marrow_walk1",
+     "marrow_walk2",
+     "marrow_walk3",
+     "marrow_walk4"
+    ]
+   }
   },
   "night_nurse": {
    "file1x": "actors/night_nurse@1x.webp",
@@ -648,7 +698,21 @@
     178,
     243
    ],
-   "file3x": "actors/night_nurse@3x.webp"
+   "file3x": "actors/night_nurse@3x.webp",
+   "frames": {
+    "walk": [
+     "night_nurse_walk1",
+     "night_nurse_walk2",
+     "night_nurse_walk3",
+     "night_nurse_walk4"
+    ],
+    "atk": [
+     "night_nurse_atk2"
+    ],
+    "hit": "night_nurse_hit",
+    "die": "night_nurse_die",
+    "hi3x": true
+   }
   },
   "npc_nurse": {
    "file1x": "actors/npc_nurse@1x.webp",
@@ -716,7 +780,16 @@
     177,
     243
    ],
-   "file3x": "actors/odile@3x.webp"
+   "file3x": "actors/odile@3x.webp",
+   "frames": {
+    "walk": [
+     "odile_walk1",
+     "odile_walk2",
+     "odile_walk3",
+     "odile_walk4"
+    ],
+    "walkOk": false
+   }
   },
   "orderly": {
    "file1x": "actors/orderly@1x.webp",
@@ -735,7 +808,21 @@
     217,
     243
    ],
-   "file3x": "actors/orderly@3x.webp"
+   "file3x": "actors/orderly@3x.webp",
+   "frames": {
+    "walk": [
+     "orderly_walk1",
+     "orderly_walk2",
+     "orderly_walk3",
+     "orderly_walk4"
+    ],
+    "atk": [
+     "orderly_atk2"
+    ],
+    "hit": "orderly_hit",
+    "die": "orderly_die",
+    "hi3x": true
+   }
   },
   "pill_swarm": {
    "file1x": "actors/pill_swarm@1x.webp",
@@ -915,7 +1002,15 @@
     177,
     243
    ],
-   "file3x": "actors/wick@3x.webp"
+   "file3x": "actors/wick@3x.webp",
+   "frames": {
+    "walk": [
+     "wick_walk1",
+     "wick_walk2",
+     "wick_walk3",
+     "wick_walk4"
+    ]
+   }
   }
  },
  "icons": {

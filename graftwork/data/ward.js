@@ -6,23 +6,23 @@
 // each morning, only while the room is ON). cap = most contents the room holds. produce = per morning while ON.
 export const ROOMS = {
   rm_entrance: { id: 'rm_entrance', name: 'Entrance', cost: {}, power: 0, fixed: true, spawn: null, hint: 'Where you start each floor. It never spawns anything.', art: 'ward_entrance' },
-  rm_theatre: { id: 'rm_theatre', name: 'Operating Theatre', cost: {}, power: 0, fixed: true, spawn: { kind: 'boss' }, hint: 'The act boss scrubs in here. Open from two days before the last; on the last night you are pulled in.', art: 'ward_theatre' },
+  rm_theatre: { id: 'rm_theatre', name: 'Operating Theatre', cost: {}, power: 0, fixed: true, foot: [2, 2], spawn: { kind: 'boss' }, hint: 'The act boss scrubs in here. Open from two days before the last; on the last night you are pulled in.', art: 'ward_theatre' },
   rm_corridor: { id: 'rm_corridor', name: 'Corridor', cost: { wood: 1 }, power: 0, spawn: null, hint: 'A cheap connector. Never spawns, never goes dark.', art: 'ward_corridor' },
-  rm_ward: { id: 'rm_ward', name: 'Ward', cost: { wood: 2, stone: 1 }, power: 1, spawn: { kind: 'fight', every: 1, cap: 5 }, hint: 'A monster checks in every day (up to 5). Walk in to fight all of them: 3 at once, the rest as reinforcements.', art: 'ward_beds' },
+  rm_ward: { id: 'rm_ward', name: 'Ward', cost: { wood: 2, stone: 1 }, power: 1, spawn: { kind: 'fight', every: 1, cap: 5 }, hint: 'A monster checks in every day (up to 5). Walk in to fight all of them: 3 at once, the rest as reinforcements. Expand it to hold 7.', art: 'ward_beds', expand: { cost: { wood: 2, stone: 1 } }, big: { cap: 7 } },
   rm_isolation: { id: 'rm_isolation', name: 'Isolation', cost: { stone: 3, gold: 20 }, power: 1, spawn: { kind: 'elite', every: 2, cap: 1 }, hint: 'An elite every 2 days. Left 3 days it turns Level 2: +30% HP, +2 Strength, one more relic to choose from.', art: 'ward_isolation' },
-  rm_chapel: { id: 'rm_chapel', name: 'Chapel', cost: { wood: 2, stone: 2 }, power: 1, spawn: { kind: 'event', every: 4, cap: 1 }, hint: 'An event every 4 days. Midday leans to gold and healing, night to strange and risky.', art: 'ward_chapel' },
+  rm_chapel: { id: 'rm_chapel', name: 'Chapel', cost: { wood: 2, stone: 2 }, power: 1, spawn: { kind: 'event', every: 4, cap: 1 }, hint: 'An event every 4 days (3 when expanded). Midday leans to gold and healing, night to strange and risky.', art: 'ward_chapel', expand: { cost: { wood: 2, stone: 2 } }, big: { every: 3 } },
   rm_dispensary: { id: 'rm_dispensary', name: 'Dispensary', cost: { wood: 3, stone: 2 }, power: 1, spawn: { kind: 'shop', every: 3, cap: 1 }, hint: 'The shop. Restocks every 3 days. Also sells building cards and removes one for 50 gold.', art: 'ward_dispensary' },
-  rm_workshop: { id: 'rm_workshop', name: 'Workshop', cost: { stone: 2, gold: 40 }, power: 1, spawn: { kind: 'forge', every: 3, cap: 1 }, hint: 'The forge. Recharges every 3 days.', art: 'ward_workshop' },
+  rm_workshop: { id: 'rm_workshop', name: 'Workshop', cost: { stone: 2, gold: 40 }, power: 1, spawn: { kind: 'forge', every: 3, cap: 1 }, hint: 'The forge. Recharges every 3 days (2 when expanded).', art: 'ward_workshop', expand: { cost: { stone: 2, gold: 20 } }, big: { every: 2 } },
   rm_sawmill: { id: 'rm_sawmill', name: 'Sawmill', cost: { stone: 1 }, power: 1, spawn: null, produce: { wood: 2 }, hint: '+2 wood each morning while lit.', art: 'ward_sawmill' },
   rm_quarry: { id: 'rm_quarry', name: 'Quarry', cost: { wood: 2 }, power: 1, spawn: null, produce: { stone: 2 }, hint: '+2 stone each morning while lit.', art: 'ward_quarry' },
   rm_counting: { id: 'rm_counting', name: 'Counting House', cost: { wood: 2, stone: 2 }, power: 1, spawn: null, produce: { gold: 15 }, hint: '+15 gold each morning while lit.', art: 'ward_counting' },
-  rm_generator: { id: 'rm_generator', name: 'Generator', cost: { stone: 3 }, power: 0, spawn: null, powerAdd: 2, hint: '+2 power capacity.', art: 'ward_generator' },
+  rm_generator: { id: 'rm_generator', name: 'Generator', cost: { stone: 4 }, power: 0, spawn: null, powerAdd: 2, foot: [2, 1], big: { powerAdd: 3 }, hint: 'Two cells. +3 power capacity (an older one-cell Generator gives +2).', art: 'ward_generator' },
   // ---- Z3 rooms: auto = a quiet service run each morning while lit (every = days between runs); no walking needed ----
   rm_pharmacy: { id: 'rm_pharmacy', name: 'Pharmacy', cost: { wood: 2, stone: 2 }, power: 1, spawn: null, auto: { every: 3, potion: 1 }, hint: 'Brews a potion every 3 days while lit (15 gold if your belt is full).', art: 'ward_dispensary' },
-  rm_library: { id: 'rm_library', name: 'Library', cost: { wood: 3, stone: 1 }, power: 1, spawn: null, auto: { upgrade: 0.25 }, hint: 'Each morning while lit, a 25% chance to upgrade a random card in your deck.', art: 'ward_chapel' },
+  rm_library: { id: 'rm_library', name: 'Library', cost: { wood: 3, stone: 1 }, power: 1, spawn: null, auto: { upgrade: 0.25 }, hint: 'Each morning while lit, a 25% chance to upgrade a random card in your deck (40% when expanded).', art: 'ward_chapel', expand: { cost: { wood: 3, stone: 1 } }, big: { upgrade: 0.4 } },
   rm_morgue: { id: 'rm_morgue', name: 'Morgue', cost: { wood: 1, stone: 3 }, power: 1, spawn: null, morgue: 1, hint: 'While lit, every monster you fight leaves 1 more stone: the dead are recycled into walls.', art: 'ward_quarry' },
-  rm_kitchen: { id: 'rm_kitchen', name: 'Kitchen', cost: { wood: 3, stone: 1 }, power: 1, spawn: null, kitchen: 1, hint: 'While lit, dinner is a feast: draw 2 more cards (not 1) on the first turn of evening fights.', art: 'ward_bowl' },
-  rm_boiler: { id: 'rm_boiler', name: 'Boiler', cost: { wood: 1, stone: 3 }, power: 0, spawn: null, boiler: 1, hint: 'Uses no power. +1 power capacity per two lit Wards.', art: 'ward_generator' },
+  rm_kitchen: { id: 'rm_kitchen', name: 'Kitchen', cost: { wood: 3, stone: 1 }, power: 1, spawn: null, kitchen: 1, hint: 'While lit, dinner is a feast: draw 2 more cards (not 1) on the first turn of evening fights (3 when expanded).', art: 'ward_bowl', expand: { cost: { wood: 3, stone: 1 } }, big: { kitchen: 3 } },
+  rm_boiler: { id: 'rm_boiler', name: 'Boiler', cost: { wood: 1, stone: 4 }, power: 0, spawn: null, boiler: 1, foot: [2, 1], big: { boilerFlat: 1 }, hint: 'Two cells. Uses no power. +1 power capacity per two lit Wards, and +1 more for the big firebox.', art: 'ward_generator' },
   rm_laundry: { id: 'rm_laundry', name: 'Laundry', cost: { wood: 2, stone: 1 }, power: 1, spawn: null, auto: { every: 2, junk: 1 }, hint: 'Every 2 days while lit, washes one junk card out of your deck.', art: 'ward_linen' },
   rm_isolation2: { id: 'rm_isolation2', name: 'Isolation Ward II', cost: { stone: 4, gold: 40 }, power: 2, spawn: { kind: 'elite', every: 3, cap: 1 }, level2: true, hint: 'An elite every 3 days, always Level 2 (+30% HP, +2 Strength, one more relic to choose from). Uses 2 power.', art: 'ward_isolation' },
   rm_linen: { id: 'rm_linen', name: 'Linen Room', cost: { wood: 2 }, power: 1, spawn: { kind: 'rest', every: 2, cap: 1 }, heal: 0.3, hint: 'Clean sheets every 2 days: walk in to heal 30% of max HP.', art: 'ward_linen' },
@@ -31,7 +31,10 @@ export const ROOM_LIST = Object.values(ROOMS);
 
 // Building cards. kind: room (builds `room` on a legal cell) | upgrade (installs on a room of type `on`) | effect.
 // target: 'cell' | 'room' | 'res' (wood or stone) | 'none'. cost: what PLAYING the card costs (room cards: the room's cost).
-const room = (id, rm, rarity) => ({ id, name: ROOMS[rm].name, kind: 'room', room: rm, rarity, cost: ROOMS[rm].cost, target: 'cell', text: `Build a ${ROOMS[rm].name}. ${ROOMS[rm].hint}`, art: ROOMS[rm].art });
+const sum = (a, b) => { const o = { ...a }; for (const k in b) o[k] = (o[k] || 0) + b[k]; return o; };
+const room = (id, rm, rarity) => ({ id, name: ROOMS[rm].name, kind: 'room', room: rm, rarity, cost: ROOMS[rm].cost, target: 'cell', text: `Build a ${ROOMS[rm].name}. ${ROOMS[rm].hint}`, art: ROOMS[rm].art, ...(ROOMS[rm].foot ? { size: ROOMS[rm].foot } : {}) });
+// a room card that builds the room already expanded (2 cells): the room's cost plus its Expand cost
+const wide = (id, name, rm, rarity, text) => ({ id, name, kind: 'room', room: rm, rarity, size: [2, 1], cost: sum(ROOMS[rm].cost, ROOMS[rm].expand.cost), target: 'cell', text, art: ROOMS[rm].art });
 export const BUILD_CARDS = {
   b_corridor: room('b_corridor', 'rm_corridor', 'common'),
   b_ward: room('b_ward', 'rm_ward', 'common'),
@@ -51,6 +54,8 @@ export const BUILD_CARDS = {
   b_boiler: room('b_boiler', 'rm_boiler', 'uncommon'),
   b_laundry: room('b_laundry', 'rm_laundry', 'common'),
   b_isolation2: room('b_isolation2', 'rm_isolation2', 'rare'),
+  b_ward_wing: wide('b_ward_wing', 'Ward Wing', 'rm_ward', 'uncommon', 'Build a Ward that already spans 2 cells. It holds 7 monsters and the walk crosses it in one step.'),
+  b_grand_chapel: wide('b_grand_chapel', 'Grand Chapel', 'rm_chapel', 'uncommon', 'Build a Chapel that already spans 2 cells. An event every 3 days instead of 4.'),
   b_scaffold: { id: 'b_scaffold', name: 'Scaffold', kind: 'room', room: 'rm_corridor', rarity: 'common', cost: {}, target: 'cell', text: 'Build a Corridor for free.', art: 'ward_corridor' },
   // upgrades (one of each per room)
   b_reinforced_beds: { id: 'b_reinforced_beds', name: 'Reinforced Beds', kind: 'upgrade', on: ['rm_ward'], rarity: 'uncommon', cost: { wood: 1, stone: 1 }, target: 'room', text: 'Upgrade a Ward: two monsters check in each day instead of one.', art: 'ward_beds' },
@@ -70,6 +75,7 @@ export const BUILD_CARDS = {
   b_requisition: { id: 'b_requisition', name: 'Requisition', kind: 'effect', effect: 'res', n: 3, rarity: 'common', cost: {}, target: 'res', text: 'Gain 3 wood or 3 stone.', art: 'ward_crate' },
   b_bribe: { id: 'b_bribe', name: 'Bribe the Porter', kind: 'effect', effect: 'bribe', rarity: 'uncommon', cost: { gold: 20 }, target: 'none', text: 'Skip the next room that would trigger on a walk (until used).', art: 'ward_coin' },
   b_double_shift: { id: 'b_double_shift', name: 'Double Shift', kind: 'effect', effect: 'tick', rarity: 'uncommon', cost: { wood: 1 }, target: 'room', text: 'A chosen room with a timer ticks once now.', art: 'ward_clock' },
+  b_expand: { id: 'b_expand', name: 'Expand', kind: 'expand', rarity: 'uncommon', cost: {}, target: 'room', text: 'Grow a Ward, Chapel, Workshop, Library or Kitchen into a free cell beside it (2 cells). Pay that room\'s Expand cost; the room then uses 2 power.', art: 'ward_hammer' },
   b_demolish: { id: 'b_demolish', name: 'Demolish', kind: 'effect', effect: 'demolish', rarity: 'uncommon', cost: {}, target: 'room', text: 'Remove a room (refund half its cost) or clear rubble. Never one that would cut a room off.', art: 'ward_hammer' },
   b_floodlights: { id: 'b_floodlights', name: 'Floodlights', kind: 'effect', effect: 'flood', rarity: 'uncommon', cost: { wood: 1, stone: 1 }, target: 'none', text: 'No night modifiers today: no night Strength, gold bonus or night relic.', art: 'ward_lamp' },
   b_overtime_pay: { id: 'b_overtime_pay', name: 'Overtime Pay', kind: 'effect', effect: 'otpay', rarity: 'common', cost: { wood: 1 }, target: 'none', text: 'Gain 5 gold per lit room that uses power (max 50).', art: 'ward_coin' },

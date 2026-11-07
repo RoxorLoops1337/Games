@@ -51,7 +51,7 @@ export function handRects(n) {
   for (let i = 0; i < n; i++) out.push({ x: x0 + i * (CW + gap), y: HAND.y + 2, w: CW, h: CH });
   return out;
 }
-const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return cellCenter(r.x, r.y); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
+const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return ISO.roomCS(run.ward, r); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
 export const fastWalk = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.fastWalk);
 const walkPace = (app) => (reduced(app) ? PACE.reduced : fastWalk(app) ? PACE.fast : PACE.normal);
 const reduced = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(FX_OPTS.reduced || (s && (s.reducedMotion || s.reduceMotion))); };
@@ -92,19 +92,22 @@ export function wardInterlude(app, run, scr) {
 }
 
 // plain-words reasons for every engine why
+const costLine = (c) => ['wood', 'stone', 'gold'].filter((k) => c[k]).map((k) => `${c[k]} ${k}`).join(', ') || 'free';
 export function whyText(run, why, card, target) {
   const w = run.ward;
   switch (why) {
     case 'phase': return 'Building happens in the morning.';
     case 'nocard': return 'That plan is not in your hand.';
-    case 'cost': { const c = card.cost || {}, miss = []; if ((c.wood || 0) > w.res.wood) miss.push(`${c.wood} wood`); if ((c.stone || 0) > w.res.stone) miss.push(`${c.stone} stone`); if ((c.gold || 0) > run.gold) miss.push(`${c.gold} gold`); return 'Not enough: needs ' + miss.join(', ') + '.'; }
+    case 'cost': { let c = card.cost || {}; const miss = []; if (card.kind === 'expand') { const ex = target && WD.expandOptions(run, typeof target === 'object' ? target.room : target); c = ex && ex.cost ? ex.cost : { wood: 1 }; } if ((c.wood || 0) > w.res.wood) miss.push(`${c.wood} wood`); if ((c.stone || 0) > w.res.stone) miss.push(`${c.stone} stone`); if ((c.gold || 0) > run.gold) miss.push(`${c.gold} gold`); return 'Not enough: needs ' + miss.join(', ') + '.'; }
     case 'bounds': return 'Off the floor plan.';
     case 'occupied': return 'Something is already built here.';
     case 'rubble': return 'Rubble. A Demolish plan clears it.';
     case 'adjacent': return 'A room must share a wall with a room (the Theatre does not count).';
-    case 'target': return card && card.kind === 'room' ? 'Drop it on an empty cell.' : card && card.effect === 'res' ? 'Choose wood or stone.' : 'Drop it on a room.';
-    case 'type': { const r = w.rooms[target]; return `${card.name} does not fit a ${r ? ROOMS[r.type].name : 'room like that'}.`; }
-    case 'already': return 'Already installed here.';
+    case 'target': return card && card.kind === 'expand' ? 'Drop it on a Ward, Chapel, Workshop, Library or Kitchen, or on a free cell beside one.' : card && card.kind === 'room' ? 'Drop it on an empty cell.' : card && card.effect === 'res' ? 'Choose wood or stone.' : 'Drop it on a room.';
+    case 'type': { const r = w.rooms[typeof target === 'object' && target ? target.room : target]; return `${card.name} does not fit a ${r ? ROOMS[r.type].name : 'room like that'}.`; }
+    case 'already': return card && card.kind === 'expand' ? 'Already expanded: a room grows once, to 2 cells.' : 'Already installed here.';
+    case 'space': return card && card.kind === 'expand' ? 'No free cell beside it to grow into (rubble, walls and rooms block it).' : 'A 2 cell room needs a second free cell beside the first.';
+    case 'norecipe': return 'That room has no plan for a bigger size yet, so it cannot Expand.';
     case 'hero': return 'You are standing in it.';
     case 'cut': return 'That would cut rooms off from the Entrance.';
     case 'fixed': return 'The Entrance and the Theatre stay where they are.';
@@ -143,8 +146,10 @@ export function walkSummary(run, p, rid) {
 function roomTip(run, r) {
   const d = ROOMS[r.type], w = run.ward, lines = [];
   if (r.type === 'rm_theatre') lines.push(bossLine(run, true));
-  else if (d.power) lines.push(r.on ? `Lit: uses ${d.power} power.` : 'Dark: switched off. Its timer pauses, what is inside sleeps, and crossing it costs 3 HP.');
-  else if (d.powerAdd) lines.push(`Adds ${d.powerAdd} power. Uses none.`);
+  else if (d.power) lines.push(r.on ? `Lit: uses ${WD.powerUse(r)} power.` : 'Dark: switched off. Its timer pauses, what is inside sleeps, and crossing it costs 3 HP.');
+  else if (d.powerAdd) lines.push(`Adds ${(WD.isBig(r) && d.big && d.big.powerAdd) || d.powerAdd} power. Uses none.`);
+  if (WD.isBig(r)) lines.unshift(r.type === 'rm_theatre' ? 'A big room (2 x 2): crossing it is one step.' : `Big room (${WD.cellCount(r)} cells): crossing it is one step.`);
+  else if (d.expand && run.ward.phase === 'morning') { const ex = WD.expandOptions(run, r.id); lines.push(ex.ok ? 'An Expand plan makes it 2 cells.' : ex.why === 'space' ? 'No free cell beside it to Expand into.' : ex.why === 'norecipe' ? 'It cannot Expand: no room plan for a bigger size.' : ''); if (!lines[lines.length - 1]) lines.pop(); }
   const every = WD.everyOf(r);
   if (r.contents.length) lines.push('Inside: ' + contentsText(r));
   if (every && r.type !== 'rm_theatre') lines.push(r.contents.length >= WD.capOf(r) ? `Full (${WD.capOf(r)}). The timer waits.` : `Next spawn in ${plural(r.timers.spawn, 'day')} (every ${plural(every, 'day')}).`);
@@ -339,7 +344,7 @@ export default {
           out.drop = { tgt, ok: chk.ok };
           if (!chk.ok && (S.drag ? S.drag.moved : true)) out.chip = { text: whyText(run, chk.why, card, tgt), x: m.x, y: m.y, bad: true };
           else if (chk.ok && K.wouldBuildDark(run, card)) { const pw = WD.wardPower(run); out.chip = { text: `No spare power (${pw.used} of ${pw.cap}): the ${ROOMS[card.room].name} would be built DARK. ${S.darkOk === darkKey(uid, tgt) ? 'Drop it again to confirm.' : 'Drop it to confirm, or switch a room off first.'}`, x: m.x, y: m.y, bad: true }; }
-          else if (chk.ok) out.chip = { text: card.kind === 'room' ? `Build the ${card.name} here` : card.target === 'room' ? `${card.name} on the ${ROOMS[hovRoom.type].name}` : `Play ${card.name}`, x: m.x, y: m.y, bad: false };
+          else if (chk.ok) out.chip = { text: card.kind === 'room' ? `Build the ${card.name} here` : card.kind === 'expand' ? `Expand the ${ROOMS[w.rooms[typeof tgt === 'object' ? tgt.room : tgt].type].name} (${WD.expandOptions(run, typeof tgt === 'object' ? tgt.room : tgt).cost ? costLine(WD.expandOptions(run, typeof tgt === 'object' ? tgt.room : tgt).cost) : ''})` : card.target === 'room' ? `${card.name} on the ${ROOMS[hovRoom.type].name}` : `Play ${card.name}`, x: m.x, y: m.y, bad: false };
         }
       }
       // release: drop a dragged plan, or a tap on the grid
@@ -412,7 +417,7 @@ export default {
     const w = run.ward, cells = [], rooms = [];
     if (card.kind === 'room') { for (const [x, y] of WD.buildCells(run)) if (WD.canBuild(run, inst.uid, x, y).ok) cells.push([x, y]); }
     else if (card.target === 'room') {
-      for (const r of Object.values(w.rooms)) if (WD.canPlayBuild(run, inst.uid, r.id).ok) rooms.push(r.id);
+      for (const r of Object.values(w.rooms)) if (WD.canPlayBuild(run, inst.uid, r.id).ok) { rooms.push(r.id); if (card.kind === 'expand') for (const d of WD.expandOptions(run, r.id).dirs) for (const c of d.cells) if (!cells.some((q) => q[0] === c[0] && q[1] === c[1])) cells.push(c); }
       if (card.effect === 'demolish') for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) if (w.grid[y][x] === 'rubble' && WD.canPlayBuild(run, inst.uid, { x, y }).ok) cells.push([x, y]);
     }
     return { cells, rooms };
@@ -420,6 +425,10 @@ export default {
   targetAt(run, card, x, y) {
     const w = run.ward, id = w.grid[y][x];
     if (card.kind === 'room') return { x, y };
+    if (card.kind === 'expand' && !id) { // a free cell beside an expandable room: grow that room toward it
+      for (const [dir, [dx, dy]] of [['w', [1, 0]], ['n', [0, 1]], ['e', [-1, 0]], ['s', [0, -1]]]) { const o = w.grid[y + dy] && w.grid[y + dy][x + dx]; if (o && o !== 'rubble' && w.rooms[o] && WD.expandOptions(run, o).dirs.some((d) => d.dir === dir)) return { room: o, dir }; }
+      return undefined;
+    }
     if (card.target === 'room') { if (id === 'rubble' && card.effect === 'demolish') return { x, y }; return id && id !== 'rubble' ? id : undefined; }
     return undefined;
   },
@@ -462,7 +471,7 @@ export default {
     for (const id of Object.keys(MEM.darkBuilt).reverse()) {
       const r = w.rooms[id];
       if (!r || r.on || !ROOMS[r.type].power) { delete MEM.darkBuilt[id]; continue; }
-      if (WD.wardPower(run).free >= ROOMS[r.type].power && WD.togglePower(run, id).ok) { delete MEM.darkBuilt[id]; MEM.bulbs[id] = S.t; lit.push(ROOMS[r.type].name); }
+      if (WD.wardPower(run).free >= WD.powerUse(r) && WD.togglePower(run, id).ok) { delete MEM.darkBuilt[id]; MEM.bulbs[id] = S.t; lit.push(ROOMS[r.type].name); }
     }
     if (lit.length) { sfx(app, 'buff', { vol: 0.7 }); this.toast(`Power is back: the ${lit.join(' and the ')} ${lit.length > 1 ? 'are' : 'is'} lit.`); }
   },
@@ -619,7 +628,7 @@ export default {
       const pt = MEM.pops[r.id]; if (pt === undefined || S.t < pt) continue;
       const k = (S.t - pt) / 0.5;
       if (k >= 1) { delete MEM.pops[r.id]; continue; }
-      const cc = cellCenter(r.x, r.y);
+      const cc = ISO.roomCS(S.run.ward, r);
       g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.ellipse(cc.x, cc.y, (10 + 30 * EASE.out(k)) * ISO.CAM.z, (10 + 30 * EASE.out(k)) * ISO.CAM.z / 2, 0, 0, Math.PI * 2); g.stroke(); g.restore();
       if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x, cc.y - 10, 'spark', { n: 8 }); }
     }
@@ -630,7 +639,7 @@ export default {
   roomCard(app) {
     const run = S.run, w = run.ward, r = S.hoverRoom && !app.blocked && !S.drag && !(S.toastT > 0) ? w.rooms[S.hoverRoom] : null; // a toast owns the map while it shows: never stack the two
     if (!r) return;
-    const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y), CWd = 208, X0 = 10;
+    const g = app.ctx, d = ROOMS[r.type], tint = K.ROOM_TINT[r.type] || '#8a7a5c', b = ISO.roomBox(w, r.x, r.y, r.w || 1, r.h || 1), CWd = 208, X0 = 10;
     const every = WD.everyOf(r), body = roomTip(run, r), bo = { size: 13, ui: true, color: 'rgba(232,220,196,.85)', fit: { w: CWd - 2 * X0, lines: 7, soft: true } }, Lb = app.layoutText(body, bo);
     const hasBar = every && r.type !== 'rm_theatre', head = 24, barH = hasBar ? 22 : 0, Hh = head + barH + Lb.h + 16;
     let x = b.x + b.w + 6; if (x + CWd > SHEET.x + SHEET.w - 4) x = b.x - CWd - 6;
@@ -1047,6 +1056,7 @@ export default {
     if (w.phase === 'morning') {
       const rr = handRects(w.deck.hand.length);
       if (rr.length && maybeTip(app, 'ward_build', rr[0].x + 30, rr[0].y + 20, 'Morning: drag a building plan onto a glowing cell. A room must share a wall with a room. The cost is on the card: wood, stone, gold.', TIPO)) return;
+      if (w.deck.hand.some((c) => BUILD_CARDS[c.id].kind === 'expand') && rr.length && maybeTip(app, 'ward_expand', rr[0].x + 30, rr[0].y + 20, 'Expand: drop it on a Ward, Chapel, Workshop, Library or Kitchen. The room grows to 2 cells and uses 2 power. A Ward then holds 7 monsters, and a route still enters a big room in one step.', TIPO)) return;
       if (maybeTip(app, 'ward_power', 806, 40, 'Every lit room uses power (the bulbs, top). Tap a room to switch it off: its timer pauses, and walking through it costs 3 HP. Generators add power.', TIPO)) return;
       const tr = Object.values(w.rooms).find((r) => WD.everyOf(r) && r.type !== 'rm_theatre');
       if (tr) { const c = cellCenter(tr.x, tr.y); if (maybeTip(app, 'ward_timers', c.x - ISO.TW * 0.3, c.y - 6, 'The ring on a room counts the days to its next spawn. A Ward gains a monster every day, up to 5. Isolation grows an elite, the Chapel an event.', TIPO)) return; }

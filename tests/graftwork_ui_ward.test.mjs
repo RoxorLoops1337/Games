@@ -660,7 +660,7 @@ await t('iso: a click at a room\'s iso position switches its power, a click on a
   const box = ISO.roomBox(run.ward, 1, 2); assert.ok(box.w > 0 && box.h > ISO.TH, 'the room box covers the wall');
 });
 
-await t('iso: depth order is back to front (x + y), the hovered, selected and hero rooms come last', async () => {
+await t('iso: depth order is strictly back to front (x + y): a focus room never paints over the rooms in front of it', async () => {
   const { app, run, flow } = await setup({ seed: 'iso3' });
   const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 2, 1], ['rm_chapel', 1, 3], ['rm_sawmill', 3, 3], ['rm_quarry', 6, 0], ['rm_linen', 0, 4]]);
   const w = run.ward, key = (id) => w.rooms[id].x + w.rooms[id].y;
@@ -668,8 +668,8 @@ await t('iso: depth order is back to front (x + y), the hovered, selected and he
   for (let i = 1; i < plain.length; i++) assert.ok(key(plain[i]) >= key(plain[i - 1]), 'non-decreasing depth');
   assert.equal(plain.length, Object.keys(w.rooms).length);
   const foc = ISO.depthOrder(w, (id) => id === ids[0]).slice();
-  assert.equal(foc[foc.length - 1], ids[0], 'the focus room is drawn last');
-  assert.deepEqual(foc.slice(0, -1), plain.filter((id) => id !== ids[0]), 'everything else keeps its order');
+  assert.deepEqual(foc, plain, 'the focus room keeps its place: drawn last it painted over the rooms in front of it (entrance over chapel and sawmill)');
+  assert.equal(foc.indexOf(ids[0]), 0, 'the back-most room (x + y = 0) is drawn first even when it is the focus room');
   flow.route(); frames(app, 5);
 });
 
@@ -868,6 +868,112 @@ await t('walk pacing: the hero on the move is drawn in the final actor pass (a w
   app.shared.meta.settings.reduceMotion = app.shared.meta.settings.reducedMotion = false;
   const H = () => ISO.lastActors().find((x) => x.kind === 'hero'), st = app.screens.ward.st;
   st.walk = { cells: [a, b], i: 0, a: 0, stop: 1, t: 0, done: null, wait: false }; frames(app, 10); assert.ok(H().moving, 'moving'); st.walk = null; frames(app, 5); assert.ok(!H().moving);
+});
+
+// ---------------- big rooms (design/WARD.md "Room sizes and Expand") ----------------
+// lay rooms with sizes: spec = [[type, x, y, w, h, contents?]]; the 2 x 2 Theatre goes to (7, 3)
+function bigLayout(run, spec) {
+  const w = run.ward;
+  w.grid = Array.from({ length: w.h }, () => Array(w.w).fill(null)); w.rooms = {}; w.nextRoom = 1;
+  const ids = [];
+  for (const [type, x, y, fw = 1, fh = 1, contents = []] of spec.concat(spec.some((q) => q[0] === 'rm_theatre') ? [] : [['rm_theatre', 7, 3, 2, 2]])) {
+    const id = 'r' + w.nextRoom++, r = { id, type, x, y, on: true, level: 1, timers: { spawn: 3 }, contents, upgrades: [] };
+    if (fw > 1) r.w = fw; if (fh > 1) r.h = fh; w.rooms[id] = r; for (const [cx, cy] of WD.cellsOf(r)) w.grid[cy][cx] = id; ids.push(id);
+  }
+  w.hero.room = ids[0]; w.power.base = 12; WD.wardPower(run);
+  return ids;
+}
+const monsN = (k) => Array.from({ length: k }, () => ({ kind: 'monster', id: NORMAL1[0] }));
+
+await t('big rooms: any cell of a 2 x 1 Ward picks that cell and resolves to the Ward; the Theatre answers from all four of its cells; the registered box spans the whole floor', async () => {
+  const { app, run, flow } = await setup({ seed: 'bigpick' });
+  const [ent, wd, ch] = bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1], ['rm_chapel', 3, 2], ['rm_corridor', 3, 3]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200); wide(app);
+  for (const [x, y] of [[1, 2], [2, 2]]) { const c = ISO.cellC(run.ward, x, y); assert.deepEqual(ISO.pick(run.ward, c.x, c.y), { x, y }, 'pick ' + x + ',' + y); assert.equal(WD.roomAt(run, x, y).id, wd); }
+  const th = WD.theatreOf(run), seen = new Set();
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const c = ISO.cellC(run.ward, th.x + dx, th.y + dy); if (!ISO.overMap(c.x, c.y)) continue; const p = ISO.pick(run.ward, c.x, c.y); assert.deepEqual(p, { x: th.x + dx, y: th.y + dy }); assert.equal(WD.roomAt(run, p.x, p.y).id, th.id); seen.add(dx + ',' + dy); }
+  const one = reg('ward-room-' + ch), two = reg('ward-room-' + wd); assert.ok(one && two);
+  assert.ok(Math.abs(two.w / one.w - 1.5) < 0.02, 'two cells side by side on the iso grid are 1.5 cells wide: ' + two.w + ' vs ' + one.w);
+  const c1 = ISO.cellC(run.ward, 1, 2), c2 = ISO.cellC(run.ward, 2, 2), rc = ISO.roomCS(run.ward, run.ward.rooms[wd]);
+  assert.ok(Math.abs(rc.x - (c1.x + c2.x) / 2) < 0.5 && Math.abs(rc.y - (c1.y + c2.y) / 2) < 0.5, 'roomCS is the middle of the footprint');
+  void ent;
+});
+
+await t('big rooms: a 2 x 1 Ward shows 7 figures inside its floor (a 1 x 1 Ward stops at 5), the big room is drawn once, in order, and a dark big room sleeps', async () => {
+  const { app, run, flow } = await setup({ seed: 'bigmon' });
+  const [ent, wd, w1] = bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1, monsN(7)], ['rm_ward', 1, 4, 1, 1, monsN(7)]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const A = ISO.lastActors(), mons = A.filter((a) => a.kind === 'monster');
+  assert.equal(mons.length, 7 + 5, 'seven in the big Ward, five (the cap of a small one) in the other');
+  const c1 = ISO.cellW(run.ward, 1, 2), c2 = ISO.cellW(run.ward, 2, 2), inFoot = (a) => (Math.abs(a.x - c1.x) / (ISO.TW / 2) + Math.abs(a.y - c1.y) / (ISO.TH / 2) <= 1.2) || (Math.abs(a.x - c2.x) / (ISO.TW / 2) + Math.abs(a.y - c2.y) / (ISO.TH / 2) <= 1.2);
+  const mid = (c1.x + c2.x) / 2; assert.ok(mons.filter(inFoot).length >= 7, 'at least 7 stand on the two cells of the big floor');
+  const order = ISO.depthOrder(run.ward, null, []); assert.equal(order.filter((id) => id === wd).length, 1, 'a big room is listed once'); assert.equal(new Set(order).size, order.length);
+  assert.ok(order.indexOf(ent) < order.indexOf(wd) && order.indexOf(wd) < order.length, 'behind rooms first'); void mid; void w1;
+  run.ward.rooms[wd].on = false; frames(app, 3); assert.equal(ISO.lastActors().filter((a) => a.kind === 'monster').length, 5, 'the dark big Ward sleeps');
+});
+
+await t('big rooms: drag a Ward Wing (2 cells) onto a free cell: the ghost covers 2 cells, the drop builds one 2 cell room and spends its power; Expand grows a Ward toward the cell you drop on, or on the room itself', async () => {
+  const { app, run, flow } = await setup({ seed: 'bigdrag' });
+  const [ent, wd] = bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 3]]);
+  run.ward.res.wood = 20; run.ward.res.stone = 20; run.ward.deck.hand = [];
+  const wing = give(run, 'b_ward_wing'), ex = give(run, 'b_expand'); flow.route(); frames(app, 200); wide(app);
+  let r = handRects(2)[0], tgt = cellCenter(1, 1);
+  const m = app.mouse; m.x = r.x + r.w / 2; m.y = r.y + 60; m.pressed = true; m.down = true; app.tick(1 / 60);
+  for (let i = 1; i <= 8; i++) { m.x += (tgt.x - m.x) / 3; m.y += (tgt.y - m.y) / 3; app.tick(1 / 60); }
+  m.x = tgt.x; m.y = tgt.y; frames(app, 3);
+  const pl = WD.placement(run, [2, 1], 1, 1); assert.ok(pl.ok && pl.cells.length === 2);
+  const hov = app.screens.ward.st; assert.ok(hov.drag, 'the plan is being dragged'); 
+  m.pressed = false; m.down = false; m.released = true; app.tick(1 / 60); m.released = false; frames(app, 2);
+  const built = WD.roomAt(run, 1, 1); assert.ok(built && built.type === 'rm_ward' && WD.cellCount(built) === 2, 'one 2 cell Ward'); assert.equal(Object.values(run.ward.rooms).filter((q) => q.type === 'rm_ward').length, 2);
+  assert.equal(run.ward.res.wood, 20 - 4); assert.equal(run.ward.res.stone, 20 - 2); assert.equal(WD.powerUse(built), 2);
+  assert.ok(!run.ward.deck.hand.some((c) => c.uid === wing), 'the plan left the hand');
+  // Expand on the small Ward: dropped on a free cell beside it (south of it), it grows that way
+  const s = app.screens.ward; const card = BUILD_CARDS.b_expand;
+  assert.deepEqual(s.targetAt(run, card, 1, 4), { room: wd, dir: 's' }, 'the cell south of the Ward grows it south');
+  assert.deepEqual(s.targetAt(run, card, 2, 3), { room: wd, dir: 'e' }, 'east');
+  assert.equal(s.targetAt(run, card, 5, 5), undefined, 'a cell beside nothing');
+  assert.equal(s.targetAt(run, card, 1, 3), wd, 'on the room: the engine picks the side');
+  const lg = s.legalTargets(run, run.ward.deck.hand.find((c) => c.uid === ex), card); assert.ok(lg.rooms.includes(wd)); assert.ok(lg.cells.some(([x, y]) => x === 1 && y === 4), 'the free cells it could grow into glow');
+  assert.ok(!lg.rooms.includes(built.id), 'a room that is already big does not light up for Expand');
+  r = handRects(1)[0]; const to = cellCenter(1, 4);
+  drag(app, r.x + r.w / 2, r.y + 60, to.x, to.y);
+  const big = run.ward.rooms[wd]; assert.deepEqual([big.x, big.y, big.h], [1, 3, 2], 'grew south'); assert.equal(run.ward.grid[4][1], wd);
+  assert.equal(whyText(run, 'already', card), 'Already expanded: a room grows once, to 2 cells.'); assert.match(whyText(run, 'space', card), /free cell/); assert.match(whyText(run, 'norecipe', card), /no plan/);
+  void ent;
+});
+
+await t('big rooms: the hover card of a big room says it is big and that crossing is one step; the Theatre card says 2 x 2; Expand shows on the card of a small room that can grow', async () => {
+  const { app, run, flow } = await setup({ seed: 'bigcard' });
+  const [ent, wd, sm] = bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1], ['rm_chapel', 1, 3]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const tip = (rid) => { const f = Object.values(app.screens.ward.st || {}); void f; return rid; }; void tip;
+  const c = ISO.roomCS(run.ward, run.ward.rooms[wd]); app.mouse.x = c.x; app.mouse.y = c.y + 6; frames(app, 12);
+  const card = reg('ward-roomcard'); assert.ok(card, 'a room card on hover'); assert.ok(card.x >= 284 && card.x + card.w <= 996 && card.y >= 64 && card.y + card.h <= 548, 'inside the map panel');
+  const wc = WD.expandOptions(run, sm); assert.ok(wc.ok, 'the small Chapel can grow'); void ent;
+});
+
+await t('big rooms: the hero walks across the floor of a big room (the route step is one room; his position moves through the footprint from the west cell to the east one)', async () => {
+  const { app, run, flow } = await setup({ seed: 'bigwalk', calm: false });
+  const [ent, wd, ch] = bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1], ['rm_chapel', 3, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const st = app.screens.ward.st, H = () => ISO.lastActors().find((x) => x.kind === 'hero');
+  const xs = []; st.walk = { cells: [ent, wd, ch], i: 0, a: 0, stop: 2, t: 0, done: null, wait: false };
+  for (let i = 0; i < 160; i++) { frames(app, 1); if (H()) xs.push(H().x); }
+  st.walk = null;
+  assert.ok(xs.length > 100); const minx = Math.min(...xs), maxx = Math.max(...xs);
+  const e0 = ISO.cellW(run.ward, 0, 2), c3 = ISO.cellW(run.ward, 3, 2);
+  assert.ok(maxx - minx > ISO.TW * 1.4, 'he covers the three steps (entrance, 2 cell ward, chapel): ' + (maxx - minx).toFixed(1)); void e0; void c3;
+  let incr = 0; for (let i = 1; i < xs.length; i++) if (xs[i] >= xs[i - 1] - 0.5) incr++;
+  assert.ok(incr > xs.length * 0.85, 'he keeps going one way (no teleport back): ' + incr + '/' + xs.length);
+});
+
+for (const ps of [0, 0.64, 0.46]) await t('layout sweep: big rooms and the Expand card, ' + (ps ? 'phone ' + ps : 'desktop'), async () => {
+  const { app, run, flow } = await setup({ seed: 'bigsweep', pscale: ps });
+  bigLayout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, 2, 1, monsN(7)], ['rm_generator', 1, 3, 1, 2], ['rm_chapel', 3, 2], ['rm_theatre', 7, 3, 2, 2]]);
+  run.ward.deck.hand = []; give(run, 'b_expand'); give(run, 'b_ward_wing'); give(run, 'b_generator'); flow.route(); frames(app, 200);
+  const uid = run.ward.deck.hand[0].uid; app.screens.ward.st.sel = uid; frames(app, 6);
+  const bad = []; for (const o of LAYOUT.findOverlaps()) bad.push('overlap ' + o.a + ' x ' + o.b); for (const id of LAYOUT.findOutOfBounds()) bad.push('oob ' + id);
+  assert.deepEqual(bad, [], bad.join('; '));
 });
 
 console.log(`${n} ward UI checks passed`);

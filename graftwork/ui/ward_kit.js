@@ -33,6 +33,7 @@ export const KIND_INFO = {
   room: { label: 'ROOM', color: '#8e1f2c' },
   upgrade: { label: 'UPGRADE', color: '#7A5F12' },
   effect: { label: 'EFFECT', color: '#2f5f6b' },
+  expand: { label: 'EXPAND', color: '#5a3a7a' },
 };
 const RARE = { common: '#8a7a5c', uncommon: '#3E7C74', rare: '#C9A227' };
 
@@ -179,7 +180,9 @@ export function cardTip(card) {
   const k = KIND_INFO[card.kind];
   const cost = costParts(card).map(([r, n]) => `${n} ${r}`).join(', ') || 'free';
   const room = card.kind === 'room' ? ROOMS[card.room] : null;
-  return `${k.label}, ${card.rarity}. Costs ${cost}.` + (room ? (room.power ? ` Uses ${room.power} power while lit.` : room.powerAdd ? ` Adds ${room.powerAdd} power.` : ' Uses no power.') : '') + `\n${card.text}`;
+  const cells = card.size ? card.size[0] * card.size[1] : 1, big = room && cells > 1 && room.big ? room.big : {};
+  const pw = room ? (room.power ? ` Uses ${room.power * cells} power while lit.` : (big.powerAdd || room.powerAdd) ? ` Adds ${big.powerAdd || room.powerAdd} power.` : ' Uses no power.') : '';
+  return `${k.label}, ${card.rarity}. ` + (card.kind === 'expand' ? 'Costs what the room\'s Expand costs (shown when you aim it).' : `Costs ${cost}.`) + (cells > 1 ? ` Covers ${cells} cells.` : '') + pw + `\n${card.text}`;
 }
 // drawBuildCard(app, card, x, y, w, h, o): o.full shows the rules text (enlarged card); o.run greys unaffordable costs
 export function drawBuildCard(app, card, x, y, w, h, o = {}) {
@@ -203,7 +206,8 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   // cost row
   const parts = costParts(card), ok = o.run ? affords(o.run, card) : null;
   let cx = x + 9 * k; const cy = y + 33 * k, isz = 15 * k;
-  if (!parts.length) app.text('FREE', cx, cy - 7 * k, { size: Math.round(11 * k), ui: true, bold: true, color: '#3E7C74', alpha: A, fit: { w: 48 * k, lines: 1 } });
+  if (card.kind === 'expand') app.text('VARIES', cx, cy - 7 * k, { size: Math.round(12 * k), ui: true, bold: true, color: '#5a3a7a', alpha: A, fit: { w: 80 * k, lines: 1 } });
+  else if (!parts.length) app.text('FREE', cx, cy - 7 * k, { size: Math.round(11 * k), ui: true, bold: true, color: '#3E7C74', alpha: A, fit: { w: 48 * k, lines: 1 } });
   for (const [r, n] of parts) {
     g.save(); g.globalAlpha *= A; drawRes(g, r, cx + isz / 2, cy, isz); g.restore();
     const bad = ok && !ok[r];
@@ -211,10 +215,11 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
     cx += isz + 8 * k + app.measure(String(n), Math.round(14 * k), { bold: true, fixed: true });
   }
   // power at the right of the cost row
+  const cells = card.size ? card.size[0] * card.size[1] : 1, big = room && cells > 1 && room.big ? room.big : {};
   if (room && (room.power || room.powerAdd)) {
     const px = x + w - 14 * k;
     g.save(); g.globalAlpha *= A; drawRes(g, 'bulb', px, cy, 14 * k, true); g.restore();
-    app.text(room.powerAdd ? '+' + room.powerAdd : String(room.power), px - 9 * k, cy - 8 * k, { size: Math.round(13 * k), bold: true, align: 'right', color: room.powerAdd ? '#3E7C74' : INK, alpha: A, fixed: true });
+    app.text(room.powerAdd ? '+' + (big.powerAdd || room.powerAdd) : String(room.power * cells), px - 9 * k, cy - 8 * k, { size: Math.round(13 * k), bold: true, align: 'right', color: room.powerAdd ? '#3E7C74' : INK, alpha: A, fixed: true });
   }
   // engraved illustration
   const iy = y + 46 * k, ih = o.full ? 50 * k : 78 * k;
@@ -249,12 +254,12 @@ export function wouldBuildDark(run, card) {
   const room = card && card.kind === 'room' ? ROOMS[card.room] : null;
   if (!room || !(room.power > 0)) return false;
   const pw = WARD.wardPower(run);
-  return pw.free < room.power;
+  return pw.free < room.power * (card.size ? card.size[0] * card.size[1] : 1);
 }
 // the building plans in hand that a morning could still play (not blocked by cost): used by the End Morning warning
 export function playablePlans(run) {
   const w = run.ward, out = [];
-  for (const c of w.deck.hand) { const card = BUILD_CARDS[c.id]; if (card && WARD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null).why !== 'cost') out.push(c); }
+  for (const c of w.deck.hand) { const card = BUILD_CARDS[c.id]; if (card && WARD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null).why !== 'cost' && !(card.kind === 'expand' && !Object.keys(w.rooms).some((id) => WARD.expandOptions(run, id).ok))) out.push(c); }
   return out;
 }
 // the reward header's gold note: what the fight pays and why ("1 monster pays 75%, midday +10%")

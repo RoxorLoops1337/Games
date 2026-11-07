@@ -51,7 +51,7 @@ t('floor generation: deterministic, 9 x 6, Entrance and Theatre far apart, pre-b
     assert.equal(a.phase, 'ward'); assert.equal(w.phase, 'morning'); assert.equal(w.day, 1); assert.equal(w.dayLimit, 8);
     assert.equal(w.grid.length, 6); assert.equal(w.grid[0].length, 9);
     const ent = W.entranceOf(a), th = W.theatreOf(a);
-    assert.ok(Math.abs(ent.x - th.x) + Math.abs(ent.y - th.y) >= 8, 'far apart');
+    assert.ok(Math.abs(ent.x - th.x) + Math.abs(ent.y - th.y) >= 7, 'far apart'); assert.deepEqual(W.sizeOf(th), [2, 2], 'the Theatre is 2 x 2'); assert.ok(th.x === 7 && th.y >= 0 && th.y <= 4);
     for (const ty of ['rm_ward', 'rm_chapel', 'rm_sawmill']) assert.ok(Object.values(w.rooms).some((r) => r.type === ty), ty);
     const conn = W.connectedRooms(a);
     for (const r of Object.values(w.rooms)) if (r.type !== 'rm_theatre') assert.ok(conn.has(r.id), 'connected ' + r.type);
@@ -93,14 +93,14 @@ t('build legality: every reason, and a legal build lands', () => {
   W.endMorning(run); const late = give(run, 'b_ward'); assert.equal(W.canBuild(run, late, 0, 1).why, 'phase');
 });
 
-t('power: capacity 6 + 2 per Generator, a room built without spare power is dark, off rooms pause their timers', () => {
+t('power: capacity 6 + 3 per 2 cell Generator, a room built without spare power is dark, off rooms pause their timers', () => {
   const run = mk('pow');
   const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0], ['rm_ward', 2, 0], ['rm_quarry', 3, 0], ['rm_sawmill', 4, 0], ['rm_chapel', 5, 0], ['rm_linen', 6, 0]]);
   assert.deepEqual([W.wardPower(run).cap, W.wardPower(run).used], [6, 6]);
   run.ward.res = { wood: 20, stone: 20 };
   const r = W.playBuildCard(run, give(run, 'b_ward'), { x: 1, y: 1 }); assert.ok(r.ok); assert.equal(run.ward.rooms[r.room].on, false, 'built dark');
   assert.equal(W.togglePower(run, r.room).why, 'power');
-  assert.ok(W.playBuildCard(run, give(run, 'b_generator'), { x: 0, y: 1 }).ok); assert.equal(W.wardPower(run).cap, 8);
+  assert.ok(W.playBuildCard(run, give(run, 'b_generator'), { x: 0, y: 1 }).ok); assert.equal(W.wardPower(run).cap, 9, 'a 2 cell Generator gives +3');
   assert.ok(W.togglePower(run, r.room).ok); assert.equal(run.ward.rooms[r.room].on, true);
   assert.equal(W.togglePower(run, ids[0]).why, 'nopower');
   // pause: switch one Ward off, run mornings, only the lit Ward fills
@@ -312,12 +312,12 @@ import { rm } from 'node:fs';
 const NODASH = /[\u2014\u2013]/;
 
 t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids unique and well formed', () => {
-  assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 48, 'building cards ' + BUILD_LIST.length);
+  assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 52, 'building cards ' + BUILD_LIST.length);
   assert.equal(new Set(BUILD_LIST.map((c) => c.id)).size, BUILD_LIST.length);
-  assert.equal(RELICS_WARD.length, 17);
-  assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 17);
+  assert.equal(RELICS_WARD.length, 18);
+  assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 18);
   for (const r of RELICS_WARD) { assert.ok(/^r_w_/.test(r.id) && r.ward && RELICS[r.id] === r); assert.ok(['common', 'uncommon', 'rare', 'boss', 'shop'].includes(r.rarity)); assert.ok(r.text && !NODASH.test(r.text + r.name)); assert.ok(r.perk || r.on, r.id + ' does something'); }
-  for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(!NODASH.test(c.name + c.text), 'no em dash ' + c.id); assert.ok(['room', 'upgrade', 'effect'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
+  for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(!NODASH.test(c.name + c.text), 'no em dash ' + c.id); assert.ok(['room', 'upgrade', 'effect', 'expand'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
   for (const r of Object.values(ROOMS)) assert.ok(!NODASH.test(r.name + r.hint), r.id);
   const by = (k) => BUILD_LIST.filter((c) => c.kind === k).length; assert.ok(by('room') >= 18 && by('upgrade') >= 9 && by('effect') >= 15);
   for (const r of RELICS_WARD) assert.ok(UNLOCKS['relic:' + r.id], 'relic unlock id ' + r.id);

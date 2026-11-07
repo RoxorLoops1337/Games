@@ -36,9 +36,9 @@ function mk(w, h) {
 
 // ---------------- which rooms are modular ----------------
 // the recipe of a room type, or null (painted): needs the kit manifest, every kit image settled, and a variant whose floor and wall exist
-export function recipeFor(type, app) {
+export function recipeFor(type, app, fw = 1, fh = 1) { // fw x fh = the room's footprint in cells (a big room has its own plans, data/ward_kit_big.js)
   if (!assets.kitReady()) return null;
-  const rc = resolveRecipe(type, assets.kit); if (!rc) return null;
+  const rc = resolveRecipe(type, assets.kit, fw, fh); if (!rc) return null;
   if (!assets.kitRecipeSettled(rc, app)) return null; // only THIS recipe's images are awaited (the title needs five rooms, not the whole kit)
   if (!assets.kitImg('floors', rc.floor, app) || !assets.kitImg('walls', rc.wall, app)) return null; // the texture failed to load: paint it
   return rc;
@@ -53,7 +53,13 @@ export function recipesSettled(types, app) {
 
 // ---------------- geometry (room-local: the top vertex of the floor diamond is the origin) ----------------
 export const subPt = (gu, gv) => ({ x: (gu - gv) * HW / SUB, y: (gu + gv) * HH / SUB });
-const wallPt = (side, s) => (side === 'L' ? { x: -HW + s * HW, y: HH - s * HH } : { x: s * HW, y: s * HH });
+// a room covers fw x fh cells: the L wall (u = 0) is fh cells long, the R wall (v = 0) fw cells; n = cells along the wall. s runs 0 to 1 over the whole wall.
+const wallPt = (side, s, n = 1) => (side === 'L' ? { x: -n * HW + s * n * HW, y: n * HH - s * n * HH } : { x: s * n * HW, y: s * n * HH });
+const wallN = (rc, side) => (side === 'L' ? rc.fh || 1 : rc.fw || 1);
+export function corners(rc) { const fw = rc.fw || 1, fh = rc.fh || 1; return { T: [0, 0], R: [fw * HW, fw * HH], B: [(fw - fh) * HW, (fw + fh) * HH], L: [-fh * HW, fh * HH], fw, fh }; }
+const asDoors = (d, n) => (Array.isArray(d) ? d : Array(n).fill(!!d));
+// the extent of a room's static layer (room-local, top vertex = origin)
+export const extentOf = (rc) => { const fw = rc.fw || 1, fh = rc.fh || 1; return { x0: -fh * HW - 5, y0: -(WALL_FULL + 16), x1: fw * HW + 5, y1: (fw + fh) * HH + 12 }; };
 function poly(g, pts) { g.beginPath(); for (let i = 0; i < pts.length; i++) (i ? g.lineTo(pts[i][0], pts[i][1]) : g.moveTo(pts[i][0], pts[i][1])); g.closePath(); }
 
 // ---------------- textures: mip chains so a pattern never aliases when the camera zooms out ----------------
@@ -83,24 +89,26 @@ function texFill(g, tex, key, ox, oy, ux, uy, vx, vy, fallback, px) {
 
 // ---------------- the static layer ----------------
 function drawSlab(g, rc, p) { // the floor's thickness on the open front edges: a plinth with a lit top rim
-  const L = { x: -HW, y: HH }, B = { x: 0, y: TH }, R = { x: HW, y: HH }, th = 6, stone = rc.wall !== 'wood';
+  const C = corners(rc), th = 6, stone = rc.wall !== 'wood';
   const side = (a, b, c0, c1) => {
     poly(g, [[a.x, a.y], [b.x, b.y], [b.x, b.y + th], [a.x, a.y + th]]); const gr = g.createLinearGradient(0, a.y, 0, a.y + th + HH); gr.addColorStop(0, c0); gr.addColorStop(1, c1); g.fillStyle = gr; g.fill();
     g.strokeStyle = '#0d0907'; g.lineWidth = 1; g.stroke(); g.strokeStyle = 'rgba(255,214,150,.28)'; g.beginPath(); g.moveTo(a.x, a.y + 0.6); g.lineTo(b.x, b.y + 0.6); g.stroke();
   };
-  if (p.slabL) side(L, B, stone ? '#6d6a63' : '#6a4a30', stone ? '#3b3935' : '#3a2616');
-  if (p.slabR) side(B, R, stone ? '#4f4d48' : '#4e3522', stone ? '#2a2927' : '#2a190e');
+  const runs = (flags, n) => { const out = []; let k = 0; while (k < n) { if (!flags[k]) { k++; continue; } let e = k; while (e < n && flags[e]) e++; out.push([k, e]); k = e; } return out; };
+  for (const [a, b] of runs(asDoors(p.slabLs || !!p.slabL, C.fw), C.fw)) side({ x: C.L[0] + a * HW, y: C.L[1] + a * HH }, { x: C.L[0] + b * HW, y: C.L[1] + b * HH }, stone ? '#6d6a63' : '#6a4a30', stone ? '#3b3935' : '#3a2616');
+  for (const [a, b] of runs(asDoors(p.slabRs || !!p.slabR, C.fh), C.fh)) side({ x: C.B[0] + a * HW, y: C.B[1] - a * HH }, { x: C.B[0] + b * HW, y: C.B[1] - b * HH }, stone ? '#4f4d48' : '#4e3522', stone ? '#2a2927' : '#2a190e');
 }
 function drawFloor(g, rc, tex, px) {
-  g.beginPath(); g.moveTo(0, -0.3); g.lineTo(HW + 0.3, HH); g.lineTo(0, TH + 0.3); g.lineTo(-HW - 0.3, HH); g.closePath();
-  texFill(g, tex, 'f:' + rc.floor, 0, 0, HW, HH, -HW, HH, FLOORC[rc.floor] || '#5a4a3a', px); // one texture tile = the whole room
+  const C = corners(rc);
+  g.beginPath(); g.moveTo(0, -0.3); g.lineTo(C.R[0] + 0.3, C.R[1]); g.lineTo(C.B[0], C.B[1] + 0.3); g.lineTo(C.L[0] - 0.3, C.L[1]); g.closePath();
+  texFill(g, tex, 'f:' + rc.floor, 0, 0, HW, HH, -HW, HH, FLOORC[rc.floor] || '#5a4a3a', px); // one texture tile = one cell of the room
   g.strokeStyle = 'rgba(10,6,3,.55)'; g.lineWidth = 0.8; g.stroke();
 }
 function wallSolid(g, rc, tex, side, s0, s1, hb, H, px) {
   if (H <= hb + 0.2) return;
-  const a = wallPt(side, s0), b = wallPt(side, s1), pts = [[a.x, a.y - hb], [b.x, b.y - hb], [b.x, b.y - H], [a.x, a.y - H]];
+  const n = wallN(rc, side), a = wallPt(side, s0, n), b = wallPt(side, s1, n), pts = [[a.x, a.y - hb], [b.x, b.y - hb], [b.x, b.y - H], [a.x, a.y - H]];
   poly(g, pts);
-  const o = wallPt(side, 0);
+  const o = wallPt(side, 0, n);
   texFill(g, tex, 'w:' + rc.wall, o.x, o.y - WALL_FULL, HW, side === 'L' ? -HH : HH, 0, WALL_FULL, WALLC[rc.wall] || '#4a3424', px);
   // light from the upper left: the left wall a little brighter, the right one darker, both darker toward the floor
   const gr = g.createLinearGradient(0, a.y - H, 0, a.y); gr.addColorStop(0, side === 'L' ? 'rgba(255,214,150,.07)' : 'rgba(0,0,0,.12)'); gr.addColorStop(1, side === 'L' ? 'rgba(0,0,0,.34)' : 'rgba(0,0,0,.46)');
@@ -110,14 +118,19 @@ function wallSolid(g, rc, tex, side, s0, s1, hb, H, px) {
   g.strokeStyle = '#0d0907'; g.lineWidth = 1; g.beginPath(); g.moveTo(a.x, a.y - H - cp); g.lineTo(b.x, b.y - H - cp); g.moveTo(a.x, a.y - H); g.lineTo(b.x, b.y - H); g.stroke();
   g.beginPath(); g.moveTo(a.x, a.y - hb); g.lineTo(a.x, a.y - H - cp); g.moveTo(b.x, b.y - hb); g.lineTo(b.x, b.y - H - cp); g.stroke();
 }
-function drawWall(g, rc, tex, side, door, H, px) {
-  if (!door) wallSolid(g, rc, tex, side, 0, 1, 0, H, px);
-  else { wallSolid(g, rc, tex, side, 0, DOOR_S0, 0, H, px); wallSolid(g, rc, tex, side, DOOR_S1, 1, 0, H, px); wallSolid(g, rc, tex, side, DOOR_S0, DOOR_S1, DOOR_H, H, px); }
+function drawWall(g, rc, tex, side, door, H, px) { // door: a bool, or one bool per cell of the wall (a big room has a door wherever a neighbour meets it)
+  const n = wallN(rc, side), ds = asDoors(door, n);
+  let k = 0;
+  while (k < n) {
+    if (!ds[k]) { let e = k; while (e < n && !ds[e]) e++; wallSolid(g, rc, tex, side, k / n, e / n, 0, H, px); k = e; continue; }
+    const a = k / n, b = (k + 1) / n, d = b - a;
+    wallSolid(g, rc, tex, side, a, a + d * DOOR_S0, 0, H, px); wallSolid(g, rc, tex, side, a + d * DOOR_S1, b, 0, H, px); wallSolid(g, rc, tex, side, a + d * DOOR_S0, a + d * DOOR_S1, DOOR_H, H, px); k++;
+  }
 }
 function post(g, rc, x, y, H) { const stone = rc.wall !== 'wood'; g.fillStyle = stone ? '#6f6a61' : '#4a3322'; g.fillRect(x - 1.8, y - H - 4, 3.6, H + 4); g.strokeStyle = '#0d0907'; g.lineWidth = 1; g.strokeRect(x - 1.8, y - H - 4, 3.6, H + 4); g.fillStyle = 'rgba(255,225,170,.25)'; g.fillRect(x - 1.8, y - H - 4, 1.2, H + 4); }
 // a flat sprite on a wall, sheared so its horizontal edges follow the wall direction. Returns the screen point it sits at (for lamp glow) or null.
-function wallSprite(g, def, im, side, s, H, alpha) {
-  const base = wallPt(side, s), sc = def.sw && def.w ? def.sw / def.w : 0.1, up = def.wallSlot === 'floor' ? 0 : WALL_FULL * 0.55;
+function wallSprite(g, def, im, side, s, H, alpha, n = 1) {
+  const base = wallPt(side, s, n), sc = def.sw && def.w ? def.sw / def.w : 0.1, up = def.wallSlot === 'floor' ? 0 : WALL_FULL * 0.55;
   const top = up + (def.h - def.anchorY) * sc;
   const vis = clamp((H - top + 8) / 8, 0, 1) * alpha; if (vis <= 0.01) return null;
   if (g) {
@@ -127,15 +140,17 @@ function wallSprite(g, def, im, side, s, H, alpha) {
   }
   return { x: base.x, y: base.y - up, top };
 }
-const onDoor = (s) => Math.abs(s - 0.5) < 0.3;
+// is a piece at position s (0..1 over a wall of n cells) in the doorway of one of its cells?
+const onDoor = (s, ds, n) => { const k = Math.min(n - 1, Math.max(0, Math.floor(s * n))); return !!ds[k] && Math.abs(s * n - k - 0.5) < 0.3; };
+const doorsOf = (p, side, rc) => { const n = wallN(rc, side); return asDoors(side === 'L' ? (p.dL || p.doorL) : (p.dR || p.doorR), n); };
 function drawPieces(g, rc, p, app) {
   for (const side of ['L', 'R']) {
-    const H = side === 'L' ? p.HL : p.HR, door = side === 'L' ? p.doorL : p.doorR;
-    if (door && rc.doorPiece) { const d = assets.kitImg('pieces', rc.doorPiece, app); if (d) wallSprite(g, d.def, d.img, side, 0.5, H, clamp((H - 30) / 8, 0, 1)); }
+    const n = wallN(rc, side), H = side === 'L' ? p.HL : p.HR, ds = doorsOf(p, side, rc);
+    if (rc.doorPiece) for (let k = 0; k < n; k++) if (ds[k]) { const d = assets.kitImg('pieces', rc.doorPiece, app); if (d) wallSprite(g, d.def, d.img, side, (k + 0.5) / n, H, clamp((H - 30) / 8, 0, 1), n); }
     for (const pc of rc.pieces) {
-      if (pc.wall !== side || (door && onDoor(pc.s))) continue;
+      if (pc.wall !== side || onDoor(pc.s, ds, n)) continue;
       const d = assets.kitImg('pieces', pc.id, app); if (!d) continue;
-      wallSprite(g, d.def, d.img, side, pc.s, H, 1);
+      wallSprite(g, d.def, d.img, side, pc.s, H, 1, n);
     }
   }
 }
@@ -143,36 +158,37 @@ function drawPieces(g, rc, p, app) {
 export function glowPoints(rc, p, app, out = []) {
   out.length = 0;
   for (const side of ['L', 'R']) {
-    const H = side === 'L' ? p.HL : p.HR, door = side === 'L' ? p.doorL : p.doorR;
+    const n = wallN(rc, side), H = side === 'L' ? p.HL : p.HR, ds = doorsOf(p, side, rc);
     for (const pc of rc.pieces) {
-      if (pc.wall !== side || (door && onDoor(pc.s)) || (pc.id !== 'sconce' && pc.id !== 'window' && pc.id !== 'stainedglass')) continue;
+      if (pc.wall !== side || onDoor(pc.s, ds, n) || (pc.id !== 'sconce' && pc.id !== 'window' && pc.id !== 'stainedglass')) continue;
       const d = assets.kitDef('pieces', pc.id); if (!d) continue;
-      const r = wallSprite(null, d, null, side, pc.s, H, 1); if (r) out.push(r.x, r.y, pc.id === 'sconce' ? 0.7 : 0.45);
+      const r = wallSprite(null, d, null, side, pc.s, H, 1, n); if (r) out.push(r.x, r.y, pc.id === 'sconce' ? 0.7 : 0.45);
     }
   }
   return out;
 }
 function propPos(pr) { const cu = pr.u + pr.c / 2, cv = pr.v + pr.r / 2, q = subPt(cu, cv); return { x: q.x, y: q.y, key: cu + cv }; }
-function propShadow(g, pr) {
+function propShadow(g, rc, pr) {
   const P = propPos(pr), w = (pr.c + pr.r) * HW / SUB * 0.36 + 1.5;
-  g.save(); g.beginPath(); g.moveTo(0, 0); g.lineTo(HW, HH); g.lineTo(0, TH); g.lineTo(-HW, HH); g.closePath(); g.clip();
+  const C = corners(rc);
+  g.save(); g.beginPath(); g.moveTo(0, 0); g.lineTo(C.R[0], C.R[1]); g.lineTo(C.B[0], C.B[1]); g.lineTo(C.L[0], C.L[1]); g.closePath(); g.clip();
   g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(48,28,16,.5)'; g.beginPath(); g.ellipse(P.x + 1.5, P.y + 1, w, w * 0.46, 0, 0, TAU); g.fill(); g.restore();
 }
 // everything static of one room, in room-local coordinates (the caller translated the origin to the top vertex)
 function paintStatic(g, rc, p, app, px) {
   const ft = assets.kitImg('floors', rc.floor, app), wt = assets.kitImg('walls', rc.wall, app);
   drawSlab(g, rc, p); drawFloor(g, rc, ft, px);
-  drawWall(g, rc, wt, 'L', p.doorL, p.HL, px); drawWall(g, rc, wt, 'R', p.doorR, p.HR, px);
-  post(g, rc, 0, 0, Math.max(p.HL, p.HR)); post(g, rc, -HW, HH, p.HL); post(g, rc, HW, HH, p.HR);
+  drawWall(g, rc, wt, 'L', p.dL || p.doorL, p.HL, px); drawWall(g, rc, wt, 'R', p.dR || p.doorR, p.HR, px);
+  { const C = corners(rc); post(g, rc, 0, 0, Math.max(p.HL, p.HR)); post(g, rc, C.L[0], C.L[1], p.HL); post(g, rc, C.R[0], C.R[1], p.HR); }
   drawPieces(g, rc, p, app);
-  for (const pr of rc.props) propShadow(g, pr);
+  for (const pr of rc.props) propShadow(g, rc, pr);
   if (p.dark) { // unpowered: a cold, dark multiply over the room's own floor and walls
     g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = '#39416a';
-    for (const pts of [[[0, 0], [HW, HH], [0, TH], [-HW, HH]], [[-HW, HH], [0, 0], [0, -p.HL - 4], [-HW, HH - p.HL - 4]], [[0, 0], [HW, HH], [HW, HH - p.HR - 4], [0, -p.HR - 4]]]) { poly(g, pts); g.fill(); }
+    const C = corners(rc);
+    for (const pts of [[[0, 0], C.R, C.B, C.L], [C.L, [0, 0], [0, -p.HL - 4], [C.L[0], C.L[1] - p.HL - 4]], [[0, 0], C.R, [C.R[0], C.R[1] - p.HR - 4], [0, -p.HR - 4]]]) { poly(g, pts); g.fill(); }
     g.restore();
   }
 }
-const EX = { x0: -HW - 5, y0: -(WALL_FULL + 16), x1: HW + 5, y1: TH + 12 };
 export const bucketOf = bucketOfZ;
 // draw the static layer of a room with its top vertex at (tx, ty). `p` = { HL, HR, doorL, doorR, slabL, slabR, dark }. Cached per zoom bucket when a DOM exists.
 export function drawStatic(app, g, id, rc, tx, ty, p, zoomPx) {
@@ -181,7 +197,7 @@ export function drawStatic(app, g, id, rc, tx, ty, p, zoomPx) {
 }
 let builtFrame = -1, builtN = 0;
 function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
-  const want = bucketOfZ(zoomPx || 1), base = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0].join('|');
+  const EX = extentOf(rc), want = bucketOfZ(zoomPx || 1), base = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0, (p.dL || []).map(Number).join(''), (p.dR || []).map(Number).join(''), (p.slabLs || []).map(Number).join(''), (p.slabRs || []).map(Number).join('')].join('|');
   let e = Q.layers.get(id);
   if (!e || e.base !== base) { e = { base, by: new Map(), z: 0 }; Q.layers.set(id, e); }
   if (app.frame === undefined || app.frame !== builtFrame) { builtFrame = app.frame; builtN = 0; }

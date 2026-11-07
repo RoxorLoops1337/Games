@@ -260,7 +260,7 @@ export function drawEnemySprite(ctx, sp, def, ed, x, floorY, t, o = {}) {
   ctx.save();
   if (P.alpha < 1) ctx.globalAlpha *= 1;
   contactShadow(ctx, px - P.dx * 0.15, floorY - 1, clamp(bw * 0.6, 40, 170), P.shadowA * (o.shadowA === undefined ? 1 : o.shadowA), P.lift);
-  if ((kind === 'elite' || kind === 'boss') && !(ed.dying > 0.34)) aura(ctx, kind, px, floorY, bw, bh, t, reduced, P.alpha);
+  if ((kind === 'elite' || kind === 'boss') && o.aura !== false && !(ed.dying > 0.34)) aura(ctx, kind, px, floorY, bw, bh, t, reduced, P.alpha);
   const wash = washOf(st, t);
   const glow = P.glow > 0.02 ? { color: P.cast ? '#ffe9a8' : '#ff5a3a', a: P.glow * 0.34 } : null;
   // painted frames carry the pose themselves: the figure keeps its lunge travel but only a fraction of the squash and lean; the die frame lies on the floor, so no collapse squash

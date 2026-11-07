@@ -55,6 +55,13 @@ await t('pickAtkFrame_maps_phases_and_degrades_with_missing_frames', () => {
   assert.equal(pickAtkFrame(only2, 'tell'), null, 'no anticipation frame: stand'); assert.equal(pickAtkFrame(only2, 'act'), 'a2'); assert.equal(pickAtkFrame(only2, 'rec', 0.1), 'a2', 'strike held at the start of the recovery');
   assert.equal(pickAtkFrame(only2, 'rec', 0.8), null, 'then back to standing'); assert.equal(pickAtkFrame({ 3: 'a3' }, 'act'), 'a3'); assert.equal(pickAtkFrame({}, 'act'), null); assert.equal(pickAtkFrame(undefined, 'act'), null);
 });
+await t('walkOk_false_drops_the_painted_walk_but_keeps_the_combat_frames', () => {
+  const F = normalizeFrames({ walk: stems('odile', ...W4), walkOk: false, hit: 'odile_hit' });
+  assert.deepEqual(F.walk, [], 'the painted cycle is ignored'); assert.equal(F.walkOk, false); assert.equal(F.hit, 'odile_hit');
+  assert.equal(normalizeFrames({ walk: stems('odile', ...W4), walkOk: false }), null, 'a walk-only actor with walkOk false has no usable frames: the procedural walk and the standing figure stay');
+  assert.equal(ISO.frameStemFor(F, { pose: '', cycle: true, stride: 1 }), null, 'moving: no painted frame is chosen');
+  assert.deepEqual(normalizeFrames({ walk: stems('a', ...W4) }).walk.length, 4); assert.equal(normalizeFrames({ walk: stems('a', ...W4) }).walkOk, true, 'walkOk defaults to true');
+});
 await t('assets_frame_answers_decoded_frames_with_the_standing_def_and_null_otherwise', () => {
   install({ marrow: actor('hero', HERO_FR), orderly: actor('normal') });
   const f = assets.frame('marrow', 'marrow_atk2', null);

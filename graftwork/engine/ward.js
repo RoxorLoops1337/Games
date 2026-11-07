@@ -11,6 +11,7 @@
 //   afterTrigger(run)                         continue the walk (RUN.advance and RUN.afterEvent call it in ward mode)
 import { ROOMS, BUILD_CARDS, BUILD_LIST, STARTER_BUILD_DECK, PHASES, PHASE_ORDER, FLOOR, START_RES, PREBUILT, WARD_TUNE as T } from '../data/ward.js';
 import { ENEMIES, EVENTS, CARDS } from '../data/index.js';
+import { hasBigRecipe } from '../data/ward_kit.js';
 import { runAllows } from './unlock.js';
 import { makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct, perkN, rollPotion as RUN_rollPotion, potionSlots as potionCap } from './run.js';
 
@@ -22,20 +23,32 @@ const W = (run) => run.ward;
 const def = (room) => ROOMS[room.type];
 export const roomAt = (run, x, y) => { const w = W(run); const id = w.grid[y] && w.grid[y][x]; return id && id !== 'rubble' ? w.rooms[id] : null; };
 const inside = (w, x, y) => x >= 0 && y >= 0 && x < w.w && y < w.h;
+// ---- footprints (design/WARD.md "Room sizes and Expand") ----
+// A room is a rectangle of w x h cells (both absent = 1). (x, y) is its top-left (smallest x, smallest y) cell and w.grid holds its id in EVERY cell it covers.
+// Old saves only have 1 x 1 rooms and carry no w / h: nothing to migrate.
+export const cellsOf = (r) => { const out = []; for (let j = 0; j < (r.h || 1); j++) for (let i = 0; i < (r.w || 1); i++) out.push([r.x + i, r.y + j]); return out; };
+export const sizeOf = (r) => [r.w || 1, r.h || 1];
+export const cellCount = (r) => (r.w || 1) * (r.h || 1);
+export const isBig = (r) => cellCount(r) > 1;
+export const sizeKey = (r) => (r.w || 1) + 'x' + (r.h || 1);
+const bigOf = (room) => (isBig(room) ? ROOMS[room.type].big || {} : NOBIG);
+const NOBIG = {};
+export const powerUse = (room) => { const d = ROOMS[room.type]; return d.power ? (bigOf(room).power !== undefined ? bigOf(room).power : d.power * cellCount(room)) : 0; };
+const powerAddOf = (room) => { const d = ROOMS[room.type]; return bigOf(room).powerAdd !== undefined ? bigOf(room).powerAdd : d.powerAdd || 0; };
 export function neighbors(run, rid) {
   const w = W(run), r = w.rooms[rid], out = [];
-  for (const [dx, dy] of DIRS) { const n = inside(w, r.x + dx, r.y + dy) && roomAt(run, r.x + dx, r.y + dy); if (n) out.push(n.id); }
+  for (const [cx, cy] of cellsOf(r)) for (const [dx, dy] of DIRS) { const n = inside(w, cx + dx, cy + dy) && roomAt(run, cx + dx, cy + dy); if (n && n.id !== rid && !out.includes(n.id)) out.push(n.id); }
   return out;
 }
 const log = (run, s) => { const w = W(run); w.log.push(`D${w.day} ${w.phase}: ${s}`); if (w.log.length > 40) w.log.splice(0, w.log.length - 40); };
 const effect = (run, id) => W(run).effects.filter((e) => e.id === id);
 const effectN = (run, id) => effect(run, id).reduce((a, e) => a + (e.n || 1), 0);
 const isDark = (room) => !room.on && def(room).power > 0;
-export function everyOf(room) { const s = def(room).spawn; return s && s.every ? s.every : 0; }
+export function everyOf(room) { const s = def(room).spawn; return s && s.every ? (bigOf(room).every || s.every) : 0; }
 export function spawnN(room) { return room.upgrades.includes('b_reinforced_beds') ? 2 : 1; } // monsters per tick
 export function capOf(room, run) {
   const s = def(room).spawn; if (!s) return 0;
-  let cap = room.upgrades.includes('b_sterile_field') ? 2 : (s.cap || 1);
+  let cap = room.upgrades.includes('b_sterile_field') ? 2 : (bigOf(room).cap || s.cap || 1);
   if (s.kind === 'fight') { if (run) cap += perkN(run, 'wardCap'); if (room.upgrades.includes('b_fire_door')) cap = Math.min(cap, T.fireDoorCap); }
   return cap;
 }
@@ -44,7 +57,7 @@ export function wardPower(run) {
   const w = W(run); let cap = w.power.base, used = 0;
   const wards = Object.values(w.rooms).filter((r) => r.type === 'rm_ward' && r.on).length;
   cap += perkN(run, 'powerCap') + effectN(run, 'power');
-  for (const r of Object.values(w.rooms)) { cap += def(r).powerAdd || 0; if (def(r).boiler) cap += Math.floor(wards / 2); if (r.on) used += def(r).power; }
+  for (const r of Object.values(w.rooms)) { cap += powerAddOf(r); if (def(r).boiler) cap += Math.floor(wards / 2) + (bigOf(r).boilerFlat || 0); if (r.on) used += powerUse(r); }
   w.power.cap = cap; w.power.used = used;
   return { cap, used, free: cap - used };
 }
@@ -57,15 +70,17 @@ export const entranceOf = (run) => Object.values(W(run).rooms).find((r) => r.typ
 export const cardInst = (run, uid) => { const d = W(run).deck; return [...d.hand, ...d.draw, ...d.discard].find((c) => c.uid === uid) || null; };
 export const buildDeckList = (run) => { const d = W(run).deck; return [...d.draw, ...d.hand, ...d.discard]; };
 
-function newRoom(run, type, x, y) {
+function newRoom(run, type, x, y, fw = 1, fh = 1) {
   const w = W(run);
   const id = 'r' + w.nextRoom++;
   const r = { id, type, x, y, on: true, level: 1, timers: { spawn: 1 }, contents: [], upgrades: [] };
-  w.rooms[id] = r; w.grid[y][x] = id;
-  if (def(r).power > 0 && wardPower(run).free < 0) r.on = false; // no spare power: built dark
+  if (fw > 1) r.w = fw; if (fh > 1) r.h = fh; // 1 x 1 rooms carry no size: byte-identical to the old saves
+  w.rooms[id] = r; for (const [cx, cy] of cellsOf(r)) w.grid[cy][cx] = id;
+  if (powerUse(r) > 0 && wardPower(run).free < 0) r.on = false; // no spare power: built dark
   wardPower(run);
   return r;
 }
+export function addBuildCard(run, id) { if (!W(run) || !BUILD_CARDS[id]) return null; return addCard(run, id); }
 function addCard(run, id, to = 'discard') { const w = W(run); const c = { uid: w.cardNext++, id }; w.deck[to].push(c); return c; }
 
 // ---------------- floor ----------------
@@ -85,7 +100,7 @@ export function wardInit(run, act) {
   if (!prev) for (const id of STARTER_BUILD_DECK) addCard(run, id, 'draw');
   rng.shuffle(w.deck.draw);
   const ent = newRoom(run, 'rm_entrance', 0, rng.int(F.h));
-  newRoom(run, 'rm_theatre', F.w - 1, rng.int(F.h));
+  newRoom(run, 'rm_theatre', F.w - 2, rng.int(F.h - 1), 2, 2); // the boss room is 2 x 2
   w.hero.room = ent.id;
   // pre-built rooms grow from the Entrance, in the left half of the floor
   for (const type of PREBUILT) {
@@ -113,6 +128,68 @@ export function buildCells(run) {
   for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) if (!w.grid[y][x] && adjacentRoom(run, x, y)) out.push([x, y]);
   return out;
 }
+// ---- placing and expanding (footprints) ----
+// dir names: 'e' (+x) 's' (+y) 'w' (-x) 'n' (-y). A 2 cell footprint grows from a cell toward dir.
+export const DIR_NAMES = ['e', 's', 'w', 'n'];
+const DIRV = { e: [1, 0], s: [0, 1], w: [-1, 0], n: [0, -1] };
+export function footprint(x, y, size, dir) { // the rectangle a [fw, fh] room covers when its first cell is (x, y) and it grows toward dir
+  const [fw, fh] = size || [1, 1];
+  if (fw * fh === 1) return { x, y, w: 1, h: 1 };
+  if (fw * fh === 4) return { x, y, w: 2, h: 2 };
+  const [dx, dy] = DIRV[dir || 'e'] || DIRV.e; // a domino: the second cell is at (x + dx, y + dy)
+  return { x: Math.min(x, x + dx), y: Math.min(y, y + dy), w: dx ? 2 : 1, h: dy ? 2 : 1 };
+}
+const rectCells = (f) => { const o = []; for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) o.push([f.x + i, f.y + j]); return o; };
+// why: bounds | rubble | occupied | adjacent | space
+function footWhy(run, f) {
+  const w = W(run), cells = rectCells(f);
+  for (const [cx, cy] of cells) if (!inside(w, cx, cy)) return cells.length === 1 ? 'bounds' : 'space';
+  for (const [cx, cy] of cells) if (w.grid[cy][cx] === 'rubble') return 'rubble';
+  for (const [cx, cy] of cells) if (w.grid[cy][cx]) return 'occupied';
+  if (!cells.some(([cx, cy]) => adjacentRoom(run, cx, cy))) return 'adjacent';
+  return null;
+}
+// where a room of `size` goes when the player points at (x, y): { ok, why, f: {x, y, w, h}, cells, dir }. Without a dir the first legal side (e, s, w, n) is used.
+export function placement(run, size, x, y, dir) {
+  const w = W(run);
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inside(w, x, y)) return { ok: false, why: 'bounds', cells: [] };
+  const one = (size[0] * size[1]) === 1;
+  const tries = one ? [undefined] : dir ? [dir] : DIR_NAMES;
+  let first = null;
+  for (const d of tries) {
+    const f = footprint(x, y, size, d), why = footWhy(run, f);
+    if (!why) return { ok: true, why: null, f, cells: rectCells(f), dir: d };
+    if (!first) first = { why, f };
+  }
+  // pointed cell itself is the problem: say so; otherwise the second cell has no room
+  const w0 = W(run);
+  const cellWhy = w0.grid[y][x] === 'rubble' ? 'rubble' : w0.grid[y][x] ? 'occupied' : null;
+  return { ok: false, why: cellWhy || (one || dir ? first.why : first.why === 'adjacent' ? 'adjacent' : 'space'), f: first.f, cells: rectCells(first.f) };
+}
+// Expand: the sides a room can grow toward. { ok, why, to: [w, h], dirs: [{dir, cells, f}], cost }. why: type already norecipe space
+export function expandOptions(run, rid) {
+  const w = W(run), room = w.rooms[rid];
+  const no = (why) => ({ ok: false, why, dirs: [], to: null, cost: null });
+  if (!room) return no('target');
+  const d = def(room);
+  if (!d.expand) return no('type');
+  if (isBig(room)) return no('already');
+  const dirs = [];
+  for (const dir of DIR_NAMES) {
+    const [dx, dy] = DIRV[dir], cx = room.x + dx, cy = room.y + dy;
+    if (!inside(w, cx, cy) || w.grid[cy][cx]) continue;
+    const f = footprint(room.x, room.y, [2, 1], dir);
+    if (!hasBigRecipe(room.type, f.w, f.h)) continue;
+    dirs.push({ dir, cells: [[cx, cy]], f });
+  }
+  if (!dirs.length) { const any = DIR_NAMES.some((dir) => hasBigRecipe(room.type, dir === 'e' || dir === 'w' ? 2 : 1, dir === 'e' || dir === 'w' ? 1 : 2)); return no(any ? 'space' : 'norecipe'); }
+  return { ok: true, why: null, dirs, to: [dirs[0].f.w, dirs[0].f.h], cost: expandCostOf(room, run) };
+}
+export function expandCostOf(room, run) { // the room's Expand cost; the Surveyor's Tape takes 1 wood and 1 stone off
+  const c = { ...((ROOMS[room.type].expand || {}).cost || {}) }, k = run ? perkN(run, 'expandCost') : 0;
+  if (k) for (const r of ['wood', 'stone']) if (c[r]) c[r] = Math.max(0, c[r] - k);
+  return c;
+}
 function adjacentRoom(run, x, y) {
   const w = W(run);
   return DIRS.some(([dx, dy]) => { const r = inside(w, x + dx, y + dy) && roomAt(run, x + dx, y + dy); return r && r.type !== 'rm_theatre'; });
@@ -120,13 +197,13 @@ function adjacentRoom(run, x, y) {
 // the Theatre can still be reached by building: a path of non-rubble cells from the Entrance network
 export function theatreReachable(run) {
   const w = W(run), th = theatreOf(run), seen = new Set(), q = [];
-  for (const r of Object.values(w.rooms)) if (r.type !== 'rm_theatre') { q.push([r.x, r.y]); seen.add(r.x + ',' + r.y); }
+  for (const r of Object.values(w.rooms)) if (r.type !== 'rm_theatre') for (const [cx, cy] of cellsOf(r)) { q.push([cx, cy]); seen.add(cx + ',' + cy); }
   while (q.length) {
     const [x, y] = q.shift();
     for (const [dx, dy] of DIRS) {
       const nx = x + dx, ny = y + dy, k = nx + ',' + ny;
       if (!inside(w, nx, ny) || seen.has(k)) continue;
-      if (nx === th.x && ny === th.y) return true;
+      if (w.grid[ny][nx] === th.id) return true;
       if (w.grid[ny][nx]) continue;
       seen.add(k); q.push([nx, ny]);
     }
@@ -198,7 +275,7 @@ function autoRoom(run, room) {
     if (run.potions.length < potionCap(run) && id) { run.potions.push(id); log(run, 'The Pharmacy brews a potion.'); }
     else { run.gold += T.pharmacyGold; run.stats.goldEarned += T.pharmacyGold; log(run, `The Pharmacy sells the batch: ${T.pharmacyGold} gold.`); }
   }
-  if (au.upgrade && run.rng.chance(au.upgrade)) {
+  if (au.upgrade && run.rng.chance(bigOf(room).upgrade || au.upgrade)) {
     const list = run.deck.filter((i) => !i.up && CARDS[i.id] && CARDS[i.id].up && CARDS[i.id].type !== 'junk');
     if (list.length) { const i = run.rng.pick(list); i.up = 1; log(run, `The Library upgrades ${CARDS[i.id].name}.`); }
   }
@@ -243,12 +320,19 @@ export function canPlayBuild(run, uid, target) {
   const card = BUILD_CARDS[inst.id];
   if (!affords(run, costOf(run, card))) return { ok: false, why: 'cost' };
   if (card.kind === 'room') {
-    const { x, y } = target || {};
+    const { x, y, dir } = target || {};
     if (!Number.isInteger(x) || !Number.isInteger(y) || !inside(w, x, y)) return { ok: false, why: 'bounds' };
-    if (w.grid[y][x] === 'rubble') return { ok: false, why: 'rubble' };
-    if (w.grid[y][x]) return { ok: false, why: 'occupied' };
-    if (!adjacentRoom(run, x, y)) return { ok: false, why: 'adjacent' };
-    return { ok: true };
+    const p = placement(run, card.size || [1, 1], x, y, dir);
+    return p.ok ? { ok: true, cells: p.cells, dir: p.dir } : { ok: false, why: p.why };
+  }
+  if (card.kind === 'expand') { // target: a room id (the side is picked for you) or { room, dir }
+    const rid = target && typeof target === 'object' ? target.room : target, dir = target && typeof target === 'object' ? target.dir : null;
+    const ex = expandOptions(run, rid);
+    if (!ex.ok) return { ok: false, why: ex.why };
+    const opt = dir ? ex.dirs.find((o) => o.dir === dir) : ex.dirs[0];
+    if (!opt) return { ok: false, why: 'space' };
+    if (!affords(run, ex.cost)) return { ok: false, why: 'cost' };
+    return { ok: true, dir: opt.dir, cells: opt.cells, f: opt.f };
   }
   if (card.kind === 'upgrade') {
     const room = w.rooms[target];
@@ -281,10 +365,17 @@ export function playBuildCard(run, uid, target) {
   const w = W(run), d = w.deck;
   const inst = d.hand.find((c) => c.uid === uid), card = BUILD_CARDS[inst.id];
   pay(run, costOf(run, card));
+  if (card.kind === 'expand') pay(run, expandCostOf(w.rooms[typeof target === 'object' ? target.room : target], run));
   if (card.kind === 'room') w.freeUsed = true;
   d.hand.splice(d.hand.indexOf(inst), 1); d.discard.push(inst);
   let room = null;
-  if (card.kind === 'room') { room = newRoom(run, card.room, target.x, target.y); log(run, `Built a ${def(room).name}${room.on ? '' : ' (dark: no spare power)'}.`); }
+  if (card.kind === 'room') { const f = chk.cells.length > 1 ? footprint(target.x, target.y, card.size, chk.dir) : { x: target.x, y: target.y, w: 1, h: 1 }; room = newRoom(run, card.room, f.x, f.y, f.w, f.h); log(run, `Built a ${def(room).name}${room.on ? '' : ' (dark: no spare power)'}.`); }
+  else if (card.kind === 'expand') {
+    room = w.rooms[typeof target === 'object' ? target.room : target]; const f = chk.f;
+    room.x = f.x; room.y = f.y; if (f.w > 1) room.w = f.w; if (f.h > 1) room.h = f.h; for (const [cx, cy] of cellsOf(room)) w.grid[cy][cx] = room.id;
+    if (powerUse(room) > 0 && wardPower(run).free < 0) room.on = false; wardPower(run); // no spare power for the bigger room: it goes dark
+    log(run, `Expanded the ${def(room).name} to ${sizeKey(room)}${room.on ? '' : ' (dark: no spare power)'}.`);
+  }
   else if (card.kind === 'upgrade') { room = w.rooms[target]; if (card.oneShot) room.overtime = 1; else room.upgrades.push(card.id); log(run, `${card.name} on the ${def(room).name}.`); }
   else {
     switch (card.effect) {
@@ -303,9 +394,9 @@ export function playBuildCard(run, uid, target) {
       case 'tick': room = w.rooms[target]; room.timers.spawn = 1; tickRoom(run, room); break;
       case 'demolish': {
         if (target && typeof target === 'object') { w.grid[target.y][target.x] = null; break; }
-        room = w.rooms[target]; const c = def(room).cost;
+        room = w.rooms[target]; const c = refundBase(room);
         w.res.wood += Math.floor((c.wood || 0) / 2); w.res.stone += Math.floor((c.stone || 0) / 2); run.gold += Math.floor((c.gold || 0) / 2);
-        w.grid[room.y][room.x] = null; delete w.rooms[room.id]; wardPower(run);
+        for (const [cx, cy] of cellsOf(room)) w.grid[cy][cx] = null; delete w.rooms[room.id]; wardPower(run);
         break;
       }
     }
@@ -313,11 +404,17 @@ export function playBuildCard(run, uid, target) {
   }
   return { ok: true, room: room ? room.id : null };
 }
+// what Demolish refunds half of: the build cost, plus the Expand cost when the room grew (a Ward Wing card already paid for both)
+function refundBase(room) {
+  const d = def(room), c = { ...d.cost };
+  if (isBig(room) && d.expand && !d.foot && !room.paidWide) for (const k in d.expand.cost) c[k] = (c[k] || 0) + d.expand.cost[k];
+  return c;
+}
 export function togglePower(run, rid) {
   const w = W(run), room = w && w.rooms[rid];
   if (!room || run.phase !== 'ward' || w.phase !== 'morning') return { ok: false, why: 'phase' };
   if (!def(room).power) return { ok: false, why: 'nopower' };
-  if (!room.on && wardPower(run).free < def(room).power) return { ok: false, why: 'power' };
+  if (!room.on && wardPower(run).free < powerUse(room)) return { ok: false, why: 'power' };
   room.on = !room.on; wardPower(run);
   return { ok: true, on: room.on };
 }
@@ -438,7 +535,7 @@ export function phaseMods(run, room, kind, level = 1) {
   if (kind === 'normal' && ph.enemyStr) m.enemyStr = ph.enemyStr * ns;
   if (kind === 'boss') { const idle = Math.max(0, T.bossIdle.need - (w.fought || 0)); if (idle) m.enemyStr = Math.floor(idle / T.bossIdle.per); if (!m.enemyStr) delete m.enemyStr; } // hiding is punished: the boss grows restless
   if (kind === 'elite') { const s = (ph.eliteStr || 0) * ns + (level >= 2 ? T.eliteL2.str : 0); if (s) m.enemyStr = s; if (level >= 2) m.hpMul = T.eliteL2.hpMul; }
-  if (ph.firstTurnDraw) m.firstTurnDraw = lit(run, 'rm_kitchen').length ? T.kitchenDraw : ph.firstTurnDraw;
+  if (ph.firstTurnDraw) { const ks = lit(run, 'rm_kitchen'); m.firstTurnDraw = ks.length ? Math.max(...ks.map((k) => bigOf(k).kitchen || T.kitchenDraw)) : ph.firstTurnDraw; }
   const r = effectN(run, 'rations'); if (r) m.handAdd = r;
   const g = ph.goldMul || 1; m.goldMul = 1 + (g - 1) * (night ? ns : 1);
   return m;
