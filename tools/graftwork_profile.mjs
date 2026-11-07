@@ -139,7 +139,8 @@ async function sweep(page, n = 6) { for (let i = 0; i < n; i++) { const p = awai
 
 const SC = {};
 // 1. title idle: the painted scene alone, 10 s, no input after the intro was used up
-SC.title_idle = { desc: 'title scene idle 10 s', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; }); await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'||window.__scene.mode==='fallback'", 90000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
+SC.title_idle = { desc: 'title scene idle 10 s', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const { SCENE } = await import('/graftwork/ui/title.js'); window.__scene = SCENE; }); if (opt('verbose', false)) for (let i = 0; i < 6; i++) { console.log('    state', JSON.stringify(await page.evaluate(() => ({ f: window.__gw.app.frame, m: window.__scene.mode })))); await wait(2000); }
+ await gwWait(page, "window.__scene.mode==='kit'||window.__scene.mode==='keyart'||window.__scene.mode==='fallback'", 40000); await wait(S(3500)); }, async run(page) { await wait(S(10000)); } };
 // 2. title intro: the needle sews the wordmark (first title of a page load)
 SC.title_intro = { desc: 'title intro (3.6 s needle) + 3 s', fresh: true, async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(async () => { const m = await import('/graftwork/ui/title.js'); m.resetTitleIntro(); window.__gw.app.go('title', { intro: true }); }); }, async run(page) { await wait(S(6600)); } };
 
