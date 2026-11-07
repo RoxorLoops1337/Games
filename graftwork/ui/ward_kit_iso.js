@@ -24,7 +24,7 @@ export const KITS = { mode: 'auto', log: null }; // log: tests set an array to r
 export function wallModeFor(nRooms) { return KITS.mode === 'auto' ? defaultWallMode(nRooms) : KITS.mode; }
 export function cycleWallMode() { const L = ['auto', 'full', 'low', 'cutaway']; KITS.mode = L[(L.indexOf(KITS.mode) + 1) % L.length]; return KITS.mode; }
 
-const Q = { mips: new Map(), pats: new Map(), layers: new Map(), dark: new WeakMap(), wallH: Object.create(null), mons: new Map(), hpaths: new Map(), shadow: null, stats: { layers: 0, hits: 0 } };
+const Q = { mips: new Map(), pats: new Map(), layers: new Map(), dark: new WeakMap(), wallH: Object.create(null), mons: new Map(), hpaths: new Map(), shadow: null, stats: { layers: 0, hits: 0, msStatic: 0, msItems: 0 } };
 export const kitStats = Q.stats;
 export function resetKit() { Q.mips.clear(); Q.pats.clear(); Q.layers.clear(); Q.wallH = Object.create(null); Q.mons.clear(); Q.hpaths.clear(); Q.stats.layers = 0; Q.stats.hits = 0; }
 function mk(w, h) {
@@ -166,6 +166,10 @@ const EX = { x0: -HW - 5, y0: -(WALL_FULL + 16), x1: HW + 5, y1: TH + 12 };
 export const bucketOf = (z) => { const L = [0.5, 0.75, 1, 1.5, 2, 3, 4]; for (const b of L) if (z <= b * 1.08) return b; return 4; };
 // draw the static layer of a room with its top vertex at (tx, ty). `p` = { HL, HR, doorL, doorR, slabL, slabR, dark }. Cached per zoom bucket when a DOM exists.
 export function drawStatic(app, g, id, rc, tx, ty, p, zoomPx) {
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  try { return drawStatic0(app, g, id, rc, tx, ty, p, zoomPx); } finally { if (t0) Q.stats.msStatic += performance.now() - t0; }
+}
+function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
   const bucket = bucketOf(zoomPx || 1), key = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0, bucket].join('|');
   let e = Q.layers.get(id);
   if (!e || e.key !== key) {
@@ -232,6 +236,10 @@ function animate(app, g, pr, d, tx, ty, t, glow) {
 // draw the props of one room together with the actors that stand in it, back to front. items: [{ y, rec }] (o.actor(rec) draws one).
 const SORT = [];
 export function drawItems(app, g, rc, tx, ty, lift, items, o) {
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  drawItems0(app, g, rc, tx, ty, lift, items, o); if (t0) Q.stats.msItems += performance.now() - t0;
+}
+function drawItems0(app, g, rc, tx, ty, lift, items, o) {
   SORT.length = 0;
   for (let i = 0; i < rc.props.length; i++) SORT.push({ y: propWorldY(rc, ty, rc.props[i]), pr: rc.props[i], a: null });
   for (const it of items) SORT.push({ y: it.y, pr: null, a: it });
