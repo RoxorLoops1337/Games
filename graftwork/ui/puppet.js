@@ -20,7 +20,7 @@ export const TUNE = { swing: 32, lift: 0.085, bob: 0.024, sway: 0.014, lean: 0.0
 export const TUNE_DEFAULT = { ...TUNE };
 const TAU = Math.PI * 2, DEG = Math.PI / 180;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-export const CLIP_MARGIN = 0.02; // legs are clipped above the hip row minus this (figure heights)
+export const CLIP_MARGIN = 0.04; // legs are clipped above the hip row minus this (figure heights)
 export const BOOT = 0.14; // the lowest part of the visible leg (fraction of it) is drawn unscaled, so a stretch never distorts the boot
 export const HEM_BAND = 0.2; // the garment band: this much of the figure height above the hip swings as cloth
 export const DEBUG = { outlines: false }; // the lab draws the leg slices and the pivots
@@ -303,8 +303,8 @@ function buildParts(img, an, res, tuck, hangOv) {
   // the upper body: everything above the hip. A GARMENT that hangs over the leg tops (apron, skirt, coat) keeps its hem crisp (one hairline row below the hip and NO fade: the legs
   // run under it); only bare legs (trousers) keep the short feathered overlap. A hanging garment also gets a hem BAND (the lowest HEM_BAND of the figure) that sways as cloth.
   const alpha = new Uint8Array(iw * ih); for (let i = 0; i < alpha.length; i++) alpha[i] = px[i * 4 + 3];
-  const hang = hangOv === undefined ? hangOf(alpha, iw, ih, an) : (hangOv ? 9 : 0), hung = hang >= HANG_MIN, ov = (hung ? 0.005 : 0.025) * H;
-  const ux0 = Math.max(0, Math.floor((an.left - pad) * iw)), ux1 = Math.min(iw - 1, Math.ceil((an.right + pad) * iw) - 1), uy0 = Math.max(0, Math.floor((an.top - pad) * ih)), uy1 = Math.min(ih - 1, Math.ceil((an.hip + ov) * ih));
+  const hang = hangOv === undefined ? hangOf(alpha, iw, ih, an) : (hangOv ? 9 : 0), hung = hang >= HANG_MIN, ov = (hung ? 0 : 0.025) * H;
+  const ux0 = Math.max(0, Math.floor((an.left - pad) * iw)), ux1 = Math.min(iw - 1, Math.ceil((an.right + pad) * iw) - 1), uy0 = Math.max(0, Math.floor((an.top - pad) * ih)), uy1 = hung ? Math.max(uy0 + 1, Math.floor(an.hip * ih) - 1) : Math.min(ih - 1, Math.ceil((an.hip + ov) * ih)); // a hanging hem ends exactly above the first leg row (no copied leg pixels under it)
   const bandTop = hung ? Math.max(uy0 + 4, Math.round((an.hip - HEM_BAND * H) * ih)) : -1;
   const upper = cropFrom(full.c, ux0, uy0, ux1, bandTop > 0 ? bandTop + 2 : uy1), band = bandTop > 0 ? cropFrom(full.c, ux0, bandTop, ux1, uy1) : null;
   if (!hung && upper) { const o = upper.c.getContext('2d'), fh = Math.max(1, Math.round(ov * ih * res)), gy = upper.c.height - fh; const gr = o.createLinearGradient(0, gy, 0, upper.c.height); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); o.globalCompositeOperation = 'destination-out'; o.fillStyle = gr; o.fillRect(0, gy, upper.c.width, fh); o.globalCompositeOperation = 'source-over'; }
@@ -332,10 +332,10 @@ export function drawLegged(g, P, pose, s, ox, oy, dw, dh, Hd) {
     const cw = part.c.width, ch = part.c.height, x = (part.x - pvx) * dw * k, w = part.w * dw * k, tot = part.h * dh * k;
     if (part.Ne === undefined) { g.drawImage(part.c, x, 0, w, tot); } else { // sliced: [ext | shin | boot]
       const n = part.Ne + part.Nv, e = part.Ne / n, b = (part.Nb || 0) / n, eh = tot * e, bh = tot * b, sh = tot - eh - bh;
-      const de = eh * (L.se === undefined ? 1 : L.se), ds = sh * (L.ss === undefined ? 1 : L.ss), c0 = ch * e, c1 = ch * (1 - b), ov = Math.min(2, 1); // slices overlap by about a pixel so a seam never opens
-      if (de > 0.01) g.drawImage(part.c, 0, 0, cw, Math.min(ch, c0 + ov), x, 0, w, de + ov * tot / ch);
-      g.drawImage(part.c, 0, Math.max(0, c0 - ov), cw, Math.max(1, Math.min(ch, c1 + ov) - Math.max(0, c0 - ov)), x, de - ov * ds / Math.max(1, c1 - c0) * 0, w, ds + ov * tot / ch);
-      if (b > 0) g.drawImage(part.c, 0, c1 - ov, cw, ch - c1 + ov, x, de + ds - ov * tot / ch, w, bh + ov * tot / ch);
+      const de = eh * (L.se === undefined ? 1 : L.se), ds = sh * (L.ss === undefined ? 1 : L.ss), c0 = ch * e, c1 = ch * (1 - b);
+      // a slice maps the source rows [s0, s1] to the dest span [d0, d0 + dh], widened by one source row each side so the slices overlap and a seam never opens
+      const sl = (s0, s1, d0, dh) => { if (s1 - s0 < 0.5 || dh <= 0) return; const k = dh / (s1 - s0), a = Math.max(0, s0 - 1), b2 = Math.min(ch, s1 + 1); g.drawImage(part.c, 0, a, cw, b2 - a, x, d0 - (s0 - a) * k, w, (b2 - a) * k); };
+      sl(0, c0, 0, de); sl(c0, c1, de, ds); sl(c1, ch, de + ds, bh);
       if (dbg) { g.lineWidth = 1; g.strokeStyle = '#4af0ff'; g.strokeRect(x, 0, w, de); g.strokeStyle = '#ffe94a'; g.strokeRect(x, de, w, ds); g.strokeStyle = '#ff9a3a'; g.strokeRect(x, de + ds, w, bh); g.fillStyle = '#ff5ad0'; g.beginPath(); g.arc(0, 0, 3, 0, 7); g.fill(); }
     }
     g.restore();

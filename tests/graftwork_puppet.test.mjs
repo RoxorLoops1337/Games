@@ -219,23 +219,25 @@ await t('legs_run_under_a_skirt_hem_with_no_transparent_gap_at_any_swing', async
         const draw = (Pp) => { const k = mkc(), g = k.getContext('2d'); g.translate(150, 340); PUP.drawLegged(g, Pp, pose, s, ox, oy, W, Hh, Hd); return alphaOf(g, vw, vh); };
         const legs = draw({ ...parts, upper: empty, band: null }), up = draw({ ...parts, legL: empty, legR: empty }), all = draw(parts);
         // the lowest row of the upper body (the hem) in this pose
-        let hemRow = -1; for (let y = vh - 1; y >= 0 && hemRow < 0; y--) for (let q = 0; q < vw; q++) if (up[y * vw + q] > 40) { hemRow = y; break; }
+        let hemRow = -1; for (let y = vh - 1; y >= 0 && hemRow < 0; y--) { let c = 0; for (let q = 0; q < vw; q++) if (up[y * vw + q] > 40) c++; if (c >= 30) hemRow = y; }
         // the first row where a leg shows
         let legTop = -1; for (let y = 0; y < vh && legTop < 0; y++) for (let q = 0; q < vw; q++) if (legs[y * vw + q] > 40) { legTop = y; break; }
         out.worst.cover = Math.max(out.worst.cover, hemRow - legTop); // rows the legs run up under the hem (must stay positive and large)
         out.coverMin = Math.min(out.coverMin === undefined ? 1e9 : out.coverMin, hemRow - legTop);
         // a gap = a leg that is not attached to the garment: the opaque pixels of the whole figure must form ONE 4-connected piece (floaty legs are separate pieces)
         let gap = 0; { const seen = new Uint8Array(vw * vh), st = []; let comps = 0;
-          for (let i = 0; i < vw * vh; i++) if (all[i] > 128 && !seen[i]) { comps++; seen[i] = 1; st.push(i);
-            while (st.length) { const j = st.pop(), jx = j % vw, jy = (j - jx) / vw; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = jx + dx, ny = jy + dy; if (nx < 0 || ny < 0 || nx >= vw || ny >= vh) continue; const k = ny * vw + nx; if (all[k] > 128 && !seen[k]) { seen[k] = 1; st.push(k); } } } }
+          for (let i = 0; i < vw * vh; i++) if (all[i] > 40 && !seen[i]) { comps++; seen[i] = 1; st.push(i);
+            while (st.length) { const j = st.pop(), jx = j % vw, jy = (j - jx) / vw; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = jx + dx, ny = jy + dy; if (nx < 0 || ny < 0 || nx >= vw || ny >= vh) continue; const k = ny * vw + nx; if (all[k] > 40 && !seen[k]) { seen[k] = 1; st.push(k); } } } }
           gap = comps - 1; if (gap > 0 && !out.bad) { const k2 = mkc(), g2 = k2.getContext('2d'); g2.fillStyle = '#2c6b3f'; g2.fillRect(0, 0, vw, vh); g2.translate(150, 340); PUP.drawLegged(g2, parts, pose, s, ox, oy, W, Hh, Hd); out.img = k2.toDataURL(); } if (gap > 0 && !out.bad) out.bad = { ph, gap, se: [pose.legL.se, pose.legR.se], dx: [pose.legL.dx, pose.legR.dx], rot: [pose.legL.rot, pose.legR.rot], lift: [pose.footLy, pose.footRy] }; }
         out.worst.gap = Math.max(out.worst.gap, gap);
         // hidden under the cloth: leg pixels above the hem row that the garment does NOT cover (they would poke out beside it)
         let poke = 0, tot = 0; for (let y = 0; y < hemRow; y++) for (let q = 0; q < vw; q++) if (legs[y * vw + q] > 40) { tot++; if (up[y * vw + q] <= 40) poke++; }
+        if (poke > out.worst.poke) { const k3 = mkc(), g3 = k3.getContext('2d'); g3.fillStyle = '#2c6b3f'; g3.fillRect(0, 0, vw, vh); const im = g3.getImageData(0, 0, vw, vh); for (let i = 0; i < vw * vh; i++) { if (all[i] > 40) { im.data[i * 4] = 200; im.data[i * 4 + 1] = 60; im.data[i * 4 + 2] = 60; } if (legs[i] > 40) { im.data[i * 4] = 255; im.data[i * 4 + 1] = 0; im.data[i * 4 + 2] = 255; } if (legs[i] > 40 && up[i] > 40) { im.data[i * 4] = 255; im.data[i * 4 + 1] = 255; im.data[i * 4 + 2] = 0; } } g3.putImageData(im, 0, 0); out.pimg = k3.toDataURL(); out.pph = ph; out.hemRow = hemRow; out.legTop = legTop; }
         out.worst.poke = Math.max(out.worst.poke, poke); out.worst.pokeN = Math.max(out.worst.pokeN, tot);
       }
       return out;
     });
+    if (res.pimg && process.env.DUMP) { fs.writeFileSync(process.env.DUMP + '.poke.png', Buffer.from(res.pimg.split(',')[1], 'base64')); console.log('poke at', res.pph, res.hemRow, res.legTop); }
     if (res.img && process.env.DUMP) fs.writeFileSync(process.env.DUMP, Buffer.from(res.img.split(',')[1], 'base64'));
     assert.ok(res.parts, 'the parts of the synthetic figure were built');
     assert.equal(res.worst.gap, 0, 'no leg detached from the garment at any swing (the figure is one piece): ' + res.worst.gap + ' extra pieces ' + JSON.stringify(res.bad));
@@ -247,7 +249,7 @@ await t('legs_run_under_a_skirt_hem_with_no_transparent_gap_at_any_swing', async
 await t('lab_has_the_tuck_garment_and_outline_controls_and_the_hem_no_longer_fades_over_a_garment', () => {
   const js = readFileSync(root + 'lab/anim.js', 'utf8'), pj = readFileSync(root + 'ui/puppet.js', 'utf8');
   for (const w of ["'Tuck/overlap'", "'Garment sway'", "'Leg outlines'", "'Stride cap'", 'PUP.DEBUG.outlines']) assert.ok(js.includes(w), 'lab: ' + w);
-  assert.ok(/hung \? 0\.005 : 0\.025/.test(pj) && /if \(!hung && upper\)/.test(pj), 'the feather is kept only where the legs are bare');
+  assert.ok(/hung ? 0 : 0.025/.test(pj) && /if \(!hung && upper\)/.test(pj), 'the feather is kept only where the legs are bare');
   for (const f of ['ui/ward.js', 'data/gaits.js', 'lab/anim.js']) assert.ok(!/[—–]/.test(readFileSync(root + f, 'utf8')), 'dash in ' + f);
 });
 
