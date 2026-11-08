@@ -35,6 +35,18 @@ await t('layers_the_left_leg_is_in_front_of_the_right_leg_in_the_puppet_and_in_t
   assert.ok(z('armL_up') > z('armR_up'), 'the near arm goes with the near leg');
 });
 
+await t('side_names_follow_the_character_not_the_screen_and_the_weapon_is_in_the_right_arm', async () => {
+  const R = await import('../graftwork/ui/rig.js');
+  assert.equal(R.sideName('L'), 'R'); assert.equal(R.sideName('R'), 'L'); assert.equal(R.sideName('x'), 'x');
+  const bone = (n) => R.HUMANOID.bones.find((b) => b.n === n);
+  // the figure is seen from the front: the screen-left bones are the character's RIGHT ones, and the weapon belongs to the right hand
+  assert.ok(bone('handL').x <= 0 || bone('armL_up').x < 0, 'the L bones are on the screen-left side');
+  assert.equal(bone('weapon').p, 'handL', 'the saw is in the character\'s right hand: the bone on the screen-left arm (named L by screen side)');
+  assert.ok(bone('weapon').z > bone('armL_up').z, 'the weapon is drawn in front of its arm');
+  const lab = readFileSync(root + 'lab/anim.js', 'utf8');
+  assert.ok(/sideName/.test(lab) && /SN\(/.test(lab), 'the lab shows the character\'s own sides');
+});
+
 await t('planted_foot_ground_speed_is_zero', () => {
   let stance = 0, worst = 0;
   for (let ph = 0.02; ph < 8; ph += DPH) {

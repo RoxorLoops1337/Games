@@ -14,6 +14,8 @@ import * as CA from '../ui/combat_art.js';
 import * as ISO from '../ui/ward_iso.js';
 import * as KR from '../ui/ward_kit_iso.js';
 import * as RIG from '../ui/rig.js';
+// The figures are seen from the front: the character's own RIGHT side is on the screen's LEFT. Internal ids stay by screen side (L, R); everything shown goes through these.
+const SN = RIG.sideName, SNs = (s) => String(s === undefined || s === null ? '' : s).replace(/[LR]/g, (c) => SN(c));
 import * as PUP from '../ui/puppet.js';
 import { gaitEntry, wantsPuppet } from '../data/gaits.js';
 import * as J from '../ui/juice.js';
@@ -223,7 +225,7 @@ function walkSrc(m, source) {
 function puppetOf(m) { const a = assets.actor(m.id, APP); return a ? PUP.infoOf(a.img, m.id) : null; }
 function walkLabel(m, source) {
   const s = walkSrc(m, source);
-  if (s === 'puppet') { const pe = puppetOf(m); return 'PUPPET walk: ' + (pe ? pe.kind + (pe.kind === 'legged' ? ', legs split at the hip, left foot then right' : ' gait, body only') : 'analysing the sprite') + (source === 'auto' ? ' (the game default)' : ''); }
+  if (s === 'puppet') { const pe = puppetOf(m); return 'PUPPET walk: ' + (pe ? pe.kind + (pe.kind === 'legged' ? ', legs split at the hip, one foot then the other' : ' gait, body only') : 'analysing the sprite') + (source === 'auto' ? ' (the game default)' : ''); }
   return walkLabel2(m, source, s);
 }
 function walkLabel2(m, source, s) {
@@ -495,7 +497,7 @@ function viewerRead(info, P, anim) {
     const n = walkN(m, P.source), ph = info.ph;
     const pp = info.rec && info.rec.pp;
     if (walkSrc(m, P.source) === 'puppet') rows.push(['stride', pp ? `${info.rec.stride.toFixed(2)} steps, plant ${pp.plant || '-'} (read from the pose), step length ${(pp.stride * 100).toFixed(0)}% of height` : `${info.rec.stride.toFixed(2)} steps, no puppet pose`]);
-    else rows.push(['stride', `${ph.toFixed(2)} plants, foot ${Math.floor(ph) % 2 === 0 ? 'L' : 'R'} planted, frame ${walkIndex(ph, n) + 1} of ${n}`]);
+    else rows.push(['stride', `${ph.toFixed(2)} plants, foot ${SN(Math.floor(ph) % 2 === 0 ? 'L' : 'R')} planted, frame ${walkIndex(ph, n) + 1} of ${n}`]);
   } else if (anim !== 'idle') rows.push(['time', `${CLK.t.toFixed(2)} s of ${durOf(m, anim).toFixed(2)} s`]);
   setRead(rows);
 }
@@ -533,7 +535,7 @@ function puppetControls() {
 const SLIDE = { x: { L: 0, R: 0 }, t: 0, key: '', max: 0, cur: 0, walk: 0, d0: 0, hold: 0 };
 function plantPanel(rec, label) {
   const pl = $('plant'); pl.style.display = 'flex';
-  if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
+  if (!pl.firstChild) { pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt')); }
   const pads = pl.children, pp = rec && rec.pp, Hw = rec && rec.pHw;
   pads[0].classList.toggle('lit', !!(pp && pp.plantL)); pads[1].classList.toggle('lit', !!(pp && pp.plantR));
   pads[2].style.whiteSpace = 'pre';
@@ -546,7 +548,7 @@ function plantPanel(rec, label) {
     SLIDE.cur = sl; SLIDE.walk = wk; SLIDE.max = Math.max(SLIDE.max * 0.985, sl);
   }
   SLIDE.key = key; SLIDE.x.L = fxL; SLIDE.x.R = fxR; SLIDE.d0 = dist;
-  pads[2].textContent = `${label || 'puppet'}  plant ${pp.plant || '-'}  lead ${pp.lead}\nfoot slide ${SLIDE.cur.toFixed(1)} px/s (peak ${SLIDE.max.toFixed(1)})\nwalking speed ${SLIDE.walk.toFixed(0)} px/s${pp.w < 0.97 ? ' (starting or stopping)' : ''}`;
+  pads[2].textContent = `${label || 'puppet'}  plant ${SNs(pp.plant) || '-'}  lead ${SN(pp.lead)}\nfoot slide ${SLIDE.cur.toFixed(1)} px/s (peak ${SLIDE.max.toFixed(1)})\nwalking speed ${SLIDE.walk.toFixed(0)} px/s${pp.w < 0.97 ? ' (starting or stopping)' : ''}`;
   return SLIDE;
 }
 const viewerP = { P: null };
@@ -711,7 +713,7 @@ SC.map = {
     // indicators
     if (rec.pp) plantPanel(rec, 'map');
     else {
-      const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
+      const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) { pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt')); }
       const pads = pl.children; pads[0].classList.toggle('lit', P.lit === 'L' && CLK.abs - (P.litT || 0) < 0.18); pads[1].classList.toggle('lit', P.lit === 'R' && CLK.abs - (P.litT || 0) < 0.18);
       const n4 = sw === 'frames' ? m.F.walk.length : 2;
       pads[2].textContent = `plants ${P.n}  (L ${P.L} / R ${P.R})\nalternation breaks ${P.skips}\nwalk frame ${rec.cycle ? walkIndex(rec.stride, n4) + 1 : '-'} of ${n4}`; pads[2].style.whiteSpace = 'pre';
@@ -834,7 +836,7 @@ function rigStrip() {
   const R = ST.rig, key = [R.stride, R.knee, R.bob, R.arms, R.lean].join('|');
   const items = Array.from({ length: 8 }, (_, k) => {
     const ph = k * 0.25;
-    return { key: k, name: 'ph ' + ph.toFixed(2), sub: RIG.leadFoot(ph) + ' lead', draw(x, W, H) { x.fillStyle = '#0d0907'; x.fillRect(0, 0, W, H); x.strokeStyle = '#4a3624'; x.beginPath(); x.moveTo(0, H - 14); x.lineTo(W, H - 14); x.stroke(); RIG.drawRig(x, RIG.HUMANOID, RIG.walkPose(ph, rigOpts()), W / 2, H - 14, { scale: 1.45, color: '#8a7a60' }); } };
+    return { key: k, name: 'ph ' + ph.toFixed(2), sub: SN(RIG.leadFoot(ph)) + ' lead', draw(x, W, H) { x.fillStyle = '#0d0907'; x.fillRect(0, 0, W, H); x.strokeStyle = '#4a3624'; x.beginPath(); x.moveTo(0, H - 14); x.lineTo(W, H - 14); x.stroke(); RIG.drawRig(x, RIG.HUMANOID, RIG.walkPose(ph, rigOpts()), W / 2, H - 14, { scale: 1.45, color: '#8a7a60' }); } };
   });
   stripSet('rig|' + key, items, (it) => { CLK.playing = false; RG.ph = it.key * 0.25 + 2 * Math.floor(RG.ph / 2); });
 }
@@ -875,7 +877,7 @@ SC.rig = {
       for (const b of bones) { g.fillStyle = b.name.startsWith('foot') ? (b.name === 'footL' ? '#5aa0ff' : '#ff9a4a') : '#ffd24a'; g.beginPath(); g.arc(b.x, b.y, 3, 0, 7); g.fill(); }
     }
     // foot markers on the ground and slide of the planted foot (ground fixed point moves left by dist * s)
-    for (const [f, nm, col] of [[fl, 'L', '#5aa0ff'], [fr, 'R', '#ff9a4a']]) { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.moveTo(f.x - 7, f.y); g.lineTo(f.x + 7, f.y); g.stroke(); g.fillStyle = col; g.font = 'bold 12px Georgia'; g.textAlign = 'center'; g.fillText(nm, f.x, f.y + 20); }
+    for (const [f, nm, col] of [[fl, SN('L'), '#5aa0ff'], [fr, SN('R'), '#ff9a4a']]) { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.moveTo(f.x - 7, f.y); g.lineTo(f.x + 7, f.y); g.stroke(); g.fillStyle = col; g.font = 'bold 12px Georgia'; g.textAlign = 'center'; g.fillText(nm, f.x, f.y + 20); }
     const gx = lp.x + dist * s;
     if (RG.prevGround && RG.prevGround.foot === low && dt > 0) { const sl = ((gx - RG.prevGround.x) / s) / dt; RG.slide = lerp(RG.slide, Math.abs(sl), 0.1); } else if (dt > 0) RG.slide = RG.slide * 0.9;
     RG.prevGround = { foot: low, x: gx };
@@ -883,9 +885,9 @@ SC.rig = {
     if (R.trail) for (const f of RG.trail) { const x = f.x - dist * s; g.fillStyle = f.foot === 'L' ? 'rgba(90,160,255,.7)' : 'rgba(255,150,70,.7)'; g.beginPath(); g.ellipse(x, gy + 3, 7, 2.4, 0, 0, 7); g.fill(); }
     rigStrip(); stripHighlight(Math.floor((((RG.ph % 2) + 2) % 2) / 0.25 + 1e-6));
     const lead = RIG.leadFoot(RG.ph), pl = $('plant'); pl.style.display = 'flex';
-    if (!pl.firstChild) { pl.append(mk('div', 'pad', 'L'), mk('div', 'pad', 'R'), mk('div', 'txt')); }
+    if (!pl.firstChild) { pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt')); }
     pl.children[0].classList.toggle('lit', lead === 'L'); pl.children[1].classList.toggle('lit', lead === 'R');
-    pl.children[2].textContent = `lead foot ${lead}\nlowest foot ${low}\nsteps ${Math.floor(RG.ph)}`; pl.children[2].style.whiteSpace = 'pre';
+    pl.children[2].textContent = `lead foot ${SN(lead)}\nlowest foot ${SN(low)}\nsteps ${Math.floor(RG.ph)}`; pl.children[2].style.whiteSpace = 'pre';
     if (performance.now() - readT > 90) {
       readT = performance.now();
       const sl = Math.abs(RG.slide), speed = R.stride * R.cadence;
