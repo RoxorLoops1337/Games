@@ -400,9 +400,9 @@ export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a
 function puppetInfo(g, r, aid, spr, s) {
   const pm = r.pm; if (pm === 'off' || !(pm === 'on' || wantsPuppet(aid))) return null;
   const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g), dev = (dsc === dsc ? dsc : 1) * s * d.w / iw;
-  const e = PUP.prepare(spr.img, aid, dev); return e && e.kind ? e : null;
+  const e = PUP.prepare(spr.img, aid, dev, PUP.tuneFor(aid)); return e && e.kind ? e : null;
 }
-const tuneOf = (id) => { const e = gaitEntry(id); if (!e || !e.tune) return PUP.TUNE; return e.tuneObj || (e.tuneObj = Object.assign(Object.create(PUP.TUNE), e.tune)); };
+const tuneOf = PUP.tuneFor; // per actor tune (data/gaits.js) over the global puppet tune
 function drawActor(app, g, r, run) {
   const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
   let spr = aid ? assets.actor(aid, app, false) : null, img = null, pe = null, parts = null;
@@ -412,7 +412,7 @@ function drawActor(app, g, r, run) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
     fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
     pe = r.kind === 'token' ? null : puppetInfo(g, r, aid, spr, s);
-    const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(pe.geom, tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
+    const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(PUP.geomFor(pe, tuneOf(aid)), tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
     const F = assets.frames(aid), stem = frameStemFor(F, r, !!pe);
     if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
     if (!img && r.frame === 1 && !pe) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
@@ -421,8 +421,8 @@ function drawActor(app, g, r, run) {
   let pose = null, Hw = 0;
   if (pe && r.cycle && !r.pose && !img) {
     pose = r.pp || (r.pp = PUP.newPose()); Hw = pe.geom.H * spr.def.h * s;
-    PUP.walkPuppet(r.pph === undefined ? r.stride : r.pph, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, pe.geom);
-    if (pe.kind === 'legged') { parts = PUP.partsOf(pe, 0) ; if (!parts) { const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g); parts = PUP.partsOf(pe, (dsc === dsc ? dsc : 1) * s * d.w / iw); } if (!parts) pose = null; }
+    PUP.walkPuppet(r.pph === undefined ? r.stride : r.pph, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, PUP.geomFor(pe, tuneOf(aid)));
+    if (pe.kind === 'legged') { parts = PUP.partsOf(pe, 0, tuneOf(aid)); if (!parts) { const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g); parts = PUP.partsOf(pe, (dsc === dsc ? dsc : 1) * s * d.w / iw, tuneOf(aid)); } if (!parts) pose = null; }
     if (pose) { if (pe.kind === 'legged') { r.bob = 0; r.tilt = 0; r.sq = pose.sq; } else { r.bob = pose.hop * Hw; r.sq = pose.sq; r.tilt = pose.lean + pose.rock; } }
   } else r.pp = null;
   r.pHw = pose ? Hw : 0;
