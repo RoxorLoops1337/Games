@@ -836,7 +836,7 @@ await t('painted low: the low painting replaces the tall one wherever the tall o
   } finally { assets.reset(); ISO.resetIso(); ISO.setWallMode('auto'); }
 });
 
-await t('walk pacing: about 0.6 s per room, a beat at the room that fires, half of it with Fast walk, quick with reduced motion, no beat on a wait; the F key saves the setting', async () => {
+await t('walk pacing: about 1.1 s per room (about 3 steps a second), a beat at the room that fires, clearly quicker with Fast walk, quick with reduced motion, no beat on a wait; the F key saves the setting', async () => {
   const run1 = async (mode) => {
     const { app, run, flow } = await setup({ seed: 'pace' + mode });
     const [a, b, c] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_corridor', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 60);
@@ -847,7 +847,7 @@ await t('walk pacing: about 0.6 s per room, a beat at the room that fires, half 
     return { total: finished / 60, move: (moveEnd === null ? finished : moveEnd) / 60, saved, app, flow, st, set };
   };
   const nrm = await run1('normal'), fast = await run1('fast'), red = await run1('reduced');
-  assert.ok(nrm.move > 1.15 && nrm.move < 1.4, 'two rooms take about 0.62 s each: ' + nrm.move.toFixed(2));
+  assert.ok(nrm.move > 2.05 && nrm.move < 2.4, 'two rooms take about 1.1 s each: ' + nrm.move.toFixed(2));
   assert.ok(nrm.total - nrm.move > 0.28 && nrm.total - nrm.move < 0.45, 'a beat of about 0.35 s where the room fires: ' + (nrm.total - nrm.move).toFixed(2));
   assert.ok(fast.total < nrm.total * 0.65 && fast.total > 0.6, 'Fast walk is clearly quicker but not a teleport: ' + fast.total.toFixed(2));
   assert.ok(red.total < 0.4 && red.total - red.move < 0.03, 'reduced motion is quick and has no beat: ' + red.total.toFixed(2));

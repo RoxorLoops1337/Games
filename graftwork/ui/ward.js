@@ -30,10 +30,12 @@ const RIGHT = { x: 1008, y: 64, w: 260, h: 484 };
 const ACT = { x: 1008, y: 556, w: 260, h: 156 };
 const HAND = { x: 284, y: 556, w: 712, h: 164 };
 const CW = 124, CH = 156; // resting building card
-// Walk pacing (seconds). The hero strides about two plants a second like a person (ward_iso.js STRIDE = 0.5 x figure height), so a room takes
-// about 0.6 s, and it stops a beat where the walk meets a room that fires (the engine already decided; this only holds the animation).
-// Fast walk (setting fastWalk, button F on the map) halves both; reduced motion keeps the old quick hop and no pause.
-export const PACE = { normal: { step: 0.62, dwell: 0.35 }, fast: { step: 0.38, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } };
+// Walk pacing (seconds). A room is one cell step (about 52 world px). The hero is 44 px tall (about 39 px of figure) and its step is about 0.4 of the figure height
+// (ui/puppet.js strideOf, capped by TUNE.strideMax), so a room takes 1.1 s at Normal: about 3 steps a second, the pace of a short legged figure (a person takes about 2
+// steps a second with a step of 0.4 of the height; short legs take shorter steps at a similar or a bit higher rate). The old 0.62 s per room was over 5 steps a second:
+// the legs looked like they were scurrying. It stops a beat where the walk meets a room that fires (the engine already decided; this only holds the animation).
+// Fast walk (setting fastWalk, button F on the map) is clearly quicker (0.65 s a room, about 5 steps a second, a hurry); reduced motion keeps the old quick hop and no pause.
+export const PACE = { normal: { step: 1.1, dwell: 0.35 }, fast: { step: 0.65, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } };
 const STEP_S = PACE.normal.step;
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };

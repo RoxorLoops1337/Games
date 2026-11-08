@@ -41,7 +41,7 @@ const APP = {
 };
 assets.setBase('../assets/ward/');
 assets.ensure(APP);
-let PACE = { normal: { step: 0.62, dwell: 0.35 }, fast: { step: 0.38, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } }; // the game's PACE (ui/ward.js), replaced below when it loads
+let PACE = { normal: { step: 1.1, dwell: 0.35 }, fast: { step: 0.65, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } }; // the game's PACE (ui/ward.js), replaced below when it loads
 import('../ui/ward.js').then((m) => { if (m && m.PACE) PACE = m.PACE; }).catch(() => { /* keep the copy above */ });
 let ART_META = {}; // tools/graftwork_art_meta.json: the framesOk flag lives there (the build drops rejected frames from the manifest)
 fetch('../../tools/graftwork_art_meta.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})).then((j) => { ART_META = j || {}; }).catch(() => {});
@@ -381,7 +381,7 @@ function overlays(info, cx, fy, z) {
   if (ST.split && info.space === 'map' && im) {
     const pe = PUP.infoOf(st.img, m.id), an = pe && pe.an;
     if (an && an.ok && an.legs) {
-      const X = (u) => (u * d.w - ax) * k, Y = (v) => (v * d.h - ay) * k, pv = an.hip - 0.4 * (an.bot - an.hip);
+      const X = (u) => (u * d.w - ax) * k, Y = (v) => (v * d.h - ay) * k, pv = an.hip - PUP.tuneFor(m.id).tuck * (an.bot - an.top);
       g.lineWidth = 1.4; g.strokeStyle = '#ffe94a'; g.setLineDash([5, 3]); g.beginPath(); g.moveTo(X(an.left), Y(an.hip)); g.lineTo(X(an.right), Y(an.hip)); g.stroke(); g.setLineDash([]);
       g.strokeStyle = '#4af0ff'; g.beginPath(); g.moveTo(X(an.valley), Y(an.hip)); g.lineTo(X(an.valley), Y(an.bot)); g.stroke();
       g.fillStyle = '#ff5ad0'; for (const px of [an.legTopL, an.legTopR]) { g.beginPath(); g.arc(X(px), Y(pv), 3, 0, 7); g.fill(); g.beginPath(); g.moveTo(X(px), Y(pv)); g.lineTo(X(px), Y(an.hip)); g.strokeStyle = '#ff5ad0'; g.stroke(); }
@@ -524,6 +524,10 @@ function commonControls() {
 function puppetControls() {
   const T = PUP.TUNE, D = PUP.TUNE_DEFAULT, r = UI.group('Puppet walk');
   UI.range(r, 'Leg swing', 5, 40, 1, () => T.swing, (v) => { T.swing = v; }, (v) => v.toFixed(0) + '\u00b0');
+  UI.range(r, 'Tuck/overlap', 0, 0.3, 0.01, () => T.tuck, (v) => { T.tuck = v; }, (v) => (v * 100).toFixed(0) + '%'); // how far the leg runs up under the garment (figure heights); parts are rebuilt per value
+  UI.range(r, 'Garment sway', 0, 2, 0.05, () => T.garment, (v) => { T.garment = v; }, (v) => v.toFixed(2) + 'x'); // the hem band: shear, lift and lag behind the legs
+  UI.range(r, 'Stride cap', 0.2, 0.6, 0.01, () => T.strideMax, (v) => { T.strideMax = v; }, (v) => (v * 100).toFixed(0) + '%');
+  UI.toggle(r, 'Leg outlines', () => PUP.DEBUG.outlines, (v) => { PUP.DEBUG.outlines = v; }, 'Cyan: the hidden extension under the garment, yellow: the shin, orange: the boot (never scaled), magenta: the hem band and the hip pivot');
   UI.range(r, 'Lift', 0.02, 0.2, 0.005, () => T.lift, (v) => { T.lift = v; }, (v) => (v * 100).toFixed(1) + '%');
   UI.range(r, 'Bob', 0, 0.08, 0.002, () => T.bob, (v) => { T.bob = v; }, (v) => (v * 100).toFixed(1) + '%');
   UI.range(r, 'Sway', 0, 0.05, 0.002, () => T.sway, (v) => { T.sway = v; }, (v) => (v * 100).toFixed(1) + '%');
