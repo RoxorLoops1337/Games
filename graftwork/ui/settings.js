@@ -9,7 +9,9 @@ import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
-import { installAvailable, install } from './install.js';
+import { installAvailable } from './install.js';
+import { offlineSupported } from './offline.js';
+const appRow = () => installAvailable() || offlineSupported(); // the App and offline row: Install, the offline copy, updates
 import { lnw } from '../art/linework.js';
 
 export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false };
@@ -49,7 +51,7 @@ export default {
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = installAvailable() ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
+    const w = 600, h = appRow() ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -74,7 +76,7 @@ export default {
     ];
     const ty0 = sy0 + 3 * 40 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
-    const inst = installAvailable(), tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
+    const inst = appRow(), tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
     toggles.forEach(([key, label, tip], i) => {
       const yy = ty0 + 14 + i * tst;
       const on = !!s[key];
@@ -158,15 +160,15 @@ export default {
   },
   muted(app) { return !!settingsOf(app).muted; },
   installRow(app, x, y, w, live) {
-    const tip = 'Adds Graftwork to your home screen or app list. Plays fullscreen, works like an app.';
-    app.text('Install app', x, y + 2, { size: 20 });
-    app.text('Plays fullscreen, works like an app', x, y + 24, { size: 12, ui: true, color: '#9b8f7a', fixed: true, fit: { w: w - 150, lines: 1 } });
-    const bx = x + w - 130, hov = live && app.inRect(x, y, w, 36);
-    this.reg(app, x, y, w, 36, 'Install app', tip, () => { install(app); });
-    if (hov) { app.cursor = 'pointer'; app.tooltip('Install app', tip); }
+    const tip = 'Install the app, download Graftwork for offline play, check for updates.';
+    app.text('App and offline', x, y + 2, { size: 20 });
+    app.text('Install, offline play, updates', x, y + 24, { size: 12, ui: true, color: '#9b8f7a', fixed: true, fit: { w: w - 150, lines: 1 } });
+    const bx = x + w - 130, hov = live && app.inRect(x, y, w, 36), open = () => app.push('app_panel');
+    this.reg(app, x, y, w, 36, 'App and offline', tip, open);
+    if (hov) { app.cursor = 'pointer'; app.tooltip('App and offline', tip); }
     app.panel(bx, y + 2, 130, 32, { r: 8, fill: hov ? '#4a3a1d' : '#3a2f1a', stroke: COL.lamp });
-    app.text('Install', bx + 65, y + 7, { size: 17, bold: true, align: 'center', color: '#fbe9b0' });
-    if (live && app.clicked(x, y, w, 36)) install(app);
+    app.text('Open', bx + 65, y + 7, { size: 17, bold: true, align: 'center', color: '#fbe9b0' });
+    if (live && app.clicked(x, y, w, 36)) open();
   },
   fsRow(app, x, y, w, s, live) {
     const g = app.ctx, can = canFullscreen(), on = can && isFullscreen(), tx = x + w - 64;

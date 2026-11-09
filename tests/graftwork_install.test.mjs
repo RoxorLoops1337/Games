@@ -5,6 +5,7 @@ import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import * as INST from '../graftwork/ui/install.js';
 import title from '../graftwork/ui/title.js';
 import settings from '../graftwork/ui/settings.js';
+import { appPanel, APP_ROWS } from '../graftwork/ui/app_panel.js';
 import * as META from '../graftwork/engine/meta.js';
 
 const UA_CHROME = 'Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile Safari/537.36';
@@ -77,7 +78,7 @@ for (const o of [{ display: 'standalone' }, { display: 'fullscreen' }, { standal
   const html = fs.readFileSync(new URL('index.html', root), 'utf8');
   for (const re of [/<link rel="manifest" href="manifest\.webmanifest">/, /<meta name="theme-color" content="#1A1614">/, /<link rel="apple-touch-icon" href="icons\/apple-touch-icon\.png">/, /apple-mobile-web-app-capable" content="yes"/, /viewport-fit=cover/]) assert.match(html, re);
   assert.equal(m.theme_color.toLowerCase(), '#1a1614'); assert.ok(!/[—–]/.test(html));
-  assert.ok(!fs.existsSync(new URL('sw.js', root)), 'no service worker: nothing can serve stale code');
+  assert.ok(fs.existsSync(new URL('sw.js', root)), 'service worker (offline copy) present: tests/graftwork_sw.test.mjs covers it');
 }
 
 // ---- UI: title and settings, desktop and phone stage scales
@@ -87,7 +88,7 @@ async function rig(scale, avail) {
   const app = await makeApp({ run: null, meta, flow: { hasSave: () => false, saveMeta() {}, openCodex() {}, openSettings() { app.push('settings'); } } });
   app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   if (scale) { app.scale = scale; app.minPx = 11; }
-  app.register('title', title); app.register('settings', settings); app.register('install_help', INST.installHelp);
+  app.register('title', title); app.register('settings', settings); app.register('install_help', INST.installHelp); app.register('app_panel', appPanel);
   return { app, h };
 }
 for (const scale of [0, 0.64, 0.54, 0.46]) for (const save of [false, true]) {
@@ -106,13 +107,14 @@ for (const scale of [0, 0.64, 0.54, 0.46]) for (const save of [false, true]) {
   const { app: a2 } = await rig(0, false); a2.go('title'); frames(a2, 80); click(a2, 725, 306 + 4 * 56 + 24); frames(a2, 20);
   assert.equal(a2.current, 'title'); assert.notEqual(a2.state, 'credits'); // Credits is full width without the button: the right half is Credits then
 }
-{ // settings row
+{ // settings row opens the App and offline panel, whose Install button prompts
   const { app, h } = await rig(0, true); const ev = promptEvent('accepted'); h.fire('beforeinstallprompt', ev);
   app.push('settings'); frames(app, 30);
   const on = app.layout.getAll(); for (const r of on) if (r.layer !== 'world' && !r.overlay) assert.ok(r.y + r.h <= 720.5, 'settings rect inside: ' + r.id);
-  const s = app.top(); assert.ok(s.rows.some((r) => r.label === 'Install app'), 'Install app row registered for keyboard nav');
-  s.rows.find((r) => r.label === 'Install app').act(1); await Promise.resolve(); await Promise.resolve(); assert.equal(ev.prompts, 1);
-  const { app: a2 } = await rig(0, false); a2.push('settings'); frames(a2, 30); assert.ok(!a2.top().rows.some((r) => r.label === 'Install app'), 'no row when not installable');
+  const s = app.top(); const row = s.rows.find((r) => r.label === 'App and offline'); assert.ok(row, 'App and offline row registered for keyboard nav');
+  row.act(1); frames(app, 5); assert.equal(app.top(), appPanel, 'panel open');
+  const R = APP_ROWS.install; click(app, R.x + R.w / 2, R.y + R.h / 2); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); assert.equal(ev.prompts, 1, 'panel Install app prompts');
+  const { app: a2 } = await rig(0, false); a2.push('settings'); frames(a2, 30); assert.ok(!a2.top().rows.some((r) => r.label === 'App and offline'), 'no row when neither install nor offline applies');
 }
 INST.resetInstall();
 console.log('install ok');

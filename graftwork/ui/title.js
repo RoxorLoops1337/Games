@@ -13,6 +13,7 @@ import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
 import { installAvailable, install } from './install.js';
+import { offlineReady, offerDue } from './offline.js';
 import { lnw } from '../art/linework.js';
 import { drawModeSwitch, modeOf } from './ward_kit.js';
 import { createScene } from './title_scene.js';
@@ -154,6 +155,8 @@ export default {
     if (app.blocked) app.navButtons = nav0;
     // top right: fullscreen (reserved zone 1128..1272 x 0..56)
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
+    if (this.state === 'menu' && offlineReady()) this.pip(app, 'Offline ready', 84, 34, { size: 12, maxW: 130, fill: '#9bd7a2' });
+    if (this.state === 'menu' && !app.blocked && !this.confirmAbandon && app.top() === this && offerDue()) app.push('offline_prompt'); // once, after an install
     // corner: version + credit line + mute (always)
     const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 400, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 400, lines: 1 } };
     if (!(compact(app) && this.state !== 'menu')) { // phones: the select and credits panels use the whole stage, the corner credit line would sit under their buttons

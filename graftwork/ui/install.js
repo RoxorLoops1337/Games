@@ -1,8 +1,9 @@
 // Install as an app (PWA). Chrome and Edge (Android, desktop) fire `beforeinstallprompt`: we keep the event and call prompt() from our own button.
 // iOS has no such event: Share > Add to Home Screen, so we show an instruction dialog. Other browsers (Firefox desktop, in-app browsers): no button.
 // Safe under node (no window: everything is a no-op); mockable for tests via setHost({window, navigator}).
-// No offline promise: there is no service worker, the installed app is the live site (it updates with every deploy).
+// Offline play is separate (ui/offline.js, sw.js): the player downloads it from Settings > App and offline.
 import { COL } from './core.js';
+import { requestOffer } from './offline.js';
 
 let host = null;
 const win = () => (host ? host.window : globalThis.window) || null;
@@ -49,7 +50,7 @@ export async function install(app) {
   try {
     await ev.prompt();
     const c = await ev.userChoice;
-    if (c && c.outcome === 'accepted') { S.installed = true; say('Installed. Graftwork is on your home screen or app list.'); return 'accepted'; }
+    if (c && c.outcome === 'accepted') { S.installed = true; say('Installed. Graftwork is on your home screen or app list.'); requestOffer(); return 'accepted'; }
     return 'dismissed';
   } catch { return 'error'; }
 }
@@ -59,7 +60,7 @@ export function initInstall(h) {
   const w = win(); if (!w || !w.addEventListener || S.listening === w) return;
   S.listening = w;
   w.addEventListener('beforeinstallprompt', (e) => { if (e.preventDefault) e.preventDefault(); S.deferred = e; });
-  w.addEventListener('appinstalled', () => { S.installed = true; S.deferred = null; say('Installed. Graftwork is on your home screen or app list.'); });
+  w.addEventListener('appinstalled', () => { S.installed = true; S.deferred = null; say('Installed. Graftwork is on your home screen or app list.'); requestOffer(); });
 }
 export function resetInstall() { host = null; S.deferred = null; S.installed = false; S.toast = null; S.listening = null; }
 initInstall(); // the event can fire before main.js boots: listen from import time
