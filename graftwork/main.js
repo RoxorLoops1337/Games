@@ -32,6 +32,9 @@ import settings from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
+import { initInstall, installHelp, drawInstallToast } from './ui/install.js';
+import { initOffline } from './ui/offline.js';
+import { appPanel, offlinePrompt } from './ui/app_panel.js';
 import { installWings } from './ui/wings.js';
 
 const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
@@ -86,11 +89,13 @@ export function boot(canvas) {
   app.lightsApi = lights; app.shared.transitions = TRANS;
   installPause(app);
   installFullscreen(app);
+  initInstall();
+  initOffline();
   app.shared.flow = flow;
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause };
+  const S = { title, map, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause, install_help: installHelp, app_panel: appPanel, offline_prompt: offlinePrompt };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
@@ -109,6 +114,7 @@ export function boot(canvas) {
     A11Y.applySettings(app);
     TRANS.drawTransitions(app);
     drawPauseOverlay(app);
+    drawInstallToast(app);
   };
   try { if (/[?&]perf\b/.test(location.search)) app.perf.debug = true; } catch (e) { /* no location */ }
   { let av = assets.ver; app.addBusyProbe(() => { const ch = assets.ver !== av; av = assets.ver; return ch || TRANS.busy(app) || (app.post && app.post.busy && app.post.busy()); }); }

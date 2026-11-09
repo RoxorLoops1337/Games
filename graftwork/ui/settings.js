@@ -9,6 +9,9 @@ import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
+import { installAvailable } from './install.js';
+import { offlineSupported } from './offline.js';
+const appRow = () => installAvailable() || offlineSupported(); // the App and offline row: Install, the offline copy, updates
 import { lnw } from '../art/linework.js';
 
 export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false };
@@ -48,7 +51,7 @@ export default {
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
+    const w = 600, h = appRow() ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -73,11 +76,12 @@ export default {
     ];
     const ty0 = sy0 + 3 * 40 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
+    const inst = appRow(), tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
     toggles.forEach(([key, label, tip], i) => {
-      const yy = ty0 + 14 + i * 31;
+      const yy = ty0 + 14 + i * tst;
       const on = !!s[key];
-      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 30);
-      this.reg(app, x + 32, yy, w - 64, 30, label, tip, () => { s[key] = !s[key]; this.applyAudio(app); this.persist(app); });
+      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, tst - 1);
+      this.reg(app, x + 32, yy, w - 64, tst - 1, label, tip, () => { s[key] = !s[key]; this.applyAudio(app); this.persist(app); });
       if (hov) { app.tooltip(label, tip); app.cursor = 'pointer'; }
       app.text(label, x + 32, yy + 9, { size: 20, color: hov ? '#fff' : COL.vellum });
       // switch
@@ -87,20 +91,21 @@ export default {
       g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), yy + 20, 10, 0, 6.283); g.fill();
       g.restore();
       app.text(on ? 'On' : 'Off', tx - 12, yy + 11, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
-      if (app.clicked(x + 32, yy, w - 64, 30) && live) {
+      if (app.clicked(x + 32, yy, w - 64, tst - 1) && live) {
         s[key] = !on;
         this.applyAudio(app); this.persist(app);
         if (app.shared.audio && !s.muted) app.shared.audio.sfx('uiClick');
       }
     });
     // reset
-    const sy1 = ty0 + 14 + toggles.length * 31;
+    const sy1 = ty0 + 14 + toggles.length * tst;
     this.segRow(app, 'Text size', 'Scales text where the layout allows it.', x + 32, sy1, w - 64, TEXT_STEPS.map((v) => [v, v + '%']), s.textScale, (v) => { s.textScale = v; s.textSize = v > 100 ? 'large' : 'normal'; this.persist(app); }, live);
-    this.segRow(app, 'Colorblind palette', 'Deuteranopia, protanopia or tritanopia. Used when Colorblind mode is on.', x + 32, sy1 + 40, w - 64, CB_MODES.map((v) => [v, v.slice(0, 3).toUpperCase()]), s.colorblindMode, (v) => { s.colorblindMode = v; this.persist(app); }, live);
-    this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + 80, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
-    this.segRow(app, 'Graphics', 'Auto adapts to how smooth the game runs on this device. High: always full detail. Low: lighter scene, no post effects, saves battery.', x + 32, sy1 + 120, w - 64, [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']], s.graphics, (v) => { s.graphics = v; this.persist(app); }, live);
-    this.fsRow(app, x + 32, sy1 + 160, w - 64, s, live);
-    const ry = sy1 + 160 + 40 + 14;
+    this.segRow(app, 'Colorblind palette', 'Deuteranopia, protanopia or tritanopia. Used when Colorblind mode is on.', x + 32, sy1 + sst, w - 64, CB_MODES.map((v) => [v, v.slice(0, 3).toUpperCase()]), s.colorblindMode, (v) => { s.colorblindMode = v; this.persist(app); }, live);
+    this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + sst * 2, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
+    this.segRow(app, 'Graphics', 'Auto adapts to how smooth the game runs on this device. High: always full detail. Low: lighter scene, no post effects, saves battery.', x + 32, sy1 + sst * 3, w - 64, [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']], s.graphics, (v) => { s.graphics = v; this.persist(app); }, live);
+    this.fsRow(app, x + 32, sy1 + sst * 4, w - 64, s, live);
+    if (inst) this.installRow(app, x + 32, sy1 + sst * 5, w - 64, live);
+    const ry = sy1 + sst * (inst ? 6 : 5) + 14 - (inst ? 4 : 0);
     stitch(g, x + 32, ry - 8, x + w - 32, ry - 8);
     if (this.reset === 0) {
       if (app.button('Reset all progress', x + 32, ry + 4, 240, 40, { size: 17, fill: '#3a2020', stroke: 'rgba(179,38,58,.7)' })) this.reset = 1;
@@ -154,6 +159,17 @@ export default {
     });
   },
   muted(app) { return !!settingsOf(app).muted; },
+  installRow(app, x, y, w, live) {
+    const tip = 'Install the app, download Graftwork for offline play, check for updates.';
+    app.text('App and offline', x, y + 2, { size: 20 });
+    app.text('Install, offline play, updates', x, y + 24, { size: 12, ui: true, color: '#9b8f7a', fixed: true, fit: { w: w - 150, lines: 1 } });
+    const bx = x + w - 130, hov = live && app.inRect(x, y, w, 36), open = () => app.push('app_panel');
+    this.reg(app, x, y, w, 36, 'App and offline', tip, open);
+    if (hov) { app.cursor = 'pointer'; app.tooltip('App and offline', tip); }
+    app.panel(bx, y + 2, 130, 32, { r: 8, fill: hov ? '#4a3a1d' : '#3a2f1a', stroke: COL.lamp });
+    app.text('Open', bx + 65, y + 7, { size: 17, bold: true, align: 'center', color: '#fbe9b0' });
+    if (live && app.clicked(x, y, w, 36)) open();
+  },
   fsRow(app, x, y, w, s, live) {
     const g = app.ctx, can = canFullscreen(), on = can && isFullscreen(), tx = x + w - 64;
     app.text('Fullscreen', x, y + 7, { size: 20, color: can ? COL.vellum : '#8c8372' });

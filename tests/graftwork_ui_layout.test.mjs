@@ -398,6 +398,18 @@ for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 
   f.hasSave = () => false; f.start = () => {}; f.openSettings = () => h.app.push('settings', {}); f.openPause = () => h.app.push('pause', {});
   h.app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   h.app.go('title'); look(h, 80, T('title') + '/menu');
+  { // Install app available (Chrome fired beforeinstallprompt): the Install slab shares the Credits row, with and without a saved run, plus the Settings row
+    const INST = await import('../graftwork/ui/install.js'); INST.resetInstall();
+    const L = {}; INST.initInstall({ window: { addEventListener(n, fn) { L[n] = fn; }, matchMedia: () => ({ matches: false }) }, navigator: { userAgent: 'Chrome/130', platform: '', maxTouchPoints: 0 } });
+    L.beforeinstallprompt({ preventDefault() {}, prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'dismissed' }) });
+    for (const save of [false, true]) {
+      const hi = await make(o); const fi = flowFor(hi); hi.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; fi.hasSave = () => save; fi.openSettings = () => hi.app.push('settings', {});
+      hi.app.shared.audio = h.app.shared.audio; hi.app.go('title'); look(hi, 80, T('title') + '/install' + (save ? 'save' : ''));
+      hoverAt(hi, 725, save ? 640 : 554); look(hi, 3, T('title') + '/installhover' + (save ? 'save' : ''));
+    }
+    const hs = await make(o); flowFor(hs); hs.app.shared.audio = h.app.shared.audio; hs.app.push('settings', {}); look(hs, 40, T('settings') + '/install');
+    INST.resetInstall();
+  }
   hoverAt(h, 640, 330); look(h, 3, T('title') + '/hover');
   { // continue present, both pips, a saved hero card, the sewing intro at four moments
     const hv = await make(o); const fv = flowFor(hv); hv.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; fv.hasSave = () => true; fv.resume = () => true; fv.openSettings = () => {}; hv.meta.history = [{ hero: 'wick' }]; hv.meta.unlocked.fresh = { a: 1, b: 1, c: 1 };
