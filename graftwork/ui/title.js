@@ -12,6 +12,7 @@ import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../eng
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
+import { installAvailable, install } from './install.js';
 import { lnw } from '../art/linework.js';
 import { drawModeSwitch, modeOf } from './ward_kit.js';
 import { createScene } from './title_scene.js';
@@ -284,7 +285,14 @@ export default {
         if (fresh > 0) this.pip(app, fresh > 99 ? '99+' : String(fresh), x + hw + 10 + hw - 14, yy + 1, { size: 12, maxW: 40, fill: '#e8c25a' });
       }
       else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (this.slab(app, id, 'Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
-      else if (id === 'credits') { if (this.slab(app, id, 'Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
+      else if (id === 'credits') {
+        const inst = installAvailable(), hw = Math.floor((bw - 10) / 2), cw = inst ? hw : bw; // Install app shares the Credits row: no extra height on any layout
+        if (this.slab(app, id, 'Credits', x, yy, cw, bh, { size: 22, fit: true })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); }
+        if (inst) {
+          if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Install app', 'Adds Graftwork to your home screen or app list. Plays fullscreen, works like an app.');
+          if (this.slab(app, 'install', 'Install app', x + hw + 10, yy, hw, bh, { size: 20, fit: true, fill: '#3a2f1a', stroke: COL.lamp })) install(app);
+        }
+      }
       y += step;
     }
     g.restore();
