@@ -17,7 +17,7 @@ export const appPanel = {
     app.panel(X, Y, W, H, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('App and offline', X + 32, Y + 20, { size: 30, bold: true, fit: { w: W - 64, lines: 1 } });
     const nav0 = app.navButtons; app.navButtons = true;
-    const sub = (t, y, c) => app.text(t, X + 32, y, { size: 14, ui: true, color: c || '#9b8f7a', fit: { w: W - 300, lines: 2 }, maxW: W - 300 });
+    const sub = (t, y, c) => app.text(t, X + 32, y, { size: 14, ui: true, color: c || '#9b8f7a', fit: { w: W - 330, lines: 2 }, maxW: W - 330 });
     // install
     app.text('Install app', X + 32, Y + 80, { size: 22 });
     const mode = I.installMode();
