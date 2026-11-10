@@ -207,7 +207,13 @@ await t('real boot: every look-changing setting repaints the frozen title once; 
   void drawInstallToast;
   // wardrobe cosmetics: a save repaints (the card back and the hero tint show on the title)
   realKey(app, 'Escape'); frames(app, 3); assert.equal(app.stack.length, 1);
-  flow.openWardrobe(); frames(app, 10); { const p0 = Z.paints; flow.saveMeta(); frames(app, 3); assert.equal(Z.paints, p0 + 1, 'a cosmetics save repaints'); }
+  { const meta = app.shared.meta; meta.credit.bal = 900; const btns = []; const b0 = app.button; app.button = (label, x, y, w, h, o) => { btns.push({ label: String(label), x, y, w, h, dis: !!(o && o.disabled) }); return b0(label, x, y, w, h, o); };
+    flow.openWardrobe(); frames(app, 30); btns.length = 0; frames(app, 1);
+    const buy = btns.find((q) => /^(Buy|Equip)/.test(q.label) && !q.dis); assert.ok(buy, 'arrange: something to buy or equip: ' + btns.map((q) => q.label).join('|'));
+    const p0 = Z.paints, d0 = titleDraws, lo = JSON.stringify(meta.loadout) + JSON.stringify(meta.cosmetics);
+    click(app, buy.x + buy.w / 2, buy.y + buy.h / 2); frames(app, 4); app.button = b0;
+    assert.notEqual(JSON.stringify(meta.loadout) + JSON.stringify(meta.cosmetics), lo, 'the cosmetic was bought or equipped');
+    assert.equal(Z.paints, p0 + 1, 'a cosmetics change repaints the frozen title once'); assert.equal(titleDraws, d0 + 1); }
   realKey(app, 'Escape'); frames(app, 3); assert.equal(app.stack.length, 1); assert.equal(Z.snap, null);
   // the quality controller measures the modal's own frames, and a calm modal idles at 30 fps over a busy screen whose tween is frozen
   app.register('busy', { name: 'busy', draw() {} }); app.go('busy'); app.tween({ x: 0 }, { x: 1 }, 600000); // a screen that is never calm, with a long tween
