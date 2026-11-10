@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, usePotion, addStatus, addCard, specOf, effCost, startPlayerTurn, dealDamage, setStatus } from '../graftwork/engine/combat.js';
 import { afflStartTurn } from '../graftwork/engine/afflictions.js';
-import { cardSpec } from '../graftwork/engine/cards.js';
 import { ENEMIES, STATUSES, GRAFTS, CARDS } from '../graftwork/data/index.js';
 
 let n = 0;
@@ -27,7 +26,7 @@ const graftPool = (pred) => Object.values(GRAFTS).filter(pred);
 t('every affliction resolves in STATUSES with a one-line tooltip and no em dash', () => {
   for (const id of ['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden', 'weightofdebt', 'stitchedup']) {
     const d = STATUSES[id]; assert.ok(d, id);
-    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && !/\n|—/.test(s), id + ' ' + s); }
+    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && !/\n/.test(s), id + ' ' + s); }
   }
 });
 

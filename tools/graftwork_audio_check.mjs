@@ -153,12 +153,13 @@ export async function runAudioCheck() {
   try { ({ chromium } = require('playwright')); } catch (e) { return { skipped: 'playwright not installed' }; }
   const srv = await serve(); const port = srv.address().port;
   let browser;
-  try { browser = await chromium.launch(); } catch (e) { srv.close(); return { skipped: 'chromium cannot launch: ' + String(e.message).split('\n')[0] }; }
+  // Playwright's own limits are 30 s, tuned to an idle machine; a busy one needs longer. A browser that never starts or a page that never loads still fails, later.
+  try { browser = await chromium.launch({ timeout: 120000 }); } catch (e) { srv.close(); return { skipped: 'chromium cannot launch: ' + String(e.message).split('\n')[0] }; }
   try {
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.message); });
-    await page.goto(`http://127.0.0.1:${port}/__blank.html`);
+    await page.goto(`http://127.0.0.1:${port}/__blank.html`, { timeout: 120000 });
     await page.evaluate(pageSetup);
     const { sfx, modes } = await page.evaluate(() => window.__ac.names());
     const out = { sfx: {}, music: {}, musicHot: {}, mixed: {}, stack: {}, muted: null };

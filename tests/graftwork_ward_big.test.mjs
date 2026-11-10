@@ -5,7 +5,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import * as W from '../graftwork/engine/ward.js';
 import { ROOMS, BUILD_CARDS, BUILD_LIST, WARD_TUNE } from '../graftwork/data/ward.js';
 import { BIG_RECIPES, hasBigRecipe } from '../graftwork/data/ward_kit_big.js';
-import { UNLOCKS, START } from '../graftwork/data/unlocks.js';
+import { UNLOCKS } from '../graftwork/data/unlocks.js';
 import { playWardRun } from '../tools/graftwork_driver.mjs';
 import { readFileSync } from 'node:fs';
 import { resolveRecipe, lanesFor, freeConnected, wallPlan, pathOnGrid } from '../graftwork/data/ward_kit.js';

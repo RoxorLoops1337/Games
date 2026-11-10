@@ -36,8 +36,8 @@ graftwork/
   assets/ward/   the Ward's generated WebP art + manifest.json (see Ward art exception below); owned by the art pipeline, never edited by hand; read only through ui/assets.js
   assets/rigs/   the painted character rigs (preview): one packed atlas per character (@1x, @2x) + manifest.json, built by tools/graftwork_rig_build.py from the raw part sheets and tools/graftwork_rig_meta.json; read only through ui/rigs.js
   design/   ART_BIBLE THREAD ENEMY_DEPTH UX_SPEC JUICE BUILD_PLAN (+ README.md index)
-tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs them all; tests/graftwork_lib.mjs is the fake-canvas harness
-tools/graftwork_*.mjs          balance and audio tooling (see Balance tooling)
+tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs them all (see Test map); tests/graftwork_lib.mjs is the fake-canvas harness
+tools/graftwork_*              balance, audio, build and audit tooling (see Balance and build tooling)
 ```
 
 ## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js, creating it and registering it in data/index.js when it does not exist)
@@ -135,7 +135,7 @@ ART_BIBLE.md (The Anatomical Plate), THREAD.md (the new core rule: school chains
 Every HUD widget reports its rectangle each frame: `app.reg(id, x, y, w, h, { layer: 'hud'|'world'|'overlay', group, overlay })`. The layout tests enforce: `hud` rects never intersect unless they share a `group` or one is flagged `overlay` (tooltips, modals, the hovered-card layer); every non-`world` rect lies inside the 1280x720 stage. Register new widgets or `ui_layout` / `ui_combat_layout` cannot see them. Text never goes below `SMALL.minTextPx` (11) and touch targets never below `SMALL.minTouchPx` (40) on phones (ui/core.js).
 
 ## Tooltips (ui/tooltips.js, one system)
-A tip exists only while its anchor is hovered, held or focused THIS frame. Show delay 0.25 s (touch: finger held 0.3 s, gone when it lifts), fade (none with reduced motion), dropped at once on a press, Esc, blur, screen change or `app.tipBlock` (combat sets it during enemy turns, drags and card animations); the same anchor stays quiet until the pointer leaves it. Shift (touch: keep holding 0.9 s) HOLDS the tip open: every definition plus the arithmetic. ONE compact panel (max width 38% of the stage, placed beside the anchor, kept off HUD rects and actors in the layout registry, arrow at the anchor): the thing's own lines, then one short definition per rules word. A card never defines its own type or school, and the totals line shows only when it differs from the face. Space is limited: extra definitions collapse into a visible `+N more (hold)`. New tips: `app.tooltip(title, text, { gloss, anchor, region })` or `queueTip(...)`. Tests: `graftwork_tip_lifecycle`, glossary (completeness), ui_layout (checkTip sweeps).
+A tip exists only while its anchor is hovered, held or focused THIS frame. Show delay 0.25 s (touch: finger held 0.3 s, gone when it lifts), fade (none with reduced motion), dropped at once on a press, Esc, blur, screen change or `app.tipBlock` (combat sets it during enemy turns, drags and card animations); the same anchor stays quiet until the pointer leaves it. Shift (touch: keep holding 0.9 s) HOLDS the tip open: every definition plus the arithmetic. ONE compact panel (max width 38% of the stage, placed beside the anchor, kept off HUD rects and actors in the layout registry, arrow at the anchor): the thing's own lines, then one short definition per rules word. A card never defines its own type or school, and the totals line shows only when it differs from the face. Space is limited: extra definitions collapse into a visible `+N more (hold)`. New tips: `app.tooltip(title, text, { gloss, anchor, region })` or `queueTip(...)`. Tests: `graftwork_tip_lifecycle`, `graftwork_tip_layout` (the checkTip sweeps), `graftwork_glossary` (completeness).
 
 ## Post, fx and audio APIs
 - Post (ui/post.js, `app.post`, all no-ops when quality is off or reduced motion): `shockwave(x,y,strength,ms)`, `aberration(amount,ms)`, `flash(color,a)`, `vignette(a,ms)`, `setBloom(k,threshold?)`, `setGrade(name,ms)`, `setQuality('off'|'low'|'high')`. Logical 1280x720 coordinates. Grades: ward market theatre boss title neutral (auto per screen). Pointer events still hit the 2D canvas. Its tier is the Effects setting while `app.perf.q.tier === 'full'` and off otherwise: post.js measures nothing, `ui/quality.js` is the only quality controller.
@@ -150,26 +150,29 @@ A tip exists only while its anchor is hovered, held or focused THIS frame. Show 
 - Other test-only names: `graftwork_audio_check`, `graftwork_motion` are not storage keys.
 
 ## Test map (which suite guards what)
-Run all: `node tests/run_graftwork.mjs` (or `npm run test:graftwork`). The runner uses a pool of 4 workers (`--jobs=N`, `--serial`, `--times` prints per-suite ms), prints one PASS or FAIL line per file, the last 12 stdout lines of a failure, and `N/N graftwork suites passed`; exit code 1 on any failure.
+Run all: `node tests/run_graftwork.mjs` (or `npm run test:graftwork`): 71 suites. The runner uses a pool of 4 workers (`--jobs=N`, `--serial`, `--times` prints per-suite ms), starts the slowest suites first (the time of each passing suite is remembered in `graftwork_suite_times_<checkout>.json` under the system temp folder, never in the repo; without it the fixed `HEAVY` list in the runner), prints one PASS or FAIL line per file, the last 12 stdout lines of a failure, and `N/N graftwork suites passed (seconds, cpu seconds, workers)`; exit code 1 on any failure. On a shared machine compare the cpu seconds, not the wall time.
+Rules for a suite: a budget is counted, never timed (`canvasCalls()` in the lib counts every call on every fake context; a wall-clock bound fails when the machine is busy), nothing asserts on the text of a source file (run the code and look at what it does), the em dash and en dash rule has ONE owner, `hygiene` (it reads every text file of the game, the tests and the tools; no suite checks a dash again), and a suite is named after what it guards, not after the round that wrote it.
 | area | suites |
 |---|---|
-| content gate (run first when editing data/) | data, content_fuzz (every card x graft x enemy), audit (power smoke, exploit decks), status_behaviour (status does what its tooltip says) |
-| rules | temper, seam, afflictions, boss_mechanics, meta, meta2, rules_fixes (text equals rule: Cut the Line, Slip Knot, Granny Knot, the declaration, resonance texts and their Thread half, Free Sample and how a waived Price reads, cut hooks past the turn's 3 paying cuts, Resonance Lens; saves with unknown ids load) |
-| whole runs | fullrun (strong bot fights, all heroes, three floors and the Grafter), e2e (real boot and flow routing, the walk interlude), regression (round trips at every decision; the Ward saves of fixtures/graftwork_wardsave_5f3e252.json resume to the same end), retire (a save on the retired map is closed, counted, deleted; the title notice; boot and Continue with old Ward saves) |
-| combat UI | ui_combat, ui_combat_layout (HUD grid 1..6 enemies x 0..10 cards), ui_juice, ui_seam, motion (timing budgets) |
-| the Ward | ward (engine), ward_big, ward_props, ui_ward (the screen, its layout sweeps), ui_ward_kit |
-| other screens | ui_event (every event, every choice), ui_graft, ui_shop (shop+forge), ui_deck, ui_title, ui_pause, ui_layout (non-combat layouts; the reward both bare and as the Ward makes it; `OPEN_WARD` lists the known faults), ui_clickthrough, ui_reward_tip, ui_polish, ui_transitions, onboarding |
-| input and a11y | touch (phone stage 844x390, pointer events), a11y, monkey (seeded random UI fuzz), ui_core |
+| content gate (run first when editing data/) | data, content_fuzz (every card x graft x enemy; merged card text repeats nothing), audit (power smoke, exploit decks), status_behaviour (status does what its tooltip says), hygiene (dead code, orphan assets, duplicate helpers, the dash rule; allowlist `tests/graftwork_hygiene_allow.json` may only shrink) |
+| rules | temper, seam, afflictions, boss_mechanics, intents (intent icons, the lethal warning, move tips), meta (persistence, migration, unlocks, achievements fire once, Daily modifiers, Credit, boss practice, defeat advice), unlock, assist, rules_fixes (text equals rule: Cut the Line, Slip Knot, Granny Knot, the declaration, resonance texts and their Thread half, Free Sample and how a waived Price reads, cut hooks past the turn's 3 paying cuts, Resonance Lens; saves with unknown ids load), difficulty (the bot tiers against the targets) |
+| whole runs | regression (strong-bot runs for every hero, round trips at every decision, the Ward saves of fixtures/graftwork_wardsave_5f3e252.json resume to the same end, and the runs reach Act 3 and win, or die in Act 2 with a killer recorded), e2e (real boot and flow routing, the walk interlude), retire (a save on the retired map is closed, counted, deleted; the title notice; boot and Continue with old Ward saves) |
+| combat UI | ui_combat (whole fights by click, key and drag; the Grafter's Reknit strip and brand), ui_combat_layout (HUD grid 1..6 enemies x 0..10 cards), ui_juice, ui_seam, motion (timing budgets), ui_transitions |
+| the Ward | ward (engine), ward_big, ward_props, ui_ward (the screen, its layout sweeps, the legend), ui_ward_kit |
+| other screens | ui_event (every event, every choice, the click guard), ui_graft (graft table and reward: choices, where tips and notes may sit, why a graft is refused), ui_shop (shop and Forge, the click that opens a picker), ui_deck, ui_title, ui_pause, ui_archive, onboarding (first-run tips and bubbles, the Thread callouts), ui_layout (non-combat layouts; the reward both bare and as the Ward makes it; `OPEN_WARD` lists the known faults) |
+| tooltips | tip_lifecycle (delay 0.25 s, fade, dismissal, placement), tip_layout (a grid hovered over every screen at four stage scales, every tip through `checkTip`; its harness is `tests/graftwork_layout_lib.mjs`), glossary (completeness) |
+| input and a11y | touch (phone stage 844x390, pointer events), a11y, monkey (seeded random UI fuzz), ui_core, phone_display |
 | frame loop | frozen (screens under a modal: no update or draw, tween and timer owners, the snapshot and when it is repainted, an enemy turn, a Ward walk and a wipe interrupted by a modal resume to the identical end) |
-| art | art_cards, art_chars, art_icons, attack_rigs, grade (the baked battle grade: colour maths, every enemy and hero, a real Chromium check) |
-| Ward art and loading | art_assets (the manifest names exactly the files on disk, the build passes incl. `--prune`), kit_assets, ward_loading (the exact set a Ward asks for, one request per thing drawn, no flicker between block and kit), ui_ward_kit, anim_frames (battle frames; the map walk is the puppet or the hop), puppet, lab_anim |
+| art | art_cards, art_chars, art_icons, attack_rigs, grade (the baked battle grade: colour maths, every enemy and hero, a real Chromium check), linework, templates |
+| Ward art and loading | art_assets (the manifest names exactly the files on disk, the build passes incl. `--prune`), kit_assets, ward_loading (the exact set a Ward asks for, one request per thing drawn, no flicker between block and kit), anim_frames (battle frames; the map walk is the puppet or the hop), puppet, lab_anim |
 | character rigs (preview) | rig (manifest and atlases, bone tree, layers and sides, feet alternate, a planted sole still in the world at game speed on every heading, reach limits, hem over the hips, feel per hero, preview off asks for nothing, preview on stands the rig on the sprite's feet, a Chromium check that every shipped rig is one connected figure, the build tool twice byte-identical and equal to the committed files) |
 | fx and audio | fx, post (API in node plus real Chromium, skips if missing), audio (name tables), audio_mix (offline render in Chromium: clipping, loudness, masking) |
-| perf | perf (fake-ctx op counts, never wall time), perf2 (text width cache, smoothing policy, dirty frames, card face buckets, room layer cache, calm governor: pure functions), perf3 (Ward backdrop layer, one quality controller, Ward clock stamps, template art switch, per-visit caches) |
+| perf | perf2 (pure functions: text width cache, smoothing policy, card face buckets, room layer cache, calm governor; and the canvas calls of a frame of the title, the Ward and a fight, counted), perf3 (Ward backdrop layer, one quality controller, Ward clock stamps, template art switch, per-visit caches), quality (the Graphics tier controller, the governor, image eviction, the Effects setting) |
+| offline and install | sw (the offline manifest is current; the service worker run in a sandbox with a fake Cache API: a download is all or nothing, the pointer moves last, an update downloads only what changed), install (beforeinstallprompt, manifest, icons, the install buttons) |
 Reaching a screen in a test: start a run (`RUN.newRun`) and let the Ward open it. tests/graftwork_lib.mjs has `wardOpen(run, 'fight' | 'elite' | 'boss' | 'event' | 'shop' | 'forge', opts)` (lays the room next to the hero and walks in, so `run.pending` is what a real walk makes), `wardLayout(run, spec)`, `WIN()` / `LOSS()` for `RUN.resolveFight`, and a small deterministic player with no tools behind it (`botStep`, `botFinish`, `botFight`; the save fixtures replay with it).
 The fake canvas in tests/graftwork_lib.mjs (`fakeCtx`) has own no-op methods for the common Canvas2D calls and a Proxy prototype for anything else, because a Proxy trap per draw call used to cost about half of every UI suite. Keep new draw calls to real Canvas2D names.
 
-## Balance tooling (tools/)
+## Balance and build tooling (tools/)
 One shared driver, `tools/graftwork_driver.mjs`: the fight policies, the graft / shop / forge / event choices, the Ward builder and walker policies and `playWardRun(hero, seed, policy, asc, opts)` (policy: strong careful greedy none sloppy random passive fill, or a policy object). Its header lists every environment switch (`GW_UNLOCK=start|all`, `GW_TUNE`, `GW_WEIRD_K`, ...). The commands are thin:
 ```
 node tools/graftwork_ward_sim.mjs 60 0 strong     # the per-act table: win rate, deaths per act, fights / monsters / elites / events / shops / forges, early boss
@@ -183,8 +186,33 @@ node tools/graftwork_cardsweep.mjs marrow 200 0   # forced-card sweep: each card
 node tools/graftwork_unlocks.mjs 200 30           # unlock pacing: runs to unlock everything per tier (GW_POOL=start for the starting pool)
 node tools/graftwork_audio_check.mjs [--json]     # offline loudness, clipping, masking report (needs Playwright chromium)
 node tools/graftwork_golden.mjs record out.json   # golden master (engine traces, resume, draw-call hashes); see its header
-node tools/graftwork_hygiene.mjs                  # dead code, duplicate helpers, orphan assets against tests/graftwork_hygiene_allow.json
+node tools/graftwork_hygiene.mjs                  # dead code, duplicate helpers, orphan assets, em and en dashes against tests/graftwork_hygiene_allow.json
+node tools/graftwork_profile.mjs                  # tick cost of the screens in real Chromium (see its header; results in design/PERF*.json)
+node tools/graftwork_sw_build.mjs                 # rewrites sw-manifest.json (the offline copy); run after ANY change under graftwork/
+node tools/graftwork_glossary_audit.mjs           # every glossary term with its definition (statuses at n=1 and n=3), for a read-through at new-player level
+python3 tools/graftwork_icons.py                  # the four PWA icons in icons/ (PIL; needs DejaVu Serif Bold: reproduces the committed files byte for byte)
+python3 tools/graftwork_art_build.py              # Ward art: raw -> WebP -> manifest (--frames, --combat, --prune); graftwork_kit_build.py does the same for the room kit
+python3 -I tools/graftwork_rig_build.py --raw <dir>  # the painted character rigs: raw part sheets -> atlases + assets/rigs/manifest.json, with graftwork_rig_meta.json (see Character rigs)
 ```
+Environment switches (all optional; the defaults are the published numbers). The strong bot's other tuning numbers are constants at the top of the section of `tools/graftwork_driver.mjs` that uses them (`PICK_FLOOR`, `OVERLOAD_P`, `TEMPER_P`, `BUY_*`, `ROAD_W`, `EARLY_HP`, the `STRONG` policy): they were switches while they were searched and are frozen where the search ended.
+| switch | read by | effect |
+|---|---|---|
+| `GW_UNLOCK=all\|start\|start+kind,kind` | driver (every command) | card pool of the runs: everything unlocked (default), the starting pool, or the starting pool plus every locked item of those kinds (`card graft relic potion event build`, narrowed by `graft:safe`, `card:marrow`) |
+| `GW_POOL=start` | unlocks | the starting pool for the unlock pacing simulation |
+| `GW_TUNE='{"tune":{...},"phases":{...},"rooms":{...},"floor":{...}}'` | driver | patches the Ward numbers in memory for what-if runs (nothing is written) |
+| `GW_WEIRD_K` | driver | credit the strong pick gives custom-hook grafts (default 0.5; 1 is the old full credit) |
+| `GW_PICK=0` | driver | the strong bot buys no cards (the baseline, same as `POLICIES.strongNoPick`) |
+| `GW_SLIP` | driver, tiers | rate of the careful tier's misplays (default 0.09) |
+| `GW_TAG` | tiers | another seed batch of the skill tiers |
+| `GW_EARLY=0` | driver | no early boss rules (the walker never goes for the Theatre early) |
+| `GW_EXPAND=0` | driver | the strong builder never plays Expand |
+| `GW_OLDWALK=1` | driver | the walker from before the dice (shortest path within MOVE) |
+| `GW_DECLARE=0` | driver | the strong bot never uses Odile's declaration |
+| `GW_HOLDCUT=0` | driver | the strong bot plays "Cut the Line." cards as soon as they score |
+| `GW_REG_SEEDS=30` | regression suite | seeds per hero and Assist mode (default 3) |
+| `GW_MONKEY_RUNS` `GW_MONKEY_TICKS` `GW_MONKEY_SEED=hero:index` | monkey suite | runs per hero, ticks per run, or replay one seed |
+| `GW_FUZZ_SEED` `GW_FUZZ_VERBOSE=1` | content_fuzz suite | another seed, list the advisories |
+| `RF_ALL=1` | rules_fixes suite | run every block and list the failures instead of stopping at the first |
 Measured (strong bot, ascension 0, N=60 per hero, seeds fixed): all pool marrow 30, wick 42, odile 48 percent; starting pool 35 / 38 / 48. Ascension 5 on the starting pool (N=20): 25 / 30 / 45. Careful (N=20): 25 / 20 / 40. Random 0 of 180, sloppy 0 of 180, passive 1 of 180. Unlock pacing (200 players, 30 runs per hero pool): strong median 39 runs to unlock everything, careful 45, sloppy 144. Act 1 is cleared almost always, Act 2 is the real filter. Grafts: common boon about +4 points, uncommon +6, rare +8, net per rarity common 0, uncommon +1, rare +2 (see Graft schema). Enemies: Act 1 normal 38 to 44 HP and 7 to 9 damage, x1.6 Act 2, x2.4 Act 3; bosses 130 / 220 / 340 HP. Treat a school or relic that moves the strong bot win rate by more than about 10 points as an outlier. Seeds are fixed per run index, so compare before and after with the same N.
 
 ## Shared-file edit protocol (what worked over ten rounds)

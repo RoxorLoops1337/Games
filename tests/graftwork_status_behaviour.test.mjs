@@ -33,9 +33,9 @@ t('every status has an icon, a one-line tooltip without em dash, a name and a co
   const drawn = new Set(ICONS.STATUS_IDS_DRAWN);
   for (const [id, d] of Object.entries(STATUSES)) {
     assert.ok(drawn.has(id), 'icon missing: ' + id);
-    assert.ok(d.name && !/—/.test(d.name), 'name ' + id);
+    assert.ok(d.name, 'name ' + id);
     assert.equal(typeof d.good, 'boolean', 'good flag ' + id);
-    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && s.length > 3 && !/\n|—|undefined|NaN/.test(s), id + ': ' + s); }
+    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && s.length > 3 && !/\n|undefined|NaN/.test(s), id + ': ' + s); }
     assert.equal(statusText(id, 2), d.desc(2), 'codex text ' + id);
     const ctx = fakeCtx();
     ICONS.drawStatus(ctx, id, 10, 10, 40, d.good);

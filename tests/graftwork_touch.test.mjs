@@ -10,7 +10,6 @@ import combat from '../graftwork/ui/combat.js';
 installDom();
 globalThis.window.innerWidth = 844; globalThis.window.innerHeight = 390;
 const { createApp, W, H } = await import('../graftwork/ui/core.js');
-const DT = 1 / 60;
 const listeners = {};
 const canvas = {
   getContext: () => fakeCtx(), style: {}, width: 1280, height: 720, setPointerCapture() {},
@@ -30,7 +29,6 @@ const st = () => combat.api().state();
 
 // ---- finger helpers: logical px -> client px -> pointer events
 const css = (x, y) => ({ clientX: app.offX + (x / W) * W * app.scale, clientY: app.offY + (y / H) * H * app.scale });
-let nextId = 1;
 function fire(type, id, x, y, primary = true) { const e = { type, pointerId: id, pointerType: 'touch', isPrimary: primary, button: 0, ...css(x, y), preventDefault() {} }; for (const f of listeners[type] || []) f(e); }
 const down = (x, y, id = 1, primary = true) => { fire('pointerdown', id, x, y, primary); };
 const move = (x, y, id = 1, primary = true) => { fire('pointermove', id, x, y, primary); };
@@ -44,9 +42,6 @@ const c = () => st().c;
 const p0 = combat.api().handPos(0);
 tap(p0.x, p0.y + 40);
 assert.ok(st().sel && st().u.touchPrev, 'tap selects with preview');
-const sel1 = st().sel;
-const dc = st().hand.find((d) => d.uid === sel1);
-const spec = c().hand.find((k) => k.uid === sel1);
 settle();
 const reg = (id) => app.layout.getAll().find((r) => r.id === id);
 const cancel = reg('preview_cancel'); assert.ok(cancel, 'preview cancel button registered');
@@ -56,8 +51,6 @@ tap(cancel.x + cancel.w / 2, cancel.y + cancel.h / 2); settle();
 assert.equal(st().sel, null, 'X cancels the preview');
 assert.equal(c().playsTurn, 0, 'cancel played nothing');
 // find an attack card in hand
-const atkIdx = c().hand.findIndex((k) => k.spec ? k.spec.type === 'attack' : (st().hand.find((d) => d.uid === k.uid) || {}).w && false) ;
-const handAttack = () => { const n = c().hand.length; for (let i = 0; i < n; i++) { const d = st().hand[i]; const s = d && d.w && d.w.spec; } return -1; };
 function attackIndex() { for (let i = 0; i < st().hand.length; i++) { const w = st().hand[i].w; const t = w && (w.type || (w.card && w.card.type)); if (t === 'attack') return i; } return 0; }
 const ai = attackIndex();
 const pa = combat.api().handPos(ai);
@@ -203,11 +196,10 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
 
 // ---- 9. phone info paths: a tap on the 'i' chip or the cut-off words opens the full text; a tap closes it; the graft tip never covers an option
 {
-  const { default: forgeS, optionCenterX, optionIndex } = await import('../graftwork/ui/forge.js');
+  const { default: forgeS } = await import('../graftwork/ui/forge.js');
   const { default: shopS } = await import('../graftwork/ui/shop.js');
   const { default: graftS } = await import('../graftwork/ui/graft.js');
   const { infoOpen } = await import('../graftwork/ui/card_zoom.js');
-  const { tipSeen } = await import('../graftwork/ui/tutorial.js');
   app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {}, openCodex() {}, saveMeta() {} };
   const chips = () => app.layout.getAll().filter((q) => q.id === 'info_chip');
   const chipTap = (q) => { tap(q.x + q.w / 2, q.y + q.h / 2); };

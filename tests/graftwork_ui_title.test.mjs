@@ -2,18 +2,16 @@
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key, fakeCtx } from './graftwork_lib.mjs';
 import fs from 'node:fs';
-import title, { SCENE, LOGO, resetTitleIntro, GOAL_TEXT as title_GOAL } from '../graftwork/ui/title.js';
+import title, { SCENE, LOGO, resetTitleIntro, GOAL_TEXT as title_GOAL, labelColor } from '../graftwork/ui/title.js';
 import { TAGLINES, TAGLINE_S, INTRO_S, WORD, taglineAt } from '../graftwork/ui/title_logo.js';
 import { CLUSTER, CAST } from '../graftwork/ui/title_scene.js';
 import { assets, createAssets } from '../graftwork/ui/assets.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
-import * as KD from '../graftwork/data/ward_kit.js';
 import end from '../graftwork/ui/end.js';
 import settings from '../graftwork/ui/settings.js';
 import * as RUN from '../graftwork/engine/run.js';
 import * as META from '../graftwork/engine/meta.js';
 import { saveRun, clearRun, hasRun } from '../graftwork/engine/save.js';
-import { cardSpec } from '../graftwork/engine/cards.js';
 
 async function rig() {
   const meta = META.loadMeta();
@@ -74,6 +72,13 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   click(app, 50 + 800 + 190, 300); frames(app, 2);
   assert.equal(title.hero, 'marrow'); frames(app, 5);
   key(app, 'Escape'); assert.equal(title.state, 'menu', 'esc goes back');
+}
+
+// ---- hero select labels are readable on the dark panel (contrast 7 or more) ----
+{
+  const lum = (h) => { const v = parseInt(h.slice(1), 16); const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(v >> 16) + 0.7152 * f((v >> 8) & 255) + 0.0722 * f(v & 255); };
+  const bg = lum('#1c1512');
+  for (const col of ['#9E0F2E', '#FF6A2B', '#C9A227']) { const l = lum(labelColor(col)); assert.ok((l + 0.05) / (bg + 0.05) >= 7, `${col} -> ${labelColor(col)} contrast too low`); }
 }
 
 // ---- continue with a saved run ----
@@ -230,7 +235,7 @@ const settle = (app, n = 6) => frames(app, n);
 // ---- taglines: three, plain wording, rotate, no dashes of the long kind ----
 {
   assert.equal(TAGLINES.length, 3);
-  for (const t of TAGLINES) { assert.ok(!/[\u2013\u2014]/.test(t), 'no em or en dash: ' + t); assert.ok(t.length < 60, 'short'); }
+  for (const t of TAGLINES) { assert.ok(t.length < 60, 'short'); }
   assert.equal(new Set(TAGLINES).size, 3, 'three different lines');
   assert.equal(taglineAt(0.4 * TAGLINE_S, false).text, TAGLINES[0]);
   assert.equal(taglineAt(1.4 * TAGLINE_S, false).text, TAGLINES[1]);

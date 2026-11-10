@@ -262,3 +262,33 @@ console.log('graftwork ui combat ok, ticks', total, 'fights', ids.length + heroe
 }
 function ctxFlow(app) { return app.shared.flow.settings || 0; }
 
+// ---- 7. The Grafter's Reknit reaches the screen: the event fires the phase strip, and the cards it marked wear the red brand
+{
+  const BRAND = 'rgba(163,20,47,.9)'; // the red of the brand (art/cards.js drawMark): nothing else on a card is painted with it
+  const ctx = setup({ seed: 'reknit', enemies: ['the_grafter'], kind: 'final', act: 3, hp: 900 });
+  for (const inst of ctx.run.deck) inst.grafts = ['g_ember_pin', 'g_cinder_wrap', 'g_scorch_thread']; // every card an Overload: Reknit marks them all
+  const beats = [], styles = new Set();
+  const spy = (g) => { for (const k of ['fillStyle', 'strokeStyle']) { let v; Object.defineProperty(g, k, { configurable: true, get: () => v, set: (x) => { v = x; if (typeof x === 'string') styles.add(x); } }); } return g; };
+  const app = await makeApp({ run: ctx.run, audio, flow: ctx.flow, transitions: { phaseBeat: (a, label) => beats.push(label) } });
+  spy(app.ctx);
+  const create = document.createElement; // card faces are baked on offscreen canvases: watch those too
+  document.createElement = (...a) => { const el = create(...a), get = el.getContext; el.getContext = (...b) => spy(get.apply(el, b)); return el; };
+  try {
+    app.register('combat', combat); app.go('combat', { run: ctx.run }); frames(app, 200);
+    const st = combat.api().state(), c = st.c, e = c.enemies[0];
+    assert.equal(e.id, 'the_grafter'); assert.ok(c.hand.length > 0 && c.hand.every((k) => !k.reknit), 'nothing is marked yet');
+    assert.ok(!styles.has(BRAND), 'no brand on an unmarked hand'); assert.deepEqual(beats, [], 'no strip yet');
+    e.hp = Math.floor(e.maxHp / 2) + 1; // one point above half: the next hit brings the Reknit
+    const i = c.hand.findIndex((_, k) => { const ck = canPlay(c, k); return ck.ok && ck.spec.type === 'attack'; });
+    assert.ok(i >= 0, 'an attack can be played');
+    const p = combat.api().handPos(i); click(app, p.x, p.y);
+    if (needsTarget(c, i)) { const ep = combat.api().enemyPos(0); click(app, ep.x, ep.y); } else click(app, 520, 200);
+    for (let k = 0; k < 600 && (combat.api().busy || !beats.length); k++) app.tick(DT);
+    assert.equal(e.data.rage, true, 'the hit took the Grafter under half'); assert.ok(e.st.reknit > 0, 'the engine marked the Overloads');
+    assert.deepEqual(beats, ['REKNIT'], 'the reknit event fires the phase strip, once');
+    assert.ok(c.hand.some((k) => k.reknit), 'marked cards are in hand');
+    frames(app, 30);
+    assert.ok(styles.has(BRAND), 'marked hand cards are drawn with the reknit brand');
+  } finally { document.createElement = create; }
+}
+

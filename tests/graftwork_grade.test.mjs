@@ -193,11 +193,12 @@ let chromium = null;
 try { chromium = createRequire(import.meta.url)('playwright').chromium; } catch (e) { console.log('grade: playwright not available, skipping the browser check'); }
 if (chromium) {
   let browser = null;
-  try { browser = await chromium.launch(); } catch (e) { console.log('grade: chromium unavailable (' + String(e.message).split('\n')[0] + '), skipping the browser check'); }
+  // Playwright's own limits are 30 s, tuned to an idle machine; a busy one needs longer. A browser that never starts or a page that never loads still fails, later.
+  try { browser = await chromium.launch({ timeout: 120000 }); } catch (e) { console.log('grade: chromium unavailable (' + String(e.message).split('\n')[0] + '), skipping the browser check'); }
   if (browser) {
     await t('Chromium: a fill under ctx.filter = GRADE_CSS has the colour gradeRGB computes (within 2 levels, in practice exactly)', async () => {
       const page = await browser.newPage();
-      await page.setContent('<canvas id="c" width="256" height="8"></canvas>');
+      await page.setContent('<canvas id="c" width="256" height="8"></canvas>', { timeout: 120000 });
       const cols = []; let s = 7; const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s >> 8) & 255; };
       for (let i = 0; i < 240; i++) cols.push([rnd(), rnd(), rnd()]);
       cols.push([255, 255, 255], [0, 0, 0], [255, 233, 176], [22, 17, 15]);
