@@ -1,9 +1,8 @@
-// Round 2 performance logic, all pure: text width cache, imageSmoothingQuality policy, dirty-frame logic, card face LOD buckets and LRU,
+// Round 2 performance logic, all pure: text width cache, imageSmoothingQuality policy, card face LOD buckets and LRU,
 // Ward room layer cache policy, governor calm screens. No wall time, no DOM (the real-browser numbers live in design/PERF.md).
 import assert from 'node:assert/strict';
 import { createTextMetrics } from '../graftwork/ui/text_metrics.js';
 import { smoothingFor, SMOOTH, installSmartDraw } from '../graftwork/ui/smoothing.js';
-import { createFrameState, busyReason, FS } from '../graftwork/ui/frame_state.js';
 import { idealBucket, chooseBucket, createFaceLru, BUCKETS, LEGACY, facePixels, BUILDS_PER_FRAME } from '../graftwork/art/face_lod.js';
 import { bucketOf, pickLayer, evictFor, isMoving, MAX_BUCKETS, BUILDS_PER_FRAME as LB } from '../graftwork/ui/layer_cache.js';
 import { createGovernor } from '../graftwork/ui/quality.js';
@@ -56,32 +55,7 @@ import { fakeCtx, installDom, makeApp, frames } from './graftwork_lib.mjs';
   assert.ok(!installSmartDraw({ drawImage() {} }), 'a context without getTransform is left alone');
 }
 
-// ---- 3. dirty-frame logic
-{
-  const quiet = { input: false, tweens: 0, timers: 0, ripples: false, transition: false, fx: false, tip: false, screenStill: true, forced: false };
-  assert.equal(busyReason(quiet), '');
-  for (const [k, v, why] of [['input', true, 'input'], ['tweens', 1, 'tweens'], ['timers', 2, 'timers'], ['ripples', true, 'ripples'], ['transition', true, 'transition'], ['fx', true, 'fx'], ['tip', true, 'tip'], ['screenStill', false, 'screen'], ['forced', true, 'forced']])
-    assert.equal(busyReason({ ...quiet, [k]: v }), why, k + ' makes the frame busy');
-  assert.equal(busyReason({ ...quiet, screenStill: undefined }), 'screen', 'a screen that never answered is never still');
-  // a still screen is drawn for quietFrames + 1 frames after the last change, then skipped
-  const fs = createFrameState(); let t = 0; const seq = [];
-  seq.push(fs.begin({ ...quiet, input: true }, t += 16)); // input: draw
-  for (let i = 0; i < 6; i++) seq.push(fs.begin(quiet, t += 16));
-  assert.deepEqual(seq.slice(0, 1 + FS.quietFrames), new Array(1 + FS.quietFrames).fill(false), 'the frames right after a change are painted');
-  assert.equal(seq[1 + FS.quietFrames], true, 'then the tick is skipped'); assert.ok(fs.isStatic());
-  // any input wakes it at once, the next quiet frames are painted again
-  assert.equal(fs.begin({ ...quiet, input: true }, t += 16), false); assert.ok(!fs.isStatic());
-  assert.equal(fs.begin(quiet, t += 16), false);
-  // an animating screen is never skipped
-  const fa = createFrameState(); let drawn = 0; for (let i = 0; i < 100; i++) if (!fa.begin({ ...quiet, screenStill: false }, i * 16)) drawn++; assert.equal(drawn, 100);
-  // markDirty forces exactly one draw cycle
-  const fm = createFrameState(); let tt = 0; for (let i = 0; i < 6; i++) fm.begin(quiet, tt += 16); assert.ok(fm.isStatic());
-  fm.markDirty(); assert.equal(fm.begin(quiet, tt += 16), false); assert.equal(fm.last, 'forced');
-  // heartbeat: a long static stretch still repaints once per maxSkipMs
-  const fh = createFrameState(); let th = 0, hb = 0; for (let i = 0; i < 400; i++) { th += 16; if (!fh.begin(quiet, th)) hb++; }
-  assert.ok(hb >= 3 + Math.floor((400 * 16) / FS.maxSkipMs) - 1 && hb <= 12, 'a repaint about every second, got ' + hb);
-  assert.ok(fh.skipped > 300, 'most of the 400 quiet frames were skipped');
-}
+// ---- 3. (the dirty-frame logic that no screen used is gone: ui/frame_state.js now holds the frozen screens under a modal, tests/graftwork_frozen.test.mjs)
 
 // ---- 4. card face LOD
 {
@@ -174,22 +148,12 @@ import { fakeCtx, installDom, makeApp, frames } from './graftwork_lib.mjs';
   assert.ok(C.cardCacheStats().builds - b2 <= 2, 'at most 2 faces built in one frame, got ' + (C.cardCacheStats().builds - b2));
 }
 
-// ---- 8. the frame loop: a screen with no still() is drawn every tick; one that is still is skipped once settled and wakes on input / markDirty
+// ---- 8. the frame loop draws the top screen every tick: nothing is skipped (the still() hook is gone with the dirty-frame logic)
 {
   const app = await makeApp({});
   let draws = 0;
-  app.register('plain', { enter() {}, leave() {}, update() {}, draw() { draws++; }, key() {} });
-  app.register('quiet', { enter() {}, leave() {}, update() {}, draw() { draws++; }, still() { return true; }, key() {} });
-  app.go('plain'); draws = 0; frames(app, 30); assert.equal(draws, 30, 'a screen that never opted in is drawn every tick');
-  assert.equal(app.staticFrame, false);
-  app.go('quiet'); draws = 0; frames(app, 30);
-  assert.ok(draws <= 6, 'a still screen settles after a few frames, drew ' + draws + ' of 30'); assert.equal(app.staticFrame, true);
-  const d0 = draws; app.mouse.x = 100; app.mouse.y = 100; frames(app, 3); assert.equal(draws - d0, 3, 'a pointer on the stage keeps it drawing (hover, tooltips)');
-  app.mouse.x = -999; app.mouse.y = -999; frames(app, 10); const d1 = draws; frames(app, 10); assert.equal(draws, d1, 'pointer gone: skipped again');
-  app.markDirty(); frames(app, 1); assert.ok(draws > d1, 'markDirty forces a repaint');
-  const d2 = draws; app.tween({ v: 0 }, { v: 1 }, 100); frames(app, 3); assert.equal(draws - d2, 3, 'a pending tween keeps it drawing');
-  app.noSkip = true; frames(app, 400); // run the tween out, then every tick must draw
-  const d3 = draws; frames(app, 10); assert.equal(draws - d3, 10, 'noSkip switches the skipping off');
+  app.register('plain', { enter() {}, leave() {}, update() {}, draw() { draws++; }, still() { return true; }, key() {} });
+  app.go('plain'); draws = 0; frames(app, 30); assert.equal(draws, 30, 'drawn every tick');
 }
 
 // ---- 9. app.text / app.measure go through the width cache (the shop and deck screens drew 140 to 280 measureText calls per frame)
