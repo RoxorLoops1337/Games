@@ -1,6 +1,6 @@
 {
- "version": "d2fc78dc9327d6f6",
- "bytes": 8963290,
+ "version": "f8acb8b25b4e7d51",
+ "bytes": 8963258,
  "count": 497,
  "files": {
   "art/attacks.js": {
@@ -1652,8 +1652,8 @@
    "s": 4179
   },
   "data/statuses_e3.js": {
-   "h": "636ee83850fea98b",
-   "s": 3599
+   "h": "f191c3c631138349",
+   "s": 3567
   },
   "data/statuses_marrow.js": {
    "h": "3ac81936dc6a2975",

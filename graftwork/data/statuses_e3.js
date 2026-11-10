@@ -25,5 +25,5 @@ export const STATUS_E3 = [
   // The Diva: the room is loud.
   { id: 'applause', name: 'Applause', good: true, stack: 'int', desc: (n) => `Her Aria hits for ${n * 3} more: 3 for each card you play past your 5th this turn (max 4).` },
   // Locksmith: the school it has sealed (the first card of it you draw each turn is Frayed).
-  { id: 'sealed', name: 'Sealed', good: true, stack: 'int', desc: (n) => `Your ${SCHOOLS_E3[n - 1] || 'biggest'} school is sealed: each turn the first card of it you would draw is Frayed (+1 cost, acts as Slack). The Locksmith gains 4 Block each time a Line of that school is cut or cashed at turn end.` },
+  { id: 'sealed', name: 'Sealed', good: true, stack: 'int', desc: (n) => `Your ${SCHOOLS_E3[n - 1] || 'biggest'} school is sealed: each turn the first card of it you would draw is Frayed (+1 cost, acts as Slack). The Locksmith gains 4 Block per Line of it cut or cashed.` },
 ];

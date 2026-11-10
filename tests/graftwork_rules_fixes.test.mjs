@@ -1001,7 +1001,7 @@ t('enemies that speak of a Line cashed (Ferric Warden, Scissor Nurse, Locksmith,
 });
 
 // ---------------------------------------------------------------- 16. the Locksmith's Block is written on its Sealed status
-await ta('Locksmith: the Sealed status it carries says it gains Block when a Line of the sealed school is cut or cashed, with the number the engine uses', async () => {
+await ta('Locksmith: the Sealed status it carries says it gains Block per Line of the sealed school cut or cashed, with the number the engine uses', async () => {
   const { statusText } = await import('../graftwork/engine/text.js');
   const gain = (seal, how) => { // Block the Locksmith gains from one Line of 4 knots of `seal`, cut by a card of another school or cashed at the turn end
     const c = fight({ enemies: ['locksmith'] }); c.player.hp = 300; const e = c.enemies[0]; e.data.seal = seal; e.block = 0;
@@ -1015,7 +1015,7 @@ await ta('Locksmith: the Sealed status it carries says it gains Block when a Lin
   const c = newCombat(RUN.newRun({ hero: 'marrow', seed: 'lock-text' }), ['locksmith']), e = c.enemies[0];
   assert.ok(e.st.sealed > 0, 'it is sealed from combat start'); const text = statusText('sealed', e.st.sealed);
   assert.ok(/Your \w+ school is sealed/.test(text), text);
-  const m = /gains (\d+) Block each time a Line of that school is cut or cashed at turn end/.exec(text);
+  const m = /The Locksmith gains (\d+) Block per Line of it cut or cashed\./.exec(text);
   assert.ok(m, 'the status says what its seal does for the Locksmith:\n' + text); assert.equal(+m[1], real, 'with the number the engine uses');
   assert.ok(!/[\u2013\u2014]/.test(text), 'no dashes');
 });
