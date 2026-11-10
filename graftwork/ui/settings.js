@@ -2,7 +2,7 @@
 // Flags other screens may read from app.shared.meta.settings:
 //   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false), fastWalk bool (default false; the Ward's F button, halves the hero's walk pacing),
 //   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
-//   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state), previewArt bool (default false: the painted art preview of ui/preview.js;
+//   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state), previewArt bool (default false: the painted art and character rig previews of ui/preview.js, read as app.settings;
 //   main.js hands it to ui/templates.js on every save, so the toggle switches the look at once, no reload).
 import { defaultQuality } from './fx.js';
 import { cleanGraphics } from './quality.js';
@@ -75,7 +75,7 @@ export default {
       ['colorblind', 'Colorblind mode', 'Safe school palette plus pattern and shape cues on cards, statuses and the Thread rail.'],
       ['flashes', 'Screen flashes', 'Off removes every white or colored full-screen flash. Never more than 3 per second either way.'],
       ['highContrast', 'High contrast text', 'Dark outline behind all text.'],
-      ['previewArt', 'Painted art (preview)', 'Painted card frames, panels, buttons and icons in place of the drawn ones. Still being finished: turn it off if anything reads worse. Not used on the Low graphics setting.'],
+      ['previewArt', 'Painted art (preview)', 'Painted card frames, panels, buttons, icons and character rigs in place of the drawn ones. Still being finished: turn it off if anything reads worse. Not used on the Low graphics setting.'],
     ];
     const ty0 = sy0 + 3 * sl + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });

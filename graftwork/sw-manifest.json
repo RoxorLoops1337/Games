@@ -1,6 +1,6 @@
 {
- "version": "f7b1f075b4023b66",
- "bytes": 10435684,
+ "version": "e3c559d3798e5e9b",
+ "bytes": 10435741,
  "count": 548,
  "files": {
   "art/attacks.js": {
@@ -2124,8 +2124,8 @@
    "s": 35885
   },
   "ui/settings.js": {
-   "h": "d34fa021b3f32320",
-   "s": 17305
+   "h": "d905abee17682012",
+   "s": 17362
   },
   "ui/shop.js": {
    "h": "1ab54c26c1416789",
