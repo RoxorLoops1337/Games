@@ -10,11 +10,13 @@
 //   wardTable(policy, N, asc) / describe(policy, rows)             the per-act table the commands print
 //   fight / strongFight / tierFight, graftScore / chooseGraft / strongPickGraft, doShop, doForge, eventScore, pickEventCard
 //
-// Environment (all optional): GW_UNLOCK=start|all|start+kind,kind (card pool, default all)  GW_TUNE='{"tune":{...}}' (patch Ward numbers in memory)
-//   GW_WEIRD_K (credit for custom-hook grafts, default 0.5; 1 is the old full credit)  GW_OVERLOAD_P  GW_TEMPER_P  GW_FLOOR  GW_MS  GW_GREED
-//   GW_PICK=0 (no card buys)  GW_MARGIN  GW_MAXBUY  GW_RESERVE  GW_THRESH  GW_FIRST  GW_BUY  GW_SLIP (careful tier misplays)
-//   GW_ROAD  GW_EARLY_HP  GW_EARLY=0 (early boss rules)  GW_EXPAND=0  GW_OLDWALK=1 (the walker from before the dice: shortest path within MOVE)
-//   GW_DECLARE=0 (the strong bot never uses Odile's declaration)  GW_HOLDCUT=0 (it plays "Cut the Line." cards as soon as they score)
+// Environment (all optional; the table is in graftwork/CLAUDE.md): GW_UNLOCK=start|all|start+kind,kind (card pool, default all)
+//   GW_TUNE='{"tune":{...}}' (patch Ward numbers in memory)  GW_WEIRD_K (credit for custom-hook grafts, default 0.5; 1 is the old full credit)
+//   GW_PICK=0 (no card buys)  GW_SLIP (careful tier misplays)  GW_EARLY=0 (no early boss rules)  GW_EXPAND=0 (never Expand)
+//   GW_OLDWALK=1 (the walker from before the dice: shortest path within MOVE)  GW_DECLARE=0 (the strong bot never uses Odile's declaration)
+//   GW_HOLDCUT=0 (it plays "Cut the Line." cards as soon as they score)
+// The other tuning numbers of the strong bot (pick floor, Overload and Temper shares, card buy limits, road weight, early boss HP) are constants
+// at the top of the section that uses them.
 // Commands: graftwork_sim.mjs, graftwork_strong.mjs, graftwork_ward_sim.mjs, graftwork_tiers.mjs, graftwork_schools.mjs, graftwork_audit.mjs,
 // graftwork_cardsweep.mjs, graftwork_unlocks.mjs. Seeds are fixed per run index, so compare before and after with the same N.
 import * as RUN from '../graftwork/engine/run.js';
@@ -497,13 +499,17 @@ export function strongPickGraft(run, pol) {
       if (s > bs) { bs = s; best = [uid, gid]; }
     }
   }
-  const pick = best && bs >= +(process.env.GW_FLOOR ?? 1.5) ? best : null;
+  const pick = best && bs >= PICK_FLOOR ? best : null;
   if (pick && RUN.findInst(run, pick[0]).grafts.length === 2) run.flags.gwOverloaded = true;
   return pick;
 }
 
 // Per-run deterministic dice so the same seed makes the same choice in baseline and relic runs.
-const OVERLOAD_P = +(process.env.GW_OVERLOAD_P ?? 0.35), TEMPER_P = +(process.env.GW_TEMPER_P ?? 0.4);
+// Tuning numbers of the strong bot. They were environment switches (GW_FLOOR GW_OVERLOAD_P GW_TEMPER_P GW_MARGIN GW_MAXBUY GW_RESERVE GW_THRESH
+// GW_MS GW_GREED GW_BUY GW_FIRST GW_ROAD GW_EARLY_HP) while they were searched; they sit at the values that search ended on, and the published
+// win rates are those of these numbers. To try another one, change it here (or pass it in a policy object: overloadP, temperP, maxStrain, greed).
+const PICK_FLOOR = 1.5;                      // the best graft pair is taken only when it scores at least this
+const OVERLOAD_P = 0.35, TEMPER_P = 0.4;     // share of runs that make one deliberate Overload / hammer the best grafted card
 const runRoll = (run, tag) => (hashSeed(run.seed + ':' + tag) % 1000) / 1000;
 
 // Forge: on some runs hammer (Temper) the best grafted card instead of resting/refining. An Overload comes first (it stops the Shatter roll);
@@ -520,13 +526,14 @@ export function strongForge(run, pol, hpF) {
 // Cards only enter a run through the shop (5 per visit). Policy: score every shelf card, buy the best while it beats skipping by a margin.
 // score = static value gain over the deck's median card (cardValue ratio via sim fxValue) + audit forced-win delta (wins per 200 runs / 20)
 //         + school bonus (shares the school of the deck's grafts) - dead-pick penalty (cards the audit measured as rarely played).
-// Gold budget: keep GW_RESERVE gold back for junk removal; at most GW_MAXBUY cards per run.
+// Gold budget: keep BUY_RESERVE gold back for junk removal; at most BUY_MAX cards per run.
 // forced-card sweep (tools/graftwork_cardsweep.mjs, 2 copies in the starter deck, 200 runs, A0, no-pick bot): wins versus control, mean over heroes that can use the card
 const AUDIT_DELTA = { o_thread_doublehem: 63, m_secondwind: 58, m_restraints: 53, o_tip_the_usher: 52, w_burnout: 47, m_stitchwork: 45, x_plate: 45, m_desperate: 43, o_liquidate: 43, m_cauterize: 42, m_hemostatic_snip: 38, o_golden_parachute: 36, m_exsang: 35, w_bare_wire: 34, m_thread_stitchup: 33, w_wax_drip: 33, w_quick_flick: 29, o_mirror_sale: 29, x_adrenal: 28, m_hacksaw: 25, w_wax_armor: 25, m_mirrored_wound: 24, w_hot_seam: 24, m_flick: 23, m_blank_chart: 23, o_thread_sparespool: 23, m_thread_longsuture: 22, w_ember_toss: 22, o_market_crash: 48, w_blowtorch: 19, w_thread_trail: 18, o_pocket_change: 15, m_tailored_cut: 14, m_thread_bloodline: 14, w_pyre_dance: 14, o_double_bill: 14, w_thread_fusewire: 13, o_heirloom: 13, m_triage: 12, x_lunge: 11, o_second_helping: 10, w_capacitor_bank: 9, m_epidemic: 8, o_bulk_order: 8, o_clean_book: 8, w_thread_arcstitch: 7, m_stitch_count: 6, m_light_packing: 6, w_spark_gap: 6, o_levy: 6, o_bidding_war: 6, m_suture: 5, x_thread_basting: 5, w_earth_wire: 5, o_standing_order: 4, x_barbs: 3, w_scald: 3, w_fuse_bridge: 3, x_recall: 2, w_static_seam: 2, m_biohazard: 1, m_fever_chart: 1, w_leather_apron: 1, w_tempered_wick: 1, m_hemostat: 0, m_stress_test: -1, m_hammered_plate: -1, x_hold: -1, o_ledger_line: -1, m_scabover: -2, w_overcurrent: -2, o_loose_change: -2, m_lancet: -3, x_second: -3, x_thread_snip: -3, o_pawn_ticket: -3, o_patronage: -3, m_swab: -4, x_cleave: -4, w_tithe_pyre: -4, o_hostile_takeover: -4, w_arc_flash: -5, o_choir_loft: -5, m_flakeoff: -6, m_scrap_splint: -6, m_sweep: -7, m_thread_rustseam: -7, w_cinder_rain: -7, m_sewn_shut: -8, x_thread_cross: -8, w_slow_match: -8, w_dynamo: -8, o_overdraft: -8, m_scarpower: -9, x_gauze: -9, x_poise: -9, w_static_cling: -9, w_thread_conflagration: -9, o_triple_threat: -9, o_layaway: -10, o_dividend: -10, x_shrug: -11, o_heavy_purse: -11, x_jab: -12, o_reprint: -12, o_cross_listing: -12, m_hemorrhage: -13, w_conductive_thread: -13, o_hardened_purse: -13, w_backdraft: -14, m_drawblood: -15, x_brace: -15, w_tinder_stack: -15, x_haymaker: -16, x_thread_shears: -16, o_tithe_ledger: -16, m_reopen: -18, m_laybare: -18, o_gilded_age: -18, m_vivisect: -19, x_thread_tieoff: -19, o_browse: -19, x_thread_unpick: -21, m_bloodrite: -22, w_substation: -22, m_anticoag: -23, w_ringing_ears: -23, o_receipt: -24, o_inventory: -24, o_audit: -2, x_thread_pinking: -25, w_graft_furnace: 9, m_rustplate: -27, x_sweep: -27, x_flatline: 6, w_discharge: -28, m_amputate: -29, w_powder_keg: -30, w_wildfire_spread: -31, w_pilot_light: -31, o_overbooked: -31, o_keepsake: -32, w_flashpoint: -33, x_resolve: 30, x_thread_loom: -35, o_prepaid: -35, o_thread_embroidered: -35, w_wildfire: -37, w_chain_reaction: -7, o_thread_tapestry: -60 };
+const BUY_MARGIN = 1.0, BUY_MAX = 4, BUY_RESERVE = 0, BUY_THRESH = 3; // card buys: weight of the deck median, cards per run, gold kept back, score to beat
 const PICK_ON = () => (process.env.GW_PICK ?? '1') !== '0';
 export function auditDelta(id) { return AUDIT_DELTA[id] || 0; }
 export function strongShopCards(run, shop, pol) {
-  const margin = +(process.env.GW_MARGIN ?? 1.0), maxBuy = +(process.env.GW_MAXBUY ?? 4), reserve = +(process.env.GW_RESERVE ?? 0);
+  const margin = BUY_MARGIN, maxBuy = BUY_MAX, reserve = BUY_RESERVE;
   const real = run.deck.filter((x) => CARDS[x.id].type !== 'junk');
   const vals = real.map((x) => cardValueStatic(x)).sort((x, y) => x - y);
   const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
@@ -536,7 +543,7 @@ export function strongShopCards(run, shop, pol) {
   const junkRemoval = run.deck.some((x) => CARDS[x.id].type === 'junk') ? RUN.servicePrice(run, 'remove') : 0;
   run.flags.gwBought = run.flags.gwBought || 0;
   for (let n = 0; n < 4 && run.flags.gwBought < maxBuy; n++) {
-    let best = -1, bs = +(process.env.GW_THRESH ?? 3);
+    let best = -1, bs = BUY_THRESH;
     shop.cards.forEach((k, i) => {
       if (k.sold || run.gold - k.price < Math.max(reserve, junkRemoval)) return;
       const def = CARDS[k.id];
@@ -555,9 +562,9 @@ const cardValueStatic = cardV;
 // Boss relic choice (a policy without pickRelic takes choice 0). Rank from forced-pick runs (100 runs x 3 heroes each, A0).
 const BOSS_RANK = ['r_second_wind', 'r_lead_apron', 'r_tithe_crown', 'r_parasite_heart', 'r_hollow_ledger', 'r_glass_throat', 'r_absolution', 'r_gamblers_thread'];
 const pickRelic = (ch) => ch.slice().sort((a, b) => BOSS_RANK.indexOf(a) - BOSS_RANK.indexOf(b))[0];
-const STRONG = { pickRelic, maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
-POLICIES.strongNoPick = { ...STRONG, buyCards: +(process.env.GW_BUY ?? 0) };
-POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards, cardsFirst: (process.env.GW_FIRST ?? '1') === '1' };
+const STRONG = { pickRelic, maxStrain: 2, greed: 0.6, fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+POLICIES.strongNoPick = { ...STRONG, buyCards: 0 };
+POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards, cardsFirst: true };
 POLICIES.strong = PICK_ON() ? POLICIES.strongPick : POLICIES.strongNoPick;
 
 // ---------- the low tiers: a careful player who slips, and fights played without reading (sloppy) or at random ----------
@@ -691,7 +698,7 @@ function strongMorning(run) {
 // Early boss rule: once the Theatre is open (last 2 days) a healthy bot takes the boss at x0.85 HP instead of waiting for the night boss
 // (the idle boss grows, the floor keeps spawning, and the early kill pays gold, a building card and a graft). It walks toward the Theatre
 // while healthy and enters it when the route reaches it with at least EARLY_HP of its HP left after the route's fights.
-const ROAD_W = +(process.env.GW_ROAD ?? 0.6), EARLY_HP = +(process.env.GW_EARLY_HP ?? 0.65), EARLY_ON = (process.env.GW_EARLY ?? '1') !== '0';
+const ROAD_W = 0.6, EARLY_HP = 0.65, EARLY_ON = (process.env.GW_EARLY ?? '1') !== '0';
 function walkScore(run, pv) {
   const w = run.ward, hpF = run.hp / run.maxHp, ph = w.phase, act = run.act;
   let s = 0, fights = 0, monsters = 0;
