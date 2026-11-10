@@ -252,7 +252,7 @@ for (const sc of SCALES) {
     assert.ok(done, `deck view card with grafts found @${sc}`);
   }
   { // the Ward: every building card (reward pick) names its rooms and words, and each gets a definition
-    const run = RUN.newRun({ hero: 'marrow', seed: 'w5w', mode: 'ward' }); run.phase = 'reward'; run.pending = RUN.fightRewards(run, 'elite', {}); run.pending.buildChoice = run.pending.buildChoice || ['b_night_shift', 'b_lamp_oil', 'b_scrub_in'];
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5w' }); run.phase = 'reward'; run.pending = RUN.fightRewards(run, 'elite', {}); run.pending.buildChoice = run.pending.buildChoice || ['b_night_shift', 'b_lamp_oil', 'b_scrub_in'];
     const app = await bootScaled(run, 'reward', reward, sc); let n = 0;
     for (const r of getAll().filter((x) => /^reward-build\d/.test(x.id))) { hover(app, r); if (app.tip && app.tip.o && app.tip.o.terms && app.tip.o.terms.length) { tipComplete(app, `ward building card ${r.id} @${sc}`, { must: [app.tip.text] }); n++; } }
     assert.ok(n >= 1, `ward building cards checked @${sc}: ${n}`);

@@ -16,13 +16,12 @@ for (const r of Object.values(RELICS)) { I.drawRelic(ctx, r.id, 40, 40, 40); gly
 I.drawRelic(ctx, 'r_future_thing', 40, 40, 40);
 for (const p of Object.values(POTIONS)) I.drawPotion(ctx, p.id, 40, 40, 40);
 I.drawPotion(ctx, 'p_new', 40, 40, 40);
-for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'boss', 'final', 'zzz']) for (const s of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 40, 40, 40, s);
+for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'rest', 'boss', 'zzz']) for (const s of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 40, 40, 40, s); // the Ward's trigger seals (and an unknown kind)
 I.drawEnergyOrb(ctx, 40, 40, 60, 3, 3); I.drawEnergyOrb(ctx, 40, 40, 60, 0);
 I.drawCoin(ctx, 1, 1, 20); I.drawHeart(ctx, 1, 1, 20); I.drawShield(ctx, 1, 1, 40, 5); I.drawShield(ctx, 1, 1, 40);
 I.drawBudgetGauge(ctx, 10, 10, 400, 4, 6, 0); I.drawBudgetGauge(ctx, 10, 10, 400, 8, 6, 2); I.drawBudgetGauge(ctx, 10, 10, 400, 0, 6, 3);
 I.drawStrainMeter(ctx, 10, 10, 200, 2, 6); I.drawDeckIcon(ctx, 1, 1, 40);
 for (const k of ['draw', 'discard', 'exhaust']) I.drawPileIcon(ctx, 1, 1, 40, k);
-I.drawMapPath(ctx, 0, 0, 100, 100, 'available', 1); I.drawMapPath(ctx, 0, 0, 100, 100, 'visited'); I.drawMapPath(ctx, 0, 0, 100, 100, 'locked');
 for (const th of [...B.BACKGROUND_THEMES, 'nonsense']) for (const t of [0, 1.7, 40]) B.drawBackground(ctx, th, t, { dim: 0.2 });
 B.drawBackground(ctx, 'ward', 1); B.drawVignette(ctx, 0.5); B.drawLampCone(ctx, 10, 10);
 // ---- round 4 additions: three sizes, new pictograms, intents, thread language, school colours
@@ -33,7 +32,7 @@ for (const sz of [20, 26, 40]) {
   I.drawIntent(ctx, 'attack', 30, 30, sz, { hits: 3 }); I.drawIntent(ctx, 'attack', 30, 30, sz, { heavy: true, conditional: true }); I.drawIntent(ctx, ['defend', 'conditional'], 30, 30, sz); I.drawIntent(ctx, ['attack', 'buff'], 30, 30, sz);
   for (const r of Object.values(RELICS)) I.drawRelic(ctx, r.id, 30, 30, sz);
   for (const p of Object.values(POTIONS)) I.drawPotion(ctx, p.id, 30, 30, sz);
-  for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'boss', 'final']) for (const st of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 30, 30, sz, st);
+  for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'rest', 'boss']) for (const st of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 30, 30, sz, st);
   I.drawNeedle(ctx, 30, 30, sz); I.drawScissors(ctx, 30, 30, sz); I.drawKnot(ctx, 30, 30, sz, '#B3263A'); I.drawLooseThread(ctx, 30, 30, sz); I.drawClasp(ctx, 30, 30, sz);
   I.drawEnergyOrb(ctx, 30, 30, sz * 2, 2, 3); I.drawHeart(ctx, 30, 30, sz); I.drawShield(ctx, 30, 30, sz, 7); I.drawCoin(ctx, 30, 30, sz);
 }
@@ -76,7 +75,8 @@ console.log('graftwork_art_icons ok', n);
     const t0 = performance.now(); for (let i = 0; i < 30; i++) Bg.drawBackground(g, th, i / 60, {}); const ms = (performance.now() - t0) / 30;
     assert.ok(ms < 2, th + ' background costs ' + ms.toFixed(2) + ' ms');
   }
-  for (const th of ['ward', 'market', 'theatre', 'title', 'table', 'shop', 'forge', 'event', 'win', 'lose', 'map1', 'map2', 'map3']) assert.ok(Bg.BACKGROUND_THEMES.includes(th), 'theme ' + th);
+  for (const th of ['ward', 'market', 'theatre', 'title', 'table', 'shop', 'forge', 'event', 'win', 'lose']) assert.ok(Bg.BACKGROUND_THEMES.includes(th), 'theme ' + th);
+  assert.equal(Bg.BACKGROUND_THEMES.length, 10, 'no theme without a screen: ' + Bg.BACKGROUND_THEMES);
   assert.ok(typeof Bg.keyLamp(1).x === 'number');
   Bg.drawVignette(g, 0.5); Bg.drawLampCone(g, 100, 0);
 }

@@ -1,5 +1,8 @@
 // Monkey test: a seeded random-input fuzzer that drives the REAL UI (pointer, keys, wheel, drags, settings, resize,
-// save/reload, abandon) and checks run + app invariants after every tick. Deterministic per seed.
+// save/reload, abandon) and checks run + app invariants after every tick. Same inputs per seed.
+// A run starts on the Ward. Random input alone rarely ends a morning, plans a route and presses Go in that order, so after a while without
+// leaving the Ward the monkey is nudged with the screen's own keyboard play (Enter ends the morning; Tab, Enter, G plan one step and go), the
+// same way a fight that random play cannot finish is handed to the engine bot. Everything in between stays random.
 //   GW_MONKEY_RUNS=4 GW_MONKEY_TICKS=2500 node tests/graftwork_monkey.test.mjs     (defaults shown)
 //   GW_MONKEY_SEED=marrow:3 GW_MONKEY_TICKS=20000 node tests/graftwork_monkey.test.mjs   (replay a single seed, verbose)
 import assert from 'node:assert/strict';
@@ -13,13 +16,13 @@ globalThis.localStorage = (() => { const m = new Map(); return { getItem: (k) =>
 const { boot } = await import('../graftwork/main.js');
 const RUN = await import('../graftwork/engine/run.js');
 const { saveRun, loadRun } = await import('../graftwork/engine/save.js');
-const { fight, POLICIES } = await import('../tools/graftwork_sim.mjs');
+const { fight, POLICIES } = await import('../tools/graftwork_driver.mjs');
 const D = await import('../graftwork/data/index.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS } = D;
 
 const { app, flow } = boot(canvas);
-const PHASES = ['map', 'ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
-const PHASE_SCREEN = { map: 'map', ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
+const PHASES = ['ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
+const PHASE_SCREEN = { ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const MODALS = new Set(['deckview', 'codex', 'archive', 'wardrobe', 'settings', 'pause']);
 const MAX_TICKS = Number(process.env.GW_MONKEY_TICKS || 2500);
 const RUNS = Number(process.env.GW_MONKEY_RUNS || 4);
@@ -76,7 +79,7 @@ function checkRun(run) {
     case 'forge': if (!p || p.kind !== 'forge') fail('forge phase without forge'); break;
     case 'event': if (!p || p.kind !== 'event' || !EVENTS[p.id]) fail('event phase without event'); break;
     case 'reward': if (!p) fail('reward phase without pending'); break;
-    case 'map': if (!run.map || !run.map.nodes) fail('map phase without map'); break;
+    case 'ward': if (!run.ward || !run.ward.rooms || !run.ward.rooms[run.ward.hero.room]) fail('ward phase without a floor and a hero on it'); break;
     default:
   }
 }
@@ -92,12 +95,14 @@ function checkApp() {
   if (run && app.current !== 'title') {
     checkRun(run);
     const want = PHASE_SCREEN[run.phase];
-    if (app.current !== want) fail(`phase ${run.phase} but screen ${app.current} (stack ${app.stack.map((s) => s.name)})`);
+    // the one legal mismatch: a walk is under way and the Ward is still showing the hero's steps to the room whose screen comes next
+    const walking = app.current === 'ward' && run.phase !== 'ward' && want !== 'end' && run.ward && run.ward.walk;
+    if (app.current !== want && !walking) fail(`phase ${run.phase} but screen ${app.current} (stack ${app.stack.map((s) => s.name)})`);
   } else if (run) checkRun(run);
 }
 
 // ---- tick with checks ----
-let stuckKey = '', stuckN = 0, combatTicks = 0;
+let stuckKey = '', stuckN = 0, combatTicks = 0, wardTicks = 0, nudges = 0;
 const warnings = [];
 function step(dt = 1 / 60) {
   lastRects = rects; rects = [];
@@ -107,13 +112,14 @@ function step(dt = 1 / 60) {
   const run = app.shared.run;
   const key = `${app.current}|${app.top().name}|${run ? run.phase : '-'}`;
   if (key === stuckKey) stuckN++; else { stuckKey = key; stuckN = 0; }
-  const exempt = app.current === 'map' || app.current === 'title' || (run && run.phase === 'combat');
+  const exempt = app.current === 'ward' || app.current === 'title' || (run && run.phase === 'combat'); // the Ward and a fight wait for the player (the nudge and the bot see to them)
   if (!exempt && stuckN > STUCK) fail(`stuck ${STUCK} ticks in state ${key}`);
   combatTicks = run && run.phase === 'combat' ? combatTicks + 1 : 0; // counts while the pause overlay quit to title leaves the combat run parked
+  wardTicks = run && run.phase === 'ward' && app.current === 'ward' ? wardTicks + 1 : 0;
 }
 
 // ---- actions ----
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'q', 'w', 'e', 'r', ' ', 'Enter', 'Escape', 'Tab'];
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'q', 'w', 'e', 'r', ' ', 'Enter', 'Escape', 'Tab', 'g', 'p', 'Backspace'];
 const SIZES = [[1280, 720], [1024, 768], [800, 600], [390, 844], [844, 390], [1920, 1080], [320, 240], [3000, 400], [2, 2], [0, 0]];
 function target(R) {
   if (lastRects.length && R() < 0.8) {
@@ -189,6 +195,19 @@ function botFight() {
   RUN.resolveFight(run, res); flow.route(); step();
 }
 
+// the Ward's keyboard play, key by key through the real screen: close whatever is open, then end the morning or plan one step and go
+function press(k) { const e = { key: k, repeat: false, preventDefault() {} }; app.keys.add(k); app.pressedKeys.push(e); const s = app.top(); if (s && s.key) s.key(app, e); step(); app.keys.delete(k); }
+function wardNudge() {
+  const run = app.shared.run, w = run.ward;
+  log('ward nudge ' + w.phase); nudges++;
+  app.mouse.x = -50; app.mouse.y = -50; app.mouse.down = false;
+  if (app.stack.length > 1) { press('Escape'); return; }
+  const st = app.screens.ward.st; if (st) { st.plans = false; st.sel = null; st.selRoom = null; st.drag = null; st.kb = -1; } // drop a half-made choice, as Escape would
+  if (w.phase === 'morning') { press('Enter'); press('Enter'); return; } // twice: the first may only arm the "plans would be discarded" warning
+  for (let i = 0; i < 80 && st && st.dieRolling; i++) step(); // let the die land
+  press('Tab'); press('Enter'); press('g');
+}
+
 function playOne(hero, idx) {
   const id = `${hero}:${idx}`;
   const R = mulberry(hashStr(id));
@@ -198,7 +217,7 @@ function playOne(hero, idx) {
   app.shared.meta.settings.reducedMotion = false; app.shared.meta.settings.textSize = 'normal';
   const asc = idx % 3 === 2 ? 5 + (idx % 6) : 0;
   flow.start({ hero, seed: 'monkey-' + id, ascension: asc });
-  stuckKey = ''; stuckN = 0; combatTicks = 0;
+  stuckKey = ''; stuckN = 0; combatTicks = 0; wardTicks = 0;
   const phasesSeen = new Set();
   let titleTicks = 0;
   const abandonAt = R() < 0.35 ? Math.floor(R() * MAX_TICKS) : -1;
@@ -207,12 +226,13 @@ function playOne(hero, idx) {
     if (ctxInfo.tick >= abandonAt && abandonAt >= 0 && app.shared.run && app.shared.run.phase !== 'dead' && app.shared.run.phase !== 'won' && R() < 0.01) doAbandon();
     const r = R();
     const run = app.shared.run;
-    if (run) phasesSeen.add(run.phase);
-    if (app.current === 'title' && !(run && run.phase === 'map' && false)) {
+    if (run) { phasesSeen.add(run.phase); if (run.mode !== 'ward') fail('a run that is not a Ward run: mode ' + run.mode); }
+    if (app.current === 'title') {
       titleTicks++;
       if (titleTicks > 400) { titleTicks = 0; flow.start({ hero, seed: `monkey-${id}-${ctxInfo.tick}` }); uiStarts--; }
     } else titleTicks = 0;
     if (combatTicks > 500) { botFight(); combatTicks = 0; continue; }
+    if (wardTicks > 300) { wardNudge(); wardTicks = 0; continue; }
     if (r < 0.40) doClick(R);
     else if (r < 0.55) doKey(R);
     else if (r < 0.63) doDrag(R);
@@ -247,6 +267,6 @@ for (const [hero, idx] of jobs) {
     process.exit(1);
   }
 }
-for (const p of ['map', 'combat', 'reward', 'graft']) assert.ok(seenAll.has(p), `monkey never reached phase ${p}`);
-console.log(`monkey: ${jobs.length} runs, ${ticks} ticks, phases seen: ${[...seenAll].join(',')}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+for (const p of ['ward', 'combat', 'reward', 'graft']) assert.ok(seenAll.has(p), `monkey never reached phase ${p}`);
+console.log(`monkey: ${jobs.length} runs, ${ticks} ticks, ${nudges} Ward nudges, phases seen: ${[...seenAll].join(',')}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 for (const w of warnings) console.log('warn', w);

@@ -1,4 +1,4 @@
-// THE WARD screen (run.phase === 'ward', design/WARD.md section 6): the hospital you build instead of the map.
+// THE WARD screen (run.phase === 'ward', design/WARD.md section 6): the hospital you build, and the map of every run.
 // An architect's blueprint engraved on vellum (9 x 6 grid, hatched walls, rubble, room plates), a brass day clock with the four phases,
 // resources and the building deck on top, the hero on the left, the room or walk notes on the right, the building hand along the bottom.
 // MORNING: drag a plan onto a glowing cell (or a room, for upgrades and effects); tap a room to switch its power; End Morning.
@@ -104,7 +104,7 @@ function ensurePlan(run) {
 export function wardInterlude(app, run, scr) {
   ensurePlan(run);
   const P = MEM.plan, w = run && run.ward;
-  if (!P || !w || !w.walk || w.act !== P.act || run.mode !== 'ward' || !app.screens.ward) return false;
+  if (!P || !w || !w.walk || w.act !== P.act || !app.screens.ward) return false;
   const idx = P.cells.indexOf(w.hero.room, P.at);
   if (idx <= P.at) return false;
   app.go('ward', { run, then: scr });

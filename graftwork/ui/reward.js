@@ -31,7 +31,7 @@ export default {
     const rw = run.pending && run.pending.kind !== undefined ? run.pending : (run.pending = { kind: 'normal', gold: 0, graft: true });
     st = {
       run, rw, t: 0, fx: new Fx(), taken: {}, done: false,
-      buildInit: Array.isArray(rw.buildChoice) && rw.buildChoice.length ? rw.buildChoice.slice() : null, // Ward mode: pick 1 of 3 building plans
+      buildInit: Array.isArray(rw.buildChoice) && rw.buildChoice.length ? rw.buildChoice.slice() : null, // an elite or a boss: pick 1 of 3 building plans
       init: { gold: rw.gold || 0, potion: rw.potion || null, relic: rw.relic || null, choices: rw.relicChoices ? rw.relicChoices.slice() : null },
     };
     this.st = st;
@@ -63,7 +63,7 @@ export default {
 
     const kind = rw.kind === 'elite' || rw.kind === 'boss' ? rw.kind : 'normal';
     let sub = `${KIND[kind]}. Take what you can carry.`;
-    if (rw.ward) { // Ward mode: what the rooms gave (wood and stone are already in the store)
+    if (rw.ward) { // what the rooms gave (wood and stone are already in the store); a fight an event queued has none
       const wd = rw.ward, got = [wd.wood ? `+${wd.wood} wood` : '', wd.stone ? `+${wd.stone} stone` : ''].filter(Boolean).join(', ');
       sub = `${KIND[kind]}${wd.count > 1 ? ` (${wd.count} monsters)` : ''}.` + (got ? ` Salvage: ${got}.` : '') + (goldNote(wd, run.ward && run.ward.phase, kind) ? ' ' + goldNote(wd, run.ward && run.ward.phase, kind) : '');
       if (rw.wardBonus) sub += ` Early: +${rw.wardBonus.gold} gold, ${BUILD_CARDS[rw.wardBonus.card] ? BUILD_CARDS[rw.wardBonus.card].name : 'a plan'}.`;
@@ -78,7 +78,7 @@ export default {
     // No relic choice: the short list would hang in the top third of the screen, so centre it between the header and the notes.
     if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0) + (st.buildInit ? 162 : 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
     rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
-    if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 112 : 150, st) + (compact ? 6 : 12); // Ward mode: building plan pick
+    if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 112 : 150, st) + (compact ? 6 : 12); // the building plan pick
 
     // forfeit notes (footer zone above the button)
     const notes = [];

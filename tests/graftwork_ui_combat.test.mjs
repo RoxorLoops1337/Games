@@ -1,6 +1,6 @@
 // Headless gate for the combat screen: plays whole fights by simulated clicks and key presses through app.tick.
 import assert from 'node:assert/strict';
-import { makeApp, frames, click, key } from './graftwork_lib.mjs';
+import { makeApp, frames, click, key, wardOpen } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as audio from '../graftwork/ui/audio.js';
 import { ENEMIES, HEROES, POTIONS } from '../graftwork/data/index.js';
@@ -14,8 +14,12 @@ const MAX_TICKS = 4000;
 function setup({ hero = 'marrow', seed = 't', enemies, kind = 'normal', hp, potions = [], act = 1 }) {
   const run = RUN.newRun({ hero, seed });
   if (act > 1) { run.act = act; }
-  run.phase = 'combat';
-  run.pending = { kind: 'combat', fightKind: kind, enemies };
+  // the fight as the Ward opens it: monsters in a Ward room (up to the three the board holds) or an elite in Isolation, with the hour's
+  // modifiers and the room on run.pending; anything else (a boss by id, a full board of 4 to 6) is a fight an event queues
+  if (kind === 'normal' && enemies.length <= 3) wardOpen(run, 'fight', { enemies });
+  else if (kind === 'elite' && enemies.length === 1) wardOpen(run, 'elite', { enemies });
+  else { run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: kind, enemies }; }
+  assert.equal(run.phase, 'combat'); assert.deepEqual(run.pending.enemies, enemies);
   if (hp) { run.hp = hp; run.maxHp = Math.max(run.maxHp, hp); }
   run.potions = potions.slice();
   const routed = [];
@@ -110,7 +114,7 @@ let si = 0;
 for (const hero of heroes) {
   for (const enemies of [['bedpan_slime'], ['bedpan_slime', 'orderly', 'iron_lung'], ['orderly', 'orderly']]) {
     const r = await fight({ hero, seed: 'a' + si, enemies, hp: 400 }, styles[si++ % 3]);
-    assert.ok(['reward', 'dead', 'map', 'won', 'graft'].includes(r.phase), 'unexpected phase ' + r.phase);
+    assert.ok(['reward', 'dead', 'won', 'graft'].includes(r.phase), 'unexpected phase ' + r.phase);
     total += r.ticks;
   }
 }
