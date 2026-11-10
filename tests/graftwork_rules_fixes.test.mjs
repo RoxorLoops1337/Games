@@ -383,5 +383,34 @@ await ta('Odile gets a declaration tab on the rail: click, G, gamepad and touch 
   }
 });
 
+// ---------------------------------------------------------------- 4. enemies that read your deck see every card and graft
+await ta('The Grafter, the Locksmith and the card jammers read the real registries (Thread cards, Thread and school grafts)', async () => {
+  const E3 = await import('../graftwork/data/enemies_3.js');
+  const { CARDS_THREAD } = await import('../graftwork/data/cards_thread.js');
+  const { GRAFTS_THREAD } = await import('../graftwork/data/grafts_thread.js');
+  const { GRAFTS_EXTRA } = await import('../graftwork/data/grafts_extra.js');
+  // no card or graft of the game is unknown to them
+  for (const d of Object.values(CARDS)) if (d.type !== 'junk' && !/^t[a]?_/.test(d.id)) assert.ok(E3.costOf({ inst: { id: d.id, up: 0 } }) >= 0, 'costOf knows ' + d.id);
+  assert.ok(CARDS_THREAD.length >= 20 && GRAFTS_THREAD.length + GRAFTS_EXTRA.length >= 51);
+  const deckOf = (run, ids, grafts) => { run.deck = ids.map((id, i) => ({ uid: 100 + i, id, grafts: (grafts[i] || []).slice(), up: 0 })); run.uidNext = 200; };
+  // The Grafter: four Blood grafts from the Thread set, on Thread cards
+  const run = RUN.newRun({ hero: 'marrow', seed: 'grafter' });
+  const blood = GRAFTS_THREAD.filter((g) => g.school === 'blood').map((g) => g.id); assert.ok(blood.length >= 3);
+  deckOf(run, ['x_thread_shears', 'm_thread_bloodline', 'm_thread_stitchup', 'm_cut', 'm_dress'], [[blood[0]], [blood[1]], [blood[2]], [], []]);
+  const c = newCombat(run, ['the_grafter'], { kind: 'final' }), g = c.enemies[0];
+  assert.equal(g.data.count, 3); assert.equal(g.data.school, 'blood', 'it used to see no school in these grafts and splice the default'); assert.deepEqual(g.data.schools, { blood: 3 });
+  assert.equal(g.data.weight, blood.slice(0, 3).reduce((a, id) => a + GRAFTS[id].weight, 0));
+  assert.equal(g.data.bestName, "Tailor's Shears", 'your best attack may be a Thread card'); assert.equal(g.def.moves.mirror.name, "Your Tailor's Shears");
+  // Locksmith: the biggest school of a deck built from Thread cards and school grafts
+  const run2 = RUN.newRun({ hero: 'wick', seed: 'lock' });
+  const stat = GRAFTS_EXTRA.filter((x) => x.school === 'static').map((x) => x.id); assert.ok(stat.length >= 2);
+  deckOf(run2, ['w_thread_trail', 'w_thread_fusewire', 'w_thread_conflagration', 'w_spark', 'w_snuff'], [[], [], [], [stat[0]], [stat[1]]]);
+  const c2 = newCombat(run2, ['locksmith']);
+  assert.equal(c2.enemies[0].data.seal, 'ember', 'three Ember Thread cards outnumber two Static grafts');
+  run2.deck[0].id = 'w_spark'; run2.deck[1].id = 'w_spark';
+  const c3 = newCombat(run2, ['locksmith']);
+  assert.equal(c3.enemies[0].data.seal, 'static', 'school grafts count');
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

@@ -1,6 +1,6 @@
 {
- "version": "e03fcb7257babf71",
- "bytes": 11586573,
+ "version": "d45a41087dd7c505",
+ "bytes": 11586048,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2188,8 +2188,8 @@
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "db9ed8278f17aafb",
-   "s": 24340
+   "h": "ed41d6eefb38f410",
+   "s": 23815
   },
   "data/enemies_new1.js": {
    "h": "ae7961b1a3de65e4",

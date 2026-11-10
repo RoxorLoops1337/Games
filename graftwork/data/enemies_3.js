@@ -1,24 +1,11 @@
 // Act III: The Gilt Theatre. 11 normals, 3 elites, The Impresario, and the final boss The Grafter.
-// Data files cannot import the engine, so card/graft lookups read the (import-free) content lists directly.
-import { CARDS_MARROW } from './cards_marrow.js';
-import { CARDS_WICK } from './cards_wick.js';
-import { CARDS_ODILE } from './cards_odile.js';
-import { CARDS_ANY } from './cards_any.js';
-import { CARDS_JUNK } from './cards_junk.js';
-import { GRAFTS_SAFE } from './grafts_safe.js';
-import { GRAFTS_GREEDY } from './grafts_greedy.js';
-import { GRAFTS_WEIRD } from './grafts_weird.js';
+// Card and graft lookups go through the one registry (data/index.js). That module imports this one, so CARDS and GRAFTS are
+// live bindings that are only read inside functions, at combat time, long after both modules have loaded (never at module scope).
+import { CARDS, GRAFTS } from './index.js';
 import { schoolsOf } from '../engine/cards.js';
 
-let _cards = null, _grafts = null;
-const cardDef = (id) => {
-  if (!_cards) { _cards = {}; for (const c of [...CARDS_MARROW, ...CARDS_WICK, ...CARDS_ODILE, ...CARDS_ANY, ...CARDS_JUNK]) _cards[c.id] = c; }
-  return _cards[id];
-};
-const graftDef = (id) => {
-  if (!_grafts) { _grafts = {}; for (const g of [...GRAFTS_SAFE, ...GRAFTS_GREEDY, ...GRAFTS_WEIRD]) _grafts[g.id] = g; }
-  return _grafts[id];
-};
+const cardDef = (id) => CARDS[id];
+const graftDef = (id) => GRAFTS[id];
 
 // ---------- disruption helpers (they edit combat zones directly; enemies act after the hand was discarded) ----------
 const costOf = (card) => {
