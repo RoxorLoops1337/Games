@@ -42,7 +42,7 @@ function block(id, title, note, h, draw) { BLOCKS.push({ id, title, note, h, dra
 
 // real cards: the first card of the data with that type and rarity
 const cardOf = (type, rarity) => CARD_LIST.find((c) => c.type === type && c.rarity === rarity) || CARD_LIST.find((c) => c.type === type && c.rarity !== 'starter') || CARD_LIST.find((c) => c.type === type);
-const specOf = (c, o = {}) => cardSpec({ uid: 1, id: c.id, grafts: o.grafts || [], fused: o.fused || [], up: o.up ? 1 : 0, waived: o.waived || [] });
+const specFor = (c, o = {}) => cardSpec({ uid: 1, id: c.id, grafts: o.grafts || [], fused: o.fused || [], up: o.up ? 1 : 0, waived: o.waived || [] });
 const graftsFor = (c, n) => { const inst = { uid: 1, id: c.id, grafts: [], up: 0 }, out = []; for (const gr of GRAFT_LIST) { if (out.length >= n) break; if (canGraft(inst, gr.id)) { out.push(gr.id); inst.grafts.push(gr.id); } } return out; };
 const HAND = 0.74, BIG = 1.22;
 
@@ -54,7 +54,7 @@ for (const [type, rarity] of FRAMES) {
   const fid = type === 'junk' ? 'card_front.junk' : `card_front.${type}.${rarity}`;
   block('cards', fid, `${c ? c.name : '?'} (${c ? c.id : ''})${own ? '' : `: the data has no ${rarity} ${type} card, this one is drawn in that frame`}. Hand size and inspect size, painted then procedural.`, 400, (g) => {
     if (!c) return;
-    const spec = specOf(c), o = { t: 1, still: true, rarity };
+    const spec = specFor(c), o = { t: 1, still: true, rarity };
     const cols = [[110, HAND, true, 'hand, painted'], [300, HAND, false, 'hand, procedural'], [560, BIG, true, 'inspect, painted'], [880, BIG, false, 'inspect, procedural']];
     for (const [x, sc, painted, text] of cols) {
       const run = () => drawCard(g, spec, x + 40, 205, { ...o, scale: sc, compact: sc === HAND });
@@ -72,18 +72,18 @@ block('cards', 'card_back.plain', 'The equipped back, painted then procedural. O
 
 // states: what a card can look like in play
 const STATES = [
-  ['upgraded', (c) => [specOf(c, { up: true }), {}]],
-  ['1 graft', (c) => [specOf(c, { grafts: graftsFor(c, 1) }), {}]],
-  ['2 grafts', (c) => [specOf(c, { grafts: graftsFor(c, 2) }), {}]],
-  ['Price waived (Free Sample)', (c) => { const g = graftsFor(c, 2); return [specOf(c, { grafts: g, waived: g }), {}]; }],
-  ['3 grafts (Overload)', (c) => [specOf(c, { grafts: graftsFor(c, 3) }), {}]],
-  ['fused (Tempered)', (c) => [specOf(c, { fused: graftsFor(c, 2) }), {}]],
-  ['tithed', (c) => [specOf(c), { tithed: true }]],
-  ['jammed, cost up', (c) => { const s = specOf(c); return [s, { jam: true, cost: (typeof s.cost === 'number' ? s.cost : 0) + 1 }]; }],
-  ['cost down', (c) => { const s = specOf(c, { up: true }); return [s, { cost: Math.max(0, (typeof s.cost === 'number' ? s.cost : 1) - 1) }]; }],
-  ['playable (glow)', (c) => [specOf(c), { glow: 0.8 }]],
-  ['unplayable (dim)', (c) => [specOf(c), { dim: 0.8 }]],
-  ['selected', (c) => [specOf(c), { selected: true }]],
+  ['upgraded', (c) => [specFor(c, { up: true }), {}]],
+  ['1 graft', (c) => [specFor(c, { grafts: graftsFor(c, 1) }), {}]],
+  ['2 grafts', (c) => [specFor(c, { grafts: graftsFor(c, 2) }), {}]],
+  ['Price waived (Free Sample)', (c) => { const g = graftsFor(c, 2); return [specFor(c, { grafts: g, waived: g }), {}]; }],
+  ['3 grafts (Overload)', (c) => [specFor(c, { grafts: graftsFor(c, 3) }), {}]],
+  ['fused (Tempered)', (c) => [specFor(c, { fused: graftsFor(c, 2) }), {}]],
+  ['tithed', (c) => [specFor(c), { tithed: true }]],
+  ['jammed, cost up', (c) => { const s = specFor(c); return [s, { jam: true, cost: (typeof s.cost === 'number' ? s.cost : 0) + 1 }]; }],
+  ['cost down', (c) => { const s = specFor(c, { up: true }); return [s, { cost: Math.max(0, (typeof s.cost === 'number' ? s.cost : 1) - 1) }]; }],
+  ['playable (glow)', (c) => [specFor(c), { glow: 0.8 }]],
+  ['unplayable (dim)', (c) => [specFor(c), { dim: 0.8 }]],
+  ['selected', (c) => [specFor(c), { selected: true }]],
 ];
 for (const [mode, sc, compact] of [['hand size', HAND, true], ['inspect size', 0.98, false]]) {
   for (let part = 0; part < 2; part++) {
@@ -115,7 +115,7 @@ for (const [id, what] of PANELS) {
     }
     procedural(() => CH.panel(app, 970, 14, 190, 190, { fill, r: 12 }));
     app.text('procedural', 1065, 100, { size: 13, ui: true, align: 'center' });
-    if (!SK.has(id)) label(g, 'the part is not loaded', 20, 310, { color: '#e06a5a' });
+    if (!SK.hasPart(id)) label(g, 'the part is not loaded', 20, 310, { color: '#e06a5a' });
   });
 }
 

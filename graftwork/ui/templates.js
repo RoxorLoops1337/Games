@@ -24,7 +24,7 @@ const BASE_DEFAULT = 'assets/ui/';
 // THE SWITCH for the painted art is the 'art' preview (ui/preview.js: PREVIEW_DEFAULT.art, the page URL ?art=1, the Settings toggle "Painted art (preview)").
 // While it is off the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look; on the minimal graphics tier
 // (ui/quality.js) it stays off whatever the setting says. Tests and tools that feed the loader themselves pass { art: true } and are not asked.
-const settingsOf = (app) => (app && app.shared && app.shared.meta && app.shared.meta.settings) || null;
+const previewSettings = (app) => (app && app.shared && app.shared.meta && app.shared.meta.settings) || null;
 const tierOf = (app) => (app && app.perf && app.perf.q && app.perf.q.tier) || 'full';
 const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -260,7 +260,7 @@ export function createTemplates(opts = {}) {
   let swKey = null, swVal = false;
   A.wanted = () => {
     if (A.art !== null) return A.art;
-    const st = settingsOf(A.app), tier = tierOf(A.app), search = typeof location !== 'undefined' && location ? String(location.search || '') : '';
+    const st = previewSettings(A.app), tier = tierOf(A.app), search = typeof location !== 'undefined' && location ? String(location.search || '') : '';
     const key = (st && st.previewArt ? '1' : '0') + tier + search;
     if (key !== swKey) { swKey = key; swVal = tier !== 'minimal' && previewOn('art', st); }
     return swVal;

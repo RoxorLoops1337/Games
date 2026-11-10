@@ -168,7 +168,7 @@ await t('preview_off_asks_for_nothing_under_assets_ui_and_draws_no_painted_part'
     app.push('pause', {}); frames(app, 6); app.pop(); app.push('settings', {}); frames(app, 6); app.pop(); app.push('deckview', {}); frames(app, 6); app.pop(); await tick();
     assert.equal(templates.on, false); assert.equal(templates.ready(), false);
     assert.deepEqual(uiRequests(), [], 'nothing under assets/ui was requested');
-    for (const id of ['panel', 'button.normal', 'bar.hp.frame']) assert.equal(SK.has(id), false);
+    for (const id of ['panel', 'button.normal', 'bar.hp.frame']) assert.equal(SK.hasPart(id), false);
     assert.equal(SK.nine(fakeCtx(), 'panel', 0, 0, 200, 100), false); assert.equal(SK.icon(fakeCtx(), 'rules.draw', 0, 0, 30), false); assert.equal(SK.hpBar(fakeCtx(), 0, 0, 100, 16, 0.5, 0.5), false); assert.equal(SK.gauge(fakeCtx(), 0, 0, 30, 6), null);
   } finally { g.fetch = keep.fetch; g.Image = keep.Image; templates.configure({ art: null, live: false, fetchJson: null, makeImage: null }); }
 });
@@ -315,15 +315,15 @@ await t('settings_toggle_switches_the_painted_art_live_and_the_minimal_tier_keep
     for (let i = 0; i < 4; i++) { frames(app, 2); await tick(); }
     assert.ok(templates.ready(), 'ready');
     assert.ok(uiRequests().some((u) => /atlas\/chrome@/.test(u)), 'the buttons of the Settings screen asked for the chrome atlas');
-    assert.ok(SK.has('button.normal'), 'and it is drawn');
+    assert.ok(SK.hasPart('button.normal'), 'and it is drawn');
     const before = uiRequests().length, v0 = templates.ver;
     row().act(1); assert.equal(meta.settings.previewArt, false); frames(app, 2);
-    assert.equal(templates.on, false, 'off again at the next frame'); assert.equal(templates.ready(), false); assert.equal(SK.has('button.normal'), false); assert.ok(templates.ver > v0, 'the version counts the change (frozen screens repaint)');
+    assert.equal(templates.on, false, 'off again at the next frame'); assert.equal(templates.ready(), false); assert.equal(SK.hasPart('button.normal'), false); assert.ok(templates.ver > v0, 'the version counts the change (frozen screens repaint)');
     frames(app, 4); await tick(); assert.equal(uiRequests().length, before, 'off: nothing more is asked for');
-    row().act(1); frames(app, 2); assert.ok(templates.ready() && SK.has('button.normal'), 'on again: what was loaded is still there, no new request'); assert.equal(uiRequests().length, before);
+    row().act(1); frames(app, 2); assert.ok(templates.ready() && SK.hasPart('button.normal'), 'on again: what was loaded is still there, no new request'); assert.equal(uiRequests().length, before);
     // Graphics: Low is the minimal tier: the painted art stays off whatever the toggle says
     app.perf.q.setMode('low', 0); assert.equal(app.perf.q.tier, 'minimal'); frames(app, 2);
-    assert.equal(templates.on, false, 'minimal tier: off'); assert.equal(SK.has('button.normal'), false);
+    assert.equal(templates.on, false, 'minimal tier: off'); assert.equal(SK.hasPart('button.normal'), false);
     app.perf.q.setMode('high', 0); frames(app, 2); assert.equal(templates.on, true, 'back on the full tier: on');
     // the lite tier takes the 1x files, a dense phone screen the 2x ones
     assert.equal(templates.use2x({ px: 2, perf: { q: { tier: 'full' } } }), true); assert.equal(templates.use2x({ px: 1, perf: { q: { tier: 'full' } } }), false); assert.equal(templates.use2x({ px: 2, perf: { q: { tier: 'lite' } } }), false);

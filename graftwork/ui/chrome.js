@@ -76,7 +76,7 @@ function frameRect(fr, x, y, w, h) {
   return [x - l, y - t, w + l + r, h + t + b];
 }
 function paintedPanel(app, x, y, w, h, o) {
-  const fr = SK.has(o.frame) && templates.frameImg(o.frame); if (!fr) return false;
+  const fr = SK.hasPart(o.frame) && templates.frameImg(o.frame); if (!fr) return false;
   const sl = fr.def.slice; if (sl && (w < (sl[0] + sl[2]) * 1.1 || h < (sl[1] + sl[3]) * 1.1)) return false; // too small for the corner pieces: the plain panel
   const R = frameRect(fr, x, y, w, h);
   if (fr.def.fill === false) { panelBody(app, x, y, w, h, o); return SK.nine(app.ctx, o.frame, R[0], R[1], R[2], R[3]); } // a border: it lies around the usual slab
@@ -84,12 +84,12 @@ function paintedPanel(app, x, y, w, h, o) {
 }
 function paintedButton(app, x, y, w, h, o, state) {
   const dy = state === 2 ? 2 : 0, tone = hueOf(o.fill), rimCol = o.stroke && o.stroke !== 'brass' && state !== 3 ? o.stroke : null;
-  const small = !o.frame && h <= 34 && SK.has('button.small');
+  const small = !o.frame && h <= 34 && SK.hasPart('button.small');
   if (small) { // one painting: the other states are washes over it
     const wash = state === 1 ? ['#fff0c8', 0.16, 'lighter'] : state === 2 ? ['#000', 0.3, 'source-over'] : state === 3 ? ['#3a3632', 0.62, 'source-over'] : null;
     return SK.nine(app.ctx, 'button.small', x, y + dy, w, h, { tone: tone && state !== 3 ? TONES[tone] : null, wash, rim: rimCol ? [rimCol, 9, 1.5] : null, key: state + tone + (rimCol || '') }) ? dy : -1;
   }
-  const base = o.frame || 'button', id = SK.has(base + '.' + STATE_NAMES[state]) ? base + '.' + STATE_NAMES[state] : SK.has(base) ? base : SK.has(base + '.normal') ? base + '.normal' : null;
+  const base = o.frame || 'button', id = SK.hasPart(base + '.' + STATE_NAMES[state]) ? base + '.' + STATE_NAMES[state] : SK.hasPart(base) ? base : SK.hasPart(base + '.normal') ? base + '.normal' : null;
   if (!id) return -1;
   const dim = state === 3 && !id.endsWith('.disabled');
   if (dim) app.ctx.globalAlpha *= 0.5;

@@ -1391,8 +1391,8 @@ export function drawCardBack(ctx, x, y, o = {}) {
 }
 
 // The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to 8 at which rules plus price fit. `fits` is false when
-// even 8 spills (the text is then drawn anyway). Shared by the face painter and by the checks that sweep every card (tests, lab).
-export function cardTextFit(g, lines, price, maxW, avail) {
+// even 8 spills (the text is then drawn anyway).
+function cardTextFit(g, lines, price, maxW, avail) {
   let best = null;
   for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
     g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);

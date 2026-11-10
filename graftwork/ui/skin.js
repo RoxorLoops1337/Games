@@ -9,11 +9,11 @@
 //   icon(ctx, id, x, y, size)            an icon of the manifest, centred on (x, y)
 //   hpBar(ctx, x, y, w, h, pct, trail)   the glass tube: track, trail, tiled liquid, frame over it
 //   gauge(ctx, x, y, h, n)               the Budget gauge frame for n sockets -> { w, cell, x0, socket } (where the code puts the pips), or null
-//   has(id)                              the part is decoded and may be drawn now
+//   hasPart(id)                          the part is decoded and may be drawn now
 import { templates, drawNineSlice } from './templates.js';
 import { deviceScale } from './smoothing.js';
 
-const MAX_PIXELS = 20e6, MAX_ENTRIES = 300;
+const SKIN_PIXELS = 20e6, SKIN_ENTRIES = 300;
 const C = { map: new Map(), pixels: 0, ver: -1 };
 
 function mk(w, h) {
@@ -26,7 +26,7 @@ function mk(w, h) {
   return g ? { c, g } : null;
 }
 const frame = (id) => { templates.ensure(); return templates.ready() ? templates.frameImg(id) : null; };
-export const has = (id) => !!frame(id);
+export const hasPart = (id) => !!frame(id);
 
 // whole-pixel cuts of one axis: [source start, source length, dest start, dest length] for the leading margin, the middle (n repeats when it tiles) and
 // the trailing margin. s0 / sLen: the part in image px; m0 / m1: the margins in image px; d: the dest length in px; e0 / e1: the margins in dest px.
@@ -85,7 +85,7 @@ const bucket = (s) => (s <= 1.05 ? 1 : s <= 1.6 ? 1.5 : s <= 2.2 ? 2 : s <= 3.2 
 // Draw a sliced frame into (x, y, w, h). Baked per (part, size, device scale, variant); without a canvas (node) it is drawn directly.
 export function nine(ctx, id, x, y, w, h, o) {
   const fr = frame(id); if (!fr || !(w > 0 && h > 0)) return false;
-  if (C.ver !== templates.ver || C.pixels > MAX_PIXELS || C.map.size > MAX_ENTRIES) { C.map.clear(); C.pixels = 0; C.ver = templates.ver; }
+  if (C.ver !== templates.ver || C.pixels > SKIN_PIXELS || C.map.size > SKIN_ENTRIES) { C.map.clear(); C.pixels = 0; C.ver = templates.ver; }
   const ds = deviceScale(ctx), S = bucket(ds > 0 ? ds : 1);
   const W = Math.max(1, Math.round(w)), H = Math.max(1, Math.round(h));
   const key = id + '|' + W + 'x' + H + '@' + S + (o && o.key ? '|' + o.key : '');
