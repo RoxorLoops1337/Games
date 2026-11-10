@@ -167,5 +167,45 @@ await t('post quality: one controller. 20 s of 33.3 ms frames with the governor 
   } finally { REC.gl = null; }
 });
 
+// ------------------------------------------------------------------ stamps of the screen clock
+await t('Ward stamps: a stamp ahead of the clock counts as finished', () => {
+  assert.equal(ISO.bornAlpha(undefined, 5), 1); assert.equal(ISO.bornAlpha(5, 5), 0); assert.ok(Math.abs(ISO.bornAlpha(5, 5.175) - 0.5) < 1e-9); assert.equal(ISO.bornAlpha(5, 6), 1);
+  assert.equal(ISO.bornAlpha(95, 2), 1, 'a stamp from an earlier visit never hides anyone'); assert.equal(ISO.bornAlpha(NaN, 2), 1);
+});
+await t('Ward stamps: spawn while on the Ward, leave, come back: every actor is drawn with alpha 1', async () => {
+  const { app, run } = await setup();
+  const ids = layout(run, [['rm_entrance', 2, 2], ['rm_ward', 3, 2, mons(0, 2)]]);
+  app.go('ward', { run }); frames(app, 5);
+  frames(app, 95, 1); // 95 s on the Ward
+  assert.ok(ward.st.t > 90, 'the screen clock ran: ' + ward.st.t);
+  run.ward.rooms[ids[1]].contents.push({ kind: 'monster', id: NORMAL1[2] }); // a monster checks in while the Ward is on screen
+  frames(app, 1);
+  let ms = ISO.lastActors().filter((a) => a.kind === 'monster');
+  const newcomer = ms.find((a) => a.id === NORMAL1[2]);
+  assert.equal(ms.length, 3); assert.ok(newcomer.alpha < 1, 'the newcomer fades in: ' + newcomer.alpha); assert.ok(ms.every((a) => a === newcomer || a.alpha === 1), 'the others stay');
+  frames(app, 40); ms = ISO.lastActors().filter((a) => a.kind === 'monster'); assert.ok(ms.every((a) => a.alpha === 1), 'and is there after the fade');
+  app.go('base'); frames(app, 3); app.go('ward', { run }); // a fight elsewhere, then back: the screen clock starts again at 0
+  assert.ok(ward.st.t < 1);
+  for (let i = 0; i < 20; i++) {
+    frames(app, 1);
+    const all = ISO.lastActors(); ms = all.filter((a) => a.kind === 'monster');
+    assert.equal(ms.length, 3, 'all three monsters stand in the room');
+    for (const a of all) assert.equal(a.alpha, 1, `frame ${i}: ${a.kind} ${a.id} is drawn with alpha ${a.alpha}`);
+  }
+});
+await t('Ward stamps: after a visit with walking, no figure has a non-finite squash on the next visit (foot plants are reset)', async () => {
+  const { app, run } = await setup({ motion: true, seed: 'perf3walk' });
+  layout(run, [['rm_entrance', 2, 2], ['rm_ward', 3, 2, mons(0, 3)], ['rm_ward', 2, 3, mons(1, 3)]]);
+  app.go('ward', { run });
+  let walked = 0;
+  for (let i = 0; i < 1900; i++) { frames(app, 1, 0.05); for (const a of ISO.lastActors()) if (a.kind === 'monster' && a.vk > 0.3) walked++; } // 95 s: the monsters wander
+  assert.ok(ward.st.t > 90 && walked > 20, 'monsters walked during the visit: ' + walked);
+  app.go('base'); frames(app, 3); app.go('ward', { run });
+  for (let i = 0; i < 30; i++) {
+    frames(app, 1, 0.016);
+    for (const a of ISO.lastActors()) if (a.kind !== 'token') assert.ok(Number.isFinite(a.sq) && a.sq > 0.5 && a.sq < 1.5, `frame ${i}: ${a.kind} ${a.id} squash ${a.sq}`);
+  }
+});
+
 console.log(`graftwork perf3: ${n} checks passed`);
 if (process.exitCode) process.exit(process.exitCode);

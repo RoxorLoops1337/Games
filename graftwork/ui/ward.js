@@ -202,6 +202,7 @@ export default {
     S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null, endArm: 0, darkOk: '', rest: false, restT: 0 };
     this.st = S;
     MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
+    ISO.newVisit(); // the same for the map's own stamps (monster fade-in, foot plants)
     const w = run.ward;
     if (!w) return;
     ISO.camReset();
