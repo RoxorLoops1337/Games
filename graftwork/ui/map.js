@@ -5,6 +5,7 @@ import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
 import * as RUN from '../engine/run.js';
 import { strainInfo } from '../engine/cards.js';
 import { HEROES, RELICS, POTIONS, SCHOOLS, CARDS } from '../data/index.js';
+import { resonanceText } from '../data/schools.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawNodeIcon, drawRelic, drawPotion, drawHeart, drawCoin } from '../art/icons.js';
 import { drawPortrait } from '../art/heroes.js';
@@ -503,7 +504,7 @@ export default {
         g.strokeStyle = c >= t ? COL.lamp : 'rgba(232,220,196,.6)'; g.lineWidth = lnw(2); g.beginPath(); g.moveTo(tx, by - 3); g.lineTo(tx, by + 11); g.stroke();
       }
       g.restore();
-      if (hov) app.tooltip(s.name + ` (${c} graft${c === 1 ? '' : 's'})`, s.blurb + '\n' + (tier >= 3 ? '[ON] ' : '[3] ') + 'At 3: ' + s.resonance[3] + '\n' + (tier >= 6 ? '[ON] ' : '[6] ') + 'At 6: ' + s.resonance[6], { color: s.color });
+      if (hov) app.tooltip(s.name + ` (${c} graft${c === 1 ? '' : 's'})`, s.blurb + '\n' + (tier >= 3 ? '[ON] ' : '[3] ') + 'At 3: ' + resonanceText(s, 3) + '\n' + (tier >= 6 ? '[ON] ' : '[6] ') + 'At 6: ' + resonanceText(s, 6), { color: s.color });
     });
   },
 

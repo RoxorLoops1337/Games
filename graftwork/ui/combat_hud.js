@@ -1,7 +1,7 @@
 // Combat screen drawing helpers: bars, status rows, intent bubbles, card keyword panel.
 import { COL, EASE, W, clamp, rgba } from './core.js';
 import { STATUSES, GRAFTS, SCHOOLS, CARDS, RELICS } from '../data/index.js';
-import { statusText } from '../engine/text.js';
+import { statusText, priceOnCard } from '../engine/text.js';
 import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
 import * as L from './combat_layout.js';
 import { queueTip, statusSection, keywordSection, explainIntent } from './tooltips.js';
@@ -364,7 +364,8 @@ export function cardSections(spec, card, dc) {
   for (const gid of spec.grafts || []) {
     const g = GRAFTS[gid]; if (!g) continue;
     const sc = SCHOOLS[g.school];
-    out.push({ title: `${g.name}  (weight ${g.weight})`, color: (sc && sc.color) || COL.lamp, text: `Boon: ${g.boon}\nPrice: ${g.price}` });
+    const p = priceOnCard(spec, gid);
+    out.push({ title: `${g.name}  (weight ${g.weight})`, color: (sc && sc.color) || COL.lamp, text: `Boon: ${g.boon}\n${p.label}: ${p.text}` });
   }
   if (spec.overload) out.push({ title: 'Overload', color: COL.lamp, text: 'Third graft. Damage and block x1.5. 25% to Shatter on its first play each combat: it resolves, then is destroyed for the run.' });
   if (card && card.tithed) out.push({ title: 'Tithed', color: COL.scar, text: 'Over Budget. This card fights at 75% numbers this combat.' });

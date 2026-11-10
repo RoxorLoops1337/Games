@@ -1,11 +1,17 @@
 // School Resonance: 3 grafts of one school in the deck wakes tier 3, 6 wakes tier 6. Hooks mirror relic hooks.
+// The Thread reads the same tiers (engine/seam.js): tier 3 adds a stitch to that school's payout, tier 6 pays its cuts twice.
 import { GRAFTS, CARDS } from '../data/index.js';
+import { relicMod } from './cards.js';
 
-export function resonanceOf(run) {
+// The fights a relic with mod.resLens (Resonance Lens) works in: there, a school at 3 grafts already counts as tier 6.
+const LENS_FIGHTS = new Set(['elite', 'boss', 'final']);
+// The ONE place a tier is decided. kind: the fight the tiers are for (newCombat passes c.kind); absent outside a fight.
+export function resonanceOf(run, kind) {
   const counts = {};
   for (const i of run.deck) for (const gid of [...i.grafts, ...(i.fused || [])]) { const s = GRAFTS[gid] && GRAFTS[gid].school; if (s) counts[s] = (counts[s] || 0) + 1; }
+  const top = LENS_FIGHTS.has(kind) && relicMod(run, 'resLens') > 0 ? 3 : 6; // grafts of one school that reach the top tier
   const tiers = {};
-  for (const s of Object.keys(counts)) tiers[s] = counts[s] >= 6 ? 6 : counts[s] >= 3 ? 3 : 0;
+  for (const s of Object.keys(counts)) tiers[s] = counts[s] >= top ? 6 : counts[s] >= 3 ? 3 : 0;
   return { counts, tiers };
 }
 
