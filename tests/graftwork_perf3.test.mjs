@@ -116,5 +116,56 @@ await t('Ward backdrop: one cached layer, one blit per frame, baked once per act
   run.act = 1; frames(app, 1); assert.equal(stats.bakes, 4);
 });
 
+// ------------------------------------------------------------------ one quality controller
+await t('post quality: one controller. 20 s of 33.3 ms frames with the governor capped leave the post tier at the Effects setting', async () => {
+  // a WebGL2 that compiles, links and completes its framebuffers, so the pass really builds
+  const K = new Map(), konst = (k) => { if (!K.has(k)) K.set(k, 0x9000 + K.size); return K.get(k); };
+  REC.gl = () => new Proxy({}, { get(o, k) {
+    if (typeof k !== 'string') return undefined;
+    if (/^[A-Z][A-Z0-9_]*$/.test(k)) return konst(k);
+    if (k === 'getShaderParameter' || k === 'getProgramParameter') return () => true;
+    if (k === 'checkFramebufferStatus') return () => konst('FRAMEBUFFER_COMPLETE');
+    if (k === 'getExtension') return () => ({ loseContext() {} });
+    return () => ({});
+  } });
+  try {
+    const { createApp } = await import('../graftwork/ui/core.js'), { installPost } = await import('../graftwork/ui/post.js');
+    const inserted = [], removed = [];
+    const parent = { insertBefore: (el) => { inserted.push(el); el.parentNode = parent; }, removeChild: (el) => { removed.push(el); el.parentNode = null; } };
+    const canvas = { getContext: () => fakeCtx(), addEventListener() {}, style: {}, parentNode: parent, nextSibling: null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), width: 1280, height: 720, setPointerCapture() {} };
+    const meta = { settings: { quality: 'high', graphics: 'high' } };
+    const app = createApp(canvas, { shared: { meta } }); app.resize(); app.perf.q.setMode('high');
+    installPost(app);
+    const post = app.post;
+    assert.equal(post.stats.tier, 'high', 'the post starts at the Effects setting'); assert.equal(post.on, true); assert.equal(inserted.length, 1, 'the GL canvas is in the page');
+    // the idle title: the governor holds 30 fps, so for 20 s every frame comes 33.3 ms after the last
+    app.perf.gov.capped = true;
+    const seen = new Set();
+    for (let i = 0; i < 600; i++) { clock += 33.3; post.render(); seen.add(post.stats.tier); }
+    assert.deepEqual([...seen], ['high'], 'the tier never left the setting (the old controller dropped High to Low after 5 s)');
+    assert.equal(post.on, true); assert.equal(removed.length, 0, 'the GL context was not torn down');
+    // the same 20 s at Effects Low (the old controller switched the post off there and tore the GL context down)
+    meta.settings.quality = 'low'; clock += 33.3; post.render(); assert.equal(post.stats.tier, 'low');
+    seen.clear(); for (let i = 0; i < 600; i++) { clock += 33.3; post.render(); seen.add(post.stats.tier); }
+    assert.deepEqual([...seen], ['low']); assert.equal(post.on, true); assert.equal(removed.length, 0);
+    meta.settings.quality = 'high'; clock += 33.3; post.render(); assert.equal(post.stats.tier, 'high');
+    // it measures nothing at all: slow frames at Graphics High do not move it either (ui/quality.js alone decides the tier, and High pins it)
+    for (let i = 0; i < 300; i++) { clock += 90; post.render(); }
+    assert.equal(post.stats.tier, 'high');
+    assert.equal('autoQuality' in post, false, 'no second controller'); for (const k of ['drops', 'rises', 'avgFrame', 'ceiling']) assert.equal(k in post.stats, false, k);
+    // the one controller: lite and minimal switch the post off, full brings back the setting
+    app.perf.q.setMode('low'); clock += 16; post.render();
+    assert.equal(post.stats.tier, 'off'); assert.equal(post.on, false); assert.equal(removed.length, 1);
+    app.perf.q.setMode('high'); clock += 16; post.render();
+    assert.equal(post.stats.tier, 'high'); assert.equal(inserted.length, 2);
+    // the Effects row (Settings) is the tier
+    meta.settings.quality = 'low'; clock += 16; post.render(); assert.equal(post.stats.tier, 'low');
+    meta.settings.quality = 'off'; clock += 16; post.render(); assert.equal(post.stats.tier, 'off');
+    meta.settings.quality = 'high'; clock += 16; post.render(); assert.equal(post.stats.tier, 'high');
+    // setQuality stays
+    post.setQuality('low'); assert.equal(post.stats.tier, 'low'); post.setQuality('bogus'); assert.equal(post.stats.tier, 'low'); post.setQuality('off'); assert.equal(post.on, false);
+  } finally { REC.gl = null; }
+});
+
 console.log(`graftwork perf3: ${n} checks passed`);
 if (process.exitCode) process.exit(process.exitCode);
