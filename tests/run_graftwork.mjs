@@ -9,7 +9,7 @@ const argv = process.argv.slice(2);
 const jobsArg = argv.find((a) => a.startsWith('--jobs='));
 const JOBS = argv.includes('--serial') ? 1 : Math.max(1, Math.min(8, jobsArg ? +jobsArg.slice(7) || 4 : 4));
 // files known to be slow start first (longest-processing-time-first scheduling)
-const HEAVY = ['ui_combat', 'ui_layout', 'monkey', 'ui_juice', 'audio_mix', 'ui_map', 'ui_combat_layout', 'post'].map((n) => `graftwork_${n}.test.mjs`);
+const HEAVY = ['ui_combat', 'ui_layout', 'monkey', 'ui_juice', 'audio_mix', 'ui_ward', 'ui_combat_layout', 'post'].map((n) => `graftwork_${n}.test.mjs`);
 const order = [...files].sort((a, b) => {
   const ia = HEAVY.indexOf(a), ib = HEAVY.indexOf(b);
   return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || (a < b ? -1 : 1);

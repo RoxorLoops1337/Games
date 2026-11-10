@@ -1,52 +1,33 @@
-// Full-run completion: every hero is played from the first node to the end screen state with the strong bot.
-// (a) a padded-HP run must reach Act 3, fight the Impresario and The Grafter and finish 'won';
-// (b) a run forced to die in Act 2 must finish 'dead' with a killer recorded; (c) a plain run ends won or dead.
+// Full-run completion: every hero is played from the first morning to the end screen state. Fights and graft picks are the strong bot's
+// (tools/graftwork_driver.mjs); building, walking, rewards, shop, forge and events are the small deterministic player of tests/graftwork_lib.mjs.
+// (a) a padded-HP run must build and walk three floors, fight the three bosses and The Grafter and finish 'won';
+// (b) a run forced to die in Act 2 must finish 'dead' with a killer recorded; (c) a plain strong-bot run ends won or dead.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
-import { POLICIES, playRun } from '../tools/graftwork_sim.mjs';
-import { strongFight, strongPickGraft } from '../tools/graftwork_strong.mjs';
+import { POLICIES, playWardRun, strongFight, strongPickGraft } from '../tools/graftwork_driver.mjs';
+import { botStep, runEnded } from './graftwork_lib.mjs';
 
 const pol = POLICIES.strong;
-const PRI = ['final', 'boss', 'elite', 'fight', 'event', 'shop', 'forge'];
 
 function drive(hero, seed, { extraHp = 0, dieInAct = 0 } = {}) {
   const run = RUN.newRun({ hero, seed });
   if (extraHp) { run.maxHp += extraHp; run.hp = run.maxHp; }
-  const seen = { acts: new Set(), kinds: new Set(), enemies: new Set() };
+  const seen = { acts: new Set(), kinds: new Set(), enemies: new Set(), phases: new Set(), hours: new Set() };
   let guard = 0;
-  while (run.phase !== 'dead' && run.phase !== 'won') {
-    assert.ok(guard++ < 800, `${hero}: run did not end`);
-    seen.acts.add(run.act);
-    switch (run.phase) {
-      case 'map': {
-        const ns = RUN.availableNodes(run).map((id) => run.map.nodes[id]).sort((a, b) => PRI.indexOf(a.type) - PRI.indexOf(b.type));
-        RUN.enterNode(run, ns[0].id); break;
-      }
-      case 'combat': {
-        seen.kinds.add(run.pending.fightKind); run.pending.enemies.forEach((e) => seen.enemies.add(e));
-        if (dieInAct && run.act === dieInAct) run.hp = 1;
-        const { res } = strongFight(run, pol);
-        RUN.resolveFight(run, res); break;
-      }
-      case 'reward': {
-        const rw = run.pending; RUN.claimGold(run, rw);
-        if (rw.relic) RUN.addRelic(run, rw.relic);
-        if (rw.relicChoices && rw.relicChoices[0]) RUN.addRelic(run, rw.relicChoices[0]);
-        if (rw.potion) RUN.addPotion(run, rw.potion);
-        RUN.afterReward(run); break;
-      }
-      case 'graft': {
-        const pick = strongPickGraft(run, pol);
-        if (pick && canGraft(RUN.findInst(run, pick[0]), pick[1])) RUN.applyGraft(run, pick[0], pick[1]); else RUN.skipGraft(run, 'budget');
-        RUN.afterGraft(run); break;
-      }
-      case 'shop': { const s = run.pending; for (let i = 0; i < s.potions.length; i++) RUN.shopBuy(run, 'potion', i); RUN.advance(run); break; }
-      case 'forge': RUN.forgeAct(run, 'expand'); RUN.advance(run); break;
-      case 'event': { const ch = RUN.eventChoices(run).filter((c) => c.ok); const c = ch.find((x) => !x.pick) || ch[0]; RUN.eventChoose(run, c.i, c.cards ? c.cards[0] : undefined); RUN.afterEvent(run); break; }
-      default: throw new Error('stuck in phase ' + run.phase);
-    }
+  while (!runEnded(run)) {
+    assert.ok(guard++ < 2000, `${hero}: run did not end`);
+    seen.acts.add(run.act); seen.phases.add(run.phase); if (run.phase === 'ward') seen.hours.add(run.ward.phase);
+    if (run.phase === 'combat') {
+      seen.kinds.add(run.pending.fightKind); run.pending.enemies.forEach((e) => seen.enemies.add(e));
+      if (dieInAct && run.act === dieInAct) run.hp = 1;
+      RUN.resolveFight(run, strongFight(run, pol).res);
+    } else if (run.phase === 'graft') {
+      const pick = strongPickGraft(run, pol);
+      if (pick && canGraft(RUN.findInst(run, pick[0]), pick[1])) RUN.applyGraft(run, pick[0], pick[1]); else RUN.skipGraft(run, 'budget');
+      RUN.afterGraft(run);
+    } else botStep(run);
   }
   return { run, seen };
 }
@@ -61,6 +42,9 @@ for (const hero of ['marrow', 'wick', 'odile']) {
     assert.ok(seen.acts.has(2) && seen.acts.has(3), 'reached acts 2 and 3');
     assert.ok(seen.kinds.has('boss') && seen.kinds.has('final'), 'fought a boss and the final boss');
     assert.ok(seen.enemies.has('the_grafter'), 'met The Grafter');
+    assert.equal(run.stats.bosses, 3, 'three act bosses fell');
+    for (const h of ['morning', 'midday', 'evening', 'night']) assert.ok(seen.hours.has(h), 'played the ' + h);
+    for (const p of ['ward', 'combat', 'reward', 'graft', 'event']) assert.ok(seen.phases.has(p), 'saw ' + p);
   });
   t(`${hero}: a run forced to die in Act 2 ends dead with a killer recorded`, () => {
     const { run } = drive(hero, `fullrun-die-${hero}`, { extraHp: 500, dieInAct: 2 });
@@ -69,8 +53,9 @@ for (const hero of ['marrow', 'wick', 'odile']) {
     assert.ok(run.killedBy, 'killedBy is set for the FLATLINE cause line');
   });
   t(`${hero}: an unpadded strong-bot run ends won or dead without throwing`, () => {
-    const r = playRun(hero, `fullrun-plain-${hero}`, pol, 0);
+    const r = playWardRun(hero, `fullrun-plain-${hero}`, 'strong', 0);
     assert.ok(['won', 'dead'].includes(r.outcome));
+    assert.ok(r.log.acts[1].fights > 0 && r.log.acts[1].walks > 0, 'the bot walked and fought on the first floor');
   });
 }
 t('combat screen wires the Grafter reknit event (phase strip) and brands marked cards', () => {

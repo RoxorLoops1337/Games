@@ -1,5 +1,5 @@
-// GRAFTWORK Ward mode (design/WARD.md): floor generation, building legality, power, spawn timers, phases and their combat
-// modifiers, walks and trigger order, off-room penalty, boss days, act carryover, save round trip, classic untouched, full runs.
+// GRAFTWORK, the Ward (design/WARD.md): floor generation, building legality, power, spawn timers, phases and their combat
+// modifiers, walks and trigger order, off-room penalty, boss days, act carryover, save round trip, seeded replay, full runs.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as RUN from '../graftwork/engine/run.js';
@@ -9,12 +9,11 @@ import { STARTER_BUILD_DECK, BUILD_LIST, WARD_TUNE } from '../graftwork/data/war
 import { BUILD_CARDS, ROOMS, ENEMIES } from '../graftwork/data/index.js';
 const ELITE1 = Object.values(ENEMIES).find((e) => e.act === 1 && e.kind === 'elite' && !e.summonOnly).id;
 import { UNLOCKS, START } from '../graftwork/data/unlocks.js';
-import { POLICIES, playRun } from '../tools/graftwork_sim.mjs';
-import { playWardRun } from '../tools/graftwork_ward_sim.mjs';
+import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
-const mk = (seed = 'w', hero = 'marrow') => RUN.newRun({ hero, seed, mode: 'ward' });
+const mk = (seed = 'w', hero = 'marrow') => RUN.newRun({ hero, seed });
 // put a building card in the hand and return its uid
 const give = (run, id) => { const c = { uid: 9000 + run.ward.cardNext++, id }; run.ward.deck.hand.push(c); return c.uid; };
 // wipe the floor and lay rooms by hand: spec = [[type, x, y, contents?, extra?]], the first must be the Entrance
@@ -264,7 +263,7 @@ t('save round trip mid-walk: same outcome as the run that never stopped', () => 
   assert.equal(play(true), play(false));
 });
 
-t('Dispensary: sells building cards and removes one for 50 gold (ward mode only)', () => {
+t('Dispensary: sells building cards and removes one for 50 gold', () => {
   const run = mk('shop'); run.gold = 500;
   const shop = RUN.makeShop(run); run.phase = 'shop'; run.pending = shop;
   assert.equal(shop.builds.length, 3); assert.equal(shop.buildRemovePrice, 50);
@@ -272,8 +271,6 @@ t('Dispensary: sells building cards and removes one for 50 gold (ward mode only)
   assert.ok(RUN.shopBuy(run, 'build', 0).ok); assert.equal(W.buildDeckList(run).length, n0 + 1);
   const g = run.gold; assert.ok(RUN.shopBuy(run, 'buildRemove', 0, run.ward.deck.draw[0].uid).ok); assert.equal(run.gold, g - 50);
   assert.equal(RUN.shopBuy(run, 'buildRemove', 0, run.ward.deck.draw[0].uid).ok, false, 'once per visit');
-  const classic = RUN.newRun({ hero: 'marrow', seed: 'shop' }); const cs = RUN.makeShop(classic);
-  assert.equal(cs.builds, undefined); classic.pending = cs; assert.equal(RUN.shopBuy(classic, 'build', 0).ok, false);
 });
 
 t('unlocks: building cards are kind build; start set = every room card plus half of the rest; the starter deck is open', () => {
@@ -282,16 +279,15 @@ t('unlocks: building cards are kind build; start set = every room card plus half
   for (const id of ORIGINAL_ROOMS) assert.equal(UNLOCKS['build:' + id].tier, 'start');
   const open = other.filter((c) => START.build.has(c.id)).length; assert.ok(open / other.length >= 0.35 && open / other.length <= 0.65, 'about half of the non-room cards ' + open + '/' + other.length);
   for (const id of STARTER_BUILD_DECK) assert.equal(UNLOCKS['build:' + id].tier, 'start');
-  const run = RUN.newRun({ hero: 'wick', seed: 'u', mode: 'ward', unlocked: 'start' });
+  const run = RUN.newRun({ hero: 'wick', seed: 'u', unlocked: 'start' });
   for (let i = 0; i < 60; i++) assert.ok(START.build.has(W.rollBuildCard(run, ['common', 'uncommon', 'rare'])));
   for (const id of Object.keys(BUILD_CARDS)) assert.ok(/^b_/.test(id)); for (const id of Object.keys(ROOMS)) assert.ok(/^rm_/.test(id));
   assert.ok(!/\u2014/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
 });
 
-t('classic mode is untouched: no mode field, no ward state, no phase mods; seeded runs replay identically', () => {
-  const h = () => { const x = createHash('sha1'); for (const hero of ['marrow', 'wick', 'odile']) for (let i = 0; i < 2; i++) { const r = playRun(hero, `cls-${hero}-${i}`, POLICIES.strong, 0); const s = RUN.serializeRun(r.run); assert.ok(!/"mode"|"ward"|"mods"|"reinforce"/.test(s), 'classic save carries no ward fields'); x.update(s); } return x.digest('hex'); };
+t('seeded runs replay identically: the same seed and policy give the same final save, byte for byte', () => {
+  const h = () => { const x = createHash('sha1'); for (const hero of ['marrow', 'wick', 'odile']) for (let i = 0; i < 2; i++) { const r = playWardRun(hero, `rep-${hero}-${i}`, 'strong', 0); x.update(RUN.serializeRun(r.run)); } return x.digest('hex'); };
   assert.equal(h(), h());
-  const run = RUN.newRun({ hero: 'marrow', seed: 'c' }); assert.equal(run.mode, undefined); assert.equal(RUN.runMode(run), 'classic'); assert.equal(run.phase, 'map');
 });
 
 t('full ward runs: 3 heroes x 3 seeds with the strong policy end won or dead, never throw', () => {
@@ -324,7 +320,7 @@ t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids un
   for (const id of START.build) assert.ok(BUILD_CARDS[id], 'START.build id valid ' + id);
   for (const id of STARTER_BUILD_DECK) assert.ok(START.build.has(id));
   // offer shapes: elites, bosses and the Dispensary draw from the right rarities
-  const run = RUN.newRun({ hero: 'marrow', seed: 'offers', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: 'offers' });
   const rar = (ids) => ids.map((i) => BUILD_CARDS[i].rarity);
   for (let i = 0; i < 40; i++) { run.pending = null; const e = W.OFFER_SLOTS; assert.ok(e.boss[0].every((x) => x === 'rare')); assert.ok(e.elite[2].includes('rare') && e.shop.length === 3); }
   void rar;
@@ -397,7 +393,7 @@ t('Ward relics: each perk and combat hook does what its text says', () => {
   assert.equal(W.wardPower(give2('r_w_spare_fuse')).cap, 7);
   { const run = give2('r_w_extra_cot'); const [, wd] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0]]); assert.equal(W.capOf(run.ward.rooms[wd], run), 6); }
   { const run = give2('r_w_dawn_whistle'); W.morningStart(run); assert.equal(run.ward.deck.hand.length, 5 + 5 + 1 - 5 + 0 >= 0 ? run.ward.deck.hand.length : 0); assert.ok(run.ward.deck.hand.length >= 6); }
-  { const run = give2('r_w_stockpile_deed'); assert.equal(run.ward.res.wood, 4 + 2 + 2 * 1 - 0 >= 0 ? run.ward.res.wood : 0); const a = RUN.newRun({ hero: 'marrow', seed: 'rl', mode: 'ward' }); assert.equal(run.ward.res.wood, a.ward.res.wood + 2, 'pickup grants 2 wood now'); }
+  { const run = give2('r_w_stockpile_deed'); assert.equal(run.ward.res.wood, 4 + 2 + 2 * 1 - 0 >= 0 ? run.ward.res.wood : 0); const a = RUN.newRun({ hero: 'marrow', seed: 'rl' }); assert.equal(run.ward.res.wood, a.ward.res.wood + 2, 'pickup grants 2 wood now'); }
   { const run = give2('r_w_master_key'); layout(run, [['rm_entrance', 0, 0]]); run.ward.res = { wood: 0, stone: 0 }; run.ward.freeUsed = false; const u = give(run, 'b_ward'); assert.ok(W.playBuildCard(run, u, { x: 1, y: 0 }).ok, 'free'); const u2 = give(run, 'b_ward'); assert.equal(W.canBuild(run, u2, 2, 0).why, 'cost', 'only the first'); }
   { const run = give2('r_w_hard_hat'); const [, wd, co] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [], { on: false }], ['rm_corridor', 2, 0]]); W.endMorning(run); assert.equal(W.pathTo(run, co).offPenalty, 0); }
   { const run = give2('r_w_supper_bell'); const [, , co] = layout(run, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0], ['rm_corridor', 2, 0]]); W.endMorning(run); run.ward.phase = 'evening'; run.hp = 20; W.startWalk(run, co); assert.equal(run.hp, 24, '2 per room, 2 rooms'); }
@@ -412,11 +408,12 @@ t('Ward relics: each perk and combat hook does what its text says', () => {
     const p2 = W.startWalk(run2, Object.keys(run2.ward.rooms)[1]); const c2 = newCombat(run2, p2.enemies, { kind: 'normal' });
     assert.ok(!check(c2) || id === 'r_w_moon_lamp' && false, id + ' does nothing in another phase');
   }
-  // Ward relics never roll in classic runs
-  const classic = RUN.newRun({ hero: 'marrow', seed: 'cr' }); for (let i = 0; i < 80; i++) { const r = RUN.rollRelic(classic, ['common', 'uncommon', 'rare', 'boss', 'shop'][i % 5]); if (r) assert.ok(!RELICS[r].ward, 'classic roll ' + r); }
+  // Ward relics are part of every run's pool: the rolls reach them at every rarity they come in
+  const any = RUN.newRun({ hero: 'marrow', seed: 'cr' }), got = new Set(); for (let i = 0; i < 400; i++) { const r = RUN.rollRelic(any, ['common', 'uncommon', 'rare', 'boss', 'shop'][i % 5]); if (r && RELICS[r].ward) got.add(RELICS[r].rarity); }
+  for (const rar of new Set(Object.values(RELICS).filter((r) => r.ward).map((r) => r.rarity))) assert.ok(got.has(rar), 'a Ward relic of rarity ' + rar + ' rolls');
 });
 
-t('phase-tagged events: weights follow the `phase` hint, untagged events keep the text lean, 22 or more events are tagged, Ward events are Ward only', () => {
+t('phase-tagged events: weights follow the `phase` hint, untagged events keep the text lean, 22 or more events are tagged, every Ward event can be drawn', () => {
   const tagged = Object.values(EVENTS).filter((e) => e.phase);
   assert.ok(tagged.length >= 22, 'tagged ' + tagged.length);
   assert.ok(Object.keys(EVENT_PHASE).length >= 12);
@@ -437,8 +434,8 @@ t('phase-tagged events: weights follow the `phase` hint, untagged events keep th
     }
     const byPhase = new Set([...outs].map((x) => x.split(':').slice(2).join(':'))); assert.ok(byPhase.size >= 4, e.id + ' has phase-specific outcomes ' + byPhase.size);
   }
-  // Ward events never show up in classic
-  const classic = RUN.newRun({ hero: 'marrow', seed: 'ce' }); for (let i = 0; i < 40; i++) { classic.seenEvents = []; const p = RUN.startEvent(classic); if (p) assert.ok(!EVENTS[p.id].ward, p.id); }
+  // the Chapel can draw every Ward event (`ward: true`): they are part of the pool like any other
+  { const seenW = new Set(); for (let i = 0; i < 600; i++) { const run = mk('wev' + i); run.act = 1 + (i % 3); run.ward.phase = ['midday', 'evening', 'night'][i % 3]; run.seenEvents = []; const p = W.wardStartEvent(run); if (p && EVENTS[p.id].ward) seenW.add(p.id); } for (const e of Object.values(EVENTS).filter((x) => x.ward)) assert.ok(seenW.has(e.id), 'the Chapel draws ' + e.id); }
   // the Chapel draws by phase: night picks a night event far more often than midday does
   const cnt = (ph) => { let k = 0; for (let i = 0; i < 300; i++) { const run = mk('lean' + i); run.ward.phase = ph; run.seenEvents = []; const p = W.wardStartEvent(run); if (p && EVENTS[p.id].phase && [].concat(EVENTS[p.id].phase).includes('night')) k++; } return k; };
   assert.ok(cnt('night') > cnt('midday') * 1.3, 'night events lean to the night');
@@ -506,11 +503,10 @@ t('dice routes: legality (adjacent steps, no re-entry, roll length), undo, trigg
   assert.equal(W.pathTo(r3, W.theatreOf(r3).id).forced, true);
 });
 
-t('dice routes: a save round trip keeps the roll and the planned route; classic runs carry no dice', () => {
+t('dice routes: a save round trip keeps the roll and the planned route', () => {
   const run = mk('rt'); W.endMorning(run);
   const r = RUN.deserializeRun(RUN.serializeRun ? RUN.serializeRun(run) : JSON.parse(JSON.stringify(run)));
   assert.deepEqual(r.ward.roll, run.ward.roll); assert.deepEqual(r.ward.route, run.ward.route);
-  const classic = RUN.newRun({ hero: 'marrow', seed: 'cl' }); assert.equal(classic.ward, undefined); assert.equal(RUN.runMode(classic), 'classic');
 });
 
 t('z5: a route through several fight rooms resumes at every step, in order, and ends on the last room only after all of them opened', () => {

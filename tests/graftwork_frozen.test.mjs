@@ -389,7 +389,7 @@ await t('Ward: a walk interrupted by Pause resumes and triggers every room; the 
   const NORMAL1 = Object.values(ENEMIES).filter((e) => e.act === 1 && e.kind === 'normal' && !e.summonOnly && !e.minion).map((e) => e.id);
   const walk = async (pauseOn) => {
     resetWardMem(); seedRandom(99);
-    const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-walk', mode: 'ward' });
+    const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-walk' });
     const meta = { settings: { tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } };
     const audio = audioRec(); const app = await makeApp({ run, meta, audio });
     app.register('ward', ward); app.register('pause', pause); app.register('base', { draw() {} }); installPause(app); app.overlay = (a) => drawPauseOverlay(a);
@@ -434,7 +434,7 @@ await t('Ward: a walk interrupted by Pause resumes and triggers every room; the 
   assert.equal(B.steps, A.steps, 'the same number of steps: ' + B.steps); assert.equal(B.hero, A.hero); assert.equal(B.phase, A.phase);
   assert.deepEqual(B.trace, A.trace, 'frame for frame the same walk as without Pause');
   // the Ward claims finger drags for its plans every frame it runs: frozen, it leaves them to the modal (the deck view over the Ward could not be scrolled by touch)
-  { resetWardMem(); const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-pan', mode: 'ward' });
+  { resetWardMem(); const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-pan' });
     const app = await makeApp({ run, meta: { settings: { tips: false, reducedMotion: true }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } }, audio: audioRec() });
     app.register('ward', ward); app.register('deckview', deckview); app.shared.flow = { RUN, route() {}, openDeck() { app.push('deckview', {}); }, openSettings() {}, saveMeta() {} };
     app.go('ward', { run }); frames(app, 30); assert.equal(app.touchPan, false, 'arrange: on the Ward a finger drag is a plan drag');
@@ -446,7 +446,7 @@ await t('Ward: a walk interrupted by Pause resumes and triggers every room; the 
   // the floor banner is timed by the wall clock as well: it must not run out behind a modal
   { resetWardMem(); const real = Date.now, pnow = globalThis.performance.now; let clock = 5e6; Date.now = () => clock; globalThis.performance.now = () => clock;
     try {
-      const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-banner', mode: 'ward' });
+      const run = RUN.newRun({ hero: 'marrow', seed: 'frozen-banner' });
       const app = await makeApp({ run, meta: { settings: { tips: false } , tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } }, audio: audioRec() });
       app.register('ward', ward); app.register('pause', pause); app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {}, saveMeta() {} };
       const step = (k) => { for (let i = 0; i < k; i++) { clock += 1000 / 60; app.tick(DT); } };
@@ -464,7 +464,7 @@ await t('every screen of a run stands still under Pause > Deck: no update, repai
   const canvas = { getContext: () => fakeCtx(), addEventListener() {}, style: {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), width: 1280, height: 720, setPointerCapture() {} };
   seedRandom(5);
   const { app, flow } = boot(canvas); app.shared.meta.settings.tips = false;
-  const start = (hero, seed) => { flow.start({ hero, seed: 'frozen-' + seed, mode: 'ward' }); return app.shared.run; };
+  const start = (hero, seed) => { flow.start({ hero, seed: 'frozen-' + seed }); return app.shared.run; };
   const SCREENS = {
     ward: () => { start('marrow', 'ward'); },
     combat: () => { const run = start('wick', 'combat'); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime', 'gauze_mummy'] }; app.go('combat', { run }); },
@@ -472,7 +472,7 @@ await t('every screen of a run stands still under Pause > Deck: no update, repai
     graft: () => { const run = start('marrow', 'graft'); RUN.startGraftPick(run); app.go('graft', { run }); },
     shop: () => { const run = start('wick', 'shop'); run.phase = 'shop'; run.pending = RUN.makeShop(run); app.go('shop', { run }); },
     forge: () => { const run = start('odile', 'forge'); run.hp = Math.round(run.maxHp / 2); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; app.go('forge', { run }); },
-    event: () => { const run = start('marrow', 'event'); RUN.startEvent(run); app.go('event', { run }); },
+    event: () => { const run = start('marrow', 'event'); WD.wardStartEvent(run); app.go('event', { run }); },
   };
   for (const name of Object.keys(SCREENS)) {
     SCREENS[name](); frames(app, 45);

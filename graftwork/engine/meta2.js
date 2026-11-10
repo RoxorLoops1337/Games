@@ -118,7 +118,7 @@ export function practiceList(m) {
     .sort((a, b) => (ENEMIES[a.boss].act - ENEMIES[b.boss].act)).map((p) => ({ ...p, name: ENEMIES[p.boss].name }));
 }
 export function newPracticeRun(snap, m) {
-  const run = RUN.newRun({ hero: snap.hero, seed: 'practice-' + snap.boss, ascension: snap.asc || 0, unlocked: m }); // practice uses the player's unlocked set
+  const run = RUN.newRun({ hero: snap.hero, seed: 'practice-' + snap.boss, ascension: snap.asc || 0, unlocked: m, bare: true }); // one fight, no floor; practice uses the player's unlocked set
   const live = (l) => (l || []).filter((g) => GRAFTS[g]); // a saved deck may name cards or grafts that no longer exist: they are left out
   run.deck = snap.deck.filter((d) => d && CARDS[d.id]).map((d) => ({ uid: RUN.nextUid(run), id: d.id, grafts: live(d.grafts), fused: live(d.fused), up: d.up || 0 }));
   run.relics = (snap.relics || []).filter((r) => RELICS[r]);

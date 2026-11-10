@@ -69,7 +69,7 @@ function expected(run, two = true) {
 
 async function open(o = {}) {
   resetWardMem(); hook();
-  const run = RUN.newRun({ hero: o.hero || 'marrow', seed: o.seed || 'load1', mode: 'ward' });
+  const run = RUN.newRun({ hero: o.hero || 'marrow', seed: o.seed || 'load1' });
   const meta = { settings: { reduceMotion: true, reducedMotion: true, tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } };
   const app = await makeApp({ run, meta, audio: { sfx() {}, music() {} } });
   if (o.px) app.px = o.px;
@@ -219,7 +219,7 @@ await t('a kit room that grows stays on the kit: the bigger plan is drawn at onc
     assert.equal(REQ.length, m + extra.length, 'nothing else was asked for');
   } finally { g.fillRect = fr0; }
   // a new floor starts over: a room id that was a kit room on the old floor is a block again until its own recipe is in
-  resetWardMem(); const run2 = RUN.newRun({ hero: 'marrow', seed: 'load8', mode: 'ward' }); layout(run2, [['rm_entrance', 0, 2], ['rm_quarry', 1, 2]]); run2.ward.deck.hand = [];
+  resetWardMem(); const run2 = RUN.newRun({ hero: 'marrow', seed: 'load8' }); layout(run2, [['rm_entrance', 0, 2], ['rm_quarry', 1, 2]]); run2.ward.deck.hand = [];
   app.shared.run = run2; app.shared.flow.route = () => app.go('ward', { run: run2 }); app.shared.flow.route(); frames(app, 3);
   const [ent2, qua2] = Object.keys(run2.ward.rooms); assert.equal(qua2, wd, 'the same room id as the Ward of the old floor');
   assert.ok(isKit(ent2), 'the entrance pieces are in'); assert.equal(isKit(qua2), false, 'the quarry waits for its own pieces: it never showed the kit on this floor');
@@ -238,7 +238,7 @@ await t('a failed texture leaves the block for good: no kit, no flicker, no indi
 
 await t('headless: no loader, no requests, procedural rooms and no indicator', async () => {
   unhook(); resetWardMem();
-  const run = RUN.newRun({ hero: 'marrow', seed: 'load6', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: 'load6' });
   const app = await makeApp({ run, meta: { settings: { tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } }, audio: { sfx() {}, music() {} } });
   app.register('ward', ward); app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {}, saveMeta() {}, hasSave: () => false };
   app.go('ward', { run }); frames(app, 30);

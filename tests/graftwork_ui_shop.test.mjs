@@ -1,6 +1,8 @@
-// Headless gate for the Shop and Forge screens: buy one of everything, strip, remove, every Forge option, back to the map.
+// Headless gate for the Shop and Forge screens, each opened by walking the hero into its room (Dispensary, Workshop): buy one of everything,
+// strip, remove, open the building plans, every Forge option, then back to the Ward with the walk finished.
 import assert from 'node:assert/strict';
-import { makeApp, frames, click } from './graftwork_lib.mjs';
+import { makeApp, frames, click, key, wardOpen } from './graftwork_lib.mjs';
+import { getAll } from '../graftwork/ui/layout_registry.js';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES } from '../graftwork/data/index.js';
@@ -16,7 +18,7 @@ async function setup(hero, phase) {
   app.register('deckview', { enter() {}, draw() {} });
   const flow = { route() { app.go(run.phase === 'shop' ? 'shop' : run.phase === 'forge' ? 'forge' : 'deckview', { run }); }, openDeck() {} };
   app.shared.flow = flow;
-  if (phase === 'shop') { run.phase = 'shop'; run.pending = RUN.makeShop(run); } else { run.phase = 'forge'; run.pending = { kind: 'forge', used: 0 }; }
+  const p = wardOpen(run, phase); assert.equal(run.phase, phase); assert.equal(p.kind, phase);
   flow.route(); frames(app, 60);
   return { run, app };
 }
@@ -58,7 +60,7 @@ for (const hero of Object.keys(HEROES)) {
     assert.ok(bought, hero + ' graft bought');
     // strip
     let g0 = nGrafts(run), gold2 = run.gold;
-    click(app, 740, 647); frames(app, 15); click(app, ...FIRST); frames(app, 15); click(app, ...GRAFT_ROW); settle(app);
+    click(app, 580, 647); frames(app, 15); click(app, ...FIRST); frames(app, 15); click(app, ...GRAFT_ROW); settle(app);
     assert.equal(nGrafts(run), g0 - 1, hero + ' strip removed a graft');
     assert.equal(gold2 - run.gold, RUN.servicePrice({ ...run, shopUses: run.shopUses }, 'strip') || gold2 - run.gold);
     // remove
@@ -68,9 +70,13 @@ for (const hero of Object.keys(HEROES)) {
     // poor: error, nothing changes
     run.gold = 1; const d2 = run.deck.length; click(app, 420, 647); frames(app, 15); click(app, ...FIRST); frames(app, 30);
     assert.equal(run.deck.length, d2); assert.ok(sfxLog.includes('error'));
-    // leave
+    // the Dispensary's building plans open from the third service and close again (buying and striking: tests/graftwork_ui_ward.test.mjs)
+    assert.equal(shopData.builds.length, 3, 'the Dispensary sells three plans');
+    run.gold = 0; click(app, 805, 647); frames(app, 10); assert.ok(getAll().some((r) => r.id === 'shop-build0'), hero + ' the plans counter opens');
+    key(app, 'Escape'); frames(app, 5); assert.ok(!getAll().some((r) => r.id === 'shop-build0'), 'and closes');
+    // leave: back to the Ward, the walk that led here is over and the day moved on
     click(app, 1095, 645); frames(app, 5);
-    assert.equal(run.phase, 'map'); assert.equal(run.pending, null);
+    assert.equal(run.phase, 'ward'); assert.equal(run.pending, null); assert.equal(run.ward.walk, null); assert.equal(run.ward.phase, 'evening');
   }
   // ---------------- forge ----------------
   const optX = (i) => optionCenterX(i);
@@ -93,7 +99,7 @@ for (const hero of Object.keys(HEROES)) {
     if (opt === 'strip') assert.equal(nGrafts(run), g0 - 1);
     if (opt === 'reforge') { assert.equal(nGrafts(run), g0); assert.notDeepEqual(run.deck.map((c) => c.grafts), uids); }
     click(app, 640, 646); frames(app, 5);
-    assert.equal(run.phase, 'map', `${hero} ${opt} returns to map`);
+    assert.equal(run.phase, 'ward', `${hero} ${opt} returns to the Ward`); assert.equal(run.ward.phase, 'evening', 'the midday walk is spent');
   }
 }
 console.log('graftwork ui shop/forge ok');

@@ -2,7 +2,7 @@
 // Covers tap select + preview, tap enemy, drag to target, drag back to cancel, second finger cancel, long press, end-turn confirm,
 // drag-to-scroll (a scroll never clicks), the 40 CSS px tap-target floor and that a lift outside a button is not a click.
 import assert from 'node:assert/strict';
-import { fakeCtx, installDom, frames } from './graftwork_lib.mjs';
+import { fakeCtx, installDom, frames, wardOpen } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as audio from '../graftwork/ui/audio.js';
 import combat from '../graftwork/ui/combat.js';
@@ -18,7 +18,7 @@ const canvas = {
   getBoundingClientRect() { return { left: parseFloat(this.style.left) || 0, top: parseFloat(this.style.top) || 0, width: parseFloat(this.style.width) || 1280, height: parseFloat(this.style.height) || 720 }; },
 };
 const run = RUN.newRun({ hero: 'marrow', seed: 'touch' });
-run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['night_nurse'] };
+wardOpen(run, 'fight', { enemies: ['night_nurse'] }); // the hero walks into a Ward room that holds one Night Nurse
 const flow = { RUN, route() {}, openDeck() {}, openSettings() {} };
 const app = createApp(canvas, { shared: { run, audio, flow } });
 app.resize();
@@ -163,9 +163,9 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   app.stack.pop();
 }
 
-// ---- 8. tap-target floor on the other screens (phone stage): map, shop, forge, event, graft, deck view and codex
+// ---- 8. tap-target floor on the other screens (phone stage): the Ward, shop, forge, event (each opened by walking into its room), graft, deck view and codex
 {
-  const { default: mapS } = await import('../graftwork/ui/map.js');
+  const { default: wardS, resetWardMem } = await import('../graftwork/ui/ward.js');
   const { default: shopS } = await import('../graftwork/ui/shop.js');
   const { default: forgeS } = await import('../graftwork/ui/forge.js');
   const { default: eventS } = await import('../graftwork/ui/event.js');
@@ -174,10 +174,10 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   const { default: codexS } = await import('../graftwork/ui/codex.js');
   const mk = () => RUN.newRun({ hero: 'marrow', seed: 'touch2' });
   const scenes = {
-    map: [mapS, (r) => {}],
-    shop: [shopS, (r) => { r.gold = 999; r.phase = 'shop'; r.pending = RUN.makeShop(r); }],
-    forge: [forgeS, (r) => { r.phase = 'forge'; r.pending = { kind: 'forge', used: 0 }; }],
-    event: [eventS, (r) => { RUN.startEvent(r); }],
+    ward: [wardS, (r) => { resetWardMem(); }],
+    shop: [shopS, (r) => { r.gold = 999; wardOpen(r, 'shop'); }],
+    forge: [forgeS, (r) => { wardOpen(r, 'forge'); }],
+    event: [eventS, (r) => { wardOpen(r, 'event'); }],
     graft: [graftS, (r) => { RUN.startGraftPick(r); }],
     deck: [deckS, (r) => {}],
     codex: [codexS, (r) => {}],
@@ -201,18 +201,7 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   }
 }
 
-// ---- 9. the map act banner: a tap skips it (hint after 0.8 s)
-{
-  const { default: mapS } = await import('../graftwork/ui/map.js');
-  const r = RUN.newRun({ hero: 'marrow', seed: 'banner' });
-  app.shared.run = r; app.register('t_map2', mapS); app.go('t_map2', { run: r }); tick(2);
-  assert.ok(mapS.banner, 'act banner shows on a fresh act');
-  tick(60); assert.ok(mapS.banner && mapS.banner.t > 0.8, 'still up after 1 s');
-  down(640, 330); tick(2); up(640, 330); tick(60);
-  assert.ok(!mapS.banner, 'a tap skips the act banner');
-}
-
-// ---- 10. phone info paths: a tap on the 'i' chip or the cut-off words opens the full text; a tap closes it; the graft tip never covers an option
+// ---- 9. phone info paths: a tap on the 'i' chip or the cut-off words opens the full text; a tap closes it; the graft tip never covers an option
 {
   const { default: forgeS, optionCenterX, optionIndex } = await import('../graftwork/ui/forge.js');
   const { default: shopS } = await import('../graftwork/ui/shop.js');
@@ -223,7 +212,7 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   const chips = () => app.layout.getAll().filter((q) => q.id === 'info_chip');
   const chipTap = (q) => { tap(q.x + q.w / 2, q.y + q.h / 2); };
   // forge: Temper's long text is cut on the phone card
-  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti1' }); r.phase = 'forge'; r.pending = { kind: 'forge', used: 0 }; app.shared.run = r;
+  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti1' }); wardOpen(r, 'forge'); app.shared.run = r;
     app.register('t_forge3', forgeS); app.go('t_forge3', { run: r }); tick(120);
     const cs = chips(); assert.ok(cs.length >= 1, 'forge shows an info chip on a cut-off description');
     assert.ok(!infoOpen()); chipTap(cs[0]); tick(3); assert.ok(infoOpen(), 'tapping the chip opens the full text'); assert.equal(r.pending.used, 0, 'the chip tap did not pick the option');
@@ -233,7 +222,7 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
     const c0 = cs[0]; tap(c0.x - 60, c0.y + 200); tick(3); assert.ok(infoOpen(), 'tapping the cut-off words opens it'); tap(640, 360); tick(3); assert.ok(!infoOpen());
   }
   // shop: potions (and relics) with cut-off text
-  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti2' }); r.gold = 999; r.phase = 'shop'; r.pending = RUN.makeShop(r); app.shared.run = r;
+  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti2' }); r.gold = 999; wardOpen(r, 'shop'); app.shared.run = r;
     app.register('t_shop3', shopS); app.go('t_shop3', { run: r }); tick(120);
     const cs = chips(); assert.ok(cs.length >= 1, 'shop shows an info chip');
     const gold0 = r.gold; chipTap(cs[0]); tick(3); assert.ok(infoOpen(), 'shop chip opens the card'); assert.equal(r.gold, gold0, 'opening it bought nothing');

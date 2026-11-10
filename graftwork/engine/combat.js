@@ -46,7 +46,7 @@ export function newCombat(run, enemyIds, opts = {}) {
   }
   c.drawPile = [...rest, ...inn];
   enemyIds.forEach((id, i) => spawn(c, id, { silent: true, slot: i }));
-  // Ward mode (engine/ward.js): phase modifiers and reinforcements ride on run.pending; classic runs never set them.
+  // The Ward (engine/ward.js): the hour's modifiers and the reinforcements ride on run.pending; a fight an event queues has neither.
   const wm = run.pending && run.pending.kind === 'combat' && run.pending.mods;
   if (wm) { c.wardMods = wm; c.reinforce = (run.pending.reinforce || []).slice(); c.handSize += wm.handAdd || 0; for (const e of c.enemies) wardBuff(c, e); }
   if (hero && hero.start) for (const s of Object.keys(hero.start)) addStatus(c, c.player, s, hero.start[s], { silent: true });

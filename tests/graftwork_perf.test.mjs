@@ -5,7 +5,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import * as audio from '../graftwork/ui/audio.js';
 import combat from '../graftwork/ui/combat.js';
 import title from '../graftwork/ui/title.js';
-import map from '../graftwork/ui/map.js';
+import ward, { resetWardMem } from '../graftwork/ui/ward.js';
 import { Fx, FX_OPTS, CAP_DESKTOP, CAP_MOBILE, defaultQuality } from '../graftwork/ui/fx.js';
 
 // ---- quality policy ----
@@ -44,17 +44,18 @@ async function measure(app, n = 30) {
 }
 const run = RUN.newRun({ hero: 'marrow', seed: 'perf' });
 const app = await makeApp({ run, audio, meta: { settings: {} }, flow: { RUN, hasSave: () => false, route() {}, openDeck() {}, openSettings() {} } });
-app.register('title', title); app.register('map', map); app.register('combat', combat);
-const BUDGET = { title: 2500, map: 8000, combat: 7000 };
-const GRAD = { title: 20, map: 40, combat: 100 };
-const DRAWS = { title: 40, map: 30, combat: 70 }; // drawImage blits per frame
-const SHADOW = { title: 6, map: 4, combat: 4 }; // shadowBlur writes per frame
+app.register('title', title); app.register('ward', ward); app.register('combat', combat);
+const BUDGET = { title: 2500, ward: 5500, combat: 7000 }; // ward: measured 3582 (first morning, fallback art)
+const GRAD = { title: 20, ward: 60, combat: 100 };
+const DRAWS = { title: 40, ward: 45, combat: 70 }; // drawImage blits per frame
+const SHADOW = { title: 6, ward: 5, combat: 4 }; // shadowBlur writes per frame
 app.go('title');
 let r = await measure(app); console.log('perf title', JSON.stringify(r));
 assert.ok(r.calls < BUDGET.title, 'title ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.title, 'title gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.title, 'title blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.title, 'title shadowBlur/frame ' + r.shadow);
-run.phase = 'map'; app.go('map', { run });
-r = await measure(app); console.log('perf map', JSON.stringify(r));
-assert.ok(r.calls < BUDGET.map, 'map ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.map, 'map gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.map, 'map blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.map, 'map shadowBlur/frame ' + r.shadow);
+// the Ward on the first morning of a run (five plans in hand, the pre-built rooms, the banner gone), in headless fallback art
+assert.equal(run.phase, 'ward'); resetWardMem(); app.go('ward', { run }); frames(app, 200);
+r = await measure(app); console.log('perf ward', JSON.stringify(r));
+assert.ok(r.calls < BUDGET.ward, 'ward ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.ward, 'ward gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.ward, 'ward blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.ward, 'ward shadowBlur/frame ' + r.shadow);
 run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime', 'orderly', 'leech_jar', 'crutchling', 'fever_moth'] };
 app.go('combat', { run });
 frames(app, 200);

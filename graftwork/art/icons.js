@@ -2,7 +2,7 @@
 // Glyphs are authored in a unit space (about -0.65..0.65) and scaled, so they stay crisp from 20 to 48px.
 // Exports: drawStatus drawIntent drawRelic drawPotion drawNodeIcon drawEnergyOrb drawCoin drawHeart drawShield
 //          drawBudgetGauge(ctx,x,y,w,weight,budget,preview) (x,y = top-left, returns height)  drawStrainMeter(ctx,x,y,w,strain,max)
-//          drawDeckIcon drawPileIcon(ctx,x,y,size,'draw'|'discard'|'exhaust')  drawMapPath(ctx,x1,y1,x2,y2,state,t)
+//          drawDeckIcon drawPileIcon(ctx,x,y,size,'draw'|'discard'|'exhaust')
 //          STATUS_IDS_DRAWN / RELIC_GLYPHS (introspection for tests)
 import { COL, FONT, rgba, shade } from '../ui/core.js';
 import { RELICS, STATUSES } from '../data/index.js';
@@ -481,7 +481,7 @@ export function drawPotion(ctx, id, x, y, size) {
 }
 
 // ======================================================================================
-// MAP NODES
+// TRIGGER SEALS (what a Ward room holds: fight, elite, event, shop, forge, rest, boss)
 // ======================================================================================
 const NODE = {
   fight: { g: 'crossedscalpels', col: '#e8c8c0', acc: '#c9d6e0', rim: '#B3263A' },
@@ -490,9 +490,8 @@ const NODE = {
   shop: { g: 'purse', col: '#c9a070', acc: '#F2C14E', rim: '#5a8fd8' },
   forge: { g: 'forgeicon', col: '#9aa4aa', acc: '#ff8a3c', rim: '#ff8a3c' },
   boss: { g: 'bellcrown', col: '#F2C14E', acc: '#B3263A', rim: '#B3263A' },
-  final: { g: 'eye', col: '#f2e6d0', acc: '#B3263A', rim: '#F2C14E' },
 };
-NODE.normal = NODE.fight; NODE.rest = NODE.forge; NODE.start = NODE.event; NODE.treasure = NODE.shop; NODE.mystery = NODE.event;
+NODE.rest = NODE.forge;
 G.bellcrown = (c, k, a) => { sub(c, G.bell, 0, 0.14, 0.85, 0, k, a); sub(c, G.crown, 0, -0.52, 0.42, 0, '#fff3b0', a); };
 export function drawNodeIcon(ctx, type, x, y, size, state = 'available') {
   const d = NODE[type]; const r = size / 2; const t = now();
@@ -528,20 +527,6 @@ export function drawNodeIcon(ctx, type, x, y, size, state = 'available') {
   if (locked) { // faint lock dot
     ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(x, y, r * 0.92, 0, TAU); ctx.fill(); ctx.restore();
   }
-}
-
-// map connection between two nodes: stitched thread. state 'available' | 'visited' | 'locked'
-export function drawMapPath(ctx, x1, y1, x2, y2, state = 'locked', t = 0) {
-  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = dx / len, ny = dy / len;
-  ctx.save();
-  const col = state === 'visited' ? 'rgba(232,220,196,.5)' : state === 'available' ? '#F2C14E' : 'rgba(232,220,196,.18)';
-  ctx.strokeStyle = col; ctx.lineWidth = lnw(state === 'available' ? 3 : 2); ctx.lineCap = 'round';
-  ctx.setLineDash([9, 7]); ctx.lineDashOffset = state === 'available' ? -t * 14 : 0;
-  ctx.beginPath(); ctx.moveTo(x1 + nx * 28, y1 + ny * 28); ctx.lineTo(x2 - nx * 28, y2 - ny * 28); ctx.stroke(); ctx.setLineDash([]);
-  if (state === 'visited') { // cross-stitches
-    ctx.lineWidth = lnw(1.6); for (let d = 40; d < len - 36; d += 22) { const cx = x1 + nx * d, cy = y1 + ny * d; ctx.beginPath(); ctx.moveTo(cx - ny * 5 - nx * 3, cy + nx * 5 - ny * 3); ctx.lineTo(cx + ny * 5 + nx * 3, cy - nx * 5 + ny * 3); ctx.stroke(); }
-  }
-  ctx.restore();
 }
 
 // ======================================================================================

@@ -76,7 +76,7 @@ assert.ok(/^full/.test(createQuality().debug()));
 // ---- 5. the rAF governor
 {
   const g = createGovernor();
-  assert.equal(g.wanted(1000, 'map', 'full'), 0, 'interactive screens run every callback');
+  assert.equal(g.wanted(1000, 'ward', 'full'), 0, 'interactive screens run every callback');
   assert.equal(g.wanted(1000, 'combat', 'minimal'), 0, 'even in the minimal tier');
   g.enter(0); assert.equal(g.wanted(1000, 'title', 'full'), 0, 'a fresh title runs at full rate');
   assert.equal(g.wanted(IDLE_AFTER_MS + 1, 'title', 'full'), g.interval, 'idle title: 30 fps');
@@ -84,7 +84,7 @@ assert.ok(/^full/.test(createQuality().debug()));
   assert.equal(g.wanted(IDLE_AFTER_MS + 100 + IDLE_AFTER_MS + 1, 'title', 'full'), g.interval, 'and it idles again');
   g.enter(50000); assert.equal(g.wanted(50001, 'title', 'full'), 0, 'entering the title (intro) counts as activity');
   assert.equal(g.wanted(10, 'title', 'minimal'), g.interval, 'minimal tier holds the title at 30 fps from the start');
-  assert.equal(g.wanted(10, 'map', 'full', true), Infinity, 'hidden: nothing runs');
+  assert.equal(g.wanted(10, 'ward', 'full', true), Infinity, 'hidden: nothing runs');
   // 60 Hz callbacks every 16.7 ms: exactly every second one runs at 30 fps
   const h = createGovernor(); h.enter(0); let last = 0, ran = 0, now = 10000;
   for (let i = 0; i < 600; i++) { now += 16.67; if (h.shouldRun(now, last, 'title', 'minimal')) { ran++; last = now; } }
@@ -95,8 +95,8 @@ assert.ok(/^full/.test(createQuality().debug()));
   assert.ok(ran >= 295 && ran <= 320, '120 Hz: still about 30 ticks per second, got ' + ran);
   // full rate: all run; hidden: none
   const f = createGovernor(); f.enter(0); last = 0; ran = 0; now = 100;
-  for (let i = 0; i < 100; i++) { now += 16.67; if (f.shouldRun(now, last, 'map', 'full')) { ran++; last = now; } } assert.equal(ran, 100);
-  for (let i = 0; i < 10; i++) assert.equal(f.shouldRun(now += 16, last, 'map', 'full', true), false);
+  for (let i = 0; i < 100; i++) { now += 16.67; if (f.shouldRun(now, last, 'ward', 'full')) { ran++; last = now; } } assert.equal(ran, 100);
+  for (let i = 0; i < 10; i++) assert.equal(f.shouldRun(now += 16, last, 'ward', 'full', true), false);
 }
 
 // ---- 6. app wiring: perf object, tier change resizes the backing store, settings persist

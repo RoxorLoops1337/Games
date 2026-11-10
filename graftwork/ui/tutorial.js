@@ -18,7 +18,6 @@ export const TIP_TEXTS = {
   skipping: 'You may skip the graft: heal 8, gain 1 Budget for good, or take 10 gold.',
   forge: 'The Forge heals, strips a graft, upgrades a card or Expands your Budget. One service per visit.',
   shop: 'Cards, grafts, relics and potions for gold. Removing a card is the cheapest upgrade.',
-  resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip in the deck view tracks it.',
   thread_chain: 'Two cards of one school tie a knot. Keep sharing a school to grow the Line, up to 5 knots.',
   thread_cut: 'A card of another school Cuts the Line and cashes it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
   claim: 'Claim: the Matron takes your most grafted card for the fight, at -25% like a Tithe. Tempering a card makes it immune.',

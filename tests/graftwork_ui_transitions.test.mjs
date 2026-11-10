@@ -20,8 +20,8 @@ frames(app, 40); assert.equal(app.tr.wipe, null, 'wipe over inside ~600 ms');
 // same-screen go: no wipe
 app.go('b'); assert.equal(app.tr.wipe, null);
 // kinds per destination
-assert.equal(TR.wipeKind('map', 'combat'), 'seal'); assert.equal(TR.wipeKind('map', 'graft'), 'thread'); assert.equal(TR.wipeKind('combat', 'reward'), 'ink');
-for (const to of ['combat', 'graft', 'map']) { app.go(to === 'map' ? 'c' : 'a'); frames(app, 3); app.tr.wipe = null; }
+assert.equal(TR.wipeKind('ward', 'combat'), 'seal'); assert.equal(TR.wipeKind('reward', 'graft'), 'thread'); assert.equal(TR.wipeKind('ward', 'forge'), 'thread'); assert.equal(TR.wipeKind('combat', 'reward'), 'ink'); assert.equal(TR.wipeKind('graft', 'ward'), 'ink');
+for (const to of ['combat', 'graft', 'ward']) { app.go(to === 'ward' ? 'c' : 'a'); frames(app, 3); app.tr.wipe = null; }
 
 // 2. a click skips the wipe
 app.go('c'); frames(app, 3); app.go('a'); assert.ok(app.tr.wipe);

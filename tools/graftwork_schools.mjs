@@ -6,8 +6,7 @@
 import * as RUN from '../graftwork/engine/run.js';
 import { cardSpec, canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, RELICS } from '../graftwork/data/index.js';
-import { POLICIES, graftScore, playRun } from './graftwork_sim.mjs';
-import { strongFight } from './graftwork_strong.mjs';
+import { POLICIES, graftScore, playWardRun, strongFight } from './graftwork_driver.mjs';
 
 export const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
 
@@ -41,7 +40,7 @@ export function forcedPolicy(schools, relic) {
 
 export function measure(hero, pol, N, asc, tag = '') {
   let w = 0, a2 = 0;
-  for (let i = 0; i < N; i++) { const r = playRun(hero, `${tag}-${hero}-${i}`, pol, asc); if (r.outcome === 'won') w++; if (r.outcome === 'won' || r.act > 2) a2++; }
+  for (let i = 0; i < N; i++) { const r = playWardRun(hero, `${tag}-${hero}-${i}`, pol, asc, { tag: 'school' }); if (r.outcome === 'won') w++; if (r.outcome === 'won' || r.act > 2) a2++; }
   return { w, a2, N };
 }
 const pct = (m) => `${(100 * m.w / m.N).toFixed(0)}%`;
@@ -70,7 +69,6 @@ if (process.argv[1] && process.argv[1].endsWith('graftwork_schools.mjs')) {
     console.log(`baseline ${pct(b)}`);
     for (const id of Object.keys(RELICS)) {
       if (only && id !== only) continue;
-      if (RELICS[id].rarity === 'boss' && false) continue;
       const m = tot(forcedPolicy(null, id), 'r');
       console.log(`${id.padEnd(26)} ${RELICS[id].rarity.padEnd(9)} ${pct(m)}  d ${(100 * (m.w - b.w) / b.N).toFixed(0)}`);
     }
