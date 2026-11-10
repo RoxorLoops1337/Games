@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import fs from 'node:fs';
-import title, { SCENE, LOGO, resetTitleIntro } from '../graftwork/ui/title.js';
+import title, { SCENE, LOGO, resetTitleIntro, GOAL_TEXT as title_GOAL } from '../graftwork/ui/title.js';
 import { TAGLINES, TAGLINE_S, INTRO_S, WORD, taglineAt } from '../graftwork/ui/title_logo.js';
 import { CLUSTER, CAST } from '../graftwork/ui/title_scene.js';
 import { assets, createAssets } from '../graftwork/ui/assets.js';
@@ -108,6 +108,33 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   click(app, 1245, 675); assert.equal(meta.settings.muted, true, 'mute corner toggle'); assert.equal(log.muted, true);
 }
 
+// ---- one game: the hero select has no mode switch, a stored Classic setting changes nothing, the Daily is a run like any other ----
+{
+  const texts = (app) => { const out = [], raw = app.text; app.text = (str, ...r) => { out.push(String(str)); return raw(str, ...r); }; return out; };
+  for (const stored of [undefined, 'classic', 'ward']) {
+    const r = await rig(); clearRun(); if (stored) r.meta.settings.mode = stored;
+    r.app.go('title'); frames(r.app, 30);
+    let tx = texts(r.app); frames(r.app, 3);
+    assert.ok(!tx.some((s) => /^(WARD|CLASSIC)$/.test(s)), 'the Daily card carries no mode tag');
+    assert.ok(tx.includes(title_GOAL), 'the goal line is the Ward goal');
+    r.app.mouse.x = 640; r.app.mouse.y = 386; frames(r.app, 30); // hover the Daily slab: its tooltip names hero, seed and modifier, no mode
+    assert.ok(r.app.tip && !/Mode:|Classic/.test(r.app.tip.text), 'no mode line in the Daily tooltip: ' + (r.app.tip && r.app.tip.text));
+    click(r.app, 640, 386);
+    assert.deepEqual(r.log.started[0], { hero: RUN.dailyHero(RUN.dailySeed()), ascension: 0, seed: RUN.dailySeed(), daily: RUN.dailySeed() }, 'the Daily starts with the seed, hero and nothing else');
+    const dr = RUN.newRun(r.log.started[0]);
+    assert.equal(dr.mode, 'ward'); assert.equal(dr.phase, 'ward'); assert.ok(dr.ward && dr.ward.day === 1, 'the Daily is a Ward run'); assert.ok(dr.dailyMod && dr.dailyMod.id, 'with the day\'s modifier');
+    assert.equal(RUN.serializeRun(dr), RUN.serializeRun(RUN.newRun({ ...r.log.started[0], mode: 'ward' })), 'the very run the Ward Daily has always been');
+    // hero select
+    r.app.go('title'); frames(r.app, 30); click(r.app, 640, 330); frames(r.app, 30); assert.equal(title.state, 'select');
+    tx.length = 0; frames(r.app, 2);
+    assert.equal(LAYOUT.getAll().find((q) => q.id === 'title-mode'), undefined, 'no mode switch on the hero select');
+    assert.ok(!tx.some((s) => /Classic|The Ward \(new\)/.test(s)), 'no mode words');
+    click(r.app, 232, 628); // Begin
+    assert.equal(r.log.started.length, 2); assert.equal(r.log.started[1].mode, undefined, 'Begin passes no mode'); assert.equal(RUN.newRun(r.log.started[1]).mode, 'ward');
+    assert.equal(r.meta.settings.mode, stored, 'a stored mode setting is left as it was');
+  }
+}
+
 // ---- settings: toggles + sliders persist ----
 {
   const { app, meta, log } = await rig();
@@ -159,8 +186,13 @@ async function endRun(phase, withInfo) {
   assert.equal(end.won, true); assert.equal(end.news.length, 3);
   app.mouse.x = 400; app.mouse.y = 300; frames(app, 5);                 // hover over grid
   app.mouse.wheel = 200; frames(app, 3);
-  click(app, 531, 685);                         // Endless
-  assert.equal(run.phase, 'map'); assert.equal(run.ended, false); assert.equal(run.endInfo, undefined); assert.equal(run.loop, 1); assert.equal(log.routed, 1);
+  const deck0 = run.ward.deck.draw.length + run.ward.deck.hand.length + run.ward.deck.discard.length;
+  run.act = 3; run.ward.act = 3; run.ward.day = 8; run.ward.res.wood = 9;
+  click(app, 531, 685);                         // Endless: the next loop opens on a fresh first floor
+  assert.equal(run.phase, 'ward'); assert.equal(run.ended, false); assert.equal(run.endInfo, undefined); assert.equal(run.loop, 1); assert.equal(log.routed, 1);
+  assert.equal(run.act, 1); assert.equal(run.ward.act, 1); assert.equal(run.ward.day, 1); assert.equal(run.ward.phase, 'morning'); assert.equal(run.hp, run.maxHp);
+  assert.equal(run.ward.deck.draw.length + run.ward.deck.hand.length + run.ward.deck.discard.length, deck0, 'the building deck carries over, as between floors');
+  assert.ok(run.ward.res.wood >= 4 + 4, 'and half the wood');
 }
 {
   const { app, run, log } = await endRun('dead', false);

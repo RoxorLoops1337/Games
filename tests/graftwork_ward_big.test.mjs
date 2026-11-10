@@ -12,7 +12,7 @@ import { resolveRecipe, lanesFor, freeConnected, wallPlan, pathOnGrid } from '..
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
-const mk = (seed = 'big', hero = 'marrow') => RUN.newRun({ hero, seed, mode: 'ward' });
+const mk = (seed = 'big', hero = 'marrow') => RUN.newRun({ hero, seed });
 const give = (run, id) => { const c = { uid: 9000 + run.ward.cardNext++, id }; run.ward.deck.hand.push(c); return c.uid; };
 // wipe the floor and lay rooms by hand: spec = [[type, x, y, w, h, contents?, extra?]]; the first is the Entrance; a 2 x 2 Theatre goes to the far corner unless given
 function layout(run, spec) {

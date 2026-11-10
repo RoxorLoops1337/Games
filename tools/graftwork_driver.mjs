@@ -806,7 +806,7 @@ export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
   const pol = custom ? policy : POLICIES[policy] || POLICIES.strong, rnd = policy === 'random' || policy === 'sloppy', R = mkRng(`ward:${name}:${seed}`);
   const morningFn = { random: randomMorning, sloppy: sloppyMorning, passive: (r) => W.endMorning(r) }[policy] || strongMorning;
   const walkFn = { random: randomWalk, sloppy: nearestWalk, passive: hideWalk, fill: (r, Rn) => strongWalk(r, Rn, true) }[policy] || strongWalk;
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || unlockOpt(process.env.GW_UNLOCK || 'all') });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, assist: o.assist, unlocked: o.unlocked || unlockOpt(process.env.GW_UNLOCK || 'all') });
   const acts = { 1: blank(), 2: blank(), 3: blank() };
   const log = { fights: [], events: 0, shops: 0, acts };
   let guard = 0;

@@ -13,7 +13,6 @@ import * as META from './engine/meta.js';
 import { saveRun, loadRun, clearRun, hasRun } from './engine/save.js';
 
 import title from './ui/title.js';
-import map from './ui/map.js';
 import combat from './ui/combat.js';
 import reward from './ui/reward.js';
 import graft from './ui/graft.js';
@@ -37,13 +36,14 @@ import { initOffline } from './ui/offline.js';
 import { appPanel, offlinePrompt } from './ui/app_panel.js';
 import { installWings } from './ui/wings.js';
 
-const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
+const PHASE_SCREEN = { ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 
 export function applyLoadout(m) { try { setCardBack(m.loadout.back); setHeroTint(META.tintColor(m)); } catch (e) { /* cosmetics are optional */ } }
 
 export function boot(canvas) {
   const meta = META.loadMeta();
+  META.retireClassicRun(meta); // a saved run on the retired map is closed and counted before the title looks for a save (the title shows meta.notice)
   applyLoadout(meta);
   const app = createApp(canvas, { shared: { run: null, meta } });
   const flow = {
@@ -54,7 +54,7 @@ export function boot(canvas) {
       flow.route();
     },
     startPractice(snap) { const run = META.newPracticeRun(snap, app.shared.meta); app.shared.run = run; saveRun(run); flow.route(); },
-    resume() { const run = loadRun(); if (!run) return false; app.shared.run = run; flow.route(); return true; },
+    resume() { if (META.retireClassicRun(app.shared.meta)) return false; const run = loadRun(); if (!run) return false; app.shared.run = run; flow.route(); return true; },
     hasSave: () => hasRun(),
     abandon() { const run = app.shared.run; if (run) { run.phase = 'dead'; run.abandoned = true; } flow.route(); },
     toTitle() { audio.music('title'); app.go('title'); },
@@ -66,11 +66,11 @@ export function boot(canvas) {
         run.ended = true; run.endInfo = META.recordRunEnd(app.shared.meta, run, run.phase === 'won' ? 'won' : 'dead');
       }
       saveRun(run);
-      const scr = PHASE_SCREEN[run.phase] || 'map';
-      if (run.mode === 'ward' && scr !== 'ward' && scr !== 'end' && wardInterlude(app, run, scr)) return; // the hero walks to the next trigger on the Ward first
+      const scr = PHASE_SCREEN[run.phase] || 'ward';
+      if (scr !== 'ward' && scr !== 'end' && wardInterlude(app, run, scr)) return; // the hero walks to the next trigger on the Ward first
       const kind = run.pending && run.pending.fightKind;
       audio.music(scr === 'combat' ? (kind === 'boss' || kind === 'final' ? 'boss' : ACT_THEME[run.act])
-        : scr === 'map' ? ACT_THEME[run.act] : scr === 'graft' ? 'grafting' : scr === 'shop' ? 'shop' : scr === 'forge' ? 'forge'
+        : scr === 'graft' ? 'grafting' : scr === 'shop' ? 'shop' : scr === 'forge' ? 'forge'
         : scr === 'end' ? (run.phase === 'won' ? 'victory' : 'defeat') : ACT_THEME[run.act]);
       app.go(scr, { run });
     },
@@ -95,7 +95,7 @@ export function boot(canvas) {
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause, install_help: installHelp, app_panel: appPanel, offline_prompt: offlinePrompt };
+  const S = { title, ward, combat, reward, graft, shop, forge, event, end, deckview, codex, archive, wardrobe, settings, pause, install_help: installHelp, app_panel: appPanel, offline_prompt: offlinePrompt };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);

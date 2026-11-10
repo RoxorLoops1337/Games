@@ -15,12 +15,13 @@ import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, reques
 import { installAvailable, install } from './install.js';
 import { offlineReady, offerDue } from './offline.js';
 import { lnw } from '../art/linework.js';
-import { drawModeSwitch, modeOf } from './ward_kit.js';
 import { createScene } from './title_scene.js';
 import { createLogo, taglineAt, INTRO_S } from './title_logo.js';
 
-// The one-line goal under the tagline, per mode (no map in the Ward: it is a hospital you build and a route you walk).
-export const goalText = (mode) => (mode === 'ward' ? 'Goal: build your ward, sew your own cards, beat each Act boss.' : 'Goal: climb the map, sew your own cards, beat each Act boss.');
+// The one-line goal under the tagline.
+export const GOAL_TEXT = 'Goal: build your ward, sew your own cards, beat each Act boss.';
+// Notices the title shows once, until dismissed (meta.notice; engine/meta.js retireClassicRun sets 'classic_retired' when it closed a run on the retired map).
+export const NOTICES = { classic_retired: 'The old map has been retired. Your run on it was closed and its progress counted.' };
 const compact = (app) => app.scale < 0.95; // phone stage: a menu column on the left, the two cards on the right, the scene in the middle
 
 export const VERSION = 'v1.0';
@@ -88,7 +89,7 @@ export default {
     try {
       const r = loadRun(); if (!r) return null;
       const h = HEROES[r.hero];
-      return { heroId: r.hero, hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, day: r.ward ? r.ward.day : 0, dayLimit: r.ward ? r.ward.dayLimit : 0, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
+      return { heroId: r.hero, hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || 0, day: r.ward ? r.ward.day : 0, dayLimit: r.ward ? r.ward.dayLimit : 0, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
     } catch { return null; }
   },
   update(app, dt) { if (!this.p) return; },
@@ -122,6 +123,9 @@ export default {
     if (this.introPlanned && !app.blocked && (app.mouse.pressed || app.mouse.released || app.pressedKeys.length)) {
       this.skipIntro(app); app.mouse.pressed = false; app.mouse.released = false; app.mouse.pressStart = null; app.pressedKeys.length = 0;
     }
+    // a notice (meta.notice) holds the menu: everything under it is drawn but takes no input until it is dismissed. It waits for the sewing intro.
+    const note = this.state === 'menu' && !this.introPlanned && !app.blocked && !this.confirmAbandon && meta && NOTICES[meta.notice] ? NOTICES[meta.notice] : null;
+    if (note) app.blocked = true;
     this.introT += dt; this.clock += cm ? 0 : dt;
     const p = this.introPlanned ? clamp(this.introT / INTRO_S, 0, 1) : 1;
     if (this.introPlanned && p >= 1) this.introPlanned = false;
@@ -145,7 +149,7 @@ export default {
       g.save(); g.globalAlpha = reveal * 0.8; g.translate(640, ty + 16); g.scale(1, 0.1); const sg = g.createRadialGradient(0, 0, 0, 0, 0, 480); sg.addColorStop(0, 'rgba(8,6,10,.85)'); sg.addColorStop(0.6, 'rgba(8,6,10,.5)'); sg.addColorStop(1, 'rgba(8,6,10,0)');
       g.fillStyle = sg; g.fillRect(-480, -480, 960, 960); g.restore(); // a soft dark pool keeps the two lines readable over the lit rooms
       const th = app.text(tg.text, 640, ty, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: tg.a * reveal, fit: { w: tw, lines: 1 } });
-      app.text(goalText(modeOf(meta)), 640, ty + th + 2, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: gw, lines: cp ? 2 : 1 } });
+      app.text(GOAL_TEXT, 640, ty + th + 2, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((reveal - 0.3) * 1.4, 0, 1) * 0.85, fit: { w: gw, lines: cp ? 2 : 1 } });
     }
     // keys
     const nav0 = app.navButtons; app.navButtons = !app.blocked; // Tab, arrows and Enter walk the buttons of this screen, never the ones of a modal on top
@@ -157,7 +161,7 @@ export default {
     // top right: fullscreen (reserved zone 1128..1272 x 0..56)
     fsButton(app, 1210, 16, 52, 44, { id: 'title_fs', hint: true });
     if (this.state === 'menu' && offlineReady()) this.pip(app, 'Offline ready', 84, 34, { size: 12, maxW: 130, fill: '#9bd7a2' });
-    if (this.state === 'menu' && !app.blocked && !this.confirmAbandon && app.top() === this && offerDue()) app.push('offline_prompt'); // once, after an install
+    if (this.state === 'menu' && !app.blocked && !this.confirmAbandon && app.top() === this && offerDue()) app.push('offline_prompt'); // once, after an install (and after a notice)
     // corner: version + credit line + mute (always)
     const vo = { size: 13, ui: true, color: 'rgba(232,220,196,.55)', fit: { w: 400, lines: 1 } }, co = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: 400, lines: 1 } };
     if (!(compact(app) && this.state !== 'menu')) { // phones: the select and credits panels use the whole stage, the corner credit line would sit under their buttons
@@ -181,6 +185,25 @@ export default {
       flow.saveMeta();
     }
     if (this.toast && this.toast.t > 0) { this.toast.t -= app.dt; app.text(this.toast.msg, 640, H - 60, { size: 16, ui: true, align: 'center', color: COL.lamp, alpha: clamp(this.toast.t, 0, 1), fit: { w: 600, lines: 1 } }); }
+    if (note) { app.blocked = false; this.drawNotice(app, note); }
+  },
+  // The notice: one sentence and one button over the dimmed title. The panel is sized from the text as it will be drawn (phone stages inflate
+  // it) and registered for the layout sweeps. The button, Enter, Space or Escape dismiss it for good (meta.notice is cleared and saved).
+  drawNotice(app, text) {
+    const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow, cp = compact(app);
+    const w = cp ? 780 : 620, tO = { size: 20, ui: true, align: 'center', color: COL.vellum, fit: { w: w - 72, lines: 4 } }, L = app.layoutText(text, tO);
+    const bw = cp ? 300 : 220, bh = cp ? 60 : 48, h = 30 + L.h + 24 + bh + 26, x = (W - w) / 2, y = Math.round((H - h) / 2);
+    g.save(); g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, 0, W, H); g.restore();
+    app.reg('title-notice', x, y, w, h, { overlay: true });
+    app.panel(x, y, w, h, { r: 14, fill: 'rgba(20,16,14,.98)', stroke: COL.lamp });
+    app.text(text, 640, y + 30, tO);
+    const nav0 = app.navButtons; app.navButtons = true; // the one button of the screen while the notice is up
+    const ok = app.button('Understood', 640 - bw / 2, y + 30 + L.h + 24, bw, bh, { size: 20, fit: true, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0' });
+    app.navButtons = nav0;
+    if (ok || app.pressedKeys.some((e) => e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+      delete meta.notice; if (flow && flow.saveMeta) flow.saveMeta();
+      app.mouse.released = false; app.mouse.pressed = false; app.pressedKeys.length = 0; // the dismissing input presses nothing under the notice
+    }
   },
   // "tk tk": the needle ticks (the sound functions respect mute and the autoplay rule by themselves)
   tick(app, n) {
@@ -261,18 +284,13 @@ export default {
         const seed = todaySeed(), hero = RUN.dailyHero(seed), played = (meta.daily ? dailyPlayed(meta, seed) : false);
         const hn = HEROES[hero].name;
         const label = played ? 'Daily Run (played)' : 'Daily Run';
-        const modeTag = modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC';
         if (app.inRect(x, yy, bw, bh)) {
           const mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
-          app.tooltip(mod.name, `${hn}, seed ${seed}.\nMode: ${modeOf(meta) === 'ward' ? 'The Ward' : 'Classic map'} (change it on the New Run screen).\n${mod.text}`, { color: COL.lamp });
+          app.tooltip(mod.name, `${hn}, seed ${seed}.\n${mod.text}`, { color: COL.lamp });
         }
         if (this.slab(app, id, label, x, yy, bw, bh, { size: 22, fit: true, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
           this.startDaily(app);
         }
-        // the mode this Daily will be played in, on the slab itself
-        // (only when it fits beside the centred label: the tag never touches the words)
-        const tagO = { size: 11, ui: true, bold: true, align: 'right', color: 'rgba(232,220,196,.5)', fit: { w: 70, lines: 1 } }, tagW = app.layoutText(modeTag, tagO).w, lblW = app.measure(label, 22, { bold: true });
-        if (lblW / 2 + tagW + 22 <= bw / 2 - 14) app.text(modeTag, x + bw - 14, yy + bh / 2 - 7, tagO);
       } else if (id === 'codex') {
         const hw = Math.floor((bw - 10) / 2);
         if (this.slab(app, 'codex', 'Codex', x, yy, hw, bh, { size: 22 })) flow.openCodex();
@@ -331,9 +349,7 @@ export default {
     const meta = app.shared.meta, flow = app.shared.flow;
     const seed = todaySeed(), hero = RUN.dailyHero(seed);
     meta.daily = meta.daily || {}; meta.daily.lastPlayed = seed; flow.saveMeta();
-    const opts = { hero, ascension: 0, seed, daily: seed };
-    if (modeOf(meta) === 'classic') opts.mode = 'classic'; // same seeded case, played on the map
-    this.begin(app, opts);
+    this.begin(app, { hero, ascension: 0, seed, daily: seed }); // today's case: a run like any other, with the day's seed, hero and modifier
   },
   dailyH(app) { return app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; },
   drawDailyCard(app, x, y) {
@@ -344,12 +360,11 @@ export default {
     g.save(); g.globalAlpha = k; g.translate((1 - k) * 40, 0);
     const ph = this.dailyH(app); // phones: the inflated rules text needs the extra rows
     app.panel(x, y, 300, ph, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
-    const modeTxt = modeOf(meta) === 'ward' ? 'WARD' : 'CLASSIC', sO = { size: 13, bold: true, ui: true }, sL = app.layoutText('PLAYED', sO), stW = Math.ceil(sL.w) + 14, stH = Math.ceil(sL.size * 1.22) + 6;
+    const sO = { size: 13, bold: true, ui: true }, sL = app.layoutText('PLAYED', sO), stW = Math.ceil(sL.w) + 14, stH = Math.ceil(sL.size * 1.22) + 6;
     const mnO = { size: 17, bold: true, fit: { w: 268, lines: 1 } }, mnL = app.layoutText(mod.name, mnO), mnH = Math.ceil(mnL.size * 1.22);
-    const stampFree = played && 284 - (16 + mnL.w) - 10 >= stW; // the stamp goes beside the modifier name when there is room, else it takes the place of the mode tag
+    const stampFree = played && 284 - (16 + mnL.w) - 10 >= stW; // the stamp goes beside the modifier name when there is room, else in the top right corner of the card
     app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp, fit: { w: 170, lines: 1 } });
     if (played && !stampFree) app.text('PLAYED', x + 284, y + 12, { size: 13, ui: true, bold: true, align: 'right', color: COL.scar, fit: { w: 90, lines: 1 } });
-    else app.text(modeTxt, x + 284, y + 12, { fit: { w: 84, lines: 1 }, bold: true, size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
     drawPortrait(g, hero, x + 16 + 32, y + 66, 64);
     app.text(h.name, x + 100, y + 38, { size: 22, bold: true });
     app.text(h.title, x + 100, y + 64, { size: 14, italic: true, color: '#cdbf9d' });
@@ -389,7 +404,6 @@ export default {
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
-    drawModeSwitch(app, px0, phone ? 40 : 52, 360, phone ? 46 : 42); // Classic map | The Ward (new), remembered in meta.settings.mode
     const ay = py + ph + 6, ah = phone ? 46 : 32;
     this.drawAssist(app, px0, ay);
     // lower row
@@ -439,7 +453,6 @@ export default {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
       const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
-      if (modeOf(meta) === 'classic') opts.mode = 'classic'; // Classic map | The Ward (ui/ward_kit.js drawModeSwitch)
       const af = assistFlags(this.assistOf(app)); if (af) opts.assist = af; // Assist mode (engine/assist.js)
       this.begin(app, opts);
     }

@@ -13,7 +13,7 @@ import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
-const mk = (seed = 'w', hero = 'marrow') => RUN.newRun({ hero, seed, mode: 'ward' });
+const mk = (seed = 'w', hero = 'marrow') => RUN.newRun({ hero, seed });
 // put a building card in the hand and return its uid
 const give = (run, id) => { const c = { uid: 9000 + run.ward.cardNext++, id }; run.ward.deck.hand.push(c); return c.uid; };
 // wipe the floor and lay rooms by hand: spec = [[type, x, y, contents?, extra?]], the first must be the Entrance
@@ -279,7 +279,7 @@ t('unlocks: building cards are kind build; start set = every room card plus half
   for (const id of ORIGINAL_ROOMS) assert.equal(UNLOCKS['build:' + id].tier, 'start');
   const open = other.filter((c) => START.build.has(c.id)).length; assert.ok(open / other.length >= 0.35 && open / other.length <= 0.65, 'about half of the non-room cards ' + open + '/' + other.length);
   for (const id of STARTER_BUILD_DECK) assert.equal(UNLOCKS['build:' + id].tier, 'start');
-  const run = RUN.newRun({ hero: 'wick', seed: 'u', mode: 'ward', unlocked: 'start' });
+  const run = RUN.newRun({ hero: 'wick', seed: 'u', unlocked: 'start' });
   for (let i = 0; i < 60; i++) assert.ok(START.build.has(W.rollBuildCard(run, ['common', 'uncommon', 'rare'])));
   for (const id of Object.keys(BUILD_CARDS)) assert.ok(/^b_/.test(id)); for (const id of Object.keys(ROOMS)) assert.ok(/^rm_/.test(id));
   assert.ok(!/\u2014/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
@@ -320,7 +320,7 @@ t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids un
   for (const id of START.build) assert.ok(BUILD_CARDS[id], 'START.build id valid ' + id);
   for (const id of STARTER_BUILD_DECK) assert.ok(START.build.has(id));
   // offer shapes: elites, bosses and the Dispensary draw from the right rarities
-  const run = RUN.newRun({ hero: 'marrow', seed: 'offers', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: 'offers' });
   const rar = (ids) => ids.map((i) => BUILD_CARDS[i].rarity);
   for (let i = 0; i < 40; i++) { run.pending = null; const e = W.OFFER_SLOTS; assert.ok(e.boss[0].every((x) => x === 'rare')); assert.ok(e.elite[2].includes('rare') && e.shop.length === 3); }
   void rar;
@@ -393,7 +393,7 @@ t('Ward relics: each perk and combat hook does what its text says', () => {
   assert.equal(W.wardPower(give2('r_w_spare_fuse')).cap, 7);
   { const run = give2('r_w_extra_cot'); const [, wd] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0]]); assert.equal(W.capOf(run.ward.rooms[wd], run), 6); }
   { const run = give2('r_w_dawn_whistle'); W.morningStart(run); assert.equal(run.ward.deck.hand.length, 5 + 5 + 1 - 5 + 0 >= 0 ? run.ward.deck.hand.length : 0); assert.ok(run.ward.deck.hand.length >= 6); }
-  { const run = give2('r_w_stockpile_deed'); assert.equal(run.ward.res.wood, 4 + 2 + 2 * 1 - 0 >= 0 ? run.ward.res.wood : 0); const a = RUN.newRun({ hero: 'marrow', seed: 'rl', mode: 'ward' }); assert.equal(run.ward.res.wood, a.ward.res.wood + 2, 'pickup grants 2 wood now'); }
+  { const run = give2('r_w_stockpile_deed'); assert.equal(run.ward.res.wood, 4 + 2 + 2 * 1 - 0 >= 0 ? run.ward.res.wood : 0); const a = RUN.newRun({ hero: 'marrow', seed: 'rl' }); assert.equal(run.ward.res.wood, a.ward.res.wood + 2, 'pickup grants 2 wood now'); }
   { const run = give2('r_w_master_key'); layout(run, [['rm_entrance', 0, 0]]); run.ward.res = { wood: 0, stone: 0 }; run.ward.freeUsed = false; const u = give(run, 'b_ward'); assert.ok(W.playBuildCard(run, u, { x: 1, y: 0 }).ok, 'free'); const u2 = give(run, 'b_ward'); assert.equal(W.canBuild(run, u2, 2, 0).why, 'cost', 'only the first'); }
   { const run = give2('r_w_hard_hat'); const [, wd, co] = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [], { on: false }], ['rm_corridor', 2, 0]]); W.endMorning(run); assert.equal(W.pathTo(run, co).offPenalty, 0); }
   { const run = give2('r_w_supper_bell'); const [, , co] = layout(run, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0], ['rm_corridor', 2, 0]]); W.endMorning(run); run.ward.phase = 'evening'; run.hp = 20; W.startWalk(run, co); assert.equal(run.hp, 24, '2 per room, 2 rooms'); }

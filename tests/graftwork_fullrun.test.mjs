@@ -12,7 +12,7 @@ import { botStep, runEnded } from './graftwork_lib.mjs';
 const pol = POLICIES.strong;
 
 function drive(hero, seed, { extraHp = 0, dieInAct = 0 } = {}) {
-  const run = RUN.newRun({ hero, seed, mode: 'ward' });
+  const run = RUN.newRun({ hero, seed });
   if (extraHp) { run.maxHp += extraHp; run.hp = run.maxHp; }
   const seen = { acts: new Set(), kinds: new Set(), enemies: new Set(), phases: new Set(), hours: new Set() };
   let guard = 0;

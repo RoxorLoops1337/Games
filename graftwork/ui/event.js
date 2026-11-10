@@ -214,7 +214,7 @@ export default {
     g.restore();
 
     // title
-    const src = this.run && this.run.mode === 'ward' ? eventSource(this.run.pending) : null; // Ward: which room and hour the event came from
+    const src = this.run ? eventSource(this.run.pending) : null; // which room and hour the event came from
     app.text(src ? `${src.head} (${src.lean})` : ev.act ? `ACT ${['', 'I', 'II', 'III'][ev.act]} EVENT` : 'EVENT', ix, P.y + 30, { size: 13, ui: true, bold: true, color: 'rgba(43,30,26,.55)', maxW: iw });
     const th = app.text(ev.name, ix, P.y + 48, { size: 36, bold: true, color: COL.ink, maxW: iw, lineH: 42 });
     let y = P.y + 48 + th + 8;

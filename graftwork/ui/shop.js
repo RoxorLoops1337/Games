@@ -542,7 +542,7 @@ export default {
     infoClose();
     const run = app.shared.run;
     S = { fx: new Fx(), modal: { m: null }, h: {}, anim: null, toast: '', toastT: 0, shakeKey: null, shakeT: 0, react: 0, gold: run.gold, quip: '', quipT: 0, goldPop: 0, t: 0 };
-    S.quip = pickQ('greet', hashStr(String(run.seed) + ':' + run.act + ':' + run.row + ':' + (run.node || '')));
+    S.quip = pickQ('greet', hashStr(String(run.seed) + ':' + run.act + ':-1:')); // one greeting per floor (the tail is what the map row and node always were in a Ward run, so the greeting did not change)
     void params;
   },
 

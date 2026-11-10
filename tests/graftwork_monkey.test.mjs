@@ -21,8 +21,8 @@ const D = await import('../graftwork/data/index.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS } = D;
 
 const { app, flow } = boot(canvas);
-const PHASES = ['map', 'ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
-const PHASE_SCREEN = { map: 'map', ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
+const PHASES = ['ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
+const PHASE_SCREEN = { ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const MODALS = new Set(['deckview', 'codex', 'archive', 'wardrobe', 'settings', 'pause']);
 const MAX_TICKS = Number(process.env.GW_MONKEY_TICKS || 2500);
 const RUNS = Number(process.env.GW_MONKEY_RUNS || 4);
@@ -79,7 +79,7 @@ function checkRun(run) {
     case 'forge': if (!p || p.kind !== 'forge') fail('forge phase without forge'); break;
     case 'event': if (!p || p.kind !== 'event' || !EVENTS[p.id]) fail('event phase without event'); break;
     case 'reward': if (!p) fail('reward phase without pending'); break;
-    case 'map': if (!run.map || !run.map.nodes) fail('map phase without map'); break;
+    case 'ward': if (!run.ward || !run.ward.rooms || !run.ward.rooms[run.ward.hero.room]) fail('ward phase without a floor and a hero on it'); break;
     default:
   }
 }
@@ -112,7 +112,7 @@ function step(dt = 1 / 60) {
   const run = app.shared.run;
   const key = `${app.current}|${app.top().name}|${run ? run.phase : '-'}`;
   if (key === stuckKey) stuckN++; else { stuckKey = key; stuckN = 0; }
-  const exempt = app.current === 'map' || app.current === 'title' || (run && run.phase === 'combat');
+  const exempt = app.current === 'ward' || app.current === 'title' || (run && run.phase === 'combat'); // the Ward and a fight wait for the player (the nudge and the bot see to them)
   if (!exempt && stuckN > STUCK) fail(`stuck ${STUCK} ticks in state ${key}`);
   combatTicks = run && run.phase === 'combat' ? combatTicks + 1 : 0; // counts while the pause overlay quit to title leaves the combat run parked
   wardTicks = run && run.phase === 'ward' && app.current === 'ward' ? wardTicks + 1 : 0;
@@ -226,8 +226,8 @@ function playOne(hero, idx) {
     if (ctxInfo.tick >= abandonAt && abandonAt >= 0 && app.shared.run && app.shared.run.phase !== 'dead' && app.shared.run.phase !== 'won' && R() < 0.01) doAbandon();
     const r = R();
     const run = app.shared.run;
-    if (run && run.mode === 'ward') phasesSeen.add(run.phase); // (until the Classic map is removed the monkey can still pick it on the title: those runs do not count)
-    if (app.current === 'title' && !(run && run.phase === 'map' && false)) {
+    if (run) { phasesSeen.add(run.phase); if (run.mode !== 'ward') fail('a run that is not a Ward run: mode ' + run.mode); }
+    if (app.current === 'title') {
       titleTicks++;
       if (titleTicks > 400) { titleTicks = 0; flow.start({ hero, seed: `monkey-${id}-${ctxInfo.tick}` }); uiStarts--; }
     } else titleTicks = 0;

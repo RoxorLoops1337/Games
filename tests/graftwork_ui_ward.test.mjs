@@ -1,7 +1,7 @@
 // THE WARD screen (ui/ward.js): enter with a ward run, build by drag, toggle power, end the morning, preview and confirm a walk
 // through a fight into an event (the routes go to the combat, reward, graft and event screens and come back to the Ward, with the
 // walk steps between two triggers played on the Ward), the reward's building plan pick, the Dispensary's plans and strike service,
-// the title's mode switch, and a layout sweep (desktop and phone stage scales 0.64 / 0.54 / 0.46): registered widgets never overlap
+// and a layout sweep (desktop and phone stage scales 0.64 / 0.54 / 0.46): registered widgets never overlap
 // outside a group or overlay, stay on the stage and out of the Pause / Fullscreen corner, and text stays inside its widget.
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key } from './graftwork_lib.mjs';
@@ -27,7 +27,7 @@ const win = () => ({ win: true, shattered: [], damageTaken: 0, turns: 3 });
 
 async function setup(o = {}) {
   resetWardMem();
-  const run = RUN.newRun({ hero: o.hero || 'marrow', seed: o.seed || 'uiw', mode: 'ward' });
+  const run = RUN.newRun({ hero: o.hero || 'marrow', seed: o.seed || 'uiw' });
   const meta = { settings: { reduceMotion: true, tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } };
   const app = await makeApp({ run, meta, audio: { sfx() {}, music() {} } });
   if (o.pscale) { app.scale = o.pscale; app.minPx = 11; }
@@ -37,7 +37,7 @@ async function setup(o = {}) {
   const flow = {
     RUN, route() {
       const scr = PHASE_SCREEN[run.phase] || 'base';
-      if (run.mode === 'ward' && scr !== 'ward' && wardInterlude(app, run, scr)) { seen.push('ward(walk)'); return; }
+      if (scr !== 'ward' && wardInterlude(app, run, scr)) { seen.push('ward(walk)'); return; }
       seen.push(scr); app.go(scr, { run });
     },
     openDeck() {}, openSettings() {}, saveMeta() {}, hasSave: () => false, resume() {}, abandon() {}, toTitle() {}, start(opts) { flow.started = opts; },
@@ -562,7 +562,7 @@ await t('item6: death in the Ward (a night fight lost) opens the end screen, whi
   assert.equal(app.current, 'end'); assert.equal(run.phase, 'dead');
   const texts = []; const raw = app.text; app.text = (str, ...r) => { texts.push(String(str)); return raw(str, ...r); }; frames(app, 90);
   assert.ok(texts.some((x) => /day 3 of 8/.test(x)), 'the end line names the Ward day: ' + texts.filter((x) => /closed|ward/i.test(x)).join(' | '));
-  assert.ok(!texts.some((x) => /floor \d+ of act/.test(x)), 'not the classic floor line');
+  assert.ok(!texts.some((x) => /floor \d+ of act/.test(x)), 'not the floor line (that one is for a practice fight, which has no day)');
 });
 
 await t('item6: win after the boss on floor 3: the Grafter fight follows, and winning it opens the victory end screen', async () => {

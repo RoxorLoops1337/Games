@@ -1,5 +1,5 @@
 // GRAFTWORK backgrounds. drawBackground(ctx, theme, t, o) paints the whole 1280x720 stage.
-// themes: ward market theatre (combat per act) | map1 map2 map3 | title table shop forge event | win lose
+// themes: ward market theatre (combat per act) | title table shop forge event | win lose
 // Heavy static layers are cached on offscreen canvases (LRU, only when `document` exists); per frame we animate only light, dust, sway.
 // o: { dim: 0..1 extra darkening, still: true to freeze animation }
 import { COL, rgba } from '../ui/core.js';
@@ -228,26 +228,6 @@ function theatreDyn(ctx, t, o) {
   for (let i = 0; i < 26; i++) { const x = 30 + i * 48; const f = 0.7 + 0.3 * Math.sin(t * 6 + i * 1.9); glow(ctx, 'thf', '#ffc860', x, 702, 26, 0.7 * f); }
   drawMotes(ctx, t, 41, 30, '#e8d0ff', 0.4);
 }
-
-// ======================================================================================
-// MAPS: a chart pinned on a slab
-// ======================================================================================
-const MAPTINT = { map1: ['#2F4A3A', '#9bc2a8'], map2: ['#3A2A1E', '#c8a07a'], map3: ['#1E1630', '#b0a0d8'] };
-function mapStatic(g, theme) {
-  const [tint, ink] = MAPTINT[theme];
-  rect(g, 0, 0, W, H, '#1A1614'); const r = rng(77); for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(255,255,255,${0.02 + r() * 0.03})`; g.lineWidth = lnw(1); g.beginPath(); const x = r() * W, y = r() * H; g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 200, y + (r() - 0.5) * 30); g.stroke(); }
-  // chart paper
-  g.save(); g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 30; g.shadowOffsetY = 8; g.fillStyle = '#2b2622'; g.fillRect(34, 26, 1212, 668); g.restore();
-  g.fillStyle = tint; g.fillRect(34, 26, 1212, 668); g.fillStyle = 'rgba(232,220,196,.1)'; g.fillRect(34, 26, 1212, 668);
-  g.strokeStyle = ink; g.globalAlpha = 0.16; g.lineWidth = lnw(1); for (let x = 34; x < 1246; x += 40) { g.beginPath(); g.moveTo(x, 26); g.lineTo(x, 694); g.stroke(); } for (let y = 26; y < 694; y += 40) { g.beginPath(); g.moveTo(34, y); g.lineTo(1246, y); g.stroke(); }
-  // faint anatomy: spine and ribs
-  g.globalAlpha = 0.1; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(640, 60); g.bezierCurveTo(610, 200, 670, 400, 640, 660); g.stroke(); for (let i = 0; i < 9; i++) { const y = 140 + i * 38, w = 150 - Math.abs(i - 3) * 14; g.beginPath(); g.moveTo(640, y); g.quadraticCurveTo(640 - w, y - 30, 640 - w * 1.4, y + 40); g.moveTo(640, y); g.quadraticCurveTo(640 + w, y - 30, 640 + w * 1.4, y + 40); g.stroke(); }
-  g.globalAlpha = 0.2; g.lineWidth = lnw(2); g.strokeStyle = ink; g.strokeRect(54, 46, 1172, 628); g.setLineDash([10, 6]); g.strokeRect(62, 54, 1156, 612); g.setLineDash([]); g.globalAlpha = 1;
-  // pins and clips
-  for (const [x, y] of [[54, 46], [1226, 46], [54, 674], [1226, 674]]) { g.beginPath(); g.arc(x + 1, y + 3, 9, 0, TAU); g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); g.beginPath(); g.arc(x, y, 9, 0, TAU); g.fillStyle = '#B3263A'; g.fill(); g.beginPath(); g.arc(x - 2, y - 3, 3, 0, TAU); g.fillStyle = 'rgba(255,255,255,.55)'; g.fill(); }
-  noise(g, 6, 600, '#000', 0.08, 2); drawVignetteTo(g, 0.55);
-}
-function mapDyn(ctx, t, o) { const f = 0.9 + 0.1 * Math.sin(t * 0.8); glow(ctx, 'mapg', '#fff3d0', 640, 330, 520, 0.05 * f); drawMotes(ctx, t, 51, 14, '#e8dcc4', 0.25); }
 
 // ======================================================================================
 // TITLE
@@ -533,7 +513,7 @@ export function keyLamp(t = 0) {
   return LAMP;
 }
 
-const ACT_AMBIENT = { ward: '#2e2a24', market: '#1f2e30', theatre: '#2a1c36', map1: '#2e2a24', map2: '#1f2e30', map3: '#2a1c36', title: '#241c18', table: '#262022', shop: '#2a2016', forge: '#2e1a12', event: '#1c2230', win: '#3a3220', lose: '#1a1214' };
+const ACT_AMBIENT = { ward: '#2e2a24', market: '#1f2e30', theatre: '#2a1c36', title: '#241c18', table: '#262022', shop: '#2a2016', forge: '#2e1a12', event: '#1c2230', win: '#3a3220', lose: '#1a1214' };
 // ambient colour per theme for the lightmap pass (what unlit areas fade to)
 export function ambient(theme) { return ACT_AMBIENT[theme] || '#241c18'; }
 
@@ -589,7 +569,6 @@ cfg('forge', { far: forgeStatic, dyn: forgeDyn, floorY: 580, tint: ['#E85D3A', 0
 cfg('event', { far: eventStatic, dyn: eventDyn, floorY: 580, tint: ['#8896b0', 0.05], shaft: ['#cfe0ff', 0.09, 3, 130], mid: ['hang', 'rgba(6,8,14,.45)'], fg: ['blob', 'rgba(4,6,12,.85)'], part: ['#cfe0ff', 0.3, false], fog: ['#8090a8', 0.14], vig: 0.35 });
 cfg('win', { far: winStatic, dyn: winDyn, floorY: 580, tint: ['#F2C14E', 0.06], shaft: ['#F5E6A8', 0.14, 5, 150], mid: ['hang', 'rgba(20,14,4,.35)'], fg: ['blob', 'rgba(16,10,2,.7)'], part: ['#F5E6A8', 0.5, true], fog: ['#c8b078', 0.1], vig: 0.4 });
 cfg('lose', { far: loseStatic, dyn: loseDyn, floorY: 580, tint: ['#2a1a22', 0.12], shaft: ['#8a7a9a', 0.06, 3, 120], mid: ['crates', 'rgba(4,2,4,.55)'], fg: ['blob', 'rgba(2,0,2,.9)'], part: ['#a090b0', 0.25, false], fog: ['#5a4a60', 0.18], vig: 0.6 });
-for (const m of ['map1', 'map2', 'map3']) cfg(m, { far: (g) => mapStatic(g, m), dyn: mapDyn, floorY: 600, tint: [m === 'map1' ? '#E8DCC4' : m === 'map2' ? '#D4C9A8' : '#BFB3A4', 0.04], shaft: ['#fff3d0', 0.07, 3, 130], mid: ['crates', 'rgba(8,6,6,.3)'], fg: ['blob', 'rgba(6,4,4,.6)'], part: ['#e8dcc4', 0.25, false], fog: ['#8a8070', 0.08], vig: 0.3 });
 
 let regTheme = null, regIds = [];
 function registerLights(theme, c) {

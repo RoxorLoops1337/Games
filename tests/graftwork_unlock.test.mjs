@@ -1,6 +1,7 @@
 // GRAFTWORK content unlock system: starting pool, UP model and caps, run gating, migration, daily fairness, determinism.
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
+import * as WD from '../graftwork/engine/ward.js';
 import * as M from '../graftwork/engine/meta.js';
 import * as UN from '../graftwork/engine/unlock.js';
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, LOCKED_IDS, UP, TOTAL_COST, START, inventory } from '../graftwork/data/unlocks.js';
@@ -83,7 +84,7 @@ t('rewards never contain locked ids: 300 fuzz rolls of offers, shop, relic, poti
     assert.ok(ok(RUN.rollRelicByAct(run)) || true); assert.ok(ok(RUN.rollPotion(run)), 'potion');
     RUN.fightRewards(run, i % 2 ? 'elite' : 'boss', {}); const rw = run.pending;
     if (rw.relic) assert.ok(ok(rw.relic)); for (const r of rw.relicChoices || []) assert.ok(ok(r), 'boss relic');
-    run.seenEvents = []; const ev = RUN.startEvent(run); if (ev) assert.ok(ok(ev.id), 'event ' + ev.id);
+    run.seenEvents = []; run.ward.phase = ['midday', 'evening', 'night'][i % 3]; const ev = WD.wardStartEvent(run); if (ev) assert.ok(ok(ev.id), 'event ' + ev.id); // the Chapel's draw
     const g = RUN.R.addGraftRandom(run, run.deck[0].uid); if (g) assert.ok(ok(g));
   }
 });

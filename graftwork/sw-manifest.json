@@ -1,15 +1,15 @@
 {
- "version": "36c4b07c46160bb9",
- "bytes": 11594266,
- "count": 663,
+ "version": "0e8f2bfa836f12dc",
+ "bytes": 11549255,
+ "count": 662,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
    "s": 22671
   },
   "art/backgrounds.js": {
-   "h": "612b03cd3ca6c008",
-   "s": 69667
+   "h": "7d1c3c11a4b0e858",
+   "s": 66762
   },
   "art/cards.js": {
    "h": "01c46b84aaac371f",
@@ -32,8 +32,8 @@
    "s": 31433
   },
   "art/icons.js": {
-   "h": "35113843ecc06281",
-   "s": 101338
+   "h": "47992dc7651a55c4",
+   "s": 100146
   },
   "art/linework.js": {
    "h": "7e1322768a8cdbf9",
@@ -2212,8 +2212,8 @@
    "s": 5834
   },
   "data/events.js": {
-   "h": "c1679a10a1aadea9",
-   "s": 79082
+   "h": "c0508db1fce52e37",
+   "s": 79046
   },
   "data/gaits.js": {
    "h": "b38f31efc0b3bd8d",
@@ -2264,8 +2264,8 @@
    "s": 3495
   },
   "data/relics_ward.js": {
-   "h": "970f878cd6cd555c",
-   "s": 3679
+   "h": "19be3e66ab9a9d0b",
+   "s": 3717
   },
   "data/schools.js": {
    "h": "cb4b938cf9b47314",
@@ -2356,20 +2356,20 @@
    "s": 12800
   },
   "engine/combat.js": {
-   "h": "09f6a1e1a6bc9f73",
-   "s": 39914
+   "h": "0c5ad811a4c98ee0",
+   "s": 39930
   },
   "engine/intent_icons.js": {
    "h": "92bf86cf68329be9",
    "s": 3176
   },
   "engine/meta.js": {
-   "h": "7f7e53d90134e3d4",
-   "s": 10878
+   "h": "89bc77830a40266a",
+   "s": 11827
   },
   "engine/meta2.js": {
-   "h": "8ac671ea8a694278",
-   "s": 13466
+   "h": "9c9fc095e6018745",
+   "s": 13482
   },
   "engine/resonance.js": {
    "h": "f98a69e798a34a63",
@@ -2380,12 +2380,12 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "8fb0913c14f99446",
-   "s": 30819
+   "h": "8f80f2262fd42c4a",
+   "s": 26501
   },
   "engine/save.js": {
-   "h": "75f3d164193012a7",
-   "s": 1065
+   "h": "c6149ebc081318fa",
+   "s": 1743
   },
   "engine/seam.js": {
    "h": "9ec4588f5ce0a9db",
@@ -2400,8 +2400,8 @@
    "s": 11837
   },
   "engine/ward.js": {
-   "h": "8e17cc9a9a266be3",
-   "s": 46421
+   "h": "564ea124e65ff647",
+   "s": 46407
   },
   "icons/apple-touch-icon.png": {
    "h": "6a1af503636154d7",
@@ -2424,8 +2424,8 @@
    "s": 1962
   },
   "main.js": {
-   "h": "2f7d60e2a4f1337a",
-   "s": 7501
+   "h": "fb25c25bb4b9b468",
+   "s": 7603
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
@@ -2464,8 +2464,8 @@
    "s": 16561
   },
   "ui/codex.js": {
-   "h": "284c71323e05d3b4",
-   "s": 40400
+   "h": "78c2d164131f7ffa",
+   "s": 40387
   },
   "ui/combat.js": {
    "h": "fc8481045cb63f3e",
@@ -2492,12 +2492,12 @@
    "s": 35369
   },
   "ui/end.js": {
-   "h": "749b1c55dfabd2cd",
-   "s": 31566
+   "h": "ed8a0b0082a9eefd",
+   "s": 31614
   },
   "ui/event.js": {
-   "h": "5215971133eab996",
-   "s": 28026
+   "h": "b273d407ad75b4d9",
+   "s": 27992
   },
   "ui/forge.js": {
    "h": "b7d90f49f3bc9768",
@@ -2543,17 +2543,13 @@
    "h": "b0b6a34d9712e486",
    "s": 7037
   },
-  "ui/map.js": {
-   "h": "becd23b138cdbe39",
-   "s": 37110
-  },
   "ui/offline.js": {
    "h": "f89e70c889951ebf",
    "s": 4454
   },
   "ui/pause.js": {
-   "h": "49b5e206d6812e5b",
-   "s": 19024
+   "h": "bb27d03da657d115",
+   "s": 19017
   },
   "ui/perf_flags.js": {
    "h": "cf5a21a500aca0d7",
@@ -2592,8 +2588,8 @@
    "s": 16705
   },
   "ui/shop.js": {
-   "h": "7db01148a15d90e2",
-   "s": 54681
+   "h": "4634a997512ba2ae",
+   "s": 54773
   },
   "ui/smoothing.js": {
    "h": "7566a23ce539df44",
@@ -2608,8 +2604,8 @@
    "s": 2446
   },
   "ui/title.js": {
-   "h": "3bf0a68215966278",
-   "s": 49427
+   "h": "5929c504d134f6e1",
+   "s": 50316
   },
   "ui/title_logo.js": {
    "h": "33ab328c6f4610c7",
@@ -2628,20 +2624,20 @@
    "s": 26278
   },
   "ui/tutorial.js": {
-   "h": "6398af7acc5ceb56",
-   "s": 10356
+   "h": "4e843e79f523ca9f",
+   "s": 10232
   },
   "ui/ward.js": {
-   "h": "d677c40a9ff24975",
-   "s": 83209
+   "h": "d1172c6d57bb193d",
+   "s": 83193
   },
   "ui/ward_iso.js": {
    "h": "27e0fba6b2bb1321",
    "s": 74668
   },
   "ui/ward_kit.js": {
-   "h": "21c89f60bea25455",
-   "s": 37073
+   "h": "08b14b7b4c136db2",
+   "s": 35003
   },
   "ui/ward_kit_iso.js": {
    "h": "8a69444b67de4e08",

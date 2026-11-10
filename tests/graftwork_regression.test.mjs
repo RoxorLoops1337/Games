@@ -1,8 +1,9 @@
 // Release-candidate regression loops for Graftwork (headless, engine only, deterministic).
 //  (a) full runs for every hero (strong-bot fights and graft picks), Assist off and on: no throw, ends won or dead, no NaN in
 //      hp/gold/budget, and serializeRun -> deserializeRun -> serializeRun is byte-identical at EVERY decision (every Ward hour included);
-//  (b) saves made by an OLDER main commit (0675399, fixture tests/fixtures/graftwork_oldsave_0675399.json) still load
-//      in the current code and can be played to the end.
+//  (b) saves from before the Ward are runs on the retired map: see tests/graftwork_retire.test.mjs;
+//  (c) Ward saves made just before the retirement (5f3e252, fixture tests/fixtures/graftwork_wardsave_5f3e252.json) load in the
+//      current code and play to the very same end.
 // GW_REG_SEEDS=30 node tests/graftwork_regression.test.mjs   (seeds per hero and assist mode; default 3 keeps it under 10 s)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -38,7 +39,6 @@ function roundTrip(run, tag) {
 // player of tests/graftwork_lib.mjs; same split as tests/graftwork_fullrun.test.mjs
 function step(run) {
   switch (run.phase) {
-    case 'map': { const ns = RUN.availableNodes(run).map((id) => run.map.nodes[id]); RUN.enterNode(run, ns[run.row < 0 ? 0 : ns.length - 1].id); break; } // saves from before the Ward (block b)
     case 'combat': RUN.resolveFight(run, strongFight(run, pol).res); break;
     case 'graft': {
       const pick = strongPickGraft(run, pol);
@@ -75,22 +75,9 @@ for (const assist of [false, true]) {
 for (const p of ['ward', 'ward:morning', 'ward:midday', 'ward:evening', 'ward:night', 'combat', 'reward', 'graft', 'event', 'shop']) assert.ok(phasesSeen.has(p), `never saw phase ${p}`);
 console.log(`ok ${n} strong-bot runs (${SEEDS} seeds x 3 heroes x assist off/on), ${saves} round trips`);
 
-// ---- (b) saves from the previous main commit still load and play on ----
-const old = JSON.parse(readFileSync(new URL('./fixtures/graftwork_oldsave_0675399.json', import.meta.url), 'utf8'));
-let loaded = 0;
-for (const hero of HEROES) {
-  assert.ok(old[hero] && old[hero].length >= 5, `${hero}: fixture has saves`);
-  for (const { phase, json } of old[hero]) {
-    const tag = `old-${hero}-${phase}`;
-    const run = RUN.deserializeRun(json);
-    assert.equal(run.v, 1, `${tag}: save version`);
-    assert.equal(run.phase, phase);
-    checkNums(run, tag);
-    finish(run, tag, (r) => checkNums(r, tag));
-    loaded++;
-  }
-}
-console.log(`ok ${loaded} saves from commit 0675399 load and play to the end`);
+// ---- (b) saves from before the Ward (commit 0675399, tests/fixtures/graftwork_oldsave_0675399.json) are runs on the retired map: they are no
+//      longer played on but closed and counted. tests/graftwork_retire.test.mjs holds that fixture's checks.
+
 // ---- (c) Ward saves made before the Classic map was retired (commit 5f3e252) resume and play to the very same end ----
 // The fixture holds saves at every kind of moment (each Ward hour, mid walk, fights, reward, graft, event, shop, forge, the Grafter) and where
 // the deterministic player of tests/graftwork_lib.mjs ended from each of them on that commit: outcome, day, gold and the hash of the final save.

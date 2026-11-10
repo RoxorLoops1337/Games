@@ -160,7 +160,7 @@ SC.title_intro = { desc: 'title intro (3.6 s needle) + 3 s', fresh: true, async 
 const WARD_SETUP = async () => {
   const RUN = await import('/graftwork/engine/run.js'), WD = await import('/graftwork/engine/ward.js');
   const { app, flow } = window.__gw;
-  const run = RUN.newRun({ hero: 'marrow', seed: 'prof', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: 'prof' });
   const w = run.ward;
   w.grid = Array.from({ length: w.h }, () => Array(w.w).fill(null)); w.rooms = {}; w.nextRoom = 1;
   // a 12 room hospital: a corridor spine on row 2, rooms above and below
