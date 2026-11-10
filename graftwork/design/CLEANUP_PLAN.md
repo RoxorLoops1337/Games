@@ -147,3 +147,43 @@ Method: real Chromium (Playwright, headless), 1000 x 462 at DPR 2 (canvas 1643 x
 - **Templates.** `TEMPLATE_ART = false` in `ui/templates.js`: nothing is requested until `assets/ui/manifest.json` lands (`design/ART_MODULAR.md` section 5).
 - **Small ones.** Mip level 0 is the decoded image; `unlockState` once per visit on the title and in the Archive (it ran every frame; the review measured about 0.13 ms a call); display-mode queries once per window; the wall plan is kept until a room changes. Their effect on tick time is inside this harness's noise (title 29 to 34 ms, Settings 37 to 42 ms either way), so they are proven by call counts in `tests/graftwork_perf3.test.mjs`. Not done as proposed: the App row of Settings is still asked every frame instead of once on enter, because the browser's install offer can arrive and Install can be pressed while Settings is open; the cost behind it is gone either way.
 - Tests: `tests/graftwork_grade.test.mjs` (colour maths against the CSS filter definitions, 63 enemies and 3 heroes graded against ungraded, a real Chromium fill) and `tests/graftwork_perf3.test.mjs` (one check per fix); each was run against the old code first and failed there. `graftwork_ui_combat_art` asserts that no context of a combat frame is given a filter.
+
+### Classic retirement
+
+What the player sees is the list under "Classic retirement: what changes for the player". Measured on the branch against main at `428b6499`:
+
+- **Code.** Game source (`graftwork/**/*.js`): 22 files changed, 121 lines added, 783 removed; one file deleted (`ui/map.js`, 543 lines); 2,663,622 to 2,618,607 bytes (45,015 less). Balance tools (sim, strong, ward_sim, tiers, schools, cardsweep, audit, unlocks): 92.7 to 86.2 KB with the three bot files folded into one driver; `tools/` as a whole 1142 lines added, 1207 removed (the golden tool grew by 6 KB: the Ward fixtures, the closing trace, the comparison flag). Tests: 35 files changed, 667 lines added, 420 removed; 73 suites on main, 74 now (`ui_map` out; `ui_event` and `retire` in). Runner (`node tests/run_graftwork.mjs`, 4 workers, one run each, back to back on a shared machine): main 73 of 73 in 286 s wall and 462 s of CPU, the branch 74 of 74 in 251 s wall and 471 s of CPU. The wall time is the layout sweep, the longest suite; read it as unchanged.
+- **A Ward run did not change.** Same seeds before and after, three ways:
+  - the balance table (`tools/graftwork_ward_sim.mjs 60 0 <policy>`, both unlock pools) and unlock pacing (`tools/graftwork_unlocks.mjs 200 30`), recorded on `5f3e252b` before the first change and again on the finished branch, are identical line for line:
+
+    | strong, A0, N=60 | marrow | wick | odile |
+    |---|---|---|---|
+    | all pool | 18/60 (30%) | 25/60 (42%) | 29/60 (48%) |
+    | start pool | 21/60 (35%) | 23/60 (38%) | 29/60 (48%) |
+
+    random 0/180, sloppy 0/180, passive 1/180 (odile); unlock pacing strong median 39 runs (p10 36, p90 43), careful 45, sloppy 144.
+  - 1080 runs (six policies, both pools, ascension 0 and 5), each hashed over its serialized state at every morning and at the end: every hash identical;
+  - the golden master, below.
+- **Golden master.** Base `428b6499` recorded with the tool of main, the branch with `--classic-rng --resume-from <base>`, `compare --common`: 25,043 keys identical, 1,348 different (engine 408, ui 864, assets 76, resume 0).
+  - Identical: all 24 Ward runs the two records share (3 heroes x 8 seeds, 3,689 trace steps: every morning, walk, fight, reward, graft, shop, forge and event choice with hp, gold and the rng state after it; final deck, relics, stats, the save bytes), all 36 resume cases (the base's own saved payloads continued by the new code to the same end, and the bytes the new code saves at the same point), every card, graft, potion, enemy and building probe, and the draw streams of 15 of the 33 UI scenes and 6 of the 8 asset scenes in all four variants: `combat`, `combat_boss`, `combat_elite`, `combat_three`, `combat_tips`, `end_won`, `forge`, `forge_temper`, `pause`, `reward_boss`, `ward_morning`, `ward_midday`, `ward_evening`, `ward_night`, `ward_built`; `combat_art`, `combat_art_boss`, `shop_ward`, `ward_kit_morning`, `ward_kit_built`, `ward_kit_night`.
+  - Different, every one because the old tool drove that probe or scene on a Classic run, or because the title changed:
+
+    | Keys | Why |
+    |---|---|
+    | `engine/runs/<hero>.ward.{a0,deep}/{endInfo,metaAfter}` (12) | One career profile played the Classic and the Ward seeds of a hero in a row; it now holds Ward runs only. The 24 run traces themselves are identical. |
+    | `engine/probes/relic/<relic>/shop` (96, every relic that is not a Ward relic) | The shop after the probe fight was a Classic shop; every shop is now the Dispensary (plans for sale, Ward relics in the pool). |
+    | `engine/probes/event/<event>/choiceN/next` (145) and `/run` (155) | The probe run went to the map after an event and carried a map; it now goes back to the Ward. `choices` and `result` of every choice are identical. |
+    | `ui/title`, `title_intro`, `title_select`, `title_veteran`, `assets/title_kit` | The title changed: no mode tag on the Daily slab, no switch on hero select. |
+    | `ui/settings`, `settings_app`, `install_help`, `codex`, `archive`, `wardrobe` | Drawn over the title menu. The draw log of the two builds differs only by the `WARD` tag behind them. |
+    | `ui/deckview` | Opened from the map screen in the old script, from the Ward now: the screen under it differs. |
+    | `ui/graft`, `graft_decline`, `event`, `event_picker` | The hash after `enter` and after `inputs` is identical; the last part differs because leaving the screen went to the map and now goes to the Ward. |
+    | `ui/end_dead` | Identical through `enter` and `inputs`; the last part is the title it returns to (the tag). |
+    | `ui/reward`, `assets/combat_art_kill` | The elite's relic was rolled from the Classic pool, which had no Ward relics (Blunt Shears became Spare Fuse). The fight before it is identical. |
+    | `ui/shop` | The scene was a Classic shop; it is the Dispensary now (the Building plans button, another relic on the shelf). `assets/shop_ward`, the shop of a Ward run, is identical. |
+
+    Only in the base: the Classic runs, their resume cases, the scenes `map` and `map_act3`. Only in the branch: an Endless run per hero, the Daily modifiers on Ward runs, the 28 Ward fixture saves, the closing of the 20 old saves.
+  - Check of the engine rows: the tool of main was copied outside the repo and four lines of it changed, so that the career plays Ward runs only and the relic shop and event probes treat their run as a Ward run without a map (the game code of the base untouched). Recorded from the base, its engine section equals the branch on all 13,478 common keys, 0 differences.
+- **Old Ward saves resume.** 28 saves recorded on `5f3e252b` (every Ward hour, mid walk, fights, reward, graft, event, shop, forge, the Grafter) reach the same end, to the hash of the final save; the golden master continues the base's own saved payloads to the same end and writes the same bytes at every save point.
+- **Old Classic saves are closed.** 20 saves from before the Ward: each one leaves the meta exactly as the Abandon button would (compared field by field against that path), is deleted, and sets the notice.
+- **Hygiene.** `tools/graftwork_hygiene.mjs` is clean; five allowlist entries that named deleted code were pruned and nothing was added to the list. Dead code the retirement left behind was deleted, not listed.
+- **Real browser** (Chromium, 1280 x 720 and 1000 x 462 at DPR 2): title without mode tags, hero select without the switch, Begin lands in the Ward, a route into a fight, reward, back on the Ward; a Classic save gives the notice once and no Continue, a click under the notice does nothing, a reload shows no second notice and counts nothing twice; three old Ward saves (evening, mid walk on a reward, the Dispensary) resume with the save unchanged. No page error.
