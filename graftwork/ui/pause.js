@@ -140,7 +140,7 @@ export default {
     if (this.confirm) this.drawConfirm(app, g, px, py, pw, ph, moved, live);
     else this.drawRows(app, g, px, py, pw, ph, moved, live);
     const hint = this.confirm ? 'Left / Right choose   Enter confirm   Esc back' : 'Up / Down move   Enter select   Esc resume';
-    T(app, hint, 640, py + ph - 34, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' });
+    T(app, hint, 640, py + ph - (SK.hasPart('modal') ? 58 : 34), { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' });
     g.restore();
   },
   frame(app, g, px, py, pw, ph) {
