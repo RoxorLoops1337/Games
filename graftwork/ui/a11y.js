@@ -88,7 +88,7 @@ export function installA11y(app) {
   function announce(text, assertive) {
     if (!text) return false;
     const st = app.shared && app.shared.meta && app.shared.meta.settings; if (st && st.announce === false) return false;
-    if (text === A.last && app.t - A.lastAt < 1) return false;
+    if (text === A.last && Math.abs(app.t - A.lastAt) < 1) return false; // abs: app.t is the top screen's clock and steps back when a modal closes
     A.last = text; A.lastAt = app.t; A.log.push(text); if (A.log.length > 200) A.log.shift();
     const key = assertive ? 'assertive' : 'polite'; if (A[key] === null) A[key] = region(key) || false;
     if (A[key]) A[key].textContent = text;

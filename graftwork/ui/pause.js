@@ -1,6 +1,6 @@
 // Pause menu (app.push('pause')) plus the GLOBAL in-run overlay (Pause + Fullscreen buttons, Esc to pause).
-// Pausing sets app.timeScale = 0 (logical timers and screen update dt freeze) and restores it on leave.
-// The pause UI animates from app.rawDt (unscaled) so it still moves; tweens owned by screens stacked above it are stepped too.
+// Pause is a modal like any other: while it (or anything opened from it) is on top, core.js freezes the run screen under it: no update, no redraw,
+// its tweens, timers and clock stand still, and it resumes exactly where it stopped (ui/frame_state.js). Pause itself keeps no time switch.
 // Esc contract: a run screen that is busy with its own Esc (dragging, modal, selection) sets `app.escBusy = true`
 // during its update/draw; the overlay clears it at the end of every frame. Only the single-screen state (stack length 1) pauses.
 import { COL, W, H, EASE, clamp } from './core.js';
@@ -68,12 +68,9 @@ export default {
   enter(app) {
     this.k = calm(app) ? 1 : 0; this.clock = 0; this.mode = 'menu'; this.confirm = null; this.sel = 0; this.scroll = 0; this.fresh = true;
     this.lastMx = -1; this.lastMy = -1;
-    if (!app.paused) { app.prevTimeScale = app.timeScale === undefined ? 1 : app.timeScale; app.timeScale = 0; app.paused = true; }
     const a = app.shared.audio; if (a && a.sfx) a.sfx('uiClick');
   },
-  leave(app) { this.resume(app); },
-  resume(app) { if (app.paused) { app.timeScale = app.prevTimeScale === undefined ? 1 : app.prevTimeScale; app.paused = false; } },
-  close(app) { const a = app.shared.audio; if (a && a.sfx) a.sfx('uiBack'); this.resume(app); const i = app.stack.indexOf(this); if (i === app.stack.length - 1) app.pop(); else if (i >= 0) app.stack.splice(i); },
+  close(app) { const a = app.shared.audio; if (a && a.sfx) a.sfx('uiBack'); while (app.stack.includes(this)) app.pop(); },
   key(app, e) {
     if (app.top() !== this) return false;
     if (this.mode === 'menu' && !this.confirm && (e.key === 'Enter' || e.key === ' ')) {
@@ -105,18 +102,18 @@ export default {
     }
     if (id === 'yes') {
       const k = this.confirm.kind; this.confirm = null;
-      if (k === 'abandon') { this.resume(app); flow.abandon(); } else this.doQuit(app);
+      if (k === 'abandon') flow.abandon(); else this.doQuit(app);
     }
     if (id === 'no') { this.confirm = null; this.sel = 0; if (a && a.sfx) a.sfx('uiBack'); }
   },
   doQuit(app) {
     const run = app.shared.run;
     if (run && run.phase !== 'dead' && run.phase !== 'won') { try { saveRun(run); } catch { /* storage blocked: still leave */ } }
-    this.resume(app); app.shared.flow.toTitle();
+    app.shared.flow.toTitle();
   },
   draw(app) {
     const g = app.ctx, live = app.top() === this;
-    const rd = Math.max(app.rawDt || 0, app.dt || 0);
+    const rd = app.dt || 0;
     this.clock += rd; if (this.k < 1) this.k = clamp(this.k + rd / 0.18, 0, 1);
     if (this.fresh) { app.mouse.released = false; app.mouse.pressed = false; this.fresh = false; }
     const k = EASE.out(this.k);
@@ -262,24 +259,14 @@ export function openPause(app) {
   if (app.stack.some((s) => s.name === 'pause')) return;
   app.push('pause', {});
 }
-// Install the tick wrapper that tracks unscaled dt and the stack size at frame start. Idempotent.
+// Install the tick wrapper that tracks the stack size at frame start (Esc only pauses a frame that began on the run screen alone). Idempotent.
 export function installPause(app) {
   if (app.pauseInstalled) return; app.pauseInstalled = true;
   const tick0 = app.tick;
-  app.tick = (raw) => { app.rawDt = raw; app.stackAtStart = app.stack.length; tick0(raw); };
+  app.tick = (raw) => { app.stackAtStart = app.stack.length; tick0(raw); };
 }
 // Draw + handle the global buttons. Call from app.overlay every frame.
 export function drawPauseOverlay(app) {
-  if (app.paused) {
-    const ui = new Set(app.stack.slice(Math.max(0, app.stack.indexOf(app.screens.pause))));
-    const d = (app.rawDt || 0) * 1000;
-    for (const tw of app.tweens.slice()) {
-      if (!ui.has(tw.obj)) continue;
-      tw.t += d; const kk = clamp(tw.t / tw.ms, 0, 1), e = tw.ease(kk);
-      for (const p of Object.keys(tw.to)) tw.obj[p] = tw.from[p] + (tw.to[p] - tw.from[p]) * e;
-      if (kk >= 1 && tw.done) { const f = tw.done; tw.done = null; f(); }
-    }
-  }
   const inRun = app.stack.length === 1 && IN_RUN.has(app.current);
   const busy = !!app.escBusy;
   if (inRun) {

@@ -268,7 +268,7 @@ export function createScene(opts = {}) {
 
   // ---------- the frame ----------
   S.draw = (app, o = {}) => {
-    const g = app.ctx, dt = Math.min(0.05, app.dt || 0.016), calm = !!o.calm, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    const g = app.ctx, dt = Math.min(0.05, app.dt ?? 0.016), calm = !!o.calm, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     S.frame++; if (!calm) S.t += dt; const t = S.t;
     S.ensure(app);
     // slow device: three frames of dt over 30 ms in a row for 90 frames flips `lite`; it never flips back

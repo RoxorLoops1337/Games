@@ -499,6 +499,10 @@ function juiceLeave() {
   if (S.gradeSet) post('setGrade', S.boss ? 'boss' : theme(), 400);
   S.dgr.on = false; S.lpSet = false; S.gradeSet = false; if (S.ending) S.ending.hb = 0;
 }
+// A modal covers the fight (core.js freezes it): the heartbeat is the one loop that would beat on alone, so it rests and comes back with the fight.
+function hbBpm() { return !S || !S.dgr ? 0 : S.ending && S.ending.hb ? [0, 56, 44, 30, 0][S.ending.hb] : S.dgr.on ? S.dgr.bpm : 0; }
+function freeze() { if (hbBpm() > 0) audioCall('heartbeat', 0); }
+function thaw() { const bpm = hbBpm(); if (bpm > 0) audioCall('heartbeat', bpm); }
 function kick(dx, dy, px, decay, roll) {
   if (!FX_OPTS.shake || calm() || !(px > 0)) return;
   const sh = S.shk, l = Math.hypot(dx, dy) || 1;
@@ -1911,5 +1915,5 @@ function api() {
   };
 }
 
-const SCREEN = { enter, leave, update, draw, key, api };
+const SCREEN = { enter, leave, freeze, thaw, update, draw, key, api };
 export default SCREEN;
