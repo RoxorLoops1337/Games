@@ -38,17 +38,17 @@ tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs the
 tools/graftwork_*.mjs          balance and audio tooling (see Balance tooling)
 ```
 
-## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js)
+## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js, creating it and registering it in data/index.js when it does not exist)
 | file | contents |
 |---|---|
 | cards_marrow.js / cards_wick.js / cards_odile.js | hero cards. ids `m_*` `w_*` `o_*`. The 7 starter cards per hero already exist: keep their ids, you may retune. Need >= 20 NON-starter cards each (common 10, uncommon 7, rare 5+), at least 5 Attack, 5 Skill, 3 Power-type per hero |
 | cards_any.js | neutral cards `x_*` any hero can buy (>= 14) |
-| cards_junk.js | junk (`j_*`), required ids: j_paperwork j_ringing j_clot j_flake j_static j_ledger. Add more as needed |
+| cards_junk.js | junk (`j_*`), required ids: j_paperwork j_ringing j_clot j_flake j_static j_ledger j_scrap. Add one only together with its source (a card op, a graft price, an enemy move or a status): `graftwork_rules_fixes` fails on a junk card nothing can add |
 | grafts_safe.js / grafts_greedy.js / grafts_weird.js | grafts `g_*`, tier matches file |
-| enemies_1/2/3.js | enemies by act, INCLUDING that act's elites and boss (kind: 'elite'/'boss'); bosses.js stays empty |
+| enemies_1/2/3.js | enemies by act, INCLUDING that act's elites and boss (kind: 'elite'/'boss') |
 | relics.js potions.js events.js | relics `r_*`, potions `p_*`, events `e_*` |
 | heroes.js schools.js statuses.js | lead only |
-| statuses_marrow/wick/odile/gsafe/ggreedy/grafts(=weird)/e1/e2/e3/relics.js | extra statuses for that author |
+| statuses_marrow/wick/odile/e1/e2/e3/aff.js | extra statuses for that author. A new author file must also be added to `data/index.js` (the empty ones were removed) |
 
 ## Card schema
 `{ id, name, hero, type: 'attack'|'skill'|'power'|'junk', cost: 0..3|'X', rarity: 'starter'|'common'|'uncommon'|'rare'|'junk', target: 'enemy'|'all'|'self'|'none', school?, flavor (one dry line, max 60 chars), flags: {exhaust, innate, retain, ethereal, unplayable}, fx: [ops], up: { fx: [ops] (full replacement), cost?, unflags?: [] } }`
@@ -61,7 +61,7 @@ Power-type cards are played once and stay out of the deck for the rest of the co
 - `{op:'addCard', card, n, to:'hand'|'draw'|'drawTop'|'discard', up?}` `{op:'summon', id, n?}` (enemies)
 - `{op:'discard', n, choose?}` `{op:'exhaustHand', n|'all', choose?, draw?}` `{op:'fetch', n, from:'discard'|'exhaust'}`
 - `{op:'if', cond, ifText:'human text of the condition', then:[ops], else?:[ops]}` cond = `{src, lt|lte|gt|gte|eq}` or a function `(c, ctx) => bool`
-- `{op:'repeat', n, fx}` `{op:'custom', fn(A, ctx), text:'rules text'}` (escape hatch; ALWAYS give `text`). Any op may carry `t:'override text'`.
+- `{op:'repeat', n, fx}` `{op:'custom', fn(A, ctx), text:'rules text'}` (escape hatch; ALWAYS give `text`). Any op may carry `t:'override text'`. "Cut the Line." is `{ op: 'custom', fn: (A) => A.cutLine(), text: 'Cut the Line.', seam: 'cut' }`: the `seam: 'cut'` mark is what `seamPreview` reads.
 - Value sources `per`/`cond.src`: x hand energy block hp hp% missingHp drawPile discard exhaust plays turn deck grafts cardGrafts strain enemies kills dealt gold junk attacksInHand, and `st:<status>@self|target|player`.
 - Replays (Plays twice, Echo) repeat damage, block and status but NOT resource ops (draw, energy, gold, addCard, heal). Draw per op max 4, energy max 3.
 
@@ -70,13 +70,14 @@ Power-type cards are played once and stay out of the deck for the rest of the co
 `mods` MUST contain at least one boon mod and one price mod. Kinds (engine/cards.js applyMod):
 - boon: `{k:'cost', d}` `{k:'flag', f}` `{k:'unflag', f}` `{k:'repeat', n}` `{k:'addFx', fx:[ops], pos?:'start'}` `{k:'pct', pct}` (+/- % to damage and block) `{k:'aoe'}` `{k:'lifesteal', cap?}` `{k:'target', t}` `{k:'type', t}` `{k:'custom', hooks}`
 - price: `{k:'selfHurt', n}` `{k:'jam', p}` `{k:'junk', card, n, to?:'draw'|'discard'|'hand', when?:'combatStart'|'onPlay'}` `{k:'selfStatus', s, n}` `{k:'drawdown', n}` `{k:'goldCost', n}` `{k:'maxHp', n}` (negative, applied once when grafted) plus the price-flavoured `cost +1`, `flag exhaust`, `flag ethereal`, `pct -N`.
-- `custom` hooks: `{ onPlay(A, ctx), onDraw(A, {card, spec}), onDiscard, onExhaust, onTurnStart }`: weird grafts live here. ctx = `{card, spec, target, mult, x, replay, dealt}`.
+- `custom` hooks: `{ onPlay(A, ctx), onDraw(A, {card, spec}), onDiscard, onExhaust, onTurnStart }`: weird grafts live here. ctx = `{card, spec, target, mult, x, replay, dealt}`. Thread flags the engine reads from a hooks object: `noCut` (a would-be cut goes Slack), `wild` (extends any Line, adds no count).
+- What a Price is has ONE definition, `isPriceMod` in engine/cards.js (the kinds above, `cost +N`, the flags exhaust / ethereal / needsAttackPlayed, `pct -N`, and a custom mod marked `price: true`). Free Sample waives exactly those mods, Numb keeps exactly those. A price written as a hook must be its OWN custom mod with `price: true`, never mixed into the boon's hook, and every graft needs at least one price mod the table can see (`graftwork_rules_fixes`).
 - Point values (balance): common graft boon ~ +4 pts, uncommon +6, rare +8; price subtracts. Rough values: plays twice +6 (x0.5 if card has draw/energy), innate +2, retain +2, burn 3 +3, vulnerable 1 +3, +50% numbers +3, aoe +4, cost -1 +4, +1 energy +4, lifesteal +3; price: cost +1 -4, exhaust -3, self damage 3 -1.5, 25% jam -3, two junk -3, max HP -4 is -2. Net per rarity: common 0, uncommon +1, rare +2. Safe = weight 1, greedy = 2 to 3.
 - Hard caps already enforced: plays/turn 20, hand 10, status 99, draw per op 4, energy per op 3, lifesteal 6.
 - Schools: ember echo hoard blood rust static gilded. Aim each school's grafts to push that school's identity.
 
 ## Enemy schema (see enemies_1.js). Acts: normal 38-44 HP / 7-9 dmg per turn in Act 1, x1.6 Act 2, x2.4 Act 3; elite x1.8 HP; boss 130 / 220 / 340 HP. Act N has >= 10 normals (kind 'normal'), >= 3 elites, 1 boss (Act 3 also the final boss `the_grafter`, whose deck is read from the run at spawn).
-Hooks `on: { combatStart(A,e), turnStart(A,e), damaged(A,e,dmg,{src,hit}), death(A,e), playerCard(A,e,{card,spec,target}), afterMove(A,e,moveId), modDamage(A,e,n,o)->n, statusGained(A,e,statusId,n) (a status landed on this enemy), playerBlock(A,e,n) (the player gained Block), seamExtend/seamCut/seamPay(A,e,info) }`. A card with `claimed: true` (The Matron's Claim) fights at the Tithe -25% and shows as tithed; Tempered cards are never claimed. `pick(A,e)->moveId` or `pattern`/`opening`. `e.data` is free scratch state. Enemy `art: { body: '<silhouette>', color, ...}` is read by art/enemies.js. `A` = combat API: A.dmg(src,tgt,n,o) A.block A.status A.setStatus A.heal A.loseHp A.draw A.energy A.gold A.addCard A.summon A.rng A.player A.alive() A.c (the full combat state).
+Hooks `on: { combatStart(A,e), turnStart(A,e), damaged(A,e,dmg,{src,hit}), death(A,e), playerCard(A,e,{card,spec,target}), afterMove(A,e,moveId), modDamage(A,e,n,o)->n, statusGained(A,e,statusId,n) (a status landed on this enemy), playerBlock(A,e,n) (the player gained Block), seamExtend/seamCut/seamPay(A,e,info) }`. A card with `claimed: true` (The Matron's Claim) fights at the Tithe -25% and shows as tithed; Tempered cards are never claimed. `pick(A,e)->moveId` or `pattern`/`opening`. `e.data` is free scratch state. Enemy `art: { body: '<silhouette>', color, ...}` is read by art/enemies.js. `A` = combat API: A.dmg(src,tgt,n,o) A.block A.status A.setStatus A.heal A.loseHp A.draw A.energy A.gold A.addCard A.summon A.kill A.cutLine() A.ev A.rng A.player A.alive() A.c (the full combat state).
 Enemy moves are declarative `fx` with the same ops (they hit the player by default; `to:'self'|'allies'` for buffs). The intent icon is derived from the fx. `hidden:true` hides it. Statuses are `immune: [ids]` capable.
 
 ## Statuses: `{id, name, good, stack:'int'|'dur', canNeg?, mod:{outAdd,outMul,inMul,inCap,blockAdd,blockMul}, hooks:{turnStart,turnEnd,attacked,damaged,cardPlayed,kill}, desc(n)}` hooks receive `(A, owner, n, payload)`.
@@ -113,7 +114,9 @@ ART_BIBLE.md (The Anatomical Plate), THREAD.md (the new core rule: school chains
 ## Engine hooks (where to plug in)
 - Enemy hooks (`def.on`): combatStart turnStart damaged death playerCard afterMove modDamage statusGained playerBlock seamExtend seamCut seamPay. Signatures are in the Enemy schema above. `seamCut` may set `info.cancel = true` to void a payout (Scissor Nurse).
 - Relic hooks (`relic.on`) and hero hooks go through `fire(c, name, ...)` in engine/combat.js: combatStart turnStart turnEnd cardPlayed damaged kill exhaust shatter combatEnd wouldDie, plus `seamExtend|seamCut|seamPay` from engine/seam.js. Relic `mod` keys (energy, hand, budget, shatter, keepBlock, seamCap) are read by the engine, run-level `perk` names by engine/run.js.
-- Seam plumbing in combat.js: `seamInit` (newCombat), `seamStep` (playCard, before the card's fx), `seamEnd` (endTurn), `seamTurnStart`. `seamPreview(c, card)` is pure and must match the real payout (tests/graftwork_ui_seam.test.mjs checks it). Caps live in seam.js (`SEAM_LEN_CAP`, `SEAM_CUTS_TURN`, ...).
+- Seam plumbing in combat.js: `seamInit` (newCombat), `seamStep` (playCard, before the card's fx), `seamEnd` (endTurn), `seamTurnStart`, `seamCutNow` (`A.cutLine`: a card effect cashes the Line as a cut; the card starts the next Line if it joined this one). `seamPreview(c, card)` is pure and must match the real payout (`graftwork_seam`, `graftwork_ui_seam` and the 400-play parity loop in `graftwork_rules_fixes` check it); `seamWorth(c)` is what cutting now pays. Caps live in seam.js (`SEAM_LEN_CAP`, `SEAM_CUTS_TURN`, ...).
+- A hero with `declare: '<school>'` (Odile: gilded) may declare one card a turn: `canDeclare(c)` / `setDeclare(c, on)` in seam.js arm it, the next card that can use it spends it. The control is `drawSeamDeclare` in ui/seam_ui.js (rect `L.DECLARE_BTN`, key G, gamepad left trigger).
+- School resonance: the rule is engine/resonance.js, the texts are data/schools.js. `graftwork_rules_fixes` measures the engine and rebuilds all 14 texts, so change both together.
 - Claim flag: `card.claimed = true` (set by The Matron's Claim in data/enemies_1.js) makes a card fight and display exactly like a Tithe for that combat (`s.tithed = card.tithed || card.claimed` in combat.js). Tempered cards (fused grafts) are never claimed. Do not set `tithed` directly from content, use `claimed`.
 - Afflictions (afflStartTurn/afflEndTurn/afflCost/afflAbsorb) are called from combat.js; add a new affliction in data/statuses_aff.js and engine/afflictions.js together.
 - Graft `custom` hooks: onPlay onDraw onDiscard onExhaust onTurnStart (see Graft schema).
@@ -141,7 +144,7 @@ Run all: `node tests/run_graftwork.mjs` (or `npm run test:graftwork`). The runne
 | area | suites |
 |---|---|
 | content gate (run first when editing data/) | data, content_fuzz (every card x graft x enemy), audit (power smoke, exploit decks), status_behaviour (status does what its tooltip says) |
-| rules | temper, seam, afflictions, boss_mechanics, meta, meta2 |
+| rules | temper, seam, afflictions, boss_mechanics, meta, meta2, rules_fixes (text equals rule: Cut the Line, Slip Knot, Granny Knot, the declaration, resonance texts, Free Sample; saves with unknown ids load) |
 | whole runs | fullrun (strong bot, all heroes), e2e (real flow routing) |
 | combat UI | ui_combat, ui_combat_layout (HUD grid 1..6 enemies x 0..10 cards), ui_juice, ui_seam, motion (timing budgets) |
 | other screens | ui_map, ui_graft, ui_shop (shop+forge), ui_deck, ui_title, ui_pause, ui_layout (non-combat layouts), ui_clickthrough, ui_reward_tip, ui_polish, ui_transitions, onboarding |

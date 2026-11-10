@@ -3,9 +3,13 @@
 // Adds POLICIES.strong to the sim's POLICIES object (sim file only gained exports and two hooks: pol.fight, pol.pickGraft).
 // Fight: per-card score = cardValue ratio + Thread bonus from seamPreview (extend / paying cut / wasted cut), block weight
 // rises with incoming damage vs HP, kill-first targeting by (hp+block) per threat. Grafts: sim graftScore + school-focus bonus.
+// Odile's declaration (hero.declare, once per turn): every card is also scored as if declared; the bot declares the card it plays
+// when that is worth clearly more for the Thread (a cut that becomes a knot, a Slack card that joins the Line). GW_DECLARE=0 never declares.
+// "Cut the Line." cards (Snip, Tailor's Shears, Hemostatic Snip) are held while another affordable card in hand could still start
+// or extend the Line: the cut is worth the most last (GW_HOLDCUT=0 plays them as soon as they score).
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf } from '../graftwork/engine/combat.js';
-import { seamPreview } from '../graftwork/engine/seam.js';
+import { seamPreview, canDeclare, declareOf, setDeclare, cutsLine, seamCap } from '../graftwork/engine/seam.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
 import { cardSpec, canGraft, canTemper, schoolsOf, newInst } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, CARDS } from '../graftwork/data/index.js';
@@ -53,17 +57,25 @@ export function strongFight(run, pol, maxTurns = 40) {
       if (pi >= 0) { usePotion(c, pi, c.enemies.indexOf(st.target)); c.ev.length = 0; continue; }
       let best = -1, bs = 0.01, bestSetup = -1, bss = 0;
       const echo = c.player.st.echo > 0;
+      const threadOf = (k) => { // Thread value of playing k now: a knot, a paying cut, or a wasted cut
+        try {
+          const pv = seamPreview(c, k);
+          if (pv.kind === 'extend') return 1.2 + (c.seam.len > 0 ? 1.0 * c.seam.len : 0) + payoutValue(c, pv.payout) * 0.35;
+          if (pv.kind === 'cut') return payoutValue(c, pv.payout) - (pv.payout.length ? 0 : c.seam.len >= 2 ? 2.5 : 0);
+        } catch { /* a card the preview cannot read is worth nothing to the Thread */ }
+        return 0;
+      };
+      const decl = DECLARE_ON && canDeclare(c) ? declareOf(c) : null, declFor = {};
+      // knots still in hand: affordable cards that would start or extend the Line (a cutting card waits for them)
+      const growing = HOLDCUT_ON && c.seam.len < seamCap(c) ? c.hand.filter((k, i) => { const ck = canPlay(c, i); if (!ck.ok || cutsLine(ck.spec)) return false; try { return seamPreview(c, k).kind === 'extend'; } catch { return false; } }).length : 0;
       c.hand.forEach((k, i) => {
         const ck = canPlay(c, i); if (!ck.ok) return;
         const cost = ck.cost === 'X' ? Math.max(1, c.energy) : ck.cost;
         const { v, setup } = cardValue(c, k, ck, st);
         const sp = ck.spec;
-        let th = 0;
-        try {
-          const pv = seamPreview(c, k);
-          if (pv.kind === 'extend') th = 1.2 + (c.seam.len > 0 ? 1.0 * c.seam.len : 0) + payoutValue(c, pv.payout) * 0.35;
-          else if (pv.kind === 'cut') th = payoutValue(c, pv.payout) - (pv.payout.length ? 0 : c.seam.len >= 2 ? 2.5 : 0);
-        } catch { th = 0; }
+        let th = threadOf(k);
+        if (decl) { c.seam.declare = decl; const t2 = threadOf(k); c.seam.declare = null; if (t2 > th + DECLARE_MIN) { th = t2; declFor[i] = true; } }
+        if (growing && cutsLine(sp)) th -= 3 + 2.5 * growing;
         if (setup > 0 && v > -2) {
           const sscore = (setup + Math.max(0, v)) / Math.max(0.7, cost + 0.2) + (cost === 0 ? 5 : 0);
           if (sscore > bss && !(echo && sp.fx.every((o) => o.op === 'status' && o.s === 'echo'))) { bss = sscore; bestSetup = i; }
@@ -79,6 +91,7 @@ export function strongFight(run, pol, maxTurns = 40) {
       const sp = specOf(c, c.hand[best]);
       const ti = sp.target === 'enemy' ? c.enemies.indexOf(st.target) : null;
       if (globalThis.GW_TRACE) console.log(`T${c.turn} hp${c.player.hp} blk${c.player.block} en${c.energy} play ${sp.id} (need ${st.need}) foes ${live.map((e) => e.id + ':' + e.hp).join(',')}`);
+      if (decl && declFor[best]) setDeclare(c, true);
       playCard(c, best, ti);
       c.ev.length = 0;
     }
@@ -92,6 +105,8 @@ export function strongFight(run, pol, maxTurns = 40) {
   return { res, c };
 }
 void CARDS;
+const DECLARE_ON = process.env.GW_DECLARE !== '0', DECLARE_MIN = 1; // declare only when the Thread gains more than this
+const HOLDCUT_ON = process.env.GW_HOLDCUT !== '0';
 
 // Graft pick: sim score plus focus on the deck's dominant Thread school (only grafts that bridge into it).
 export function strongPickGraft(run, pol) {

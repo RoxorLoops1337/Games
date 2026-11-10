@@ -515,7 +515,7 @@ export default {
     app.text(school.name, x + w - 14, y + 28, { size: 11, ui: true, bold: true, align: 'right', color: locked ? '#6d655a' : school.color, fit: { w: 60, lines: 1 } });
     if (locked) {
       app.text('LOCKED', x + 24, y + 86, { size: 12, ui: true, bold: true, color: '#8c8372', fit: { w: 120, lines: 1 } });
-      const ul = app.text(heroHint(meta, h.id) || (h.unlock ? h.unlock.text : 'Locked.'), x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3, soft: true } });
+      const ul = app.text(heroHint(meta, h.id) || 'Locked.', x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3, soft: true } });
       app.text(h.blurb, x + 24, y + 106 + ul + 8, { size: 14, color: '#6d655a', fit: { w: w - 48, h: 90, lines: 4, soft: true } });
       // a big shrouded bust so the locked card still teases who is waiting (idle breath unless reduced motion)
       g.save(); g.globalAlpha = 0.34 + (calm(app) ? 0 : 0.06 * Math.sin(app.t * 1.6 + idx));

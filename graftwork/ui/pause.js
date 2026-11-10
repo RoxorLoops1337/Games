@@ -30,7 +30,7 @@ export const CONTROLS = [
     '1 to 9, 0: pick that card in your hand. Press again to play it.',
     'Left / Right: step through the hand. Tab: change the target.',
     'Enter or Space: play the selected card, or end the turn.',
-    'Q: draw, discard and exhaust piles.',
+    'Q: draw, discard and exhaust piles. G: Odile declares the next card Gilded.',
     'Esc: cancel, or open this menu. F: fullscreen.',
     'In menus: Up / Down / Tab move, Enter picks, Esc goes back.']],
   ['TOUCH', [

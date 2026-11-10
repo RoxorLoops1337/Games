@@ -1,10 +1,10 @@
 // Thread cards (see design/THREAD.md). hero: 'any' cards sit in the shared shop pool; hero cards use the hero's id.
 // {per:'knots'} reads the length of the current Line, AFTER the card itself has extended it (engine/seam.js runs first).
 // Readers with no school are Slack on purpose: they read the Line without disturbing it.
-// Engine contract used here (E1): cutting a Line from a card effect calls A.cutLine() when it exists, else sets c.seam.forceCut = true.
+// "Cut the Line." is A.cutLine() (engine/seam.js seamCutNow); the op carries seam: 'cut' so the preview knows the card cuts.
 const S = (A) => A.c.seam;
 const topSchool = (s) => Object.keys(s.counts || {}).sort((a, b) => (s.counts[b] || 0) - (s.counts[a] || 0))[0] || null;
-const cutNow = (A) => { const s = S(A); if (!s) return; if (typeof A.cutLine === 'function') A.cutLine(); else s.forceCut = true; };
+const CUT = { op: 'custom', fn: (A) => A.cutLine(), text: 'Cut the Line.', seam: 'cut' };
 const tieNow = (A) => { const s = S(A); if (s) s.tied = true; };
 const KN = (base, mul, max) => (max ? { base, per: 'knots', mul, max } : { base, per: 'knots', mul });
 
@@ -28,8 +28,8 @@ export const CARDS_THREAD = [
   { id: 'x_thread_cross', art: 'crossstitch', name: 'Cross-Stitch', hero: 'any', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', flags: {},
     fx: [{ op: 'dmg', n: KN(6, 2) }], up: { fx: [{ op: 'dmg', n: KN(8, 3) }] }, flavor: 'One more pass and it holds.' },
   { id: 'x_thread_snip', name: 'Snip', hero: 'any', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', flags: {},
-    fx: [{ op: 'dmg', n: 4 }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }],
-    up: { fx: [{ op: 'dmg', n: 7 }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }] }, flavor: 'Cashes the Line. Not a metaphor.' },
+    fx: [{ op: 'dmg', n: 4 }, CUT],
+    up: { fx: [{ op: 'dmg', n: 7 }, CUT] }, flavor: 'Cashes the Line. Not a metaphor.' },
   { id: 'x_thread_tieoff', art: 'threader', name: 'Tie Off', hero: 'any', type: 'skill', cost: 1, rarity: 'common', target: 'self', flags: {},
     fx: [{ op: 'block', n: 5 }, { op: 'custom', fn: tieNow, text: 'Tie the Line: it carries over at full value.' }],
     up: { fx: [{ op: 'block', n: 8 }, { op: 'custom', fn: tieNow, text: 'Tie the Line: it carries over at full value.' }] }, flavor: 'A knot holds what hands cannot.' },
@@ -42,8 +42,8 @@ export const CARDS_THREAD = [
   { id: 'x_thread_pinking', art: 'pinking', name: 'Pinking Shears', hero: 'any', type: 'attack', cost: 1, rarity: 'uncommon', target: 'all', school: 'rust', flags: {},
     fx: [{ op: 'dmg', n: KN(2, 2, 14), to: 'all' }], up: { fx: [{ op: 'dmg', n: KN(3, 2, 18), to: 'all' }] }, flavor: 'Zigzag edge. Fewer frayed ends, more frayed nerves.' },
   { id: 'x_thread_shears', art: 'shears', name: 'Tailor\'s Shears', hero: 'any', type: 'attack', cost: 2, rarity: 'rare', target: 'enemy', school: 'blood', flags: {},
-    fx: [{ op: 'dmg', n: KN(8, 4, 28) }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }],
-    up: { fx: [{ op: 'dmg', n: KN(10, 5, 35) }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }] }, flavor: 'The longer the line, the cleaner the cut.' },
+    fx: [{ op: 'dmg', n: KN(8, 4, 28) }, CUT],
+    up: { fx: [{ op: 'dmg', n: KN(10, 5, 35) }, CUT] }, flavor: 'The longer the line, the cleaner the cut.' },
   { id: 'x_thread_loom', art: 'loom', name: 'Standing Loom', hero: 'any', type: 'power', cost: 2, rarity: 'rare', target: 'self', school: 'hoard', flags: {},
     fx: [{ op: 'status', s: 'plated', n: KN(1, 1, 5), to: 'self' }], up: { fx: [{ op: 'status', s: 'plated', n: KN(2, 1, 6), to: 'self' }] }, flavor: 'It works while you do not.' },
 

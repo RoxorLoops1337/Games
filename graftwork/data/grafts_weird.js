@@ -61,16 +61,16 @@ export const GRAFTS_WEIRD = [
     mods: [{ k: 'pct', pct: -25 }, { k: 'custom', hooks: { onDiscard(A) { A.block(A.player, 10); } } }] },
   { id: 'g_slow_tumor', name: 'Slow Tumor', school: 'blood', weight: 1, tier: 'weird', rarity: 'common', types: AB, ok: (s) => dmgOrBlock(s) && numeric(s) && s.cost <= 2,
     boon: 'Each time you draw it, it deals or blocks 8 more this play.', price: 'Each time you draw it, it costs 1 more until played.',
-    mods: [{ k: 'custom', hooks: {
-      onDraw(A, { card }) { card.costMod = (card.costMod || 0) + 1; card.surge = 8; },
-    } }, { k: 'custom', hooks: { onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.surge || 0); } } }] },
+    mods: [{ k: 'custom', hooks: { onDraw(A, { card }) { card.surge = 8; } } },
+      { k: 'custom', price: true, hooks: { onDraw(A, { card }) { card.costMod = (card.costMod || 0) + 1; } } },
+      { k: 'custom', hooks: { onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.surge || 0); } } }] },
   { id: 'g_vampire_teeth', name: 'Vampire Teeth', school: 'blood', weight: 1, tier: 'weird', rarity: 'common', types: ['attack'], ok: (s) => s.target === 'enemy' && hasD(s),
     boon: 'After the hit, if the target is at half HP or lower (or dead), heal 6.', price: 'Otherwise lose 2 HP.',
     mods: [{ k: 'custom', hooks: { onPlay(A, ctx) {
       if (ctx.replay) return;
       const t = ctx.target;
       if (!t || t.dead || t.hp * 2 <= t.maxHp) A.heal(A.player, 6);
-    } } }, { k: 'custom', hooks: { onPlay(A, ctx) {
+    } } }, { k: 'custom', price: true, hooks: { onPlay(A, ctx) {
       if (ctx.replay) return;
       const t = ctx.target;
       if (t && !t.dead && t.hp * 2 > t.maxHp) A.loseHp(A.player, 2, { floor1: true, src: 'graft' });
@@ -92,7 +92,7 @@ export const GRAFTS_WEIRD = [
     mods: [{ k: 'custom', hooks: {
       onDraw(A, { card, spec }) { card.costSet = 0; card.debt = numeric(spec) ? spec.cost : 0; },
       onDiscard(A, { card }) { card.debt = 0; },
-    } }, { k: 'custom', hooks: { onPlay(A, ctx) {
+    } }, { k: 'custom', price: true, hooks: { onPlay(A, ctx) {
       if (ctx.replay) return;
       const d = ctx.card.debt || 0;
       ctx.card.debt = 0;
@@ -167,16 +167,13 @@ export const GRAFTS_WEIRD = [
     } }] },
   { id: 'g_gold_lever', name: 'Gold Lever', school: 'gilded', weight: 2, tier: 'weird', rarity: 'uncommon', types: AB, ok: dmgOrBlock,
     boon: 'On play, deals or blocks 1 extra per 6 gold you hold (max 12).', price: 'Spends 5 gold on play. With less than 5 gold there is no bonus.',
-    mods: [{ k: 'custom', hooks: { onPlay(A, ctx) {
-      if (ctx.replay) return;
-      const g = A.c.run.gold || 0;
-      ctx.card.lever = g >= 5 ? Math.min(12, Math.floor(g / 6)) : 0;
-      if (g >= 5) A.gold(-5);
-    } } }, { k: 'custom', hooks: { onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.lever || 0); } } }] },
+    mods: [{ k: 'custom', hooks: { onPlay(A, ctx) { if (!ctx.replay) ctx.card.lever = Math.min(12, Math.floor((A.c.run.gold || 0) / 6)); } } }, // under 5 gold this is 0: no bonus
+      { k: 'custom', price: true, hooks: { onPlay(A, ctx) { if (!ctx.replay && (A.c.run.gold || 0) >= 5) A.gold(-5); } } },
+      { k: 'custom', hooks: { onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.lever || 0); } } }] },
   { id: 'g_ash_pact', name: 'Ash Pact', school: 'ember', weight: 2, tier: 'weird', rarity: 'uncommon', types: AB, ok: (s) => s.target === 'enemy',
     boon: 'On play, apply 5 Burn to the target.', price: 'Also gain 2 Burn yourself.',
     mods: [{ k: 'custom', hooks: { onPlay(A, ctx) { const t = tgt(A, ctx); if (!ctx.replay && t) A.status(t, 'burn', 5); } } },
-      { k: 'custom', hooks: { onPlay(A, ctx) { if (!ctx.replay) A.status(A.player, 'burn', 2); } } }] },
+      { k: 'custom', price: true, hooks: { onPlay(A, ctx) { if (!ctx.replay) A.status(A.player, 'burn', 2); } } }] },
 
   // ---------- rare ----------
   { id: 'g_mirror_lens', name: 'Mirror Lens', school: 'echo', weight: 2, tier: 'weird', rarity: 'rare', types: AB,

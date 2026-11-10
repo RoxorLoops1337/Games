@@ -100,7 +100,7 @@ export function installA11y(app) {
 }
 
 // ---- gamepad -> keys, so the same focus system and per-screen key handlers serve both ----
-export const PAD_MAP = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 1: 'Escape', 3: 'i', 2: 'e', 9: 'Pause', 4: 'ArrowLeft', 5: 'ArrowRight' };
+export const PAD_MAP = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 1: 'Escape', 3: 'i', 2: 'e', 9: 'Pause', 4: 'ArrowLeft', 5: 'ArrowRight', 6: 'g' }; // 6 = left trigger: Odile's declaration (ui/seam_ui.js)
 export function padKeys(pad, held) {
   // returns the keys newly pressed this poll; held is the per-pad edge state
   const out = [], now = {};

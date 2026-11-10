@@ -104,7 +104,7 @@ t('credit shop: buy, owned, short, not for sale, equip', () => {
 
 t('practice: needs the boss met, replays the saved deck, and never touches stats', () => {
   const m = fresh(); const run = mk();
-  run.bossLog = [{ kind: 'boss', enemies: ['the_matron'], act: 1, win: false, deck: run.deck.map((i) => ({ id: i.id, grafts: ['g'], fused: [], up: 0 })), relics: run.relics.slice(), maxHp: 60 }];
+  run.bossLog = [{ kind: 'boss', enemies: ['the_matron'], act: 1, win: false, deck: run.deck.map((i) => ({ id: i.id, grafts: [gids[0]], fused: [], up: 0 })), relics: run.relics.slice(), maxHp: 60 }];
   run.seenEnemies = ['the_matron'];
   M.recordRunEnd(m, done(run, 'dead'), 'dead');
   const list = M.practiceList(m); assert.equal(list.length, 1); assert.equal(list[0].boss, 'the_matron');
@@ -112,7 +112,7 @@ t('practice: needs the boss met, replays the saved deck, and never touches stats
   assert.equal(M.practiceList(m2).length, 0, 'locked until met');
   const p = M.newPracticeRun(list[0]);
   assert.equal(p.phase, 'combat'); assert.equal(p.pending.fightKind, 'boss'); assert.deepEqual(p.pending.enemies, ['the_matron']); assert.equal(p.maxHp, 60); assert.equal(p.hp, 60);
-  assert.equal(p.deck.length, run.deck.length); assert.ok(p.deck.every((i) => i.grafts[0] === 'g'));
+  assert.equal(p.deck.length, run.deck.length); assert.ok(p.deck.every((i) => i.grafts[0] === gids[0])); // a real graft id: a saved deck that names a graft that no longer exists loses it (rules_fixes suite)
   const before = JSON.stringify(m.stats), credit = m.credit.bal;
   p.stats.shatters = 4; RUN.resolveFight(p, { win: true, shattered: [], damageTaken: 0 });
   assert.equal(p.phase, 'won'); const res = M.recordRunEnd(m, p, 'won');
