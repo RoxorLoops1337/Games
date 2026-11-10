@@ -42,7 +42,7 @@ function block(id, title, note, h, draw) { BLOCKS.push({ id, title, note, h, dra
 
 // real cards: the first card of the data with that type and rarity
 const cardOf = (type, rarity) => CARD_LIST.find((c) => c.type === type && c.rarity === rarity) || CARD_LIST.find((c) => c.type === type && c.rarity !== 'starter') || CARD_LIST.find((c) => c.type === type);
-const specOf = (c, o = {}) => cardSpec({ uid: 1, id: c.id, grafts: o.grafts || [], fused: o.fused || [], up: o.up ? 1 : 0 });
+const specOf = (c, o = {}) => cardSpec({ uid: 1, id: c.id, grafts: o.grafts || [], fused: o.fused || [], up: o.up ? 1 : 0, waived: o.waived || [] });
 const graftsFor = (c, n) => { const inst = { uid: 1, id: c.id, grafts: [], up: 0 }, out = []; for (const gr of GRAFT_LIST) { if (out.length >= n) break; if (canGraft(inst, gr.id)) { out.push(gr.id); inst.grafts.push(gr.id); } } return out; };
 const HAND = 0.74, BIG = 1.22;
 
@@ -75,6 +75,7 @@ const STATES = [
   ['upgraded', (c) => [specOf(c, { up: true }), {}]],
   ['1 graft', (c) => [specOf(c, { grafts: graftsFor(c, 1) }), {}]],
   ['2 grafts', (c) => [specOf(c, { grafts: graftsFor(c, 2) }), {}]],
+  ['Price waived (Free Sample)', (c) => { const g = graftsFor(c, 2); return [specOf(c, { grafts: g, waived: g }), {}]; }],
   ['3 grafts (Overload)', (c) => [specOf(c, { grafts: graftsFor(c, 3) }), {}]],
   ['fused (Tempered)', (c) => [specOf(c, { fused: graftsFor(c, 2) }), {}]],
   ['tithed', (c) => [specOf(c), { tithed: true }]],
@@ -86,8 +87,8 @@ const STATES = [
 ];
 for (const [mode, sc, compact] of [['hand size', HAND, true], ['inspect size', 0.98, false]]) {
   for (let part = 0; part < 2; part++) {
-    const list = STATES.slice(part ? 6 : 0, part ? 11 : 6);
-    block('states', `Card states, ${mode} (${part + 1} of 2)`, 'Top row painted, bottom row procedural. The card is a two cost attack with room for three grafts.', compact ? 520 : 680, (g) => {
+    const list = STATES.slice(part ? 6 : 0, part ? 12 : 6);
+    block('states', `Card states, ${mode} (${part + 1} of 2)`, 'Top row painted, bottom row procedural. The card is a two cost attack with room for three grafts; a waived Price is not on the card at all.', compact ? 520 : 680, (g) => {
       const c = CARD_LIST.find((q) => q.type === 'attack' && q.rarity === 'uncommon' && q.cost === 2) || cardOf('attack', 'uncommon');
       const cw = CARD_W * sc + (compact ? 30 : 16), rowH = CARD_H * sc + 26;
       list.forEach(([name, mk], i) => {

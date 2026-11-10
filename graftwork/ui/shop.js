@@ -148,7 +148,7 @@ export function drawModal(app, st, run, extra = {}) {
   const fade = clamp(m.t / 0.18, 0, 1);
   app.reg('modal', 36, 30, 1208, 660, { overlay: true });
   g.save(); g.globalAlpha = fade; g.fillStyle = 'rgba(6,4,3,.82)'; g.fillRect(0, 0, 1280, 720);
-  app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3 });
+  app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3, frame: 'modal' });
   app.text(m.title, 640, 44, { size: 30, bold: true, align: 'center', color: COL.lamp, fit: { w: 760, lines: 1 } });
   if (m.sub) app.text(m.sub, 640, 82, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', fit: { w: 960, h: 34, lines: 2 } });
   const close = () => { st.m = null; if (m.onCancel) m.onCancel(); };

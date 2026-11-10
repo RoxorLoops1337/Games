@@ -7,6 +7,7 @@ import { COL, W, H, EASE, clamp } from './core.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs, toggleFullscreen } from './fullscreen.js';
 import { saveRun } from '../engine/save.js';
 import { lnw } from '../art/linework.js';
+import * as SK from './skin.js';
 
 export const IN_RUN = new Set(['ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event']);
 export const PAUSE_BTN = { x: 1136, y: 9, w: 44, h: 38 };
@@ -143,7 +144,8 @@ export default {
     g.restore();
   },
   frame(app, g, px, py, pw, ph) {
-    app.panel(px, py, pw, ph, { r: 16, fill: 'rgba(22,18,16,.985)', stroke: BRASS, lw: 3 });
+    app.panel(px, py, pw, ph, { r: 16, fill: 'rgba(22,18,16,.985)', stroke: BRASS, lw: 3, frame: 'modal' }); // painted modal (preview) when its image is there
+    if (SK.has('modal')) return; // its own brass corners stand in for the inner rule and the four rivets below
     g.save(); app.rr(px + 7, py + 7, pw - 14, ph - 14, 11); g.strokeStyle = 'rgba(232,220,196,.16)'; g.lineWidth = lnw(1.5); g.stroke();
     g.fillStyle = BRASS;
     for (const [rx, ry] of [[px + 16, py + 16], [px + pw - 16, py + 16], [px + 16, py + ph - 16], [px + pw - 16, py + ph - 16]]) { g.beginPath(); g.arc(rx, ry, 3.5, 0, 6.283); g.fill(); }
