@@ -69,6 +69,38 @@ function applyMod(s, m, g) {
   }
 }
 
+// Free Sample's waiver (inst.waived) belongs to one sewing of one graft: it travels with the graft when Reforge or an event lifts it
+// onto another card and ends when the graft is stripped. sewGraft / unsewGraft are the only ways a live graft joins or leaves a card.
+// A graft Numb has muted (afflictions.js mutedId) is looked up under the id it was muted from.
+const isWaived = (inst, g) => !!inst.waived && inst.waived.includes(g.of || g.id);
+export function sewGraft(inst, gid, waived = false) {
+  inst.grafts.push(gid);
+  if (waived) (inst.waived = inst.waived || []).push(gid);
+}
+// Takes the graft off the card (the last one when no id is given). Returns { waived } or null when the card does not carry it.
+export function unsewGraft(inst, gid = inst.grafts[inst.grafts.length - 1]) {
+  const i = inst.grafts.indexOf(gid);
+  if (i < 0) return null;
+  inst.grafts.splice(i, 1);
+  const w = inst.waived ? inst.waived.indexOf(gid) : -1;
+  if (w >= 0) inst.waived.splice(w, 1);
+  return { waived: w >= 0 };
+}
+
+// The deck as the Forge and the shop preview it after a Strip or a Reforge; the real cards stay as they are.
+const copyOf = (i) => ({ ...i, grafts: i.grafts.slice(), waived: (i.waived || []).slice() });
+export function deckStripped(deck, uid, gid) {
+  return deck.map((i) => { if (i.uid !== uid) return i; const c = copyOf(i); unsewGraft(c, gid); return c; });
+}
+export function deckMoved(deck, fromUid, gid, toUid) {
+  const lifted = copyOf(deck.find((i) => i.uid === fromUid)), waived = unsewGraft(lifted, gid);
+  return deck.map((i) => {
+    if (i.uid === fromUid) return lifted;
+    if (i.uid !== toUid) return i;
+    const c = copyOf(i); sewGraft(c, gid, !!(waived && waived.waived)); return c;
+  });
+}
+
 export function cardSpec(inst) {
   const base = CARDS[inst.id];
   if (!base) throw new Error('unknown card ' + inst.id);
@@ -93,7 +125,7 @@ export function cardSpec(inst) {
   for (const gid of [...(inst.fused || []), ...inst.grafts]) {
     const g = GRAFTS[gid];
     if (!g) throw new Error('unknown graft ' + gid);
-    const waived = inst.waived && inst.waived.includes(gid);
+    const waived = isWaived(inst, g);
     if (waived) s.waived.push(gid);
     for (const m of g.mods || []) { if (waived && isPriceMod(m)) continue; applyMod(s, m, g); }
   }

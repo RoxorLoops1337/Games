@@ -7,7 +7,7 @@ import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { runAllows, snapshotFor } from './unlock.js';
 import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
-import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod } from './cards.js';
+import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod, sewGraft, unsewGraft } from './cards.js';
 
 export const POTION_SLOTS = 3;
 export const SKIP_HEAL = 8;
@@ -235,10 +235,10 @@ function sampleReady(run) { return perk(run, 'freeFirstGraft') && !run.flags['pf
 export function applyGraft(run, uid, gid, o = {}) {
   const inst = findInst(run, uid);
   if (!inst || !canGraft(inst, gid)) return { ok: false };
-  inst.grafts.push(gid);
-  const g = GRAFTS[gid];
-  if (!o.free && sampleReady(run)) { run.flags['pf' + run.act] = 1; (inst.waived = inst.waived || []).push(gid); } // decided first: a waived Price costs no max HP either
-  if (!(inst.waived && inst.waived.includes(gid))) for (const m of g.mods) if (m.k === 'maxHp') { run.maxHp = Math.max(10, run.maxHp + m.n); run.hp = Math.min(run.hp, run.maxHp); }
+  const g = GRAFTS[gid], free = !o.free && sampleReady(run); // decided first: a waived Price costs no max HP either
+  if (free) run.flags['pf' + run.act] = 1;
+  sewGraft(inst, gid, free);
+  if (!free) for (const m of g.mods) if (m.k === 'maxHp') { run.maxHp = Math.max(10, run.maxHp + m.n); run.hp = Math.min(run.hp, run.maxHp); }
   const bounty = perkN(run, 'graftBounty'); if (bounty) { run.gold += bounty; run.stats.goldEarned += bounty; }
   run.stats.grafts++;
   if (!o.keepPhase) { run.pending = null; }
@@ -329,10 +329,7 @@ export function forgeHeal(run) { return Math.round(run.maxHp * (run.ascension >=
 export function stripGraft(run, uid, gid) {
   const inst = findInst(run, uid);
   if (!inst || !inst.grafts.length) return false;
-  const i = gid ? inst.grafts.indexOf(gid) : inst.grafts.length - 1;
-  if (i < 0) return false;
-  inst.grafts.splice(i, 1);
-  return true;
+  return !!unsewGraft(inst, gid || undefined); // the waiver Free Sample gave this sewing ends with it
 }
 // choice: 'rest' | 'expand' | 'refine' (a: uid) | 'temper' (a: uid) | 'strip' (a: uid, b: gid) | 'reforge' (a: fromUid, b: gid, c: toUid)
 export function forgeAct(run, choice, a, b, c) {
@@ -346,10 +343,7 @@ export function forgeAct(run, choice, a, b, c) {
   else if (choice === 'strip') ok = stripGraft(run, a, b);
   else if (choice === 'reforge') {
     const from = findInst(run, a), to = findInst(run, c);
-    if (from && to && from !== to && from.grafts.includes(b)) {
-      const had = from.grafts.slice(); from.grafts.splice(from.grafts.indexOf(b), 1);
-      if (canGraft(to, b)) { to.grafts.push(b); ok = true; } else from.grafts = had;
-    }
+    if (from && to && from !== to && from.grafts.includes(b) && canGraft(to, b)) { sewGraft(to, b, unsewGraft(from, b).waived); ok = true; } // a waived Price stays waived
   }
   if (ok) { f.used++; f.last = choice; }
   return { ok };
@@ -374,7 +368,7 @@ export const R = {
   queueFight: (run, enemies, o = {}) => { run.flags.queueFight = { enemies, elite: !!o.elite }; },
   rng: (run) => run.rng,
   addGraftRandom: (run, uid) => { const inst = findInst(run, uid); if (!inst) return null; const pool = gpool(run).filter((g) => canGraft(inst, g.id)); if (!pool.length) return null; const g = run.rng.pick(pool); applyGraft(run, uid, g.id, { keepPhase: true }); return g.id; },
-  moveGraft: (run, from, to, gid) => { const a = findInst(run, from), b = findInst(run, to); if (!a || !b || a === b || !a.grafts.includes(gid) || !canGraft(b, gid)) return false; a.grafts.splice(a.grafts.indexOf(gid), 1); b.grafts.push(gid); return true; },
+  moveGraft: (run, from, to, gid) => { const a = findInst(run, from), b = findInst(run, to); if (!a || !b || a === b || !a.grafts.includes(gid) || !canGraft(b, gid)) return false; sewGraft(b, gid, unsewGraft(a, gid).waived); return true; },
   shatter: (run, uid) => { run.deck = run.deck.filter((i) => i.uid !== uid); run.stats.shatters++; },
   strainOf: (run) => strainInfo(run),
 };
@@ -466,7 +460,11 @@ const keepKnown = (list, known) => (Array.isArray(list) && list.some((x) => !kno
 function repairRun(run) {
   if (!Array.isArray(run.deck)) return run;
   run.deck = keepKnown(run.deck, (i) => !!(i && CARDS[i.id]));
-  for (const i of run.deck) for (const k of ['grafts', 'fused', 'waived']) if (i[k]) i[k] = keepKnown(i[k], (g) => !!GRAFTS[g]);
+  for (const i of run.deck) {
+    for (const k of ['grafts', 'fused', 'waived']) if (i[k]) i[k] = keepKnown(i[k], (g) => !!GRAFTS[g]);
+    // a waiver belongs to a graft the card carries: Reforge and Strip used to leave theirs behind, and a graft sewn on again was free
+    if (i.waived) i.waived = keepKnown(i.waived, (g) => i.grafts.includes(g) || (i.fused || []).includes(g));
+  }
   run.relics = keepKnown(run.relics, (r) => !!RELICS[r]);
   run.potions = keepKnown(run.potions, (p) => !!POTIONS[p]);
   const p = run.pending;

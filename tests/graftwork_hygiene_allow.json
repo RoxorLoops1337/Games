@@ -568,8 +568,6 @@
   "spring@graftwork/ui/juice.js",
   "stitch@graftwork/ui/end.js",
   "stitch@graftwork/ui/settings.js",
-  "stitches@graftwork/data/relics_more.js",
-  "stitches@graftwork/data/relics_thread.js",
   "store@graftwork/engine/save.js",
   "store@graftwork/ui/offline.js",
   "tipSeen@graftwork/engine/meta.js",

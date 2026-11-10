@@ -363,7 +363,7 @@ export default {
     } else if (this.tab === 7) {
       app.text('Achievements, Credit and cosmetics. Credit is paid by the case file at the end of a run.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     } else {
-      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in eight panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
+      app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : `The whole Graft system in ${RULES.length} panels.`, 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     }
     const CX = 28, CY = 144, CW = W - 56, CH = H - 144 - 20;
     app.reg('scroll-codex', CX, 0, CW, H, { overlay: true }); // every cell clips its own content

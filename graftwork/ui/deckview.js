@@ -155,7 +155,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
     }
   });
   st.activate = false;
-  if (hover >= 0 && hr && items[hover].spec && !items[hover].draw) cardGlossTip(app, items[hover].spec, o.glossBand ? { ...hr, band: o.glossBand } : hr, { extra: items[hover].gloss }); // hover or keyboard focus: the rules words on this card, explained
+  if (hover >= 0 && hr && items[hover].spec && !items[hover].draw) cardGlossTip(app, items[hover].spec, o.glossRegion ? { ...hr, region: o.glossRegion } : hr, { extra: items[hover].gloss }); // hover or keyboard focus: the rules words on this card, explained
   for (const [it, i] of pend) { it.onClick(it, i); break; }
   return { hover, cols, rowH };
 }
@@ -385,7 +385,7 @@ export default {
     if (showCount) app.text(countTxt, W - 40, ty + 6, { size: 14, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
 
     // ---- main: grid
-    const MY = 148, MH = app.scale < 0.95 ? 452 : 466; // phones: the resonance strip below gets 3 lines of text
+    const MY = 148, MH = app.scale < 0.95 ? 452 : 466, PREVIEW_X = 734, SIDE_X = 988; // phones: the resonance strip below gets 3 lines of text
     const items = all.map((c) => {
       const w = instWeight(c.inst), tithed = tithedSet.has(c.inst.uid);
       const badges = [];
@@ -399,14 +399,14 @@ export default {
       };
     });
     const emptyMsg = this.pick ? 'No card can take this.' : this.grafted ? 'No grafted cards yet. Graft one after a fight.' : this.bare ? 'Every card here has a graft.' : 'Nothing matches.';
-    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: app.scale < 0.95 ? 0.72 : 0.56, gap: 10, empty: emptyMsg, glossBand: { x: 940, y: MY, bottom: MY + MH, dir: 1 } });
+    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: app.scale < 0.95 ? 0.72 : 0.56, gap: 10, empty: emptyMsg, glossRegion: { x0: 22, y0: MY, x1: PREVIEW_X - 4, y1: MY + MH } }); // the tip lives over the grid: the preview and the side panel (the card's grafts) stay readable
     if (this.pick && g.hover >= 0 && items[g.hover].disabled) app.tooltip('Cannot choose', 'This card does not qualify.');
     this.hoverIdx = g.hover;
     const hv = g.hover >= 0 ? items[g.hover] : null;
 
     // ---- preview + details
-    this.drawPreview(app, run, hv, info, 734, MY, 244, MH);
-    this.drawSide(app, run, hv, info, 988, MY, 262, MH);
+    this.drawPreview(app, run, hv, info, PREVIEW_X, MY, 244, MH);
+    this.drawSide(app, run, hv, info, SIDE_X, MY, 262, MH);
 
     // ---- resonance
     resonanceStrip(app, run, 28, MY + MH + 6, W - 56, 704 - (MY + MH + 6));
