@@ -7,8 +7,10 @@ import { cardGlossTip } from './tooltips.js';
 import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
+import { resonanceText } from '../data/schools.js';
 import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
+import { priceOnCard } from '../engine/text.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
 import { lnw } from '../art/linework.js';
 
@@ -214,7 +216,10 @@ export function gaugeCells(app, x, y, info, o = {}) {
 
 // ---------------------------------------------------------------- school resonance strip
 export function resonanceStrip(app, run, x, y, w, h) {
-  const ctx = app.ctx, res = resonanceOf(run);
+  // opened in a fight, the strip shows the tiers that fight uses (Resonance Lens lifts a school at 3 in Elite and Boss fights);
+  // plain = what the grafts alone wake, so the tooltip can say when the fight counts a school higher
+  const kind = run.phase === 'combat' && run.pending ? run.pending.fightKind : undefined;
+  const ctx = app.ctx, res = resonanceOf(run, kind), plain = kind ? resonanceOf(run).tiers : res.tiers;
   app.panel(x, y, w, h, { r: 8, fill: 'rgba(14,12,10,.7)', stroke: 'rgba(232,220,196,.22)', lw: 1.5 });
   const ids = SCHOOLS ? Object.keys(SCHOOLS) : [];
   const colW = (w - 12) / ids.length;
@@ -238,7 +243,8 @@ export function resonanceStrip(app, run, x, y, w, h) {
     ctx.restore();
     const txt = tier ? (s.resonance[tier] || '') : `At 3: ${s.resonance[3] || ''}`;
     app.text(txt, left, y + 38, { size: 12, ui: true, lineH: 13, color: tier ? COL.vellum : 'rgba(232,220,196,.5)', fit: { w: inner, h: h - 40, lines: 3, soft: true } }); // the full text is in the tooltip
-    if (app.inRect(left - 4, y, colW, h)) app.tooltip(`${s.name}: ${n} ${plural(n, 'graft')}`, `3 grafts: ${s.resonance[3]}\n6 grafts: ${s.resonance[6]}\n${s.blurb || ''}`, { color: col });
+    const lifted = tier > (plain[id] || 0) ? `Counts as ${tier} grafts in this fight.\n` : '';
+    if (app.inRect(left - 4, y, colW, h)) app.tooltip(`${s.name}: ${n} ${plural(n, 'graft')}`, `${lifted}3 grafts: ${resonanceText(s, 3)}\n6 grafts: ${resonanceText(s, 6)}\n${s.blurb || ''}`, { color: col });
   });
 }
 
@@ -478,7 +484,8 @@ export default {
       const inst = hv.inst, spec = hv.spec;
       yy += app.text(spec.name, x + pad, yy, { size: 20, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 23 }) + 2;
       const fusedIds = inst.fused || [];
-      const lc = Math.ceil(Math.max(app.measure('Boon', 12, { ui: true, bold: true }), app.measure('Price', 12, { ui: true, bold: true }))) + 8; // the Boon / Price label column follows the real text size
+      const labels = ['Boon', 'Price', ...(spec.waived.length ? ['Waived'] : [])]; // a waived Price (Free Sample) is labelled Waived
+      const lc = Math.ceil(Math.max(...labels.map((t) => app.measure(t, 12, { ui: true, bold: true })))) + 8; // the label column follows the real text size
       if (!inst.grafts.length && !fusedIds.length) {
         const txt = isBare(inst) ? 'No grafts. A plain card: it weighs nothing, and it is what the Tithe lands on.' : 'No grafts. Junk takes none and weighs nothing.';
         yy += app.text(txt, x + pad, yy, { size: 14, ui: true, maxW: w - 2 * pad, color: COL.vellum }) + 6;
@@ -497,8 +504,9 @@ export default {
           app.text('Boon', x + pad, yy, { size: 12, ui: true, bold: true, color: COL.good });
           yy += Math.max(15, app.text(gr.boon || '', x + pad + lc, yy, { size: 13, ui: true, maxW: w - 2 * pad - lc, lineH: 15, color: COL.vellum }));
           yy += 2;
-          app.text('Price', x + pad, yy, { size: 12, ui: true, bold: true, color: COL.bad });
-          yy += Math.max(15, app.text(gr.price || '', x + pad + lc, yy, { size: 13, ui: true, maxW: w - 2 * pad - lc, lineH: 15, color: '#ffb0b0' }));
+          const pr = priceOnCard(spec, gid);
+          app.text(pr.label, x + pad, yy, { size: 12, ui: true, bold: true, color: pr.waived ? COL.lamp : COL.bad });
+          yy += Math.max(15, app.text(pr.text || '', x + pad + lc, yy, { size: 13, ui: true, maxW: w - 2 * pad - lc, lineH: 15, color: pr.waived ? 'rgba(232,220,196,.6)' : '#ffb0b0' }));
           yy += 10;
         });
       }
@@ -511,7 +519,8 @@ export default {
           app.text(gr.name, x + pad + 18, yy, { size: 14, bold: true, color: COL.vellum, fit: { w: w - 2 * pad - 18 - 40, lines: 1 } });
           app.text(`W${fusedWeight(gid)}`, x + w - pad, yy + 1, { size: 14, ui: true, bold: true, align: 'right', color: COL.vellum });
           yy += 20;
-          yy += Math.max(14, app.text(`${gr.boon || ''} Price: ${gr.price || ''}`, x + pad + 18, yy, { size: 12, ui: true, maxW: w - 2 * pad - 18, lineH: 14, color: 'rgba(232,220,196,.8)' })) + 4;
+          const pr = priceOnCard(spec, gid);
+          yy += Math.max(14, app.text(`${gr.boon || ''} ${pr.label}: ${pr.text || ''}`, x + pad + 18, yy, { size: 12, ui: true, maxW: w - 2 * pad - 18, lineH: 14, color: 'rgba(232,220,196,.8)' })) + 4;
         }
         yy += 4;
       }

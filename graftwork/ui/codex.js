@@ -6,6 +6,7 @@ import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../ar
 import { drawStatus, drawRelic } from '../art/icons.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, SCHOOLS, HEROES, GRAFT_LIST } from '../data/index.js';
+import { RESONANCE_THREAD } from '../data/schools.js';
 import { cardSpec } from '../engine/cards.js';
 import { drawSeamBadge } from './seam_ui.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
@@ -184,7 +185,7 @@ const RULES = [
   ['Weight and Budget', 'Each graft weighs 1 to 3. Your Budget, 6 to start, is the Weight your deck carries for free.'],
   ['Strain Tithes your plain cards', 'Weight over Budget is Strain. Each point Tithes a plain card: it fights at 75 percent. With no plain card left, grafted cards jam.'],
   ['Overload and Shatter', 'A card holds 2 grafts. The 3rd Overloads it: +1 Weight, numbers x1.5, and a 25 percent chance to Shatter on its first play each combat.'],
-  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
+  ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one. ' + RESONANCE_THREAD.rule],
   ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school Cuts it and pays one Stitch per knot after the first. A longer Line pays more.'],
   ['Slack, Tied, Frayed', 'Slack: a card with no school changes nothing. Tied: a Tempered card never cuts, and a Tied Line carries over a turn. Frayed: a jammed card acts as Slack.'],
   ['The Ward: build, then walk', 'Each floor is a hospital you build. Mornings you play building plans: rooms spawn fights, events, shops and forges on timers. Lit rooms use power.'],
@@ -463,9 +464,13 @@ export default {
     const ctx = app.ctx, st = this.state('schools'), ids = SCHOOL_IDS();
     const gap = 14, cw = Math.floor((w - 16 - gap) / 2), ch = Math.round(166 + (growOf(app) - 1) * 70);
     const rows = Math.ceil(ids.length / 2);
-    scrollArea(app, st, x, y, w, h, rows * (ch + gap) + gap, (top) => {
+    // the Thread half of resonance is the same for every school: said once, above the seven
+    const cap = 'For every school. ' + RESONANCE_THREAD.rule, capO = { size: 14, ui: true, lineH: 17, color: COL.vellum, maxW: w - 40 };
+    const capL = app.layoutText(cap, capO), capH = capL.lines.length * capL.lineH + 8;
+    scrollArea(app, st, x, y, w, h, capH + rows * (ch + gap) + gap, (top) => {
+      if (top + gap + capH > y) app.text(cap, x + 12, top + gap, capO);
       ids.forEach((id, i) => {
-        const s = SCHOOLS[id], cx = x + 8 + (i % 2) * (cw + gap), cy = top + gap + Math.floor(i / 2) * (ch + gap);
+        const s = SCHOOLS[id], cx = x + 8 + (i % 2) * (cw + gap), cy = top + gap + capH + Math.floor(i / 2) * (ch + gap);
         if (cy + ch < y || cy > y + h) return;
         const col = s.color || COL.vellum;
         if (inView(app, st, cx, cy, cw, ch)) glossTip(app, '', [s.blurb, s.resonance[3], s.resonance[6]], { x: cx, y: cy, w: cw, h: ch });

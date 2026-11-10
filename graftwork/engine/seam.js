@@ -6,6 +6,8 @@
 // turn, 6 charge per turn, 20 gold per combat, len cap 5 (Spool: mod.seamCap).
 // Hooks: relics/hero via fire(c,'seamExtend'|'seamCut'|'seamPay',info); enemies via def.on.seamExtend/seamCut/seamPay(A,e,info).
 // An enemy or relic may set info.cancel = true on a seamCut hook to void that payout (Scissor Nurse).
+// seamCut info.paid is false for a cut past the turn's paying cuts (it cuts the Line and pays nothing), true for every other cut
+// and for the turn-end cash: a hook that rides on a paying cut tests it. The seamCut event carries capped: true for the same cut.
 // A hero with `declare: <school>` (Odile, 'gilded') may declare one card a turn: canDeclare / setDeclare below.
 import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
@@ -215,11 +217,13 @@ function cash(c, kind, card) {
     list = payoutFor(c, s.counts, s.order, s.set, s.len, mode, kind === 'cut' ? timesFor(c, base[0].school) : 1);
   }
   const hadStitches = base.length > 0;
-  const info = { len: s.len, school: list[0] ? list[0].school : base[0] ? base[0].school : null, stitches: list.reduce((a, x) => a + x.stitches, 0), kind, card: card ? card.uid : null, cancel: false, capped };
+  const info = { len: s.len, school: list[0] ? list[0].school : base[0] ? base[0].school : null, stitches: list.reduce((a, x) => a + x.stitches, 0), kind, card: card ? card.uid : null, cancel: false, paid: !capped };
   if (hadStitches && kind === 'cut' && !capped) s.cuts++;
   if (hadStitches) { fire(c, 'seamCut', info); enemyHook(c, 'seamCut', info); }
   const paid = info.cancel ? 0 : list.reduce((a, x) => a + x.stitches, 0);
-  c.ev.push({ t: 'seamCut', paid, school: info.school, len: s.len, card: card ? card.uid : null, kind });
+  const ev = { t: 'seamCut', paid, school: info.school, len: s.len, card: card ? card.uid : null, kind };
+  if (capped) ev.capped = true; // the cap, not an enemy cancel or a Line too short to pay (data/grafts_thread.js reads it)
+  c.ev.push(ev);
   if (!info.cancel) for (const e of list) pay(c, e, kind);
   return paid;
 }

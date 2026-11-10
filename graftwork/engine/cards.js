@@ -76,6 +76,7 @@ export function cardSpec(inst) {
     uid: inst.uid, id: base.id, name: base.name, hero: base.hero, rarity: base.rarity || 'common', type: base.type,
     cost: base.cost, target: base.target || 'enemy', flags: { ...(base.flags || {}) }, fx: cloneFx(base.fx || []),
     repeat: 0, pct: 0, lifesteal: 0, price: emptyPrice(), custom: [], grafts: inst.grafts.slice(), fused: (inst.fused || []).slice(),
+    waived: [], // grafts of this card whose Price was left out below (Free Sample): engine/text.js priceOnCard prints them as waived
     up: !!inst.up, school: base.school || null, art: base.art || base.id, flavor: base.flavor || '', text: base.text || null,
     overload: inst.grafts.length > MAX_GRAFTS_NORMAL,
   };
@@ -93,6 +94,7 @@ export function cardSpec(inst) {
     const g = GRAFTS[gid];
     if (!g) throw new Error('unknown graft ' + gid);
     const waived = inst.waived && inst.waived.includes(gid);
+    if (waived) s.waived.push(gid);
     for (const m of g.mods || []) { if (waived && isPriceMod(m)) continue; applyMod(s, m, g); }
   }
   if (s.flags.unplayable) s.unplayable = true;

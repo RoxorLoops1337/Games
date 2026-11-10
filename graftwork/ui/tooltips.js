@@ -8,6 +8,7 @@
 //                   (one panel, width <= 38% of the stage, placed beside the anchor and clear of the HUD, with an arrow at the anchor)
 import { COL } from './core.js';
 import { STATUSES, SCHOOLS, GRAFTS } from '../data/index.js';
+import { RESONANCE_THREAD } from '../data/schools.js';
 import { cardLines } from '../engine/text.js';
 import { mult, scaleNum } from '../engine/combat.js';
 import { OVERLOAD_MULT, TITHE_MULT } from '../engine/cards.js';
@@ -50,7 +51,7 @@ export const KEYWORDS = {
   Ringing: K('#a79bb5', 'hex', 'Junk. Unplayable and Ethereal: clogs your hand, then fades.'),
   Weight: K('#d6c7a6', 'square', 'What a graft counts against your Budget (1 to 3).'),
   Budget: K('#d6c7a6', 'square', 'Graft Weight the deck carries free of Strain.'),
-  Resonance: K('#7fd1e0', 'star', 'Deck bonus for many grafts of one school, at 3 and again at 6.'),
+  Resonance: K('#7fd1e0', 'star', 'Deck bonus at 3 and 6 grafts of one school. ' + RESONANCE_THREAD.rule),
   Strength: K('#ff9a6a', 'tri', 'Attacks deal this much extra damage.'),
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),

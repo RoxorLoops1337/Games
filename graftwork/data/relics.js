@@ -153,8 +153,7 @@ export const RELIC_LIST = [
   { id: 'r_graft_press', name: 'Graft Press', rarity: 'rare', text: 'The first time each combat you play a card with 2 or more grafts, gain 1 Energy.',
     on: { cardPlayed: (A, p) => { const s = S(A); if (p.spec.grafts.length >= 2 && !s.press) { s.press = true; A.energy(1); } } } },
   { id: 'r_golden_scalpel', name: 'Golden Scalpel', rarity: 'rare', text: 'Budget +1. Overload Shatter chance is 15% higher.', mod: { budget: 1, shatter: 0.15 } },
-  { id: 'r_resonance_lens', name: 'Resonance Lens', rarity: 'rare', text: 'In Elite and Boss fights, each school at Resonance 3 counts as Resonance 5.',
-    on: { combatStart: (A) => { if (A.c.kind !== 'elite' && A.c.kind !== 'boss' && A.c.kind !== 'final') return; const r = A.c.res || {}; for (const k of Object.keys(r)) if (r[k] === 3) r[k] = 5; } } },
+  { id: 'r_resonance_lens', name: 'Resonance Lens', rarity: 'rare', text: 'In Elite and Boss fights, each school at Resonance 3 counts as Resonance 6.', mod: { resLens: 1 } }, // read by engine/resonance.js resonanceOf, the one place a tier is decided
   // ---------- boss (2) ----------
   { id: 'r_tithe_crown', name: 'Tithe Crown', rarity: 'boss', text: 'Budget -2. Start combat with 1 Strength per Tithed card (max 6).', mod: { budget: -2 },
     on: { combatStart: (A) => A.status(A.player, 'strength', Math.min(6, A.c.strain.tithed.length)) } },
