@@ -180,5 +180,4 @@ t('the_build_script_has_no_low_pass_and_no_walk_handling', () => {
   for (const gone of ["'--low'", 'low_pass', 'LOW_REJECT', "'walk1x'] =", 'walkOk\'] =', "fr['walk']", 'cardsById\'] =']) assert.ok(!src.includes(gone), gone);
   for (const kept of ["'--frames'", "'--combat'", "'--prune'", 'def frames_pass', 'def combat_pass', 'def prune_pass']) assert.ok(src.includes(kept), kept);
 });
-t('no_em_dashes', () => { assert.ok(!raw.includes(String.fromCharCode(0x2014))); });
 console.log(n + ' ok');

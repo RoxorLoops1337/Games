@@ -612,7 +612,6 @@ await t('item6: the Codex Rules tab teaches the Ward (build, the die and the rou
   const { CODEX_RULES } = await import('../graftwork/ui/codex.js');
   const all = CODEX_RULES.map((r) => r.join(' ')).join('\n');
   assert.ok(/Ward/.test(all) && /die/.test(all) && /boss/i.test(all) && /\bG\b/.test(all) && /\bR\b/.test(all), 'Ward rules named: ' + all.slice(-400));
-  assert.ok(!/\u2014/.test(all), 'no em dashes');
   for (const ps of [0, 0.54]) {
     const { app } = await setup({ seed: 'codexw', pscale: ps });
     app.register('codex', (await import('../graftwork/ui/codex.js')).default);

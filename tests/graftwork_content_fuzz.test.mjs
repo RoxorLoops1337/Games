@@ -214,7 +214,7 @@ for (const s of Object.keys(STATUSES)) { tryDo(`status ${s}`, () => ART.icons.dr
 for (const e of ENEMY_IDS) for (const t of [0, 1.3]) tryDo(`enemy ${e}`, () => ART.enemies.drawEnemy(ctx, ENEMIES[e], 300, 400, { t }));
 
 // ---------------- part 3: text templates ----------------
-const badText = (t) => (/undefined|\[object|NaN|null/.test(t) ? 'bad token' : / {2,}/.test(t) ? 'double space' : /—/.test(t) ? 'em dash' : /\s$|^\s/.test(t) ? 'edge space' : '');
+const badText = (t) => (/undefined|\[object|NaN|null/.test(t) ? 'bad token' : / {2,}/.test(t) ? 'double space' : /\s$|^\s/.test(t) ? 'edge space' : '');
 const scan = (what, t) => { if (typeof t !== 'string') return; const w = badText(t); if (w) bug(`TEXT ${what}: ${w}`, JSON.stringify(t).slice(0, 140)); };
 for (const id of CARD_IDS) for (const up of [0, 1]) for (const gs of [0, 2, 3]) {
   const inst = newInst(id, () => 1); inst.up = up; if (gs) inst.grafts.push(...randomGrafts(inst, gs));

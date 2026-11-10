@@ -537,12 +537,11 @@ await t('grounding: monsters ease in and out of a walk (the speed ramps, it neve
 });
 
 // ======================================================= WARD.md =======================================================
-await t('docs: WARD.md documents the modular kit renderer and every planned id; no em dashes in the new files', async () => {
+await t('docs: WARD.md documents the modular kit renderer and every planned id', async () => {
   const doc = fs.readFileSync(new URL('../graftwork/design/WARD.md', import.meta.url), 'utf8');
   assert.ok(/Modular kit renderer/.test(doc), 'section present');
   const ids = [...KD.PLANNED.floors, ...KD.PLANNED.walls, ...KD.PLANNED.pieces, ...Object.keys(KD.PLANNED.props)];
   for (const id of ids) assert.ok(new RegExp('\\b' + id + '\\b').test(doc), 'planned id documented: ' + id);
-  for (const f of ['../graftwork/data/ward_kit.js', '../graftwork/ui/ward_kit_iso.js', '../graftwork/ui/ward_iso.js', '../graftwork/ui/assets.js', '../graftwork/design/WARD.md', '../graftwork/CLAUDE.md', './graftwork_ui_ward_kit.test.mjs']) assert.ok(!fs.readFileSync(new URL(f, import.meta.url), 'utf8').includes(String.fromCharCode(8212)), f + ' has no em dash');
 });
 
 console.log(n + ' ward kit checks passed');

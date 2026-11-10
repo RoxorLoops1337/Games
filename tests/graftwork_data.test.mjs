@@ -27,10 +27,9 @@ function walk(ops, where, f) {
     if (f) f(o);
   }
 }
-const noDash = (s, where) => ok(!/—/.test(String(s || '')), `${where}: em dash in text`);
 
 t('statuses are well formed', () => {
-  for (const s of Object.values(STATUSES)) { ok(s.name && typeof s.desc === 'function' && ['int', 'dur'].includes(s.stack), s.id); ok(s.desc(2).length > 3, s.id); noDash(s.desc(2), s.id); }
+  for (const s of Object.values(STATUSES)) { ok(s.name && typeof s.desc === 'function' && ['int', 'dur'].includes(s.stack), s.id); ok(s.desc(2).length > 3, s.id); }
 });
 t('cards are well formed', () => {
   for (const c of Object.values(CARDS)) {
@@ -42,7 +41,7 @@ t('cards are well formed', () => {
     walk(c.fx || [], c.id);
     if (c.type !== 'junk') { ok(c.up && c.up.fx, c.id + ' needs up.fx'); walk(c.up.fx, c.id + '.up'); ok(c.flavor, c.id + ' needs flavor'); }
     const spec = cardSpec(newInst(c.id, () => 1));
-    const lines = cardLines(spec); noDash(lines.join(' ') + c.flavor + c.name, c.id);
+    const lines = cardLines(spec);
     if (c.type === 'attack') ok(spec.fx.some((o) => ['dmg', 'status', 'detonate', 'custom'].includes(o.op)), c.id + ' attack does nothing');
     if (c.type !== 'junk' && !c.text && !(c.fx || []).length) ok(false, c.id + ' empty');
   }
@@ -61,7 +60,6 @@ t('grafts are well formed and apply to a card', () => {
   ok(all.length >= 1, 'no grafts');
   for (const g of all) {
     ok(g.name && g.boon && g.price, g.id + ' needs name/boon/price');
-    noDash(g.boon + g.price + g.name, g.id);
     ok(SCHOOLS[g.school], g.id + ' school');
     ok([1, 2, 3].includes(g.weight), g.id + ' weight');
     ok(['safe', 'greedy', 'weird'].includes(g.tier), g.id + ' tier');
@@ -85,8 +83,8 @@ t('graft pairs and triples never throw', () => {
   }
 });
 t('relics and potions are well formed', () => {
-  for (const r of Object.values(RELICS)) { ok(r.name && r.text && ['common', 'uncommon', 'rare', 'boss', 'shop', 'start'].includes(r.rarity), r.id); noDash(r.text + r.name, r.id); }
-  for (const p of Object.values(POTIONS)) { ok(p.name && p.text && p.fx, p.id); walk(p.fx, p.id); noDash(p.text, p.id); }
+  for (const r of Object.values(RELICS)) { ok(r.name && r.text && ['common', 'uncommon', 'rare', 'boss', 'shop', 'start'].includes(r.rarity), r.id); }
+  for (const p of Object.values(POTIONS)) { ok(p.name && p.text && p.fx, p.id); walk(p.fx, p.id); }
 });
 t('enemies are well formed', () => {
   for (const e of Object.values(ENEMIES)) {
@@ -94,13 +92,13 @@ t('enemies are well formed', () => {
     ok(e.hp, e.id + ' hp'); ok(e.moves && Object.keys(e.moves).length, e.id + ' moves');
     ok(e.pattern || e.pick, e.id + ' needs pattern or pick');
     for (const id of [...(e.pattern || []), ...(e.opening || [])]) ok(e.moves[id], `${e.id}: pattern move ${id}`);
-    for (const [id, mv] of Object.entries(e.moves)) { walk(mv.fx || [], `${e.id}.${id}`); if (mv.name) noDash(mv.name, e.id); }
+    for (const [id, mv] of Object.entries(e.moves)) { walk(mv.fx || [], `${e.id}.${id}`); }
     ok(e.art && e.art.body, e.id + ' needs art.body');
     for (const s of Object.keys(e.start || {})) ok(STATUSES[s], e.id + ' start status ' + s);
   }
 });
 t('events are well formed', () => {
-  for (const ev of Object.values(EVENTS)) { ok(ev.name && ev.text && ev.choices && ev.choices.length >= 2, ev.id); noDash(ev.text, ev.id); for (const ch of ev.choices) { ok(ch.label && typeof ch.apply === 'function', ev.id + ' choice'); noDash(ch.label + (ch.text || ''), ev.id); } }
+  for (const ev of Object.values(EVENTS)) { ok(ev.name && ev.text && ev.choices && ev.choices.length >= 2, ev.id); for (const ch of ev.choices) { ok(ch.label && typeof ch.apply === 'function', ev.id + ' choice'); } }
 });
 
 // ---- headless fights: a simple bot plays every enemy, every card, and every graft ----

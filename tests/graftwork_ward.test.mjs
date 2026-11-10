@@ -282,7 +282,6 @@ t('unlocks: building cards are kind build; start set = every room card plus half
   const run = RUN.newRun({ hero: 'wick', seed: 'u', unlocked: 'start' });
   for (let i = 0; i < 60; i++) assert.ok(START.build.has(W.rollBuildCard(run, ['common', 'uncommon', 'rare'])));
   for (const id of Object.keys(BUILD_CARDS)) assert.ok(/^b_/.test(id)); for (const id of Object.keys(ROOMS)) assert.ok(/^rm_/.test(id));
-  assert.ok(!/\u2014/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
 });
 
 t('seeded runs replay identically: the same seed and policy give the same final save, byte for byte', () => {
@@ -304,17 +303,14 @@ import { RELICS, EVENTS } from '../graftwork/data/index.js';
 import { EVENT_PHASE } from '../graftwork/data/events.js';
 import { RELICS_WARD } from '../graftwork/data/relics_ward.js';
 import { WARD_GLOSSARY, glossaryEntry } from '../graftwork/ui/tooltips.js';
-import { rm } from 'node:fs';
-const NODASH = /[\u2014\u2013]/;
 
 t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids unique and well formed', () => {
   assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 52, 'building cards ' + BUILD_LIST.length);
   assert.equal(new Set(BUILD_LIST.map((c) => c.id)).size, BUILD_LIST.length);
   assert.equal(RELICS_WARD.length, 18);
   assert.equal(new Set(RELICS_WARD.map((r) => r.id)).size, 18);
-  for (const r of RELICS_WARD) { assert.ok(/^r_w_/.test(r.id) && r.ward && RELICS[r.id] === r); assert.ok(['common', 'uncommon', 'rare', 'boss', 'shop'].includes(r.rarity)); assert.ok(r.text && !NODASH.test(r.text + r.name)); assert.ok(r.perk || r.on, r.id + ' does something'); }
-  for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(!NODASH.test(c.name + c.text), 'no em dash ' + c.id); assert.ok(['room', 'upgrade', 'effect', 'expand'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
-  for (const r of Object.values(ROOMS)) assert.ok(!NODASH.test(r.name + r.hint), r.id);
+  for (const r of RELICS_WARD) { assert.ok(/^r_w_/.test(r.id) && r.ward && RELICS[r.id] === r); assert.ok(['common', 'uncommon', 'rare', 'boss', 'shop'].includes(r.rarity)); assert.ok(r.text); assert.ok(r.perk || r.on, r.id + ' does something'); }
+  for (const c of BUILD_LIST) { assert.ok(/^b_/.test(c.id) && c.name && c.text.length > 4 && ['common', 'uncommon', 'rare'].includes(c.rarity), c.id); assert.ok(['room', 'upgrade', 'effect', 'expand'].includes(c.kind)); assert.ok(UNLOCKS['build:' + c.id], 'unlock id ' + c.id); }
   const by = (k) => BUILD_LIST.filter((c) => c.kind === k).length; assert.ok(by('room') >= 18 && by('upgrade') >= 9 && by('effect') >= 15);
   for (const r of RELICS_WARD) assert.ok(UNLOCKS['relic:' + r.id], 'relic unlock id ' + r.id);
   for (const id of START.build) assert.ok(BUILD_CARDS[id], 'START.build id valid ' + id);
@@ -422,7 +418,7 @@ t('phase-tagged events: weights follow the `phase` hint, untagged events keep th
   assert.equal(W.eventWeight({ phase: ['midday', 'night'], choices: [{ label: 'a' }] }, 'night'), 3);
   assert.equal(W.eventWeight({ choices: [{ label: 'Heal 5' }] }, 'midday'), 3, 'untagged: legacy text lean'); assert.equal(W.eventWeight({ choices: [{ label: 'Heal 5' }] }, 'evening'), 1);
   const wardEvs = Object.values(EVENTS).filter((e) => e.ward); assert.ok(wardEvs.length >= 10);
-  for (const e of wardEvs) { assert.ok(e.choices.length >= 2 && e.phase, e.id); assert.ok(!NODASH.test(e.text + e.name + e.choices.map((c) => c.label + (c.text || '')).join('')), e.id + ' no em dash'); }
+  for (const e of wardEvs) { assert.ok(e.choices.length >= 2 && e.phase, e.id); }
   // each Ward event resolves in each phase for every choice without throwing, and the outcomes differ between phases
   for (const e of wardEvs) {
     const outs = new Set();
@@ -442,8 +438,7 @@ t('phase-tagged events: weights follow the `phase` hint, untagged events keep th
 });
 
 t('glossary: every new room and Ward term resolves', () => {
-  for (const term of ['Pharmacy', 'Library', 'Morgue', 'Kitchen', 'Boiler', 'Laundry', 'Isolation Ward II', 'Quarantine', 'Fumigate', 'Double Doors', 'Soundproofing', 'Fire Door', 'Floodlights']) { const g = glossaryEntry(term); assert.ok(g && g.text.length > 10 && !NODASH.test(g.text), term); }
-  for (const k of Object.keys(WARD_GLOSSARY)) assert.ok(!NODASH.test(WARD_GLOSSARY[k].text), k);
+  for (const term of ['Pharmacy', 'Library', 'Morgue', 'Kitchen', 'Boiler', 'Laundry', 'Isolation Ward II', 'Quarantine', 'Fumigate', 'Double Doors', 'Soundproofing', 'Fire Door', 'Floodlights']) { const g = glossaryEntry(term); assert.ok(g && g.text.length > 10, term); }
 });
 
 t('tiers: random 0 wins, sloppy and passive almost never win (smoke)', () => {

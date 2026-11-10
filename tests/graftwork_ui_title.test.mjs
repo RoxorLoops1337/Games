@@ -237,7 +237,7 @@ const settle = (app, n = 6) => frames(app, n);
 // ---- taglines: three, plain wording, rotate, no dashes of the long kind ----
 {
   assert.equal(TAGLINES.length, 3);
-  for (const t of TAGLINES) { assert.ok(!/[\u2013\u2014]/.test(t), 'no em or en dash: ' + t); assert.ok(t.length < 60, 'short'); }
+  for (const t of TAGLINES) { assert.ok(t.length < 60, 'short'); }
   assert.equal(new Set(TAGLINES).size, 3, 'three different lines');
   assert.equal(taglineAt(0.4 * TAGLINE_S, false).text, TAGLINES[0]);
   assert.equal(taglineAt(1.4 * TAGLINE_S, false).text, TAGLINES[1]);

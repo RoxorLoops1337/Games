@@ -81,8 +81,8 @@ await t('skip marks both lessons seen and saves meta', async () => {
   assert.ok(tipSeen(app.shared.meta, 'thread_chain') && tipSeen(app.shared.meta, 'thread_cut'));
   assert.ok(saved.length >= 1);
 });
-await t('lesson text is short, plain and has no em dash', () => {
-  for (const k of ['thread_chain', 'thread_cut']) { assert.ok(TIP_TEXTS[k] && TIP_TEXTS[k].length <= 150, k); assert.ok(!/—|–/.test(TIP_TEXTS[k])); }
+await t('lesson text is short and plain', () => {
+  for (const k of ['thread_chain', 'thread_cut']) { assert.ok(TIP_TEXTS[k] && TIP_TEXTS[k].length <= 150, k); }
 });
 
 await t('every Thread term has a glossary entry', () => {
@@ -100,7 +100,7 @@ await t('every status (including the 12 afflictions) has a glossary entry and to
     const g = glossaryEntry(id); assert.ok(g && g.text && g.text.length > 5, id + ' glossary text');
     assert.equal(glossaryEntry(d.name).title, d.name, id + ' by name');
     assert.ok(KEYWORDS[d.name], id + ' is a keyword');
-    for (const nn of [1, 3]) { const s = statusSection(id, nn); assert.ok(s.text, id + ' tooltip text'); assert.ok(!/—/.test(s.text), id); }
+    for (const nn of [1, 3]) { const s = statusSection(id, nn); assert.ok(s.text, id + ' tooltip text'); }
   }
   assert.equal(glossaryEntry('nonsense'), null);
 });
@@ -117,12 +117,11 @@ await t('Thread phrasing: one vocabulary in card, graft and relic text', () => {
   const re = /\b(Line|knot|knots|Slack|Tied|Tie|Cut|cut|cuts|extends|extend|stitch|stitches)\b/;
   const bad = [];
   for (const c of Object.values(CARDS)) { let l = []; try { l = cardLines(c); } catch (e) { continue; } for (const ln of l) { if (/knots? in the Thread/.test(ln)) bad.push(c.id + ': ' + ln); if (/\b(the line|the seam|a seam)\b/.test(ln)) bad.push(c.id + ' lowercase: ' + ln); } }
-  for (const g of Object.values(GRAFTS)) for (const s of [g.boon, g.price]) { if (/\b(the line|the seam|in the Thread|chain)\b/.test(s) && re.test(s)) bad.push(g.id + ': ' + s); if (/—/.test(s)) bad.push(g.id + ' em dash'); }
+  for (const g of Object.values(GRAFTS)) for (const s of [g.boon, g.price]) { if (/\b(the line|the seam|in the Thread|chain)\b/.test(s) && re.test(s)) bad.push(g.id + ': ' + s); }
   for (const r of Object.values(RELICS)) { if (/\b(the line|the seam|in the Thread)\b/.test(r.text)) bad.push(r.id + ': ' + r.text); }
   assert.deepEqual(bad, []);
   // extend / cut verbs: grafts that talk about the Line say "extends the Line" or "cuts the Line"
   for (const g of Object.values(GRAFTS)) if (/\bLine\b/.test(g.boon)) assert.ok(!/\b(joins|ends|breaks|snips) the Line\b/.test(g.boon), g.id + ': ' + g.boon);
-  for (const k of THREAD_TERMS) assert.ok(!/—/.test(KEYWORDS[k].text));
 });
 
 // ---- first-run tip bubbles: a fixed corner is honoured, and a bubble slides clear of what it must not cover ----

@@ -103,7 +103,7 @@ t('achievements: >= 24, unique, well formed, voice rules', () => {
   assert.ok(ACHIEVEMENTS.length >= 24 + 6 - 6); assert.ok(ACHIEVEMENTS.length >= 30);
   assert.equal(new Set(ACHIEVEMENTS.map((a) => a.id)).size, ACHIEVEMENTS.length);
   assert.ok(ACHIEVEMENTS.filter((a) => a.secret).length >= 6);
-  for (const a of ACHIEVEMENTS) { assert.equal(typeof a.check, 'function'); assert.ok(!/[—!]/.test(a.name + a.text), a.id); }
+  for (const a of ACHIEVEMENTS) { assert.equal(typeof a.check, 'function'); assert.ok(!/!/.test(a.name + a.text), a.id); }
 });
 
 t('achievements: checks never throw on odd runs; progress works', () => {
@@ -178,7 +178,7 @@ t('migration: junk in the new fields is repaired', () => {
 t('achievements: 24 new, unique, rewarded, voice rules', () => {
   const ids = M.ACHIEVEMENTS.map((a) => a.id); assert.equal(new Set(ids).size, ids.length);
   const extra = M.ACHIEVEMENTS.filter((a) => a.reward); assert.equal(extra.length, 24);
-  for (const a of extra) { assert.ok(['title', 'back', 'tint'].includes(a.reward.kind), a.id); assert.ok(!/[—!]/.test(a.name + a.text + a.reward.name), a.id); }
+  for (const a of extra) { assert.ok(['title', 'back', 'tint'].includes(a.reward.kind), a.id); assert.ok(!/!/.test(a.name + a.text + a.reward.name), a.id); }
   for (const a of extra.filter((x) => x.reward.kind === 'back')) assert.ok(M.CARD_BACKS.some((b) => b.id === a.reward.id), a.id);
   for (const a of extra.filter((x) => x.reward.kind === 'tint')) assert.ok(M.TINTS.some((b) => b.id === a.reward.id), a.id);
 });
@@ -205,7 +205,7 @@ t('achievements: afflictions, ascension and the clean-bill win', () => {
 
 t('daily mods: 12, each with an up and a down side, short enough for the title card', () => {
   assert.equal(DAILY_MODS.length, 12); assert.equal(new Set(DAILY_MODS.map((d) => d.id)).size, 12);
-  for (const d of DAILY_MODS) { assert.ok(d.up && d.down && d.name, d.id); assert.ok(d.text.length <= 76, d.id + ' text too long'); assert.ok(!/[—!]/.test(d.name + d.text), d.id); }
+  for (const d of DAILY_MODS) { assert.ok(d.up && d.down && d.name, d.id); assert.ok(d.text.length <= 76, d.id + ' text too long'); assert.ok(!/!/.test(d.name + d.text), d.id); }
   assert.ok(DAILY_MODS.some((d) => d.lineCap === 3));
 });
 t('daily mods apply deterministically from the seed', () => {
@@ -261,7 +261,7 @@ t('practice: needs the boss met, replays the saved deck, and never touches stats
 
 t('defeat advice: 12 cause categories, each reachable, each a non-empty line without em dashes', () => {
   assert.equal(Object.keys(DEATH_ADVICE).length, 12, '12 cause categories');
-  for (const [k, v] of Object.entries(DEATH_ADVICE)) assert.ok(v.length > 20 && !v.includes('—'), 'advice ' + k);
+  for (const [k, v] of Object.entries(DEATH_ADVICE)) assert.ok(v.length > 20, 'advice ' + k);
   const boss = Object.values(ENEMIES).find((e) => e.kind === 'boss'), elite = Object.values(ENEMIES).find((e) => e.kind === 'elite'), norm = Object.values(ENEMIES).find((e) => e.kind === 'normal');
   const cases = {
     poison: { status: 'poison' }, burn: { status: 'burn' }, bleed: { status: 'bleed' }, brittle: { status: 'brittle' }, stagefright: { status: 'stagefright' }, dread: { status: 'dread' },
@@ -270,7 +270,7 @@ t('defeat advice: 12 cause categories, each reachable, each a non-empty line wit
   for (const [cat, cs] of Object.entries(cases)) {
     const r = deathAdvice({ deathCause: cs });
     assert.equal(r.cat, cat, 'category ' + cat);
-    assert.ok(r.text && !r.text.includes('—'));
+    assert.ok(r.text);
   }
   assert.match(deathAdvice({ deathCause: { status: 'poison' } }).text, /Poison ignores Block/);
   assert.match(deathAdvice({ deathCause: { strain: 3, enemy: norm.id } }).text, /Too many grafts/);

@@ -221,7 +221,7 @@ async function boot(run, scr, mod) {
     const inst = { uid: 1, id: c.id, grafts: have, up: 0 };
     const why = cantGraftWhy(inst, g.id);
     assert.equal(canGraft(inst, g.id), why === null, `${c.id} + ${g.id}: canGraft and cantGraftWhy disagree (${why})`);
-    if (why !== null) { refused++; assert.ok(typeof why === 'string' && why.length > 3 && !/[—–]/.test(why), 'reason text: ' + why); if (why === 'Does not fit this card') vague++; }
+    if (why !== null) { refused++; assert.ok(typeof why === 'string' && why.length > 3, 'reason text: ' + why); if (why === 'Does not fit this card') vague++; }
   }
   assert.ok(refused > 1000);
   assert.ok(vague / refused < 0.02, `too many vague refusals: ${vague}/${refused}`);

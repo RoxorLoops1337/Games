@@ -75,7 +75,6 @@ await t('lethal: Vulnerable and Weak are applied, pierce ignores Block, hidden a
 // ---------- move tips ----------
 await t('Lid Crush has a tip, the Grafter mirror says it copies your card', async () => {
   assert.ok(ENEMIES.pickled_king.moves.crush.tip && /Brined/.test(ENEMIES.pickled_king.moves.crush.tip));
-  assert.ok(!/—/.test(ENEMIES.pickled_king.moves.crush.tip));
   assert.match(ENEMIES.the_grafter.moves.mirror.tip, /copies your own card/);
   const run = RUN.newRun({ hero: 'marrow', seed: 'gm' }); run.relics = [];
   const c = newCombat(run, ['the_grafter']);

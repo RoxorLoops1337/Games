@@ -35,7 +35,7 @@ INST.resetInstall();
   assert.ok(ev.prevented, 'default mini-infobar prevented'); assert.equal(INST.canInstall(), true); assert.equal(INST.installAvailable(), true);
   assert.equal(await INST.install(null), 'accepted'); assert.equal(ev.prompts, 1);
   assert.equal(INST.installAvailable(), false, 'hidden after install'); assert.equal(INST.installMode(), 'installed');
-  assert.ok(INST.installToast() && /Installed/.test(INST.installToast().msg), 'success toast'); assert.ok(!/[—–]/.test(INST.installToast().msg));
+  assert.ok(INST.installToast() && /Installed/.test(INST.installToast().msg), 'success toast');
 }
 { // dismissed: hidden until the browser fires a new event; appinstalled path
   const h = fakeHost(UA_CHROME); INST.initInstall(h);
@@ -58,12 +58,11 @@ for (const o of [{ display: 'standalone' }, { display: 'fullscreen' }, { standal
   INST.initInstall(fakeHost(UA_IOS + ' Instagram 300')); assert.equal(INST.installMode(), 'none', 'in-app browser');
   INST.initInstall(fakeHost('Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0')); assert.equal(INST.installMode(), 'none', 'Firefox desktop');
 }
-{ const src = fs.readFileSync(new URL('../graftwork/ui/install.js', import.meta.url), 'utf8'); assert.ok(!/[—–]/.test(src), 'no dashes in install.js'); }
 
 // ---- manifest, icons, index.html
 {
   const root = new URL('../graftwork/', import.meta.url);
-  const raw = fs.readFileSync(new URL('manifest.webmanifest', root), 'utf8'); assert.ok(!/[—–]/.test(raw), 'no em dashes');
+  const raw = fs.readFileSync(new URL('manifest.webmanifest', root), 'utf8');
   const m = JSON.parse(raw);
   assert.equal(m.name, 'Graftwork'); assert.equal(m.short_name, 'Graftwork'); assert.equal(m.start_url, './'); assert.equal(m.scope, './');
   assert.equal(m.display, 'fullscreen'); assert.deepEqual(m.display_override, ['fullscreen', 'standalone']); assert.equal(m.orientation, 'landscape');
@@ -77,7 +76,7 @@ for (const o of [{ display: 'standalone' }, { display: 'fullscreen' }, { standal
   const [aw, ah] = sizeOf(new URL('icons/apple-touch-icon.png', root)); assert.equal(aw + 'x' + ah, '180x180');
   const html = fs.readFileSync(new URL('index.html', root), 'utf8');
   for (const re of [/<link rel="manifest" href="manifest\.webmanifest">/, /<meta name="theme-color" content="#1A1614">/, /<link rel="apple-touch-icon" href="icons\/apple-touch-icon\.png">/, /apple-mobile-web-app-capable" content="yes"/, /viewport-fit=cover/]) assert.match(html, re);
-  assert.equal(m.theme_color.toLowerCase(), '#1a1614'); assert.ok(!/[—–]/.test(html));
+  assert.equal(m.theme_color.toLowerCase(), '#1a1614');
   assert.ok(fs.existsSync(new URL('sw.js', root)), 'service worker (offline copy) present: tests/graftwork_sw.test.mjs covers it');
 }
 

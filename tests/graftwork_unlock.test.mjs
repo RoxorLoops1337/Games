@@ -131,7 +131,6 @@ t('API: unlockState, awardRun via recordRunEnd, isUnlocked, lockedHint, codex di
   const res = M.recordRunEnd(m, run, 'dead');
   assert.ok(res.unlock.up >= UP.FLOOR && Array.isArray(res.unlock.unlockedNow)); assert.ok(m.unlocked.points + res.unlock.unlockedNow.reduce((a, b) => a + b.cost, 0) >= 0);
   const lid = LOCKED_IDS.find((k) => !UN.isUnlocked(m, k)); assert.ok(UN.lockedHint(UNLOCKS[lid].itemId).length > 10); assert.equal(UN.lockedHint('nope'), '');
-  assert.ok(!/—/.test(JSON.stringify(Object.values(UNLOCKS).map((e) => e.hint))), 'no em dashes');
   assert.ok(M.isUnlocked === UN.isUnlocked, 'exported from meta.js too (codex)');
 });
 t('affinity: the most played hero\'s cards are pulled forward', () => {

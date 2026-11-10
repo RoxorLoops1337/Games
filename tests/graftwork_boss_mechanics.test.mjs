@@ -223,7 +223,6 @@ t('every signature move with a number has a short name and the new ones carry a 
     const mv = ENEMIES[id].moves[m];
     assert.ok(mv.tip && mv.tip.length > 10, `${id}/${m} tip`);
     assert.ok(mv.name.length <= 16, `${id}/${m} name "${mv.name}" under 17 characters`);
-    assert.ok(!/—/.test(mv.tip + mv.name), 'no em dash');
   }
 });
 

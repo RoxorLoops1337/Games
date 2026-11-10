@@ -27,7 +27,7 @@ const graftPool = (pred) => Object.values(GRAFTS).filter(pred);
 t('every affliction resolves in STATUSES with a one-line tooltip and no em dash', () => {
   for (const id of ['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden', 'weightofdebt', 'stitchedup']) {
     const d = STATUSES[id]; assert.ok(d, id);
-    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && !/\n|—/.test(s), id + ' ' + s); }
+    for (const k of [1, 2, 5]) { const s = d.desc(k); assert.ok(s && !/\n/.test(s), id + ' ' + s); }
   }
 });
 

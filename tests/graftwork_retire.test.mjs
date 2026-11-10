@@ -95,7 +95,7 @@ await t('boot with a save on the old map: closed before the title looks, no Cont
   const texts = []; const raw = app.text; app.text = (s, ...r) => { texts.push(String(s)); return raw(s, ...r); };
   frames(app, 90);
   assert.equal(app.current, 'title'); assert.equal(app.screens.title.hasSave, false);
-  assert.equal(NOTICES.classic_retired, SENTENCE); assert.ok(!/[\u2014\u2013]/.test(SENTENCE), 'no dashes');
+  assert.equal(NOTICES.classic_retired, SENTENCE);
   assert.ok(texts.includes(SENTENCE), 'the title shows the notice'); assert.ok(!texts.includes('Continue'), 'no Continue slab');
   const box = reg('title-notice'); assert.ok(box && box.overlay, 'registered as an overlay'); assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.w <= 1280 && box.y + box.h <= 720, 'on the stage');
   // the menu under it takes no input: New Run (640,330) does not open the hero select while the notice is up

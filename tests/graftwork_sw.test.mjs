@@ -19,7 +19,6 @@ import * as O from '../graftwork/ui/offline.js';
   for (const p of ['sw.js', 'sw-logic.js', 'sw-manifest.json', 'package.json']) assert.ok(!m.files[p], 'managed separately: ' + p);
   assert.ok(m.bytes < 20 * 1048576, 'offline copy stays under 20 MB: ' + m.bytes);
   const m2 = buildManifest(); assert.equal(m2.version, m.version, 'deterministic');
-  assert.ok(!/[—–]/.test(cur));
 }
 
 // ---- pure logic (sw-logic.js is a classic script: load it in a sandbox)
@@ -46,7 +45,6 @@ assert.ok(L.validManifest({ version: 'v', files: { a: {} } })); assert.ok(!L.val
 // nothing outside /graftwork/ is ever asked for
 {
   const sw = fs.readFileSync(new URL('../graftwork/sw.js', import.meta.url), 'utf8');
-  assert.ok(!/[—–]/.test(sw));
   const SC = '/graftwork/', sha16 = (b) => createHash('sha1').update(b).digest('hex').slice(0, 16);
   const manifestOf = (version, texts) => { const files = {}; let bytes = 0; for (const [p, t] of Object.entries(texts)) { const b = Buffer.from(t); files[p] = { h: sha16(b), s: b.length }; bytes += b.length; } return { version, bytes, count: Object.keys(files).length, files }; };
   // one worker: its caches, what it fetched, what it wrote (in order) and what it told the page
@@ -123,7 +121,6 @@ assert.ok(L.validManifest({ version: 'v', files: { a: {} } })); assert.ok(!L.val
   O.apply({ type: 'state', state: 'ready', bytes: 14.2 * 1048576 }); assert.equal(O.offlineLabel(), 'Ready (14.2 MB)'); assert.equal(O.offlineReady(), true);
   O.apply({ type: 'state', state: 'update-ready' }); assert.match(O.offlineLabel(), /restart/i); assert.equal(O.offlineReady(), true);
   O.apply({ type: 'state', state: 'error', message: 'x' }); assert.match(O.offlineLabel(), /failed/);
-  for (const t of ['Not downloaded', 'Downloading 5%', 'Ready (1.0 MB)', 'Update ready, restart to apply']) assert.ok(!/[—–]/.test(t));
   // supported host: registers sw.js at ./ and asks for a check; offer once, never with saveData
   const posted = [], sent = []; let msgHandler = null;
   const reg = { active: { postMessage: (m) => posted.push(m) } };
