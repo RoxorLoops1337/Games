@@ -6,6 +6,8 @@
 // GW_REG_SEEDS=30 node tests/graftwork_regression.test.mjs   (seeds per hero and assist mode; default 3 keeps it under 10 s)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { botFinish } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft, budgetOf } from '../graftwork/engine/cards.js';
 import { POLICIES } from '../tools/graftwork_sim.mjs';
@@ -99,4 +101,24 @@ for (const hero of HEROES) {
   }
 }
 console.log(`ok ${loaded} saves from commit 0675399 load and play to the end`);
+// ---- (c) Ward saves made before the Classic map was retired (commit 5f3e252) resume and play to the very same end ----
+// The fixture holds saves at every kind of moment (each Ward hour, mid walk, fights, reward, graft, event, shop, forge, the Grafter) and where
+// the deterministic player of tests/graftwork_lib.mjs ended from each of them on that commit: outcome, day, gold and the hash of the final save.
+const wardOld = JSON.parse(readFileSync(new URL('./fixtures/graftwork_wardsave_5f3e252.json', import.meta.url), 'utf8'));
+let resumed = 0; const kinds = new Set();
+for (const hero of HEROES) {
+  assert.ok(wardOld[hero] && wardOld[hero].length >= 5, `${hero}: Ward fixture has saves`);
+  for (const s of wardOld[hero]) {
+    const tag = `ward-${hero}-${s.key}`;
+    const run = RUN.deserializeRun(s.json);
+    assert.equal(run.mode, 'ward', `${tag}: a Ward save`); assert.equal(run.phase, s.phase, tag);
+    assert.equal(RUN.serializeRun(run), s.json, `${tag}: loading and saving again changes nothing`);
+    const steps = botFinish(run, { deep: s.deep }, (r) => checkNums(r, tag));
+    const end = { outcome: run.phase, act: run.act, day: run.ward.day, hp: run.hp, gold: run.gold, floors: run.stats.floors, fights: run.stats.fights, steps, sha1: createHash('sha1').update(RUN.serializeRun(run)).digest('hex') };
+    assert.deepEqual(end, s.end, `${tag}: the resumed run ends where it ended before the retirement`);
+    kinds.add(s.key.split('|')[0]); resumed++;
+  }
+}
+for (const k of ['ward:morning', 'ward:midday', 'ward:evening', 'ward:night', 'combat:normal', 'combat:elite', 'combat:boss', 'combat:final', 'reward', 'graft', 'event', 'shop', 'forge']) assert.ok(kinds.has(k), 'fixture covers ' + k);
+console.log(`ok ${resumed} Ward saves from commit 5f3e252 resume to the same end`);
 console.log(`graftwork regression passed (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
