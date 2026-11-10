@@ -555,5 +555,26 @@ await ta('Ascension 8 says that graft offers cannot be rerolled; a locked hero s
   }
 });
 
+// ---------------------------------------------------------------- 8. the balance bot plays the fixed rules
+await ta('the strong bot declares Gilded with Odile and cuts with Snip (the sims measure the real rules)', async () => {
+  const { POLICIES } = await import('../tools/graftwork_sim.mjs');
+  const { strongFight } = await import('../tools/graftwork_strong.mjs');
+  const seen = { declared: 0, turns: 0, snipCuts: [] };
+  RELICS.r_test_spy = { id: 'r_test_spy', name: 'x', rarity: 'common', text: 'x', on: {
+    turnEnd: (A) => { seen.turns++; if (A.c.seam.declared) seen.declared++; },
+    seamCut: (A, i) => { const k = A.c.currentCard; if (k && k.inst.id === 'x_thread_snip') seen.snipCuts.push(i.len); },
+  } };
+  try {
+    for (const seed of ['bot-a', 'bot-b', 'bot-c']) {
+      const run = RUN.newRun({ hero: 'odile', seed }); run.relics.push('r_test_spy');
+      run.deck.push({ uid: run.uidNext++, id: 'x_thread_snip', grafts: [], up: 0 }, { uid: run.uidNext++, id: 'x_thread_snip', grafts: [], up: 0 });
+      run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime', 'orderly'] };
+      const r = strongFight(run, POLICIES.strong); assert.ok(r.res.turns > 0);
+    }
+    assert.ok(seen.turns >= 6); assert.ok(seen.declared >= 3, `the bot declared on ${seen.declared} of ${seen.turns} turns`);
+    assert.ok(seen.snipCuts.length >= 1, 'Snip cut a paying Line at least once'); assert.ok(seen.snipCuts.every((len) => len >= 2));
+  } finally { delete RELICS.r_test_spy; }
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

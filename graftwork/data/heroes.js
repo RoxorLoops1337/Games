@@ -27,7 +27,7 @@ export const HERO_LIST = [
     unlock: true,
     blurb: 'Polite, acquisitive, and never without a receipt. Gold in, replays out.',
     passive: 'Start with 130 gold. Shop prices are 10% lower. Once per turn, a card may be declared Gilded.',
-    perks: { hp: 92, gold: 130, shopDiscount: 0.1, combatHeal: 8 },
+    perks: { hp: 88, gold: 130, shopDiscount: 0.1, combatHeal: 8 }, // hp 92 until the declaration became real (rules fixes): it is worth about 6 points of win rate, 4 HP takes 3 back
     // Thread: once per turn the player may declare the next card Gilded (engine/seam.js canDeclare / setDeclare; the control sits on the Thread rail, key G).
     declare: 'gilded',
     deck: ['o_swipe', 'o_swipe', 'o_swipe', 'o_pocket_change', 'o_pocket_change', 'o_cover', 'o_cover', 'o_cover', 'o_cover', 'o_appraise', 'o_appraise', 'o_gilt_strike', 'o_gilt_strike', 'o_collect', 'o_encore'],

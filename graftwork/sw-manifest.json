@@ -1,6 +1,6 @@
 {
- "version": "18f6f8be4d2df438",
- "bytes": 11587451,
+ "version": "5a1a717fbf8c854f",
+ "bytes": 11587567,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2232,8 +2232,8 @@
    "s": 16252
   },
   "data/heroes.js": {
-   "h": "da68955d5ad03a8c",
-   "s": 2801
+   "h": "23e350f2bfe441b7",
+   "s": 2917
   },
   "data/index.js": {
    "h": "1d0fb3deb429c453",
