@@ -42,6 +42,78 @@ These are not behaviour-preserving, so they ship as their own step with tests an
 - **The room lab page (`lab/rooms.html`) is removed.** The animation lab stays.
 - **The rules bugs are fixed** (see the list above), each with a regression test and a balance re-check.
 
+## Classic retirement: what changes for the player
+
+Inventory made before deleting anything (grep over `graftwork/`, `tests/graftwork*`, `tools/graftwork*` for `classic`, `ward`, `run.mode`, `DEFAULT_MODE`, phase `map`, map nodes, floors and days). Every hit is in one of three groups.
+
+### What the player loses or sees differently
+
+1. **Hero select has no mode switch.** `Classic map | The Ward (new)` is gone; every new run is a Ward run. A stored `meta.settings.mode` is ignored and left in the save untouched.
+2. **Daily Run is always a Ward run** with the daily seed, hero and modifier. The `WARD` / `CLASSIC` tag on the Daily slab and on Today's Case, and the `Mode:` line of the Daily tooltip, are gone. A player who had Classic selected gets the same case in the Ward.
+3. **The map screen is gone**: the chart of nodes, its act banner, legend, node tooltips, and the two first-time tips only that screen showed (`mapnodes`, `resonance`). Both tips are retired, not converted: the Ward never showed them, so a Ward player sees no difference. `meta.tips.mapnodes` and `meta.tips.resonance` stay in old saves, unread. The resonance rule itself is still on the graft table, in the deck view and in the Codex.
+4. **A saved Classic run cannot be continued.** A run save with no `mode` (from before the Ward) or any mode but `ward` is closed on load exactly as the Abandon button closes a run: history entry (dead), deaths and lifetime stats, Codex sightings, case-file Credit, boss practice decks, Unlock Points and achievements (`recordRunEnd` with `run.abandoned`). The run save is deleted and the title shows one notice until it is dismissed: "The old map has been retired. Your run on it was closed and its progress counted." A Classic Daily in progress is closed the same way. Practice fights never had a map: an old practice save still resumes.
+5. **Endless after a win now works in the Ward.** The end screen sent every Endless run to the map screen; for a Ward run that screen had no map and drew nothing (checked headless on the baseline: phase `map`, `run.map` null). Endless now opens the next loop on a fresh Ward floor, which `startLoop` already built. A Ward save stuck in that state (mode `ward`, phase `map`) resumes on its floor.
+6. **Boss practice keeps working, its fixed shuffle changes once.** A practice run was a Classic run with the fight forced; the map generator drew from the seeded rng before the fight. It is now a bare run (no map, no floor), so the same boss and deck open with a different, again fixed, draw order.
+7. **Codex rules page**: "In Ward mode each floor is a hospital you build" becomes "Each floor is a hospital you build" (there is no other mode).
+8. **Ascension 1 has no rule in the Ward.** "One extra elite on every map." only ever acted in map generation; in the Ward it did nothing before this change and does nothing after it. The line is left as it is: giving Ascension 1 a Ward rule changes Ward balance and is an owner decision, not part of this cleanup.
+
+Nothing else is lost: no achievement, relic, perk, event or Daily modifier was map only.
+
+- Achievements: all 59 stay, ids and checks untouched, earned ones stay earned. The ones that read like the map all work in the Ward: `premature` ("first 3 floors": `stats.floors` counts every room that opened something), `against_advice` (abandon before the first fight), `relapse` and `chronic` (Endless, see 5).
+- Relic perks: every `perk` name in the data is read by shared or Ward code. The 18 Ward relics and the 11 Ward events (`ward: true`) were kept out of Classic runs by a mode check; the check goes, the flag stays as data (the bots read it).
+- Stats: `meta.stats`, `meta.history`, `meta.daily.best`, `fastestWinFloors` keep their shape and meaning ("floors" = rooms that opened something, as the Ward has counted them since it shipped).
+
+### (a) Classic only: deleted
+
+- `ui/map.js` (543 lines) and its registration, import and `phase === 'map'` routing in `main.js`; the `map` entry of `IN_RUN` in `ui/pause.js`.
+- `engine/run.js`: `genMap`, `availableNodes`, `enterNode`, `ACT_ROWS`, `COLS`, `runMode`, `startEvent` (the uniform event draw; the Ward draws with `wardStartEvent`), the Classic halves of `startAct`, `advance`, `afterEvent`, `startLoop`, and `opts.mode`.
+- `ui/ward_kit.js`: `DEFAULT_MODE`, `modeOf`, `drawModeSwitch` (layout id `title-mode`). `ui/title.js`: the switch, `goalText(mode)`, the Daily mode tag and tooltip line.
+- `ui/end.js`: the Classic Endless branch (`run.phase = 'map'`).
+- `ui/tutorial.js`: `TIP_TEXTS.resonance` (the `mapnodes` text lived in the map screen).
+- `art/backgrounds.js`: themes `map1` `map2` `map3` (`mapStatic`, `mapDyn`, `MAPTINT`, their ambient entries). `art/icons.js`: `drawMapPath`, and the node styles `final`, `normal`, `start`, `treasure`, `mystery` (the Ward draws fight, elite, event, shop, forge, rest, boss). Proof for each: one grep over `graftwork/`, `tests/`, `tools/` finds the name only at its definition and in tests of the map.
+- Tests: `tests/graftwork_ui_map.test.mjs`, the map blocks of the layout sweeps, touch, perf, pause, transitions, quality and art suites, the "classic untouched" blocks of the Ward suites, the mode switch and Classic Daily tests.
+- Tools: the Classic run drivers (`playRun`, `chooseNode`, `lowRun`) and `GW_MODE`. No whole tool was map only, see "Tools" below.
+
+### (b) Shared code with two branches: collapsed to the Ward branch
+
+- `engine/run.js`: `newRun` (always `mode: 'ward'`, set at the same place so a new save is byte identical to an old Ward save), `startAct` (always `wardInit`), `fightRewards` (always `wardRewards`), `makeShop` (always the Dispensary's plans), `shopBuy` (`build`, `buildRemove`), `relicPool` (Ward relics always in the pool), `afterEvent` and `advance` (always back to the walk), `startLoop`.
+- `main.js`: `PHASE_SCREEN` without `map`, the walk interlude without the mode check, the music table without the map row.
+- `ui/ward.js` `wardInterlude`, `ui/event.js` (room and hour heading), `ui/end.js` (death line: day of the floor; the floor line stays for practice fights, which have no floor), `ui/title.js` (Continue line, Daily, Begin), `ui/shop.js` (one service row: remove a card, strip a graft, building plans; the two-button row of a shop without plans is gone, every shop is the Dispensary).
+- `engine/save.js` + `engine/meta.js`: loading a run decides between resume (Ward, practice) and retirement (everything else).
+
+### (c) Looks Classic, the Ward uses it: kept
+
+- Rewards, graft offers, shop, forge, events, `R` helpers, `queueFight`, `queueGraftPick`: the Ward opens the same screens through the same engine calls.
+- Acts as floors (`run.act`, `startAct`, act themes and music), the boss flow, the Grafter (`startFight(run, 'final')`), ascension rules 2 to 10, Daily modifiers, boss practice, Endless.
+- `makeEncounter`: the Ward uses the boss and final branches; the normal branch is the combat screen's fallback when a fight has no enemy list. Its "later rows of the map" budget went with the map; what is left is the small-fight budget it always used in a Ward run.
+- `run.row`, `run.node`, `run.map`: always `-1`, `null`, `null` in a Ward run. They stay in the save so the Ward save shape does not change; nothing reads them (the shop greeting keeps the seed string they used to give, so the greeting is the same).
+- `run.mode = 'ward'` stays in every save: it is what tells a Ward save from a retired one.
+- `stats.floors` and "Floors climbed" on the end screen, `UP.PER_FLOOR`: Ward trigger rooms count as floors.
+- `drawNodeIcon` (the Ward's trigger seals), the `mapStep` sound (the Ward's footstep), "Continue to the map" on the reward and Forge buttons (the Ward is the hospital map; the label and so the picture of those screens do not change).
+
+### Saves
+
+- Ward saves: shape, field order, rng use and the order of every random draw are unchanged. Proof: `tests/fixtures/graftwork_wardsave_5f3e252.json` (28 saves recorded on the baseline at every kind of moment, each with the end it reaches on the main line without the retirement) is resumed by `tests/graftwork_regression.test.mjs`, and the Ward balance table and per-run trace hashes are identical before and after (Results).
+- Retired saves: `tests/fixtures/graftwork_oldsave_0675399.json` (20 Classic saves from before the Ward) is now the fixture for the retirement: each save is closed, counted and deleted.
+- No save key, id or folder is renamed. `graftwork_meta_v1` gains one optional field, `notice` (`'classic_retired'` until the notice is dismissed).
+
+### Tests
+
+Suites that used a Classic run as the vehicle now start a Ward run and reach the screen through the Ward (`wardOpen(run, kind)` in `tests/graftwork_lib.mjs` lays the room next to the hero and walks in, so `run.pending` is what a real walk makes) or through the engine call the Ward itself uses. Shared helpers live in `tests/graftwork_lib.mjs`: `wardLayout`, `wardOpen`, `botFight`, `botStep`, `botFinish`, `WIN`, `LOSS`, `actEnemies`. `graftwork_ui_map` is gone; its second half (every event, every choice, through the event screen) is `graftwork_ui_event`. New: `graftwork_retire` (the closing of old saves, the notice, boot and Continue with old Ward saves).
+
+### Tools
+
+One shared driver, `tools/graftwork_driver.mjs`: the fight policies (careful, greedy, none, strong, the slip and low tiers), graft, shop, forge and event choices, the Ward builder and walker policies (strong, careful, sloppy, random, passive, fill) and `playWardRun(hero, seed, policy, asc, opts)`. Every balance tool is a thin command on top of it: `graftwork_sim.mjs` (careful, greedy, none), `graftwork_strong.mjs` (the reference), `graftwork_ward_sim.mjs` (the per-act table), `graftwork_tiers.mjs`, `graftwork_schools.mjs`, `graftwork_audit.mjs`, `graftwork_cardsweep.mjs`, `graftwork_unlocks.mjs`. Dropped: `GW_MODE` (unlock pacing is always the Ward) and `GW_OLDPICK` (`GW_WEIRD_K=1` is the same pick). No tool is deleted: none was map only, each one measures the combat game or a whole run, and a whole run is now a Ward run. `tools/graftwork_golden.mjs` records Ward runs only (bots from the driver, no Classic runs, no map scenes, the closing of each old save under `resume/retired`); its `--classic-rng` flag exists for the one comparison against a record made before the retirement.
+
+### Layout faults the port found (open, not fixed here)
+
+The layout gate (`tests/graftwork_ui_layout.test.mjs`) swept the reward and the shop on Classic runs. On scenes the Ward really makes it found faults that are older than the retirement. They are listed in the test as `OPEN_WARD` (scene, kind and text; anything else still fails, and an entry that stops matching fails the test until it is deleted) and need their own fix, with before and after pictures:
+
+- **Elite reward with a relic, a potion and the building plan row**, at text scale 125 and 150 and on all three phone stages: the plan row runs into the "left behind" notes and the Continue button (224 findings in the sweep: overlaps and text over widgets). At text scale 100 on the desktop it fits.
+- **Boss reward with the plan row**: the row's caption "Pick 1 for your building deck, or pass." is cut at text scale 125 and 150 and on the phone stages; on the two small phone stages (0.54, 0.46) the texts of the boss relic cards under the row are cut too.
+- **Ward hand on the two small phone stages**: a plan's name is drawn over its cost digits ("Workshop", "Isolation"), and the two lines of the deck counter ("7 draw", "0 used") touch. The Ward's own sweep has no text-over-text check; the layout gate's tooltip sweep of the Ward has.
+- **Dispensary on the smallest phone stage (0.46)**: the one-line subtitle of the graft card picker cuts a long boon ("When it extends the Line, ..."), and the relic name "Featherweight" is 2 px too wide for its column in the test's metric.
+
 ## Rules for everyone working on this
 
 - Never rename save keys, ids, or the folder. A Ward run saved before the cleanup must resume after it (to the same outcome, except where a listed rules fix changes a card it holds).
@@ -116,7 +188,7 @@ Balance (strong bot, Ward mode, Ascension 0; "all" is the target pool of design/
 - N = 60 is too small for a 12 point band (one standard deviation is 6 points): it was outside the band before any change. The verdict is read at N = 1000: 34 / 32 / 39, spread 7, inside 25 to 40.
 - The fixes moved one hero: Odile, from 37 to 41 in the all pool. Her declaration alone is worth about 6 points (36 with it switched off, `GW_DECLARE=0`, 41 with it); the other fixes together are within two points for every hero (Marrow 32 to 34, Wick 33 to 32, Odile without her declaration 37 to 36). The retune is one number: **Odile's max HP 92 to 88** (`data/heroes.js`). Measured on Odile alone at N = 1000: 92 HP 41.3, 90 HP 40.8, 88 HP 38.5; starting gold 130 to 115 only reached 40.5. Nothing global was touched. She is still the hero with the most HP (Marrow 82, Wick 76) and sits near the top of the band.
 - The start pool is not a target (WARD.md). Odile rose there too (49 to 52 with the retune, 56 without).
-- The bot (`tools/graftwork_strong.mjs`) learned two things first: it scores every card with and without the declaration and declares when the Thread gains (`GW_DECLARE=0` switches it off), and it holds a "Cut the Line." card while another affordable card could still start or extend the Line (`GW_HOLDCUT=0`). The second made no measurable difference (the middle column was run before it, except N = 1000).
+- The bot (`strongFight`; since the Classic retirement it lives in `tools/graftwork_driver.mjs`) learned two things first: it scores every card with and without the declaration and declares when the Thread gains (`GW_DECLARE=0` switches it off), and it holds a "Cut the Line." card while another affordable card could still start or extend the Line (`GW_HOLDCUT=0`). The second made no measurable difference (the middle column was run before it, except N = 1000).
 - Unlock pacing stays in its targets (strong 33 to 40, careful 45 to 55).
 
 Not fixed, found on the way (owner decisions):
@@ -244,13 +316,54 @@ Tests: `tests/graftwork_frozen.test.mjs` (11 blocks; every block was run against
 
 Known limits: ambient motion that reads the wall clock directly (the lamp on cards, portrait breathing, icon liquids, the room pulse in `ui/ward_iso.js`) is not on a pausable clock, so it continues at the wall-clock phase after a modal; in Graphics Auto the controller can rise a tier on cheap modal frames and drop again after closing (its own lock then stops it after two tries).
 
+### Classic retirement
+
+What the player sees is the list under "Classic retirement: what changes for the player". The branch was proved three times, each time against the main line it had just merged: `428b6499` (the performance step), `b0ed267f` (the rules fixes) and `79cb478d` (one path per job, frozen screens). The numbers are the last round, the branch against `79cb478d`; the two rounds before it gave the same picture, with the balance numbers of their own main line.
+
+- **Code.** Game source (`graftwork/**/*.js`): 22 files changed, 121 lines added, 782 removed; one file deleted (`ui/map.js`, 543 lines); 2,617,858 to 2,572,933 bytes (44,925 less). Balance tools (sim, strong, ward_sim, tiers, schools, cardsweep, audit, unlocks): 94.4 to 87.5 KB with the three bot files folded into one driver; `tools/` as a whole 1154 lines added, 1222 removed (the golden tool grew by 6 KB: the Ward fixtures, the closing trace, the comparison flag). Tests: 39 files changed, 686 lines added, 434 removed; 76 suites on main, 77 on the branch (`ui_map` out; `ui_event` and `retire` in). Runner (`node tests/run_graftwork.mjs`, 4 workers), main and branch back to back on a shared machine: 152 s against 163 s wall (407 against 429 s of CPU) at the `b0ed267f` round, 227 s against 205 s (470 against 468 s of CPU) at the `79cb478d` round, 76 of 76 and 77 of 77 green. Read it as unchanged: the wall time is the layout sweep, the longest suite (it now sweeps the reward both bare and as the Ward makes it; the map sweep is gone).
+- **A Ward run did not change.** Same seeds on the main line and on the branch, three ways:
+  - the balance table (`tools/graftwork_ward_sim.mjs 60 0 <policy>`, both unlock pools) and unlock pacing (`tools/graftwork_unlocks.mjs 200 30`) are identical line for line (20 and 16 lines):
+
+    | strong, A0, N=60 | marrow | wick | odile |
+    |---|---|---|---|
+    | all pool | 27/60 (45%) | 20/60 (33%) | 25/60 (42%) |
+    | start pool | 23/60 (38%) | 27/60 (45%) | 34/60 (57%) |
+
+    random 0/180, sloppy 0/180, passive 0/180; unlock pacing strong median 39 runs (p10 36, p90 42), careful 49, sloppy 151. These are the numbers of the main line after the rules fixes. In the first round, before the rules fixes were merged, the table recorded on `5f3e252b` before the first change (30 / 42 / 48 and 35 / 38 / 48, passive 1/180, pacing 39 and 45) was reproduced the same way.
+  - 1080 runs (six policies, both pools, ascension 0 and 5), each hashed over its serialized state at every morning and at the end: every hash identical;
+  - the golden master, below.
+- **Golden master.** Base `79cb478d` recorded with the tool of main, the branch with `--classic-rng --resume-from <base>`, `compare --common`: 24,656 keys identical, 1,292 different (engine 408, ui 808, assets 76, resume 0).
+  - Identical: all 24 Ward runs the two records share (3 heroes x 8 seeds, 3,848 trace steps: every morning, walk, fight, reward, graft, shop, forge and event choice with hp, gold and the rng state after it; final deck, relics, stats, the save bytes), all 36 resume cases (the base's own saved payloads continued by the new code to the same end, and the bytes the new code saves at the same point), every card, graft, potion, enemy and building probe, and the draw streams of 15 of the 33 UI scenes and 6 of the 8 asset scenes in all four variants: `combat`, `combat_boss`, `combat_elite`, `combat_three`, `combat_tips`, `end_won`, `forge`, `forge_temper`, `pause`, `reward_boss`, `ward_morning`, `ward_midday`, `ward_evening`, `ward_night`, `ward_built`; `combat_art`, `combat_art_boss`, `shop_ward`, `ward_kit_morning`, `ward_kit_built`, `ward_kit_night`.
+  - Different, every one because the old tool drove that probe or scene on a Classic run, or because the title changed:
+
+    | Keys | Why |
+    |---|---|
+    | `engine/runs/<hero>.ward.{a0,deep}/{endInfo,metaAfter}` (12) | One career profile played the Classic and the Ward seeds of a hero in a row; it now holds Ward runs only. The 24 run traces themselves are identical. |
+    | `engine/probes/relic/<relic>/shop` (96, every relic that is not a Ward relic) | The shop after the probe fight was a Classic shop; every shop is now the Dispensary (plans for sale, Ward relics in the pool). |
+    | `engine/probes/event/<event>/choiceN/next` (145) and `/run` (155) | The probe run went to the map after an event and carried a map; it now goes back to the Ward. `choices` and `result` of every choice are identical. |
+    | `ui/title`, `title_intro`, `title_select`, `title_veteran`, `assets/title_kit` | The title changed: no mode tag on the Daily slab, no switch on hero select. |
+    | `ui/settings`, `settings_app`, `install_help`, `codex`, `archive`, `wardrobe` | Opened over the title menu. The draw log of the two builds differs only by the `WARD` tag in the picture of the title behind them. |
+    | `ui/deckview` | Opened over the map screen in the old script; the screen under it is another one now. |
+    | `ui/graft`, `graft_decline`, `event`, `event_picker` | First pass: the hash after `enter` and after `inputs` is identical, the last part differs because leaving the screen went to the map and now goes to the Ward. Second pass in the same process: different from its first frame, because `art/backgrounds.js` keeps one baked backdrop at a time; the map screen at the end of the first pass replaced the table's, the Ward does not use that cache. |
+    | `ui/end_dead` | Identical through `enter` and `inputs` in both passes; the last part is the title it returns to (the tag). |
+    | `ui/reward`, `assets/combat_art_kill` | The elite's relic was rolled from the Classic pool, which had no Ward relics (Blunt Shears became Spare Fuse). The fight before it is identical. |
+    | `ui/shop` | The scene was a Classic shop; it is the Dispensary now (the Building plans button, another relic on the shelf). `assets/shop_ward`, the shop of a Ward run, is identical. |
+
+    Only in the base: the Classic runs, their resume cases, the scenes `map` and `map_act3`. Only in the branch: an Endless run per hero, the Daily modifiers on Ward runs, the 28 Ward fixture saves, the closing of the 20 old saves.
+  - Check of the engine rows: the tool of main was copied outside the repo and four lines of it changed, so that the career plays Ward runs only and the relic shop and event probes treat their run as a Ward run without a map (the game code of the base untouched). Recorded from the base, its engine section equals the branch on all 13,055 common keys, 0 differences.
+- **Old Ward saves resume.** 28 saves written by `5f3e252b` (every Ward hour, mid walk, fights, reward, graft, event, shop, forge, the Grafter): played to the end by the same deterministic player on the main line and on the branch, all 28 reach the same end, to the hash of the final save. The rules fixes moved 12 of those ends on the main line itself (two Wick and Odile runs by a few hit points and gold, the rest only in the final save), so the ends in `tests/fixtures/graftwork_wardsave_5f3e252.json` were played again on `b0ed267f`; the saves in it are untouched. The golden master continues the base's own saved payloads to the same end and writes the same bytes at every save point.
+- **Old Classic saves are closed.** 20 saves from before the Ward: each one leaves the meta exactly as the Abandon button would (compared field by field against that path), is deleted, and sets the notice.
+- **Hygiene.** `tools/graftwork_hygiene.mjs` is clean. The allowlist is the main line's minus the five entries that named deleted code; nothing was added. Dead code the retirement left behind was deleted, not listed.
+- **What the merges needed.** The strong bot's two new rules from the rules fixes (Odile's declaration, holding a "Cut the Line." card) were moved into `tools/graftwork_driver.mjs`, where the bot lives now (the fight function is the main line's text; the tables above are the check). `tests/graftwork_rules_fixes.test.mjs` saved a Classic and a Ward run and saves one Ward run now; `tests/graftwork_frozen.test.mjs` opened its event with the retired `RUN.startEvent` and uses the Ward's `wardStartEvent`; `tests/graftwork_ui_pause.test.mjs` keeps the main line's frozen assertions on the Ward screen.
+- **Real browser** (Chromium, 1280 x 720 and 1000 x 462 at DPR 2, on the merged branch): title without mode tags, hero select without the switch, Begin lands in the Ward, a route into a fight, reward, back on the Ward; a Classic save gives the notice once and no Continue, a click under the notice does nothing, a reload shows no second notice and counts nothing twice; three old Ward saves (evening, mid walk on a reward, the Dispensary) resume with the save unchanged. No page error.
+
 ### Rules leftovers (branch `cleanup-leftovers`)
 
 The four items the rules pass listed under "Not fixed, found on the way". Each has a block in `tests/graftwork_rules_fixes.test.mjs` (sections 9 to 12) that failed on the code before; `graftwork_glossary` reads the new texts and `graftwork_ui_layout` now sweeps cards with a waived Price.
 
 - **Cut hooks fired on unpaid cuts.** Wrong: the hooks that skip a cut that paid nothing tested `paid`, which the engine never set, so the 4th cut of a turn triggered them. Changed: `seamCut` carries `paid: false` for a cut past the turn's 3 paying cuts and for nothing else (an enemy cancel and the turn-end cash are `paid: true`); the event carries `capped: true`. Not fired on such a cut: Marrow's passive, Spool, Bobbin, Seam Ripper, Blunt Shears, Tapestry Frame, Second Colour (their own checks now work), Pin Cushion (it had none; same wording as Spool), and the two grafts that pay "per stitch" when their card cuts (Surgeon's Knot, Surge Loop). Still fired: Scissor Loop, Reef Knot and Spent Thread (they ask for the cut, not for stitches) and the enemy hooks.
 - **A waived Price still read as due.** Wrong: Free Sample took the Price off the card, but the graft's Boon / Price block printed "Price: ..." wherever a card lists its grafts. Changed: `cardSpec` names the waived grafts (`spec.waived`) and one reader, `priceOnCard` in engine/text.js, labels such a Price "Waived" (gold, not red) in the combat card tip and pile view, the deck view panel (live and tempered grafts) and the graft choice of Strip and Reforge; the Strip note says "Its Price was waived." instead of "Frees you of".
-- **The Thread half of resonance was in no text.** Wrong: tier 3 adds a stitch and tier 6 doubles the cut, and nothing a player can read said so. Changed: `RESONANCE_THREAD` in data/schools.js ("Its Thread payout gains 1 Stitch." / "Its cuts pay double.", and one line for both). It is on the Resonance keyword (hover tip and glossary), in the Codex (rule 6, a line above the seven schools), in the school tooltips of the deck view strip and the classic map panel, and in the school panel and patch tip of the graft screen. The test measures both numbers for every school (top school, second school, cut, turn end) and rebuilds the texts.
+- **The Thread half of resonance was in no text.** Wrong: tier 3 adds a stitch and tier 6 doubles the cut, and nothing a player can read said so. Changed: `RESONANCE_THREAD` in data/schools.js ("Its Thread payout gains 1 Stitch." / "Its cuts pay double.", and one line for both). It is on the Resonance keyword (hover tip and glossary), in the Codex (rule 6, a line above the seven schools), in the school tooltip of the deck view strip, and in the school panel of the graft screen (the patch tip a phone shows instead of that panel keeps the school's own line: with four patches there is no room for more, the layout suite says). The test measures both numbers for every school (top school, second school, cut, turn end) and rebuilds the texts.
 - **Resonance Lens did nothing.** Wrong: it set tier 5 and every rule asks for 3 or 6. Changed: "In Elite and Boss fights, each school at Resonance 3 counts as Resonance 6." The rule is in `resonanceOf(run, kind)`, the one place a tier is decided; the relic is only `mod.resLens`. The deck view strip opened in a fight shows that fight's tiers and its tooltip says "Counts as 6 grafts in this fight."
 
 Balance of the Lens (strong bot, Ward mode, all pool, 500 runs per hero on the same seeds, the relic handed over on the first morning, which is the most a relic can do; "inert" is the Lens in the relic list with its rule switched off, so the relic list and the RNG stream are the same). Win percent for Marrow / Wick / Odile, then all 1500 runs:
@@ -273,8 +386,9 @@ Balance of the Lens (strong bot, Ward mode, all pool, 500 runs per hero on the s
 | Pin Cushion (rare) | 26.4 / 23.4 / 35.4 | 28.4 | +6.6 |
 | Graft Press (rare) | 27.0 / 23.8 / 33.6 | 28.1 | +6.3 |
 
-- The classic harness (`node tools/graftwork_schools.mjs relics 200 0 <id>`, 600 runs each, the relic from the first fight): baseline 26 percent, Resonance Lens 38 (+12), Tapestry Frame 39 (+13), Graft Press 32 (+6), Pin Cushion 31 (+5).
-- Verdict: strong, at the top of the rare relics, not out of their family. Held from the first morning (the most a relic can do) it stays under the bar of about 10 points in Ward mode: level with Graft Press, Tapestry Frame and Pin Cushion at Ascension 0, ahead of them by about 2 points at Ascension 5 (one hero, Odile, reaches +10.2). On the classic map it passes the bar, and so does Tapestry Frame. Nothing was retuned. It is busy: the bot holds a school at 3 to 5 grafts in 71 percent of its Elite and Boss fights, and there the Lens cuts the fights lost from 2.2 percent (176 of 7899) to 1.0 percent (78 of 8205) at Ascension 0. A player who builds for it (two schools at 3 on a Budget of 6) gets more than the bot does.
+- The stock harness (`node tools/graftwork_schools.mjs relics 200 0 <id>`, 600 runs each on its own seeds, the relic from the first fight) agrees: baseline 34 percent, Graft Press 43 (+9), Resonance Lens 41 (+8), Pin Cushion 41 (+7), Tapestry Frame 38 (+5). Before the Classic retirement was merged into this branch the same command played the Classic map: baseline 26, Tapestry Frame 39 (+13), Resonance Lens 38 (+12), Graft Press 32 (+6), Pin Cushion 31 (+5).
+- The two tables were measured before that merge. The Lens and inert arms of Ascension 0 and the Lens arm of Ascension 5 were run again on the merged tree: the same wins and the same fight counts, to the last fight.
+- Verdict: strong, at the top of the rare relics, not out of their family. Held from the first morning (the most a relic can do) it stays under the bar of about 10 points in Ward mode: level with Graft Press, Tapestry Frame and Pin Cushion at Ascension 0, ahead of them by about 2 points at Ascension 5 (one hero, Odile, reaches +10.2). On the retired Classic map it passed the bar, and so did Tapestry Frame. Nothing was retuned. It is busy: the bot holds a school at 3 to 5 grafts in 71 percent of its Elite and Boss fights, and there the Lens cuts the fights lost from 2.2 percent (176 of 7899) to 1.0 percent (78 of 8205) at Ascension 0. A player who builds for it (two schools at 3 on a Budget of 6) gets more than the bot does.
 
 Seen on the way, not touched:
 
@@ -284,4 +398,3 @@ Seen on the way, not touched:
 - The Locksmith gains 4 Block when a Line of the sealed school is cut; no text says so.
 - Deck view: the glossary tip of the hovered card opens over the panel that lists its grafts.
 - Codex, Rules tab: the header says "eight panels", the sheet has eleven.
-

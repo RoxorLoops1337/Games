@@ -1,5 +1,6 @@
-// Run layer: a run is plain JSON (plus run.rng). Everything between fights lives here: the map, rewards, the graft
-// offer (the heart of the game), shop, forge, events, ascension, daily seed, endless loops, save/restore.
+// Run layer: a run is plain JSON (plus run.rng). Everything between fights lives here: rewards, the graft offer (the heart of
+// the game), shop, forge, events, ascension, daily seed, endless loops, save/restore. Where the hero goes between them is the
+// Ward (engine/ward.js): every run is a Ward run, the node map it replaced is retired (design/CLEANUP_PLAN.md).
 import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
@@ -8,7 +9,6 @@ import { runAllows, snapshotFor } from './unlock.js';
 import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod } from './cards.js';
 
-export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
 export const POTION_SLOTS = 3;
 export const SKIP_HEAL = 8;
 export const GOLD_FIGHT = { 1: 18, 2: 24, 3: 30 };
@@ -43,14 +43,14 @@ export function newRun(opts = {}) {
   const run = {
     v: 1, seed: seedStr, hero: hero.id, ascension: asc, daily: opts.daily || null, loop: 0,
     rng, uidNext: 1,
-    act: 1, row: -1, node: null, map: null, phase: 'map',
+    act: 1, row: -1, node: null, map: null, phase: 'ward', // row, node, map: fields of the retired node map, always -1 / null / null; they stay so a save keeps the shape it has always had
     hp: perks.hp || 70, maxHp: perks.hp || 70, gold: perks.gold || 99,
     deck: hero.deck.map((id) => newInst(id, () => uid++)),
     relics: [], potions: [], budgetBonus: 0, flags: {}, stats: { fights: 0, elites: 0, grafts: 0, shatters: 0, goldEarned: 0, damageTaken: 0, skips: 0, floors: 0, bosses: 0 },
     ...(snap ? { unlockedAtStart: snap } : {}),
     seenEvents: [], rerolls: 0, shopUses: { remove: 0, strip: 0 }, pending: null,
   };
-  if (opts.mode === 'ward') run.mode = 'ward'; // Ward mode (engine/ward.js); classic runs carry no mode field so their saves stay byte identical
+  run.mode = 'ward'; // the only mode there is. The field stays in the save: it tells a Ward run from a run on the retired map (engine/save.js isRetiredRun)
   run.uidNext = uid;
   if (asc >= 9) { run.maxHp = Math.round(run.maxHp * 0.9); run.hp = run.maxHp; }
   if (asc >= 3) run.deck.push(newInst('j_clot', () => run.uidNext++));
@@ -61,7 +61,7 @@ export function newRun(opts = {}) {
   if (run.daily) { run.dailyMod = DAILY_MODS[hashSeed(run.daily) % DAILY_MODS.length]; run.budgetBonus += run.dailyMod.budget || 0; }
   run.budgetBonus += -(asc >= 6 ? 1 : 0);
   if (opts.assist && !opts.daily) applyAssist(run, opts.assist); // Assist mode (engine/assist.js); daily cases never take it
-  startAct(run, 1);
+  if (!opts.bare) startAct(run, 1); // bare: no floor is laid out (a practice fight, engine/meta2.js newPracticeRun)
   return run;
 }
 export function nextUid(run) { return run.uidNext++; }
@@ -85,7 +85,7 @@ export function addPotion(run, id) {
   run.potions.push(id); return true;
 }
 function relicPool(run, rarities) {
-  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && runAllows(run, r.id) && (!r.hero || r.hero === run.hero) && (!r.ward || run.mode === 'ward'));
+  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && runAllows(run, r.id) && (!r.hero || r.hero === run.hero));
 }
 export function rollRelic(run, rarity) {
   const order = { common: ['common'], uncommon: ['uncommon'], rare: ['rare'], boss: ['boss'], shop: ['shop', 'uncommon'] };
@@ -105,84 +105,9 @@ export function rollPotion(run) {
   return run.rng.weighted(list, (p) => w[p.rarity] || 1).id;
 }
 
-// ---------- map ----------
-const COLS = 6;
-export function runMode(run) { return run.mode === 'ward' ? 'ward' : 'classic'; }
-export function startAct(run, act) {
-  if (run.mode === 'ward') { run.act = act; run.row = -1; run.node = null; run.map = null; wardInit(run, act); return; }
-  run.act = act; run.row = -1; run.node = null;
-  run.map = genMap(run, act);
-  run.phase = 'map';
-}
-function genMap(run, act) {
-  const rng = run.rng;
-  const rows = ACT_ROWS[act];
-  const bossRows = act === 3 ? 2 : 1;
-  const nodes = [];
-  const byRow = [];
-  for (let r = 0; r < rows; r++) {
-    const last = r >= rows - bossRows;
-    const count = last ? 1 : (r === 0 ? rng.range(3, 4) : rng.range(2, 4));
-    const cols = last ? [2] : rng.sample([0, 1, 2, 3, 4, 5], count).sort((a, b) => a - b);
-    const row = cols.map((col) => ({ id: `${act}-${r}-${col}`, row: r, col, type: 'fight', next: [], visited: false }));
-    byRow.push(row); nodes.push(...row);
-  }
-  // edges: every node links to 1 or 2 nodes in the next row, and every node has an incoming edge
-  for (let r = 0; r < rows - 1; r++) {
-    const a = byRow[r], b = byRow[r + 1];
-    const nearest = (n) => b.slice().sort((x, y) => Math.abs(x.col - n.col) - Math.abs(y.col - n.col));
-    for (const n of a) {
-      const near = nearest(n);
-      n.next.push(near[0].id);
-      if (near[1] && rng.chance(0.45) && Math.abs(near[1].col - n.col) <= 2) n.next.push(near[1].id);
-    }
-    for (const m of b) if (!a.some((n) => n.next.includes(m.id))) { const n = a.slice().sort((x, y) => Math.abs(x.col - m.col) - Math.abs(y.col - m.col))[0]; n.next.push(m.id); }
-  }
-  // types
-  const set = (n, type) => { n.type = type; };
-  const bossRow = rows - bossRows;
-  if (act === 3) { set(byRow[rows - 2][0], 'boss'); set(byRow[rows - 1][0], 'final'); } else set(byRow[rows - 1][0], 'boss');
-  const forgeRow = bossRow - 1;
-  for (const n of byRow[forgeRow]) set(n, 'forge');
-  for (const n of byRow[0]) set(n, 'fight');
-  const mid = nodes.filter((n) => n.row >= 1 && n.row < forgeRow);
-  const weights = [['fight', 52], ['event', 20], ['shop', 8], ['forge', 8], ['elite', 12]];
-  for (const n of mid) {
-    let w = weights.filter(([t]) => (t !== 'elite' || n.row >= 3) && (t !== 'shop' || n.row >= 2) && (t !== 'forge' || n.row >= 3));
-    if (n.row === forgeRow - 1) w = w.filter(([t]) => t !== 'forge');
-    set(n, rng.weighted(w, ([, k]) => k)[0]);
-  }
-  // guarantees: a shop around the middle, at least 2 elites (3 on A1+), and two events
-  const need = (type, count, rowMin, rowMax) => {
-    let have = mid.filter((n) => n.type === type).length;
-    const pool = mid.filter((n) => n.row >= rowMin && n.row <= rowMax && n.type === 'fight');
-    while (have < count && pool.length) { set(pool.splice(rng.int(pool.length), 1)[0], type); have++; }
-  };
-  need('shop', 1, 3, 6); need('elite', 2 + (run.ascension >= 1 ? 1 : 0), 3, forgeRow - 1); need('event', 2, 1, forgeRow - 2);
-  // no two shops or forges in a row on one path would be nice; keep it simple
-  for (const n of nodes) { n.x = (n.col + 0.5) / COLS + (rng.next() - 0.5) * 0.04; }
-  return { act, rows, nodes: Object.fromEntries(nodes.map((n) => [n.id, n])), byRow: byRow.map((r) => r.map((n) => n.id)) };
-}
-export function availableNodes(run) {
-  if (!run.map) return [];
-  if (run.node === null) return run.map.byRow[0];
-  return run.map.nodes[run.node].next;
-}
-export function enterNode(run, id) {
-  if (!availableNodes(run).includes(id)) return null;
-  const n = run.map.nodes[id];
-  run.node = id; run.row = n.row; n.visited = true; run.stats.floors++;
-  switch (n.type) {
-    case 'fight': return startFight(run, 'normal');
-    case 'elite': return startFight(run, 'elite');
-    case 'boss': return startFight(run, 'boss');
-    case 'final': return startFight(run, 'final');
-    case 'shop': run.phase = 'shop'; run.pending = makeShop(run); return run.pending;
-    case 'forge': run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; return run.pending;
-    case 'event': return startEvent(run);
-    default: throw new Error('bad node ' + n.type);
-  }
-}
+// ---------- floors ----------
+// A new floor: act N of the hospital. engine/ward.js lays it out and opens its first morning (run.phase = 'ward').
+export function startAct(run, act) { run.act = act; wardInit(run, act); }
 
 // ---------- encounters ----------
 function actEnemies(run, kind) {
@@ -195,9 +120,8 @@ export function makeEncounter(run, kind) {
   if (kind === 'elite') { const e = actEnemies(run, 'elite'); return [rng.pick(e).id]; }
   const pool = actEnemies(run, 'normal');
   const avg = (e) => (Array.isArray(e.hp) ? (e.hp[0] + e.hp[1]) / 2 : e.hp);
-  const early = run.row <= 1;
   const scale = { 1: 1, 2: 1.4, 3: 2.0 }[run.act];
-  const budget = (early ? 36 : 54 + rng.int(14)) * scale;
+  const budget = 36 * scale; // a small fight, one or two monsters (the Ward names its own monsters; this is the combat screen's fallback)
   const out = [];
   let spent = 0, tries = 0;
   while (tries++ < 12) {
@@ -205,7 +129,7 @@ export function makeEncounter(run, kind) {
     if (out.length && (spent + avg(e) > budget || out.length >= 3)) continue;
     out.push(e.id); spent += avg(e);
     if (spent >= budget * 0.85 || out.length >= 3) break;
-    if (early && out.length >= 2) break;
+    if (out.length >= 2) break;
   }
   if (!out.length) out.push(rng.pick(pool).id);
   return out;
@@ -218,7 +142,7 @@ export function startFight(run, kind) {
 
 // ---------- rewards ----------
 export function fightRewards(run, kind, result) {
-  const prevPending = run.pending; // Ward mode reads its room info and phase modifiers from the fight that just ended
+  const prevPending = run.pending; // the room and the hour's modifiers of the fight that just ended ride on it
   const act = run.act;
   const rng = run.rng;
   const gm = (run.dailyMod && run.dailyMod.goldMul) || 1;
@@ -230,7 +154,7 @@ export function fightRewards(run, kind, result) {
   const potionChance = 0.4 + relicMod(run, 'potionChance') * 0.1;
   if (kind !== 'final' && rng.chance(kind === 'normal' ? potionChance : 0.6)) rw.potion = rollPotion(run);
   if (kind === 'final') rw.graft = false;
-  if (run.mode === 'ward') wardRewards(run, rw, prevPending);
+  wardRewards(run, rw, prevPending); // salvage, the hour's gold, building plans (engine/ward.js)
   run.phase = 'reward'; run.pending = rw;
   return rw;
 }
@@ -359,7 +283,7 @@ export function makeShop(run) {
   const m = priceMult(run);
   for (const it of [...cards, ...grafts, ...relics, ...potions]) it.price = Math.max(10, Math.round(it.price * m));
   const shop = { kind: 'shop', cards, grafts, relics, potions, removeUses: 0 };
-  if (run.mode === 'ward') wardShopExtend(run, shop); // building cards + removal at the Dispensary
+  wardShopExtend(run, shop); // the Dispensary's building plans and its strike-a-plan service
   return shop;
 }
 export function servicePrice(run, svc) {
@@ -371,7 +295,7 @@ export function servicePrice(run, svc) {
 export function shopBuy(run, kind, index, extra) {
   const shop = run.pending;
   if (!shop || shop.kind !== 'shop') return { ok: false, why: 'noshop' };
-  if (kind === 'build' || kind === 'buildRemove') return run.mode === 'ward' ? wardShopBuy(run, shop, kind, index, extra) : { ok: false, why: 'kind' };
+  if (kind === 'build' || kind === 'buildRemove') return wardShopBuy(run, shop, kind, index, extra);
   if (kind === 'remove') {
     const price = servicePrice(run, 'remove'); const inst = findInst(run, extra);
     if (!inst || run.gold < price) return { ok: false, why: 'gold' };
@@ -438,7 +362,7 @@ export const R = {
   hurt: (run, n) => { run.hp = Math.max(1, run.hp - n); },
   maxHp: (run, n) => { run.maxHp = Math.max(10, run.maxHp + n); run.hp = Math.min(run.maxHp, Math.max(1, run.hp + (n > 0 ? n : 0))); },
   addCard: (run, id) => { if (CARDS[id]) run.deck.push(newInst(id, () => run.uidNext++)); },
-  addBuild: (run, id) => addBuildCard(run, id), // a Ward building card (b_*) into the building deck; a no-op outside the Ward
+  addBuild: (run, id) => addBuildCard(run, id), // a building card (b_*) into the building deck
   removeCard: (run, uid) => { run.deck = run.deck.filter((i) => i.uid !== uid); },
   upgrade: (run, uid) => { const i = findInst(run, uid); if (i && CARDS[i.id].up) i.up = 1; },
   addRelic: (run, id) => addRelic(run, id || rollRelicByAct(run)),
@@ -454,16 +378,7 @@ export const R = {
   shatter: (run, uid) => { run.deck = run.deck.filter((i) => i.uid !== uid); run.stats.shatters++; },
   strainOf: (run) => strainInfo(run),
 };
-export function startEvent(run) {
-  const pool = Object.values(EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id) && (!e.ward || run.mode === 'ward'));
-  const open = pool.filter((e) => runAllows(run, e.id));
-  if (open.length) pool.splice(0, pool.length, ...open);
-  const ev = pool.length ? run.rng.pick(pool) : null;
-  if (!ev) { run.phase = 'map'; return null; }
-  run.seenEvents.push(ev.id);
-  run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null };
-  return run.pending;
-}
+// An event is opened by the Chapel (engine/ward.js wardStartEvent); these read and resolve run.pending.
 export function eventChoices(run) {
   const p = run.pending; const ev = EVENTS[p.id];
   return ev.choices.map((ch, i) => ({ i, label: ch.label, text: ch.text || '', pick: ch.pick || null, ok: !ch.cond || !!ch.cond(run), cards: ch.pick === 'card' ? run.deck.filter((x) => !ch.pickFilter || ch.pickFilter(x)).map((x) => x.uid) : null }));
@@ -476,12 +391,11 @@ export function eventChoose(run, i, uid) {
   p.result = ch.apply(run, R, inst) || 'Done.';
   return p.result;
 }
-// After an event, a queued fight or graft pick may follow. Returns the next phase.
+// After an event, a queued fight or graft pick may follow, else the walk goes on. Returns the next phase.
 export function afterEvent(run) {
   if (run.flags.queueFight) { const q = run.flags.queueFight; delete run.flags.queueFight; run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: q.elite ? 'elite' : 'normal', enemies: q.enemies, fromEvent: true }; return run.phase; }
   if (run.flags.queueGraft > 0) { run.flags.queueGraft--; startGraftPick(run); return run.phase; }
-  if (run.mode === 'ward') { wardAfterTrigger(run); return run.phase; } // back to the walk
-  run.phase = 'map'; run.pending = null; return run.phase;
+  wardAfterTrigger(run); return run.phase; // back to the walk
 }
 
 // ---------- fight resolution ----------
@@ -516,7 +430,7 @@ export function resolveFight(run, result) {
   fightRewards(run, kind, result);
   return 'reward';
 }
-// Leave a reward screen: first graft pick if offered, then the map (or the next act).
+// Leave a reward screen: first the graft pick if one is offered, then back to the walk (or the next floor).
 export function afterReward(run) {
   const rw = run.pending;
   if (rw && rw.graft && graftableCards(run).length) { rw.graft = false; return startGraftPick(run), 'graft'; }
@@ -526,20 +440,10 @@ export function afterGraft(run) {
   if (run.flags.queueGraft > 0) { run.flags.queueGraft--; startGraftPick(run); return 'graft'; }
   return advance(run);
 }
-export function advance(run) {
-  if (run.mode === 'ward') return wardAdvance(run); // the walk continues, or the next floor after the boss
-  const node = run.node ? run.map.nodes[run.node] : null;
-  run.pending = null;
-  if (node && node.type === 'boss' && run.act < 3) {
-    startAct(run, run.act + 1);
-    run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.5));
-    run.phase = 'map'; return 'act';
-  }
-  run.phase = 'map'; return 'map';
-}
-export function startLoop(run) {
-  run.loop++; run.hp = run.maxHp; startAct(run, 1); run.phase = 'map';
-}
+// After a reward, a graft pick, the shop or the forge: the walk continues, or the next floor opens after the boss (Act 3: the Grafter).
+export function advance(run) { return wardAdvance(run); }
+// Endless: the next loop starts on a fresh first floor (resources and the building deck carry over as between floors).
+export function startLoop(run) { run.loop++; run.hp = run.maxHp; startAct(run, 1); }
 
 export { resonanceOf as resonance } from './resonance.js';
 

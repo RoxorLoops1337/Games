@@ -64,11 +64,9 @@ t('a run save with unknown card and graft ids loads, fights and saves again', ()
   assert.equal(RUN.serializeRun(RUN.deserializeRun(again)), again, 'a repaired save is stable');
 });
 t('a save without unknown ids is returned byte for byte', () => {
-  for (const mode of [undefined, 'ward']) {
-    const run = RUN.newRun({ hero: 'odile', seed: 'clean', mode });
-    const a = RUN.serializeRun(run);
-    assert.equal(RUN.serializeRun(RUN.deserializeRun(a)), a);
-  }
+  const run = RUN.newRun({ hero: 'odile', seed: 'clean' }); // a Ward run: the floor, the building deck and the dice are in the save
+  const a = RUN.serializeRun(run);
+  assert.equal(RUN.serializeRun(RUN.deserializeRun(a)), a);
 });
 t('pending screens drop unknown ids: shop stock, graft offer, reward', () => {
   const mk = () => JSON.parse(RUN.serializeRun(RUN.newRun({ hero: 'wick', seed: 'pend' })));
@@ -772,10 +770,8 @@ await ta('the Thread half of resonance (tier 3 adds a stitch, tier 6 doubles the
       assert.ok(tt.includes('3 grafts: ' + resonanceText(SCHOOLS[sch], 3)) && tt.includes('6 grafts: ' + resonanceText(SCHOOLS[sch], 6)), sch + ' strip tip:\n' + tt); seen++;
     }
     assert.ok(seen >= 7, 'every school column of the strip was hovered: ' + seen); }
-  for (const [n, next] of [[0, 3], [2, 3], [3, 6], [5, 6]]) {
-    const info = resonanceInfo(null, 'rust', { rust: n });
-    assert.ok(info.lines.includes(`At ${next}: ${resonanceText(SCHOOLS.rust, next)}`)); if (n >= 3) assert.ok(info.lines.includes('Active (3): ' + resonanceText(SCHOOLS.rust, 3)));
-  }
+  // the patch tip a phone shows instead of that panel keeps the school's own line: with four patches there is no room for more
+  for (const [n, next] of [[0, 3], [2, 3], [3, 6], [5, 6]]) assert.ok(resonanceInfo(null, 'rust', { rust: n }).lines.includes(`At ${next}: ${SCHOOLS.rust.resonance[next]}`));
   { const run = schoolDeck('gilded', 2); RUN.startGraftPick(run); run.pending.offer.grafts[0] = GOF.gilded;
     const { app, said } = await boot(run, 'graft', graft, { go: true }); frames(app, 80);
     const r = LR.getAll().find((q) => q.id === 'graft-patch0'); app.mouse.x = r.x + r.w / 2; app.mouse.y = r.y + r.h / 2; said.length = 0; frames(app, 30);

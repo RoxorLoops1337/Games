@@ -1,6 +1,6 @@
 // Meta progression + settings, persisted under graftwork_meta_v1 (key is final, never rename).
 // Pure functions over a plain meta object. Storage is injectable (setStorage) so tests run in node.
-import { lsGet, lsSet } from './save.js';
+import { lsGet, lsSet, loadRun, clearRun, isRetiredRun } from './save.js';
 import { HEROES, CARDS } from '../data/index.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
@@ -70,6 +70,22 @@ export function loadMeta() {
   return migrate(raw);
 }
 export function saveMeta(m) { wr(JSON.stringify(m)); }
+
+// ---------- the retired map ----------
+// A saved run on the old node map cannot be continued (engine/save.js isRetiredRun). It is closed exactly as the Abandon button closes a run
+// (flow.abandon + flow.route in main.js: dead, abandoned, recordRunEnd), so its history entry, stats, Codex sightings, Credit, practice decks,
+// Unlock Points and achievements all count; the run save is deleted and m.notice asks the title to say so once (ui/title.js clears it when dismissed).
+// Returns what recordRunEnd returned, or null when the save is a run that can be continued (or there is none).
+const NOTICE_RETIRED = 'classic_retired';
+export function retireClassicRun(m) {
+  const run = loadRun();
+  if (!isRetiredRun(run)) return null;
+  run.phase = 'dead'; run.abandoned = true; run.ended = true;
+  const info = recordRunEnd(m, run, 'dead');
+  clearRun();
+  m.notice = NOTICE_RETIRED; saveMeta(m);
+  return info;
+}
 
 // ---------- settings / tips ----------
 export function setting(m, key) { const s = m && m.settings; return s && s[key] !== undefined ? s[key] : DEFAULT_SETTINGS[key]; }

@@ -1,5 +1,5 @@
 // THE WARD drawing kit (design/WARD.md section 6, ART_BIBLE "Anatomical Plate"): engraved room glyphs, resource icons,
-// building cards, the building deck viewer, the reward building pick, the Dispensary counter and the title mode switch.
+// building cards, the building deck viewer, the reward building pick and the Dispensary counter.
 // Pure canvas drawing plus small immediate-mode widgets; the run is only changed through engine/ward.js and engine/run.js.
 //
 //   roomGlyph(g, art, x, y, s, ink, spot)        engraved glyph for a room / card art key, centred, s = size in px
@@ -9,7 +9,6 @@
 //   plansModal(app, run, st)                     the building deck viewer (st.plans = true opens it); returns true while open
 //   buildPickRow(app, run, rw, x, y, w, h, st)   reward screen: pick 1 of 3 building cards or skip (engine takeBuildChoice)
 //   dispensary(app, run, shop, st)               shop screen: building cards for sale and the remove-a-plan service
-//   modeOf(meta) / drawModeSwitch(app, x, y, w, h)   the hero select switch 'Classic map | The Ward (new)' (meta.settings.mode)
 import { COL, clamp, rgba, EASE } from './core.js';
 import { lnw } from '../art/linework.js';
 import { drawCoin } from '../art/icons.js';
@@ -20,8 +19,6 @@ import * as RUN from '../engine/run.js';
 import { assets } from './assets.js';
 
 export const INK = '#2B1E1A', VELLUM = '#E8DCC4', BRASS = '#C9A227';
-export const DEFAULT_MODE = 'ward'; // the Ward is the default once its screen and tests are in (design/WARD.md step 4)
-export function modeOf(meta) { const m = meta && meta.settings && meta.settings.mode; return m === 'classic' || m === 'ward' ? m : DEFAULT_MODE; }
 
 export const ROOM_TINT = {
   rm_entrance: '#7a6a4a', rm_theatre: '#8e1f2c', rm_corridor: '#8a7a5c', rm_ward: '#B3263A', rm_isolation: '#C9A227', rm_chapel: '#3E7C74',
@@ -410,21 +407,4 @@ export function dispensary(app, run, shop, st) {
   return true;
 }
 
-// ---------------- title: mode switch ----------------
-export function drawModeSwitch(app, x, y, w, h) {
-  const meta = app.shared.meta; if (!meta) return;
-  const cur = modeOf(meta), half = w / 2;
-  app.reg('title-mode', x, y, w, h, { group: 'mode' });
-  const g = app.ctx;
-  app.panel(x, y, w, h, { r: 8, fill: 'rgba(8,6,5,.7)', stroke: 'rgba(232,220,196,.3)', rivets: false });
-  [['classic', 'Classic map'], ['ward', 'The Ward (new)']].forEach(([id, label], i) => {
-    const bx = x + i * half + 3, on = cur === id, over = app.inRect(bx, y + 3, half - 6, h - 6);
-    g.save(); app.rr(bx, y + 3, half - 6, h - 6, 6); g.fillStyle = on ? '#5a3f10' : over ? 'rgba(232,220,196,.1)' : 'rgba(0,0,0,0)'; g.fill();
-    if (on) { g.strokeStyle = COL.lamp; g.lineWidth = lnw('fine'); g.stroke(); }
-    g.restore();
-    app.text(label, bx + (half - 6) / 2, y + h / 2, { size: 16, ui: true, bold: on, align: 'center', baseline: 'middle', color: on ? '#ffe9a8' : 'rgba(232,220,196,.7)', fit: { w: half - 16, lines: 1 } });
-    if (over) { app.cursor = 'pointer'; app.tooltip(label, id === 'ward' ? 'Build your own hospital, room by room. Fights, events and shops are rooms that fill on timers; walk through them in the day\'s phases. The boss arrives on the last night.' : 'The surgical chart: pick a path of nodes up to the boss.', { color: COL.lamp, terms: id === 'ward' ? ['Ward', 'Morning'] : [] }); }
-    if (!on && app.clicked(bx, y + 3, half - 6, h - 6)) { meta.settings = meta.settings || {}; meta.settings.mode = id; const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta(); const a = app.shared.audio; if (a && a.sfx) a.sfx('uiClick'); }
-  });
-}
 export { EASE };

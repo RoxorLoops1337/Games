@@ -1,4 +1,4 @@
-// Ward relics (design/WARD.md section 9). `ward: true` keeps them out of classic runs (engine/run.js relicPool).
+// Ward relics (design/WARD.md section 9): relics about building and walking. `ward: true` marks them for the tools (the bots rank only combat relics).
 // Combat ones read the phase the Ward passes into the fight (A.c.wardMods.phase); the rest are run-level `perk`s read by engine/ward.js.
 // perks: eveningHeal nightGold powerCap wardCap firstFree startRes handPlus move noDark shopBuild expandCost. Voice: no em dashes.
 const ph = (A) => (A.c.wardMods && A.c.wardMods.phase) || null;

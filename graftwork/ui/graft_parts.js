@@ -1,7 +1,6 @@
 // Small drawing + rules helpers for the graft table and reward screens (pure canvas, no state).
 import { COL, EASE, clamp, rgba } from './core.js';
 import { SCHOOLS, GRAFTS, CARDS } from '../data/index.js';
-import { resonanceText } from '../data/schools.js';
 import * as ICONS from '../art/icons.js';
 import { cardSpec, cantGraftWhy } from '../engine/cards.js';
 import { OVERLOAD_SHATTER, relicMod } from '../engine/cards.js';
@@ -34,16 +33,18 @@ export function hpPerPlay(spec) {
   return own * (1 + (spec.repeat || 0)) + ((spec.price && spec.price.selfHurt) || 0);
 }
 
-// School resonance line: "Ember 2/3 resonance" and what the next step does.
+// School resonance line: "Ember 2/3 resonance" and what the next step does. These lines go into the patch tip of a phone, which has no
+// room for more than the school's own bonus: the Thread half (data/schools.js RESONANCE_THREAD) is in the school panel of the big
+// screen, on the Resonance keyword and in the deck view.
 export function resonanceInfo(run, schoolId, counts) {
   const s = SCHOOLS[schoolId]; if (!s) return null;
   const n = (counts && counts[schoolId]) || 0;
   const next = n < 3 ? 3 : n < 6 ? 6 : 6;
   const lines = [];
   lines.push(`${s.name} ${Math.min(n, next)}/${next} resonance`);
-  if (n >= 3) lines.push('Active (3): ' + resonanceText(s, 3));
-  if (n >= 6) lines.push('Active (6): ' + resonanceText(s, 6));
-  if (n < 6) lines.push(`At ${next}: ${resonanceText(s, next)}`);
+  if (n >= 3) lines.push('Active (3): ' + s.resonance[3]);
+  if (n >= 6) lines.push('Active (6): ' + s.resonance[6]);
+  if (n < 6) lines.push(`At ${next}: ${s.resonance[next]}`);
   return { name: s.name, n, next, color: s.color, lines, blurb: s.blurb };
 }
 

@@ -1,22 +1,18 @@
 // Unlock pacing simulator for GRAFTWORK (engine/unlock.js + data/unlocks.js).
 //   node tools/graftwork_unlocks.mjs [players=200] [poolPerHero=40]
-// Builds a pool of real finished runs per skill tier with the sim bots (strong = graftwork_strong, careful, sloppy = never grafts),
-// all on the FULL pool (GW_POOL=start for the starting pool), then lets N simulated players draw runs from their tier's pool and pushes every run through the REAL
-// recordRunEnd (so UP, first kills, achievements and hero gates are exactly the game's). Prints runs needed to unlock everything
-// per tier and the unlocked-percent curve. Deterministic (seeded).
+// Builds a pool of real finished runs per skill tier with the driver's bots, all on the FULL pool (GW_POOL=start for the starting pool), then
+// lets N simulated players draw runs from their tier's pool and pushes every run through the REAL recordRunEnd (so UP, first kills,
+// achievements and hero gates are exactly the game's). Prints runs needed to unlock everything per tier and the unlocked-percent curve.
+// Deterministic (seeded).
 import * as RUN from '../graftwork/engine/run.js';
 import * as META from '../graftwork/engine/meta.js';
-import { POLICIES, playRun } from './graftwork_sim.mjs';
-import './graftwork_strong.mjs'; // adds POLICIES.strong
 import { makeRng } from '../graftwork/engine/rng.js';
 import { TOTAL_COST, UP } from '../graftwork/data/unlocks.js';
-import { playWardRun } from './graftwork_ward_sim.mjs';
-// GW_MODE=ward builds the pools from Ward runs (strong bot at A0, careful bot at A5; the sloppy tier plays the Ward's sloppy bot at A3); default is the classic map
-const WARD = process.env.GW_MODE === 'ward';
-const WARD_POL = { strong: 'strong', careful: 'careful', sloppy: 'sloppy' };
+import { playWardRun } from './graftwork_driver.mjs';
 
 // The bots all play far better than real beginners, so skill is emulated by handicap: ascension level (harder game) per tier.
-const TIERS = WARD ? { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 3] } : { strong: [POLICIES.strong, 0], careful: [POLICIES.careful, 5], sloppy: [POLICIES.none, 6] };
+// tier: [driver policy, ascension]
+const TIERS = { strong: ['strong', 0], careful: ['careful', 5], sloppy: ['sloppy', 3] };
 const HEROES = ['marrow', 'wick', 'odile'];
 const MAX_RUNS = 220;
 
@@ -27,7 +23,7 @@ export function buildPools(perHero = 40, quiet = false) {
     for (const h of HEROES) {
       const arr = [];
       for (let i = 0; i < perHero; i++) {
-        const r = WARD ? playWardRun(h, `unl-${tier}-${h}-${i}`, WARD_POL[tier], asc, { unlocked: process.env.GW_POOL || 'all' }) : playRun(h, `unl-${tier}-${h}-${i}`, pol, asc, { unlocked: process.env.GW_POOL || 'all' });
+        const r = playWardRun(h, `unl-${tier}-${h}-${i}`, pol, asc, { unlocked: process.env.GW_POOL || 'all' });
         arr.push({ json: RUN.serializeRun(r.run), outcome: r.outcome });
       }
       pools[tier][h] = arr;
