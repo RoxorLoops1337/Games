@@ -1,7 +1,7 @@
 {
- "version": "90d9349bffb39a20",
- "bytes": 11580193,
- "count": 662,
+ "version": "6e03427d32118488",
+ "bytes": 11578909,
+ "count": 655,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -2151,10 +2151,6 @@
    "h": "79a7c7214b777b84",
    "s": 4888
   },
-  "data/bosses.js": {
-   "h": "a6c8a95adddbb149",
-   "s": 26
-  },
   "data/cards_any.js": {
    "h": "15b3e9eacde89345",
    "s": 4062
@@ -2240,8 +2236,8 @@
    "s": 2994
   },
   "data/index.js": {
-   "h": "4eac9e6c74f57cb9",
-   "s": 3735
+   "h": "1d0fb3deb429c453",
+   "s": 3271
   },
   "data/potions.js": {
    "h": "04fa30ed924bcc9e",
@@ -2287,22 +2283,6 @@
    "h": "0ec213683f9311ee",
    "s": 3509
   },
-  "data/statuses_ggraftsx.js": {
-   "h": "e635161d41a7f36c",
-   "s": 254
-  },
-  "data/statuses_ggreedy.js": {
-   "h": "36920b7f8c6db8dd",
-   "s": 110
-  },
-  "data/statuses_grafts.js": {
-   "h": "c605d172869c7729",
-   "s": 109
-  },
-  "data/statuses_gsafe.js": {
-   "h": "cc1c872b50ebf72f",
-   "s": 108
-  },
   "data/statuses_marrow.js": {
    "h": "3ac81936dc6a2975",
    "s": 1991
@@ -2310,14 +2290,6 @@
   "data/statuses_odile.js": {
    "h": "38d8e40f4b7d10e8",
    "s": 2340
-  },
-  "data/statuses_relics.js": {
-   "h": "ee4a79d679b7e0c9",
-   "s": 109
-  },
-  "data/statuses_thread.js": {
-   "h": "6de16c6f4e14a7c8",
-   "s": 104
   },
   "data/statuses_wick.js": {
    "h": "6c84ba53226a5620",

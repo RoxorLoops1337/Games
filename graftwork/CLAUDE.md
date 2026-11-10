@@ -38,17 +38,17 @@ tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs the
 tools/graftwork_*.mjs          balance and audio tooling (see Balance tooling)
 ```
 
-## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js)
+## Content files and owners (never edit another owner's file; add new statuses ONLY to your own statuses_<x>.js, creating it and registering it in data/index.js when it does not exist)
 | file | contents |
 |---|---|
 | cards_marrow.js / cards_wick.js / cards_odile.js | hero cards. ids `m_*` `w_*` `o_*`. The 7 starter cards per hero already exist: keep their ids, you may retune. Need >= 20 NON-starter cards each (common 10, uncommon 7, rare 5+), at least 5 Attack, 5 Skill, 3 Power-type per hero |
 | cards_any.js | neutral cards `x_*` any hero can buy (>= 14) |
 | cards_junk.js | junk (`j_*`), required ids: j_paperwork j_ringing j_clot j_flake j_static j_ledger. Add more as needed |
 | grafts_safe.js / grafts_greedy.js / grafts_weird.js | grafts `g_*`, tier matches file |
-| enemies_1/2/3.js | enemies by act, INCLUDING that act's elites and boss (kind: 'elite'/'boss'); bosses.js stays empty |
+| enemies_1/2/3.js | enemies by act, INCLUDING that act's elites and boss (kind: 'elite'/'boss') |
 | relics.js potions.js events.js | relics `r_*`, potions `p_*`, events `e_*` |
 | heroes.js schools.js statuses.js | lead only |
-| statuses_marrow/wick/odile/gsafe/ggreedy/grafts(=weird)/e1/e2/e3/relics.js | extra statuses for that author |
+| statuses_marrow/wick/odile/e1/e2/e3/aff.js | extra statuses for that author. A new author file must also be added to `data/index.js` (the empty ones were removed) |
 
 ## Card schema
 `{ id, name, hero, type: 'attack'|'skill'|'power'|'junk', cost: 0..3|'X', rarity: 'starter'|'common'|'uncommon'|'rare'|'junk', target: 'enemy'|'all'|'self'|'none', school?, flavor (one dry line, max 60 chars), flags: {exhaust, innate, retain, ethereal, unplayable}, fx: [ops], up: { fx: [ops] (full replacement), cost?, unflags?: [] } }`
