@@ -72,6 +72,24 @@ const MEM = { dieKey: '', phaseKey: '', floorKey: '', seen: {}, plan: null, stam
 export const wardMem = MEM; // tests
 // 0..1 progress of a build / upgrade pop-in. A stamp from the future (an earlier visit's clock) never hides a room: it counts as finished.
 export function buildAge(stamp, t) { if (stamp === undefined || !(stamp <= t)) return 1; return clamp((t - stamp) / 0.4, 0, 1); }
+// The picture behind the panels. They cover the stage except 8 to 12 px gutters, so the act's backdrop (far wall, lamps, shafts, motes, fog, vignette) is painted
+// ONCE as a still frame, with the 50 percent dim on top, into one stage-size layer; a Ward frame then blits it. It used to be painted live every frame (18 of
+// 48 ms per tick in the software-raster harness) for those gutters. One layer is kept: a new act repaints it. Stage units like every background layer, so the backing size only scales the blit.
+const ACT_BACKDROP = { 1: 'ward', 2: 'market', 3: 'theatre' };
+const BACKDROP = { theme: '', c: null, ok: false, bakes: 0 };
+function paintBackdrop(g, theme) { drawBackground(g, theme, 0, { still: true }); g.save(); g.fillStyle = 'rgba(8,6,5,.5)'; g.fillRect(0, 0, W, H); g.restore(); }
+export function backdropLayer(act) {
+  const theme = ACT_BACKDROP[act] || 'ward', B = BACKDROP;
+  if (B.theme === theme) return B.ok ? B.c : null;
+  B.theme = theme; B.ok = false;
+  if (typeof document === 'undefined' || !document.createElement) return null;
+  if (!B.c) { B.c = document.createElement('canvas'); B.c.width = W; B.c.height = H; }
+  const g = B.c.getContext && B.c.getContext('2d'); if (!g) return null;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  paintBackdrop(g, theme); B.ok = true; B.bakes++;
+  return B.c;
+}
+export const backdropStats = BACKDROP; // tests
 export function resetWardMem() { MEM.dieKey = ''; MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; MEM.darkBuilt = {}; }
 
 // A walk that was resumed (page reload, Continue from the title) has no step plan in memory: rebuild it from the saved walk so the token still
@@ -184,6 +202,7 @@ export default {
     S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null, endArm: 0, darkOk: '', rest: false, restT: 0 };
     this.st = S;
     MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
+    ISO.newVisit(); // the same for the map's own stamps (monster fade-in, foot plants)
     const w = run.ward;
     if (!w) return;
     ISO.camReset();
@@ -254,8 +273,7 @@ export default {
     const busy = !!(S.walk || S.banner || S.plans);
     if (busy) app.blocked = true;
     this.phaseWatch(app);
-    drawBackground(g, { 1: 'ward', 2: 'market', 3: 'theatre' }[run.act] || 'ward', S.t);
-    g.save(); g.fillStyle = 'rgba(8,6,5,.5)'; g.fillRect(0, 0, W, H); g.restore();
+    { const bl = backdropLayer(run.act); if (bl) g.drawImage(bl, 0, 0); else paintBackdrop(g, ACT_BACKDROP[run.act] || 'ward'); } // one blit of the baked still backdrop (no canvas: painted still)
     const so = S.fx.shakeOffset();
     g.save(); g.translate(so.x, so.y);
     this.drawSheet(app);

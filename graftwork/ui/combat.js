@@ -627,10 +627,9 @@ function drawEnemyJ(ctx, ed, def, x, y) {
   const a = ed.anim, idl = rmotion() || ed.dying > 0 ? 0 : Math.sin((S.t + ed.phase) * 2.1) * 0.014, sy = 1 + a.sq + idl, sx = 1 / (1 + a.sq) * (1 - idl * 0.6);
   ctx.save();
   CA.contactShadow(ctx, x, y - 1, Math.max(50, ed.w * 0.68), 1 - clamp(ed.dying * 1.4, 0, 1)); // the same grounding shadow the painted ones get
-  CA.gradeProcedural(ctx, true); // a matching colour grade until the creature is painted
   if (a.sq || idl) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
-  drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac });
-  CA.gradeProcedural(ctx, false);
+  CA.gradeProcedural(true); // a matching colour grade until the creature is painted (baked into its colours: no canvas filter)
+  try { drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac }); } finally { CA.gradeProcedural(false); }
   if (a.seamLit > 0) J.drawSeams(ctx, x, y, ed.w, ed.h, a.seamLit, S.t, 1 - ed.dying);
   ctx.restore();
 }
@@ -1582,9 +1581,8 @@ function drawHeroAndHud(app) {
     const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
     ctx.save();
     if (dying) ctx.globalAlpha = 1 - dying * 0.6;
-    CA.gradeProcedural(ctx, true);
-    drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying });
-    CA.gradeProcedural(ctx, false);
+    CA.gradeProcedural(true);
+    try { drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying }); } finally { CA.gradeProcedural(false); }
     ctx.restore();
   }
   const lethal = !S.ending && !S.modal && canAct() ? { ...lethalIncoming(S.c), rm: FX_OPTS.reduced || rmotion() } : null; // intents this turn >= your HP after Block: pulse the bar, show the chip

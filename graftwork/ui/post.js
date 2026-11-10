@@ -14,6 +14,9 @@
 //   app.post.setGrade(name, ms)             'ward'|'market'|'theatre'|'boss'|'title'|'neutral' (auto-selected per screen)
 //   app.post.setMaskRects([[x,y,w,h],...])  up to 8 rects where warp and aberration are zeroed
 //   app.post.setQuality('off'|'low'|'high')
+// Quality: the tier is the Effects setting (meta.settings.quality) while the game's quality tier is full, and off in lite and minimal. ONE controller
+// decides that tier (ui/quality.js, which knows the 30 fps idle cap); this file measures nothing. It used to keep its own frame-time ring and switched
+// bloom, grade and vignette off after about 11 s on the idle title, because it read the governor's 33 ms frames as a slow device.
 //   app.staticFrame = true                  optional hint from a screen: the 2D canvas did not change, skip the upload
 // Not thread-safe (main thread only). The frame loop (update/render) allocates nothing.
 import { flashGate } from './fx.js';
@@ -54,10 +57,9 @@ export function installPost(app) {
   const g = { t: 1, ms: 1, name: 'neutral', autoKey: '' };
   const userRects = new Float32Array(32); let nUser = 0;
   const maskU = new Float32Array(32);
-  const stats = { ms: 0, avgFrame: 16.7, frames: 0, tier: 'off', ceiling: 'high', drops: 0, rises: 0 };
+  const stats = { ms: 0, tier: 'off' };
 
-  const S = { tier: 'off', ceiling: 'high', noGL: !hasDom, lost: false, gradeInit: false, dirty: true, errors: 0, auto: true, lastWant: undefined, lastNow: 0, lastChange: 0, fastSince: 0, lastGrain: 0 };
-  const ring = new Float32Array(60); let ringI = 0, ringN = 0, ringSum = 0;
+  const S = { tier: 'off', noGL: !hasDom, lost: false, gradeInit: false, dirty: true, errors: 0, lastWant: undefined, lastNow: 0, lastGrain: 0 };
   const R = { cv: null, gl: null, P: null, tex: null, texW: 0, texH: 0, T: [], U: [], levels: 0, vao: null, half: false, sw: 0, sh: 0, glW: 0, glH: 0, sLeft: '', sTop: '', sWidth: '', sHeight: '', ignoreLoss: false };
 
   // ---- GL resource management ----
@@ -188,8 +190,8 @@ export function installPost(app) {
 
   // ---- public API ----
   const post = {
-    on: false, autoQuality: true,
-    setQuality(q) { if (!TIERS.includes(q)) return; S.ceiling = q; stats.ceiling = q; setTier(q); resetRing(); },
+    on: false,
+    setQuality(q) { if (TIERS.includes(q)) setTier(q); },
     setGrade(name, ms) {
       const to = GRADES[name]; if (!to) return;
       for (let i = 0; i < 9; i++) { gFrom[i] = gCur[i]; gTo[i] = to[i]; }
@@ -237,10 +239,9 @@ export function installPost(app) {
   };
   app.post = post;
 
-  // ---- settings, auto grade, auto quality ----
+  // ---- settings, auto grade ----
   function settings() { const m = app.shared && app.shared.meta; return (m && m.settings) || EMPTY; }
   function reduced() { return settings().reducedMotion === true; }
-  function resetRing() { ringN = 0; ringI = 0; ringSum = 0; S.lastChange = now(); S.fastSince = 0; }
   function autoGrade() {
     const cur = app.current, run = app.shared && app.shared.run;
     let name;
@@ -262,18 +263,6 @@ export function installPost(app) {
     return n;
   }
   S.autoKey = '';
-  function autoQuality(t, frameMs) {
-    ringSum += frameMs - ring[ringI]; ring[ringI] = frameMs; ringI = (ringI + 1) % 60; if (ringN < 60) ringN++;
-    stats.frames++;
-    if (ringN < 60) return;
-    const avg = ringSum / 60; stats.avgFrame = avg;
-    if (post.autoQuality === false || t - S.lastChange < 5000) { if (avg >= 17.4) S.fastSince = 0; return; }
-    const ti = TIERS.indexOf(S.tier);
-    if (avg > 18 && ti > 0 && (ti > 1 || avg > 24)) { setTier(TIERS[ti - 1]); stats.drops++; S.noRiseUntil = t + 60000; resetRing(); return; }
-    // a vsync-limited 60 Hz display averages about 16.7 ms even when it has headroom, so 'fast' means under 17.4 (the old 12 ms could never be met there and bloom stayed off for the whole session); after a drop, wait a minute before trying again so a borderline device does not flap
-    if (avg < 17.4 && t >= (S.noRiseUntil || 0)) { if (!S.fastSince) S.fastSince = t; else if (t - S.fastSince > 10000 && ti < TIERS.indexOf(S.ceiling)) { setTier(TIERS[ti + 1]); stats.rises++; resetRing(); } } else S.fastSince = 0;
-  }
-
   // ---- frame ----
   function fxActive() { return sw.n > 0 || ab.amt > 0 || vg.a > 0 || fl.a > 0 || g.t < 1; }
   function renderFrame() {
@@ -281,11 +270,10 @@ export function installPost(app) {
     const frameMs = S.lastNow ? Math.min(100, t0 - S.lastNow) : 16.7; S.lastNow = t0;
     const dt = frameMs / 1000;
     const st = settings();
-    const want = app.perf && app.perf.q.tier !== 'full' ? 'off' : st.quality; // lite and minimal tiers (ui/quality.js) switch the WebGL post off
-    if (want !== S.lastWant) { S.lastWant = want; if (TIERS.includes(want)) { S.ceiling = want; stats.ceiling = want; if (want !== S.tier) setTier(want); resetRing(); } }
+    const want = app.perf && app.perf.q.tier !== 'full' ? 'off' : st.quality; // the Effects setting in the full tier; lite and minimal (ui/quality.js) switch the WebGL post off
+    if (want !== S.lastWant) { S.lastWant = want; if (TIERS.includes(want) && want !== S.tier) setTier(want); }
     post.update(dt);
     autoGrade();
-    autoQuality(t0, frameMs);
     if (S.tier === 'off' || S.lost || !R.cv) return;
     const gl = R.gl, rm = st.reducedMotion === true;
     try {
@@ -367,10 +355,7 @@ export function installPost(app) {
     app.afterFrame = (a) => { if (prev) prev(a); renderFrame(); };
     const q = settings().quality;
     S.lastWant = q;
-    const start = TIERS.includes(q) ? q : 'high';
-    S.ceiling = start; stats.ceiling = start;
-    setTier(start);
-    S.lastChange = now();
+    setTier(TIERS.includes(q) ? q : 'high');
   } else {
     // no DOM (node tests): the API keeps working, nothing renders; tests may call app.post.render() themselves
     S.tier = 'off';

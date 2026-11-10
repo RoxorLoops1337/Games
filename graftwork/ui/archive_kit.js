@@ -37,7 +37,17 @@ export function categoryCounts(meta) {
   return out;
 }
 export const archiveState = (meta) => unlockState(meta);
-export const percentLabel = (meta) => { const st = unlockState(meta); return st.done ? 'Archive complete' : `Archive ${st.percent} percent`; };
+export const percentLabelOf = (st) => (st.done ? 'Archive complete' : `Archive ${st.percent} percent`);
+export const percentLabel = (meta) => percentLabelOf(unlockState(meta));
+// unlockState walks every unlock, so a screen that only shows it asks once per visit instead of every frame: on its first frame after enter (the screen
+// clears `_unl` there), when the stack returns to it (a modal over it closed: Settings can erase the profile) and when the profile object is swapped.
+// Nothing changes the unlock model while the title or the Archive is the top screen.
+export function unlockOnce(scr, app) {
+  const meta = app.shared.meta, top = app.top() === scr, c = scr._unl;
+  if (!c || c.meta !== meta || (top && !c.top)) scr._unl = { meta, top, st: unlockState(meta) };
+  else c.top = top;
+  return scr._unl.st;
+}
 // the short first sentence of a hint ("A Wick rare card.")
 export const shortHint = (h) => String(h || '').split('. ')[0].replace(/\.$/, '') + '.';
 

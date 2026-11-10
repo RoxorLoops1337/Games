@@ -121,13 +121,28 @@ await t('status and block overlays, elite aura, boss presence draw without throw
     st.P.dying = 0.5; st.ending = { win: false, t: 1 }; frames(app, 5);
   }
 });
-await t('the fallback (Act 2 enemy, or no manifest at all) keeps the procedural look with the same shadow and a colour grade', async () => {
+await t('the fallback (Act 2 enemy, or no manifest at all) keeps the procedural look with the same shadow and a colour grade that is baked into its colours: the frame sets no canvas filter', async () => {
   const { app } = await fight(['jarhead'], { act: 2 });
-  const filters = []; const proto = app.ctx; let f = 'none';
-  Object.defineProperty(proto, 'filter', { configurable: true, get: () => f, set: (v) => { f = v; filters.push(v); } });
-  const rec = spy(app.ctx); frames(app, 3);
-  assert.ok(filters.includes(CA.GRADE), 'graded'); assert.equal(f, 'none', 'grade is reset after each figure');
+  // every 2D context of the frame is watched (the stage and the offscreen layers): a filter costs one pass per draw call
+  const filters = [], fills = new Set(), watch = (ctx, set) => {
+    let f = 'none', fs = '#000';
+    Object.defineProperty(ctx, 'filter', { configurable: true, get: () => f, set: (v) => { f = v; filters.push(v); } });
+    if (set) Object.defineProperty(ctx, 'fillStyle', { configurable: true, get: () => fs, set: (v) => { fs = v; set.add(v); } });
+    return ctx;
+  };
+  watch(app.ctx, fills);
+  const ce = document.createElement; document.createElement = (...a) => { const c = ce(...a), gc = c.getContext; c.getContext = (...b) => watch(gc.apply(c, b)); return c; };
+  const rec = spy(app.ctx);
+  try { frames(app, 3); } finally { document.createElement = ce; }
+  assert.deepEqual(filters, [], 'no context of the combat frame is given a filter');
+  // the grade is arithmetic now: Jarhead's stubby legs are #7a6a50 = rgb(122,106,80), and under sepia(0.2) saturate(0.82) contrast(1.06) brightness(0.96) that is rgb(118,105,82)
+  assert.ok(fills.has('rgb(118,105,82)'), 'the figure is painted with graded colours'); assert.ok(!fills.has('rgb(122,106,80)'), 'and not with the raw ones');
   assert.ok(rec.shadows.some((h) => Math.abs(h.y - (L.ENEMY_FOOT - 1)) < 2), 'same contact shadow');
+  // as before, only the full quality tier grades
+  const lite = await fight(['jarhead'], { act: 2 }), fills2 = new Set();
+  const was = assets.app; assets.app = lite.app; lite.app.perf.q.setMode('low'); watch(lite.app.ctx, fills2);
+  try { frames(lite.app, 3); } finally { assets.app = was; }
+  assert.ok(fills2.has('rgb(122,106,80)') && !fills2.has('rgb(118,105,82)'), 'the minimal tier draws the figure ungraded');
   const bare = await fight(['bedpan_slime'], { sprites: false }); frames(bare.app, 5);
   assert.equal(CA.spriteOf('bedpan_slime', bare.app), null);
 });

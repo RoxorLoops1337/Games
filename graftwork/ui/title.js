@@ -5,7 +5,7 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
-import { percentLabel } from './archive_kit.js';
+import { percentLabelOf, unlockOnce } from './archive_kit.js';
 import { heroHint } from '../engine/unlock.js';
 import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
 import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../engine/assist.js';
@@ -64,6 +64,7 @@ export function labelColor(hex, k = 0.62) {
 export default {
   enter(app, params) {
     this.p = params || {};
+    this._unl = null; // the Archive percent is read again (ui/archive_kit.js unlockOnce)
     this.state = 'menu';
     this.logoK = 0; this.menuK = 0;
     app.sceneT = 0;
@@ -280,7 +281,7 @@ export default {
         if (credit > 0) this.pip(app, credit, x + hw + 10 + hw - 28, yy + 1, { size: 12, maxW: 52 });
       }
       else if (id === 'settings') {
-        const hw = Math.floor((bw - 10) / 2), al = percentLabel(meta);
+        const hw = Math.floor((bw - 10) / 2), al = percentLabelOf(unlockOnce(this, app)); // read once per visit, not every frame
         if (this.slab(app, 'settings', 'Settings', x, yy, hw, bh, { size: 22, fit: true })) flow.openSettings();
         if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Archive', 'New cards, grafts, relics, potions and events open after every run. See what is open and what comes next.' + (fresh ? `\n${fresh} new since you last looked.` : ''), { color: COL.lamp });
         app.reg('title-archive', x + hw + 10, yy - 12, hw, bh + 12, { group: 'archive' }); // includes the pip that hangs on its top edge
