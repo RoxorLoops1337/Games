@@ -1047,7 +1047,7 @@ function renderFaceTemplate(g, spec, lines, price, o, I, T) {
   if (painted) { rr(g, -HW + 3, -HH + 3, CARD_W - 6, CARD_H - 6, 9); g.fillStyle = '#17110e'; g.fill(); BB = null; } // nothing shows through a seam or a socket
   composeCardFront(g, T.tpl, T.fr, { compact, grafts: (spec.grafts || []).length > 0 }, painters);
   if (junk && !painted) drawBandages(g);
-  if (o.tithed) drawSeam(g, seed);
+  if (o.tithed) { drawSeam(g, seed); if (painted && T.slots.namePlate && (T.fr.def.baked || []).includes('namePlate')) painters.namePlate(g, T.slots.namePlate, { baked: true }); } // the seam runs through the banner of a painted card: the name is written over it again
   if (o.jam) drawClamp(g, seed, painted ? win.y + 34 : win.y + win.h); // on a painted frame the banner under the picture carries the name: the clamp bites the top of the picture
   if (o.mark) drawMark(g, o.mark, win, seed);
 }
