@@ -1,7 +1,7 @@
 {
- "version": "85880c82c5deee87",
- "bytes": 8960379,
- "count": 497,
+ "version": "a61b818ed574ac1e",
+ "bytes": 9213401,
+ "count": 518,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -42,6 +42,82 @@
   "art/plates.js": {
    "h": "d6cce7a66d1e3d7a",
    "s": 23191
+  },
+  "assets/rigs/candy_striper@1x.webp": {
+   "h": "7a948cc6621359de",
+   "s": 5410
+  },
+  "assets/rigs/candy_striper@2x.webp": {
+   "h": "24a02ad97bcf981d",
+   "s": 13260
+  },
+  "assets/rigs/knitter@1x.webp": {
+   "h": "ea17623494910f4d",
+   "s": 7132
+  },
+  "assets/rigs/knitter@2x.webp": {
+   "h": "1e2aec5c2b50cfb8",
+   "s": 17512
+  },
+  "assets/rigs/manifest.json": {
+   "h": "bd710e14a2d5aaca",
+   "s": 32537
+  },
+  "assets/rigs/marrow@1x.webp": {
+   "h": "4e4a866ee15506a3",
+   "s": 6474
+  },
+  "assets/rigs/marrow@2x.webp": {
+   "h": "ae58c75b8e0dc9f1",
+   "s": 16250
+  },
+  "assets/rigs/night_nurse@1x.webp": {
+   "h": "80f48159601b1a5c",
+   "s": 5610
+  },
+  "assets/rigs/night_nurse@2x.webp": {
+   "h": "6c4d11f9409dc53c",
+   "s": 13668
+  },
+  "assets/rigs/npc_nurse@1x.webp": {
+   "h": "b9d8047b08f1d090",
+   "s": 6044
+  },
+  "assets/rigs/npc_nurse@2x.webp": {
+   "h": "86907be2a9930efc",
+   "s": 14532
+  },
+  "assets/rigs/npc_patient@1x.webp": {
+   "h": "191ae7b464c06031",
+   "s": 6056
+  },
+  "assets/rigs/npc_patient@2x.webp": {
+   "h": "c027e4af9e7ceb70",
+   "s": 15562
+  },
+  "assets/rigs/npc_porter@1x.webp": {
+   "h": "fda50ecf471dc58b",
+   "s": 6792
+  },
+  "assets/rigs/npc_porter@2x.webp": {
+   "h": "b4b84c394dd2b225",
+   "s": 17372
+  },
+  "assets/rigs/odile@1x.webp": {
+   "h": "3ded9458a04d30af",
+   "s": 5618
+  },
+  "assets/rigs/odile@2x.webp": {
+   "h": "a2703bb6e8f79434",
+   "s": 14316
+  },
+  "assets/rigs/wick@1x.webp": {
+   "h": "8fc7de61b323d5d2",
+   "s": 6056
+  },
+  "assets/rigs/wick@2x.webp": {
+   "h": "4bc28517bfd0db0d",
+   "s": 15650
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
@@ -1580,8 +1656,8 @@
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "a00cb98133bee50a",
-   "s": 2920
+   "h": "4e0ab04510fc8a8c",
+   "s": 3992
   },
   "data/grafts_extra.js": {
    "h": "00f2b29e703d69d3",
@@ -1903,6 +1979,10 @@
    "h": "b868f4fb7841b817",
    "s": 5000
   },
+  "ui/preview.js": {
+   "h": "bc4f4194e6537095",
+   "s": 1034
+  },
   "ui/puppet.js": {
    "h": "a0d7bfae1e1c1f58",
    "s": 34193
@@ -1916,8 +1996,12 @@
    "s": 17989
   },
   "ui/rig.js": {
-   "h": "47eb1353afdc836e",
-   "s": 6824
+   "h": "4ebb555aecc4f5e4",
+   "s": 25768
+  },
+  "ui/rigs.js": {
+   "h": "3972650d1d124331",
+   "s": 4260
   },
   "ui/seam_ui.js": {
    "h": "2263d7fa77934da3",
@@ -1972,8 +2056,8 @@
    "s": 83905
   },
   "ui/ward_iso.js": {
-   "h": "b98f98da5ea7c9cd",
-   "s": 70991
+   "h": "eb3acb7f5a505f8a",
+   "s": 72852
   },
   "ui/ward_kit.js": {
    "h": "08b14b7b4c136db2",

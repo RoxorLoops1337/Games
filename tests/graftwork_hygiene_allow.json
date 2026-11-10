@@ -301,7 +301,6 @@
   "graftwork/ui/ward_iso.js:drawGround",
   "graftwork/ui/ward_iso.js:drawRooms",
   "graftwork/ui/ward_iso.js:fpOf",
-  "graftwork/ui/ward_iso.js:groundShadow",
   "graftwork/ui/ward_iso.js:roomCW",
   "graftwork/ui/ward_iso.js:toWorld",
   "graftwork/ui/ward_kit.js:EASE",
