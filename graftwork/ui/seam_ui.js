@@ -5,12 +5,11 @@
 //   drawSeamBadge(app, kind, x, y, s, school?)  needle / scissors / loose thread / clasp badge, readable at 0.54 scale
 //   onSeamEvent(app, ev, ctx)          animate seamExtend / seamCut / seamSlack / seamFray / seamPay (ctx = { fx, entPos, c }); returns ms to wait
 //   seamTip(app, c, rect)              the one-time 'thread' tutorial tip (call last in the tips pass)
+//   drawSeamDeclare(app, c, can)       the declaration tab (heroes with `declare`, Odile): press or G arms it, again takes it back
 //   payShort(school, stitches)         the short payout text shared by chip, floats and tests
 import { COL, EASE, clamp, rgba } from './core.js';
 import { FX_OPTS } from './fx.js';
 import { drawSchoolGlyph } from '../art/cards.js';
-import { schoolsOf } from '../engine/cards.js';
-import { specOf } from '../engine/combat.js';
 import * as SEAM from '../engine/seam.js';
 import { maybeTip, threadLesson, tipSeen, TIP_TEXTS } from './tutorial.js';
 import * as L from './combat_layout.js';
@@ -58,21 +57,11 @@ function fitText(app, str, x, y, size, o = {}) {
   return app.text(str, x, y, { ...rest, size });
 }
 
-// ---------------------------------------------------------------- preview / badge logic
-function fallbackPreview(c, card) {
-  const s = c.seam, spec = specOf(c, card), set = schoolsOf(spec);
-  const mk = (kind, school) => ({ kind, school: school || null, len: s.len, payout: [] });
-  if (card.jam || !set.length) return mk('slack', set[0]);
-  if (spec.fused && spec.fused.length) return mk('tied', set[0]);
-  if (s.len === 0) return mk('extend', set[0]);
-  const shared = set.find((x) => s.set.includes(x));
-  return shared ? mk('extend', shared) : mk('cut', set[0]);
-}
+// ---------------------------------------------------------------- preview / badge logic (the engine's seamPreview is the only source)
 export function seamBadgeInfo(c, card) {
   if (!c || !c.seam || !card) return null;
   let pv = null;
-  try { if (typeof SEAM.seamPreview === 'function') pv = SEAM.seamPreview(c, card); } catch (e) { pv = null; }
-  if (!pv) { try { pv = fallbackPreview(c, card); } catch (e) { return null; } }
+  try { pv = SEAM.seamPreview(c, card); } catch (e) { return null; }
   return { kind: pv.kind, school: pv.school, pv };
 }
 export function seamBadge(c, card) { const i = seamBadgeInfo(c, card); M.lastSchool = i ? i.school : null; return i ? i.kind : null; }
@@ -263,6 +252,43 @@ function drawChip(app, c, rect, pv) {
   drawSeamBadge(app, kind, x + 20, y + h / 2, 0.62, school);
   fitText(app, l1, x + 42, y + 3, 14, { bold: true, color: col === COL.gilded || col === COL.static || col === COL.echo ? col : COL.vellum, maxW: w - 48 });
   fitText(app, l2, x + 42, y + h / 2 + 1, 13, { color: 'rgba(232,220,196,.88)', maxW: w - 48 });
+}
+
+// ---------------------------------------------------------------- the declaration tab (Odile: "Once per turn, a card may be declared Gilded")
+// Sits on the rail's top left edge. A press, G or the gamepad's left trigger arms it: the next card also counts as that school
+// (hand badges and the rail preview follow at once, they read the engine). Pressing again takes it back. Spent for the turn
+// once a card has used it. Drawn only for a hero with `declare`. Returns true when it changed the declaration.
+export const DECLARE_KEY = 'g';
+export function declareShown(c) { return !!(c && c.seam && SEAM.declareOf(c)); }
+export function drawSeamDeclare(app, c, can) {
+  if (!c || !c.seam) return false;
+  const school = SEAM.declareOf(c); if (!school) return false;
+  const R = L.DECLARE_BTN, s = c.seam, armed = !!s.declare, spent = !!s.declared, col = schoolCol(school), name = SCHOOL_NAME[school] || school;
+  if (app.reg) app.reg('seamDeclare', R.x, R.y, R.w, R.h, { layer: 'hud', group: 'seam' });
+  const label = spent ? 'Spent' : armed ? name : 'Declare', dis = spent || !can;
+  const pulse = armed && !reduced(app) ? 0.5 + 0.5 * Math.sin(app.t * 5) : armed ? 1 : 0;
+  const hit = app.button('', R.x, R.y, R.w, R.h, {
+    key: DECLARE_KEY, disabled: dis, r: 8, fill: armed ? '#4d3a0e' : '#26201c',
+    icon: (ctx, x, y, w, h) => {
+      if (armed) { ctx.save(); ctx.globalAlpha = 0.45 + 0.4 * pulse; app.rr(x + 1.5, y + 1.5, w - 3, h - 3, 7); ctx.lineWidth = lnw(2.5); ctx.strokeStyle = col; ctx.stroke(); ctx.restore(); }
+      // the school glyph leads the word where both fit; on a phone the word is bigger and stands alone, in the school colour
+      const tcol = dis ? 'rgba(232,220,196,.4)' : armed ? BRASS_L : COL.vellum, ty = y + h / 2 - app.sz(14) * 0.6;
+      if (app.layoutText(label, { size: 14, ui: true, bold: true }).w <= w - 37) {
+        ctx.save(); if (dis) ctx.globalAlpha *= 0.45;
+        drawSchoolGlyph(ctx, school, x + 17, y + h / 2, 9, col);
+        ctx.restore();
+        fitText(app, label, x + 31, ty, 14, { bold: true, maxW: w - 37, color: tcol });
+      } else fitText(app, label, x + w / 2, ty, 14, { bold: true, maxW: w - 10, align: 'center', color: dis ? tcol : col });
+    },
+  });
+  if (app.inRect(R.x, R.y, R.w, R.h)) {
+    const state = spent ? 'Used this turn.' : armed ? `Armed: the next card you play also counts as ${name}. Press again to take it back.` : `The next card you play also counts as ${name}: it can join a ${name} Line, or bring ${name} into the Line it joins.`;
+    app.tooltip(`Declare ${name}`, `Once per turn. ${state}${app.mouse.touch ? '' : ' Key: G.'}`, { color: col, anchor: R });
+  }
+  if (!hit || !SEAM.setDeclare(c)) return false;
+  snd(app, 'knotTie', 'uiClick', { pitch: c.seam.declare ? 1.3 : 0.8, vol: 0.6 });
+  if (app.announce) app.announce(c.seam.declare ? `The next card counts as ${name}.` : 'Declaration taken back.', false);
+  return true;
 }
 
 // ---------------------------------------------------------------- overlays (flying beads, snip, signature moments, puffs)

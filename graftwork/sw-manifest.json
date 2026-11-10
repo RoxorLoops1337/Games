@@ -1,6 +1,6 @@
 {
- "version": "7b6f0555ccbfc2e8",
- "bytes": 11582156,
+ "version": "e03fcb7257babf71",
+ "bytes": 11586573,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2232,8 +2232,8 @@
    "s": 16063
   },
   "data/heroes.js": {
-   "h": "de8570a5eb34ec80",
-   "s": 2994
+   "h": "c1a8438759b3933c",
+   "s": 2840
   },
   "data/index.js": {
    "h": "1d0fb3deb429c453",
@@ -2356,8 +2356,8 @@
    "s": 1065
   },
   "engine/seam.js": {
-   "h": "d902679eb66499fb",
-   "s": 15182
+   "h": "638ce7c62e8b8c03",
+   "s": 16680
   },
   "engine/text.js": {
    "h": "b9c8e9d6a3afe0e2",
@@ -2400,8 +2400,8 @@
    "s": 798
   },
   "ui/a11y.js": {
-   "h": "8e5150b70b7cd6b0",
-   "s": 8902
+   "h": "f155d93f1c97adea",
+   "s": 8967
   },
   "ui/app_panel.js": {
    "h": "ae3745884251d20d",
@@ -2436,8 +2436,8 @@
    "s": 40400
   },
   "ui/combat.js": {
-   "h": "8d70ab511459966d",
-   "s": 120544
+   "h": "669319cfbb6dfb00",
+   "s": 120931
   },
   "ui/combat_art.js": {
    "h": "ddcac08d047ae5ca",
@@ -2448,8 +2448,8 @@
    "s": 30431
   },
   "ui/combat_layout.js": {
-   "h": "dcc16b6f9a40b2f7",
-   "s": 5870
+   "h": "ed89fe130fa80493",
+   "s": 6047
   },
   "ui/core.js": {
    "h": "18d3934c833e557e",
@@ -2520,8 +2520,8 @@
    "s": 4454
   },
   "ui/pause.js": {
-   "h": "49b5e206d6812e5b",
-   "s": 19024
+   "h": "d7740039b7369add",
+   "s": 19064
   },
   "ui/perf_flags.js": {
    "h": "cf5a21a500aca0d7",
@@ -2552,8 +2552,8 @@
    "s": 6824
   },
   "ui/seam_ui.js": {
-   "h": "449c2466c7355b2b",
-   "s": 33488
+   "h": "1372bbcb82b0519e",
+   "s": 35892
   },
   "ui/settings.js": {
    "h": "ffc15b93cebabdbb",

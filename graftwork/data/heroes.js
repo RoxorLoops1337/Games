@@ -1,5 +1,5 @@
 // Heroes. deck = the 15 starting card ids (the cards must exist in cards_<hero>.js).
-// perks are read by engine/run.js: hp, gold, combatHeal, shopDiscount, startRelic, startGraft.
+// perks are read by engine/run.js: hp, gold, combatHeal, shopDiscount, startRelic, startGraft. declare (a school) is read by engine/seam.js.
 export const HERO_LIST = [
   {
     id: 'marrow', name: 'Marrow', title: 'Barber-Surgeon', color: '#9E0F2E', school: 'blood', unlocked: true,
@@ -28,8 +28,8 @@ export const HERO_LIST = [
     blurb: 'Polite, acquisitive, and never without a receipt. Gold in, replays out.',
     passive: 'Start with 130 gold. Shop prices are 10% lower. Once per turn, a card may be declared Gilded.',
     perks: { hp: 92, gold: 130, shopDiscount: 0.1, combatHeal: 8 },
-    // Thread: engine/seam.js asks seamDeclare({card, set, line}) when a card would CUT the Line; returning 'gilded' adds that school to the card for this step (once per turn).
-    on: { seamDeclare: (A, p) => { const c = A.c; c.rx = c.rx || {}; if (c.rx.declTurn === c.turn || !p || !p.line || !p.line.includes('gilded')) return null; c.rx.declTurn = c.turn; return 'gilded'; } },
+    // Thread: once per turn the player may declare the next card Gilded (engine/seam.js canDeclare / setDeclare; the control sits on the Thread rail, key G).
+    declare: 'gilded',
     deck: ['o_swipe', 'o_swipe', 'o_swipe', 'o_pocket_change', 'o_pocket_change', 'o_cover', 'o_cover', 'o_cover', 'o_cover', 'o_appraise', 'o_appraise', 'o_gilt_strike', 'o_gilt_strike', 'o_collect', 'o_encore'],
   },
 ];

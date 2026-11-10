@@ -283,6 +283,105 @@ t('Granny Knot: extends any Line as every school in it, and adds no count', () =
   const e = fight(); play(e, mk(e, 't_gilded', { grafts: ['g_granny_knot'] })); assert.equal(e.seam.len, 1); assert.deepEqual(e.seam.counts, { gilded: 1, rust: 1 });
 });
 
+// ---------------------------------------------------------------- 3. Odile: once per turn, a card may be declared Gilded
+t("Odile's declaration: the next card also counts as Gilded, once per turn, and only Odile has it", () => {
+  assert.equal(HEROES.odile.declare, 'gilded'); assert.ok(!(HEROES.odile.on && HEROES.odile.on.seamDeclare), 'the hook nothing fired is gone');
+  const m0 = fight({ hero: 'marrow', passive: true }); assert.equal(SEAM.canDeclare(m0), false); assert.equal(SEAM.setDeclare(m0, true), false);
+  const c = fight({ hero: 'odile', passive: true }); lineOf(c, 'gilded', 2);
+  const card = mk(c, 't_ember');
+  assert.equal(seamPreview(c, card).kind, 'cut', 'undeclared, an Ember card cuts a Gilded Line');
+  assert.equal(SEAM.canDeclare(c), true); assert.equal(SEAM.setDeclare(c, true), true); assert.equal(c.seam.declare, 'gilded');
+  const pv = seamPreview(c, card); assert.equal(pv.kind, 'extend'); assert.equal(pv.len, 3);
+  assert.equal(SEAM.setDeclare(c, false), true); assert.equal(seamPreview(c, card).kind, 'cut', 'the declaration can be taken back before a card is played');
+  SEAM.setDeclare(c, true);
+  const m = mark(c); play(c, card);
+  assert.equal(since(c, m, 'seamCut').length, 0); assert.equal(c.seam.len, 3); assert.deepEqual(c.seam.counts, { gilded: 3, ember: 1 }); assert.deepEqual(c.seam.set, ['ember', 'gilded']);
+  assert.equal(c.seam.declare, null); assert.equal(c.seam.declared, true); assert.equal(SEAM.canDeclare(c), false); assert.equal(SEAM.setDeclare(c, true), false, 'once per turn');
+  P(c, 'ember'); assert.equal(c.seam.len, 4, 'the declared card bridges to its own school');
+  endTurn(c);
+  assert.equal(SEAM.canDeclare(c), true, 'a new turn, a new declaration');
+  // a card that is already Gilded, Frayed or Tempered does not spend it
+  c.hand = []; SEAM.setDeclare(c, true);
+  P(c, 'gilded'); assert.equal(c.seam.declare, 'gilded'); P(c, 'blood', { jam: true }); assert.equal(c.seam.declare, 'gilded'); P(c, 'blood', { fused: [GOF.blood] }); assert.equal(c.seam.declare, 'gilded');
+  play(c, mk(c, 't_plain')); assert.equal(c.seam.declared, true, 'a card with no school becomes a Gilded knot'); assert.equal(c.seam.len, 2);
+});
+t('preview equals payout for cutting cards, Slip Knot, Granny Knot and declared cards (400 random plays)', () => {
+  const c = fight({ hero: 'odile', passive: true, seed: 'parity' });
+  c.run.hero = 'odile'; const heroOn = HEROES.odile.on; // keep the declaration, no other passive
+  const rnd = (() => { let a = 4242; return () => (a = (a * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; })();
+  const ids = ['t_ember', 't_blood', 't_gilded', 't_rust', 't_plain', ...CUT_CARDS];
+  for (let step = 0; step < 400; step++) {
+    if (step % 13 === 12) { endTurn(c); c.hand = []; c.energy = 99; }
+    const o = {}; const r = rnd();
+    if (r < 0.15) o.grafts = ['g_slip_knot']; else if (r < 0.3) o.grafts = ['g_granny_knot']; else if (r < 0.4) o.grafts = [GOF[SCH[Math.floor(rnd() * 7)]]]; else if (r < 0.45) o.grafts = OVL_EMBER;
+    if (rnd() < 0.08) o.fused = [GOF.ember]; if (rnd() < 0.08) o.jam = true; if (rnd() < 0.3) o.up = true;
+    const card = mk(c, ids[Math.floor(rnd() * ids.length)], o);
+    if (rnd() < 0.35) SEAM.setDeclare(c, true);
+    const snap = JSON.stringify(c.seam), pv = seamPreview(c, card);
+    assert.equal(JSON.stringify(c.seam), snap, 'the preview is pure');
+    const m = mark(c), len0 = c.seam.len;
+    play(c, card);
+    const tag = `step ${step} ${card.inst.id} ${JSON.stringify(o)} pv ${pv.kind}`;
+    if (pv.kind === 'cut') { assert.deepEqual(pays(c, m), pvPays(pv), tag); assert.equal(c.seam.len, pv.len, tag); assert.ok(since(c, m, 'seamCut').length >= (len0 > 0 ? 1 : 0), tag); }
+    else if (pv.kind === 'extend') { assert.equal(c.seam.len, pv.len, tag); assert.equal(since(c, m, 'seamPay').length, 0, tag); assert.equal(since(c, m, 'seamCut').filter((e) => e.kind === 'cut').length, 0, tag); }
+    else { assert.equal(c.seam.len, len0, tag); assert.equal(since(c, m, 'seamPay').length, 0, tag); assert.deepEqual(pv.payout, [], tag); }
+    assert.ok(c.seam.len === 0 || Object.keys(c.seam.counts).length > 0 || c.seam.set.length > 0, 'no Line without a school: ' + tag);
+    c.player.hp = c.player.maxHp; for (const e of c.enemies) e.hp = e.maxHp;
+    void heroOn;
+  }
+});
+
+// ---------------------------------------------------------------- 3b. the declaration tab on the Thread rail (the real combat screen)
+await ta('Odile gets a declaration tab on the rail: click, G, gamepad and touch arm it; Marrow has none; it overlaps nothing', async () => {
+  const audio = await import('../graftwork/ui/audio.js');
+  const combat = (await import('../graftwork/ui/combat.js')).default;
+  const LR = await import('../graftwork/ui/layout_registry.js');
+  const A11Y = await import('../graftwork/ui/a11y.js');
+  const { click, key } = await import('./graftwork_lib.mjs');
+  const normals = Object.values(ENEMIES).filter((e) => e.act === 1 && e.kind === 'normal').map((e) => e.id);
+  async function scene(hero, nEnemies, pscale = 0) {
+    const run = RUN.newRun({ hero, seed: 'declare' + nEnemies });
+    run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: normals.slice(0, nEnemies) };
+    const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} }, meta: { settings: {}, tips: {} } });
+    if (pscale) { app.scale = pscale; app.minPx = 11; app.mouse.touch = true; }
+    const tips = []; const ot = app.tooltip; app.tooltip = (title, text, o) => { tips.push({ title, text }); return ot(title, text, o); };
+    app.register('combat', combat); app.go('combat', { run });
+    frames(app, 220);
+    return { app, c: combat.api().state().c, tips, reg: () => LR.getAll().find((r) => r.id === 'seamDeclare') };
+  }
+  { const { reg, c } = await scene('marrow', 2); assert.equal(reg(), undefined, 'no tab for a hero who cannot declare'); assert.equal(c.seam.declare, null); }
+  for (const n of [1, 3, 6]) {
+    const { app, c, tips, reg } = await scene('odile', n);
+    const r = reg(); assert.ok(r, 'the tab is in the layout registry'); assert.equal(r.layer, 'hud');
+    assert.deepEqual(LR.findOverlaps().filter((o) => o.a === 'seamDeclare' || o.b === 'seamDeclare'), [], `the tab overlaps no HUD widget with ${n} enemies`);
+    assert.ok(!LR.findOutOfBounds().includes('seamDeclare'));
+    if (n !== 3) continue;
+    assert.ok(combat.api().canAct, 'the fight is idle');
+    click(app, r.x + r.w / 2, r.y + r.h / 2); frames(app, 4);
+    assert.equal(c.seam.declare, 'gilded', 'a click arms it');
+    assert.ok(tips.some((t) => /Declare Gilded/.test(t.title) && /Once per turn/.test(t.text) && /Key: G/.test(t.text)), 'hovering it explains it');
+    key(app, 'g'); frames(app, 2); assert.equal(c.seam.declare, null, 'G takes it back');
+    key(app, 'G'); frames(app, 2); assert.equal(c.seam.declare, 'gilded');
+    // gamepad: the left trigger is G
+    assert.equal(A11Y.PAD_MAP[6], 'g'); key(app, 'g'); assert.equal(c.seam.declare, null);
+    const pad = { buttons: Array.from({ length: 16 }, () => ({ pressed: false, value: 0 })), axes: [0, 0] }; pad.buttons[6].pressed = true;
+    assert.deepEqual(A11Y.padKeys(pad, {}), ['g']);
+    // armed, the hand badges follow the engine: a card that is not Gilded now reads as Gilded for the Line
+    key(app, 'g'); frames(app, 2);
+    const hi = c.hand.findIndex((k) => !specOf(c, k).unplayable && SEAM.seamPreview(c, k).kind !== 'slack' && c.energy >= (specOf(c, k).cost | 0));
+    assert.ok(hi >= 0); const uid = c.hand[hi].uid;
+    playCard(c, hi, 0); frames(app, 60);
+    assert.ok(c.seam.set.includes('gilded') && c.seam.declared && c.seam.declare === null, 'the played card spent it: ' + uid);
+    key(app, 'g'); frames(app, 2); assert.equal(c.seam.declare, null, 'spent for the turn: G does nothing');
+  }
+  { // phone stage: the tap target is at least 40 css px, and a tap arms it without dropping the selected card
+    const { app, c, reg } = await scene('odile', 2, 0.5417);
+    const r = reg(), g = app.hitRect(r.x, r.y, r.w, r.h);
+    assert.ok(g.w * app.scale >= 39.5 && g.h * app.scale >= 39.5, `tap target ${Math.round(g.w * app.scale)}x${Math.round(g.h * app.scale)} css px`);
+    click(app, r.x + r.w / 2, r.y + r.h / 2); frames(app, 4);
+    assert.equal(c.seam.declare, 'gilded', 'a tap arms it');
+  }
+});
 
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

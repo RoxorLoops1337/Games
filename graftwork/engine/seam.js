@@ -1,20 +1,21 @@
 // THE THREAD (design/THREAD.md). Chain cards that share a school, cut the Line to cash it in.
-// c.seam = { set, counts, order, len, cuts, tied, last, used, lockBroke, paidTurn:{draw,charge}, gold, retain, step }
+// c.seam = { set, counts, order, len, cuts, tied, last, used, lockBroke, paidTurn:{draw,charge}, gold, retain, step, declare, declared }
 // Plumbing in combat.js: seamInit (newCombat), seamStep (playCard, before the card's fx), seamEnd (endTurn), seamTurnStart,
 // seamCutNow (A.cutLine: a card effect that says "Cut the Line.").
 // Payouts go through the combat API (c.A.*) so statuses and relics react. Hard caps: 3 paying cuts per turn, 3 draws per
 // turn, 6 charge per turn, 20 gold per combat, len cap 5 (Spool: mod.seamCap).
 // Hooks: relics/hero via fire(c,'seamExtend'|'seamCut'|'seamPay',info); enemies via def.on.seamExtend/seamCut/seamPay(A,e,info).
 // An enemy or relic may set info.cancel = true on a seamCut hook to void that payout (Scissor Nurse).
+// A hero with `declare: <school>` (Odile, 'gilded') may declare one card a turn: canDeclare / setDeclare below.
 import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
-import { RELICS } from '../data/index.js';
+import { RELICS, HEROES } from '../data/index.js';
 
 export const SEAM_LEN_CAP = 5, SEAM_CUTS_TURN = 3, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 6, SEAM_GOLD_COMBAT = 20;
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
 
 export function seamInit(c) {
-  return { set: [], counts: {}, order: [], len: 0, cuts: 0, tied: false, last: null, used: {}, lockBroke: false, paidTurn: { draw: 0, charge: 0 }, gold: 0, retain: 0 };
+  return { set: [], counts: {}, order: [], len: 0, cuts: 0, tied: false, last: null, used: {}, lockBroke: false, paidTurn: { draw: 0, charge: 0 }, gold: 0, retain: 0, declare: null, declared: false };
 }
 
 const tier = (c, s) => (c.res && c.res[s]) || 0;
@@ -39,20 +40,37 @@ export function cutsLine(spec) {
 const flagOf = (spec, k) => (spec.custom || []).some((h) => h[k]);
 const lineSchools = (line) => line.order.filter((x) => line.counts[x] > 0);
 
-// What a card would do to the Line (pure).
+// The declaration (Odile: "Once per turn, a card may be declared Gilded"). Arming it is free and can be taken back; the next
+// card played also counts as that school for its Thread step. It is spent by the card that uses it: a card that already has
+// the school, or that stays out of the Line whatever its schools (Frayed, Tempered, a Granny Knot on a standing Line, a Slip
+// Knot going Slack), leaves it armed for the next card.
+export function declareOf(c) { const h = HEROES[c.run.hero]; return (h && h.declare) || null; }
+export function canDeclare(c) { return !!declareOf(c) && !c.over && !c.seam.declared; }
+export function setDeclare(c, on = !c.seam.declare) {
+  if (!canDeclare(c)) return false;
+  const sch = on ? declareOf(c) : null;
+  if (c.seam.declare === sch) return false;
+  c.seam.declare = sch;
+  c.ev.push({ t: 'seamDeclare', school: declareOf(c), on: !!sch });
+  return true;
+}
+
+// What a card would do to the Line (pure). declared: this card would spend the turn's declaration.
 function plan(c, card, spec) {
   const s = c.seam;
   if (card.jam) return { kind: 'slack', fray: true, set: [] };
-  const set = schoolsOf(spec);
+  const own = schoolsOf(spec), tied = !!(spec.fused && spec.fused.length);
+  const declared = !!s.declare && !tied && !own.includes(s.declare);
+  const set = declared ? [...own, s.declare] : own;
   if (!set.length) return { kind: 'slack', set };
-  if (spec.fused && spec.fused.length) return { kind: 'tied', set };
-  if (s.len > 0 && c.player.st.cadencelock > 0 && !s.lockBroke && set.some((x) => s.used[x])) return { kind: 'break', set };
-  if (s.len === 0) return { kind: 'start', set };
-  if (flagOf(spec, 'wild') && lineSchools(s).length) return { kind: 'extend', set, shared: topOf(s.counts, s.order, s.set), wild: true };
+  if (tied) return { kind: 'tied', set };
+  if (s.len > 0 && c.player.st.cadencelock > 0 && !s.lockBroke && set.some((x) => s.used[x])) return { kind: 'break', set, declared };
+  if (s.len === 0) return { kind: 'start', set, declared };
+  if (flagOf(spec, 'wild') && lineSchools(s).length) return { kind: 'extend', set: own, shared: topOf(s.counts, s.order, s.set), wild: true };
   const shared = overlap(set, s.set);
-  if (shared) return { kind: 'extend', set, shared };
-  if (flagOf(spec, 'noCut')) return { kind: 'slack', set };
-  return { kind: 'cut', set };
+  if (shared) return { kind: 'extend', set, shared, declared };
+  if (flagOf(spec, 'noCut')) return { kind: 'slack', set: own };
+  return { kind: 'cut', set, declared };
 }
 
 // The school a Line pays in: the highest count, a tie going to a school of the last card, then to the oldest.
@@ -227,6 +245,7 @@ export function seamStep(c, card, spec) {
   const s = c.seam, p = plan(c, card, spec);
   const k = knotsOf(spec), cap = seamCap(c);
   s.step = { card: card.uid, set: p.set, k, joined: p.kind !== 'slack' && p.kind !== 'tied', cut: false }; // what this card did, for seamCutNow
+  if (p.declared) { c.ev.push({ t: 'seamDeclare', school: s.declare, card: card.uid, spent: true }); s.declare = null; s.declared = true; }
   if (p.fray) { c.ev.push({ t: 'seamFray', card: card.uid }); }
   if (p.kind === 'slack' || p.kind === 'tied') { c.ev.push({ t: 'seamSlack', card: card.uid }); return; }
   if (p.kind === 'extend') {
@@ -271,6 +290,7 @@ export function seamTurnStart(c) {
   const s = c.seam;
   for (const k of c.hand) k.retain = false;
   s.cuts = 0; s.used = {}; s.lockBroke = false; s.paidTurn = { draw: 0, charge: 0 }; s.retain = 0; s.last = null;
+  s.declare = null; s.declared = false;
   if (s.tied) { s.tied = false; if (s.len > 0) return; }
   clearLine(s);
 }
