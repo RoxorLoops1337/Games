@@ -1,7 +1,8 @@
 // The event screen: every event, every choice, played through the screen the way the Ward opens it (the hero walks into a Chapel that
 // holds an event, so the pending event carries its hour), then on to wherever the event leads: back to the Ward, a queued fight or a graft pick.
+// And the click guard: the click that skips the typewriter never picks a choice.
 import assert from 'node:assert/strict';
-import { makeApp, frames, key, wardOpen } from './graftwork_lib.mjs';
+import { makeApp, frames, click, key, wardOpen } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import { EVENTS, GRAFTS, HEROES } from '../graftwork/data/index.js';
 const event = (await import('../graftwork/ui/event.js')).default;
@@ -50,5 +51,32 @@ for (const ph of ['ward', 'combat', 'graft']) assert.ok(after.has(ph), 'some eve
   const { app, run, flow } = await setup('marrow', 'r');
   wardOpen(run, 'event', { event: 'e_coin_flip' }); run.pending.result = 'Already done.'; flow.route(); frames(app, 30);
   event.cont(app); assert.equal(run.phase, 'ward'); assert.equal(run.pending, null);
+}
+// the click that skips the typewriter must not pick a choice (first-hour playtest fix)
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'q3ev' });
+  const id = Object.keys(EVENTS)[0];
+  run.phase = 'event'; run.pending = { kind: 'event', id, result: null };
+  const ev = event, choose = ev.choose;
+  const app = await makeApp({ run, flow: { route() {}, openDeck() {} }, audio: null, meta: { settings: {}, tips: {} } });
+  app.register('event', ev); app.go('event', { run });
+  frames(app, 3);
+  assert.ok(ev.shown < 1e8, 'text is still typing');
+  click(app, 900, 300); // skip click (inside the panel, away from any choice row while typing)
+  frames(app, 1);
+  assert.equal(ev.result, null, 'the skip click did not pick a choice');
+  // even a click on the first choice row right after the text finished is ignored inside the 150 ms guard
+  const y1 = 64 + 48 + 42 + 8 + 20 + 400; // anywhere in the lower panel
+  for (let i = 0; i < 3; i++) { click(app, 900, y1 - i * 60); }
+  assert.equal(ev.result, null, 'no pick inside the 150 ms guard');
+  frames(app, 20); // 333 ms
+  assert.ok(ev.doneT != null && ev.t - ev.doneT >= 0.15, 'guard has elapsed');
+  const picks = []; const orig = ev.choose.bind(ev); ev.choose = (a, i) => { picks.push(i); return orig(a, i); };
+  const first = RUN.eventChoices(run).findIndex((c) => c.ok);
+  assert.ok(first >= 0);
+  // number key picks once the guard is over
+  app.pressedKeys.push({ key: String(first + 1), preventDefault() {} }); app.tick(1 / 60);
+  assert.ok(picks.length === 1 || ev.picker, 'a choice works after the guard');
+  ev.choose = choose;
 }
 console.log(`graftwork_ui_event ok: ${played} event choices`);

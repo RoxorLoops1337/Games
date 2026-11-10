@@ -163,6 +163,19 @@ await t('walk: wait here heals 3; far and unreachable rooms explain why; the las
   assert.equal(run.phase, 'combat'); assert.equal(run.pending.fightKind, 'boss');
 });
 
+await t('walk: the legend and the route list name every trigger in plain words', async () => {
+  const { app, run, flow } = await setup({ seed: 'legend' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, [{ kind: 'monster', id: NORMAL1[0] }]], ['rm_chapel', 2, 2, [{ kind: 'event' }]], ['rm_dispensary', 3, 2, [{ kind: 'shop' }]], ['rm_workshop', 4, 2, [{ kind: 'forge' }]], ['rm_linen', 5, 2, [{ kind: 'rest' }]]]);
+  run.ward.phase = 'midday'; run.ward.roll = { key: '1:midday', base: 5, sides: 6, bonus: 0, n: 5, lucky: 0 };
+  flow.route(); frames(app, 200);
+  for (let x = 1; x <= 5; x++) { const c = cellCenter(x, 2); click(app, c.x, c.y); frames(app, 3); }
+  assert.equal(run.ward.route.length, 5, 'a route through the five rooms'); assert.deepEqual(WD.routeInfo(run).triggers.map((g) => g.kind), ['fight', 'event', 'shop', 'forge', 'rest']);
+  const drawn = []; const tx = app.text.bind(app); app.text = (str, ...a) => { drawn.push(String(str)); return tx(str, ...a); }; frames(app, 3);
+  for (const word of ['Ward fight', 'Elite', 'Chapel event', 'Dispensary', 'Workshop', 'The boss']) assert.ok(drawn.includes(word), 'the legend names ' + word + ': ' + drawn.filter((x) => x.length < 16).join(' | '));
+  for (const line of ['1. Ward fight: 1 monster', '2. Chapel event', '3. Dispensary', '4. Workshop', '5. Clean sheets']) assert.ok(drawn.includes(line), 'the route list says "' + line + '": ' + drawn.filter((x) => /^\d\. /.test(x)).join(' | '));
+  assert.ok(!drawn.some((x) => /refine, strip or reforge|Event: \?\?\?|Shop: spend gold/.test(x)), 'no jargon on the Ward');
+});
+
 await t('reward: an elite offers a building plan (pick 1 of 3) and its salvage; the boss relic choice still works', async () => {
   const { app, run, flow } = await setup({ seed: 'rw' });
   const [, iso] = layout(run, [['rm_entrance', 0, 2], ['rm_isolation', 1, 2]]);

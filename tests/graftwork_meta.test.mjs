@@ -1,13 +1,14 @@
 // GRAFTWORK meta progression (engine/meta.js, engine/meta2.js): persistence, migration of old saves, unlock rules, achievements (they fire
-// once), Daily Case modifiers, Credit and the Credit shop, boss practice.
+// once), Daily Case modifiers, Credit and the Credit shop, boss practice, the defeat advice of the end screen.
 import assert from 'node:assert/strict';
-import { GRAFTS } from '../graftwork/data/index.js';
+import { GRAFTS, ENEMIES } from '../graftwork/data/index.js';
 import { DAILY_MODS } from '../graftwork/data/dailymods.js';
 import * as RUN from '../graftwork/engine/run.js';
 import * as M from '../graftwork/engine/meta.js';
 import { ACHIEVEMENTS } from '../graftwork/data/achievements.js';
 import { strainInfo } from '../graftwork/engine/cards.js';
 import { seamCap } from '../graftwork/engine/seam.js';
+import { DEATH_ADVICE, deathAdvice, deathAdviceCategory } from '../graftwork/engine/meta2.js';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -256,5 +257,27 @@ t('practice: needs the boss met, replays the saved deck, and never touches stats
   p.stats.shatters = 4; RUN.resolveFight(p, { win: true, shattered: [], damageTaken: 0 });
   assert.equal(p.phase, 'won'); const res = M.recordRunEnd(m, p, 'won');
   assert.ok(res.practice); assert.equal(JSON.stringify(m.stats), before); assert.equal(m.credit.bal, credit);
+});
+
+t('defeat advice: 12 cause categories, each reachable, each a non-empty line without em dashes', () => {
+  assert.equal(Object.keys(DEATH_ADVICE).length, 12, '12 cause categories');
+  for (const [k, v] of Object.entries(DEATH_ADVICE)) assert.ok(v.length > 20 && !v.includes('—'), 'advice ' + k);
+  const boss = Object.values(ENEMIES).find((e) => e.kind === 'boss'), elite = Object.values(ENEMIES).find((e) => e.kind === 'elite'), norm = Object.values(ENEMIES).find((e) => e.kind === 'normal');
+  const cases = {
+    poison: { status: 'poison' }, burn: { status: 'burn' }, bleed: { status: 'bleed' }, brittle: { status: 'brittle' }, stagefright: { status: 'stagefright' }, dread: { status: 'dread' },
+    strain: { enemy: norm.id, strain: 2 }, backfire: { enemy: norm.id, backfire: 1 }, boss: { enemy: boss.id }, elite: { enemy: elite.id }, enemy: { enemy: norm.id }, generic: { status: null },
+  };
+  for (const [cat, cs] of Object.entries(cases)) {
+    const r = deathAdvice({ deathCause: cs });
+    assert.equal(r.cat, cat, 'category ' + cat);
+    assert.ok(r.text && !r.text.includes('—'));
+  }
+  assert.match(deathAdvice({ deathCause: { status: 'poison' } }).text, /Poison ignores Block/);
+  assert.match(deathAdvice({ deathCause: { strain: 3, enemy: norm.id } }).text, /Too many grafts/);
+  // a boss move with a tip quotes the counter
+  for (const b of Object.values(ENEMIES).filter((e) => e.kind === 'boss')) for (const [mid, mv] of Object.entries(b.moves || {})) if (mv.tip) {
+    assert.ok(deathAdvice({ deathCause: { enemy: b.id, move: mid } }).text.includes(mv.tip), 'boss tip quoted ' + b.id);
+  }
+  assert.equal(deathAdviceCategory({}), 'generic');
 });
 console.log(n, 'passed');
