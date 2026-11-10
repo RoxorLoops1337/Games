@@ -5,7 +5,7 @@ import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, drawGraftPatch, CARD_W, CARD_H } from '../art/cards.js';
-import { drawRelic, drawPotion, drawCoin } from '../art/icons.js';
+import { drawRelic, drawPotion, drawCoin, paintedGauge } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, deckStripped, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines, priceOnCard } from '../engine/text.js';
@@ -36,6 +36,7 @@ export function drawGauge(app, x, y, w, info, o = {}) {
   const g = app.ctx;
   const n = Math.max(info.budget, info.weight, 1), gap = 4;
   const cw = clamp((w - (n - 1) * gap) / n, 8, 28), ch = o.h || 18;
+  if (!o.slide && paintedGauge(g, x, y, w, ch, info.weight, info.budget)) return n * (cw + gap); // painted (preview): the brass socket frame, same row, same room
   for (let i = 0; i < n; i++) {
     const cx = x + i * (cw + gap);
     let oy = 0, al = 1;
@@ -141,7 +142,7 @@ export function drawModal(app, st, run, extra = {}) {
   const fade = clamp(m.t / 0.18, 0, 1);
   app.reg('modal', 36, 30, 1208, 660, { overlay: true });
   g.save(); g.globalAlpha = fade; g.fillStyle = 'rgba(6,4,3,.82)'; g.fillRect(0, 0, 1280, 720);
-  app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3 });
+  app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3, frame: 'modal' });
   app.text(m.title, 640, 44, { size: 30, bold: true, align: 'center', color: COL.lamp, fit: { w: 760, lines: 1 } });
   if (m.sub) app.text(m.sub, 640, 82, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', fit: { w: 960, h: 34, lines: 2 } });
   const close = () => { st.m = null; if (m.onCancel) m.onCancel(); };

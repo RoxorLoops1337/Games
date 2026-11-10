@@ -80,8 +80,9 @@ await t('frame_id_candidates_run_specific_to_generic', () => {
   assert.deepEqual(T.cardBackIds('gilt'), ['card_back.gilt', 'card_back']);
 });
 await t('loader_is_a_noop_headless_and_lazy_with_fakes', async () => {
-  const L = T.createTemplates();
-  L.ensure(); assert.equal(L.state, 'none'); assert.equal(L.ready(), false); assert.equal(L.frameImg('x'), null); assert.equal(L.pickFrame(['a', 'b']), null);
+  const L = T.createTemplates(); // the preview is off: the loader does nothing and stays idle
+  L.ensure(); assert.equal(L.state, 'idle'); assert.equal(L.on, false); assert.equal(L.ready(), false); assert.equal(L.frameImg('x'), null); assert.equal(L.pickFrame(['a', 'b']), null);
+  const L0 = T.createTemplates({ art: true }); L0.ensure(); assert.equal(L0.state, 'none', 'switched on without a page to load from: nothing to do'); assert.equal(L0.ready(), false);
   let fetched = 0;
   const L2 = T.createTemplates({ art: true, live: true, fetchJson: (u) => { fetched++; assert.equal(u, 'assets/ui/manifest.json'); return Promise.resolve({ frames: { p: { file: 'p@1x.webp', file2x: 'p@2x.webp', w: 64, h: 64, slice: [8, 8, 8, 8] } } }); }, makeImage: fakeImg(128, 128) });
   L2.ensure(); L2.ensure(); assert.equal(fetched, 1); assert.equal(L2.frameImg('p'), null);
@@ -140,7 +141,7 @@ await t('card_template_mode_composes_frame_then_painters', async () => {
   assert.deepEqual(T.resolveSlots(templates.cardTemplate(fr), {}).window, { x: -80, y: -100, w: 160, h: 80, r: 5 });
   // the back
   const b0 = log.length; C.drawCardBack(fakeCtx(), 0, 0, { t: 1, back: 'plain' }); assert.ok(log.length > b0, 'template back drawn');
-  globalThis.document.createElement = prev; templates.configure({ art: T.TEMPLATE_ART, live: false, fetchJson: null, makeImage: null }); C.clearCardCache();
+  globalThis.document.createElement = prev; templates.configure({ art: null, live: false, fetchJson: null, makeImage: null }); C.clearCardCache();
 });
 await t('compose_calls_painters_in_order_with_baked_flags', () => {
   const calls = [];
@@ -157,16 +158,22 @@ await t('compose_calls_painters_in_order_with_baked_flags', () => {
 await t('panel_and_button_use_a_9_slice_skin_only_when_a_frame_decoded', async () => {
   const { templates } = T; const CH = await import('../graftwork/ui/chrome.js');
   const mk = () => { const calls = []; return { calls, scale: 1, px: 1, ctx: { globalAlpha: 1, drawImage: (...a) => calls.push(a), save() {}, restore() {}, beginPath() {}, fill() {}, stroke() {}, fillRect() {}, createLinearGradient: () => ({ addColorStop() {} }) }, rr() {} }; };
-  const base = mk(); CH.panel(base, 10, 10, 200, 100, {}); CH.button(base, 10, 10, 100, 40, {}, 2);
-  templates.configure({ art: true, live: true, fetchJson: () => Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] }, 'button.down': { file: 'bd.webp', w: 48, h: 24, slice: [8, 8, 8, 8] }, button: { file: 'b.webp', w: 48, h: 24, slice: [8, 8, 8, 8] } } }), makeImage: fakeImg(96, 96) });
-  const a = mk(); CH.panel(a, 10, 10, 200, 100, {}); await tick(); CH.panel(a, 10, 10, 200, 100, {}); await tick();
-  const n0 = a.calls.length; CH.panel(a, 10, 10, 200, 100, {}); assert.equal(a.calls.length - n0, 9);
-  const n1 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { frame: false }); assert.ok(a.calls.length - n1 <= 1, 'opt out bakes the vector panel'); // one drawImage of the baked canvas at most
-  const n2 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { plain: true }); assert.ok(a.calls.length - n2 <= 1);
-  CH.button(a, 10, 10, 100, 40, {}, 0); await tick(); const n3 = a.calls.length; const dy = CH.button(a, 10, 10, 100, 40, {}, 2); assert.equal(a.calls.length - n3, 9); assert.equal(dy, 2);
-  templates.configure({ art: T.TEMPLATE_ART, live: false, fetchJson: null, makeImage: null });
-  const b = mk(); CH.panel(b, 10, 10, 200, 100, {}); CH.button(b, 10, 10, 100, 40, {}, 2);
-  assert.equal(b.calls.length, base.calls.length, 'no assets: same drawing as before');
+  const base = mk(); CH.panel(base, 10, 10, 200, 100, {}); CH.panel(base, 10, 10, 200, 100, { frame: 'panel' }); CH.button(base, 10, 10, 100, 40, {}, 2);
+  // no document here, so nothing can be baked: a skin is the plain 9-slice (nine drawImage calls), the vector panel has none
+  const prevDoc = globalThis.document; globalThis.document = undefined;
+  try {
+    templates.configure({ art: true, live: true, fetchJson: () => Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] }, 'button.down': { file: 'bd.webp', w: 48, h: 24, slice: [8, 8, 8, 8] }, button: { file: 'b.webp', w: 48, h: 24, slice: [8, 8, 8, 8] } } }), makeImage: fakeImg(96, 96) });
+    const a = mk(); CH.panel(a, 10, 10, 200, 100, { frame: 'panel' }); await tick(); CH.panel(a, 10, 10, 200, 100, { frame: 'panel' }); await tick();
+    const n0 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { frame: 'panel' }); assert.equal(a.calls.length - n0, 9, 'a panel that asks for the frame is drawn from it');
+    const n1 = a.calls.length; CH.panel(a, 10, 10, 200, 100, {}); assert.ok(a.calls.length - n1 <= 1, 'a panel that does not ask keeps the vector look (its fill and stroke carry a state)'); // one drawImage of the baked canvas at most
+    const n2 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { frame: 'panel', plain: true }); assert.ok(a.calls.length - n2 <= 1, 'plain opts out');
+    const n4 = a.calls.length; CH.panel(a, 10, 10, 20, 20, { frame: 'panel' }); assert.ok(a.calls.length - n4 <= 1, 'too small for the corner pieces: the vector panel');
+    CH.button(a, 10, 10, 100, 40, {}, 0); await tick(); const n3 = a.calls.length; const dy = CH.button(a, 10, 10, 100, 40, {}, 2); assert.equal(a.calls.length - n3, 9, 'a button is skinned by default'); assert.equal(dy, 2);
+    const n5 = a.calls.length; CH.button(a, 10, 10, 100, 40, { frame: false }, 2); assert.ok(a.calls.length - n5 <= 1, 'frame: false opts a button out');
+    templates.configure({ art: null, live: false, fetchJson: null, makeImage: null });
+    const b = mk(); CH.panel(b, 10, 10, 200, 100, {}); CH.panel(b, 10, 10, 200, 100, { frame: 'panel' }); CH.button(b, 10, 10, 100, 40, {}, 2);
+    assert.equal(b.calls.length, base.calls.length, 'no assets: same drawing as before');
+  } finally { globalThis.document = prevDoc; templates.configure({ art: null, live: false, fetchJson: null, makeImage: null }); }
 });
 
 // ---- rig

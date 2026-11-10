@@ -15,14 +15,16 @@ Owner direction: make EVERYTHING modular like the Ward room kit. The Ward kit (W
 
 | piece | file | what |
 |---|---|---|
-| loader | `ui/templates.js` | `templates` singleton (off until `TEMPLATE_ART` is set, section 5): lazy manifest + image cache, `frameImg(id)`, `pickFrame(ids)`, `iconImg`, `drawIcon`, `preload`, headless no-op, injectable `fetchJson`/`makeImage` for tests |
+| switch | `ui/preview.js` | `previewOn('art', settings)`: the ONE place that decides whether painted art is used (section 5, "The switch") |
+| loader | `ui/templates.js` | `templates` singleton (follows the preview switch, `sync(app)`, `ver` counts every change): lazy manifest + image cache, `frameImg(id)`, `pickFrame(ids)`, `iconImg`, `drawIcon`, `preload`, `force(v)` for labs, headless no-op, injectable `fetchJson`/`makeImage` for tests; @2x on a dense screen on the full tier, @1x otherwise |
+| skin | `ui/skin.js` | the painted parts as drawn: `nine` (a sliced frame BAKED once per size and device scale, edges that repeat whole, pills whose caps follow the height, optional tone / wash / rim), `part`, `icon`, `hpBar`, `gauge` |
 | parse | `parseManifest` | validates every entry, drops bad ones (absolute or `..` paths, bad slices, missing atlas) and keeps the rest |
 | 9-slice | `sliceRects`, `drawNineSlice`, `contentRect` | slice margins in logical px, shrink together when the target is smaller, no-centre option, content rect keeps native insets |
 | slots | `resolveSlot(s)`, `CARD_TEMPLATE`, `mergeTemplate` | anchor/pivot/offset or absolute rects, repeat with `step` and `n`; default template = the procedural layout |
-| composer | `composeCardFront`, `FRONT_ORDER` | draws frame then calls painters per slot; `baked` slots skip their own plate |
+| composer | `composeCardFront`, `FRONT_ORDER` | paints the slots a frame lists as `under` (its transparent windows), then the frame, then every other slot; `baked` slots skip their own plate |
 | fit | `fitFontSize` | pure largest-font-that-fits; slots carry `fit:{max,min,lines}` |
 | cards | `art/cards.js` | `drawCard` / `drawCardBack` use a template face when a frame decoded, else the old code (`renderFace`, `renderBack` untouched in behaviour) |
-| chrome | `ui/chrome.js` | `app.panel` and `app.button` draw a 9-slice skin when frames `panel`, `button`, `button.<state>` exist; `o.frame` picks another id, `o.frame === false` or `o.plain` opts out |
+| chrome | `ui/chrome.js` | `app.button` draws the leather pill in its state (or `button.small` under 35 px high) unless `o.frame === false`; a caller's fill tints the leather, its stroke becomes the rim. `app.panel` is painted only where the call passes `frame: 'modal' \| 'panel' \| 'panel.parchment'` (most panels are rows whose fill and stroke carry a state); a framed panel stands AROUND the rectangle it replaces |
 | rig | `ui/rig.js` | skeletal runtime for layered characters (section 7) |
 
 Card frame resolution (first decoded wins): `card_front.<type>.<rarity>.<school>`, `card_front.<type>.<rarity>`, `card_front.<type>`, `card_front.<rarity>`, `card_front`. Backs: `card_back.<back>.<hero>`, `card_back.<back>.act<N>`, `card_back.<back>`, `card_back.<hero>`, `card_back.act<N>`, `card_back`. Optional parts: `card_gem` (cost gem image), `card_foil` (overlay for rares). `drawCardBack(ctx,x,y,{hero,act})` takes the variant options.
@@ -96,7 +98,31 @@ A frame can move any slot by itself: `frames["card_front.attack.rare"].slots = {
 - `file` / `file1x` / `file2x`: relative paths (no `..`, no leading slash). `w`,`h` = logical size. `slice` = `[l,t,r,b]` logical margins, `fill:false` drops the centre. `content` = child rect inside the frame. `atlas` + `rect` replace the files. `baked` = slot names already in the image. `slots` = per-frame slot overrides. Bad entries are dropped individually.
 - Slot grammar: `{x,y,w,h}` in card space or `{anchor:[ax,ay], pivot:[px,py], dx, dy, w, h}`, repeats with `step:{x,y}`, `n`; `fit:{max,min,lines}`.
 - Existing `assets/ward/manifest.json` and `assets/ward_kit/manifest.json` stay as they are.
-- **The switch.** `ui/templates.js` exports `TEMPLATE_ART`, currently `false`: no `assets/ui/manifest.json` exists yet, and asking for it was a 404 on every page load. While it is `false` the loader requests nothing (not the manifest, no image) and every caller draws its procedural look. Set `TEMPLATE_ART = true` in the same commit that adds `graftwork/assets/ui/manifest.json`; nothing else has to change. Tests and tools that feed the loader themselves pass `{ art: true }` to `createTemplates` or `templates.configure`. `tests/graftwork_perf3.test.mjs` fails if the switch is off while the manifest exists or a request is made while it is off.
+- **The switch.** `ui/preview.js` (`PREVIEW_DEFAULT = { art: false, rig: false }`, `previewOn(name, settings, search)`): the painted art is OFF for every player unless the page URL says `?art=1` (or `?preview=1`; `=0` forces off) or Settings > "Painted art (preview)" (`meta.settings.previewArt`) is on. Making it the default look is the one-line change `PREVIEW_DEFAULT.art = true`. `ui/templates.js` follows the switch (`templates.sync(app)`, called by main.js every frame and after every settings save, so the toggle works without a reload; turning it off keeps what was downloaded, turning it on again is instant) and keeps it off on the `minimal` graphics tier. While it is off the loader requests nothing (not the manifest, no image) and every caller draws its procedural look, call for call. Tests and tools that feed the loader themselves pass `{ art: true }` to `createTemplates` or `templates.configure`. `tests/graftwork_ui_art.test.mjs` and `tests/graftwork_perf3.test.mjs` fail if anything under `assets/ui/` is requested while the switch is off.
+
+### What is built (the first delivery, `assets/ui/`, about 1.1 MB)
+
+Written by `tools/graftwork_ui_build.py` from the artist's raw PNGs (not in the repo): `python3 -I tools/graftwork_ui_build.py --raw <dir>`. Same input, same bytes. The tool crops the magenta margins, removes the pink spill, brings the 3:4 card art to 220:310 by adding rows only in the plain rails beside the text window (corners, banner, ribbon and cost socket keep their shape; the steepest local stretch is x1.3 to x1.5 on leather), measures the art window, text window, banner, ribbon and cost socket from the pixels, measures 9-slice margins (and the field inside a frame) from the pixels, cuts the icon sheets by their own bounding boxes and packs everything small into two atlases (`chrome`, `icons`).
+
+| built | how it is used |
+|---|---|
+| `card_front.{attack,skill,power}.{common,uncommon,rare}`, `card_front.junk` (also the generic `card_front`, so a curse or status would wear it), `card_front.<type>` = the common frame for starter cards | full face and hand face; the picture and the text window are painted UNDER the frame (their rectangles are transparent in it), the name is written on the banner, the type on the ribbon, the rules text in the text window; the hand face puts the big number on the lower part of the picture and the graft chips in the text window; `attack.rare` has its own text slots (a gilt ornament hangs into its text window) |
+| `card_back.plain` | the equipped back when it is `plain`; the other seven backs stay procedural (no painting yet) |
+| `card_gem` (+ `.up`, `.down`) | the cost gem; slate as printed, red when the cost is raised, green when lowered; the number keeps an ink edge |
+| `panel`, `panel.parchment`, `modal` | `modal` on Pause, the shop picker, the title dialogs (notice, confirm, credits) and the graft decline menu; `panel.parchment` on the event page. `panel` (border only, the vellum centre is removed) has no call site yet: every dark slab of the game is a row or a plate whose fill and stroke carry a state |
+| `button.{normal,hover,down,disabled}`, `button.small` | every `app.button`; four states of one pill |
+| `bar.hp.frame` + `bar.hp.fill` | the HP bars of the fight (enemy and hero) |
+| `dial.energy`, `plate.block` | the energy orb, the Block shield of the fight |
+| `chip.intent`, `chip.status` | the intent plate over an enemy, status icons |
+| `gauge.budget` (cap, cell, cap) | the Budget gauge of the shop and Forge (`drawGauge`) and of the Graft screen (`drawBudgetGauge`); the deck view and the Codex (`gaugeCells`) keep their cells |
+| `sheet.rules` (16 icons) | the three pile medallions (draw, discard, exhaust) and `drawPileIcon`; the other thirteen are in the manifest and the lab, with no place yet (see below) |
+| `sheet.intent` (12 icons) | the intent icons: attack and heavy (red ring), multi, block (defend), buff, debuff, poison, heal, summon, unknown, stun, escape (flee). `sweep`, `junk`, `special`, `sleep` have no painting and keep their glyph; `thread` has no place |
+| `bg.title_keyart` | the title screen backdrop (the two wall charts' lettering was painted out by the build tool) |
+
+Still procedural: the seven other card backs, school glyphs, relic and potion icons, status glyphs (the chip holds the old glyph), rarity pips (they are in the frames), tooltips, tabs, the Ward panels, the Codex and Archive sheets, graft patches, the map. Concepts without an icon: sweep, junk, special, sleep intents; school glyphs; currency; relics; potions; status glyphs (a status sheet is in the shopping list). Icons without a place: rules.energy, cost, retain, innate, ethereal, jam, upgrade, graft, tithe, strain, budget, overload, temper and intent.thread (they are meant for the keyword tips and the Codex rules page; the lab shows them with their ids).
+
+Look at all of it in `lab/art.html`.
+
 
 ## 6. Production order
 

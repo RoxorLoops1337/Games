@@ -2,7 +2,8 @@
 // Flags other screens may read from app.shared.meta.settings:
 //   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false), fastWalk bool (default false; the Ward's F button, halves the hero's walk pacing),
 //   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
-//   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
+//   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state), previewArt bool (default false: the painted art and character rig previews of ui/preview.js, read as app.settings;
+//   main.js hands it to ui/templates.js on every save, so the toggle switches the look at once, no reload).
 import { defaultQuality } from './fx.js';
 import { cleanGraphics } from './quality.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
@@ -14,7 +15,7 @@ import { offlineSupported } from './offline.js';
 const appRow = () => installAvailable() || offlineSupported(); // the App and offline row: Install, the offline copy, updates
 import { lnw } from '../art/linework.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false };
+export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false, previewArt: false };
 export const TEXT_STEPS = [100, 125, 150, 175];
 export const QUALITY = ['off', 'low', 'high'];
 
@@ -52,7 +53,7 @@ export default {
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
     const inst = appRow(); // asked once a frame and kept live: the browser's install offer can arrive, and Install can be pressed, while this screen is open
-    const w = 600, h = inst ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
+    const w = 600, h = inst ? 695 : 697, x = 640 - w / 2, y = 14 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -62,10 +63,10 @@ export default {
     g.save(); g.strokeStyle = COL.vellum; g.lineWidth = lnw(3); g.lineCap = 'round'; g.beginPath(); g.moveTo(cx + 11, cy + 11); g.lineTo(cx + 27, cy + 27); g.moveTo(cx + 27, cy + 11); g.lineTo(cx + 11, cy + 27); g.stroke(); g.restore();
     if (over) app.cursor = 'pointer';
     if (app.clicked(cx, cy, 38, 38)) { this.close(app); g.restore(); return; }
-    const sy0 = y + 70;
+    const sy0 = y + 70, sl = inst ? 36 : 40; // seven toggles: the rows under them stand a little closer (with the Install row the sliders do too), everything above keeps its place
     // sliders
     const sliders = [['master', 'Master volume'], ['sfx', 'Sound effects'], ['music', 'Music']];
-    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * 40, w - 64, s));
+    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * sl, w - 64, s, sl));
     // toggles
     const toggles = [
       ['muted', 'Mute all sound', 'Silences everything. Volumes are kept.'],
@@ -74,10 +75,11 @@ export default {
       ['colorblind', 'Colorblind mode', 'Safe school palette plus pattern and shape cues on cards, statuses and the Thread rail.'],
       ['flashes', 'Screen flashes', 'Off removes every white or colored full-screen flash. Never more than 3 per second either way.'],
       ['highContrast', 'High contrast text', 'Dark outline behind all text.'],
+      ['previewArt', 'Painted art (preview)', 'Painted card frames, panels, buttons, icons and character rigs in place of the drawn ones. Still being finished: turn it off if anything reads worse. Not used on the Low graphics setting.'],
     ];
-    const ty0 = sy0 + 3 * 40 + 14;
+    const ty0 = sy0 + 3 * sl + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
-    const tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
+    const tst = inst ? 27 : 31, sst = inst ? 37 : 36; // an Install row needs room: the rows pack a little tighter while it shows
     toggles.forEach(([key, label, tip], i) => {
       const yy = ty0 + 14 + i * tst;
       const on = !!s[key];
@@ -185,12 +187,12 @@ export default {
     app.text(on ? 'On' : 'Off', tx - 12, y + 9, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
     if (live && app.clicked(x, y, w, 36)) requestFs(app);
   },
-  slider(app, key, label, x, y, w, s) {
+  slider(app, key, label, x, y, w, s, rowH = 40) {
     const g = app.ctx, live = app.top() === this;
     const tx = x + 190, tw = w - 190 - 56, ty = y + 18;
     app.text(label, x, y + 6, { size: 20 });
-    this.reg(app, x, y, w, 40, label, 'Left and Right change the volume.', (d) => { s[key] = clamp(Math.round((s[key] + (d || 1) * 0.05) * 100) / 100, 0, 1); this.applyAudio(app); this.persist(app); });
-    const hit = [tx - 10, y, tw + 20, 40];
+    this.reg(app, x, y, w, rowH, label, 'Left and Right change the volume.', (d) => { s[key] = clamp(Math.round((s[key] + (d || 1) * 0.05) * 100) / 100, 0, 1); this.applyAudio(app); this.persist(app); });
+    const hit = [tx - 10, y, tw + 20, rowH];
     const over = app.inRect(...hit);
     if (over) app.cursor = 'pointer';
     if (live && app.mouse.pressed && over) this.drag = key;

@@ -14,6 +14,7 @@ import { drawHeart, drawCoin, drawRelic, drawEventSeal } from '../art/icons.js';
 import { lnw } from '../art/linework.js';
 import { eventSource } from './ward_kit.js';
 import { drawCardZoom } from './card_zoom.js';
+import * as SK from './skin.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
@@ -207,10 +208,12 @@ export default {
     // parchment
     g.save();
     app.rr(P.x + 4, P.y + 6, P.w, P.h, 10); g.fillStyle = 'rgba(0,0,0,.45)'; g.fill();
+    if (!SK.nine(g, 'panel.parchment', P.x, P.y, P.w, P.h)) { // painted (preview): the torn vellum sheet, otherwise the drawn one
     app.rr(P.x, P.y, P.w, P.h, 10);
     const pg = g.createLinearGradient(P.x, P.y, P.x + P.w, P.y + P.h); pg.addColorStop(0, '#e2d5b6'); pg.addColorStop(1, '#cbbb95'); g.fillStyle = pg; g.fill();
     g.strokeStyle = '#2b1e1a'; g.lineWidth = lnw(3); g.stroke();
     g.lineWidth = lnw(1.5); g.strokeStyle = 'rgba(43,30,26,.4)'; g.setLineDash([8, 6]); app.rr(P.x + 10, P.y + 10, P.w - 20, P.h - 20, 6); g.stroke(); g.setLineDash([]);
+    }
     g.restore();
 
     // title

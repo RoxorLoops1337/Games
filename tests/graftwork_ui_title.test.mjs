@@ -150,7 +150,7 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   assert.equal(meta.settings.reducedMotion, true);
   click(app, 640, 340);  // colorblind
   assert.equal(meta.settings.colorblind, true);
-  click(app, 806, 436);  // text size 150%
+  click(app, 806, 467);  // text size 150% (the row under the seven toggles)
   assert.equal(meta.settings.textScale, 150); assert.equal(meta.settings.textSize, 'large');
   click(app, 640, 247);  // mute
   assert.equal(meta.settings.muted, true);
@@ -164,7 +164,7 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   assert.equal(JSON.parse(globalThis.localStorage ? globalThis.localStorage.getItem('graftwork_meta_v1') : JSON.stringify(meta)).settings.master, meta.settings.master);
   // reset needs two confirms
   meta.stats.wins = 5; saveRun(RUN.newRun({ seed: 'x' }));
-  const ry = 418 + 160 + 40 + 14; // Graphics row added: toggles 31 px apart
+  const ry = 449 + 5 * 36 + 14; // seven toggles 31 px apart, then five rows 36 px apart
   click(app, 450, ry + 4 + 20); frames(app, 2); assert.equal(settings.reset, 1);
   assert.equal(meta.stats.wins, 5, 'not erased after one confirm');
   click(app, 420, ry + 26 + 19); frames(app, 2); assert.equal(settings.reset, 2);

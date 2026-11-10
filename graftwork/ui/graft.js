@@ -616,7 +616,7 @@ function drawSkipMenu(app) {
   ctx.save(); ctx.fillStyle = 'rgba(6,5,4,.78)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
   const px = 190, py = 120, pw = 900, ph = 470;
   app.reg('graft-skipmenu', px, py, pw, ph, { overlay: true });
-  app.panel(px, py, pw, ph, { fill: 'rgba(24,20,17,.97)', stroke: COL.lamp, lw: 2.5, r: 14 });
+  app.panel(px, py, pw, ph, { fill: 'rgba(24,20,17,.97)', stroke: COL.lamp, lw: 2.5, r: 14, frame: 'modal' });
   app.text('Decline the graft', 640, py + 18, { size: 34, bold: true, align: 'center', color: COL.lamp, shadow: true });
   const lim = skipLimit(run);
   app.text(lim > 1 ? 'Sew nothing. Your relic lets you take TWO of these.' : 'Sew nothing. Take ONE of these instead.', 640, py + 62, { size: 17, ui: true, align: 'center', color: DIM });
