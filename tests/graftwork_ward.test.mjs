@@ -302,7 +302,7 @@ t('full ward runs: 3 heroes x 3 seeds with the strong policy end won or dead, ne
 import { RELICS, EVENTS } from '../graftwork/data/index.js';
 import { EVENT_PHASE } from '../graftwork/data/events.js';
 import { RELICS_WARD } from '../graftwork/data/relics_ward.js';
-import { WARD_GLOSSARY, glossaryEntry } from '../graftwork/ui/tooltips.js';
+import { glossaryEntry } from '../graftwork/ui/tooltips.js';
 
 t('content sizes: about 45 building cards, 14 Ward relics, 19 room cards, ids unique and well formed', () => {
   assert.ok(BUILD_LIST.length >= 44 && BUILD_LIST.length <= 52, 'building cards ' + BUILD_LIST.length);
