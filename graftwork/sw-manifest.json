@@ -1,6 +1,6 @@
 {
- "version": "a55d9b110b6c6f39",
- "bytes": 11594262,
+ "version": "fb9982f41dcccd7a",
+ "bytes": 11597879,
  "count": 663,
  "files": {
   "art/attacks.js": {
@@ -2424,20 +2424,20 @@
    "s": 1962
   },
   "main.js": {
-   "h": "2f7d60e2a4f1337a",
-   "s": 7501
+   "h": "bb216394836d69d7",
+   "s": 8091
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
    "s": 798
   },
   "ui/a11y.js": {
-   "h": "8e5150b70b7cd6b0",
-   "s": 8902
+   "h": "59d1a824b8288cf0",
+   "s": 8987
   },
   "ui/app_panel.js": {
-   "h": "ae3745884251d20d",
-   "s": 6006
+   "h": "48f3925a539a663a",
+   "s": 6160
   },
   "ui/archive.js": {
    "h": "779e0928e40ffbd6",
@@ -2460,16 +2460,16 @@
    "s": 4419
   },
   "ui/chrome.js": {
-   "h": "d541879264fa1b80",
-   "s": 16561
+   "h": "4e749e0345719977",
+   "s": 16443
   },
   "ui/codex.js": {
    "h": "284c71323e05d3b4",
    "s": 40400
   },
   "ui/combat.js": {
-   "h": "fc8481045cb63f3e",
-   "s": 120601
+   "h": "3ab97434d41bded1",
+   "s": 121046
   },
   "ui/combat_art.js": {
    "h": "4a911bb17ed8e49e",
@@ -2484,8 +2484,8 @@
    "s": 5870
   },
   "ui/core.js": {
-   "h": "18d3934c833e557e",
-   "s": 38443
+   "h": "a25d5c7e33256310",
+   "s": 41593
   },
   "ui/deckview.js": {
    "h": "24cf1a908c0dc330",
@@ -2504,8 +2504,8 @@
    "s": 26937
   },
   "ui/frame_state.js": {
-   "h": "433b0a4d4542518c",
-   "s": 3194
+   "h": "4ee183083fbc16d0",
+   "s": 3250
   },
   "ui/fullscreen.js": {
    "h": "1228bc5230f6cda1",
@@ -2524,8 +2524,8 @@
    "s": 9525
   },
   "ui/install.js": {
-   "h": "d62e63fcbe680947",
-   "s": 6258
+   "h": "c2b56d8ceef5ffd7",
+   "s": 6285
   },
   "ui/juice.js": {
    "h": "961af54dab9bfe33",
@@ -2552,16 +2552,16 @@
    "s": 4454
   },
   "ui/pause.js": {
-   "h": "49b5e206d6812e5b",
-   "s": 19024
+   "h": "4ee7b40994e687d5",
+   "s": 18169
   },
   "ui/perf_flags.js": {
-   "h": "cf5a21a500aca0d7",
-   "s": 1327
+   "h": "f69ba3cd7e27ce97",
+   "s": 1271
   },
   "ui/post.js": {
-   "h": "40fb9e24720f85c9",
-   "s": 22385
+   "h": "5197cbcacb606037",
+   "s": 21844
   },
   "ui/post_shaders.js": {
    "h": "b868f4fb7841b817",
@@ -2608,32 +2608,32 @@
    "s": 2446
   },
   "ui/title.js": {
-   "h": "d4331ba24dc241bb",
-   "s": 49453
+   "h": "4bf6b31a1ab721d5",
+   "s": 49435
   },
   "ui/title_logo.js": {
    "h": "33ab328c6f4610c7",
    "s": 17047
   },
   "ui/title_scene.js": {
-   "h": "1cf56ed5771af4bb",
+   "h": "7f91b1a5e4da4732",
    "s": 24713
   },
   "ui/tooltips.js": {
-   "h": "4330727f02c4808d",
-   "s": 54700
+   "h": "bbc3dc2125ecaa13",
+   "s": 54826
   },
   "ui/transitions.js": {
-   "h": "7c0c29b8d3163f43",
-   "s": 26278
+   "h": "9e5b59cd73808e7c",
+   "s": 26697
   },
   "ui/tutorial.js": {
    "h": "6398af7acc5ceb56",
    "s": 10356
   },
   "ui/ward.js": {
-   "h": "d677c40a9ff24975",
-   "s": 83209
+   "h": "55dfe98252280c05",
+   "s": 83362
   },
   "ui/ward_iso.js": {
    "h": "27e0fba6b2bb1321",
