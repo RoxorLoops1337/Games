@@ -1019,5 +1019,25 @@ await ta('Locksmith: the Sealed status it carries says it gains Block when a Lin
   assert.ok(m, 'the status says what its seal does for the Locksmith:\n' + text); assert.equal(+m[1], real, 'with the number the engine uses');
   assert.ok(!/[\u2013\u2014]/.test(text), 'no dashes');
 });
+
+// ---------------------------------------------------------------- 17. the Codex Rules tab counts its panels
+await ta('Codex, Rules tab: the header names the number of panels the sheet has (desktop and phone stage)', async () => {
+  const codex = (await import('../graftwork/ui/codex.js')).default, { CODEX_RULES } = await import('../graftwork/ui/codex.js');
+  for (const scale of [1, 0.54]) {
+    const app = await makeApp({ run: RUN.newRun({ hero: 'marrow', seed: 'codex-rules' }), meta: META.defaultMeta(), audio: { sfx() {}, music() {} } });
+    if (scale < 1) { app.scale = scale; app.minPx = 11; }
+    const said = []; const raw = app.text; app.text = (str, x, y, o) => { said.push(String(str)); return raw(str, x, y, o); };
+    app.shared.flow = { app, RUN, META, route() {}, toTitle() {}, openDeck() {}, openCodex() {}, openArchive() {}, openSettings() {}, saveMeta() {}, hasSave: () => false, start() {} };
+    app.register('codex', codex); app.register('base', { draw() {} }); app.go('base'); app.push('codex', {});
+    codex.setTab(6); said.length = 0; frames(app, 12);
+    const head = said.find((x) => /^The whole Graft system/.test(x));
+    assert.ok(head, 'the Rules tab has its header @' + scale);
+    const m = /in (\d+) panels\.$/.exec(head); assert.ok(m, 'the header gives a number: ' + head);
+    assert.equal(+m[1], CODEX_RULES.length, 'and it is the number of rules the sheet holds @' + scale);
+    const seen = new Set(); // the sheet scrolls when it outgrows the view: walk it from top to bottom
+    for (let pos = 0; pos < 3000; pos += 120) { codex.rulesSt.scroll = codex.rulesSt.target = pos; said.length = 0; frames(app, 2); for (const [title] of CODEX_RULES) if (said.includes(title)) seen.add(title); }
+    assert.equal(seen.size, CODEX_RULES.length, 'and the sheet really holds that many panels @' + scale);
+  }
+});
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

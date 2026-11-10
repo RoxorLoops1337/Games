@@ -1,6 +1,6 @@
 {
- "version": "ade3d44781e50987",
- "bytes": 8963127,
+ "version": "9a0b71d6e6209965",
+ "bytes": 8963137,
  "count": 497,
  "files": {
   "art/attacks.js": {
@@ -1804,8 +1804,8 @@
    "s": 16443
   },
   "ui/codex.js": {
-   "h": "585102f2756b3a70",
-   "s": 40870
+   "h": "5aa358f8a74f9822",
+   "s": 40880
   },
   "ui/combat.js": {
    "h": "2858183ed9e4ecda",
