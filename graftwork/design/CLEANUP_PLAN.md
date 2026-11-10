@@ -21,6 +21,19 @@ Baseline: main at `1449c24d` (installable app and offline copy). Every phase mus
 3. **Consolidate.** One shared helper module, one source of truth for settings defaults, leftovers from the review.
 4. **Docs.** Rewrite `graftwork/CLAUDE.md` to the current truth, prune `design/`, final numbers in this file.
 
+## Performance and bug fixes found by the reviews (visible changes, listed on purpose)
+
+These are not behaviour-preserving, so they ship as their own step with tests and before/after numbers:
+
+- Procedural enemies (the 43 enemies without sprites, all of Acts 2 and 3) are colour graded with a canvas filter applied to every draw call: an Act 2 fight tick measured 2162 ms against 41.6 ms without it. The grade is baked instead. Same look within rounding.
+- The Ward draws the full animated combat backdrop under panels that cover it (25 of 39 ms per tick). It becomes one cached blit; the 8 to 12 px gutters show a still backdrop.
+- Two quality controllers fight: `post.js autoQuality` reads the 30 fps idle cap as a slow device and switches bloom, grade and vignette off after about 11 s on the title. One controller remains (`ui/quality.js`); the post tier follows the Effects setting while the tier is full.
+- `V.born` in `ui/ward_iso.js` keeps a screen-clock stamp across Ward visits, so a monster can be invisible after returning from a fight. Cleared on enter (same class as the room stamp bug fixed earlier).
+- `ui/templates.js` requests `assets/ui/manifest.json` on every page load and gets a 404. No request until template art exists.
+- Rules bugs (cards whose text the engine does not implement: "Cut the Line", Slip Knot, Granny Knot, Odile's declare passive, The Grafter's stale card list, five resonance texts, Free Sample and max HP prices) are a separate step after the cleanup, each with a regression test and a balance re-check.
+
+Not doing without the owner's say: freezing screens under a modal (enemy turns currently continue behind Pause), removing the 12 unreachable junk cards (they show in the Codex), removing the Classic map or the room lab page.
+
 ## Rules for everyone working on this
 
 - Never rename save keys, ids, or the folder. A run saved before the cleanup must resume to the same outcome after it.
