@@ -1,6 +1,6 @@
 {
- "version": "edd249bedb66b5d8",
- "bytes": 9208913,
+ "version": "9e6eff4b02e2673c",
+ "bytes": 9208845,
  "count": 518,
  "files": {
   "art/attacks.js": {
@@ -60,8 +60,8 @@
    "s": 17512
   },
   "assets/rigs/manifest.json": {
-   "h": "fd52a746f88350d4",
-   "s": 32510
+   "h": "06ac197f0a906164",
+   "s": 32537
   },
   "assets/rigs/marrow@1x.webp": {
    "h": "4e4a866ee15506a3",
@@ -1996,8 +1996,8 @@
    "s": 17989
   },
   "ui/rig.js": {
-   "h": "aa9c4ab1d3b5251c",
-   "s": 25863
+   "h": "4ebb555aecc4f5e4",
+   "s": 25768
   },
   "ui/rigs.js": {
    "h": "3972650d1d124331",

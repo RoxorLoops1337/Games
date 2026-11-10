@@ -138,8 +138,8 @@ export function makeRig(id, e) {
   // the step the legs can take: a swing of about 38 degrees of the shorter leg (hip to sole), never more than the tune asks (figure heights)
   const stride = clamp(Math.min(T.stride * feel.strideK, T.swing * Math.min(legs.L.len + legs.L.sole, legs.R.len + legs.R.sole) / (duty * H)), 0.2, 0.5);
   const arms = e.arms || {}, prop = e.prop || null;
-  const parts = e.parts.map((p) => { const b = B[p.bone] || null; return { n: p.n, bone: b, sx: p.rect[0], sy: p.rect[1], w: p.rect[2], h: p.rect[3], px: p.px, py: p.py, ox: p.x - (b ? b.x : 0), oy: p.y - (b ? b.y : 0), hem: p.hem, lag: p.lag || 0, spin: p.spin || 0, upright: !!p.upright, hx: 0, hs: 1, m: M6() }; });
-  return { id, H, w: e.w, h: e.h, foot: e.foot, bones, B, parts, legs, stiff, feel, duty, stride, arms: { L: arms.L === undefined ? 1 : arms.L, R: arms.R === undefined ? 1 : arms.R }, prop, ship: !!e.ship,
+  const parts = e.parts.map((p) => { const b = B[p.bone] || null; return { n: p.n, bone: b, sx: p.rect[0], sy: p.rect[1], w: p.rect[2], h: p.rect[3], px: p.px, py: p.py, ox: p.x - (b ? b.x : 0), oy: p.y - (b ? b.y : 0), hem: p.hem, lag: p.lag || 0, upright: !!p.upright, hx: 0, hs: 1, m: M6() }; });
+  return { id, H, w: e.w, foot: e.foot, bones, B, parts, legs, stiff, feel, duty, stride, arms: { L: arms.L === undefined ? 1 : arms.L, R: arms.R === undefined ? 1 : arms.R }, prop,
     root: M6(), info: { plantL: true, plantR: true, plant: 'LR', lead: 'L', down: 0, sway: 0, lean: 0, stretch: 1, thigh: 1, slip: 0 } };
 }
 // along-track offset of a foot over its own cycle f (0 = contact): stance moves back at exactly the body's speed, swing eases forward
@@ -242,7 +242,6 @@ export function poseRig(rig, st = ST0) {
     if (p.upright) mAt(p.m, m[0] * p.ox + m[2] * oy + m[4], m[1] * p.ox + m[3] * oy + m[5], p.lag * (0.05 * bounce + 0.02 * air)); // a flame, a tray: carried level
     else { mT(p.m, m, p.ox, oy); if (b === to) mMul(p.m, p.m, 1, 0, 0, by); }
     if (p.hem !== undefined) { p.hx = hemX; p.hs = hemS; }
-    else if (p.spin) mR(p.m, p.m, ph * S / p.spin);
     else if (p.lag && !p.upright) mR(p.m, p.m, p.lag * (rig.prop && rig.prop.part === p.n ? 0.5 * pA * w * late + 0.02 * air : 0.045 * bounce + 0.012 * air));
   }
   return rig;

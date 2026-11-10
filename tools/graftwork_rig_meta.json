@@ -11,8 +11,8 @@
    "parts": [
     {"part": "armR_lo", "box": "armL_lo_with_hand", "comp": "big", "rows": [0.3, 1], "s": 0.1, "pivot": [0.3, 0.3], "at": [154, 106], "rot": 32},
     {"part": "armR_up", "box": "armR_up", "s": 0.1, "pivot": [0.5, 0.06], "at": [153, 89]},
-    {"part": "legR_up", "box": "legR_up", "s": 0.1, "pivot": [0.5, 0.1], "at": [137, 138]},
-    {"part": "legR_lo", "box": "legR_lo", "s": 0.095, "pivot": [0.5, 0.04], "at": [143, 166]},
+    {"part": "legR_up", "box": "legR_up", "s": 0.1, "pivot": [0.5, 0.1], "at": [133, 140]},
+    {"part": "legR_lo", "box": "legR_lo", "s": 0.095, "pivot": [0.5, 0.04], "at": [140, 167]},
     {"part": "footR", "box": "footR", "s": 0.116, "pivot": [0.3, 0.3], "at": [148, 194]},
     {"part": "torso", "box": "torso", "rows": [0, 0.66], "s": 0.168, "anchor": [0.5, 0.62], "at": [127, 140]},
     {"part": "legL_up", "box": "legL_up", "s": 0.11, "pivot": [0.5, 0.1], "at": [118, 144]},
@@ -157,7 +157,7 @@
   "knitter": {
    "sheet": "batch2/rig.knitter",
    "ship": true,
-   "side": "Read by eye, the names are loose: armL_up (the puffed sleeve) and the lower piece of the armL_lo box make the SCREEN LEFT arm (her own right, near side), with the open hand of box 14; armR_up is the far arm and ends in needles_with_hand, the fist that holds both needles, so the needles are the prop of the SCREEN RIGHT hand. cap_a is used (cap_b has the pink fleck; despill is on for the scarf box, which catches a corner of it). The near leg is one painted piece (thigh and shin joined), so it is one bone; the far leg came as two loose pieces and bends at the knee. Both are hidden to the boots by the long dress.",
+   "side": "Read by eye, the names are loose: armL_up (the puffed sleeve) and the lower piece of the armL_lo box make the SCREEN LEFT arm (her own right, near side), with the open hand of box 14; armR_up is the far arm and ends in needles_with_hand, the fist that holds both needles, so the needles are the prop of the SCREEN RIGHT hand. cap_a is used; cap_b, the copy with the pink fleck, is left out, so nothing has to be repainted. The near leg is one painted piece (thigh and shin joined), so it is one bone; the far leg came as two loose pieces and bends at the knee. Both are hidden to the boots by the long dress.",
    "joints": {"hips": [132, 150], "legL_lo": [122, 190], "handR": [153, 130]},
    "rigid": ["legL"],
    "prop": {"part": "needles", "hand": "R"},
@@ -173,7 +173,7 @@
     {"part": "footL", "box": 17, "s": 0.13, "pivot": [0.45, 0.3], "at": [126, 221]},
     {"part": "skirt", "bone": "torso", "box": 7, "comp": 1, "rows": [0.31, 1], "s": 0.125, "anchor": [0.5, 0.33], "at": [135, 125], "hem": 0.3},
     {"part": "apron", "bone": "torso", "box": 9, "s": 0.1, "pivot": [0.5, 0.05], "at": [140, 124], "hem": 0.3},
-    {"part": "scarf", "bone": "torso", "box": 3, "comp": 1, "despill": true, "s": 0.15, "pivot": [0.75, 0.12], "at": [135, 90], "lag": 0.6},
+    {"part": "scarf", "bone": "torso", "box": 3, "comp": 1, "s": 0.15, "pivot": [0.75, 0.12], "at": [135, 90], "lag": 0.6},
     {"part": "head", "box": 1, "s": 0.15, "pivot": [0.55, 0.95], "at": [137, 84]},
     {"part": "cap", "bone": "head", "box": 2, "s": 0.15, "pivot": [0.5, 0.9], "at": [130, 38]},
     {"part": "needles", "bone": "handR", "box": 15, "s": 0.18, "pivot": [0.45, 0.55], "at": [154, 131], "rot": 40, "lag": 0.3},
@@ -208,7 +208,7 @@
   "npc_porter": {
    "sheet": "batch2/rig.npc_porter",
    "ship": false,
-   "side": "The sheet names its limbs a and b. Read by eye: the pieces of arm_group_b (sleeve, forearm with cuff, glove, three loose pieces told apart by the build tool) are used for BOTH arms, because the standing sprite has both arms reaching to the cart handle on the screen right and group a is painted reaching the other way. thigh_a, shin_a, boot_a are the SCREEN LEFT (near) leg. The cart, its wheel and the crate ride on the floor (bone root), the wheel turns with the distance walked; the hands stay on the handle (no arm swing).",
+   "side": "The sheet names its limbs a and b. Read by eye: the pieces of arm_group_b (sleeve, forearm with cuff, glove, three loose pieces told apart by the build tool) are used for BOTH arms, because the standing sprite has both arms reaching to the cart handle on the screen right and group a is painted reaching the other way. thigh_a, shin_a, boot_a are the SCREEN LEFT (near) leg. The cart, its wheel and the crate ride on the floor (bone root: they do not bob with the body); the wheel is painted in perspective, so it is not turned. The hands stay on the handle (no arm swing).",
    "joints": {"hips": [92, 148]},
    "arms": {"L": 0, "R": 0},
    "note": "The sheet paints a slim boy who stands upright with a short coat and thin legs; the standing sprite is stocky and leans into a bigger cart. Assembled it reads as a porter with a cart, but not as the same person.",
@@ -228,7 +228,7 @@
     {"part": "cap", "bone": "head", "box": 2, "s": 0.15, "pivot": [0.5, 0.6], "at": [105, 43]},
     {"part": "cart", "bone": "root", "box": 6, "comp": "big", "despill": true, "s": 0.155, "pivot": [0.5, 0.5], "at": [168, 176]},
     {"part": "crate", "bone": "root", "box": 15, "s": 0.15, "pivot": [0.5, 0.5], "at": [180, 154]},
-    {"part": "wheel", "bone": "root", "box": 9, "s": 0.12, "pivot": [0.5, 0.5], "at": [150, 226], "spin": 17},
+    {"part": "wheel", "bone": "root", "box": 9, "s": 0.12, "pivot": [0.5, 0.5], "at": [150, 226]},
     {"part": "armL_up", "box": 5, "comp": 0, "s": 0.085, "pivot": [0.3, 0.08], "at": [95, 90], "rot": -40},
     {"part": "armL_lo", "box": 5, "comp": 2, "s": 0.085, "pivot": [0.3, 0.06], "at": [114, 108], "rot": -45},
     {"part": "handL", "box": 5, "comp": 3, "s": 0.085, "pivot": [0.4, 0.1], "at": [130, 122], "rot": -40}

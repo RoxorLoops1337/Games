@@ -35,7 +35,6 @@ joints {bone: [x, y]} for bones that carry no part (deliberately empty), feet, a
   anchor the joint as fractions of the BOX instead (two pieces cut from one box share it and line up exactly)
   rot    degrees the piece is turned at rest (clockwise), baked into the atlas      mirror   true flips the piece left to right
   hem    the piece is cloth: from this fraction of its height down it sways (a garment)      lag   follow-through weight (hair, feather, prop)
-  spin   a wheel: its radius on the canvas (it turns with the distance walked)
 
 Units: one canvas px of the standing sprite (figure about 225 tall, feet anchor 128, 243). The @2x atlas holds one px per unit, exactly the
 sharpness of the standing @2x sprite the map draws; @1x is half. Sizes come from SIZES below (a battle build would add a 2 px per unit file).
@@ -295,7 +294,7 @@ def build_rig(rid, m, raw, ward):
             die('%s: part %s hangs on no bone (%s)' % (rid, name, bone))
         at = p['at'] if borrow else [p['at'][0] + dx, p['at'][1] + dy]
         rec = {'n': name, 'bone': bone, 'z': z, 'at': at, 'master': master, 'mp': mp, 'src': im, 'piv': piv}
-        for k in ('hem', 'lag', 'spin', 'upright'):
+        for k in ('hem', 'lag', 'upright'):
             if k in p:
                 rec[k] = p[k]
         parts.append(rec)
@@ -359,7 +358,7 @@ def build_rig(rid, m, raw, ward):
         x, y = pos[p['n']]
         e = {'n': p['n'], 'bone': p['bone'], 'rect': [x, y, p['master'].width // M, p['master'].height // M],
              'px': round(p['mp'][0] / M, 2), 'py': round(p['mp'][1] / M, 2), 'x': p['at'][0], 'y': p['at'][1]}
-        for k in ('hem', 'lag', 'spin', 'upright'):
+        for k in ('hem', 'lag', 'upright'):
             if k in p:
                 e[k] = p[k]
         if 'hem' in p:
