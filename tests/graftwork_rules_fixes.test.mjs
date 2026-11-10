@@ -64,11 +64,9 @@ t('a run save with unknown card and graft ids loads, fights and saves again', ()
   assert.equal(RUN.serializeRun(RUN.deserializeRun(again)), again, 'a repaired save is stable');
 });
 t('a save without unknown ids is returned byte for byte', () => {
-  for (const mode of [undefined, 'ward']) {
-    const run = RUN.newRun({ hero: 'odile', seed: 'clean', mode });
-    const a = RUN.serializeRun(run);
-    assert.equal(RUN.serializeRun(RUN.deserializeRun(a)), a);
-  }
+  const run = RUN.newRun({ hero: 'odile', seed: 'clean' }); // a Ward run: the floor, the building deck and the dice are in the save
+  const a = RUN.serializeRun(run);
+  assert.equal(RUN.serializeRun(RUN.deserializeRun(a)), a);
 });
 t('pending screens drop unknown ids: shop stock, graft offer, reward', () => {
   const mk = () => JSON.parse(RUN.serializeRun(RUN.newRun({ hero: 'wick', seed: 'pend' })));

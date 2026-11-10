@@ -56,10 +56,11 @@ import { ENEMIES } from '../graftwork/data/index.js';
   assert.equal(deathAdviceCategory({}), 'generic');
 }
 
-// ---- 6. map legend: no jargon
+// ---- 6. the Ward's legend and trigger labels: no jargon
 {
   const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../graftwork/ui/map.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../graftwork/ui/ward.js', import.meta.url), 'utf8');
   assert.ok(!/refine, strip or reforge/.test(src) && !/Event: \?\?\?/.test(src) && !/Shop: spend gold/.test(src), 'legend uses plain words');
+  for (const word of ['Ward fight', 'Elite', 'Chapel event', 'Dispensary', 'Workshop', 'Clean sheets', 'The boss']) assert.ok(src.includes(`'${word}'`), 'the legend names ' + word);
 }
 console.log('graftwork q3 flow ok');

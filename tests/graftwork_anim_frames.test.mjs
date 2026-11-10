@@ -72,7 +72,7 @@ await t('assets_loader_asks_for_a_frame_file_only_when_that_frame_is_asked_for',
 // ---------------- the Ward map: the standing image only, moved by the puppet or by the hop ----------------
 async function mapSetup(actors, o = {}) {
   wardMod.resetWardMem(); install(actors, o.decoded);
-  const run = RUN.newRun({ hero: 'marrow', seed: o.seed || 'animw', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: o.seed || 'animw' });
   const meta = { settings: { reduceMotion: !!o.reduced, reducedMotion: !!o.reduced, tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } };
   const app = await makeApp({ run, meta, audio: { sfx() {}, music() {} } });
   app.ctx.measureText = (s) => ({ width: String(s).length * 8 });

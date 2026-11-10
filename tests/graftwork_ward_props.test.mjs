@@ -176,7 +176,7 @@ function roundTrip(run, tag) {
 
 export function playProperty(seed, hero) {
   const rnd = makeRng('prop|' + seed), stats = { fights: 0, elites: 0, shops: 0, forges: 0, events: 0, bosses: 0, deaths: 0, routes: 0, routeLen: 0, waits: 0, waitTriggers: 0, saves: 0, floors: 1, days: 0 };
-  let run = RUN.newRun({ hero, seed: 'prop' + seed, mode: 'ward' }), lastAct = run.act, lastDay = 1;
+  let run = RUN.newRun({ hero, seed: 'prop' + seed }), lastAct = run.act, lastDay = 1;
   checkInvariants(run, `s${seed} start`);
   for (let a = 0; a < MAX_ACTIONS && run.phase !== 'dead' && run.phase !== 'won'; a++) {
     const tag = `s${seed} a${a} ${run.ward.act}/${run.ward.day}${run.ward.phase}`;
@@ -222,7 +222,7 @@ t(`${SEEDS} random runs x 3 heroes: hero always in a built room, a roll in every
 
 t('a route of every length 1..roll from every room fires exactly the previewed triggers (seeded floors, all rooms full)', () => {
   for (let s = 0; s < 25; s++) {
-    const run = RUN.newRun({ hero: 'marrow', seed: 'full' + s, mode: 'ward' }), w = run.ward;
+    const run = RUN.newRun({ hero: 'marrow', seed: 'full' + s }), w = run.ward;
     // fill every room with something to trigger
     for (const r of Object.values(w.rooms)) { const sp = BUILD_ROOMS(r.type); if (sp === 'fight') r.contents = [{ kind: 'monster', id: Object.values(run.ward.rooms).length ? 'orderly' : 'orderly' }]; else if (sp) r.contents = [{ kind: sp }]; }
     W.endMorning(run);

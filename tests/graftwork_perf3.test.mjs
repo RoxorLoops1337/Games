@@ -51,13 +51,13 @@ const mons = (k, nn = 2) => Array.from({ length: nn }, (_, i) => ({ kind: 'monst
 // the Ward screen harness (as tests/graftwork_ui_ward_kit.test.mjs)
 async function setup(o = {}) {
   resetWardMem(); if (!assets.kit) ISO.resetIso();
-  const run = RUN.newRun({ hero: 'marrow', seed: o.seed || 'perf3', mode: 'ward' });
+  const run = RUN.newRun({ hero: 'marrow', seed: o.seed || 'perf3' });
   const motion = !!o.motion;
   const meta = { settings: { reduceMotion: !motion, reducedMotion: !motion, tips: false, textScale: 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } };
   const app = await makeApp({ run, meta, audio: { sfx() {}, music() {} } });
   app.ctx.measureText = (s) => { const f = String(app.ctx.font || ''), m = /(\d+(?:\.\d+)?)px/.exec(f), size = m ? +m[1] : 16; return { width: String(s).length * size * (/bold/.test(f) ? 0.56 : 0.52) }; };
   app.register('ward', ward); app.register('base', { draw() {} });
-  const flow = { RUN, route() { const scr = run.phase === 'ward' ? 'ward' : 'base'; if (run.mode === 'ward' && scr !== 'ward' && wardInterlude(app, run, scr)) return; app.go(scr, { run }); }, openDeck() {}, openSettings() {}, saveMeta() {}, hasSave: () => false, resume() {}, abandon() {}, toTitle() {}, start() {} };
+  const flow = { RUN, route() { const scr = run.phase === 'ward' ? 'ward' : 'base'; if (scr !== 'ward' && wardInterlude(app, run, scr)) return; app.go(scr, { run }); }, openDeck() {}, openSettings() {}, saveMeta() {}, hasSave: () => false, resume() {}, abandon() {}, toTitle() {}, start() {} };
   app.shared.flow = flow;
   return { app, run, meta, flow };
 }

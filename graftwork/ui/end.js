@@ -93,8 +93,8 @@ export default {
     let sub;
     if (this.won) sub = run.loop ? `The Grafter, again. Loop ${run.loop} stands on the floor behind you.` : 'You walk out into the dawn, mostly yourself.';
     else if (run.abandoned) sub = 'The procedure was left unfinished. The ward remembers.';
-    else if (run.mode === 'ward' && run.ward) sub = this.killer ? `${this.killer} closed the file. Act ${run.act}, day ${run.ward.day} of ${run.ward.dayLimit}.` : `The ward closed over you on day ${run.ward.day} of ${run.ward.dayLimit}, act ${run.act}.`;
-    else sub = this.killer ? `${this.killer} closed the file. Act ${run.act}, floor ${run.stats.floors}.` : `The ward closed over you on floor ${run.stats.floors} of act ${run.act}.`;
+    else if (run.ward) sub = this.killer ? `${this.killer} closed the file. Act ${run.act}, day ${run.ward.day} of ${run.ward.dayLimit}.` : `The ward closed over you on day ${run.ward.day} of ${run.ward.dayLimit}, act ${run.act}.`;
+    else sub = this.killer ? `${this.killer} closed the file. Act ${run.act}, floor ${run.stats.floors}.` : `The ward closed over you on floor ${run.stats.floors} of act ${run.act}.`; // a practice fight has no floor and no day
     app.text(sub, 640, 68, { size: 17, italic: true, align: 'center', color: '#e0d4b8', shadow: true });
     if (!this.won && !run.abandoned && this.advice) app.text(this.advice.text, 640, 94, { size: 15, ui: true, align: 'center', color: COL.lamp, shadow: true, maxW: 1000, lineH: 18 });
     g.restore();
@@ -387,7 +387,7 @@ export default {
       const fitSub = sub ? fitSize(app, sub, bw - 20, 12) : 12;
       if (app.button(label, x, y, bw, bh, { size: 18, fill, stroke, sub: sub ? ' ' : undefined })) {
         if (id === 'new') flow.start({ hero: run.hero, ascension: run.ascension || 0, ...(run.assist ? { assist: run.assist } : {}) });
-        else if (id === 'endless') { RUN.startLoop(run); run.phase = 'map'; run.ended = false; delete run.endInfo; flow.route(); }
+        else if (id === 'endless') { RUN.startLoop(run); run.ended = false; delete run.endInfo; flow.route(); } // the next loop opens on a fresh first floor
         else if (id === 'copy') this.copySeed(app);
         else flow.toTitle();
       }

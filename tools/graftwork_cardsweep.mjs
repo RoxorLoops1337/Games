@@ -3,8 +3,7 @@
 // on the same seeds as a no-card control. Prints wins and floors versus the control, and plays per run is not tracked (see the audit doc).
 import * as RUN from '../graftwork/engine/run.js';
 import { CARDS, HEROES } from '../graftwork/data/index.js';
-import { POLICIES, playRun } from './graftwork_sim.mjs';
-import './graftwork_strong.mjs';
+import { POLICIES, playWardRun } from './graftwork_driver.mjs';
 
 export function forcedRuns(hero, ids, N, asc, copies = 2) {
   const pol = POLICIES.strongNoPick;
@@ -14,8 +13,8 @@ export function forcedRuns(hero, ids, N, asc, copies = 2) {
     let w = 0, fl = 0;
     for (let i = 0; i < N; i++) {
       const p2 = { ...pol, fight(run, po, mt) { if (id && !run.flags.swept) { run.flags.swept = 1; for (let k = 0; k < copies; k++) run.deck.push({ uid: RUN.nextUid(run), id, grafts: [], up: 0 }); } return pol.fight(run, po, mt); } };
-      const r = playRun(hero, `sweep-${hero}-${i}`, p2, asc);
-      if (r.outcome === 'won') w++; fl += r.floors;
+      const r = playWardRun(hero, `sweep-${hero}-${i}`, p2, asc, { tag: 'sweep' });
+      if (r.outcome === 'won') w++; fl += r.run.stats.floors;
     }
     res[tag(id)] = { w, fl: fl / N };
   }
