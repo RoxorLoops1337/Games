@@ -381,15 +381,17 @@ def card_layout(m):
         'costGemCompact': {'x': round(cx - gem_r - 2.5, 2), 'y': round(cy - gem_r - 2.5, 2), 'w': round(gem_r * 2 + 5, 2), 'h': round(gem_r * 2 + 5, 2)},
         'fusedSlots': {'x': -117, 'y': round(tb['y'] + 2, 2), 'w': 18, 'h': 18, 'step': {'x': 0, 'y': round((tb['h'] - 22) / 3, 1)}, 'n': 4},
         'fusedSlotsCompact': {'x': -117, 'y': round(tb['y'] + 2, 2), 'w': 18, 'h': 18, 'step': {'x': 0, 'y': round((tb['h'] - 22) / 3, 1)}, 'n': 4},
-        # full face: type on the ribbon, rules text in the text window, graft patches down its right edge
-        'typeBand': dict(ty, fit={'max': 11, 'min': 9}),
-        'textBox': dict(tb, fit={'max': 15, 'min': 8}),
+        # type on the ribbon, rules text in the text window (both faces); the full face hangs its graft patches down the right edge
+        'typeBand': dict(ty, fit={'max': 11, 'min': 9}), 'typeBandCompact': dict(ty, fit={'max': 11, 'min': 9}),
+        'textBox': dict(tb, fit={'max': 15, 'min': 8}), 'textBoxCompact': dict(tb, fit={'max': 15, 'min': 8}),
         'graftSlots': {'x': 97, 'y': round(tb['y'] - 1, 2), 'w': 34, 'h': 30, 'step': {'x': 0, 'y': round((tb['h'] - 30) / 2, 1)}, 'n': 3},
-        # compact (hand) face: the big number stands on the lower part of the picture, the graft chips and the two glyphs in the text window
-        'keyNumber': {'x': win['x'], 'y': round(win['y'] + win['h'] - 62, 2), 'w': win['w'], 'h': 62},
-        'graftBand': {'x': round(tb['x'] + 1, 2), 'y': round(tb['y'] + 2, 2), 'w': round(tb['w'] - 2, 2), 'h': 34},
-        'typeGlyph': {'x': round(tb['x'] + 2, 2), 'y': round(tb['y'] + tb['h'] - 26, 2), 'w': 22, 'h': 22},
-        'schoolGlyph': {'x': round(tb['x'] + tb['w'] - 28, 2), 'y': round(tb['y'] + tb['h'] - 28, 2), 'w': 26, 'h': 26},
+        # compact (hand) face: the big number stands on the lower part of the picture (the top of a card is what a hand shows), the graft
+        # chips take the text window of a grafted card. The frame's colour says the type and the school seal sits on the picture, so
+        # the two corner glyphs of the procedural hand face are switched off (a slot of no size).
+        'keyNumber': {'x': win['x'], 'y': round(win['y'] + win['h'] - 74, 2), 'w': win['w'], 'h': 74},
+        'graftBand': {'x': round(tb['x'] + 1, 2), 'y': round(tb['y'] + 8, 2), 'w': round(tb['w'] - 2, 2), 'h': 38},
+        'typeGlyph': {'x': 0, 'y': 0, 'w': 0, 'h': 0},
+        'schoolGlyph': {'x': 0, 'y': 0, 'w': 0, 'h': 0},
     }
 
 
@@ -504,6 +506,24 @@ class Atlas:
         say(f'  atlas {self.name}: {len(self.parts)} parts, {used_w} x {height} logical px')
 
 
+def field_inset(a):
+    """how thick the frame of a panel is: from the middle of each side inward, the first pixel that is the panel's field (transparent,
+    or the colour of the centre and staying so). Returns [l, t, r, b] in pixels."""
+    h, w = a.shape[:2]
+    cy, cx = h // 2, w // 2
+    mid = a[cy - 8:cy + 8, cx - 8:cx + 8].reshape(-1, 4)
+    ref = np.median(mid, axis=0)
+
+    def run(line):
+        same = (line[:, 3] < 40) if ref[3] < 40 else ((np.abs(line[:, :3] - ref[:3]).max(axis=1) < 26) & (line[:, 3] > 200))
+        n = len(same); need = max(6, n // 40)
+        for i in range(n // 2):
+            if same[i:i + need].all():
+                return i
+        return 0
+    return [run(a[cy]), run(a[:, cx]), run(a[cy, ::-1]), run(a[::-1, cx])]
+
+
 def sliced(atlas, pid, a, lw, lh, tile=True, fill=True, notes=None, band=0.2, content=None, pad=3, cap=None):
     """add a 9-slice part: margins measured in the art, the middle cut down to a piece that repeats, logical margins in the manifest"""
     h, w = a.shape[:2]
@@ -524,10 +544,12 @@ def sliced(atlas, pid, a, lw, lh, tile=True, fill=True, notes=None, band=0.2, co
         extra['tile'] = True
     if not fill:
         extra['fill'] = False
-    if content:
-        extra['content'] = content(lw2, lh2, lsl)
+    if content:                     # the frame stands AROUND what it holds: its field (inside the border) is the content rect
+        fi = field_inset(a)
+        il, it, ir, ib = [int(round(v * (lw / w if i % 2 == 0 else lh / h))) for i, v in enumerate(fi)]
+        extra['content'] = {'x': il, 'y': it, 'w': lw2 - il - ir, 'h': lh2 - it - ib}
     atlas.add(pid, small, lw2, lh2, **extra)
-    say(f'  {pid}: slice measured {sl} px of {w} x {h}' + (f' (notes: {notes})' if notes else '') + f' -> {lsl} of {lw2} x {lh2} logical' + (f', middle cut to {x1 - sl[0]} x {y1 - sl[1]} px to repeat' if tile else ''))
+    say(f'  {pid}: slice measured {sl} px of {w} x {h}' + (f' (notes: {notes})' if notes else '') + f' -> {lsl} of {lw2} x {lh2} logical' + (f', middle cut to {x1 - sl[0]} x {y1 - sl[1]} px to repeat' if tile else '') + (f', field inside {extra["content"]}' if content else ''))
     return lsl, (lw2, lh2)
 
 
@@ -567,16 +589,16 @@ def build_chrome(man, sizes, report):
     if a is not None:
         a = trim(a); despill(a)
         n = key_centre(a)
-        sliced(at, 'panel', a, 216, 216, fill=False, notes='340 on every side')
+        sliced(at, 'panel', a, 216, 216, fill=False, notes='340 on every side', content=True)
         report['panel'] = f'vellum centre removed ({n} px), border only'
     a = load('panel.parchment')
     if a is not None:
         a = trim(a); despill(a)
-        sliced(at, 'panel.parchment', a, 180, 178, notes='about 120', band=0.12, cap=190)
+        sliced(at, 'panel.parchment', a, 180, 178, notes='about 120', band=0.12, cap=190, tile=False)   # the sheet is shaded across: it stretches, a repeat would show
     a = load('modal')
     if a is not None:
         a = trim(a); despill(a)
-        sliced(at, 'modal', a, 188, 187, notes='about 290, corner brackets about 280', band=0.3)
+        sliced(at, 'modal', a, 188, 187, notes='about 290, corner brackets about 280', band=0.3, content=True)
     # ---- buttons: a leather pill in four states that share one geometry. Its caps are measured on the outline (where the top edge
     # stops curving) and scale with the height in the game; the middle stretches (the leather is shaded end to end, a repeat would band).
     ref = load('button.normal')
@@ -606,7 +628,9 @@ def build_chrome(man, sizes, report):
         if a is None:
             continue
         a = trim(a); n = despill(a)
-        at.add(pid, a, lw, lh)
+        # the intent chip is a shield: it widens to hold an icon and a number by stretching the few columns around its point
+        extra = {'slice': [21, lh // 2 - 1, 21, lh // 2 - 1], 'scale': 'height'} if pid == 'chip.intent' else {}
+        at.add(pid, a, lw, lh, **extra)
         if n:
             report[pid] = f'{n} pink pixels neutralised'
     # ---- HP bar: frame (caps + glass) and the liquid
@@ -700,31 +724,64 @@ def build_icons(man, sizes, report):
     at.pack(man, sizes)
 
 
+def inpaint(a, poly):
+    """Take the dark strokes (lettering) out of the quadrilateral `poly` of an RGB array: every stroke pixel is replaced by what the
+    paper around it suggests (the hole is filled from its rim inward, then smoothed), so the sheet keeps its own light and grain."""
+    xs = [p[0] for p in poly]; ys = [p[1] for p in poly]
+    x0, x1, y0, y1 = int(min(xs)) - 6, int(max(xs)) + 7, int(min(ys)) - 6, int(max(ys)) + 7
+    blk = a[y0:y1, x0:x1].copy()
+    h, w = blk.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w]
+    inside = np.ones((h, w), bool)
+    for i in range(4):                                     # the four half planes of the (convex, clockwise) quadrilateral
+        (ax, ay), (bx, by) = poly[i], poly[(i + 1) % 4]
+        inside &= ((bx - ax) * (yy + y0 - ay) - (by - ay) * (xx + x0 - ax)) >= 0
+    lum = blk @ np.array([0.3, 0.59, 0.11], np.float32)
+    paper = lum.copy()
+    for _ in range(3):                                     # the local paper tone: a wide blur of the brightness
+        paper = np.apply_along_axis(lambda v: box(v, 9), 0, paper); paper = np.apply_along_axis(lambda v: box(v, 9), 1, paper)
+    hole = inside & (lum < paper - 7)
+    for _ in range(2):                                     # take the soft edge of every stroke with it
+        hole = hole | np.roll(hole, 1, 0) | np.roll(hole, -1, 0) | np.roll(hole, 1, 1) | np.roll(hole, -1, 1)
+    hole &= inside
+    known = ~hole
+    val = blk * known[..., None]
+    for _ in range(64):                                    # fill from the rim inward
+        if known.all():
+            break
+        ssum = np.zeros_like(val); cnt = np.zeros((h, w), np.float32)
+        for ax_, sh in ((0, 1), (0, -1), (1, 1), (1, -1)):
+            ssum += np.roll(val * known[..., None], sh, ax_); cnt += np.roll(known, sh, ax_)
+        new = hole & ~known & (cnt > 0)
+        val[new] = ssum[new] / cnt[new][:, None]
+        known = known | new
+    for _ in range(40):                                    # then even the fill out (the rim stays as it is)
+        avg = (np.roll(val, 1, 0) + np.roll(val, -1, 0) + np.roll(val, 1, 1) + np.roll(val, -1, 1)) / 4.0
+        val[hole] = avg[hole]
+    a[y0:y1, x0:x1] = val
+    return int(hole.sum())
+
+
+# The lettering the model invented on the two wall charts of bg.title_keyart.png (2560 x 1440): the header line of each chart, as a
+# quadrilateral in raw px, clockwise from its top left.
+TITLE_PATCHES = [
+    [(226, 608), (344, 632), (344, 670), (222, 650)],
+    [(2104, 588), (2220, 548), (2224, 600), (2108, 632)],
+]
+
+
 def build_title(man, sizes, report):
     p = find('bg.title_keyart')
     if p is None:
         return
-    im = Image.open(p).convert('RGB')
-    a = np.asarray(im, dtype=np.float32)
-    # The two wall charts carry lettering the model invented. Each chart header is painted over with the chart's own paper:
-    # the median colour of the rows just under it, with the paper's grain kept (the high frequencies of what was there, damped).
-    for (x0, y0, x1, y1) in TITLE_PATCHES:
-        blk = a[y0:y1, x0:x1]
-        ref = np.median(a[y1:y1 + 14, x0:x1].reshape(-1, 3), axis=0)
-        lowpass = np.stack([box(box(blk[..., c].mean(axis=0), 6), 6) for c in range(3)], axis=1)[None, :, :]
-        grain = (blk - blk.mean(axis=(0, 1), keepdims=True)) * 0.12
-        shade = (lowpass - lowpass.mean(axis=(0, 1), keepdims=True)) * 0.5
-        a[y0:y1, x0:x1] = ref[None, None, :] + shade + grain
+    a = np.asarray(Image.open(p).convert('RGB'), dtype=np.float32).copy()
+    n = sum(inpaint(a, poly) for poly in TITLE_PATCHES)
     im = Image.fromarray(np.clip(np.rint(a), 0, 255).astype(np.uint8), 'RGB')
     e = {'file1x': 'bg/title_keyart@1x.webp', 'file2x': 'bg/title_keyart@2x.webp', 'w': 1280, 'h': 720}
-    sizes[e['file2x']] = save(im.resize((1920, 1080), Image.LANCZOS), e['file2x'], q=Q_BG, opaque=True)
+    sizes[e['file2x']] = save(im.resize((2560, 1440), Image.LANCZOS), e['file2x'], q=Q_BG, opaque=True)
     sizes[e['file1x']] = save(im.resize((1280, 720), Image.LANCZOS), e['file1x'], q=Q_BG, opaque=True)
     man['frames']['bg.title_keyart'] = e
-    report['bg.title_keyart'] = f'{len(TITLE_PATCHES)} chart headers with invented lettering painted over with their own paper'
-
-
-# raw px boxes of the lettering on the wall charts of bg.title_keyart.png (2560 x 1440)
-TITLE_PATCHES = []
+    report['bg.title_keyart'] = f'the invented lettering on {len(TITLE_PATCHES)} wall charts taken out ({n} px filled from the paper around them)'
 
 
 def main():
