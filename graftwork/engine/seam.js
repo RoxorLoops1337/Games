@@ -63,7 +63,6 @@ function payoutFor(c, counts, order, lastSet, len, mode, times) {
 function timesFor(c, topSchool, firstCut) {
   let t = 1;
   if (topSchool && tier(c, topSchool) >= 6) t++;
-  if (firstCut && (c.seam.tapestry || c.player.st.tapestry > 0)) t++;
   return t;
 }
 function payText(school, n) {
@@ -87,7 +86,7 @@ export function seamPreview(c, card) {
   const none = (kind, school, len) => ({ kind, school, len, payout: [] });
   if (p.kind === 'slack' || p.kind === 'tied') return none(p.kind, p.set[0] || null, s.len);
   const cap = seamCap(c), k = knotsOf(spec);
-  const cutNow = (setLen) => {
+  const cutNow = () => {
     if (s.cuts >= SEAM_CUTS_TURN || s.len < 2) return [];
     const top0 = payoutFor(c, s.counts, s.order, s.set, s.len, 'cut', 1);
     const times = timesFor(c, top0[0] && top0[0].school, s.cuts === 0);
@@ -119,7 +118,7 @@ function enemyHook(c, name, info) {
   }
 }
 
-function startLine(c, set, k, spec) {
+function startLine(c, set, k) {
   const s = c.seam, cap = seamCap(c);
   s.counts = {}; s.order = [];
   for (const x of set) { s.counts[x] = k; s.order.push(x); }
@@ -206,7 +205,7 @@ export function seamStep(c, card, spec) {
     s.lockBroke = true; s.len = 0; s.counts = {}; s.order = []; s.set = [];
     c.ev.push({ t: 'seamCut', paid: 0, school: null, len: 0, card: card.uid, kind: 'break' });
   } else if (p.kind === 'cut') cash(c, 'cut', card);
-  startLine(c, p.set, k, spec);
+  startLine(c, p.set, k);
   for (const x of p.set) s.used[x] = true;
   s.last = card.uid;
   c.ev.push({ t: 'seamExtend', len: s.len, school: p.set[0], card: card.uid, start: true });

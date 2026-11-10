@@ -15,18 +15,15 @@ import { intentIcons } from './intent_icons.js';
 export const HAND_CAP = 10;
 export const MAX_PLAYS_TURN = 20;
 export const MAX_ENEMIES = 6;
-export const LIFESTEAL_CAP = 6;
 export const STATUS_CAP = 99;
 export const MAX_INNATE = 3;
 const RESOURCE_OPS = new Set(['draw', 'energy', 'gold', 'addCard', 'heal']);
-
-let _eid = 1;
 
 // ---------- setup ----------
 export function newCombat(run, enemyIds, opts = {}) {
   const hero = HEROES[run.hero];
   const c = {
-    run, rng: run.rng, turn: 0, over: null, pending: null, ev: [], log: [],
+    run, rng: run.rng, turn: 0, over: null, pending: null, ev: [],
     player: { kind: 'player', hp: run.hp, maxHp: run.maxHp, block: 0, st: {} },
     enemies: [], hand: [], drawPile: [], discard: [], exhaust: [], powers: [],
     energy: 0, maxEnergy: 3 + relicMod(run, 'energy') + ((hero && hero.energy) || 0),
@@ -116,9 +113,7 @@ function makeApi(c) {
     summon: (id, n, o) => { const out = []; for (let i = 0; i < (n || 1); i++) { const e = spawn(c, id, o); if (e) out.push(e); } return out; },
     kill: (e) => kill(c, e),
     ev: (e) => c.ev.push(e),
-    st: (ent, s) => (ent.st[s] || 0),
     player: c.player,
-    hero: () => HEROES[c.run.hero],
   };
   return A;
 }
@@ -155,7 +150,6 @@ export function addStatus(c, tgt, s, n, o = {}) {
   if (!n || (tgt.dead)) return;
   const d = stDef(s);
   if (!d.good && tgt.kind === 'enemy' && tgt.def.immune && tgt.def.immune.includes(s)) { c.ev.push({ t: 'immune', who: tgt.uid, s }); return; }
-  if (!d.good && tgt.st.artifact > 0) { tgt.st.artifact--; return; }
   const cur = tgt.st[s] || 0;
   let v = cur + n;
   if (!d.canNeg && v < 0) v = 0;
@@ -307,7 +301,6 @@ export function drawCards(c, n, o = {}) {
     if (CARDS[card.inst.id].type === 'junk') fire(c, 'junkDrawn', { card });
     if (sp.price.jam > 0 && c.rng.chance(sp.price.jam)) { card.jam = true; c.ev.push({ t: 'jam', card: card.uid }); }
     for (const h of sp.custom) if (h.onDraw) h.onDraw(c.A, { card, spec: sp });
-    if (sp.flags.onDrawAddEnergy) c.A.energy(sp.flags.onDrawAddEnergy);
   }
   return drawn;
 }
@@ -317,15 +310,14 @@ function discardCard(c, card, why = 'discard') {
   if (i >= 0) c.hand.splice(i, 1);
   const sp = specOf(c, card);
   card.jam = false; card.costMod = 0; delete card.costSet;
-  if (sp.flags.ethereal && why === 'turnEnd') { exhaustCard(c, card, true); return; }
+  if (sp.flags.ethereal && why === 'turnEnd') { exhaustCard(c, card); return; }
   c.discard.push(card);
   c.ev.push({ t: 'discard', card: card.uid, why });
   for (const h of sp.custom) if (h.onDiscard) h.onDiscard(c.A, { card, spec: sp });
 }
 
-export function exhaustCard(c, card, fromZoneAlready) {
-  if (!fromZoneAlready) { for (const z of [c.hand, c.drawPile, c.discard]) { const i = z.indexOf(card); if (i >= 0) z.splice(i, 1); } }
-  else { for (const z of [c.hand, c.drawPile, c.discard]) { const i = z.indexOf(card); if (i >= 0) z.splice(i, 1); } }
+export function exhaustCard(c, card) {
+  for (const z of [c.hand, c.drawPile, c.discard]) { const i = z.indexOf(card); if (i >= 0) z.splice(i, 1); }
   c.exhaust.push(card);
   card.jam = false; card.costMod = 0;
   c.ev.push({ t: 'exhaust', card: card.uid });
@@ -410,12 +402,10 @@ function targetsFor(c, ctx, to, dflt) {
   switch (to) {
     case 'enemy': return ctx.target && !ctx.target.dead ? [ctx.target] : (live.length ? [live[0]] : []);
     case 'all': return mine ? [c.player] : live;
-    case 'allEnemies': return live;
     case 'random': return live.length ? [c.rng.pick(live)] : [];
     case 'self': return [ctx.srcEnt || c.player];
     case 'player': return [c.player];
     case 'allies': return live.filter((e) => e !== ctx.srcEnt);
-    case 'target': return ctx.target && !ctx.target.dead ? [ctx.target] : [];
     default: throw new Error('bad target ' + to);
   }
 }
@@ -442,7 +432,6 @@ function runOp(c, op, ctx) {
           if (t.dead) continue;
           const d = dealDamage(c, isEnemy ? ctx.srcEnt : c.player, t, n, { pierce: op.pierce, card: !isEnemy });
           ctx.dealt = (ctx.dealt || 0) + d;
-          if (!isEnemy && ctx.card) ctx.card.lastHit = t;
         }
       }
       break;
@@ -473,13 +462,9 @@ function runOp(c, op, ctx) {
     case 'discard': startPending(c, { kind: 'discard', n: val(c, ctx, op.n), choose: op.choose !== false, then: 'discard' }); break;
     case 'exhaustHand': startPending(c, { kind: 'exhaust', n: op.n === 'all' ? 99 : val(c, ctx, op.n), choose: op.choose !== false && op.n !== 'all', then: 'exhaust', draw: op.draw }); break;
     case 'fetch': startPending(c, { kind: 'fetch', zone: op.from || 'discard', n: val(c, ctx, op.n) || 1, choose: true, then: 'hand' }); break;
-    case 'retarget': break;
     case 'if': runFx(c, cond(c, ctx, op.cond) ? (op.then || []) : (op.else || []), ctx); break;
     case 'repeat': for (let i = 0; i < val(c, ctx, op.n); i++) runFx(c, op.fx, ctx); break;
     case 'custom': op.fn(c.A, ctx); break;
-    case 'move': { // enemy move-flow helper: intent shown but no effect (telegraph only)
-      break;
-    }
     default: throw new Error('unknown op ' + op.op);
   }
 }
@@ -576,7 +561,7 @@ export function playCard(c, hi, ti) {
     if (r > 0) c.ev.push({ t: 'replay', card: card.uid });
     runFx(c, sp.fx, ctx);
     for (const h of sp.custom) if (h.onPlay) h.onPlay(c.A, ctx);
-    if (sp.lifesteal && ctx.dealt) heal(c, c.player, Math.min(ctx.dealt, sp.lifesteal || LIFESTEAL_CAP));
+    if (sp.lifesteal && ctx.dealt) heal(c, c.player, Math.min(ctx.dealt, sp.lifesteal));
     if (c.over) break;
   }
   card.plays++; card.inst.plays = (card.inst.plays || 0) + 1;
@@ -592,7 +577,7 @@ export function playCard(c, hi, ti) {
     card.inst.shattered = true; c.ev.push({ t: 'shatter', card: card.uid, id: sp.id });
     fire(c, 'shatter', { card });
   } else if (sp.type === 'power') { c.powers.push(card); c.ev.push({ t: 'power', card: card.uid }); }
-  else if (sp.flags.exhaust) exhaustCard(c, card, true);
+  else if (sp.flags.exhaust) exhaustCard(c, card);
   else { c.discard.push(card); c.ev.push({ t: 'discard', card: card.uid, why: 'played' }); }
   checkEnd(c);
   return { ok: true };

@@ -1,6 +1,6 @@
 // Run layer: a run is plain JSON (plus run.rng). Everything between fights lives here: the map, rewards, the graft
 // offer (the heart of the game), shop, forge, events, ascension, daily seed, endless loops, save/restore.
-import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../data/index.js';
+import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
@@ -186,7 +186,7 @@ export function enterNode(run, id) {
 
 // ---------- encounters ----------
 function actEnemies(run, kind) {
-  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.noPick && !e.summonOnly);
+  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.summonOnly);
 }
 export function makeEncounter(run, kind) {
   const rng = run.rng;
@@ -515,13 +515,11 @@ export function resolveFight(run, result) {
 // Leave a reward screen: first graft pick if offered, then the map (or the next act).
 export function afterReward(run) {
   const rw = run.pending;
-  if (rw && rw.kind === 'boss') { /* boss relic chosen in UI before this */ }
   if (rw && rw.graft && graftableCards(run).length) { rw.graft = false; return startGraftPick(run), 'graft'; }
   return advance(run);
 }
 export function afterGraft(run) {
   if (run.flags.queueGraft > 0) { run.flags.queueGraft--; startGraftPick(run); return 'graft'; }
-  const rw = run.postReward;
   return advance(run);
 }
 export function advance(run) {
@@ -533,7 +531,6 @@ export function advance(run) {
     run.hp = Math.min(run.maxHp, run.hp + Math.round(run.maxHp * 0.5));
     run.phase = 'map'; return 'act';
   }
-  if (node && node.type === 'boss' && run.act === 3) { run.phase = 'map'; return 'map'; }
   run.phase = 'map'; return 'map';
 }
 export function startLoop(run) {

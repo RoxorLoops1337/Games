@@ -6,7 +6,7 @@
 // (and of each enemy, for the guard statuses) is wrapped in a Proxy whose set trap clamps to each status's `cap`, rejects a
 // 3rd distinct new debuff inside one enemy move and a 4th distinct affliction type overall (that one refreshes the durations
 // of the afflictions already active instead), and whose delete trap keeps Infection through card/relic cleanses.
-import { STATUSES, GRAFTS, RELICS } from '../data/index.js';
+import { STATUSES, GRAFTS } from '../data/index.js';
 import { instWeight } from './cards.js';
 import { refreshStrain, specOf } from './combat.js';
 

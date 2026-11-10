@@ -1,6 +1,6 @@
 {
- "version": "eff19aef83f42b1a",
- "bytes": 11582035,
+ "version": "90d9349bffb39a20",
+ "bytes": 11580193,
  "count": 662,
  "files": {
   "art/attacks.js": {
@@ -2192,8 +2192,8 @@
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "87408658007ce34d",
-   "s": 24406
+   "h": "db9ed8278f17aafb",
+   "s": 24340
   },
   "data/enemies_new1.js": {
    "h": "ae7961b1a3de65e4",
@@ -2228,8 +2228,8 @@
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "892172b4f700a86f",
-   "s": 9956
+   "h": "c067389b6243de6b",
+   "s": 9879
   },
   "data/grafts_weird.js": {
    "h": "2c11aed6b9fd5af3",
@@ -2324,48 +2324,48 @@
    "s": 1922
   },
   "data/unlocks.js": {
-   "h": "e1cfdbfd5dc95ec8",
-   "s": 12494
+   "h": "9c0e6a9da13a5e4c",
+   "s": 12417
   },
   "data/ward.js": {
-   "h": "df759bd1563539d3",
-   "s": 18584
+   "h": "d1b1b201579a5bb7",
+   "s": 18516
   },
   "data/ward_kit.js": {
-   "h": "a14f2bcfafad3840",
-   "s": 22460
+   "h": "2eb5242c69cfa505",
+   "s": 22398
   },
   "data/ward_kit_big.js": {
    "h": "665c92bfc16bf0eb",
    "s": 5178
   },
   "engine/afflictions.js": {
-   "h": "1c3d5f401a24066f",
-   "s": 8555
+   "h": "a0c5c404e6098693",
+   "s": 8547
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
    "s": 2535
   },
   "engine/cards.js": {
-   "h": "c76175b13b0f0c9d",
-   "s": 12800
+   "h": "60572d19ddb30027",
+   "s": 12818
   },
   "engine/combat.js": {
-   "h": "09f6a1e1a6bc9f73",
-   "s": 39914
+   "h": "99997875351e7eb7",
+   "s": 39143
   },
   "engine/intent_icons.js": {
-   "h": "92bf86cf68329be9",
-   "s": 3176
+   "h": "d9c814fa71665a0f",
+   "s": 3164
   },
   "engine/meta.js": {
-   "h": "7f7e53d90134e3d4",
-   "s": 10878
+   "h": "3748714d59b76fa3",
+   "s": 10870
   },
   "engine/meta2.js": {
-   "h": "748ed46b87858d47",
-   "s": 13449
+   "h": "d26129f5adb97fe4",
+   "s": 13416
   },
   "engine/resonance.js": {
    "h": "f98a69e798a34a63",
@@ -2376,28 +2376,28 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "1fe783f823374cab",
-   "s": 30806
+   "h": "49ac9c32a627b2e0",
+   "s": 30587
   },
   "engine/save.js": {
    "h": "75f3d164193012a7",
    "s": 1065
   },
   "engine/seam.js": {
-   "h": "9ec4588f5ce0a9db",
-   "s": 11936
+   "h": "5836c7d0063522f7",
+   "s": 11848
   },
   "engine/text.js": {
-   "h": "460ecb55f755fa45",
-   "s": 8097
+   "h": "b9c8e9d6a3afe0e2",
+   "s": 8066
   },
   "engine/unlock.js": {
    "h": "669f19021efcda9e",
    "s": 11837
   },
   "engine/ward.js": {
-   "h": "8e17cc9a9a266be3",
-   "s": 46421
+   "h": "3b8d9743bb0d52f3",
+   "s": 46196
   },
   "icons/apple-touch-icon.png": {
    "h": "6a1af503636154d7",
@@ -2420,8 +2420,8 @@
    "s": 1962
   },
   "main.js": {
-   "h": "2f7d60e2a4f1337a",
-   "s": 7501
+   "h": "66fa2d2a56652561",
+   "s": 7472
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
@@ -2580,8 +2580,8 @@
    "s": 6824
   },
   "ui/seam_ui.js": {
-   "h": "4187ca597d6f1907",
-   "s": 34465
+   "h": "d01acf611f4c8d2a",
+   "s": 34379
   },
   "ui/settings.js": {
    "h": "ffc15b93cebabdbb",

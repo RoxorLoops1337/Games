@@ -87,7 +87,7 @@ function worthNow(c) {
   const sch = s.order.filter((x) => s.counts[x] > 0); if (!sch.length) return [];
   const rank = (x) => s.counts[x] * 10 + (s.set.includes(x) ? 1 : 0);
   let top = sch[0]; for (const x of sch) if (rank(x) > rank(top)) top = x;
-  const times = 1 + (tier(top) >= 6 ? 1 : 0) + (s.cuts === 0 && (s.tapestry || (c.player.st && c.player.st.tapestry > 0)) ? 1 : 0);
+  const times = 1 + (tier(top) >= 6 ? 1 : 0);
   const out = [{ school: top, stitches: (S + (tier(top) >= 3 ? 1 : 0)) * times }];
   const rest = sch.filter((x) => x !== top && s.counts[x] >= 2);
   if (rest.length && Math.floor(S / 2) > 0) {

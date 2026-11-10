@@ -3,7 +3,6 @@
 // Engine flags read by engine/seam.js (E1): hooks.noCut (a would-be cut becomes Slack), hooks.wild (counts as every school, adds no count).
 const hasD = (s) => s.fx.some((o) => o.op === 'dmg');
 const hasB = (s) => s.fx.some((o) => o.op === 'block');
-const hits = (s) => hasD(s) && (s.target === 'enemy' || s.target === 'all');
 const numbers = (s) => hasD(s) || hasB(s);
 const foe = (A, ctx) => (ctx.target && !ctx.target.dead ? ctx.target : (A.alive()[0] || null));
 const stitchesOf = (len) => Math.max(0, Math.min(5, len || 0) - 1);

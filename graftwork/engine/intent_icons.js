@@ -41,7 +41,7 @@ export function intentIcons(mv, info, o = {}) {
     if (k === 'attack') {
       if (all) out.push({ k: 'sweep', hits });
       else if (hits > 1) out.push({ k: 'multi', hits });
-      else if ((info.dmg || 0) >= Math.max(HEAVY_MIN, maxHp * 0.2) || mv.heavy) out.push({ k: 'heavy', hits });
+      else if ((info.dmg || 0) >= Math.max(HEAVY_MIN, maxHp * 0.2)) out.push({ k: 'heavy', hits });
       else out.push({ k: 'attack', hits });
     } else if (k === 'debuff' && poison && !has.has('attack')) out.push({ k: 'poison' });
     else out.push({ k });

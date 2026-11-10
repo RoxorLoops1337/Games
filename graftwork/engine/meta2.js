@@ -170,7 +170,7 @@ export const DEATH_ADVICE = {
 };
 export function deathAdviceCategory(run) {
   const cs = (run && run.deathCause) || null;
-  if (!cs) return (run && run.strain) ? 'strain' : 'generic';
+  if (!cs) return 'generic';
   if (cs.status && DEATH_ADVICE[cs.status]) return cs.status;
   if ((cs.strain || 0) >= 2) return 'strain';
   if ((cs.backfire || 0) > 0) return 'backfire';

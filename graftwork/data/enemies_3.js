@@ -365,7 +365,6 @@ function bestDmg(fx) {
   }
   return b;
 }
-const grafterDmg = (e) => 12 + Math.min(40, (e.data.count || 0));
 const schoolN = (e) => Math.min(8, 2 + Math.floor((e.data.count || 0) / 3));
 
 function spliceEffect(A, ctx) {
