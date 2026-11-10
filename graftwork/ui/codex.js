@@ -187,7 +187,7 @@ const RULES = [
   ['Schools and Resonance', 'Grafts belong to schools. Three of one school wake a bonus. Six wake a bigger one.'],
   ['The Thread', 'Cards that share a school tie knots into the Line. A card of another school Cuts it and pays one Stitch per knot after the first. A longer Line pays more.'],
   ['Slack, Tied, Frayed', 'Slack: a card with no school changes nothing. Tied: a Tempered card never cuts, and a Tied Line carries over a turn. Frayed: a jammed card acts as Slack.'],
-  ['The Ward: build, then walk', 'In Ward mode each floor is a hospital you build. Mornings you play building plans: rooms spawn fights, events, shops and forges on timers. Lit rooms use power.'],
+  ['The Ward: build, then walk', 'Each floor is a hospital you build. Mornings you play building plans: rooms spawn fights, events, shops and forges on timers. Lit rooms use power.'],
   ['The die and the route', 'Each walk (midday, evening, night) starts with a die roll. Plan a route of that many rooms next to each other, then Go. Every room on the route triggers in order. G goes, R rests the day.'],
   ['Days, nights and the boss', 'Night pays best and hits hardest. The boss waits in the Theatre: walk in early for a bonus, or be pulled in on the last night. Beat the third floor to win.'],
 ];

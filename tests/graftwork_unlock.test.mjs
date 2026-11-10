@@ -1,12 +1,12 @@
 // GRAFTWORK content unlock system: starting pool, UP model and caps, run gating, migration, daily fairness, determinism.
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
+import * as WD from '../graftwork/engine/ward.js';
 import * as M from '../graftwork/engine/meta.js';
 import * as UN from '../graftwork/engine/unlock.js';
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, LOCKED_IDS, UP, TOTAL_COST, START, inventory } from '../graftwork/data/unlocks.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
-import { POLICIES, playRun } from '../tools/graftwork_sim.mjs';
-import '../tools/graftwork_strong.mjs';
+import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -40,7 +40,7 @@ t('starting pool: 3 archetypes per hero, all 7 schools at tier 1 and 2, every ac
 });
 t('starting pool survives the strong bot: 10 full runs per hero, no throw', () => {
   for (const h of ['marrow', 'wick', 'odile']) for (let i = 0; i < 10; i++) {
-    const r = playRun(h, `unl-${h}-${i}`, POLICIES.strong, 0, { unlocked: 'start' });
+    const r = playWardRun(h, `unl-${h}-${i}`, 'strong', 0, { unlocked: 'start' });
     assert.ok(r.outcome === 'won' || r.outcome === 'dead');
     for (const x of r.run.deck) assert.ok(isStart(x.id) || /^j_|_(kit)$/.test(x.id) || CARDS[x.id].rarity === 'starter' || CARDS[x.id].type === 'junk', 'deck card from start pool: ' + x.id);
     for (const g of r.run.deck.flatMap((x) => x.grafts)) assert.ok(isStart(g), 'graft from start pool: ' + g);
@@ -84,7 +84,7 @@ t('rewards never contain locked ids: 300 fuzz rolls of offers, shop, relic, poti
     assert.ok(ok(RUN.rollRelicByAct(run)) || true); assert.ok(ok(RUN.rollPotion(run)), 'potion');
     RUN.fightRewards(run, i % 2 ? 'elite' : 'boss', {}); const rw = run.pending;
     if (rw.relic) assert.ok(ok(rw.relic)); for (const r of rw.relicChoices || []) assert.ok(ok(r), 'boss relic');
-    run.seenEvents = []; const ev = RUN.startEvent(run); if (ev) assert.ok(ok(ev.id), 'event ' + ev.id);
+    run.seenEvents = []; run.ward.phase = ['midday', 'evening', 'night'][i % 3]; const ev = WD.wardStartEvent(run); if (ev) assert.ok(ok(ev.id), 'event ' + ev.id); // the Chapel's draw
     const g = RUN.R.addGraftRandom(run, run.deck[0].uid); if (g) assert.ok(ok(g));
   }
 });

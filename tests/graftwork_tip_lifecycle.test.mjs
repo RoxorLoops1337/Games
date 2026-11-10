@@ -22,6 +22,7 @@ const FLOW = () => ({ route() {}, openDeck() {}, openSettings() { FLOW.settings 
 async function combatApp({ scale = 1, enemies = ['bedpan_slime'], settings = {}, seed = 'tl' } = {}) {
   const run = RUN.newRun({ hero: 'marrow', seed });
   for (const i of run.deck.filter((x) => !x.id.startsWith('j_')).slice(0, 6)) RUN.applyGraft(run, i.uid, 'g_scorch_thread', { keepPhase: true, free: true });
+  run.deck = run.deck.filter((i) => i.grafts.includes('g_scorch_thread')); // only those six: whatever the shuffle deals, every hand card has a tip
   run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies };
   const app = await makeApp({ run, meta: { settings: { tips: false, ...settings } }, audio: audioMod, flow: FLOW() });
   if (scale < 1) { app.scale = scale; app.minPx = 11; }

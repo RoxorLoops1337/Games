@@ -1,14 +1,14 @@
-// THE WARD (design/WARD.md): the hospital you build instead of the map. Pure rules, no DOM, every roll from run.rng.
-// State lives on run.ward (plain JSON, saved with the run). run.phase is 'ward' while the Ward screen is up; fights,
-// events, shops and forges reuse the classic phases and screens, and RUN.advance / afterEvent come back here.
+// THE WARD (design/WARD.md): the hospital you build, room by room. Pure rules, no DOM, every roll from run.rng.
+// State lives on run.ward (plain JSON, saved with the run). run.phase is 'ward' while the Ward screen is up; a fight, event,
+// shop or forge sets its own phase and screen, and RUN.advance / afterEvent come back here.
 //
-//   wardInit(run, act)                        new floor (called by RUN.startAct when run.mode === 'ward')
+//   wardInit(run, act)                        new floor (called by RUN.startAct)
 //   canBuild(run, uid, x, y) -> {ok, why}     a room card on a cell; canPlayBuild(run, uid, target) for any card
 //   playBuildCard(run, uid, target)           target: {x,y} (room cards, Demolish on rubble) | roomId | 'wood'|'stone' | null
 //   togglePower(run, roomId)  endMorning(run)
 //   pathTo(run, roomId, alt?) -> {ok, why, path, triggers, cost, offPenalty, alts, move}
 //   startWalk(run, roomId, alt?) -> the first trigger's pending (run.phase set) | null (walk ended, next phase) | false (illegal, run.ward.why)
-//   afterTrigger(run)                         continue the walk (RUN.advance and RUN.afterEvent call it in ward mode)
+//   afterTrigger(run)                         continue the walk (RUN.advance and RUN.afterEvent call it)
 import { ROOMS, BUILD_CARDS, BUILD_LIST, STARTER_BUILD_DECK, PHASES, PHASE_ORDER, FLOOR, START_RES, PREBUILT, WARD_TUNE as T } from '../data/ward.js';
 import { ENEMIES, EVENTS, CARDS } from '../data/index.js';
 import { hasBigRecipe } from '../data/ward_kit.js';
@@ -540,7 +540,7 @@ export function phaseMods(run, room, kind, level = 1) {
 }
 function launch(run, room, t) {
   const w = W(run);
-  run.stats.floors++; // every room that opens something counts like a map node (unlock points, history)
+  run.stats.floors++; // every room that opens something is one "floor" of the run's count (unlock points, history, the end screen)
   const every = everyOf(room);
   switch (t.kind) {
     case 'fight': {
@@ -581,7 +581,7 @@ function launch(run, room, t) {
   }
   return null;
 }
-// the Chapel's event: the act pool as in RUN.startEvent, weighted by the phase's lean
+// the Chapel's event: one of the act's events not seen yet this run, weighted by the phase's lean
 // An event may carry `phase: 'midday' | 'evening' | 'night'` (or an array): it is 3 times as likely in those phases and half as likely in the
 // others. Untagged events keep the old lean by text (kind: heal or gold at midday, strange: chance and relics at night).
 const LEAN = { kind: /heal|gold/i, strange: /random|relic|max HP|Overload|50%/i };

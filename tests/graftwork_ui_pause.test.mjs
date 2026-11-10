@@ -36,7 +36,7 @@ async function rig(host) {
   app.shared.flow = flow; app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   app.register('pause', pause); app.register('settings', settings); app.register('title', title);
   const upd = () => { log.updates++; };
-  app.register('map', { draw() {}, update: upd }); app.register('end', { draw() {}, update() {} });
+  app.register('ward', { draw() {}, update: upd }); app.register('end', { draw() {}, update() {} });
   app.register('combat', { draw() {}, update: upd, enter() {}, leave() {} });
   if (host) FS.setHost(host);
   installPause(app); FS.installFullscreen(app);
@@ -49,8 +49,8 @@ const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the C
 // ---- Esc opens, Esc resumes; the run screen stands still in between ----
 {
   const { app, log } = await rig(null);
-  app.shared.run = run(); app.go('map', {}); frames(app, 5);
-  assert.ok(IN_RUN.has('map')); assert.equal(log.updates, 5);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 5);
+  assert.ok(IN_RUN.has('ward')); assert.ok(!IN_RUN.has('map'), 'the map screen is gone'); assert.deepEqual([...IN_RUN].sort(), ['combat', 'event', 'forge', 'graft', 'reward', 'shop', 'ward']); assert.equal(log.updates, 5);
   key(app, 'Escape'); const u0 = log.updates; frames(app, 30);
   assert.equal(app.top().name, 'pause', 'Esc opens pause'); assert.equal(log.updates, u0, 'paused: the run screen gets no update'); assert.equal(app.frozen, true);
   assert.equal(pause.k, 1, 'the menu itself runs on real time'); assert.ok(pause.clock > 0.4);
@@ -70,7 +70,7 @@ const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the C
 // ---- every item ----
 {
   const { app, log } = await rig(null);
-  app.shared.run = run(); app.go('map', {}); frames(app, 3);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3);
   key(app, 'Escape'); const u0 = log.updates; frames(app, 3); assert.equal(pause.sel, 0, 'Resume is the default focus');
   // keyboard navigation: Down to Settings, Enter
   key(app, 'ArrowDown'); assert.equal(pause.sel, 1); key(app, 'Enter'); frames(app, 3); assert.equal(app.top().name, 'settings', 'Settings opens over pause');
@@ -90,7 +90,7 @@ const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the C
 // ---- quit: saves, confirm only in combat ----
 {
   const { app, log } = await rig(null);
-  app.shared.run = run(); app.go('map', {}); frames(app, 3); key(app, 'Escape'); frames(app, 3);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3); key(app, 'Escape'); frames(app, 3);
   pause.sel = 5; key(app, 'Enter'); frames(app, 3); assert.equal(log.title, 1, 'quit outside combat is immediate'); assert.equal(app.frozen, false);
   app.shared.run.phase = 'combat'; app.go('combat', {}); frames(app, 3); key(app, 'Escape'); frames(app, 3);
   assert.equal(app.top().name, 'pause'); assert.equal(app.frozen, true);
@@ -102,7 +102,7 @@ for (const webkit of [false, true]) {
   const host = mockHost('Mozilla/5.0 (X11; Linux)', webkit);
   const { app } = await rig(host);
   assert.ok(FS.canFullscreen()); assert.equal(FS.isFullscreen(), false);
-  app.shared.run = run(); app.go('map', {}); frames(app, 3);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3);
   assert.ok(app.layout.getAll().some((r) => r.id === 'fs_btn' && r.x === FS_BTN.x && r.w === FS_BTN.w), 'fs button registered');
   // button click: tick sets pendingFs, a window gesture processes it (never from the tick)
   click(app, FS_BTN.x + 20, FS_BTN.y + 20); assert.equal(host.calls.length, 0, 'tick never requests'); assert.equal(app.pendingFs, true);
@@ -127,7 +127,7 @@ for (const webkit of [false, true]) {
   const host = mockHost('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)');
   const { app } = await rig(host);
   assert.equal(FS.canFullscreen(), false, 'iPhone has no element fullscreen'); assert.equal(FS.toggleFullscreen(), false);
-  app.shared.run = run(); app.go('map', {}); frames(app, 3);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3);
   assert.ok(!app.layout.getAll().some((r) => r.id === 'fs_btn'), 'no fullscreen button on iPhone');
   key(app, 'Escape'); frames(app, 3); assert.ok(!pause.items.some((i) => i.id === 'fullscreen'));
   const ipad = mockHost('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)', true); FS.setHost(ipad); assert.equal(FS.canFullscreen(), true, 'iPad is fine');
@@ -166,7 +166,7 @@ for (const webkit of [false, true]) {
   const { app } = await rig(null);
   app.register('deckview', deckview);
   app.shared.flow.openDeck = () => app.push('deckview', {});
-  app.shared.run = run(); app.go('map', {}); frames(app, 3);
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3);
   // the real keydown path of ui/core.js: queue the event for the frame, then give it to the top screen first
   const realKey = (k) => { const e = { key: k, preventDefault() {} }; app.pressedKeys.push(e); const s = app.top(); if (s && s.key && s.key(app, e)) e.preventDefault(); app.tick(1 / 60); };
   realKey('Escape'); frames(app, 3); assert.equal(app.top().name, 'pause');

@@ -11,7 +11,7 @@ const canFuse = (i) => i.grafts.length > 0 && (i.fused || []).length + i.grafts.
 const fuseInst = (run, i) => { if (!canFuse(i)) return false; i.fused = [...(i.fused || []), ...i.grafts]; i.grafts = []; if (run.stats) run.stats.tempered = (run.stats.tempered || 0) + 1; return true; };
 const rerollCard = (run, R, inst) => { const n = inst.grafts.length; for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); let k = 0; for (let j = 0; j < n; j++) if (R.addGraftRandom(run, inst.uid)) k++; return k; };
 
-// The phase a Ward event is running in (engine/ward.js keeps it on run.ward.phase); classic runs never see Ward events.
+// The phase a Ward event is running in (engine/ward.js keeps it on run.ward.phase).
 const phaseOf = (run) => (run.ward && run.ward.phase) || 'midday';
 
 export const EVENT_LIST = [
