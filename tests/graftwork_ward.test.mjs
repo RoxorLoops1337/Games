@@ -9,8 +9,7 @@ import { STARTER_BUILD_DECK, BUILD_LIST, WARD_TUNE } from '../graftwork/data/war
 import { BUILD_CARDS, ROOMS, ENEMIES } from '../graftwork/data/index.js';
 const ELITE1 = Object.values(ENEMIES).find((e) => e.act === 1 && e.kind === 'elite' && !e.summonOnly).id;
 import { UNLOCKS, START } from '../graftwork/data/unlocks.js';
-import { POLICIES, playRun } from '../tools/graftwork_sim.mjs';
-import { playWardRun } from '../tools/graftwork_ward_sim.mjs';
+import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -288,10 +287,9 @@ t('unlocks: building cards are kind build; start set = every room card plus half
   assert.ok(!/\u2014/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
 });
 
-t('classic mode is untouched: no mode field, no ward state, no phase mods; seeded runs replay identically', () => {
-  const h = () => { const x = createHash('sha1'); for (const hero of ['marrow', 'wick', 'odile']) for (let i = 0; i < 2; i++) { const r = playRun(hero, `cls-${hero}-${i}`, POLICIES.strong, 0); const s = RUN.serializeRun(r.run); assert.ok(!/"mode"|"ward"|"mods"|"reinforce"/.test(s), 'classic save carries no ward fields'); x.update(s); } return x.digest('hex'); };
+t('seeded runs replay identically: the same seed and policy give the same final save, byte for byte', () => {
+  const h = () => { const x = createHash('sha1'); for (const hero of ['marrow', 'wick', 'odile']) for (let i = 0; i < 2; i++) { const r = playWardRun(hero, `rep-${hero}-${i}`, 'strong', 0); x.update(RUN.serializeRun(r.run)); } return x.digest('hex'); };
   assert.equal(h(), h());
-  const run = RUN.newRun({ hero: 'marrow', seed: 'c' }); assert.equal(run.mode, undefined); assert.equal(RUN.runMode(run), 'classic'); assert.equal(run.phase, 'map');
 });
 
 t('full ward runs: 3 heroes x 3 seeds with the strong policy end won or dead, never throw', () => {

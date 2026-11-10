@@ -1,10 +1,10 @@
 // GRAFTWORK graft power audit (reusable).
 //   node tools/graftwork_audit.mjs [N=40] [--pool=starters|all] [--tier=safe|greedy|weird] [--graft=g_id] [--rows]
-// For every graft and every card it can legally go on, runs N seeded 2-enemy Act-1 fights with the sim bot and compares
+// For every graft and every card it can legally go on, runs N seeded 2-enemy Act-1 fights with the careful policy and compares
 // turns-to-win and HP lost against the same deck with no graft (same seeds, same enemy pairs: a paired comparison).
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
-import { fight, POLICIES } from './graftwork_sim.mjs';
+import { fight, POLICIES } from './graftwork_driver.mjs';
 import { CARDS, GRAFTS, HEROES, ENEMIES } from '../graftwork/data/index.js';
 import { strainInfo, graftWeight } from '../graftwork/engine/cards.js';
 

@@ -10,8 +10,7 @@ import { createHash } from 'node:crypto';
 import { botFinish } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft, budgetOf } from '../graftwork/engine/cards.js';
-import { POLICIES } from '../tools/graftwork_sim.mjs';
-import { strongFight, strongPickGraft } from '../tools/graftwork_strong.mjs';
+import { POLICIES, strongFight, strongPickGraft } from '../tools/graftwork_driver.mjs';
 
 const pol = POLICIES.strong;
 const SEEDS = Number(process.env.GW_REG_SEEDS || 3);

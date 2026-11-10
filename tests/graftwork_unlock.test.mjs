@@ -5,8 +5,7 @@ import * as M from '../graftwork/engine/meta.js';
 import * as UN from '../graftwork/engine/unlock.js';
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, LOCKED_IDS, UP, TOTAL_COST, START, inventory } from '../graftwork/data/unlocks.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
-import { POLICIES, playRun } from '../tools/graftwork_sim.mjs';
-import '../tools/graftwork_strong.mjs';
+import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -40,7 +39,7 @@ t('starting pool: 3 archetypes per hero, all 7 schools at tier 1 and 2, every ac
 });
 t('starting pool survives the strong bot: 10 full runs per hero, no throw', () => {
   for (const h of ['marrow', 'wick', 'odile']) for (let i = 0; i < 10; i++) {
-    const r = playRun(h, `unl-${h}-${i}`, POLICIES.strong, 0, { unlocked: 'start' });
+    const r = playWardRun(h, `unl-${h}-${i}`, 'strong', 0, { unlocked: 'start' });
     assert.ok(r.outcome === 'won' || r.outcome === 'dead');
     for (const x of r.run.deck) assert.ok(isStart(x.id) || /^j_|_(kit)$/.test(x.id) || CARDS[x.id].rarity === 'starter' || CARDS[x.id].type === 'junk', 'deck card from start pool: ' + x.id);
     for (const g of r.run.deck.flatMap((x) => x.grafts)) assert.ok(isStart(g), 'graft from start pool: ' + g);

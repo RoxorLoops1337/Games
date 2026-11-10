@@ -13,7 +13,7 @@ globalThis.localStorage = (() => { const m = new Map(); return { getItem: (k) =>
 const { boot } = await import('../graftwork/main.js');
 const RUN = await import('../graftwork/engine/run.js');
 const { saveRun, loadRun } = await import('../graftwork/engine/save.js');
-const { fight, POLICIES } = await import('../tools/graftwork_sim.mjs');
+const { fight, POLICIES } = await import('../tools/graftwork_driver.mjs');
 const D = await import('../graftwork/data/index.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS } = D;
 
