@@ -8,9 +8,11 @@ import { newCombat, playCard, endTurn, specOf } from '../graftwork/engine/combat
 import { newInst, cardSpec } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, POTIONS, EVENTS, HEROES, ROOMS, BUILD_CARDS } from '../graftwork/data/index.js';
 
-let n = 0;
-const t = (name, fn) => { fn(); n++; console.log('ok', name); };
-const ta = async (name, fn) => { await fn(); n++; console.log('ok', name); };
+let n = 0, bad = 0;
+const ALL = process.env.RF_ALL === '1'; // RF_ALL=1 runs every block and lists the failures (to watch a block fail on old code)
+const fail = (name, e) => { if (!ALL) throw e; bad++; console.log('FAIL', name, '\n   ', String(e && e.message).split('\n')[0]); };
+const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { fail(name, e); } };
+const ta = async (name, fn) => { try { await fn(); n++; console.log('ok', name); } catch (e) { fail(name, e); } };
 
 // ---------------------------------------------------------------- junk cards nothing can add are gone
 const REMOVED_JUNK = ['j_bruise', 'j_gauze', 'j_splinter', 'j_fever', 'j_scab', 'j_slag', 'j_fog', 'j_lint', 'j_invoice', 'j_shard', 'j_tourniquet', 'j_slip'];
@@ -114,4 +116,144 @@ await ta('meta with unknown ids in seen lists, history and a practice deck loads
   META.setStorage(null);
 });
 
-console.log(`${n} rules-fix checks done`);
+// ---------------------------------------------------------------- Thread fixtures (as in graftwork_seam.test.mjs)
+const { seamPreview, seamWorth, SEAM_CUTS_TURN } = await import('../graftwork/engine/seam.js');
+const SEAM = await import('../graftwork/engine/seam.js');
+const SCH = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+for (const s of SCH) {
+  CARDS['t_' + s] = { id: 't_' + s, name: 'T ' + s, type: 'skill', cost: 0, rarity: 'common', school: s, target: 'none', fx: [], flavor: 'x', flags: {} };
+  CARDS['ta_' + s] = { id: 'ta_' + s, name: 'TA ' + s, type: 'attack', cost: 0, rarity: 'common', school: s, target: 'enemy', fx: [{ op: 'dmg', n: 1 }], flavor: 'x', flags: {} };
+}
+CARDS.t_plain = { id: 't_plain', name: 'plain', type: 'skill', cost: 0, rarity: 'common', target: 'none', fx: [], flavor: 'x', flags: {} };
+const GOF = { ember: 'g_ember_pin', echo: 'g_held_breath', hoard: 'g_quick_hands', blood: 'g_sutured_seam', rust: 'g_oxide_patch', static: 'g_ground_wire', gilded: 'g_leaf_gilt' };
+for (const s of SCH) assert.equal(GRAFTS[GOF[s]].school, s, 'fixture graft ' + s);
+const OVL_EMBER = ['g_ember_pin', 'g_cinder_wrap', 'g_scorch_thread']; // three ember grafts: an Overload card, 2 knots
+let uidn = 0;
+function fight(o = {}) {
+  const run = RUN.newRun({ hero: o.hero || 'marrow', seed: o.seed || 'rules' });
+  run.relics = (o.relics || []).slice();
+  const c = newCombat(run, o.enemies || ['bedpan_slime']);
+  if (!o.passive) c.run.hero = ''; // no hero passives unless asked: exact numbers
+  for (const e of c.enemies) { e.hp = e.maxHp = 99999; }
+  c.hand = []; c.energy = 99; c.maxEnergy = 99; c.player.hp = c.player.maxHp = 500; c.rng.chance = () => false; // no jams, no shatters
+  return c;
+}
+function mk(c, id, o = {}) {
+  const inst = newInst(id, () => 'rf' + (uidn++));
+  inst.grafts = (o.grafts || []).slice(); inst.fused = (o.fused || []).slice(); inst.up = o.up ? 1 : 0;
+  const card = { inst, uid: inst.uid, tithed: false, jam: !!o.jam, costMod: 0, plays: 0, rolled: true, temp: true };
+  c.hand.push(card);
+  return card;
+}
+const play = (c, card) => { const hi = c.hand.indexOf(card); assert.ok(hi >= 0); const r = playCard(c, hi, 0); assert.ok(r.ok, JSON.stringify(r)); return r; };
+const P = (c, sch, o) => play(c, mk(c, 't_' + sch, o));
+const mark = (c) => c.ev.length;
+const since = (c, m, tt) => c.ev.slice(m).filter((e) => e.t === tt);
+const pays = (c, m) => since(c, m, 'seamPay').map((p) => [p.school, p.stitches]);
+const pvPays = (pv) => pv.payout.map((p) => [p.school, p.stitches]);
+const lineOf = (c, sch, len) => { for (let i = 0; i < len; i++) P(c, sch); };
+const cutText = (spec) => { const walk = (fx) => (fx || []).some((o) => /Cut the Line/.test(o.text || '') || walk(o.then) || walk(o.else)); return walk(spec.fx); };
+
+// ---------------------------------------------------------------- 1. "Cut the Line." cuts the Line
+const CUT_CARDS = ['x_thread_snip', 'x_thread_shears', 'm_hemostatic_snip'];
+t('every card that says "Cut the Line." is one of the three, and the engine knows it (no forceCut shim)', () => {
+  const ids = Object.values(CARDS).filter((d) => cutText({ fx: d.fx }) || (d.up && cutText({ fx: d.up.fx }))).map((d) => d.id).sort();
+  assert.deepEqual(ids, CUT_CARDS.slice().sort());
+  for (const id of CUT_CARDS) for (const up of [0, 1]) assert.ok(SEAM.cutsLine(cardSpec({ uid: 1, id, grafts: [], up })), id + ' is marked as a cutting card');
+  assert.ok(!SEAM.cutsLine(cardSpec({ uid: 1, id: 'x_thread_cross', grafts: [], up: 0 })));
+  const c = fight(); lineOf(c, 'ember', 3); play(c, mk(c, 'x_thread_snip'));
+  assert.ok(!('forceCut' in c.seam), 'the shim flag is gone'); assert.equal(typeof c.A.cutLine, 'function');
+});
+t('Snip (no school): cashes the Line as a cut and leaves the rail empty; preview equals payout', () => {
+  for (const up of [false, true]) {
+    const c = fight(); lineOf(c, 'ember', 4);
+    const card = mk(c, 'x_thread_snip', { up }), pv = seamPreview(c, card), m = mark(c);
+    assert.equal(pv.kind, 'cut'); assert.deepEqual(pvPays(pv), [['ember', 3]]); assert.deepEqual(pvPays({ payout: seamWorth(c) }), [['ember', 3]]);
+    play(c, card);
+    const cut = since(c, m, 'seamCut'); assert.equal(cut.length, 1); assert.equal(cut[0].kind, 'cut'); assert.equal(cut[0].paid, 3); assert.equal(cut[0].card, card.uid); assert.equal(cut[0].len, 4);
+    assert.deepEqual(pays(c, m), pvPays(pv)); assert.equal(c.enemies[0].st.burn, 9, 'ember pays 3 Burn per stitch');
+    assert.equal(c.seam.len, 0); assert.equal(pv.len, 0); assert.equal(c.seam.cuts, 1);
+    assert.equal(since(c, m, 'seamExtend').length, 0, 'a card with no school starts no Line');
+  }
+});
+t("Tailor's Shears and Hemostatic Snip: the card joins the Line, reads it, cuts it, and starts the next one", () => {
+  for (const [id, up] of [['x_thread_shears', false], ['x_thread_shears', true], ['m_hemostatic_snip', false], ['m_hemostatic_snip', true]]) {
+    const c = fight(); c.player.hp = 400; lineOf(c, 'blood', 3);
+    const card = mk(c, id, { up }), pv = seamPreview(c, card), m = mark(c), hp = c.player.hp;
+    assert.equal(pv.kind, 'cut'); assert.deepEqual(pvPays(pv), [['blood', 3]], id + ' pays the Line with itself in it (4 knots)');
+    play(c, card);
+    const kinds = c.ev.slice(m).filter((e) => /^seam(Extend|Cut)$/.test(e.t) && e.card === card.uid).map((e) => e.t + (e.start ? ':start' : '') + ':' + e.len);
+    assert.deepEqual(kinds, ['seamExtend:4', 'seamCut:4', 'seamExtend:start:1'], id);
+    assert.deepEqual(pays(c, m), pvPays(pv)); assert.equal(c.seam.len, 1); assert.equal(pv.len, 1); assert.deepEqual(c.seam.set, ['blood']); assert.equal(c.seam.cuts, 1);
+    const heal = c.player.hp - hp; assert.equal(heal, id === 'm_hemostatic_snip' ? 6 + (up ? 5 : 4) : 6, 'blood heals 2 per stitch' + (id === 'm_hemostatic_snip' ? ' plus its own heal at 4 knots' : ''));
+    // on a Line of another school it is an ordinary cut (the old Line pays, the card starts the next one)
+    const d = fight(); lineOf(d, 'ember', 3);
+    const c2 = mk(d, id, { up }), pv2 = seamPreview(d, c2), m2 = mark(d);
+    play(d, c2);
+    assert.deepEqual(pays(d, m2), [['ember', 2]]); assert.deepEqual(pvPays(pv2), [['ember', 2]]); assert.equal(d.seam.len, 1); assert.equal(pv2.len, 1); assert.deepEqual(d.seam.set, ['blood']); assert.equal(d.seam.cuts, 1);
+  }
+});
+t('a cut by effect fires the same hooks as any cut, respects the 3 cuts a turn and enemy cancels', () => {
+  const seen = [];
+  RELICS.r_test_hook = { id: 'r_test_hook', name: 'x', rarity: 'common', text: 'x', on: { seamCut: (A, i) => seen.push('c' + i.len + ':' + i.stitches), seamPay: (A, i) => seen.push('p' + i.school + i.stitches) } };
+  const def = ENEMIES.bedpan_slime, old = def.on, eseen = [];
+  try {
+    const c = fight({ relics: ['r_test_hook'] });
+    def.on = { ...(old || {}), seamCut: (A, e, i) => { eseen.push('c' + i.len); if (c.cancelNext) i.cancel = true; }, seamPay: () => eseen.push('p') };
+    lineOf(c, 'blood', 3); play(c, mk(c, 'x_thread_snip'));
+    assert.deepEqual(seen, ['c3:2', 'pblood2']); assert.deepEqual(eseen, ['c3', 'p']);
+    // enemy cancel: the Line is cut, nothing is paid
+    c.cancelNext = true; lineOf(c, 'ember', 3); let m = mark(c); play(c, mk(c, 'x_thread_snip'));
+    assert.equal(since(c, m, 'seamPay').length, 0); assert.equal(since(c, m, 'seamCut')[0].paid, 0); assert.equal(c.seam.len, 0);
+    c.cancelNext = false;
+    // the turn's third paying cut, then a fourth: it still cuts, it pays nothing, and the preview says so
+    lineOf(c, 'rust', 2); play(c, mk(c, 'x_thread_snip')); assert.equal(c.seam.cuts, SEAM_CUTS_TURN);
+    lineOf(c, 'gilded', 4); const card = mk(c, 'x_thread_snip'), pv = seamPreview(c, card); m = mark(c);
+    assert.deepEqual(pv.payout, []); assert.deepEqual(seamWorth(c), []);
+    play(c, card); assert.equal(since(c, m, 'seamPay').length, 0); assert.equal(c.seam.len, 0); assert.equal(c.seam.cuts, SEAM_CUTS_TURN);
+  } finally { def.on = old; delete RELICS.r_test_hook; }
+});
+t("Marrow's passive counts a Blood cut made by Hemostatic Snip; replays cut once", () => {
+  const c = fight({ hero: 'marrow', passive: true }); c.player.hp = 300; lineOf(c, 'blood', 3);
+  const hp = c.player.hp; play(c, mk(c, 'm_hemostatic_snip'));
+  assert.equal(c.player.hp - hp, 6 + 4 + 3, 'payout 6, the card heals 4 at 4 knots, the passive 1 per stitch');
+  const d = fight(); d.player.st.echo = 1; lineOf(d, 'ember', 4); // the Echo is spent by the first card: give it back for Snip
+  d.player.st.echo = 1; const m = mark(d); play(d, mk(d, 'x_thread_snip'));
+  assert.equal(since(d, m, 'seamCut').length, 1, 'the replay finds no Line to cut'); assert.deepEqual(pays(d, m), [['ember', 3]]);
+  const e = fight(); e.player.st.echo = 1; P(e, 'blood'); e.player.st.echo = 1; const m2 = mark(e);
+  play(e, mk(e, 'x_thread_shears', { grafts: OVL_EMBER })); // an Overload card restarts the Line at 2 knots: the replay must not cash that too
+  assert.equal(since(e, m2, 'seamCut').filter((x) => x.kind === 'cut').length, 1); assert.equal(e.seam.len, 2);
+});
+t('a Frayed or Tempered cutting card stays out of the Line, and its effect still cuts', () => {
+  for (const o of [{ jam: true }, { fused: [GOF.blood] }]) {
+    const c = fight(); lineOf(c, 'blood', 3);
+    const card = mk(c, 'x_thread_shears', o), pv = seamPreview(c, card), m = mark(c);
+    play(c, card);
+    assert.equal(pv.kind, 'cut'); assert.deepEqual(pays(c, m), [['blood', 2]], 'the Line of 3 is cashed, the card is not a knot'); assert.deepEqual(pvPays(pv), [['blood', 2]]);
+    assert.equal(c.seam.len, 0); assert.equal(pv.len, 0);
+  }
+});
+
+// ---------------------------------------------------------------- 1b. grafts that say "when it cuts the Line" fire on a cut, the extend ones do not
+t('Thread grafts: "when it cuts" fires on a cut (it never did), "when it extends" no longer fires on a cut', () => {
+  const run1 = (gid, base = 'ta_rust') => { const c = fight(); lineOf(c, 'blood', 3); const m = mark(c), gold = c.run.gold, hp = c.enemies[0].hp; play(c, mk(c, base, { grafts: [gid] })); return { c, m, gold: c.run.gold - gold, dmg: hp - c.enemies[0].hp }; };
+  let r = run1('g_scissor_loop'); assert.equal(r.dmg, 1 + 9, 'Scissor Loop: 3 damage per knot of the Line it cut (3 knots)');
+  r = run1('g_surgeons_knot'); assert.equal(r.gold, 8 - 1, "Surgeon's Knot: 4 gold per stitch (2), minus its 1 gold cost");
+  r = run1('g_surge_loop'); assert.equal(r.c.player.st.charge, 2, 'Surge Loop: 1 Charge per stitch');
+  r = run1('g_spent_thread'); assert.equal(r.c.seam.len, 2, 'Spent Thread: the new Line starts at 2 knots');
+  r = run1('g_reef_knot'); assert.equal(r.c.player.st.echo, 1, 'Reef Knot: 1 Echo on the cut');
+  // a second cut the same turn still gives Echo (the once per turn limit is on extends only)
+  lineOf(r.c, 'blood', 2); r.c.player.st.echo = 0; play(r.c, mk(r.c, 'ta_rust', { grafts: ['g_reef_knot'] })); assert.equal(r.c.player.st.echo, 1);
+  // extend grafts on a card that CUTS: nothing (they used to fire as if it had extended a Line of 1)
+  r = run1('g_running_stitch', 'ta_ember'); assert.equal(r.c.player.st.charge || 0, 0, 'Running Stitch gives Charge when it extends, not when it cuts');
+  r = run1('g_fine_gilt', 'ta_ember'); assert.equal(r.gold, 0, 'Fine Gilt Thread pays on an extend only');
+  // and they still fire on a real extend and on the card that starts a Line
+  const c = fight(); play(c, mk(c, 'ta_blood', { grafts: ['g_fine_gilt'] })); const g0 = c.run.gold; play(c, mk(c, 'ta_blood', { grafts: ['g_fine_gilt'] })); assert.equal(c.run.gold - g0, 2);
+  // a cut by the card's own effect counts as that card cutting the Line
+  const d = fight(); lineOf(d, 'blood', 3); const hp = d.enemies[0].hp; play(d, mk(d, 'x_thread_snip', { grafts: ['g_scissor_loop'] }));
+  assert.equal(hp - d.enemies[0].hp, 4 + 9, 'Snip 4, Scissor Loop 3 per knot of the Line it cut');
+});
+
+
+console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
+if (bad) process.exit(1);

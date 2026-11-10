@@ -1,6 +1,6 @@
 {
- "version": "731fc235a3e6e5e2",
- "bytes": 11579481,
+ "version": "8cf819b0ad30ea4d",
+ "bytes": 11581303,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2160,16 +2160,16 @@
    "s": 1335
   },
   "data/cards_marrow.js": {
-   "h": "8326cb2e808bac43",
-   "s": 17223
+   "h": "15b2ca9ad8be2ba5",
+   "s": 17137
   },
   "data/cards_odile.js": {
    "h": "3edea24fa71450dc",
    "s": 16240
   },
   "data/cards_thread.js": {
-   "h": "cb68f5ad169dafa8",
-   "s": 9318
+   "h": "6742e69c0555971f",
+   "s": 9072
   },
   "data/cards_wick.js": {
    "h": "3aa5eee085244b1d",
@@ -2224,8 +2224,8 @@
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "c067389b6243de6b",
-   "s": 9879
+   "h": "0e22643993d8f0fa",
+   "s": 10328
   },
   "data/grafts_weird.js": {
    "h": "2c11aed6b9fd5af3",
@@ -2324,8 +2324,8 @@
    "s": 12818
   },
   "engine/combat.js": {
-   "h": "99997875351e7eb7",
-   "s": 39143
+   "h": "7ae667b5496adec9",
+   "s": 39225
   },
   "engine/intent_icons.js": {
    "h": "d9c814fa71665a0f",
@@ -2356,8 +2356,8 @@
    "s": 1065
   },
   "engine/seam.js": {
-   "h": "5836c7d0063522f7",
-   "s": 11848
+   "h": "52ce70cdafe47d3e",
+   "s": 14362
   },
   "engine/text.js": {
    "h": "b9c8e9d6a3afe0e2",
@@ -2552,8 +2552,8 @@
    "s": 6824
   },
   "ui/seam_ui.js": {
-   "h": "d01acf611f4c8d2a",
-   "s": 34379
+   "h": "449c2466c7355b2b",
+   "s": 33488
   },
   "ui/settings.js": {
    "h": "ffc15b93cebabdbb",

@@ -7,7 +7,7 @@
 import { CARDS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } from '../data/index.js';
 import { cardSpec, strainInfo, relicMod, newInst, OVERLOAD_MULT, OVERLOAD_SHATTER, TITHE_MULT } from './cards.js';
 import { resonanceOf, RES_HOOKS } from './resonance.js';
-import { seamInit, seamStep, seamEnd, seamTurnStart } from './seam.js';
+import { seamInit, seamStep, seamEnd, seamTurnStart, seamCutNow } from './seam.js';
 import { assistDmgMul, assistRevive, assistOpt } from './assist.js';
 import { afflInst, afflCost, afflStartTurn, afflEndTurn, afflAbsorb } from './afflictions.js';
 import { intentIcons } from './intent_icons.js';
@@ -112,6 +112,7 @@ function makeApi(c) {
     addCard: (id, n, to, o) => addCard(c, id, n, to, o),
     summon: (id, n, o) => { const out = []; for (let i = 0; i < (n || 1); i++) { const e = spawn(c, id, o); if (e) out.push(e); } return out; },
     kill: (e) => kill(c, e),
+    cutLine: () => seamCutNow(c), // "Cut the Line." (engine/seam.js)
     ev: (e) => c.ev.push(e),
     player: c.player,
   };

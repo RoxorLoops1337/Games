@@ -9,23 +9,26 @@ const stitchesOf = (len) => Math.max(0, Math.min(5, len || 0) - 1);
 const seam = (A) => A.c.seam || { len: 0, set: [], counts: {}, cuts: 0 };
 const schoolsIn = (s) => Object.keys(s.counts || {}).filter((k) => s.counts[k] > 0);
 
-// What did the engine just do with THIS card? Reads the event log (seamExtend / seamCut / seamSlack / seamFray).
-function kindOf(A, ctx) {
-  const ev = A.c.ev, uid = ctx.card && ctx.card.uid;
-  for (let i = ev.length - 1, k = 0; i >= 0 && k < 24; i--, k++) {
+// What did the engine do with THIS card? Reads the events since its 'play' event (seamExtend / seamCut / seamSlack / seamFray).
+//   extend: it tied a knot (it extended a Line, or started one on an empty rail). len = the Line then.
+//   cut:    it cut a Line, by school or by its own "Cut the Line." effect. len = the Line it cut. The Line the card starts
+//           right after its own cut is the new Line, not an extend.
+function kindsOf(A, ctx) {
+  const ev = A.c.ev, uid = ctx.card && ctx.card.uid, out = {};
+  let i = ev.length - 1;
+  while (i > 0 && !(ev[i].t === 'play' && ev[i].card === uid)) i--;
+  for (i = Math.max(0, i); i < ev.length; i++) {
     const e = ev[i];
-    const mine = e.card === uid || (e.card && e.card.uid === uid);
-    if (!mine) continue;
-    if (e.t === 'play') break;
-    if (e.t === 'seamExtend') return { kind: 'extend', len: e.len };
-    if (e.t === 'seamCut') return { kind: 'cut', len: e.len, paid: e.paid !== false };
-    if (e.t === 'seamSlack') return { kind: 'slack' };
-    if (e.t === 'seamFray') return { kind: 'fray' };
+    if (e.card !== uid) continue;
+    if (e.t === 'seamCut') { if (e.kind === 'cut' && !out.cut) out.cut = { kind: 'cut', len: e.len }; }
+    else if (e.t === 'seamExtend') { if (!out.cut && !out.extend) out.extend = { kind: 'extend', len: e.len }; }
+    else if (e.t === 'seamSlack') out.slack = { kind: 'slack' };
+    else if (e.t === 'seamFray') out.fray = { kind: 'fray' };
   }
-  return { kind: null };
+  return out;
 }
-// run fn(info) only for the first play of a card (replays count once)
-const on = (kinds, fn) => (A, ctx) => { if (ctx.replay) return; const i = kindOf(A, ctx); if (kinds.includes(i.kind)) fn(A, ctx, i); };
+// run fn(A, ctx, info) once for each listed thing the card did, on its first play only (replays count once)
+const on = (kinds, fn) => (A, ctx) => { if (ctx.replay) return; const k = kindsOf(A, ctx); for (const name of kinds) if (k[name]) fn(A, ctx, k[name]); };
 // extra damage (or Block on pure block cards)
 function bonus(A, ctx, n) {
   if (!(n > 0)) return;
@@ -84,7 +87,7 @@ export const GRAFTS_THREAD = [
   G('g_motley_patch', 'Motley Patch', 'rust', 1, 'weird', 'uncommon', 'If the Line holds 2 or more schools, +8 damage or Block.', '20% chance to jam.',
     [H({ onPlay: (A, ctx) => { if (!ctx.replay && schoolsIn(seam(A)).length >= 2) bonus(A, ctx, 8); } }), { k: 'jam', p: 0.2 }], { ok: numbers }),
   G('g_spent_thread', 'Spent Thread', 'gilded', 1, 'weird', 'rare', 'After it cuts the Line, the new Line starts at 2 knots.', 'Exhaust.',
-    [H({ onPlay: on(['cut'], (A) => { const s = seam(A); s.len = Math.max(s.len, 2); }) }), { k: 'flag', f: 'exhaust' }], { ok: (s) => !s.flags.exhaust }),
+    [H({ onPlay: on(['cut'], (A) => { const s = seam(A); if (s.len > 0) s.len = Math.max(s.len, 2); }) }), { k: 'flag', f: 'exhaust' }], { ok: (s) => !s.flags.exhaust }),
   G('g_unraveller', 'Unraveller', 'ember', 2, 'weird', 'rare', 'After it plays, drop the Line to 1 knot and deal 5 damage per knot lost to all enemies.', 'Lose 1 HP when played.',
     [H({ onPlay: (A, ctx) => { if (ctx.replay) return; const s = seam(A); const lost = Math.max(0, s.len - 1); if (!lost) return; s.len = 1; for (const e of A.alive()) A.dmg(A.player, e, 5 * lost, { card: true }); } }), { k: 'selfHurt', n: 1 }], { ok: (s) => s.cost !== 'X' }),
 ];

@@ -77,25 +77,8 @@ export function seamBadgeInfo(c, card) {
 }
 export function seamBadge(c, card) { const i = seamBadgeInfo(c, card); M.lastSchool = i ? i.school : null; return i ? i.kind : null; }
 
-// What cutting the Line right now would pay (approximate when no card is focused; the real number is E1's seamPreview).
-function worthNow(c) {
-  const s = c.seam;
-  if (s.len < 2 || s.cuts >= 3) return [];
-  const cap = typeof SEAM.seamCap === 'function' ? SEAM.seamCap(c) : 5;
-  const S = Math.min(s.len, cap) - 1; if (S <= 0) return [];
-  const tier = (x) => (c.res && c.res[x]) || 0;
-  const sch = s.order.filter((x) => s.counts[x] > 0); if (!sch.length) return [];
-  const rank = (x) => s.counts[x] * 10 + (s.set.includes(x) ? 1 : 0);
-  let top = sch[0]; for (const x of sch) if (rank(x) > rank(top)) top = x;
-  const times = 1 + (tier(top) >= 6 ? 1 : 0);
-  const out = [{ school: top, stitches: (S + (tier(top) >= 3 ? 1 : 0)) * times }];
-  const rest = sch.filter((x) => x !== top && s.counts[x] >= 2);
-  if (rest.length && Math.floor(S / 2) > 0) {
-    let sec = rest[0]; for (const x of rest) if (s.counts[x] > s.counts[sec]) sec = x;
-    out.push({ school: sec, stitches: (Math.floor(S / 2) + (tier(sec) >= 3 ? 1 : 0)) * times });
-  }
-  return out;
-}
+// What cutting the Line right now would pay (no card focused): the engine's own number.
+const worthNow = (c) => SEAM.seamWorth(c);
 
 // ---------------------------------------------------------------- glyphs
 function badgeGlyph(ctx, kind, x, y, r, col) {
@@ -271,7 +254,7 @@ function drawChip(app, c, rect, pv) {
     else { l1 = 'Slack'; l2 = 'Line is unchanged'; }
   } else if (s.len >= 2) {
     const w2 = worthNow(c); kind = 'cut'; school = w2[0] ? w2[0].school : s.set[0];
-    l1 = s.cuts >= 3 ? 'Cuts spent' : 'Cut now'; l2 = s.cuts >= 3 ? 'Later cuts pay nothing' : w2.length ? `Pays ${payLine(w2)}` : 'Nothing to cash';
+    l1 = s.cuts >= SEAM.SEAM_CUTS_TURN ? 'Cuts spent' : 'Cut now'; l2 = s.cuts >= SEAM.SEAM_CUTS_TURN ? 'Later cuts pay nothing' : w2.length ? `Pays ${payLine(w2)}` : 'Nothing to cash';
   } else return;
   const col = school ? schoolCol(school) : BRASS;
   ctx.save();

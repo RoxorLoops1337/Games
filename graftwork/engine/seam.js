@@ -1,8 +1,9 @@
 // THE THREAD (design/THREAD.md). Chain cards that share a school, cut the Line to cash it in.
-// c.seam = { set, counts, order, len, cuts, tied, last, used, lockBroke, paidTurn:{draw,charge}, gold, retain }
-// Plumbing in combat.js: seamInit (newCombat), seamStep (playCard, before the card's fx), seamEnd (endTurn), seamTurnStart.
+// c.seam = { set, counts, order, len, cuts, tied, last, used, lockBroke, paidTurn:{draw,charge}, gold, retain, step }
+// Plumbing in combat.js: seamInit (newCombat), seamStep (playCard, before the card's fx), seamEnd (endTurn), seamTurnStart,
+// seamCutNow (A.cutLine: a card effect that says "Cut the Line.").
 // Payouts go through the combat API (c.A.*) so statuses and relics react. Hard caps: 3 paying cuts per turn, 3 draws per
-// turn, 4 charge per turn, 20 gold per combat, len cap 5 (Spool: mod.seamCap).
+// turn, 6 charge per turn, 20 gold per combat, len cap 5 (Spool: mod.seamCap).
 // Hooks: relics/hero via fire(c,'seamExtend'|'seamCut'|'seamPay',info); enemies via def.on.seamExtend/seamCut/seamPay(A,e,info).
 // An enemy or relic may set info.cancel = true on a seamCut hook to void that payout (Scissor Nurse).
 import { schoolsOf } from './cards.js';
@@ -26,6 +27,11 @@ export function seamCap(c) {
 }
 const knotsOf = (spec) => (spec.overload ? 2 : 1);
 const overlap = (a, b) => { for (const s of a) if (b.includes(s)) return s; return null; };
+// A card whose effect says "Cut the Line." marks that op with seam: 'cut' (the op calls A.cutLine). The preview reads the mark.
+export function cutsLine(spec) {
+  const walk = (fx) => (fx || []).some((o) => o && (o.seam === 'cut' || walk(o.then) || walk(o.else) || (o.op === 'repeat' && walk(o.fx))));
+  return walk(spec.fx);
+}
 
 // What a card would do to the Line (pure).
 function plan(c, card, spec) {
@@ -41,16 +47,21 @@ function plan(c, card, spec) {
   return { kind: 'cut', set };
 }
 
+// The school a Line pays in: the highest count, a tie going to a school of the last card, then to the oldest.
+function topOf(counts, order, lastSet) {
+  const rank = (x) => counts[x] * 10 + (lastSet.includes(x) ? 1 : 0);
+  let top = null;
+  for (const x of order) if (counts[x] > 0 && (top === null || rank(x) > rank(top))) top = x;
+  return top;
+}
 // Pending payout for a Line. mode 'cut' pays S, 'end' pays S-1. counts/order/lastSet describe the Line.
 function payoutFor(c, counts, order, lastSet, len, mode, times) {
   let S = Math.min(len, seamCap(c)) - 1;
   if (mode === 'end') S -= 1;
   if (S <= 0) return [];
   const sch = order.filter((x) => counts[x] > 0);
-  if (!sch.length) return [];
-  const rank = (x) => counts[x] * 10 + (lastSet.includes(x) ? 1 : 0);
-  let top = sch[0];
-  for (const x of sch) if (rank(x) > rank(top)) top = x;
+  const top = topOf(counts, order, lastSet);
+  if (!top) return [];
   const out = [{ school: top, stitches: (S + (tier(c, top) >= 3 ? 1 : 0)) * times }];
   const rest = sch.filter((x) => x !== top && counts[x] >= 2);
   if (rest.length && Math.floor(S / 2) > 0) {
@@ -60,11 +71,16 @@ function payoutFor(c, counts, order, lastSet, len, mode, times) {
   }
   return out;
 }
-function timesFor(c, topSchool, firstCut) {
-  let t = 1;
-  if (topSchool && tier(c, topSchool) >= 6) t++;
-  return t;
+const timesFor = (c, topSchool) => (topSchool && tier(c, topSchool) >= 6 ? 2 : 1); // Resonance 6: that school's cuts pay twice
+// What a Line pays if it is cut now (pure): nothing once the turn's paying cuts are spent. line = { counts, order, set, len }.
+function worth(c, line, cuts) {
+  if (cuts >= SEAM_CUTS_TURN) return [];
+  const base = payoutFor(c, line.counts, line.order, line.set, line.len, 'cut', 1);
+  return base.length ? payoutFor(c, line.counts, line.order, line.set, line.len, 'cut', timesFor(c, base[0].school)) : [];
 }
+const fmt = (arr) => arr.map((x) => ({ school: x.school, stitches: x.stitches, text: payText(x.school, x.stitches) }));
+// What cutting the Line right now would pay (the rail's "Cut now" chip).
+export function seamWorth(c) { return fmt(worth(c, c.seam, c.seam.cuts)); }
 function payText(school, n) {
   const nm = SCHOOL_NAME[school] || school;
   switch (school) {
@@ -79,35 +95,33 @@ function payText(school, n) {
   }
 }
 
-// Pure read for the UI: what playing `card` now would do. payout = what the Line is worth if it is cashed by this card
-// (kind 'cut'), or if it were cut right after this card (kind 'extend', the rail projection).
+// Pure read for the UI: what playing `card` now would do. payout = what this card cashes (kind 'cut': a Line of another
+// school, or the Line its own "Cut the Line." effect cuts), or what the Line would pay if it were cut right after this card
+// (kind 'extend', the rail projection). len = the Line after the play.
 export function seamPreview(c, card) {
   const s = c.seam, spec = specOf(c, card), p = plan(c, card, spec);
-  const none = (kind, school, len) => ({ kind, school, len, payout: [] });
-  if (p.kind === 'slack' || p.kind === 'tied') return none(p.kind, p.set[0] || null, s.len);
-  const cap = seamCap(c), k = knotsOf(spec);
-  const cutNow = () => {
-    if (s.cuts >= SEAM_CUTS_TURN || s.len < 2) return [];
-    const top0 = payoutFor(c, s.counts, s.order, s.set, s.len, 'cut', 1);
-    const times = timesFor(c, top0[0] && top0[0].school, s.cuts === 0);
-    return payoutFor(c, s.counts, s.order, s.set, s.len, 'cut', times);
-  };
-  const fmt = (arr) => arr.map((x) => ({ school: x.school, stitches: x.stitches, text: payText(x.school, x.stitches) }));
-  if (p.kind === 'cut' || p.kind === 'break') {
-    const pay = p.kind === 'break' ? [] : fmt(cutNow());
-    return { kind: 'cut', school: p.set[0], len: k, payout: pay };
+  const cap = seamCap(c), k = knotsOf(spec), fxCut = cutsLine(spec);
+  const joins = p.kind !== 'slack' && p.kind !== 'tied';
+  const fresh = () => { const counts = {}; for (const x of p.set) counts[x] = k; return { counts, order: p.set.slice(), set: p.set, len: Math.min(k, cap) }; };
+  let line = s, cuts = s.cuts, paid = [];
+  if (!joins) {
+    if (!fxCut) return { kind: p.kind, school: p.set[0] || null, len: s.len, payout: [] };
+  } else if (p.kind === 'cut' || p.kind === 'break') {
+    if (p.kind === 'cut') { paid = worth(c, s, cuts); if (cuts < SEAM_CUTS_TURN && payoutFor(c, s.counts, s.order, s.set, s.len, 'cut', 1).length) cuts++; }
+    line = fresh();
+    if (!fxCut) return { kind: 'cut', school: p.set[0], len: line.len, payout: fmt(paid) };
+  } else if (p.kind === 'start') {
+    line = fresh();
+    if (!fxCut) return { kind: 'extend', school: p.set[0], len: line.len, payout: [] };
+  } else { // extend: project the Line after this card
+    const counts = { ...s.counts }, order = s.order.slice();
+    for (const x of p.set) { counts[x] = (counts[x] || 0) + k; if (!order.includes(x)) order.push(x); }
+    line = { counts, order, set: p.set, len: Math.min(cap, s.len + k) };
+    if (!fxCut) return { kind: 'extend', school: p.shared, len: line.len, payout: fmt(worth(c, line, cuts)) };
   }
-  if (p.kind === 'start') return { kind: 'extend', school: p.set[0], len: Math.min(k, cap), payout: [] };
-  // extend: project the Line after this card
-  const counts = { ...s.counts }, order = s.order.slice();
-  for (const x of p.set) { counts[x] = (counts[x] || 0) + k; if (!order.includes(x)) order.push(x); }
-  const len = Math.min(cap, s.len + k);
-  let pay = [];
-  if (s.cuts < SEAM_CUTS_TURN) {
-    const t0 = payoutFor(c, counts, order, p.set, len, 'cut', 1);
-    pay = payoutFor(c, counts, order, p.set, len, 'cut', timesFor(c, t0[0] && t0[0].school, s.cuts === 0));
-  }
-  return { kind: 'extend', school: p.shared, len, payout: fmt(pay) };
+  // "Cut the Line.": the Line that stands after the card's own step is cashed. A card that joined it starts the next one.
+  paid = paid.concat(worth(c, line, cuts));
+  return { kind: 'cut', school: joins ? p.set[0] : topOf(line.counts, line.order, line.set), len: joins ? Math.min(k, cap) : 0, payout: fmt(paid) };
 }
 
 function enemyHook(c, name, info) {
@@ -124,6 +138,7 @@ function startLine(c, set, k) {
   for (const x of set) { s.counts[x] = k; s.order.push(x); }
   s.set = set.slice(); s.len = Math.min(k, cap);
 }
+const clearLine = (s) => { s.set = []; s.counts = {}; s.order = []; s.len = 0; };
 
 function pay(c, entry, kind) {
   const s = c.seam, A = c.A, n = entry.stitches, school = entry.school;
@@ -171,8 +186,7 @@ function cash(c, kind, card) {
   const capped = kind === 'cut' && s.cuts >= SEAM_CUTS_TURN;
   const base = payoutFor(c, s.counts, s.order, s.set, s.len, mode, 1);
   if (base.length && !capped) {
-    const firstCut = kind === 'cut' && s.cuts === 0;
-    list = payoutFor(c, s.counts, s.order, s.set, s.len, mode, kind === 'cut' ? timesFor(c, base[0].school, firstCut) : 1);
+    list = payoutFor(c, s.counts, s.order, s.set, s.len, mode, kind === 'cut' ? timesFor(c, base[0].school) : 1);
   }
   const hadStitches = base.length > 0;
   const info = { len: s.len, school: list[0] ? list[0].school : base[0] ? base[0].school : null, stitches: list.reduce((a, x) => a + x.stitches, 0), kind, card: card ? card.uid : null, cancel: false, capped };
@@ -184,11 +198,29 @@ function cash(c, kind, card) {
   return paid;
 }
 
+// "Cut the Line." as a card effect (A.cutLine): the Line is cashed as a cut, with the hooks, the 3 cuts a turn and the enemy
+// cancels of any other cut. The card that did it starts the next Line if it joined this one (it has a school and was not
+// Slack, Frayed or Tied), exactly as a card that cuts by school does; otherwise the rail is left empty. Replays cut once.
+export function seamCutNow(c) {
+  const s = c.seam, card = c.currentCard || null;
+  const st = card && s.step && s.step.card === card.uid ? s.step : null;
+  if (st) { if (st.cut) return 0; st.cut = true; }
+  if (s.len < 1) return 0;
+  const paid = cash(c, 'cut', card);
+  clearLine(s);
+  if (st && st.joined) {
+    startLine(c, st.set, st.k);
+    c.ev.push({ t: 'seamExtend', len: s.len, school: st.set[0], card: card.uid, start: true });
+  }
+  return paid;
+}
+
 export function seamStep(c, card, spec) {
   const s = c.seam, p = plan(c, card, spec);
+  const k = knotsOf(spec), cap = seamCap(c);
+  s.step = { card: card.uid, set: p.set, k, joined: p.kind !== 'slack' && p.kind !== 'tied', cut: false }; // what this card did, for seamCutNow
   if (p.fray) { c.ev.push({ t: 'seamFray', card: card.uid }); }
   if (p.kind === 'slack' || p.kind === 'tied') { c.ev.push({ t: 'seamSlack', card: card.uid }); return; }
-  const k = knotsOf(spec), cap = seamCap(c);
   if (p.kind === 'extend') {
     s.len = Math.min(cap, s.len + k);
     if (s.len > (s.maxLen || 0)) s.maxLen = s.len; // longest Line this combat (case file)
@@ -202,7 +234,7 @@ export function seamStep(c, card, spec) {
     return;
   }
   if (p.kind === 'break') {
-    s.lockBroke = true; s.len = 0; s.counts = {}; s.order = []; s.set = [];
+    s.lockBroke = true; clearLine(s);
     c.ev.push({ t: 'seamCut', paid: 0, school: null, len: 0, card: card.uid, kind: 'break' });
   } else if (p.kind === 'cut') cash(c, 'cut', card);
   startLine(c, p.set, k);
@@ -232,5 +264,5 @@ export function seamTurnStart(c) {
   for (const k of c.hand) k.retain = false;
   s.cuts = 0; s.used = {}; s.lockBroke = false; s.paidTurn = { draw: 0, charge: 0 }; s.retain = 0; s.last = null;
   if (s.tied) { s.tied = false; if (s.len > 0) return; }
-  s.set = []; s.counts = {}; s.order = []; s.len = 0;
+  clearLine(s);
 }
