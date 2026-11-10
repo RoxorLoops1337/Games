@@ -18,6 +18,7 @@ import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip, drawSeamDeclare, declareShown } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
+import * as SK from './skin.js';
 import { drawCardZoom } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 import * as CA from './combat_art.js';
@@ -1734,6 +1735,8 @@ function drawTopBar(app) {
 }
 
 const PILE_LABEL = { draw: 'DRAW', disc: 'DISCARD', exh: 'EXH' };
+const PILE_ART = { draw: 'rules.draw', disc: 'rules.discard', exh: 'rules.exhaust' };
+const drawPileMark = (ctx, key, x, y, size) => SK.icon(ctx, PILE_ART[key], x, y, size);
 function pileStack(app, pos, count, s, label, key, onClick) {
   const ctx = app.ctx, pl = S.pulse[key] || 0;
   const bw = CARD_W * s, bh = CARD_H * s;
@@ -1748,6 +1751,7 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   if (count === 0) { drawCardBack(ctx, 0, 0, { scale: s, alpha: 0.16 }); }
   else for (let i = layers - 1; i >= 0; i--) drawCardBack(ctx, -i * 2, -i * 2.5, { scale: s });
   ctx.restore();
+  if (count) drawPileMark(ctx, key, pos.x, pos.y - bh * 0.1, Math.min(bw * 0.66, 58)); // painted (preview): what the pile is, as a medallion on the top card
   // label ribbon across the lower part of the pile
   const fs = 14, ly = Math.min(pos.y + bh / 2 - fs - 6, H - fs - 6);
   ctx.save(); ctx.fillStyle = 'rgba(10,8,8,.82)'; ctx.fillRect(pos.x - bw / 2, ly - 2, bw, fs + 6); ctx.restore();

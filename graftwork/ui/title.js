@@ -195,7 +195,7 @@ export default {
     const bw = cp ? 300 : 220, bh = cp ? 60 : 48, h = 30 + L.h + 24 + bh + 26, x = (W - w) / 2, y = Math.round((H - h) / 2);
     g.save(); g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, 0, W, H); g.restore();
     app.reg('title-notice', x, y, w, h, { overlay: true });
-    app.panel(x, y, w, h, { r: 14, fill: 'rgba(20,16,14,.98)', stroke: COL.lamp });
+    app.panel(x, y, w, h, { r: 14, fill: 'rgba(20,16,14,.98)', stroke: COL.lamp, frame: 'modal' });
     app.text(text, 640, y + 30, tO);
     const nav0 = app.navButtons; app.navButtons = true; // the one button of the screen while the notice is up
     const ok = app.button('Understood', 640 - bw / 2, y + 30 + L.h + 24, bw, bh, { size: 20, fit: true, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0' });
@@ -382,7 +382,7 @@ export default {
     const g = app.ctx;
     g.save(); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, 0, W, H); g.restore();
     const x = 400, y = 260, w = 480, h = 200;
-    app.panel(x, y, w, h, { r: 14, fill: 'rgba(20,16,14,.98)', stroke: COL.lamp });
+    app.panel(x, y, w, h, { r: 14, fill: 'rgba(20,16,14,.98)', stroke: COL.lamp, frame: 'modal' });
     app.text(title, 640, y + 22, { size: 26, bold: true, align: 'center' });
     app.text(body, 640, y + 66, { size: 16, ui: true, align: 'center', maxW: 420, color: '#d9cba8' });
     app.blocked = false;
@@ -607,7 +607,7 @@ export default {
     g.save(); g.fillStyle = 'rgba(0,0,0,.66)'; g.fillRect(0, 0, W, H); g.restore();
     const tall = app.scale < 0.95, w = 700, h = tall ? 580 : 500, x = 640 - w / 2, y = (tall ? 70 : 110) + (1 - k) * 24; // phones: a taller panel, so the inflated text keeps a legible size
     g.save(); g.globalAlpha = k;
-    app.panel(x, y, w, h, { r: 16, fill: 'rgba(20,16,14,.98)', stroke: 'rgba(232,220,196,.45)' });
+    app.panel(x, y, w, h, { r: 16, fill: 'rgba(20,16,14,.98)', stroke: 'rgba(232,220,196,.45)', frame: 'modal' });
     app.text('Credits', 640, y + 20, { size: 32, bold: true, align: 'center' });
     stitchLine(g, x + 40, y + 66, x + w - 40, y + 66, { color: 'rgba(232,220,196,.3)', size: 4, step: 12, lw: 1.5 });
     const rows = [

@@ -16,6 +16,7 @@ import { contactOf, gait, drawActor as drawWardActor } from './ward_iso.js';
 import { drawHero } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { lnw } from '../art/linework.js';
+import { templates } from './templates.js';
 
 const TAU = Math.PI * 2;
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
@@ -265,8 +266,17 @@ export function createScene(opts = {}) {
     return (HERO = o.c);
   }
 
-  function keyartPass(app, g, o) {
-    const ka = S.keyart, img = ka.img, iw = img.naturalWidth || img.width || ka.def.w || 2560, ih = img.naturalHeight || img.height || ka.def.h || 1440;
+  // the title key art of the painted UI set: where its lamps and the candle are (they flicker), and where the eye should rest
+  const PAINTED_KEYART = { lights: [{ x: 0.14, y: 0.32, k: 1 }, { x: 0.277, y: 0.46, k: 0.7 }, { x: 0.75, y: 0.46, k: 0.7 }, { x: 0.537, y: 0.835, k: 0.5 }], focus: { x: 0.5, y: 0.46 } };
+  function paintedKeyart(app) {
+    templates.ensure(app);
+    const fr = templates.ready() ? templates.frameImg('bg.title_keyart', app) : null;
+    if (!fr) return null;
+    if (!S.painted || S.painted.img !== fr.img) S.painted = { img: fr.img, ok: true, def: PAINTED_KEYART };
+    return S.painted;
+  }
+  function keyartPass(app, g, o, ka) {
+    const img = ka.img, iw = img.naturalWidth || img.width || ka.def.w || 2560, ih = img.naturalHeight || img.height || ka.def.h || 1440;
     const sc = Math.max(W / iw, H / ih) * 1.06, dw = iw * sc, dh = ih * sc, f = ka.def.focus || { x: 0.5, y: 0.5 };
     const x = (W - dw) / 2 + o.ox0 * 1.4 - (f.x - 0.5) * 20, y = (H - dh) / 2 + o.oy0 * 1.4 - (f.y - 0.5) * 12;
     g.drawImage(img, x, y, dw, dh);
@@ -283,9 +293,12 @@ export function createScene(opts = {}) {
     // the quality tier (ui/quality.js, measured from real frame deltas) drives lite both ways; without a controller (tests) the old JS-time detector decides, sticky
     if (app.perf && app.perf.q) { const tl = app.perf.q.tier; if (tl !== S.lastTier) { S.lastTier = tl; S.lite = tl !== 'full'; } } // on a tier change only
     else if (t0) { S.slow = S.slow * 0.97 + (S.stats.ms > 7 ? 1 : 0) * 0.03; if (!S.lite && S.frame > 90 && S.slow > 0.6) S.lite = true; }
-    const useKeyart = !!(S.keyart && S.keyart.ok), useKit = !useKeyart && resolveKit(app);
+    // the painted key art of the art preview (assets/ui bg.title_keyart, ui/preview.js) comes before a key art of the Ward manifest; off, nothing changes
+    const pk = paintedKeyart(app), ka = pk || (S.keyart && S.keyart.ok ? S.keyart : null);
+    const kaWait = !ka && S.frame < 420 && templates.on && (templates.state === 'loading' || (templates.ready() && templates.has('bg.title_keyart'))); // on its way: a dark room, not the kit scene first
+    const useKeyart = !!ka, useKit = !useKeyart && !kaWait && resolveKit(app);
     // images still on their way (a real browser, first seconds): a dark room instead of the fallback, so the scene fades in once instead of flashing the old one first
-    const waiting = !useKeyart && !useKit && S.frame < 420 && (assets.kitState === 'loading' || assets.state === 'loading' || (assets.kitReady() && !KR.recipesSettled(CLUSTER.map((r) => r.type), app)));
+    const waiting = !useKeyart && !useKit && S.frame < 420 && (kaWait || assets.kitState === 'loading' || assets.state === 'loading' || (assets.kitReady() && !KR.recipesSettled(CLUSTER.map((r) => r.type), app)));
     S.mode = useKeyart ? 'keyart' : useKit ? 'kit' : waiting ? 'loading' : 'fallback';
     S.age = S.mode === 'kit' || S.mode === 'keyart' ? (calm ? 1 : Math.min(1, (S.age || 0) + dt / 0.9)) : 0;
     const mx = app.mouse && app.mouse.x > -900 ? clamp((app.mouse.x - 640) / 640, -1, 1) : 0, my = app.mouse && app.mouse.y > -900 ? clamp((app.mouse.y - 360) / 360, -1, 1) : 0;
@@ -301,7 +314,7 @@ export function createScene(opts = {}) {
     }
     const z = CAM.z * zk, ox = CAM.sx - CAM.cx * z + ox0, oy = CAM.sy - CAM.cy * z + oy0;
     tg.save(); tg.fillStyle = '#07060a'; tg.fillRect(0, 0, W, H);
-    if (useKeyart) keyartPass(app, tg, { ox0, oy0, ox, oy, z });
+    if (useKeyart) keyartPass(app, tg, { ox0, oy0, ox, oy, z }, ka);
     else {
       backdrop(tg, t, ox0 * 0.35, oy0 * 0.35, calm);
       tg.save(); tg.translate(ox, oy); tg.scale(z, z);

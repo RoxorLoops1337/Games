@@ -21,7 +21,7 @@ import { lnw } from './linework.js';
 import { createFaceLru, chooseBucket, idealBucket, LEGACY, PIXEL_BUDGET, BIG_MAX, BIG_FROM } from './face_lod.js';
 import { deviceScale } from '../ui/smoothing.js';
 import { FLAGS } from '../ui/perf_flags.js';
-import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf } from '../ui/templates.js';
+import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf, CARD_BACK_TEMPLATE } from '../ui/templates.js';
 
 export const CARD_W = 220, CARD_H = 310;
 const HW = CARD_W / 2, HH = CARD_H / 2;
@@ -661,19 +661,22 @@ function drawForeLayer(g, I, w, M) {
   for (let i = 0; i < 5; i++) { const px = w.x + 8 + r() * (w.w - 16), py = w.y + w.h - 4 - r() * 8; g.moveTo(px, py); g.lineTo(px + 3, py - 7); }
   g.stroke(); BB = null;
 }
-function drawRing(g, I, w, compact) {
+function drawRing(g, I, w, compact, framed) { // framed: a painted frame lies over the window's edge, so the ink rule is left out and the school seal moves clear of the corner piece
   g.save(); rr(g, w.x, w.y, w.w, w.h, 5); g.clip();
   rr(g, w.x - 2, w.y - 2, w.w + 4, w.h + 4, 6); g.lineWidth = lnw(6.5); g.strokeStyle = lg(g, w.x, w.y, w.x + w.w, w.y + w.h, [[0, 'rgba(30,18,12,.34)'], [0.5, 'rgba(30,18,12,.5)'], [1, 'rgba(30,18,12,.7)']]); g.stroke();
   g.restore();
-  rr(g, w.x, w.y, w.w, w.h, 5); g.lineWidth = lnw(2.5); g.strokeStyle = INK; g.stroke();
-  rr(g, w.x + 2.5, w.y + 2.5, w.w - 5, w.h - 5, 3.5); g.lineWidth = lnw(1); g.strokeStyle = 'rgba(255,246,220,.5)'; g.stroke();
-  if (I.sch && !compact) { circ(g, w.x + w.w - 13, w.y + 13, 10.5, 'rgba(232,220,196,.88)', 1.4); drawSchoolGlyph(g, I.sch, w.x + w.w - 13, w.y + 13, 7.5, COLX[I.sch]); }
+  if (!framed) {
+    rr(g, w.x, w.y, w.w, w.h, 5); g.lineWidth = lnw(2.5); g.strokeStyle = INK; g.stroke();
+    rr(g, w.x + 2.5, w.y + 2.5, w.w - 5, w.h - 5, 3.5); g.lineWidth = lnw(1); g.strokeStyle = 'rgba(255,246,220,.5)'; g.stroke();
+  }
+  const gx = w.x + w.w - (framed ? 19 : 13), gy = w.y + (framed ? 24 : 13);
+  if (I.sch && (!compact || framed)) { circ(g, gx, gy, 10.5, 'rgba(232,220,196,.88)', 1.4); drawSchoolGlyph(g, I.sch, gx, gy, 7.5, COLX[I.sch]); }
   BB = null;
 }
-function drawIllustration(g, I, w, compact = w === WINC) {
+function drawIllustration(g, I, w, compact = w === WINC, framed = false) {
   g.save(); rr(g, w.x, w.y, w.w, w.h, 5); g.clip();
   drawBackLayer(g, I, w, 0); drawMotifLayer(g, I, w); drawForeLayer(g, I, w, 0);
-  g.restore(); drawRing(g, I, w, compact);
+  g.restore(); drawRing(g, I, w, compact, framed);
 }
 
 // ---------- thread, patches, brass ----------
@@ -893,18 +896,19 @@ function renderBody(g, spec, o, rarity) {
   [[-105, -150], [105, -150], [-105, 150], [105, 150]].forEach(([x, y]) => domeRivet(g, x, y, 3.6));
   return frame;
 }
-function drawKeyNumber(g, spec, lines, o, win) { // compact face: the one number that matters, big, with its kind icon
-  const ki = keyInfo(lines), ty = win.y + win.h;
+function drawKeyNumber(g, spec, lines, o, win, box) { // compact face: the one number that matters, big, with its kind icon. box: a painted frame's own place for it
+  const ki = keyInfo(lines), ty = box ? box.y : win.y + win.h, kb = box ? box.h / 88 : 1;
   if (ki) {
-    const gz = (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-    const wN = g.measureText(ki.n).width, cx = 14, baseY = ty + 8 + size * 0.78;
+    const gz = !box && (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz * kb); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    const wN = g.measureText(ki.n).width, cx = box ? box.x + box.w / 2 + 12 * kb : 14, baseY = ty + 8 * kb + size * 0.78;
     const ncol = o.tithed ? '#7a6a60' : ki.kind === 'dmg' ? '#7a1c1c' : ki.kind === 'block' ? '#2f4a58' : ki.kind === 'heal' ? '#3a6a46' : '#4a3022';
+    if (box) { g.lineJoin = 'round'; g.lineWidth = Math.max(4, size * 0.09); g.strokeStyle = 'rgba(240,231,208,.92)'; g.strokeText(ki.n, cx, baseY); } // on a picture: a vellum edge around the number
     g.fillStyle = 'rgba(20,10,5,.28)'; g.fillText(ki.n, cx + 2, baseY + 3);
     g.fillStyle = ncol; g.fillText(ki.n, cx, baseY);
     const hp = hatchPat(g, 2); if (hp) { g.save(); g.globalAlpha = 0.55; g.fillStyle = hp; g.fillText(ki.n, cx, baseY); g.restore(); }
     g.lineJoin = 'round'; g.lineWidth = 1.3; g.strokeStyle = SEPIA; g.strokeText(ki.n, cx, baseY);
     g.fillStyle = 'rgba(255,246,220,.5)'; g.fillRect(cx - wN / 2 + 3, baseY - size * 0.72, wN - 6, 1);
-    kindIcon(g, ki.kind, cx - wN / 2 - 24, baseY - size * 0.34, 20);
+    kindIcon(g, ki.kind, cx - wN / 2 - (box ? 6 + 16 * kb : 24), baseY - size * 0.34, box ? Math.max(15, 20 * kb) : 20);
   }
 }
 function plate(g, x, y, w, h, fill, up) { // engraved name plate
@@ -967,16 +971,43 @@ function pipsPaint(g, r, rarity, up) {
   const n = rarity === 'rare' ? 3 : rarity === 'uncommon' ? 2 : rarity === 'common' ? 1 : 0, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
   for (let i = 0; i < n; i++) { const x = cx + (i - (n - 1) / 2) * 14; g.beginPath(); g.moveTo(x, cy - 4.5); g.lineTo(x + 4, cy); g.lineTo(x, cy + 4.5); g.lineTo(x - 4, cy); g.closePath(); g.fillStyle = up ? BRASS_L : BRASS; g.fill(); g.lineWidth = lnw(0.9); g.strokeStyle = INK; g.stroke(); }
 }
+// the vellum that shows through a painted frame's text window: the same sheet as the procedural card (fibre, a foxed edge)
+function vellumRect(g, r, seed, junk) {
+  g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+  g.fillStyle = junk ? mix(COLX.vellum, '#8d897d', 0.5) : COLX.vellum; g.fillRect(r.x, r.y, r.w, r.h);
+  const fp = fibrePat(g); if (fp) { g.globalCompositeOperation = 'multiply'; g.fillStyle = fp; g.fillRect(r.x, r.y, r.w, r.h); g.globalCompositeOperation = 'source-over'; }
+  const rx = rngOf('fox:' + seed);
+  for (let i = 0; i < 5; i++) { const px = r.x + rx() * r.w, py = rx() > 0.5 ? r.y : r.y + r.h, rad = 14 + rx() * 26; const rg = g.createRadialGradient(px, py, 1, px, py, rad); rg.addColorStop(0, `rgba(150,102,52,${0.16 + rx() * 0.12})`); rg.addColorStop(1, 'rgba(150,102,52,0)'); g.fillStyle = rg; g.fillRect(px - rad, py - rad, rad * 2, rad * 2); }
+  g.lineWidth = lnw(9); g.strokeStyle = 'rgba(60,36,18,.22)'; g.strokeRect(r.x, r.y, r.w, r.h); // the frame's shadow on the sheet
+  g.restore();
+}
+// lettering on a painted ribbon or banner: light with an ink edge, so it reads on leather, gauze and gilt alike
+function inked(g, str, x, y, col, size) {
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2.2, size * 0.22); g.strokeStyle = 'rgba(22,12,8,.92)'; g.strokeText(str, x, y);
+  g.fillStyle = col; g.fillText(str, x, y);
+}
 function renderFaceTemplate(g, spec, lines, price, o, I, T) {
   const junk = spec.type === 'junk', seed = spec.id || spec.name || 'x', rarity = o.rarity || spec.rarity || 'common', compact = !!o.compact;
-  const frame = junk ? COLX.junk : (COLX[spec.type] || '#444'), win = T.slots.window;
+  const frame = junk ? COLX.junk : (COLX[spec.type] || '#444'), win = T.slots.window, painted = T.painted;
   const nm = String(spec.name || '').replace(/\+$/, '');
   const painters = {
-    window: (gg, r) => drawIllustration(gg, I, r, compact),
+    window: (gg, r, inf) => drawIllustration(gg, I, r, compact, inf.under),
+    textHole: (gg, r) => vellumRect(gg, r, seed, junk),
     namePlate: (gg, r, inf) => {
       gg.textAlign = 'center'; gg.textBaseline = 'middle';
-      if (!inf.baked) plate(gg, r.x, r.y, r.w, r.h, spec.up ? '#d9b648' : mix(frame, INK, 0.5), spec.up);
-      const fit = r.fit || {}, textW = r.w - 18 - (spec.up ? 18 : 0), cx = r.x + r.w / 2 - (spec.up ? 8 : 0), cy = r.y + r.h / 2 + 0.5;
+      const fit = r.fit || {};
+      if (inf.baked) { // the banner is in the painting: only the name is written, gold when the card is upgraded
+        const up = !!spec.up, textW = r.w - 6 - (up ? 15 : 0), cx = r.x + r.w / 2 - (up ? 7 : 0), cy = r.y + r.h / 2 + 0.5;
+        const ns = fitText(gg, nm, textW, fit.max || 16, fit.min || 9.5, { bold: true }); gg.font = font(ns, { bold: true });
+        const tw = Math.min(r.w, gg.measureText(nm).width + 26), wash = gg.createLinearGradient(cx - tw / 2, 0, cx + tw / 2, 0);
+        wash.addColorStop(0, 'rgba(20,10,6,0)'); wash.addColorStop(0.18, 'rgba(20,10,6,.42)'); wash.addColorStop(0.82, 'rgba(20,10,6,.42)'); wash.addColorStop(1, 'rgba(20,10,6,0)');
+        gg.fillStyle = wash; gg.fillRect(cx - tw / 2, r.y + 1.5, tw, r.h - 3); // a soft shade under the letters: gilt ornament and gauze stay behind them
+        inked(gg, nm, cx, cy, up ? '#ffe7a0' : COLX.vellum, ns);
+        if (up) { const bx = r.x + r.w - 9, by = r.y + r.h / 2; circ(gg, bx, by, 7.5, INK, 1.2); gg.fillStyle = COLX.lamp; gg.font = font(13, { bold: true }); gg.fillText('+', bx, by + 0.5); BB = null; }
+        return;
+      }
+      plate(gg, r.x, r.y, r.w, r.h, spec.up ? '#d9b648' : mix(frame, INK, 0.5), spec.up);
+      const textW = r.w - 18 - (spec.up ? 18 : 0), cx = r.x + r.w / 2 - (spec.up ? 8 : 0), cy = r.y + r.h / 2 + 0.5;
       const ns = fitText(gg, nm, textW, fit.max || 17, fit.min || 9.5, { bold: true }); gg.font = font(ns, { bold: true });
       const col = spec.up ? INK : COLX.vellum;
       if (gg.measureText(nm).width <= textW || !(fit.lines > 1)) engrave(gg, nm, cx, cy, col, !spec.up);
@@ -986,36 +1017,58 @@ function renderFaceTemplate(g, spec, lines, price, o, I, T) {
     typeBand: (gg, r, inf) => {
       const label = String(spec.type || '').toUpperCase(), cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       gg.textAlign = 'center'; gg.textBaseline = 'middle';
-      if (!inf.baked) { gg.beginPath(); gg.moveTo(r.x, r.y); gg.lineTo(r.x + r.w, r.y); gg.lineTo(r.x + r.w - 6, cy); gg.lineTo(r.x + r.w, r.y + r.h); gg.lineTo(r.x, r.y + r.h); gg.lineTo(r.x + 6, cy); gg.closePath(); BB = { cx, cy, r: r.w / 2 }; fs(gg, mix(frame, INK, 0.2), 1.8, 1); }
+      if (inf.baked) { // the ribbon is in the painting
+        const fit = r.fit || {}, sz = fitText(gg, label, r.w - 8, fit.max || 11, fit.min || 9, { bold: true, ui: true });
+        gg.font = font(sz, { bold: true, ui: true }); inked(gg, label, cx, cy + 0.5, COLX.vellum, sz * 0.8);
+        return;
+      }
+      gg.beginPath(); gg.moveTo(r.x, r.y); gg.lineTo(r.x + r.w, r.y); gg.lineTo(r.x + r.w - 6, cy); gg.lineTo(r.x + r.w, r.y + r.h); gg.lineTo(r.x, r.y + r.h); gg.lineTo(r.x + 6, cy); gg.closePath(); BB = { cx, cy, r: r.w / 2 }; fs(gg, mix(frame, INK, 0.2), 1.8, 1);
       try { if ('letterSpacing' in gg) gg.letterSpacing = '1.5px'; } catch (e) { /* none */ }
       gg.font = font(11, { bold: true, ui: true }); gg.fillStyle = COLX.vellum; gg.fillText(label, cx, cy + 0.5);
       try { if ('letterSpacing' in gg) gg.letterSpacing = '0px'; } catch (e) { /* none */ }
     },
-    textBox: (gg, r) => layoutText(gg, spec, lines, price, o, r),
-    keyNumber: (gg) => drawKeyNumber(gg, spec, lines, o, win),
+    textBox: (gg, r) => { if (!(compact && (spec.grafts || []).length)) layoutText(gg, spec, lines, price, o, r); }, // a grafted hand face shows its graft chips there instead
+    keyNumber: (gg, r) => {
+      if (!r.own) { drawKeyNumber(gg, spec, lines, o, win); return; }
+      if (!keyInfo(lines)) return;
+      const wash = gg.createLinearGradient(0, r.y, 0, r.y + r.h); // the number stands on the picture: a vellum mist under it keeps it as plain as on the bare card
+      wash.addColorStop(0, 'rgba(236,225,200,0)'); wash.addColorStop(0.5, 'rgba(236,225,200,.5)'); wash.addColorStop(1, 'rgba(236,225,200,.8)');
+      gg.fillStyle = wash; gg.fillRect(r.x, r.y, r.w, r.h);
+      drawKeyNumber(gg, spec, lines, o, win, r);
+    },
     graftBand: (gg, r) => drawGraftBand(gg, spec.grafts || [], r.x, r.y, r.w, r.h),
     graftSlots: (gg, r) => (spec.grafts || []).slice(0, 3).forEach((gid, i) => { const c = centerOf(r.items[i]); drawSmallPatch(gg, gid, c.x, c.y, i); }),
     fusedSlots: (gg, r) => (spec.fused || []).slice(0, 4).forEach((gid, i) => { const c = centerOf(r.items[i]); drawRivet(gg, gid, c.x, c.y); }),
     typeGlyph: (gg, r) => { const c = centerOf(r); typeGlyph(gg, spec.type, c.x, c.y, r.w / 2, frame); },
     schoolGlyph: (gg, r) => { const sch = schoolOf(spec); if (!sch) return; const c = centerOf(r); circ(gg, c.x, c.y, r.w / 2, 'rgba(232,220,196,.9)', 1.4); drawSchoolGlyph(gg, sch, c.x, c.y, r.w * 0.35, COLX[sch]); },
-    pips: (gg, r) => pipsPaint(gg, r, rarity, !!spec.up),
+    pips: (gg, r, inf) => { if (!inf.baked) pipsPaint(gg, r, rarity, !!spec.up); },
   };
   g.textBaseline = 'middle';
+  if (painted) { rr(g, -HW + 3, -HH + 3, CARD_W - 6, CARD_H - 6, 9); g.fillStyle = '#17110e'; g.fill(); BB = null; } // nothing shows through a seam or a socket
   composeCardFront(g, T.tpl, T.fr, { compact, grafts: (spec.grafts || []).length > 0 }, painters);
-  if (junk) drawBandages(g);
-  if (o.tithed) drawSeam(g, seed);
-  if (o.jam) drawClamp(g, seed, win.y + win.h);
+  if (junk && !painted) drawBandages(g);
+  if (o.tithed) { drawSeam(g, seed); if (painted && T.slots.namePlate && (T.fr.def.baked || []).includes('namePlate')) painters.namePlate(g, T.slots.namePlate, { baked: true }); } // the seam runs through the banner of a painted card: the name is written over it again
+  if (o.jam) drawClamp(g, seed, painted ? win.y + 34 : win.y + win.h); // on a painted frame the banner under the picture carries the name: the clamp bites the top of the picture
   if (o.mark) drawMark(g, o.mark, win, seed);
 }
-// the template (if any) a card face is drawn from: { fr, tpl, slots } or null
+// the template (if any) a card face is drawn from: { fr, tpl, slots, painted } or null. Resolved once per frame image and variant, then looked up.
+const TPL = { ver: -1, pick: new Map(), face: new Map() };
 function faceTemplate(spec, o) {
   templates.ensure();
   if (!templates.ready()) return null;
-  const fr = templates.pickFrame(cardFrameIds(spec, o.rarity || spec.rarity || 'common'));
+  if (TPL.ver !== templates.ver) { TPL.ver = templates.ver; TPL.pick.clear(); TPL.face.clear(); }
+  const rarity = o.rarity || spec.rarity || 'common', pk = (spec.type || '') + '|' + rarity + '|' + (spec.school || '');
+  let fr = TPL.pick.get(pk);
+  if (fr === undefined) { fr = templates.pickFrame(cardFrameIds(spec, rarity)); TPL.pick.set(pk, fr); }
   if (!fr) return null;
-  const tpl = templates.cardTemplate(fr), slots = resolveSlots(tpl, { compact: !!o.compact, grafts: (spec.grafts || []).length > 0 });
-  if (!slots.window) return null;
-  return { fr, tpl, slots };
+  const compact = !!o.compact, grafts = (spec.grafts || []).length > 0, fk = fr.id + (compact ? '|c' : '|f') + (grafts ? 'g' : '');
+  let T = TPL.face.get(fk);
+  if (T === undefined) {
+    const tpl = templates.cardTemplate(fr), slots = resolveSlots(tpl, { compact, grafts });
+    T = slots.window ? { fr, tpl, slots, painted: !!(fr.def.under && fr.def.under.length) } : null;
+    TPL.face.set(fk, T);
+  }
+  return T;
 }
 
 // ---------- caching ----------
@@ -1030,9 +1083,8 @@ const FACE_STATS = { builds: 0, reuse: 0 };
 function faceKey(spec, lines, price, o) {
   return [spec.id, spec.up ? 1 : 0, (spec.grafts || []).join(','), (spec.fused || []).join(','), o.tithed ? 1 : 0, o.jam ? 1 : 0, o.compact ? 1 : 0, o.mark || '', o.rarity || spec.rarity || '', spec.type, spec.school || '', lines.join('|'), price.join('|')].join('#');
 }
-function getFace(spec, o, need) {
+function getFace(spec, o, need, T) {
   const lines = cardLines(spec, !!o.tithed), price = priceLines(spec);
-  const T = faceTemplate(spec, o);
   const base = faceKey(spec, lines, price, o) + (T ? '#T:' + T.fr.id : '');
   const pick = chooseBucket(need, (b) => cache.has(base + '@' + b), builtNow);
   const key = base + '@' + pick.bucket;
@@ -1069,14 +1121,17 @@ function drawCostOrb(g, spec, o, L, T) {
   const cost = o.cost === undefined ? spec.cost : o.cost, cp = !!o.compact;
   const gs = T && T.slots.costGem; // a template may move the gem (its slot) and bring its own gem image
   const r = gs ? gs.w / 2 : cp ? 25 : 20, ox = gs ? gs.x + gs.w / 2 : -HW + (cp ? 14 : 12), oy = gs ? gs.y + gs.h / 2 : -HH + (cp ? 16 : 14);
-  const gem = gs && templates.frameImg('card_gem');
   const base = typeof spec.cost === 'number' ? spec.cost : null;
   let tint = '#2b3a44';
   if (typeof cost === 'number' && base !== null) { if (cost > base) tint = '#7a1c2c'; else if (cost < base) tint = '#2b6a3a'; }
+  // the painted gem comes in the three cost states (as printed, raised, lowered); a manifest with one gem only gets the old colour wash
+  const gemUp = gs && tint !== '#2b3a44' ? templates.frameImg(tint === '#7a1c2c' ? 'card_gem.up' : 'card_gem.down') : null, gem = gemUp || (gs && templates.frameImg('card_gem'));
   const unplay = spec.flags && spec.flags.unplayable;
   g.save();
-  if (gem) { drawNineSlice(g, gem, ox - r, oy - r, r * 2, r * 2); g.fillStyle = tint; g.globalAlpha = 0.28; g.beginPath(); g.arc(ox, oy, r * 0.8, 0, 6.3); g.fill(); g.globalAlpha = 1; }
-  else {
+  if (gem) {
+    drawNineSlice(g, gem, ox - r, oy - r, r * 2, r * 2);
+    if (!gemUp && tint !== '#2b3a44' && !templates.has('card_gem.up')) { g.fillStyle = tint; g.globalAlpha = 0.28; g.beginPath(); g.arc(ox, oy, r * 0.8, 0, 6.3); g.fill(); g.globalAlpha = 1; }
+  } else {
   g.beginPath(); g.arc(ox - L.x * 2.5, oy - L.y * 3.5, r, 0, 6.3); g.fillStyle = 'rgba(0,0,0,.4)'; g.fill();
   g.beginPath(); g.arc(ox, oy, r, 0, 6.3); g.fillStyle = tint; g.fill();
   g.beginPath(); g.arc(ox + 3, oy + 4, r - 3, 0, 6.3); g.fillStyle = mix(tint, '#000', 0.4); g.fill();
@@ -1089,6 +1144,7 @@ function drawCostOrb(g, spec, o, L, T) {
   }
   const txt = unplay && cost === undefined ? '-' : String(cost === undefined || cost === null ? '-' : cost);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(txt.length > 1 ? (cp ? 26 : 20) : (cp ? 32 : 25), { bold: true }); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(txt, ox + 1, oy + 2);
+  if (gem) { g.lineJoin = 'round'; g.lineWidth = cp ? 5 : 4; g.strokeStyle = 'rgba(16,10,8,.85)'; g.strokeText(txt, ox, oy + 1); } // facets are busy: the number keeps an ink edge
   g.fillStyle = tint === '#7a1c2c' ? '#ffd6d6' : tint === '#2b6a3a' ? '#d6ffd9' : '#f6ecd2'; g.fillText(txt, ox, oy + 1);
   // "+N cost" badge: a small red orb with an up arrow on the cost orb whenever the effective cost is above the printed one (Heavy Hands, Leaden, jams, Costup)
   if (typeof cost === 'number' && base !== null && cost > base) {
@@ -1146,7 +1202,7 @@ export function drawCard(ctx, spec, x, y, o = {}) {
   ctx.translate(x, y); if (o.rot) ctx.rotate(o.rot); ctx.scale(s, s);
   if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
   if (o.selected) ctx.translate(0, -14); else if (o.hover) ctx.translate(0, -6);
-  const junk = spec.type === 'junk', cid = spec.id || spec.name || 'x';
+  const cid = spec.id || spec.name || 'x', T = faceTemplate(spec, o), junk = spec.type === 'junk' && !(T && T.painted); // junk: the torn procedural outline (a painted junk frame is a plain rounded card)
   // contact shadow, thrown away from the lamp
   const sdx = -L.x * 7, sdy = -L.y * 10;
   ctx.save(); ctx.translate(sdx, sdy); cardPath(ctx, junk, cid); ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fill(); ctx.translate(sdx * 0.3, sdy * 0.3); cardPath(ctx, junk, cid); ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.fill(); ctx.restore();
@@ -1156,16 +1212,18 @@ export function drawCard(ctx, spec, x, y, o = {}) {
     const a = o.selected ? Math.max(gl, 0.7) : gl;
     for (let i = 4; i >= 1; i--) { rr(ctx, -HW - i * 3, -HH - i * 3, CARD_W + i * 6, CARD_H + i * 6, 12 + i * 3); ctx.fillStyle = alpha(col, a * 0.1); ctx.fill(); }
   }
-  const face = getFace(spec, o, FLAGS.faceLod && typeof ctx.getTransform === 'function' ? deviceScale(ctx) : LEGACY), win = face.win, tl = o.tilt, tx = tl ? tl.x || 0 : 0, ty = tl ? tl.y || 0 : 0;
+  const face = getFace(spec, o, FLAGS.faceLod && typeof ctx.getTransform === 'function' ? deviceScale(ctx) : LEGACY, T), win = face.win, tl = o.tilt, tx = tl ? tl.x || 0 : 0, ty = tl ? tl.y || 0 : 0;
   if (face.cv) {
     ctx.drawImage(face.cv, -HW - PAD, -HH - PAD, CARD_W + PAD * 2, CARD_H + PAD * 2);
-    if (tl && (Math.abs(tx) > 0.02 || Math.abs(ty) > 0.02)) { // 3-layer parallax: back wash 2px, motif 5px, foreground 9px
+    if (tl && (Math.abs(tx) > 0.02 || Math.abs(ty) > 0.02) && !(T && T.painted && o.compact)) { // 3-layer parallax: back wash 2px, motif 5px, foreground 9px (not under the number a painted hand face puts on the picture)
       const ly = buildLayers(face);
       if (ly) {
         ctx.save(); rr(ctx, win.x, win.y, win.w, win.h, 5); ctx.clip();
         const ww = win.w + 2 * LM, hh = win.h + 2 * LM, bx = win.x - LM, by = win.y - LM;
         ctx.drawImage(ly.a, bx + tx * 2, by + ty * 2, ww, hh); ctx.drawImage(ly.b, bx + tx * 5, by + ty * 5, ww, hh); ctx.drawImage(ly.c, bx + tx * 9, by + ty * 9, ww, hh);
-        ctx.restore(); ctx.drawImage(ly.d, win.x - 4, win.y - 4, win.w + 8, win.h + 8);
+        ctx.restore();
+        if (T && T.painted) { ctx.save(); ctx.beginPath(); ctx.rect(win.x - 1, win.y - 1, win.w + 2, win.h + 2); ctx.clip(); drawNineSlice(ctx, T.fr, -HW, -HH, CARD_W, CARD_H); ctx.restore(); } // the frame's corner pieces lie over the picture again
+        else ctx.drawImage(ly.d, win.x - 4, win.y - 4, win.w + 8, win.h + 8);
       }
     }
   } else face.direct(ctx);
@@ -1299,11 +1357,20 @@ function backTemplate(bid, o) {
   return fr ? { fr, tpl: templates.cardBackTemplate(fr) } : null;
 }
 function renderBackTemplate(g, BT, P) {
-  const slots = resolveSlots(BT.tpl, {});
+  const slots = resolveSlots(BT.tpl, {}), t = slots.title, own = !!(BT.tpl.slots.title && BT.tpl.slots.title !== CARD_BACK_TEMPLATE.slots.title);
   drawNineSlice(g, BT.fr, -HW, -HH, CARD_W, CARD_H);
-  if (slots.title && !(BT.fr.def.baked || []).includes('title')) {
-    g.font = font(11, { bold: true, ui: true }); g.textAlign = 'center'; g.textBaseline = 'middle'; try { if ('letterSpacing' in g) g.letterSpacing = '3px'; } catch (e) { /* none */ }
-    engrave(g, 'GRAFTWORK', slots.title.x + slots.title.w / 2, slots.title.y + slots.title.h / 2, P.txt, true);
+  if (t && !(BT.fr.def.baked || []).includes('title')) {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (own) { // the painting has a brass plate for the title: dark engraved letters, sized to the plate
+      let sp = 3, sz = 11; g.font = font(sz, { bold: true, ui: true });
+      while (sz > 8 && g.measureText('GRAFTWORK').width + 9 * sp > t.w - 12) { if (sp > 1) sp -= 0.5; else { sz -= 0.5; g.font = font(sz, { bold: true, ui: true }); } }
+      try { if ('letterSpacing' in g) g.letterSpacing = sp + 'px'; } catch (e) { /* none */ }
+      engrave(g, 'GRAFTWORK', t.x + t.w / 2 + sp / 2, t.y + t.h / 2 + 0.5, '#2a1a0e');
+      try { if ('letterSpacing' in g) g.letterSpacing = '0px'; } catch (e) { /* none */ }
+    } else {
+      g.font = font(11, { bold: true, ui: true }); try { if ('letterSpacing' in g) g.letterSpacing = '3px'; } catch (e) { /* none */ }
+      engrave(g, 'GRAFTWORK', t.x + t.w / 2, t.y + t.h / 2, P.txt, true);
+    }
   }
   BB = null;
 }
@@ -1323,22 +1390,28 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.restore(); BB = null;
 }
 
+// The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to `floor` (8; a painted frame's smaller text window goes to 7)
+// at which rules plus price fit. `fits` is false when even the floor spills (the text is then drawn anyway).
+function cardTextFit(g, lines, price, maxW, avail, floor = 8) {
+  let best = null; const psMin = floor < 8 ? floor + 0.5 : 8.5;
+  for (let s = 15; s >= floor; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking rather than spill off the face
+    g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
+    const rl = lines.map((l) => wrapText(g, l, maxW)); const rn = rl.reduce((a, b) => a + b.length, 0);
+    const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
+    const ps = Math.max(psMin, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
+    const pl = price.map((l) => wrapText(g, l, maxW)); const pn = pl.reduce((a, b) => a + b.length, 0);
+    const pH = pn ? pn * ps * 1.2 + 12 : 0;
+    best = { s, lh, rl, rH, ps, pl, pH };
+    if (rH + pH + 4 <= avail) break;
+  }
+  best.fits = best.rH + best.pH + 4 <= avail;
+  return best;
+}
 function layoutText(g, spec, lines, price, o, box) { // box: the text slot of a template face; the default is the procedural layout
   const MAXW = box ? box.w : 176, TOP = box ? box.y : 2, BOT = box ? box.y + box.h : 143, AVAIL = BOT - TOP, CX = box ? box.x + box.w / 2 : 0;
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   const flavor = spec.flavor ? String(spec.flavor) : '';
-  let best = null;
-  for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
-    g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
-    const rl = lines.map((l) => wrapText(g, l, MAXW)); const rn = rl.reduce((a, b) => a + b.length, 0);
-    const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
-    const ps = Math.max(8.5, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
-    const pl = price.map((l) => wrapText(g, l, MAXW)); const pn = pl.reduce((a, b) => a + b.length, 0);
-    const pH = pn ? pn * ps * 1.2 + 12 : 0;
-    best = { s, lh, rl, rH, ps, pl, pH };
-    if (rH + pH + 4 <= AVAIL) break;
-  }
-  const { s, lh, rl, rH, ps, pl, pH } = best;
+  const { s, lh, rl, rH, ps, pl, pH } = cardTextFit(g, lines, price, MAXW, AVAIL, box && AVAIL < 120 ? 7 : 8);
   let fl = [], fH = 0;
   if (flavor) { g.font = font(11, { italic: true }); fl = wrapText(g, flavor, MAXW); if (fl.length > 2) fl.length = 2; fH = fl.length * 12.5 + 5; }
   const flavorOk = fH && rH + pH + fH + 6 <= AVAIL;

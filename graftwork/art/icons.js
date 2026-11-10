@@ -1,4 +1,6 @@
 // GRAFTWORK icons. Everything is procedural canvas. Every drawer is CENTERED at (x,y); `size` is the badge diameter.
+// While the painted art preview is on (ui/preview.js) the status chip, the intents, the energy dial, the block plate, the Budget gauge and the pile
+// icons draw their painted part (ui/skin.js) in the same place; each falls back to the drawing below while its image is not there.
 // Glyphs are authored in a unit space (about -0.65..0.65) and scaled, so they stay crisp from 20 to 48px.
 // Exports: drawStatus drawIntent drawRelic drawPotion drawNodeIcon drawEnergyOrb drawCoin drawHeart drawShield
 //          drawBudgetGauge(ctx,x,y,w,weight,budget,preview) (x,y = top-left, returns height)  drawStrainMeter(ctx,x,y,w,strain,max)
@@ -7,6 +9,7 @@
 import { COL, FONT, rgba, shade } from '../ui/core.js';
 import { RELICS, STATUSES } from '../data/index.js';
 import { lnw } from './linework.js';
+import * as SK from '../ui/skin.js';
 
 const TAU = Math.PI * 2;
 const D = '#2B1E1A'; // sepia ink: the one outline colour
@@ -317,10 +320,12 @@ export function drawStatus(ctx, id, x, y, size, good = true, opt) {
   // opt: true | { shape: true } adds the colourblind corner triangle (up = good, down = bad)
   const shape = opt === true || !!(opt && opt.shape);
   const r = size / 2; const e = ST[id];
-  ctx.save(); ctx.translate(x, y);
+  const chip = SK.part(ctx, 'chip.status', x - r, y - r, size, size); // painted: an iron chip holds the glyph; its well keeps the good or bad colour of the old rim
+  if (chip) { const q = r * 0.6; ctx.save(); ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - q, y - q, q * 2, q * 2, r * 0.22); else ctx.rect(x - q, y - q, q * 2, q * 2); ctx.fillStyle = good ? '#1d2a21' : '#2f1a18'; ctx.fill(); ctx.lineWidth = lnw(Math.max(1.4, r * 0.13)); ctx.strokeStyle = good ? GOODRIM : BADRIM; ctx.stroke(); ctx.restore(); }
+  if (!chip) { ctx.save(); ctx.translate(x, y);
   badge(ctx, r, good ? GOODRIM : BADRIM, good ? '#1d2a21' : '#2f1a18');
-  ctx.restore();
-  if (e) withGlyph(ctx, x, y, size, e[1], e[2], e[0], 0.8);
+  ctx.restore(); }
+  if (e) withGlyph(ctx, x, y, size, e[1], e[2], e[0], chip ? 0.7 : 0.8);
   else {
     ctx.save(); ctx.fillStyle = good ? '#d8f5da' : '#ffd2cc'; ctx.font = `bold ${Math.round(size * 0.5)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(id || '?')[0].toUpperCase(), x, y + size * 0.03); ctx.restore();
@@ -350,6 +355,11 @@ export function drawIntent(ctx, kind, x, y, size, opt) {
   else if (kind === 'sweep' && opt && opt.heavy) kind = 'sweep';
   const e = INT[kind] || INT.unknown; const heavy = kind === 'heavy';
   const r = (size / 2) * (heavy ? 1.12 : 1); const gc = e[3].length === 7 ? e[3] : '#ffffff';
+  if (INTENT_ART[kind] && SK.icon(ctx, INTENT_ART[kind], x, y, r * 2.08)) { // painted medallion; a heavy blow keeps its red ring, a condition its badge
+    if (heavy) { ctx.save(); ctx.beginPath(); ctx.arc(x, y, r * 1.02, 0, TAU); ctx.lineWidth = lnw(Math.max(2, r * 0.16)); ctx.strokeStyle = '#e0453a'; ctx.stroke(); ctx.restore(); }
+    if (cond) condBadge(ctx, x, y, r);
+    return;
+  }
   ctx.save();
   const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 1.25);
   g.addColorStop(0, rgba(gc, 0.3)); g.addColorStop(1, rgba(gc, 0));
@@ -359,12 +369,15 @@ export function drawIntent(ctx, kind, x, y, size, opt) {
   ctx.beginPath(); ctx.arc(0, 0, r * 0.93, 0, TAU); ctx.lineWidth = lnw(heavy ? Math.max(2, r * 0.16) : Math.max(1, r * 0.07)); ctx.strokeStyle = heavy ? '#e0453a' : rgba(gc, 0.75); ctx.stroke();
   ctx.restore();
   withGlyph(ctx, x, y, r * 2, e[1], e[2], e[0], kind === 'attack' || kind === 'heavy' ? 1.3 : kind === 'multi' || kind === 'sweep' ? 1.1 : 0.9); // the blade glyphs are thin: draw them bigger so the sword reads at 28 px
-  if (cond && kind !== 'conditional') {
-    const br = r * 0.36; ctx.save(); ctx.translate(x + r * 0.64, y + r * 0.64); disc(ctx, br * 1.1, D); disc(ctx, br, '#F2C14E');
-    const p = PX; PX = br; hatchDisc(ctx, br, 0.3); PX = p; ctx.restore();
-    withGlyph(ctx, x + r * 0.64, y + r * 0.64, br * 2, D, D, 'asterisk', 0.8);
-  }
+  if (cond && kind !== 'conditional') condBadge(ctx, x, y, r);
 }
+function condBadge(ctx, x, y, r) { // the gold asterisk: this intent has a condition the tooltip lists
+  const br = r * 0.36; ctx.save(); ctx.translate(x + r * 0.64, y + r * 0.64); disc(ctx, br * 1.1, D); disc(ctx, br, '#F2C14E');
+  const p = PX; PX = br; hatchDisc(ctx, br, 0.3); PX = p; ctx.restore();
+  withGlyph(ctx, x + r * 0.64, y + r * 0.64, br * 2, D, D, 'asterisk', 0.8);
+}
+// intent kind -> painted icon of assets/ui (sheet.intent). Kinds without a painting (sweep, junk, sleep, special) keep their glyph.
+export const INTENT_ART = { attack: 'intent.attack', heavy: 'intent.attack', multi: 'intent.multi', defend: 'intent.block', buff: 'intent.buff', debuff: 'intent.debuff', poison: 'intent.poison', heal: 'intent.heal', summon: 'intent.summon', unknown: 'intent.unknown', stun: 'intent.stun', flee: 'intent.escape' };
 
 // ======================================================================================
 // RELICS
@@ -540,6 +553,16 @@ export function drawEnergyOrb(ctx, x, y, size, n = 0, max) {
   const r = size / 2, t = now(); const empty = n <= 0;
   ctx.save();
   if (!empty) { const p = 0.85 + 0.15 * Math.sin(t * 2.6); const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.6 * p); g.addColorStop(0, rgba('#F2C14E', 0.4)); g.addColorStop(1, rgba('#F2C14E', 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.7, 0, TAU); ctx.fill(); }
+  if (SK.part(ctx, 'dial.energy', x - r, y - r, size, size)) { // painted dial: the needle and the number are the code's
+    const k = max > 0 ? Math.max(0, Math.min(1, n / max)) : (empty ? 0 : 1), a = Math.PI * 0.75 + k * Math.PI * 1.5;
+    if (empty) { ctx.beginPath(); ctx.arc(x, y, r * 0.74, 0, TAU); ctx.fillStyle = 'rgba(30,26,30,.5)'; ctx.fill(); }
+    ctx.lineCap = 'round'; ctx.lineWidth = lnw(Math.max(1.6, r * 0.06)); ctx.strokeStyle = empty ? 'rgba(60,56,60,.8)' : '#7a1c1c';
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 0.42, y + Math.sin(a) * r * 0.42); ctx.lineTo(x + Math.cos(a) * r * 0.68, y + Math.sin(a) * r * 0.68); ctx.stroke();
+    ctx.restore();
+    numText(ctx, String(n), x, y + r * 0.02, r * (max !== undefined ? 0.8 : 0.95), empty ? '#b9b4ae' : '#fff6da', empty ? '#1c1a1e' : '#3a1c06');
+    if (max !== undefined) numText(ctx, '/' + max, x + r * 0.02, y + r * 0.44, r * 0.3, empty ? '#9a9aa4' : '#ffe9a8', '#2a1606');
+    return;
+  }
   ctx.translate(x, y); const pp = PX; PX = r;
   disc(ctx, r * 0.98, D); disc(ctx, r * 0.92, '#C9A227'); hatchDisc(ctx, r * 0.92, 0.38);
   ctx.beginPath(); ctx.arc(0, 0, r * 0.82, Math.PI * 0.06, Math.PI * 0.56); ctx.lineWidth = lnw(Math.max(1, r * 0.08)); ctx.strokeStyle = '#7A5F12'; ctx.stroke();
@@ -578,6 +601,10 @@ export function drawHeart(ctx, x, y, size) {
   PX = p; ctx.restore();
 }
 export function drawShield(ctx, x, y, size, n) {
+  if (SK.part(ctx, 'plate.block', x - size * 0.55, y - size * 0.55, size * 1.1, size * 1.1)) { // painted: a riveted iron plate, the number in its well
+    if (n !== undefined && n !== null) numText(ctx, String(n), x, y + size * 0.02, size * 0.46, '#ffffff', '#16242c');
+    return;
+  }
   // riveted plates: steel shield split by two seams, rivets at the plate corners
   const r = size / 2; ctx.save(); ctx.translate(x, y); ctx.scale(r * 0.95, r * 0.95); const p = PX; PX = r * 0.95;
   shieldPath(ctx, 1.4, 0); fs(ctx, '#8fa9b5', 0.06);
@@ -590,8 +617,29 @@ export function drawShield(ctx, x, y, size, n) {
   PX = p; ctx.restore();
   if (n !== undefined && n !== null) numText(ctx, String(n), x, y + r * 0.05, r * 0.95, '#ffffff', '#1e3340');
 }
+// The painted Budget gauge (assets/ui gauge.budget): one socket per Budget point in a brass frame, a pip per Weight point, Strain as red pips past the frame.
+// (x, y) top left of the row, h its height, w the room. Returns false while the part is not there. Shared by every screen that shows the gauge.
+export function paintedGauge(ctx, x, y, w, h, weight, budget, previewWeight = 0, t = now()) {
+  const n = Math.max(1, budget | 0), total = Math.max(n, weight + Math.max(0, previewWeight));
+  let fh = h + 8; const need = SK.gaugeWidth(fh, n); if (!need) return false; // the frame stands 4 px above and below the row the old cells used
+  const over = total - n, room = w - (over > 0 ? 6 : 0);
+  if (need * (1 + over / (n + 0.76)) > room) fh *= room / (need * (1 + over / (n + 0.76)));
+  const G = SK.gauge(ctx, x - 2, y + h / 2 - fh / 2, fh, n); if (!G) return false;
+  const cy = y + h / 2, pr = G.socket * 0.36, pulse = 0.5 + 0.5 * Math.sin(t * 6);
+  ctx.save();
+  for (let i = 0; i < total; i++) {
+    const out = i >= n, px = out ? x - 2 + G.w + 6 + (i - n + 0.5) * G.cell : G.x0 + i * G.cell, filled = i < weight, prev = !filled && i < weight + previewWeight;
+    if (!filled && !prev) continue;
+    ctx.beginPath(); ctx.arc(px, cy, out ? pr * 1.25 : pr, 0, TAU);
+    ctx.fillStyle = out ? (prev ? rgba('#e0455c', 0.35 + pulse * 0.45) : '#d2334c') : (prev ? rgba('#F2C14E', 0.3 + pulse * 0.5) : '#f1d287'); ctx.fill();
+    ctx.lineWidth = lnw(1.2); ctx.strokeStyle = out ? '#ffb0b8' : prev ? '#fff0b8' : '#7a5a14'; if (prev) ctx.setLineDash([2.5, 2]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+  return true;
+}
 export function drawBudgetGauge(ctx, x, y, w, weight = 0, budget = 6, previewWeight = 0) {
   const h = 22; const total = Math.max(budget, weight + Math.max(0, previewWeight), 1);
+  if (paintedGauge(ctx, x, y, w, h, weight, budget, previewWeight)) return h;
   const gap = 4, cw = Math.min(46, (w - gap * (total - 1)) / total); const t = now();
   const used = Math.min(w, cw * total + gap * (total - 1)); const x0 = x;
   ctx.save();
@@ -640,6 +688,7 @@ export function drawDeckIcon(ctx, x, y, size) {
 }
 export function drawPileIcon(ctx, x, y, size, kind = 'draw', pile) {
   const k = ['draw', 'discard', 'exhaust'].includes(kind) ? kind : ['draw', 'discard', 'exhaust'].includes(pile) ? pile : 'draw';
+  if (SK.icon(ctx, 'rules.' + k, x, y, size)) return; // painted medallion
   const r = size / 2; ctx.save(); ctx.translate(x, y);
   const col = k === 'draw' ? '#7FD1E0' : k === 'discard' ? '#E8DCC4' : '#ff7a4a';
   for (let i = 0; i < 3; i++) { const w = r * 1.0, h = r * 1.3, ox = (i - 1) * r * 0.1 * (k === 'discard' ? -1 : 1), oy = -i * r * 0.08 + r * 0.1; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2 + ox, -h / 2 + oy, w, h, r * 0.1) : ctx.rect(-w / 2 + ox, -h / 2 + oy, w, h); ctx.fillStyle = k === 'exhaust' ? ['#3a2420', '#4a2c24', '#5a3226'][i] : ['#2a211d', '#3a2f29', '#4a3d36'][i]; ctx.fill(); ctx.lineWidth = lnw(Math.max(1, r * 0.07)); ctx.strokeStyle = k === 'exhaust' ? 'rgba(255,122,74,.7)' : D; ctx.stroke(); }
