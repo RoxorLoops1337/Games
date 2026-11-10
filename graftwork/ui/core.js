@@ -169,11 +169,12 @@ export function createApp(canvas, opts = {}) {
   // ---- tweens and timers ----
   app.tween = (obj, props, ms, ease = 'out', done) => {
     const from = {}; for (const k of Object.keys(props)) from[k] = obj[k];
-    const tw = { obj, from, to: props, t: 0, ms, ease: EASE[ease] || ease, done, owner: top() };
+    const tw = { obj, from, to: props, t: 0, ms, ease: EASE[ease] || ease, done, owner: painting || top() };
     app.tweens.push(tw); return tw;
   };
-  app.after = (ms, fn) => { app.timers.push({ ms, fn, owner: top() }); };
-  // A tween or timer belongs to the screen that was on top when it was made and stands still while that screen is covered by a modal.
+  app.after = (ms, fn) => { app.timers.push({ ms, fn, owner: painting || top() }); };
+  // A tween or timer belongs to the screen that was on top when it was made (or that is being painted into the snapshot) and stands still while that screen is covered by a modal.
+  let painting = null;
   const liveOne = (o) => Z.isLive(o.owner, app.stack);
   app.clearTweens = (obj) => { app.tweens = app.tweens.filter((t) => !obj || t.obj !== obj); };
 
@@ -472,11 +473,11 @@ export function createApp(canvas, opts = {}) {
     try {
       for (let i = 0; i < n; i++) {
         const s = st[i], c = Z.clocks.get(s); if (c) { app.t = c.t; app.sceneT = c.sceneT; }
-        app.blocked = true; if (s.draw) s.draw(app);
+        app.blocked = true; painting = s; if (s.draw) s.draw(app);
       }
-      app.blocked = true; if (app.belowOverlay) app.belowOverlay(app); // what belongs to the frozen world but is drawn by app.overlay while it lives (main.js: the screen wipe, the boss plate)
+      painting = st[0]; app.blocked = true; if (app.belowOverlay) app.belowOverlay(app); // what belongs to the frozen world but is drawn by app.overlay while it lives (main.js: the screen wipe, the boss plate)
     } finally {
-      app.t = t; app.sceneT = sceneT; app.dt = dt; app.pressedKeys = keys; QUIET.length = 0; m.x = mx; m.y = my; m.pressed = pressed; m.released = released; m.down = down; m.wheel = wheel; F.curN = curN; F.fire = fire;
+      painting = null; app.t = t; app.sceneT = sceneT; app.dt = dt; app.pressedKeys = keys; QUIET.length = 0; m.x = mx; m.y = my; m.pressed = pressed; m.released = released; m.down = down; m.wheel = wheel; F.curN = curN; F.fire = fire;
     }
     // nothing of a frozen screen stays live: its rectangles leave the layout registry, it has no tooltip, no cursor, no tap target and no fullscreen hot spot
     app.tip = null; unqueueTips(app); app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true;
@@ -548,8 +549,8 @@ export function createApp(canvas, opts = {}) {
   };
   // debug only: a tiny readout of the quality tier (enable with ?perf in the URL or app.perf.debug = true)
   function drawPerfDebug() {
-    ctx.save(); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); ctx.font = '12px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 250, 18);
-    ctx.fillStyle = '#9fe6a0'; ctx.fillText(`Q ${P.q.debug()} dpr${(app.dpr || 1).toFixed(1)}${P.gov.capped ? ' 30fps' : ''}`, 8, 7); ctx.restore();
+    ctx.save(); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); ctx.font = '12px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 360, 18);
+    ctx.fillStyle = '#9fe6a0'; ctx.fillText(`Q ${P.q.debug()} dpr${(app.dpr || 1).toFixed(1)}${P.gov.capped ? ' 30fps' : ''}${Z.snap ? ` frozen ${(Z.snap.width * Z.snap.height / 262144).toFixed(0)}MB x${Z.paints}` : ''}`, 8, 7); ctx.restore();
   }
   app.start = () => { app.resize(); running = true; last = performance.now(); P.lastTick = 0; requestAnimationFrame(frame); };
   app.stop = () => { running = false; };

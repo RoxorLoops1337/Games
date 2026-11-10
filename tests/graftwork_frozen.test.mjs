@@ -119,6 +119,9 @@ await t('a tween and an after-timer of the covered screen pause and resume; the 
   const C = await mk(); let late = 0, orphan = 0;
   C.app.register('modal', { draw() {} }); C.app.register('other', { draw() {} });
   C.app.after(0, () => late++); C.app.push('modal'); frames(C.app, 30); assert.equal(late, 0, 'due but frozen'); C.app.pop(); frames(C.app, 1); assert.equal(late, 1);
+  // a timer a covered screen makes while it is painted into the snapshot is its own: it waits with it
+  let painted = 0, fired = 0; const base = C.app.top(), d0 = base.draw; base.draw = function (a) { d0.call(this, a); if (a.blocked && !painted++) a.after(50, () => fired++); };
+  C.app.push('modal'); frames(C.app, 30); assert.equal(painted, 1); assert.equal(fired, 0, 'made during the snapshot paint: frozen with its screen'); C.app.pop(); frames(C.app, 5); assert.equal(fired, 1); base.draw = d0;
   C.app.push('modal'); C.app.after(400, () => orphan++); C.app.go('other'); frames(C.app, 30); assert.equal(orphan, 1, 'app.go: nobody is frozen any more');
   assert.equal(C.app.frozen, false);
 });
@@ -415,7 +418,11 @@ await t('Ward: a walk interrupted by Pause resumes and triggers every room; the 
     const app = await makeApp({ run, meta: { settings: { tips: false, reducedMotion: true }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} } }, audio: audioRec() });
     app.register('ward', ward); app.register('deckview', deckview); app.shared.flow = { RUN, route() {}, openDeck() { app.push('deckview', {}); }, openSettings() {}, saveMeta() {} };
     app.go('ward', { run }); frames(app, 30); assert.equal(app.touchPan, false, 'arrange: on the Ward a finger drag is a plan drag');
-    app.shared.flow.openDeck(); frames(app, 10); assert.equal(app.touchPan, true, 'under the deck view the Ward no longer takes the drag: the list scrolls'); }
+    app.shared.flow.openDeck(); frames(app, 10); assert.equal(app.touchPan, true, 'under the deck view the Ward no longer takes the drag: the list scrolls');
+    // and its button shortcuts are dead: E, E on the Pause menu used to end the morning behind it
+    app.pop(); app.register('pause', pause); frames(app, 240); assert.equal(run.ward.phase, 'morning');
+    app.push('pause', {}); frames(app, 10); key(app, 'e'); frames(app, 5); key(app, 'e'); frames(app, 5); key(app, 'g'); key(app, 'r'); frames(app, 5);
+    assert.equal(run.ward.phase, 'morning', 'no key reaches a button of the frozen Ward'); assert.equal(app.top().name, 'pause'); }
   // the floor banner is timed by the wall clock as well: it must not run out behind a modal
   { resetWardMem(); const real = Date.now, pnow = globalThis.performance.now; let clock = 5e6; Date.now = () => clock; globalThis.performance.now = () => clock;
     try {
@@ -430,7 +437,42 @@ await t('Ward: a walk interrupted by Pause resumes and triggers every room; the 
   Math.random = realRandom;
 });
 
-// ---------------------------------------------------------------- 8. the WebGL post layer holds the frozen screen's effects
+// ---------------------------------------------------------------- 8. every run screen: frozen under Pause and the deck view, repainted, untouched
+await t('every screen of a run stands still under Pause > Deck: no update, repaints that move nothing, the run payload is untouched', async () => {
+  const { boot } = await import('../graftwork/main.js');
+  const { serializeRun } = await import('../graftwork/engine/run.js');
+  const canvas = { getContext: () => fakeCtx(), addEventListener() {}, style: {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), width: 1280, height: 720, setPointerCapture() {} };
+  seedRandom(5);
+  const { app, flow } = boot(canvas); app.shared.meta.settings.tips = false;
+  const start = (hero, seed) => { flow.start({ hero, seed: 'frozen-' + seed, mode: 'ward' }); return app.shared.run; };
+  const SCREENS = {
+    ward: () => { start('marrow', 'ward'); },
+    combat: () => { const run = start('wick', 'combat'); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime', 'gauze_mummy'] }; app.go('combat', { run }); },
+    reward: () => { const run = start('marrow', 'reward'); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'elite', enemies: ['the_resident'] }; RUN.resolveFight(run, { win: true, shattered: [], damageTaken: 9, turns: 4 }); app.go('reward', { run }); },
+    graft: () => { const run = start('marrow', 'graft'); RUN.startGraftPick(run); app.go('graft', { run }); },
+    shop: () => { const run = start('wick', 'shop'); run.phase = 'shop'; run.pending = RUN.makeShop(run); app.go('shop', { run }); },
+    forge: () => { const run = start('odile', 'forge'); run.hp = Math.round(run.maxHp / 2); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; app.go('forge', { run }); },
+    event: () => { const run = start('marrow', 'event'); RUN.startEvent(run); app.go('event', { run }); },
+  };
+  for (const name of Object.keys(SCREENS)) {
+    SCREENS[name](); frames(app, 45);
+    assert.equal(app.current, name, 'arrange: on ' + name);
+    const scr = app.screens[name], run = app.shared.run; let ups = 0, draws = 0; const u0 = scr.update, d0 = scr.draw;
+    if (u0) scr.update = function (a, dt) { ups++; return u0.call(this, a, dt); }; scr.draw = function (a) { draws++; return d0.call(this, a); };
+    const before = serializeRun(run), Z = app.frameState, p0 = Z.paints, keep = RNG.s;
+    flow.openPause(); frames(app, 20); app.refreshBelow(); frames(app, 3);
+    flow.openDeck(); frames(app, 12); assert.deepEqual(app.stack.map((s) => s.name), [name, 'pause', 'deckview'], name + ': three deep');
+    globalThis.window.innerWidth = 1000; app.resize(); frames(app, 3); globalThis.window.innerWidth = 1280; app.resize(); frames(app, 3);
+    assert.equal(ups, 0, name + ': no update while covered'); assert.equal(draws, Z.paints - p0, name + ': drawn only for the ' + (Z.paints - p0) + ' snapshot paints'); assert.equal(Z.paints - p0, 5, name + ': open, asked, deck, resize, resize');
+    assert.deepEqual(LAYOUT.findOutOfBounds(), [], name + ': the deck view over it stays on the stage');
+    app.pop(); frames(app, 3); app.pop();
+    assert.equal(serializeRun(run), before, name + ': the run is exactly as it was');
+    RNG.s = keep; if (u0) scr.update = u0; scr.draw = d0; frames(app, 3); assert.equal(Z.snap, null);
+  }
+  Math.random = realRandom;
+});
+
+// ---------------------------------------------------------------- 9. the WebGL post layer holds the frozen screen's effects
 await t('post: effect timers of the frozen screen wait under a modal', async () => {
   const { installPost } = await import('../graftwork/ui/post.js');
   const app = await makeApp({ meta: { settings: {} } }); installPost(app);
