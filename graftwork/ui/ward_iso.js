@@ -18,6 +18,9 @@ import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
 import { assets } from './assets.js';
 import * as PUP from './puppet.js';
+import * as RIG from './rig.js';
+import { rigs } from './rigs.js';
+import { previewOn } from './preview.js';
 import { deviceScale } from './smoothing.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
@@ -378,16 +381,27 @@ function puppetInfo(g, r, aid, spr, s) {
   const e = PUP.prepare(spr.img, aid, dev, PUP.tuneFor(aid)); return e && e.kind ? e : null;
 }
 const tuneOf = PUP.tuneFor; // per actor tune (data/gaits.js) over the global puppet tune
+// THE RIG PREVIEW (ui/preview.js: ?rig=1 or the Settings toggle; off by default): a character that has a painted rig (assets/rigs, ui/rigs.js) walks and
+// idles as its rig instead of the puppet. The rig is laid over the standing sprite's own canvas, so it is drawn with the sprite's contact point and
+// scale: same feet, same height, same depth, same shadow. Until its atlas is decoded, and for everyone without a rig, the puppet draws as before.
+// The switch is read once per frame; while it is off nothing under assets/rigs is ever asked for.
+const RIGV = { f: -1, on: false, st: { ph: 0, w: 0, t: 0, ux: 1, uy: 0, calm: false } };
+const rigOn = (app) => { if (RIGV.f !== app.frame) { RIGV.f = app.frame; RIGV.on = previewOn('rig', app.settings); } return RIGV.on; };
 function drawActor(app, g, r, run) {
   const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
   const spr = aid ? assets.actor(aid, app) : null; let pe = null, parts = null;
+  const rg = spr && r.kind !== 'token' && !r.pm && rigOn(app) ? rigs.get(aid, app) : null; // r.pm (the animation lab): 'off' shows the hop, 'puppet' the puppet
   r.pp = r.pp || null;
   let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
   if (spr) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
     fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
-    pe = r.kind === 'token' ? null : puppetInfo(g, r, aid, spr, s);
-    const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(PUP.geomFor(pe, tuneOf(aid)), tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
+    pe = r.kind === 'token' || rg ? null : puppetInfo(g, r, aid, spr, s);
+    const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = rg ? rg.rig.stride * rg.rig.H * s / sz : pe ? (pe.kind === 'legged' ? PUP.strideOf(PUP.geomFor(pe, tuneOf(aid)), tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
+  }
+  if (rg) { // the rig poses itself (walk and idle): nothing of the hop is left on the body, and the feet never leave their floor
+    const st = RIGV.st, fl = r.flip < 0 ? -1 : 1; st.ph = r.stride; st.w = r.vk || 0; st.t = (r.t || 0) + (r.ph || 0); st.ux = (r.ux === undefined ? 1 : r.ux) * fl; st.uy = r.uy || 0; st.calm = !!r.calm;
+    RIG.poseRig(rg.rig, st); r.bob = 0; r.tilt = 0; r.sq = 1;
   }
   // the puppet pose of this frame (only while really walking; at rest the standing image is drawn)
   let pose = null, Hw = 0;
@@ -414,7 +428,8 @@ function drawActor(app, g, r, run) {
   if (r.alpha < 1) g.globalAlpha *= r.alpha;
   if (spr) {
     const d = spr.def;
-    if (pose && parts) PUP.drawLegged(g, parts, pose, s, fx, fy, d.w, d.h, pe.geom.H * d.h);
+    if (rg) { g.translate(-fx * s, -fy * s); g.scale(s, s); RIG.drawRigged(g, rg.rig, rg.img); }
+    else if (pose && parts) PUP.drawLegged(g, parts, pose, s, fx, fy, d.w, d.h, pe.geom.H * d.h);
     else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
     else g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
@@ -442,9 +457,10 @@ const HOP = 2.2, STRIDE = 0.5;
 export { gait, drawActor, groundShadow, HOP, STRIDE }; // the title scene's monsters and lab/anim.html use the real gait and the real actor draw
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
-  if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
-  const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
-  rec.gk = key; rec.dist = g.dist;
+  if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0, ux: 1, uy: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
+  const mx = nx - g.px, my = ny - g.py, d = Math.hypot(mx, my); g.px = nx; g.py = ny;
+  if (d > 0.02 && d < 40) { const k = Math.min(1, dt * 16); g.ux += (mx / d - g.ux) * k; g.uy += (my / d - g.uy) * k; } // the heading, eased: a rig plants its feet along it
+  rec.gk = key; rec.dist = g.dist; rec.ux = g.ux; rec.uy = g.uy; rec.t = S.t; rec.calm = !!calm;
   if (calm) { g.vk = 0; rec.vk = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
   if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
   const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
