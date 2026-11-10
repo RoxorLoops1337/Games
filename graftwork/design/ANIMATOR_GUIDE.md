@@ -73,3 +73,28 @@ Filmstrip (use `/tmp/<scratch>/film.cjs`-style script: 12 phases over 2 steps, 6
 - Stride control and foot sliding (the root advances one step length per step): https://download.autodesk.com/global/docs/softimage2013/en_us/userguide/files/GUID-533150CD-B20F-4E36-9351-9FEC0F91C740.htm
 - Gait, step length and cadence: https://physio-pedia.com/Gait_Cycle and https://en.wikipedia.org/wiki/Effect_of_gait_parameters_on_energetic_cost
 - Toon Boom, cutout walk cycle as an in-place loop moved by a separate tween: https://forums.toonboom.com/t/walkcycle-with-cutout-animation-method/5088
+
+## 6. Rigs: a skeleton with painted parts (ui/rig.js, the preview)
+
+The puppet cuts ONE painted figure in three. A rig has real parts (head, torso, arms, legs, boots, garment, prop) on a humanoid skeleton, so knees bend, arms swing and a prop is held. Everything in sections 1 and 2 still holds; this is how the rig keeps each rule. How a rig is built and added: ART_MODULAR.md section 7.
+
+How it keeps the rules
+- **Rule 1, 3 (hide the hip, pivot at the real hip).** The hip joints sit under the garment, a little above the hem (not at the waist: a long thigh pokes its knee out beside the cloth as a dark wedge when it swings). The garment parts are drawn over both thighs. `the_hem_covers_the_hip_joints_in_every_frame_of_the_cycle` checks every frame on three headings.
+- **Rule 4, 15 (cloth follows, small).** A garment part hangs rigid down to its `hem` line and shears below it from the leg spread of `hemLag` steps ago (the puppet's formula); hair, feather, scarf and prop turn by a lagged copy of the body or arm swing (`lag`). Zero at rest, bounded in the test.
+- **Rule 8 (contact, down, passing, up).** `poseRig` puts the body lowest just after contact and highest at passing, twice per cycle; the swinging knee folds because the foot is lifted (two-bone reach, knee forward).
+- **Rule 9, 10 (foot arc, heel and toe).** The boot rolls: it lands on its heel edge, lies flat while the shin is within `flat` of upright, then goes over the toe edge, turning about the edge that is on the floor. A boot painted on the shin, or a leg painted in one piece, rolls with the leg.
+- **Rule 11 (no sliding).** Each foot has a floor point that moves back exactly one stride per step while planted, along the real heading (both screen axes: the Ward walks its diamond floor down-right and up-right). The Ward's `gait()` divides the distance walked by the rig's own stride, so stride and speed cannot disagree. The test walks 4 seconds at the game's speed on three headings and reads the sole back from the drawn matrices: drift under 0.12 units (0.05 percent of the height).
+- **Rule 12, 13 (stride and cadence).** The stride is the smaller of the tune (`RIG_TUNE.stride` x the character's `strideK`) and what the shorter leg reaches at `swing`. Short chibi legs cap it near 0.35 to 0.38 of the height: 3.2 to 3.6 steps a second at the Normal pace.
+- **Reach.** A foot that the leg cannot reach is never dragged: the thigh stretches (hidden by the garment, up to `thigh`), the shin a little (`shin`), and what is left moves the hidden hip (`slip`, read it in the lab). Walking down the screen the reaching leg is longer and walking up it is shorter: that is the isometric foreshortening of a foot planted on the floor, not an error. Without a garment the thigh may only stretch to `bare`.
+
+Tuning a rig (in the lab, Rig lab, then in the meta file)
+- [ ] At rest it is the same person as the standing sprite beside it (drift: say so, and do not ship it).
+- [ ] Walk, Level heading, Slow: feet alternate; a planted sole rides on its floor mark (slide readout 0); no foot floats.
+- [ ] Down-right and Up-right: the leg reaches from under the hem with no gap at the hem and no detached piece (the Chromium test counts connected pieces).
+- [ ] No dark wedge beside the cloth at passing: lower the hip joints (`at` of `legL_up`, `legR_up`).
+- [ ] Joints: no gap where thigh meets shin or shin meets boot at the widest swing (give the upper piece more overlap: a larger `s` or a lower pivot); no kink at the boot top.
+- [ ] The head sits on the neck; hat and hair follow a beat late and never leave the head.
+- [ ] The prop is in the hand the standing sprite holds it in, in front, and rides on that hand (`prop`, `lag`; `upright` for a flame or a tray).
+- [ ] Arms swing against the legs; an arm that holds something swings less (`arms` in the meta file).
+- [ ] Feel (`RIG_GAITS`): Marrow heavy (long stance, deep drop, forward lean), Wick light and quick (short quick steps, feet picked up), Odile gliding and upright (low feet, almost no bob, a straight back).
+

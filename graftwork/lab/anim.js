@@ -432,7 +432,7 @@ function pickItem(m, anim, source, it) {
 const READ = $('read');
 let readT = 0;
 const SMALLV = () => innerHeight < 560;
-const SKIP_SMALL = new Set(['actor', 'image', 'contact', 'pace', 'shadow', 'clock']);
+const SKIP_SMALL = new Set(['actor', 'image', 'contact', 'pace', 'shadow', 'clock', 'rig', 'reach', 'body']);
 function setRead(rows) {
   READ.textContent = '';
   if (SMALLV()) rows = rows.filter((r) => typeof r === 'string' || !SKIP_SMALL.has(r[0]));
@@ -883,7 +883,7 @@ function transport2(row) {
 // ---------------- scene: Rig lab, the painted rigs ----------------
 // The rig of one character (assets/rigs, posed by ui/rig.js exactly as the Ward poses it) next to the same character as the game's puppet and as the painted
 // standing sprite, all three on one clock and one distance walked, so drift and quality show at a glance.
-const RL = { dist: 0, w: 1, slotP: null, who: '', st: { ph: 0, w: 0, t: 0, ux: 1, uy: 0, calm: false }, seen: {}, slide: 0, peak: 0, key: '' };
+const RL = { dist: 0, w: 1, slotP: null, who: '', st: { ph: 0, w: 0, t: 0, ux: 1, uy: 0, calm: false }, seen: {}, slide: 0, deep: 0, peak: 0, key: '' };
 const HEADINGS = { flat: [1, 0], down: [0.886, 0.463], up: [0.886, -0.463] }; // the Ward's floor is a 2:1 diamond: its rooms lie down-right and up-right of each other
 const rigIds = () => rigs.ids();
 function rigSpeed() { const base = KR.worldLen(4, 0) / PACE.normal.step; return ST.rig.pace === 'slow' ? base * 0.5 : ST.rig.pace === 'fast' ? KR.worldLen(4, 0) / PACE.fast.step : base; }
@@ -926,6 +926,8 @@ SC.rig = {
     UI.toggle(o, 'Bones', () => R.bones, (v) => { R.bones = v; }, 'Joints and bones; pink = a bone that is empty on purpose, the short bars = where each sole meets the floor'); UI.toggle(o, 'Floor marks', () => R.marks, (v) => { R.marks = v; }, 'Marks fixed to the floor: a planted foot must travel with them');
     UI.toggle(o, 'Onion skin', () => ST.onion, (v) => { ST.onion = v; }, 'Blue = a quarter step back, orange = a quarter step on'); UI.toggle(o, 'Flip', () => ST.flip, (v) => { ST.flip = v; }); UI.toggle(o, 'Puppet + sprite', () => R.cmp, (v) => { R.cmp = v; }, 'The same character as the game\'s puppet and as the standing sprite');
     UI.toggle(o, 'Reduced motion', () => ST.calm, (v) => { ST.calm = v; });
+    UI.range(UI.group('Rig tune (ui/rig.js RIG_TUNE)'), 'Depth', 0, 1, 0.05, () => RIG.RIG_TUNE.depth, (v) => { RIG.RIG_TUNE.depth = v; }, (v) => (v * 100).toFixed(0) + '%'); // how much of the floor's screen-y travel the feet follow on a diagonal: 100% = no slide at all, but the legs grow and fold
+    UI.range(UI.group(), 'Boot roll', 0, 1, 0.02, () => RIG.RIG_TUNE.roll, (v) => { RIG.RIG_TUNE.roll = v; }, (v) => (v * 57.3).toFixed(0) + '\u00b0');
     UI.range(UI.group(), 'Scale', 0.5, 2.5, 0.05, () => ST.scale, (v) => { ST.scale = v; }, (v) => v.toFixed(2) + 'x');
   },
   draw(w, h) {
@@ -959,17 +961,17 @@ SC.rig = {
     rigFigure(g, RG2, s0, st, { bones: R.bones });
     g.restore();
     // where each sole meets the floor, and how still a planted sole stands in the world (units of the rig per second)
-    const I = rig.info, c = { x: 0, y: 0, bx: 0, by: 0 }; let slide = 0;
+    const I = rig.info, c = { x: 0, y: 0, bx: 0, by: 0 }; let slide = 0, deep = 0;
     for (const s of ['L', 'R']) {
       const L = rig.legs[s]; RIG.footContact(rig, s, c);
       const sx = cx + (c.x - rig.foot[0]) * s0 * z * fl, sy = gy + (c.y - rig.foot[1]) * s0 * z;
       g.strokeStyle = s === 'L' ? '#5aa0ff' : '#ff9a4a'; g.fillStyle = g.strokeStyle; g.lineWidth = 2;
       if (L.plant && RL.w > 0.5) { g.fillRect(sx - 7, sy + 2, 14, 3); g.font = 'bold 11px Georgia'; g.textAlign = 'center'; g.fillText(SN(s), sx, sy + 17); } else { g.strokeRect(sx - 6, sy + 2, 12, 3); }
-      const wx = c.x + ph * rig.stride * rig.H * u[0], wy = c.y + ph * rig.stride * rig.H * u[1], k = s + (L.phi > 0 ? 't' : 'h'), p = RL.seen[k];
-      if (L.plant && RL.w === 1 && p && dt > 0 && p.n === Math.floor(ph / 2 + (s === 'L' ? 0 : 0.5))) slide = Math.max(slide, Math.hypot(wx - p.x, wy - p.y) / dt);
-      RL.seen[k] = { x: wx, y: wy, n: Math.floor(ph / 2 + (s === 'L' ? 0 : 0.5)) };
+      const wx = c.x + ph * rig.stride * rig.H * u[0], wy = c.y + ph * rig.stride * rig.H * u[1], k = s + (L.phi > 0 ? 't' : 'h'), p = RL.seen[k], nth = Math.floor(ph / 2 + (s === 'L' ? 0 : 0.5));
+      if (L.plant && RL.w === 1 && p && dt > 0 && p.n === nth) { slide = Math.max(slide, Math.abs(wx - p.x) / dt); deep = Math.max(deep, Math.abs(wy - p.y) / dt); }
+      RL.seen[k] = { x: wx, y: wy, n: nth };
     }
-    if (dt > 0 && walk) { RL.slide = slide; RL.peak = Math.max(RL.peak * 0.99, slide); }
+    if (dt > 0 && walk) { RL.slide = slide; RL.deep = deep; RL.peak = Math.max(RL.peak * 0.99, slide); }
     const label = (x0, ww, txt, col) => { g.fillStyle = 'rgba(18,13,10,.85)'; g.fillRect(x0, h - top, ww, top); g.fillStyle = col || '#eadfc6'; g.font = '12px Georgia'; g.textAlign = 'left'; g.fillText(txt.slice(0, Math.max(8, Math.floor(ww / 6.3))), x0 + 8, h - 7); };
     label(0, pw, 'RIG: ' + m.name + (e.ship ? ' (ships in the preview)' : ' (lab only, the game keeps the puppet)'), e.ship ? '#9fd89a' : '#e0a050');
     if (cmp) {
@@ -988,7 +990,7 @@ SC.rig = {
     rigStripReal(RG2, stepW); stripHighlight(walk || R.anim === 'walk' ? 'w' + (Math.floor((((ph % 2) + 2) % 2) / 0.25 + 1e-6) % 8) : '');
     const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt'));
     pl.children[0].classList.toggle('lit', I.plantL && RL.w > 0.5); pl.children[1].classList.toggle('lit', I.plantR && RL.w > 0.5); pl.children[2].style.whiteSpace = 'pre';
-    pl.children[2].textContent = RL.w > 0.5 ? `planted ${SNs(I.plant) || '-'}  lead ${SN(I.lead)}\nsole slide ${RL.slide.toFixed(2)} u/s (peak ${RL.peak.toFixed(2)})` : 'idle: both feet planted';
+    pl.children[2].textContent = RL.w > 0.5 ? `planted ${SNs(I.plant) || '-'}  lead ${SN(I.lead)}\nsole slide ${RL.slide.toFixed(2)} u/s across (peak ${RL.peak.toFixed(2)})${u[1] ? `\nin depth ${(RL.deep || 0).toFixed(0)} u/s (Depth ${(RIG.RIG_TUNE.depth * 100).toFixed(0)}%)` : ''}` : 'idle: both feet planted';
     if (performance.now() - readT > 90) {
       readT = performance.now();
       const cad = speed / stepW;
@@ -1015,7 +1017,7 @@ function mountScene(id) {
   READ.style.top = id === 'compare' ? '32px' : '8px';
   document.querySelectorAll('#scenes button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
   const url = new URL(location.href); url.searchParams.set('scene', id); history.replaceState(null, '', url);
-  $('hint').textContent = id === 'map' ? 'space: play or pause' : 'space: play or pause, comma and period: step';
+  $('hint').textContent = id === 'rig' ? '' : id === 'map' ? 'space: play or pause' : 'space: play or pause, comma and period: step';
 }
 for (const id of SCENES) { const b = mk('button', null, SCENE_LABEL[id]); b.dataset.id = id; b.onclick = () => mountScene(id); $('scenes').append(b); }
 $('ctlBtn').onclick = () => { $('ctl').classList.toggle('hidden'); resize(); };

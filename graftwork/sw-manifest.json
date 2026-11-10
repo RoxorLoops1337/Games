@@ -1,6 +1,6 @@
 {
- "version": "41f3cc3f8e709253",
- "bytes": 9205356,
+ "version": "edd249bedb66b5d8",
+ "bytes": 9208913,
  "count": 518,
  "files": {
   "art/attacks.js": {
@@ -52,16 +52,16 @@
    "s": 13260
   },
   "assets/rigs/knitter@1x.webp": {
-   "h": "450f3f7381848fc4",
-   "s": 7138
+   "h": "ea17623494910f4d",
+   "s": 7132
   },
   "assets/rigs/knitter@2x.webp": {
-   "h": "038855d8be7b2025",
-   "s": 17446
+   "h": "1e2aec5c2b50cfb8",
+   "s": 17512
   },
   "assets/rigs/manifest.json": {
-   "h": "27acc4057522ef6b",
-   "s": 32089
+   "h": "fd52a746f88350d4",
+   "s": 32510
   },
   "assets/rigs/marrow@1x.webp": {
    "h": "4e4a866ee15506a3",
@@ -72,12 +72,12 @@
    "s": 16250
   },
   "assets/rigs/night_nurse@1x.webp": {
-   "h": "3ca7d2295ac987d4",
-   "s": 5414
+   "h": "80f48159601b1a5c",
+   "s": 5610
   },
   "assets/rigs/night_nurse@2x.webp": {
-   "h": "841bb72508c330d9",
-   "s": 13372
+   "h": "6c4d11f9409dc53c",
+   "s": 13668
   },
   "assets/rigs/npc_nurse@1x.webp": {
    "h": "b9d8047b08f1d090",
@@ -88,12 +88,12 @@
    "s": 14532
   },
   "assets/rigs/npc_patient@1x.webp": {
-   "h": "d35bf5d3afbab66e",
-   "s": 5936
+   "h": "191ae7b464c06031",
+   "s": 6056
   },
   "assets/rigs/npc_patient@2x.webp": {
-   "h": "a8969c3c35f77751",
-   "s": 15194
+   "h": "c027e4af9e7ceb70",
+   "s": 15562
   },
   "assets/rigs/npc_porter@1x.webp": {
    "h": "fda50ecf471dc58b",
@@ -104,20 +104,20 @@
    "s": 17372
   },
   "assets/rigs/odile@1x.webp": {
-   "h": "e85ac17624aaa78b",
-   "s": 5438
+   "h": "3ded9458a04d30af",
+   "s": 5618
   },
   "assets/rigs/odile@2x.webp": {
-   "h": "ea31e3a126d71073",
-   "s": 13608
+   "h": "a2703bb6e8f79434",
+   "s": 14316
   },
   "assets/rigs/wick@1x.webp": {
-   "h": "ec4d9af051686fc2",
-   "s": 6216
+   "h": "46e1071a21f69775",
+   "s": 6264
   },
   "assets/rigs/wick@2x.webp": {
-   "h": "b84193c037e4dede",
-   "s": 15862
+   "h": "0e7a3abbd8d6c8a8",
+   "s": 15956
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
@@ -1996,12 +1996,12 @@
    "s": 17989
   },
   "ui/rig.js": {
-   "h": "60bd6e17f5aea698",
-   "s": 25329
+   "h": "aa9c4ab1d3b5251c",
+   "s": 25863
   },
   "ui/rigs.js": {
-   "h": "99971e88acc666b9",
-   "s": 3728
+   "h": "3972650d1d124331",
+   "s": 4260
   },
   "ui/seam_ui.js": {
    "h": "2263d7fa77934da3",

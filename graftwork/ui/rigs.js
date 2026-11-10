@@ -6,8 +6,9 @@
 //                             drew before (the puppet). all: also the rigs that do not ship (ship: false; the lab shows them, the game never asks)
 //   rigs.entry(id)            the manifest entry of a character, or null (also while the manifest is on its way)
 //   rigs.ids()                every rig of the manifest, in its order
-// The atlas is @2x unless the Ward art would be @1x (assets.use2x: lite tier, data saver, a small backing store); rects are in @2x px either way.
-// Atlases are small (about 20 KB, 200 KB decoded) and are never evicted, so a figure that has turned into its rig never turns back.
+// The atlas is @2x unless the Ward art would be @1x when it is first asked for (assets.use2x: lite tier, data saver, a small backing store); rects
+// are in @2x px either way. Atlases are small (about 20 KB, 200 KB decoded), are never evicted and never swapped for the other size, so a figure
+// that has turned into its rig never turns back.
 // Headless (node: no fetch, no Image) it answers null and asks for nothing. Tests inject fetchJson and makeImage, like ui/assets.js.
 import { assets } from './assets.js';
 import { makeRig } from './rig.js';
@@ -16,6 +17,7 @@ export function createRigs(opts = {}) {
   const R = { base: opts.base || 'assets/rigs/', state: 'idle', manifest: null, imgs: new Map(), made: new Map(), fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null };
   const live = () => !!R.fetchJson || assets.available();
   R.setBase = (b) => { R.base = b.endsWith('/') ? b : b + '/'; };
+  R.reset = () => { R.state = 'idle'; R.manifest = null; R.imgs.clear(); R.made.clear(); };
   function ensure() {
     if (R.state !== 'idle') return;
     if (!live()) { R.state = 'none'; return; }
@@ -43,7 +45,10 @@ export function createRigs(opts = {}) {
   R.get = (id, app, all) => {
     ensure();
     const d = R.entry(id); if (!d || (!d.ship && !all)) return null;
-    const want = assets.use2x(app) ? [d.file2x, d.file1x] : [d.file1x, d.file2x];
+    // one atlas per character, ever: the size asked for first is the one that is drawn, so a change of quality tier (which swaps @2x and @1x for the
+    // big Ward art) never sends a rig back to the puppet while another file loads. The other size is asked for only when the first one failed.
+    const want = assets.use2x(app) ? [d.file2x, d.file1x] : [d.file1x, d.file2x], have = R.imgs.get(want[1]);
+    if (have && !have.bad && want[1]) want.reverse();
     for (const f of want) {
       if (!f) continue;
       const e = load(f);

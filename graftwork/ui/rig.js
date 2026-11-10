@@ -10,7 +10,7 @@
 //   drawRig(ctx, rig, pose, x, y, o)   draws parts via o.part(name) -> { img, sx,sy,sw,sh, px,py, w,h } | null, else the procedural placeholder
 // Positions are in rig units (about 64 tall); o.scale maps them to pixels. x,y is the point between the feet on the ground.
 // The PAINTED rigs (real parts from assets/rigs, the walk the Ward previews) are the second half of this file.
-import { clamp } from './core.js';
+import { clamp, EASE } from './core.js';
 import { rigGait } from '../data/gaits.js';
 export const HUMANOID = {
   id: 'humanoid', height: 64,
@@ -108,10 +108,14 @@ export function drawRig(ctx, rig, P, x, y, o = {}) {
 // swing it eases forward on an arc. The hip, knee and ankle are solved from the target (two-bone IK, knee forward); a leg that cannot reach stretches a
 // little along its bones (hidden under the garment), never slides. The boot rolls: heel first, flat, then over the toe, about the edge that is on
 // the floor. Body lowest just after contact, highest at passing; arms swing against the legs; cloth, hair and the prop follow a beat late.
+// DEPTH: the Ward walks its diamond floor, so the heading has a screen-y part. A foot planted on that floor would travel as far up and down the screen as
+// the floor does, and a flat painted leg would have to grow and fold by a tenth of the figure's height on every step (it cannot foreshorten). RIG_TUNE.depth
+// is how much of the floor's screen-y travel the feet follow: 1 = exact on every heading (the solver is exact, the test proves it), 0 = level feet like the
+// puppet. Along the screen x a planted foot is always exact.
 // LAYERS: parts are drawn in manifest order: far arm, far leg, torso, near leg, the garment over both thighs, head, prop, near arm.
-export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6 };
+export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6, depth: 0.5 };
 const FEEL = { strideK: 1, duty: 0, lift: 1, bob: 1, sway: 1, lean: 1, arms: 1, hem: 1, head: 1 }; // per character multipliers (data/gaits.js RIG_GAITS)
-const TAU = Math.PI * 2, sstep = (u) => u * u * (3 - 2 * u), frac = (v) => v - Math.floor(v);
+const PI2 = Math.PI * 2, frac = (v) => v - Math.floor(v);
 const M6 = () => { const m = new Float64Array(6); m[0] = m[3] = 1; return m; };
 const mT = (o, m, x, y) => { o[4] = m[0] * x + m[2] * y + m[4]; o[5] = m[1] * x + m[3] * y + m[5]; o[0] = m[0]; o[1] = m[1]; o[2] = m[2]; o[3] = m[3]; return o; }; // o = m . translate
 const mMul = (o, m, a, b, c, d) => { const a0 = m[0], b0 = m[1], c0 = m[2], d0 = m[3]; o[0] = a0 * a + c0 * b; o[1] = b0 * a + d0 * b; o[2] = a0 * c + c0 * d; o[3] = b0 * c + d0 * d; o[4] = m[4]; o[5] = m[5]; return o; }; // o = m . [a c; b d]
@@ -139,7 +143,7 @@ export function makeRig(id, e) {
     root: M6(), info: { plantL: true, plantR: true, plant: 'LR', lead: 'L', down: 0, sway: 0, lean: 0, stretch: 1, thigh: 1, slip: 0 } };
 }
 // along-track offset of a foot over its own cycle f (0 = contact): stance moves back at exactly the body's speed, swing eases forward
-const footS = (f, a, B) => (f < B ? a * (1 - 2 * f / B) : -a + 2 * a * sstep((f - B) / (1 - B)));
+const footS = (f, a, B) => (f < B ? a * (1 - 2 * f / B) : -a + 2 * a * EASE.inOut((f - B) / (1 - B)));
 const footUp = (f, B, lift) => (f < B ? 0 : lift * Math.pow(Math.sin(Math.PI * (f - B) / (1 - B)), 0.85));
 // one leg: the ankle target (floor point + the roll of the boot about its heel or toe), then hip, knee and ankle from it.
 // Reach: a target the leg cannot reach is met by STRETCH, never by sliding the foot. The thigh takes it first: under a garment it is hidden, so it may
@@ -196,17 +200,17 @@ const ST0 = { ph: 0, w: 0, t: 0, ux: 1, uy: 0, calm: true };
 export function poseRig(rig, st = ST0) {
   const T = RIG_TUNE, F = rig.feel, B = rig.B, H = rig.H, I = rig.info, ph = st.ph > 0 ? st.ph : 0, w = clamp(st.w || 0, 0, 1), idle = st.calm ? 0 : 1 - w, t = st.t || 0;
   let ux = st.ux === undefined ? 1 : st.ux, uy = st.uy || 0; const un = Math.hypot(ux, uy); if (un > 1e-6) { ux /= un; uy /= un; } else { ux = 1; uy = 0; }
-  const D = rig.duty, S = rig.stride * H, a = D * S, spread = sstep(clamp((w - 0.2) / 0.6, 0, 1)), fL = frac(ph * 0.5), fR = frac(ph * 0.5 + 0.5), cs = Math.cos(Math.PI * ph);
+  const D = rig.duty, S = rig.stride * H, a = D * S, spread = EASE.inOut(clamp((w - 0.2) / 0.6, 0, 1)), fL = frac(ph * 0.5), fR = frac(ph * 0.5 + 0.5), cs = Math.cos(Math.PI * ph);
   const lift = Math.min(T.lift * F.lift * H, 0.5 * Math.min(rig.legs.L.len, rig.legs.R.len));
   // ---- the body: drop (lowest just after contact), sway toward the planted foot, a slow weight shift and breathing at rest
-  const down = T.bob * F.bob * H * w * 0.5 * (1 + Math.cos(TAU * (ph - 0.06))), sway = -T.sway * F.sway * H * w * Math.sin(TAU * (fL - 0.04));
+  const down = T.bob * F.bob * H * w * 0.5 * (1 + Math.cos(PI2 * (ph - 0.06))), sway = -T.sway * F.sway * H * w * Math.sin(PI2 * (fL - 0.04));
   const shift = idle * 0.006 * H * Math.sin(t * 0.85), breath = idle * Math.sin(t * 2.1);
   const hips = B.hips, hx = hips.x + sway + shift, hy = hips.y + down + idle * 0.0015 * H * (1 - Math.cos(t * 0.85 * 2));
   mAt(hips.m, hx, hy, 0);
   const lean = T.lean * F.lean * w * (1 + 0.15 * Math.sin(Math.PI * ph)) + idle * 0.008 * Math.sin(t * 0.85 + 0.6), by = 1 + 0.012 * breath; // by: the chest rises as it fills
   const to = B.torso; mAt(to.m, hx + (to.x - hips.x), hy + (to.y - hips.y), lean);
   const onTorso = (b, ex) => { const dx = b.x - to.x + ex, dy = (b.y - to.y) * by; return [to.m[0] * dx + to.m[2] * dy + to.m[4], to.m[1] * dx + to.m[3] * dy + to.m[5]]; };
-  const nod = (0.025 * w * Math.sin(TAU * ph - 1.1) + idle * 0.012 * Math.sin(t * 0.9 + 1)) * F.head, hd = onTorso(B.head, 0);
+  const nod = (0.025 * w * Math.sin(PI2 * ph - 1.1) + idle * 0.012 * Math.sin(t * 0.9 + 1)) * F.head, hd = onTorso(B.head, 0);
   mAt(B.head.m, hd[0], hd[1], lean * 0.4 + nod);
   // ---- arms swing against the legs (the arm on the side of the forward leg goes back); the elbow folds more on the way forward
   const tw = T.twist * w * cs;
@@ -223,7 +227,7 @@ export function poseRig(rig, st = ST0) {
     L.off = off; L.plant = f < D;
     // at rest the feet stand where the standing sprite has them; walking, each foot tracks under its own hip (the middle of the sole below the joint)
     const ax0 = L.an.x + spread * (L.hip.x - (L.heel + L.toe) / 2 - L.an.x);
-    solveLeg(rig, L, hx + (L.hip.x - hips.x), hy + (L.hip.y - hips.y), ax0 + off * ux, L.an.y + off * uy, up);
+    solveLeg(rig, L, hx + (L.hip.x - hips.x), hy + (L.hip.y - hips.y), ax0 + off * ux, L.an.y + off * uy * T.depth, up);
     if (L.slip > slip) slip = L.slip; if (L.k2 > stretch) stretch = L.k2; if (L.k1 > thigh) thigh = L.k1;
   }
   I.plantL = rig.legs.L.plant; I.plantR = rig.legs.R.plant; I.plant = (I.plantL ? 'L' : '') + (I.plantR ? 'R' : ''); I.lead = leadFoot(ph); I.down = down; I.sway = sway; I.lean = lean; I.stretch = stretch; I.thigh = thigh; I.slip = slip;
@@ -231,7 +235,7 @@ export function poseRig(rig, st = ST0) {
   const G = T.hem * F.hem * w * spread, p2 = ph - T.hemLag, f2 = frac(p2 * 0.5), f3 = frac(p2 * 0.5 + 0.5);
   const dr = a > 0 ? clamp((footS(f2, a, D) - footS(f3, a, D)) / (2 * a), -1, 1) : 0, liftN = lift > 0 ? clamp((footUp(f2, D, lift) + footUp(f3, D, lift)) / lift, 0, 1.2) : 0;
   const hemX = G * (-0.04 + 0.13 * dr) * (ux >= 0 ? 1 : -1) + idle * 0.012 * Math.sin(t * 1.1 + 0.4), hemS = 1 - G * 0.045 * liftN;
-  const late = Math.cos(Math.PI * (ph - 0.24)) - cs, bounce = w * Math.sin(TAU * (ph - 0.2)), air = idle * Math.sin(t * 1.3 + 0.7);
+  const late = Math.cos(Math.PI * (ph - 0.24)) - cs, bounce = w * Math.sin(PI2 * (ph - 0.2)), air = idle * Math.sin(t * 1.3 + 0.7);
   const ph2 = rig.prop ? rig.prop.hand : '', pA = ph2 ? T.arms * F.arms * rig.arms[ph2] * (ph2 === 'L' ? 1 : -1) : 0;
   for (const p of rig.parts) {
     const b = p.bone, m = b ? b.m : rig.root, oy = b === to ? p.oy * by : p.oy;
@@ -258,7 +262,7 @@ export function drawRigged(g, rig, img, o = {}) {
   if (o.contact !== false) for (const s of ['R', 'L']) { // a small dark pool under each sole that fades as the foot leaves the floor: what glues a foot to the ground
     const L = rig.legs[s], al = 0.3 * (1 - clamp(L.lift / (0.05 * rig.H), 0, 1)); if (al <= 0.01) continue;
     const cx = L.cx + (L.heel + L.toe) / 2, cy = L.cy + L.sole - 1, rx = (L.toe - L.heel) * 0.62;
-    g.fillStyle = `rgba(0,0,0,${al.toFixed(3)})`; g.beginPath(); g.ellipse(cx, cy, rx, rx * 0.38, 0, 0, TAU); g.fill();
+    g.fillStyle = `rgba(0,0,0,${al.toFixed(3)})`; g.beginPath(); g.ellipse(cx, cy, rx, rx * 0.38, 0, 0, PI2); g.fill();
   }
   for (const p of rig.parts) {
     const m = p.m; g.save(); g.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
