@@ -13,9 +13,9 @@ const files = readdirSync(dir).filter((f) => /^graftwork_.*\.test\.mjs$/.test(f)
 const argv = process.argv.slice(2);
 const jobsArg = argv.find((a) => a.startsWith('--jobs='));
 const JOBS = argv.includes('--serial') ? 1 : Math.max(1, Math.min(8, jobsArg ? +jobsArg.slice(7) || 4 : 4));
-// The fallback order (no times on record yet): the suites that take longest, slowest first, as measured by `--times`. Measure again
-// when a suite joins or leaves this group.
-const HEAVY = ['ui_layout', 'ui_combat', 'tip_layout', 'ui_ward', 'monkey', 'ui_juice', 'ui_combat_layout', 'audio_mix', 'difficulty', 'glossary', 'ward_big', 'tip_lifecycle', 'e2e', 'ui_ward_kit'].map((n) => `graftwork_${n}.test.mjs`);
+// The fallback order (no times on record yet): the suites that take longest, slowest first, from a run on a busy machine (`--times`). Measure
+// again when a suite joins or leaves this group.
+const HEAVY = ['ui_combat', 'tip_layout', 'monkey', 'ui_ward', 'ui_juice', 'ui_combat_layout', 'audio_mix', 'difficulty', 'rig', 'frozen', 'e2e', 'glossary', 'ui_ward_kit', 'ui_layout', 'tip_lifecycle', 'content_fuzz', 'unlock'].map((n) => `graftwork_${n}.test.mjs`);
 const TIMES_FILE = join(tmpdir(), `graftwork_suite_times_${createHash('sha1').update(dir.pathname).digest('hex').slice(0, 10)}.json`);
 let known = {};
 try { const j = JSON.parse(readFileSync(TIMES_FILE, 'utf8')); if (j && typeof j === 'object') known = j; } catch { /* first run of this checkout, or an unreadable file: the fixed list */ }
