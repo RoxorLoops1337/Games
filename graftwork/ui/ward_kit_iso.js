@@ -1,5 +1,5 @@
-// THE WARD, modular room renderer (design/WARD.md "Modular kit renderer"). ui/ward_iso.js calls this for every room type that has a usable
-// recipe (data/ward_kit.js resolved against assets/ward_kit/manifest.json); every other room keeps its painted sprite.
+// THE WARD, modular room renderer (design/WARD.md "Modular kit renderer"). ui/ward_iso.js calls this for every room whose recipe
+// (data/ward_kit.js resolved against assets/ward_kit/manifest.json) has its images in; until then the room is a procedural block.
 //
 // A room is drawn from KIT pieces in the Ward projection (TW 92 x TH 48): a floor diamond filled with a seamless texture through an affine
 // pattern, two back wall slabs (the L wall on the u = 0 edge, the R wall on the v = 0 edge) with texture, shading and a coping strip, wall
@@ -35,15 +35,33 @@ function mk(w, h) {
 }
 
 // ---------------- which rooms are modular ----------------
-// the recipe of a room type, or null (painted): needs the kit manifest, every kit image settled, and a variant whose floor and wall exist
+// The recipe of a room type, or null (draw the block): needs the kit manifest, the images of THIS recipe settled, and its floor and wall textures.
+// Asking is what starts those downloads: a screen loads the rooms it draws, never the whole kit. Once a recipe has been handed out it stays
+// (ui/assets.js never evicts a kit image and bridges a change of size), so a room that has shown the kit does not go back to its block.
 export function recipeFor(type, app, fw = 1, fh = 1) { // fw x fh = the room's footprint in cells (a big room has its own plans, data/ward_kit_big.js)
   if (!assets.kitReady()) return null;
   const rc = resolveRecipe(type, assets.kit, fw, fh); if (!rc) return null;
-  if (!assets.kitRecipeSettled(rc, app)) return null; // only THIS recipe's images are awaited (the title needs five rooms, not the whole kit)
-  if (!assets.kitImg('floors', rc.floor, app) || !assets.kitImg('walls', rc.wall, app)) return null; // the texture failed to load: paint it
+  if (!assets.kitRecipeSettled(rc, app)) return null;
+  if (!assets.kitImg('floors', rc.floor, app) || !assets.kitImg('walls', rc.wall, app)) return null; // a texture failed to load: the block stays
   return rc;
 }
 
+// The plan of a room that has ALREADY been drawn from the kit and whose plan changed (it grew): never null while the kit has a plan for that size, so
+// the room does not go back to its block. Its missing images are asked for as usual; with `part` set, drawStatic and drawItems leave out what has not
+// arrived (the layer is rebuilt once everything is in).
+export function recipeHeld(type, app, fw = 1, fh = 1) {
+  if (!assets.kitReady()) return null;
+  const rc = resolveRecipe(type, assets.kit, fw, fh); if (rc) assets.kitRecipeSettled(rc, app);
+  return rc;
+}
+// How far the recipes of a list of rooms are ({ type, w, h } each): kit images settled of all they need. total 0 = no kit or nothing to wait for.
+const RP = { loaded: 0, total: 0 };
+export function recipesProgress(rooms, app, out = { loaded: 0, total: 0 }) {
+  out.loaded = 0; out.total = 0;
+  if (!assets.kitReady()) return out;
+  for (const r of rooms) { const rc = resolveRecipe(r.type, assets.kit, r.w || 1, r.h || 1); if (!rc) continue; assets.kitRecipeProgress(rc, app, RP); out.loaded += RP.loaded; out.total += RP.total; }
+  return out;
+}
 // true once every listed room type has its images settled (the title scene waits on its five rooms)
 export function recipesSettled(types, app) {
   if (!assets.kitReady()) return false;
@@ -184,7 +202,7 @@ function paintStatic(g, rc, p, app, px) {
   drawWall(g, rc, wt, 'L', p.dL || p.doorL, p.HL, px); drawWall(g, rc, wt, 'R', p.dR || p.doorR, p.HR, px);
   { const C = corners(rc); post(g, rc, 0, 0, Math.max(p.HL, p.HR)); post(g, rc, C.L[0], C.L[1], p.HL); post(g, rc, C.R[0], C.R[1], p.HR); }
   drawPieces(g, rc, p, app);
-  for (const pr of rc.props) propShadow(g, rc, pr);
+  for (const pr of rc.props) if (!p.part || assets.kitImg('props', pr.id, app)) propShadow(g, rc, pr); // a prop still on its way casts no shadow yet
   if (p.dark) { // unpowered: a cold, dark multiply over the room's own floor and walls
     g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = '#39416a';
     const C = corners(rc);
@@ -193,14 +211,15 @@ function paintStatic(g, rc, p, app, px) {
   }
 }
 export const bucketOf = bucketOfZ;
-// draw the static layer of a room with its top vertex at (tx, ty). `p` = { HL, HR, doorL, doorR, slabL, slabR, dark }. Cached per zoom bucket when a DOM exists.
+// draw the static layer of a room with its top vertex at (tx, ty). `p` = { HL, HR, doorL, doorR, slabL, slabR, dark, part }. Cached per zoom bucket when a DOM exists.
+// part: some images of the recipe are still loading (a room that grew): the layer is keyed apart, so it is painted again when they are in.
 export function drawStatic(app, g, id, rc, tx, ty, p, zoomPx) {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   try { return drawStatic0(app, g, id, rc, tx, ty, p, zoomPx); } finally { if (t0) Q.stats.msStatic += performance.now() - t0; }
 }
 let builtFrame = -1, builtN = 0;
 function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
-  const EX = extentOf(rc), want = bucketOfZ(zoomPx || 1), base = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0, (p.dL || []).map(Number).join(''), (p.dR || []).map(Number).join(''), (p.slabLs || []).map(Number).join(''), (p.slabRs || []).map(Number).join('')].join('|');
+  const EX = extentOf(rc), want = bucketOfZ(zoomPx || 1), base = [rc.key, Math.round(p.HL), Math.round(p.HR), p.doorL ? 1 : 0, p.doorR ? 1 : 0, p.slabL ? 1 : 0, p.slabR ? 1 : 0, p.dark ? 1 : 0, (p.dL || []).map(Number).join(''), (p.dR || []).map(Number).join(''), (p.slabLs || []).map(Number).join(''), (p.slabRs || []).map(Number).join('')].join('|') + (p.part ? '|part' : '');
   let e = Q.layers.get(id);
   if (!e || e.base !== base) { e = { base, by: new Map(), z: 0 }; Q.layers.set(id, e); }
   if (app.frame === undefined || app.frame !== builtFrame) { builtFrame = app.frame; builtN = 0; }
@@ -245,8 +264,9 @@ function darkImg(img) {
   v = o ? o.c : null; Q.dark.set(img, v); return v;
 }
 export function propWorldY(rc, ty, pr) { return ty + propPos(pr).y; }
-function drawProp(app, g, pr, tx, ty, dark) {
+function drawProp(app, g, pr, tx, ty, dark, part) {
   const d = assets.kitImg('props', pr.id, app), P = propPos(pr);
+  if (!d && part) return d; // still on its way (a room that grew): nothing yet, not the placeholder of a failed image
   g.save(); g.translate(tx + P.x, ty + P.y); if (pr.flip) g.scale(-1, 1);
   if (d) { const k = d.def.sw / d.def.w; let im = d.img; if (dark) { const dk = darkImg(im); if (dk) im = dk; } g.drawImage(im, -d.def.anchorX * k, -d.def.anchorY * k, d.def.w * k, d.def.h * k); }
   else { g.fillStyle = '#c9a22788'; g.fillRect(-8, -14, 16, 14); }
@@ -284,7 +304,7 @@ function drawItems0(app, g, rc, tx, ty, lift, items, o) {
   if (KITS.log) KITS.log.push({ ty, order: SORT.map((s) => (s.pr ? 'prop:' + s.pr.id : 'actor:' + s.a.rec.kind) + '@' + s.y.toFixed(2)) });
   g.save(); if (lift) g.translate(0, -lift);
   for (const s of SORT) {
-    if (s.pr) { const d = drawProp(app, g, s.pr, tx, ty, o.dark); if (!o.calm && !o.dark) animate(app, g, s.pr, d, tx, ty, o.t, o.glow); } else o.actor(s.a.rec);
+    if (s.pr) { const d = drawProp(app, g, s.pr, tx, ty, o.dark, o.part); if (!o.calm && !o.dark) animate(app, g, s.pr, d, tx, ty, o.t, o.glow); } else o.actor(s.a.rec);
   }
   g.restore();
 }

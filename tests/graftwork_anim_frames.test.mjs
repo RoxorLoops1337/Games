@@ -72,10 +72,12 @@ await t('assets_frame_answers_decoded_frames_with_the_standing_def_and_null_othe
   assert.ok(!assets.walkReady('marrow', null), 'one walk frame still decoding: the cycle does not start');
   assets.reset(); assert.equal(assets.frame('marrow', 'marrow_atk2', null), null, 'no manifest');
 });
-await t('assets_loader_requests_frame_files_by_stem_and_preloads_the_walk_cycle', async () => {
+await t('assets_loader_requests_frame_files_by_stem_when_they_are_asked_for', async () => {
   const asked = [], A = createAssets({ fetchJson: async (u) => (u.endsWith('ward/manifest.json') ? { version: 1, tile: { w: 2, h: 1 }, rooms: { r: {} }, actors: { marrow: actor('hero', HERO_FR) }, icons: {}, cards: {} } : Promise.reject(new Error('no kit'))), makeImage: () => { const o = {}; Object.defineProperty(o, 'src', { set: (v) => { asked.push(v); o.onload && o.onload(); } }); return o; } });
-  A.ensure(null); await new Promise((r) => setTimeout(r, 5)); A.preload(null);
-  for (const w of W4) assert.ok(asked.some((u) => u.endsWith(`actors/marrow_${w}@2x.webp`)), 'walk frame ' + w + ' preloaded: ' + asked.join(' '));
+  A.ensure(null); await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(asked, [], 'the manifest alone loads no image: nothing is preloaded');
+  A.walkReady('marrow', null); // asking whether the walk cycle is ready is what starts its frames
+  for (const w of W4) assert.ok(asked.some((u) => u.endsWith(`actors/marrow_${w}@2x.webp`)), 'walk frame ' + w + ' asked for by its stem: ' + asked.join(' '));
   assert.ok(!asked.some((u) => u.includes('atk')), 'combat frames are loaded by the battle, not the map');
 });
 

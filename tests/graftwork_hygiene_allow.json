@@ -116,8 +116,6 @@
   "graftwork/ui/ward_iso.js:kitLog",
   "graftwork/ui/ward_iso.js:lastActors",
   "graftwork/ui/ward_iso.js:lastKit",
-  "graftwork/ui/ward_iso.js:paintedKind",
-  "graftwork/ui/ward_iso.js:pending",
   "graftwork/ui/ward_iso.js:resetIso",
   "graftwork/ui/ward_iso.js:setWallMode",
   "graftwork/ui/ward_kit_iso.js:kitStats"

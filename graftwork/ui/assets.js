@@ -1,4 +1,5 @@
 // Image assets for the Ward (design/WARD.md "Isometric view and art pipeline"): a lazy loader and cache for assets/ward/manifest.json.
+// NOTHING is loaded ahead: an image is asked for by the code that is about to draw it, and that request starts its download.
 //
 //   manifest: { version, tile:{w,h}, rooms:{id:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}},
 //               actors:{id:{file1x,file2x,w,h,anchorX,anchorY,kind,scale,walk1x,walk2x}}, icons:{id:{file1x,file2x,w,h}}, cards:{artId:{...}}, cardsById:{b_x:{room}} }
@@ -10,10 +11,9 @@
 //
 //   assets.ensure(app)          starts the manifest load once (no-op in node / headless, or when fetch or Image is missing)
 //   assets.ready()              true once the manifest is in
-//   assets.room(id, app)        { img, def } or null while loading / missing   (also actor, icon, card)
-//   assets.preload(app, kinds)  queue every image of the given groups (rooms, actors by default); progress() says how far it is
-//   assets.progress()           { loaded, total, failed, state }  state: 'idle' | 'loading' | 'ready' | 'none'
-//   assets.kitReady() / kitImg(kind, id, app) / kitSettled(app): the modular room kit (assets/ward_kit/manifest.json), see data/ward_kit.js
+//   assets.room(id, app)        { img, def } or null while loading / missing   (also actor, icon, card, cardArt for a building card)
+//   assets.kitReady() / kitImg(kind, id, app) / kitRecipeSettled(rc, app) / kitRecipeProgress(rc, app): the modular room kit (assets/ward_kit/manifest.json),
+//                               loaded one recipe at a time (data/ward_kit.js, ui/ward_kit_iso.js recipeFor)
 // @2x is used unless the backing store is under 0.8 device px per logical px (app.px), then @1x. Every failure is swallowed: callers draw their procedural fallback on null.
 const BASE_DEFAULT = 'assets/ward/';
 const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
@@ -47,7 +47,7 @@ export function createAssets(opts = {}) {
     base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, hits: 0, ver: 0,
     // test / tool hooks: a fetch and an image factory can be injected
     fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null,
-    // the modular room kit (assets/ward_kit/manifest.json): floors, walls, pieces, props. Optional: no kit means every room is painted.
+    // the modular room kit (assets/ward_kit/manifest.json): floors, walls, pieces, props. Optional: no kit means every room is a procedural block.
     kit: null, kitState: 'idle', kitBase: opts.kitBase || '',
     clock: 0, budget: opts.budget || 192 * 1048576, evicted: 0, // clock: ms of the last maintain() call, the LRU stamp; budget: decoded bytes kept
   };
@@ -126,7 +126,9 @@ export function createAssets(opts = {}) {
     return null;
   }
   // ---- the kit: images are keyed 'kit:<file>'; pieces, props, floors and walls come back as { img, def } | null ----
-  const KIT_GROUPS = ['floors', 'walls', 'pieces', 'props'];
+  // A kit image is asked for by the recipe that needs it (kitRecipeProgress), never as a whole kit. Two rules keep a room that has shown the kit on the kit:
+  // a kit image is never evicted (maintain below; the whole kit is about 25 MB decoded at @2x), and when the wanted size changes (the quality tier, a resize)
+  // the size that is already decoded is drawn until the new one is in.
   function kitLoad(file) {
     const key = 'kit:' + file; let e = A.imgs.get(key); if (e) return e;
     e = { img: null, ok: false, bad: false, bytes: 0, used: A.clock }; A.imgs.set(key, e);
@@ -134,32 +136,39 @@ export function createAssets(opts = {}) {
     return e;
   }
   const kitFile = (d, app) => (A.use2x(app) ? d.file2x || d.file1x || d.file : d.file1x || d.file2x || d.file);
+  // the entry to draw for one kit def: the wanted size (its load starts here), else the other size when that one is already decoded
+  function kitEntry(d, app) {
+    const f = kitFile(d, app); if (!f) return null;
+    const e = kitLoad(f); if (e.ok) return e;
+    const alt = f === d.file1x ? d.file2x || d.file : d.file1x, o = alt && alt !== f ? A.imgs.get('kit:' + alt) : null;
+    return o && o.ok ? o : e;
+  }
   A.kitDef = (kind, id) => (A.kit && A.kit[kind] && A.kit[kind][id]) || null;
-  A.kitImg = (kind, id, app) => { const d = A.kitDef(kind, id); if (!d) return null; const f = kitFile(d, app); if (!f) return null; const e = kitLoad(f); if (e.ok) e.used = A.clock; return e.ok ? { img: e.img, def: d } : null; };
-  A.kitPreload = (app) => { if (!A.kitReady()) return; for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (f) kitLoad(f); } };
-  // true once every kit image of this scale has loaded or failed (the renderer waits for it so a room never flips from painted to modular piece by piece)
-  A.kitSettled = (app) => { if (!A.kitReady()) return false; A.kitPreload(app); for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; const e = A.imgs.get('kit:' + f); if (!e || (!e.ok && !e.bad)) return false; } return true; };
-  A.kitProgress = (app) => { let total = 0, loaded = 0; if (A.kitReady()) for (const k of KIT_GROUPS) for (const d of Object.values(A.kit[k])) { const f = kitFile(d, app); if (!f) continue; total++; const e = A.imgs.get('kit:' + f); if (e && (e.ok || e.bad)) loaded++; } return { loaded, total, state: A.kitState }; };
-  // The kit images ONE recipe needs (floor, wall, its pieces, props, door). A screen that draws a few rooms waits for those only, not for the whole kit.
-  A.kitFilesFor = (rc, app) => {
-    const out = [], add = (kind, id) => { const d = A.kitDef(kind, id); const f = d && kitFile(d, app); if (f) out.push(f); };
+  A.kitImg = (kind, id, app) => { const d = A.kitDef(kind, id), e = d && kitEntry(d, app); if (!e || !e.ok) return null; e.used = A.clock; return { img: e.img, def: d }; };
+  // How far ONE recipe is (floor, wall, its pieces, props, door): the images that have loaded or failed, of all it needs. Asking starts them, so a screen
+  // that draws a few rooms downloads those rooms only. out: { loaded, total }
+  A.kitRecipeProgress = (rc, app, out = { loaded: 0, total: 0 }) => {
+    out.loaded = 0; out.total = 0;
+    const one = (kind, id) => { const d = A.kitDef(kind, id); if (!d || !kitFile(d, app)) return; out.total++; const e = kitEntry(d, app); if (e.ok || e.bad) out.loaded++; };
     if (!rc) return out;
-    add('floors', rc.floor); add('walls', rc.wall);
-    for (const p of rc.pieces || []) add('pieces', p.id);
-    for (const p of rc.props || []) add('props', p.id);
-    if (rc.doorPiece) add('pieces', rc.doorPiece);
+    one('floors', rc.floor); one('walls', rc.wall);
+    for (const p of rc.pieces || []) one('pieces', p.id);
+    for (const p of rc.props || []) one('props', p.id);
+    if (rc.doorPiece) one('pieces', rc.doorPiece);
     return out;
   };
+  const KP = { loaded: 0, total: 0 };
   // true once every image of this recipe has loaded or failed (starts them)
-  A.kitRecipeSettled = (rc, app) => { let ok = true; for (const f of A.kitFilesFor(rc, app)) { const e = kitLoad(f); if (!e.ok && !e.bad) ok = false; } return ok; };
+  A.kitRecipeSettled = (rc, app) => { A.kitRecipeProgress(rc, app, KP); return KP.loaded >= KP.total; };
   // ---- decoded memory: LRU eviction ----
   A.decodedBytes = () => { let n = 0; for (const e of A.imgs.values()) if (e.ok) n += e.bytes || 0; return n; };
   // Drop the least recently drawn images until the decoded total is under 85% of the budget. Never touches an image drawn in the last `keepMs`
-  // (so nothing on screen goes away) or one still loading. A dropped image simply loads again (HTTP cache) if a screen asks for it later.
+  // (so nothing on screen goes away), one still loading, or a kit image (a room never falls back from the kit to its block). A dropped image
+  // simply loads again (HTTP cache) if a screen asks for it later.
   A.maintain = (nowMs, budget = A.budget, keepMs = 6000) => {
     A.clock = nowMs;
     let total = A.decodedBytes(); if (total <= budget) return 0;
-    const list = []; for (const [k, e] of A.imgs) if (e.ok && nowMs - (e.used || 0) > keepMs) list.push([k, e]);
+    const list = []; for (const [k, e] of A.imgs) if (e.ok && !k.startsWith('kit:') && nowMs - (e.used || 0) > keepMs) list.push([k, e]);
     list.sort((a, b) => (a[1].used || 0) - (b[1].used || 0));
     let n = 0; const goal = budget * 0.85;
     for (const [k, e] of list) { if (total <= goal) break; total -= e.bytes || 0; A.imgs.delete(k); n++; }
@@ -182,27 +191,13 @@ export function createAssets(opts = {}) {
   A.actor = (id, app, alt) => get('actors', id, app, alt); // alt: the second walk frame (falls back to the first)
   A.icon = (id, app) => get('icons', id, app);
   A.card = (id, app) => get('cards', id, app);
-  A.preload = (app, kinds = ['rooms', 'actors']) => {
-    A.ensure(app);
-    if (!A.ready()) return;
-    for (const g of kinds) for (const id of Object.keys(A.manifest[g] || {})) { get(g, id, app); if (g === 'actors') { get(g, id, app, true); const F = A.frames(id); if (F) for (const st of F.walk) A.frame(id, st, app); } }
-  };
-  A.progress = (kinds = ['rooms', 'actors']) => {
-    let total = 0, loaded = 0;
-    if (A.ready()) for (const g of kinds) for (const d of Object.values(A.manifest[g] || {})) {
-      total++;
-      const e1 = d.file1x && A.imgs.get(d.file1x), e2 = d.file2x && A.imgs.get(d.file2x);
-      if ((e1 && e1.ok) || (e2 && e2.ok)) loaded++;
-    }
-    return { loaded, total, failed: A.failed, state: A.state };
-  };
   // the first of several candidate ids that the manifest knows (actor id guessing: 'hero_marrow' then 'hero')
   A.firstOf = (group, ids) => { for (const id of ids) if (defOf(group, id)) return id; return null; };
   A.ids = (group, prefix) => (A.manifest ? Object.keys(A.manifest[group] || {}).filter((k) => k === prefix || k.startsWith(prefix + '_')) : []);
   // actor ids of one kind ('hero' | 'normal' | 'elite' | 'npc'), for enemies the art set does not paint yet
   A.kindIds = (kind) => { const out = []; if (A.manifest) for (const [k, d] of Object.entries(A.manifest.actors || {})) if ((d.kind || (k.startsWith('npc_') ? 'npc' : '')) === kind && !k.endsWith('_l2')) out.push(k); return out; };
-  // the card illustration for a building card: its own art id, else the diorama of the room it builds
-  A.cardArt = (card, app) => { const a = card && card.art && A.card(card.art, app); if (a) return { ...a, kind: 'card' }; const m = A.ready() && A.manifest.cardsById && A.manifest.cardsById[card && card.id]; const ca = m && m.card && A.card(m.card, app); if (ca) return { ...ca, kind: 'card' }; const rm = m && m.room ? A.room(m.room, app) : (card && card.kind === 'room' ? A.room(card.room, app) : null); return rm ? { ...rm, kind: 'room' } : null; };
+  // the illustration of a building card: its own art id (data/ward.js `art`; a room card's art is a room painting, cards[art].fromRoom)
+  A.cardArt = (card, app) => (card && card.art ? A.card(card.art, app) : null);
   return A;
 }
 
