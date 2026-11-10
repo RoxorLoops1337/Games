@@ -1,6 +1,6 @@
 // Thread grafts: knots (see design/THREAD.md). Same schema as the other graft files; every tier lives here.
 // Hooks run in onPlay, which fires AFTER the engine has stepped the Line for this card, so c.seam is current.
-// Engine flags read by engine/seam.js (E1): hooks.noCut (a would-be cut becomes Slack), hooks.wild (counts as every school, adds no count).
+// Engine flags read by engine/seam.js (plan): hooks.noCut (a would-be cut becomes Slack), hooks.wild (counts as every school in the Line: always extends it, adds no count).
 const hasD = (s) => s.fx.some((o) => o.op === 'dmg');
 const hasB = (s) => s.fx.some((o) => o.op === 'block');
 const numbers = (s) => hasD(s) || hasB(s);

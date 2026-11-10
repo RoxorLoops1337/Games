@@ -254,6 +254,35 @@ t('Thread grafts: "when it cuts" fires on a cut (it never did), "when it extends
   assert.equal(hp - d.enemies[0].hp, 4 + 9, 'Snip 4, Scissor Loop 3 per knot of the Line it cut');
 });
 
+// ---------------------------------------------------------------- 2. Slip Knot and Granny Knot
+t('Slip Knot: a card that would cut goes Slack instead; it still starts and extends Lines', () => {
+  const c = fight(); lineOf(c, 'ember', 3);
+  const card = mk(c, 't_blood', { grafts: ['g_slip_knot'] }), pv = seamPreview(c, card), m = mark(c);
+  assert.equal(pv.kind, 'slack'); assert.deepEqual(pv.payout, []);
+  play(c, card);
+  assert.equal(since(c, m, 'seamCut').length, 0); assert.equal(since(c, m, 'seamSlack').length, 1); assert.equal(c.seam.len, 3); assert.deepEqual(c.seam.counts, { ember: 3 });
+  assert.equal(c.player.st.charge, 2, 'its other boon');
+  P(c, 'ember'); assert.equal(c.seam.len, 4, 'the Line goes on');
+  const d = fight(); play(d, mk(d, 't_blood', { grafts: ['g_slip_knot'] })); assert.equal(d.seam.len, 1, 'starts a Line');
+  play(d, mk(d, 't_static', { grafts: ['g_slip_knot'] })); assert.equal(d.seam.len, 2, 'extends through its own school');
+});
+t('Granny Knot: extends any Line as every school in it, and adds no count', () => {
+  const c = fight(); P(c, 'ember'); P(c, 'ember', { grafts: [GOF.blood] }); P(c, 'blood'); // counts ember 2, blood 2, last card blood
+  const before = JSON.stringify(c.seam.counts);
+  const card = mk(c, 't_gilded', { grafts: ['g_granny_knot'] }), pv = seamPreview(c, card), m = mark(c);
+  assert.equal(pv.kind, 'extend'); assert.equal(pv.len, 4);
+  play(c, card);
+  assert.equal(since(c, m, 'seamCut').length, 0); assert.equal(c.seam.len, 4); assert.equal(JSON.stringify(c.seam.counts), before, 'no count for gilded, rust or anything else');
+  assert.deepEqual(c.seam.set.slice().sort(), ['blood', 'ember'], 'it stands for every school in the Line');
+  // so the next card may be any school of the Line, even one the previous card did not carry
+  const next = mk(c, 't_ember'); assert.equal(seamPreview(c, next).kind, 'extend'); play(c, next); assert.equal(c.seam.len, 5);
+  // the payout it promised when it extended is the payout a cut then pays
+  const d = fight(); lineOf(d, 'ember', 2); const g = mk(d, 't_gilded', { grafts: ['g_granny_knot'] }), pv2 = seamPreview(d, g); play(d, g);
+  const m2 = mark(d); P(d, 'blood'); assert.deepEqual(pays(d, m2), pvPays(pv2)); assert.deepEqual(pays(d, m2), [['ember', 2]]);
+  // on an empty rail it starts a Line as its own schools, like any card
+  const e = fight(); play(e, mk(e, 't_gilded', { grafts: ['g_granny_knot'] })); assert.equal(e.seam.len, 1); assert.deepEqual(e.seam.counts, { gilded: 1, rust: 1 });
+});
+
 
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

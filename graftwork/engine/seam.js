@@ -33,6 +33,12 @@ export function cutsLine(spec) {
   return walk(spec.fx);
 }
 
+// Graft flags the Thread reads (graft mod { k: 'custom', hooks: { noCut | wild: true } }, data/grafts_thread.js):
+//   noCut (Slip Knot): a card that would cut the Line by school goes Slack instead.
+//   wild (Granny Knot): the card counts as every school in the Line, so it always extends it, and adds no count.
+const flagOf = (spec, k) => (spec.custom || []).some((h) => h[k]);
+const lineSchools = (line) => line.order.filter((x) => line.counts[x] > 0);
+
 // What a card would do to the Line (pure).
 function plan(c, card, spec) {
   const s = c.seam;
@@ -42,8 +48,10 @@ function plan(c, card, spec) {
   if (spec.fused && spec.fused.length) return { kind: 'tied', set };
   if (s.len > 0 && c.player.st.cadencelock > 0 && !s.lockBroke && set.some((x) => s.used[x])) return { kind: 'break', set };
   if (s.len === 0) return { kind: 'start', set };
+  if (flagOf(spec, 'wild') && lineSchools(s).length) return { kind: 'extend', set, shared: topOf(s.counts, s.order, s.set), wild: true };
   const shared = overlap(set, s.set);
   if (shared) return { kind: 'extend', set, shared };
+  if (flagOf(spec, 'noCut')) return { kind: 'slack', set };
   return { kind: 'cut', set };
 }
 
@@ -115,8 +123,8 @@ export function seamPreview(c, card) {
     if (!fxCut) return { kind: 'extend', school: p.set[0], len: line.len, payout: [] };
   } else { // extend: project the Line after this card
     const counts = { ...s.counts }, order = s.order.slice();
-    for (const x of p.set) { counts[x] = (counts[x] || 0) + k; if (!order.includes(x)) order.push(x); }
-    line = { counts, order, set: p.set, len: Math.min(cap, s.len + k) };
+    if (!p.wild) for (const x of p.set) { counts[x] = (counts[x] || 0) + k; if (!order.includes(x)) order.push(x); }
+    line = { counts, order, set: p.wild ? lineSchools(s) : p.set, len: Math.min(cap, s.len + k) };
     if (!fxCut) return { kind: 'extend', school: p.shared, len: line.len, payout: fmt(worth(c, line, cuts)) };
   }
   // "Cut the Line.": the Line that stands after the card's own step is cashed. A card that joined it starts the next one.
@@ -224,8 +232,8 @@ export function seamStep(c, card, spec) {
   if (p.kind === 'extend') {
     s.len = Math.min(cap, s.len + k);
     if (s.len > (s.maxLen || 0)) s.maxLen = s.len; // longest Line this combat (case file)
-    for (const x of p.set) { s.counts[x] = (s.counts[x] || 0) + k; if (!s.order.includes(x)) s.order.push(x); }
-    s.set = p.set.slice();
+    if (p.wild) s.set = lineSchools(s); // it stands for every school in the Line: the next card may follow any of them
+    else { for (const x of p.set) { s.counts[x] = (s.counts[x] || 0) + k; if (!s.order.includes(x)) s.order.push(x); } s.set = p.set.slice(); }
     for (const x of p.set) s.used[x] = true;
     s.last = card.uid;
     const info = { len: s.len, school: p.shared, card: card.uid, spec };
