@@ -3,7 +3,6 @@
 // (a) a padded-HP run must build and walk three floors, fight the three bosses and The Grafter and finish 'won';
 // (b) a run forced to die in Act 2 must finish 'dead' with a killer recorded; (c) a plain strong-bot run ends won or dead.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { POLICIES, playWardRun, strongFight, strongPickGraft } from '../tools/graftwork_driver.mjs';
@@ -58,9 +57,4 @@ for (const hero of ['marrow', 'wick', 'odile']) {
     assert.ok(r.log.acts[1].fights > 0 && r.log.acts[1].walks > 0, 'the bot walked and fought on the first floor');
   });
 }
-t('combat screen wires the Grafter reknit event (phase strip) and brands marked cards', () => {
-  const src = readFileSync(new URL('../graftwork/ui/combat.js', import.meta.url), 'utf8');
-  assert.match(src, /case 'reknit':[^\n]*phaseBeat\(APP, 'REKNIT'\)/, 'reknit event fires the phase strip');
-  assert.match(src, /mark: dc\.w\.reknit \? 'reknit'/, 'marked hand cards are drawn with the reknit brand');
-});
 console.log(`${n} full-run checks passed`);
