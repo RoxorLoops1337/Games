@@ -103,7 +103,9 @@ window.__ready = true;
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
       const errors = []; page.on('pageerror', (e) => errors.push(e.message));
       await page.goto(`http://localhost:${port}/__post_test.html`);
-      await page.waitForFunction(() => window.__ready === true, null, { timeout: 15000 });
+      // generous on purpose: on a busy machine the page's module graph can take far longer than on an idle one, and a page that never gets
+      // ready still fails here (15 s was tuned to an idle machine)
+      await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
       const info = await page.evaluate(() => { window.T.app.tick(1 / 60); return window.T.glInfo(); });
       if (!info || !info.on) { console.log('post: WebGL2 unavailable in this chromium, skipping rendering checks'); }
       else {
