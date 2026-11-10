@@ -114,7 +114,7 @@ fig('actor_half_walk1'); fig('actor_half_walk2'); fig('actor_half_hit')
   assert.deepEqual(m.actors.half.frames, { hit: 'half_hit', hi3x: true }); assert.equal(m.actors.none.frames, undefined);
   assert.deepEqual({ ...m.actors.fig, frames: undefined }, { ...ent, frames: undefined }, 'no existing key changes');
   for (const s of ['fig_atk2', 'fig_hit', 'fig_die']) for (const t2 of ['1x', '2x', '3x']) assert.ok(existsSync(join(out, `actors/${s}@${t2}.webp`)), s + '@' + t2);
-  assert.deepEqual(readdirSync(join(out, 'actors')).filter((f) => /walk|_b@/.test(f)), [], 'a walk raw or a step raw exports nothing');
+  assert.deepEqual(readdirSync(join(out, 'actors')).filter((f) => /walk|_b@|_low/.test(f)), [], 'a walk raw, a step raw or a low pass exports nothing');
   assert.match(r.stdout, /fig_atk2: WARNING scale differs/, 'a frame twice the standing size warns'); assert.doesNotMatch(r.stdout, /fig_hit: WARNING scale/);
   // the feet: the frames were shifted in the raw, yet their contact lands on the standing figure's contact
   const chk = spawnSync('python3', ['-c', `
@@ -174,10 +174,5 @@ t('build_prune_pass_drops_what_the_game_no_longer_draws_and_nothing_else_and_is_
   rmSync(join(out, 'actors/fig_hit@2x.webp')); writeFileSync(join(out, 'actors/stray@1x.webp'), 'x');
   r = spawnSync('python3', [tool, '--prune', '--out=' + out], { encoding: 'utf8' }); assert.equal(r.status, 1); assert.match(r.stdout, /NOT PRUNED/); assert.ok(existsSync(join(out, 'actors/stray@1x.webp')), 'nothing was deleted');
   rmSync(dir, { recursive: true, force: true });
-});
-t('the_build_script_has_no_low_pass_and_no_walk_handling', () => {
-  const src = readFileSync(new URL('../tools/graftwork_art_build.py', import.meta.url), 'utf8');
-  for (const gone of ["'--low'", 'low_pass', 'LOW_REJECT', "'walk1x'] =", 'walkOk\'] =', "fr['walk']", 'cardsById\'] =']) assert.ok(!src.includes(gone), gone);
-  for (const kept of ["'--frames'", "'--combat'", "'--prune'", 'def frames_pass', 'def combat_pass', 'def prune_pass']) assert.ok(src.includes(kept), kept);
 });
 console.log(n + ' ok');
