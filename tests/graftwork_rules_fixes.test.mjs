@@ -999,5 +999,25 @@ t('enemies that speak of a Line cashed (Ferric Warden, Scissor Nurse, Locksmith,
     const k = line4('locksmith', { seal: 'blood' }); k.e.block = 0; play(k.c, mk(k.c, 't_ember')); assert.equal(k.e.block, 4, 'and the sealed school cut by a card'); }
   { const { c, e } = line4('knitter'); e.data.cut = false; SEAM.seamEnd(c); assert.equal(e.data.cut, true, 'the cashed Line pays at +50%'); }
 });
+
+// ---------------------------------------------------------------- 16. the Locksmith's Block is written on its Sealed status
+await ta('Locksmith: the Sealed status it carries says it gains Block when a Line of the sealed school is cut or cashed, with the number the engine uses', async () => {
+  const { statusText } = await import('../graftwork/engine/text.js');
+  const gain = (seal, how) => { // Block the Locksmith gains from one Line of 4 knots of `seal`, cut by a card of another school or cashed at the turn end
+    const c = fight({ enemies: ['locksmith'] }); c.player.hp = 300; const e = c.enemies[0]; e.data.seal = seal; e.block = 0;
+    P(c, 'blood'); P(c, 'blood'); P(c, 'blood'); P(c, 'blood');
+    if (how === 'cut') P(c, 'ember'); else SEAM.seamEnd(c);
+    return e.block;
+  };
+  const real = gain('blood', 'cut'); assert.equal(real, 4, 'the engine: 4 Block');
+  assert.equal(gain('blood', 'end'), real, 'and the same when the Line is cashed at the turn end'); assert.equal(gain('rust', 'cut') + gain('rust', 'end'), 0, 'a Line of another school gives it nothing');
+  // the status the Locksmith carries from the first turn names the school and the rule
+  const c = newCombat(RUN.newRun({ hero: 'marrow', seed: 'lock-text' }), ['locksmith']), e = c.enemies[0];
+  assert.ok(e.st.sealed > 0, 'it is sealed from combat start'); const text = statusText('sealed', e.st.sealed);
+  assert.ok(/Your \w+ school is sealed/.test(text), text);
+  const m = /gains (\d+) Block each time a Line of that school is cut or cashed at turn end/.exec(text);
+  assert.ok(m, 'the status says what its seal does for the Locksmith:\n' + text); assert.equal(+m[1], real, 'with the number the engine uses');
+  assert.ok(!/[\u2013\u2014]/.test(text), 'no dashes');
+});
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);
