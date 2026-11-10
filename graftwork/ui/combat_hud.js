@@ -7,6 +7,7 @@ import * as L from './combat_layout.js';
 import { queueTip, statusSection, keywordSection, explainIntent } from './tooltips.js';
 import { opText } from '../engine/text.js';
 import { lnw } from '../art/linework.js';
+import * as SK from './skin.js';
 
 export const STATUS_COL = { burn: COL.ember, bleed: '#d12a44', poison: '#8fd14f', vulnerable: '#e0a050', weak: '#9aa8b0', strength: '#ff9a6a', dexterity: '#7fd1e0' };
 export const stCol = (id) => STATUS_COL[id] || (STATUSES[id] && STATUSES[id].good ? COL.good : COL.bad);
@@ -30,6 +31,10 @@ function barHatch(ctx) {
 export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
   const ctx = app.ctx;
   const pct = max > 0 ? clamp(shown / max, 0, 1) : 0, tp = max > 0 ? clamp(trail / max, 0, 1) : 0;
+  if (SK.hpBar(ctx, x, y, w, h, pct, tp)) { // painted (preview): the glass tube with its liquid; the label is the same
+    if (label) app.text(label, x + w / 2, y + h / 2 - 8, { size: 14, align: 'center', ui: true, bold: true, color: '#fff', stroke: '#0e0e0e', strokeW: 3, fixed: true });
+    return;
+  }
   ctx.save();
   app.rr(x, y, w, h, h / 2); ctx.fillStyle = 'rgba(10,8,8,.85)'; ctx.fill();
   ctx.save(); app.rr(x, y, w, h, h / 2); ctx.clip();
@@ -230,9 +235,11 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
   const col = info.hidden ? '#bbb' : attack ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
   // engraved brass-framed tag (not a web pill): squarer corners, spot-colour rule, thin sepia inner line, four rivets
+  if (!SK.nine(ctx, 'chip.intent', x - w / 2 - 3, y - h / 2 - 2, w + 6, h + 8)) { // painted (preview): the shield chip, drawn a little past the tag so its point hangs under it
   app.rr(x - w / 2, y - h / 2, w, h, 6); ctx.fillStyle = 'rgba(16,13,12,.9)'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = col; ctx.stroke();
   app.rr(x - w / 2 + 3, y - h / 2 + 3, w - 6, h - 6, 3.5); ctx.lineWidth = lnw(1); ctx.strokeStyle = 'rgba(214,190,140,.32)'; ctx.stroke();
   ctx.fillStyle = 'rgba(255,241,176,.55)'; for (const [rx, ry] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); ctx.arc(x + rx * (w / 2 - 3.5), y + ry * (h / 2 - 3.5), 1, 0, 6.2832); ctx.fill(); }
+  }
   ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
   let cx = x - w / 2 + 8;
   for (const ic of kinds) { drawIntent(ctx, ic.k, cx + isz / 2 - 1, y, isz, { hits: ic.hits, heavy: ic.k === 'heavy' }); cx += isz + 2; }

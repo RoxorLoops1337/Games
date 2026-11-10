@@ -14,8 +14,7 @@ import { templates, drawNineSlice } from './templates.js';
 import { deviceScale } from './smoothing.js';
 
 const MAX_PIXELS = 20e6, MAX_ENTRIES = 300;
-const C = { map: new Map(), pixels: 0, ver: -1, bakes: 0, hits: 0, direct: 0 };
-export const skinStats = C;
+const C = { map: new Map(), pixels: 0, ver: -1 };
 
 function mk(w, h) {
   let c = null;
@@ -93,11 +92,11 @@ export function nine(ctx, id, x, y, w, h, o) {
   let cv = C.map.get(key);
   if (cv === undefined) {
     const t = mk(Math.max(1, Math.round(W * S)), Math.max(1, Math.round(H * S)));
-    if (t) { bake(t.g, fr, t.c.width, t.c.height, S); if (o) finish(t.c, t.g, S, o); cv = t.c; C.pixels += cv.width * cv.height; C.bakes++; } else cv = null;
+    if (t) { bake(t.g, fr, t.c.width, t.c.height, S); if (o) finish(t.c, t.g, S, o); cv = t.c; C.pixels += cv.width * cv.height; } else cv = null;
     C.map.set(key, cv);
   }
-  if (cv) { C.hits++; ctx.drawImage(cv, x + (w - W) / 2, y + (h - H) / 2, W, H); return true; }
-  C.direct++; drawNineSlice(ctx, fr, x, y, w, h); // no canvas to bake into: the plain 9-slice
+  if (cv) { ctx.drawImage(cv, x + (w - W) / 2, y + (h - H) / 2, W, H); return true; }
+  drawNineSlice(ctx, fr, x, y, w, h); // no canvas to bake into: the plain 9-slice
   return true;
 }
 export function part(ctx, id, x, y, w, h) {
@@ -109,7 +108,6 @@ export function icon(ctx, id, x, y, size) {
   templates.ensure();
   return templates.ready() ? templates.drawIcon(ctx, id, x - size / 2, y - size / 2, size, size) : false;
 }
-export const hasIcon = (id) => { templates.ensure(); return templates.ready() && !!templates.iconImg(id); };
 
 // The HP tube. (x, y, w, h) is the bar the procedural code draws; the caps stand a little outside it, the liquid runs between them.
 export function hpBar(ctx, x, y, w, h, pct, trail) {

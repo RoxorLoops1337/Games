@@ -670,7 +670,7 @@ function drawRing(g, I, w, compact, framed) { // framed: a painted frame lies ov
     rr(g, w.x + 2.5, w.y + 2.5, w.w - 5, w.h - 5, 3.5); g.lineWidth = lnw(1); g.strokeStyle = 'rgba(255,246,220,.5)'; g.stroke();
   }
   const gx = w.x + w.w - (framed ? 19 : 13), gy = w.y + (framed ? 24 : 13);
-  if (I.sch && !compact) { circ(g, gx, gy, 10.5, 'rgba(232,220,196,.88)', 1.4); drawSchoolGlyph(g, I.sch, gx, gy, 7.5, COLX[I.sch]); }
+  if (I.sch && (!compact || framed)) { circ(g, gx, gy, 10.5, 'rgba(232,220,196,.88)', 1.4); drawSchoolGlyph(g, I.sch, gx, gy, 7.5, COLX[I.sch]); }
   BB = null;
 }
 function drawIllustration(g, I, w, compact = w === WINC, framed = false) {
@@ -902,6 +902,7 @@ function drawKeyNumber(g, spec, lines, o, win, box) { // compact face: the one n
     const gz = !box && (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz * kb); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     const wN = g.measureText(ki.n).width, cx = box ? box.x + box.w / 2 + 12 * kb : 14, baseY = ty + 8 * kb + size * 0.78;
     const ncol = o.tithed ? '#7a6a60' : ki.kind === 'dmg' ? '#7a1c1c' : ki.kind === 'block' ? '#2f4a58' : ki.kind === 'heal' ? '#3a6a46' : '#4a3022';
+    if (box) { g.lineJoin = 'round'; g.lineWidth = Math.max(4, size * 0.09); g.strokeStyle = 'rgba(240,231,208,.92)'; g.strokeText(ki.n, cx, baseY); } // on a picture: a vellum edge around the number
     g.fillStyle = 'rgba(20,10,5,.28)'; g.fillText(ki.n, cx + 2, baseY + 3);
     g.fillStyle = ncol; g.fillText(ki.n, cx, baseY);
     const hp = hatchPat(g, 2); if (hp) { g.save(); g.globalAlpha = 0.55; g.fillStyle = hp; g.fillText(ki.n, cx, baseY); g.restore(); }
@@ -1026,12 +1027,12 @@ function renderFaceTemplate(g, spec, lines, price, o, I, T) {
       gg.font = font(11, { bold: true, ui: true }); gg.fillStyle = COLX.vellum; gg.fillText(label, cx, cy + 0.5);
       try { if ('letterSpacing' in gg) gg.letterSpacing = '0px'; } catch (e) { /* none */ }
     },
-    textBox: (gg, r) => layoutText(gg, spec, lines, price, o, r),
+    textBox: (gg, r) => { if (!(compact && (spec.grafts || []).length)) layoutText(gg, spec, lines, price, o, r); }, // a grafted hand face shows its graft chips there instead
     keyNumber: (gg, r) => {
       if (!r.own) { drawKeyNumber(gg, spec, lines, o, win); return; }
       if (!keyInfo(lines)) return;
       const wash = gg.createLinearGradient(0, r.y, 0, r.y + r.h); // the number stands on the picture: a vellum mist under it keeps it as plain as on the bare card
-      wash.addColorStop(0, 'rgba(236,225,200,0)'); wash.addColorStop(0.42, 'rgba(236,225,200,.8)'); wash.addColorStop(1, 'rgba(236,225,200,.92)');
+      wash.addColorStop(0, 'rgba(236,225,200,0)'); wash.addColorStop(0.5, 'rgba(236,225,200,.5)'); wash.addColorStop(1, 'rgba(236,225,200,.8)');
       gg.fillStyle = wash; gg.fillRect(r.x, r.y, r.w, r.h);
       drawKeyNumber(gg, spec, lines, o, win, r);
     },
@@ -1047,7 +1048,7 @@ function renderFaceTemplate(g, spec, lines, price, o, I, T) {
   composeCardFront(g, T.tpl, T.fr, { compact, grafts: (spec.grafts || []).length > 0 }, painters);
   if (junk && !painted) drawBandages(g);
   if (o.tithed) drawSeam(g, seed);
-  if (o.jam) drawClamp(g, seed, painted ? win.y + 24 : win.y + win.h); // on a painted frame the banner under the picture carries the name: the clamp bites the top of the picture
+  if (o.jam) drawClamp(g, seed, painted ? win.y + 34 : win.y + win.h); // on a painted frame the banner under the picture carries the name: the clamp bites the top of the picture
   if (o.mark) drawMark(g, o.mark, win, seed);
 }
 // the template (if any) a card face is drawn from: { fr, tpl, slots, painted } or null. Resolved once per frame image and variant, then looked up.
@@ -1389,22 +1390,28 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.restore(); BB = null;
 }
 
+// The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to 8 at which rules plus price fit. `fits` is false when
+// even 8 spills (the text is then drawn anyway). Shared by the face painter and by the checks that sweep every card (tests, lab).
+export function cardTextFit(g, lines, price, maxW, avail) {
+  let best = null;
+  for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
+    g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
+    const rl = lines.map((l) => wrapText(g, l, maxW)); const rn = rl.reduce((a, b) => a + b.length, 0);
+    const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
+    const ps = Math.max(8.5, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
+    const pl = price.map((l) => wrapText(g, l, maxW)); const pn = pl.reduce((a, b) => a + b.length, 0);
+    const pH = pn ? pn * ps * 1.2 + 12 : 0;
+    best = { s, lh, rl, rH, ps, pl, pH };
+    if (rH + pH + 4 <= avail) break;
+  }
+  best.fits = best.rH + best.pH + 4 <= avail;
+  return best;
+}
 function layoutText(g, spec, lines, price, o, box) { // box: the text slot of a template face; the default is the procedural layout
   const MAXW = box ? box.w : 176, TOP = box ? box.y : 2, BOT = box ? box.y + box.h : 143, AVAIL = BOT - TOP, CX = box ? box.x + box.w / 2 : 0;
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   const flavor = spec.flavor ? String(spec.flavor) : '';
-  let best = null;
-  for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
-    g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
-    const rl = lines.map((l) => wrapText(g, l, MAXW)); const rn = rl.reduce((a, b) => a + b.length, 0);
-    const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
-    const ps = Math.max(8.5, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
-    const pl = price.map((l) => wrapText(g, l, MAXW)); const pn = pl.reduce((a, b) => a + b.length, 0);
-    const pH = pn ? pn * ps * 1.2 + 12 : 0;
-    best = { s, lh, rl, rH, ps, pl, pH };
-    if (rH + pH + 4 <= AVAIL) break;
-  }
-  const { s, lh, rl, rH, ps, pl, pH } = best;
+  const { s, lh, rl, rH, ps, pl, pH } = cardTextFit(g, lines, price, MAXW, AVAIL);
   let fl = [], fH = 0;
   if (flavor) { g.font = font(11, { italic: true }); fl = wrapText(g, flavor, MAXW); if (fl.length > 2) fl.length = 2; fH = fl.length * 12.5 + 5; }
   const flavorOk = fH && rH + pH + fH + 6 <= AVAIL;

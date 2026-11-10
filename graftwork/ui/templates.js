@@ -189,10 +189,11 @@ const SLOT_NAMES = ['window', 'textHole', 'namePlate', 'typeBand', 'textBox', 'c
 export function resolveSlots(tpl, { compact = false, grafts = false } = {}) {
   const out = {};
   for (const n of SLOT_NAMES) {
-    if (compact ? FULL_ONLY.includes(n) : COMPACT_ONLY.includes(n)) continue;
-    const s = (compact && tpl.slots[slotName(n, true, grafts)]) || tpl.slots[n];
+    // a full-face slot shows on a compact face only when the template names it for that face ('typeBandCompact'); a slot of no size is a slot switched off
+    if (compact ? FULL_ONLY.includes(n) && !tpl.slots[n + 'Compact'] : COMPACT_ONLY.includes(n)) continue;
+    const s = (compact && tpl.slots[slotName(n, true, grafts)]) || (compact && tpl.slots[n + 'Compact']) || tpl.slots[n];
     const r = s ? resolveSlot(s, tpl.w, tpl.h) : null;
-    if (r) out[n] = r;
+    if (r && (r.w > 0 || r.h > 0)) out[n] = r;
   }
   // the big number of a compact face: the template's own keyNumber slot (a painted frame puts it on the picture), else the strip under the window
   if (compact) { const own = tpl.slots.keyNumber ? resolveSlot(tpl.slots.keyNumber, tpl.w, tpl.h) : null; if (own) { own.own = true; out.keyNumber = own; } else if (out.window) out.keyNumber = { x: out.window.x, y: out.window.y + out.window.h, w: out.window.w, h: 80 }; }
@@ -282,6 +283,8 @@ export function createTemplates(opts = {}) {
     if (o.art !== undefined) A.art = o.art === null ? null : !!o.art;
     A.reset();
   };
+  // a lab page or a test shows the painted and the procedural look side by side: force(true | false) sets the switch without dropping what is loaded, force(null) hands it back
+  A.force = (v) => { A.art = v === null || v === undefined ? null : !!v; return A.sync(); };
   A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.res.clear(); A.failed = 0; A.gen = (A.gen || 0) + 1; swKey = null; A.on = A.wanted(); A.ver++; };
   A.ensure = (app) => {
     if (app && (app !== A.app || app.frame !== A.syncFrame)) A.sync(app);

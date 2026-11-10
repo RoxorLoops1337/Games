@@ -5,7 +5,7 @@ import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, drawGraftPatch, CARD_W, CARD_H } from '../art/cards.js';
-import { drawRelic, drawPotion, drawCoin } from '../art/icons.js';
+import { drawRelic, drawPotion, drawCoin, paintedGauge } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines } from '../engine/text.js';
@@ -36,6 +36,7 @@ export function drawGauge(app, x, y, w, info, o = {}) {
   const g = app.ctx;
   const n = Math.max(info.budget, info.weight, 1), gap = 4;
   const cw = clamp((w - (n - 1) * gap) / n, 8, 28), ch = o.h || 18;
+  if (!o.slide && paintedGauge(g, x, y, w, ch, info.weight, info.budget)) return n * (cw + gap); // painted (preview): the brass socket frame, same row, same room
   for (let i = 0; i < n; i++) {
     const cx = x + i * (cw + gap);
     let oy = 0, al = 1;

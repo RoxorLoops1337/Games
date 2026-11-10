@@ -68,10 +68,19 @@ function hueOf(col) { // 'gold' | 'green' | '' : which leather a caller's fill a
   HUE.set(col, h); return h;
 }
 const TONES = { gold: '#c08a22', green: '#4c8a3a' };
+// A frame with a content rect (modal, panel) stands AROUND the panel it replaces: the old rectangle becomes its field, so what the screen puts near
+// the panel's edge is not covered by the border (only the corner pieces reach in, along the edges). It never leaves the stage.
+function frameRect(fr, x, y, w, h) {
+  const c = fr.def.content; if (!c) return [x, y, w, h];
+  const l = Math.max(0, Math.min(c.x, x)), t = Math.max(0, Math.min(c.y, y)), r = Math.max(0, Math.min(fr.src.lw - c.x - c.w, 1280 - x - w)), b = Math.max(0, Math.min(fr.src.lh - c.y - c.h, 720 - y - h));
+  return [x - l, y - t, w + l + r, h + t + b];
+}
 function paintedPanel(app, x, y, w, h, o) {
   const fr = SK.has(o.frame) && templates.frameImg(o.frame); if (!fr) return false;
   const sl = fr.def.slice; if (sl && (w < (sl[0] + sl[2]) * 1.1 || h < (sl[1] + sl[3]) * 1.1)) return false; // too small for the corner pieces: the plain panel
-  return fr.def.fill === false ? 'border' : SK.nine(app.ctx, o.frame, x, y, w, h);
+  const R = frameRect(fr, x, y, w, h);
+  if (fr.def.fill === false) { panelBody(app, x, y, w, h, o); return SK.nine(app.ctx, o.frame, R[0], R[1], R[2], R[3]); } // a border: it lies around the usual slab
+  return SK.nine(app.ctx, o.frame, R[0], R[1], R[2], R[3]);
 }
 function paintedButton(app, x, y, w, h, o, state) {
   const dy = state === 2 ? 2 : 0, tone = hueOf(o.fill), rimCol = o.stroke && o.stroke !== 'brass' && state !== 3 ? o.stroke : null;
@@ -121,9 +130,7 @@ function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
   return o.c;
 }
 export function panel(app, x, y, w, h, o) {
-  const painted = typeof o.frame === 'string' && !o.plain && (templates.ensure(app), templates.ready()) ? paintedPanel(app, x, y, w, h, o) : false;
-  if (painted === true) return;
-  if (painted === 'border') { panelBody(app, x, y, w, h, o); SK.nine(app.ctx, o.frame, x, y, w, h); return; } // the leather border lies over the usual slab
+  if (typeof o.frame === 'string' && !o.plain && (templates.ensure(app), templates.ready()) && paintedPanel(app, x, y, w, h, o)) return;
   panelBody(app, x, y, w, h, o);
 }
 function panelBody(app, x, y, w, h, o) {
