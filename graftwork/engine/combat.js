@@ -33,7 +33,7 @@ export function newCombat(run, enemyIds, opts = {}) {
   c.A = makeApi(c);
   c.strain = strainInfo(run);
   c.seam = seamInit(c);
-  c.res = resonanceOf(run).tiers;
+  c.res = resonanceOf(run, c.kind).tiers;
   const tithed = new Set(c.strain.tithed);
   const brand = relicMod(run, 'brandingIron') || run.relics.some((r) => RELICS[r] && RELICS[r].perk === 'brandingIron');
   for (const inst of run.deck) { const w = wrap(c, inst, tithed.has(inst.uid)); if (brand && inst.grafts.length === 2) w.brand = true; c.drawPile.push(w); }

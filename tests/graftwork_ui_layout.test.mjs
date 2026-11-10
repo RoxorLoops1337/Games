@@ -168,9 +168,10 @@ const flowFor = (h) => {
     openDeck() { h.app.push('deckview', {}); }, openSettings() {}, abandon() {}, saveMeta() {}, newRun() {}, toTitle() {}, openCodex() { h.app.push('codex', {}); } };
   h.app.shared.flow = f; return f;
 };
+// every second graft has its Price waived (Free Sample): the panels that list a card's grafts then print "Waived" where the others print "Price"
 const graftHeavy = (run, n = 8) => {
   let done = 0;
-  for (const inst of run.deck) for (const g of GRAFT_LIST) { if (done >= n) return; if (CARDS[inst.id].type !== 'junk' && !inst.grafts.length && RUN.applyGraft(run, inst.uid, g.id, { keepPhase: true, free: true }).ok) { done++; break; } }
+  for (const inst of run.deck) for (const g of GRAFT_LIST) { if (done >= n) return; if (CARDS[inst.id].type !== 'junk' && !inst.grafts.length && RUN.applyGraft(run, inst.uid, g.id, { keepPhase: true, free: true }).ok) { if (done % 2) inst.waived = [g.id]; done++; break; } }
 };
 const hoverAt = (h, x, y, n = 4) => { h.app.mouse.x = x; h.app.mouse.y = y; frames(h.app, n); };
 // Every scene is reached the way a run reaches it: the hero walks into the room that holds it (tests/graftwork_lib.mjs wardOpen), so the reward
