@@ -10,6 +10,7 @@ import * as META from '../graftwork/engine/meta.js';
 import * as WD from '../graftwork/engine/ward.js';
 import { ENEMIES } from '../graftwork/data/index.js';
 import combat from '../graftwork/ui/combat.js';
+import { canPlay } from '../graftwork/engine/combat.js';
 import pause, { installPause, drawPauseOverlay } from '../graftwork/ui/pause.js';
 import settings from '../graftwork/ui/settings.js';
 import deckview from '../graftwork/ui/deckview.js';
@@ -284,17 +285,23 @@ async function enemyTurn(hook, o = {}) {
   const R = await fightRig(o), { app, audio } = R;
   for (let i = 0; i < 600 && combat.api().busy; i++) app.tick(DT);
   const a = combat.api(); assert.ok(a.canAct, 'the fight is ready');
-  click(app, a.endTurn.x, a.endTurn.y); frames(app, 30); click(app, a.endTurn.x, a.endTurn.y); app.mouse.x = app.mouse.y = -999;
-  assert.equal(a.c.turn, 2, 'the engine resolved the enemy turn at once'); assert.ok(combat.api().queueLen > 5, 'and its animation is queued: ' + combat.api().queueLen);
+  if (o.card) { // a card of the player's own: pick the first playable one by key, press again to play it
+    const i = a.c.hand.findIndex((k, j) => canPlay(a.c, j).ok && a.c.hand[j].inst.id !== 'm_dress'), n0 = a.c.hand.length; assert.ok(i >= 0);
+    key(app, String(i + 1)); key(app, String(i + 1)); if (a.c.hand.length === n0) key(app, 'Enter');
+    assert.equal(a.c.hand.length, n0 - 1, 'the card was played'); assert.ok(combat.api().busy, 'and its animation runs');
+  } else {
+    click(app, a.endTurn.x, a.endTurn.y); frames(app, 30); click(app, a.endTurn.x, a.endTurn.y); app.mouse.x = app.mouse.y = -999;
+    assert.equal(a.c.turn, 2, 'the engine resolved the enemy turn at once'); assert.ok(combat.api().queueLen > 5, 'and its animation is queued: ' + combat.api().queueLen);
+  }
   frames(app, o.into || 24);
   const S = combat.api().state(), mid = { q: combat.api().queueLen, anim: animOf(S), engine: engineOf(a.c) };
-  assert.ok(mid.q > 0 && combat.api().busy, 'the modal opens in the middle of the sequence');
+  assert.ok((mid.q > 0 || S.wait > 0 || S.spr.length > 0) && combat.api().busy, 'the modal opens in the middle of the sequence');
   const calls0 = audio.calls.length, keep = RNG.s;
   const info = hook ? await hook(R, mid) : null;
   RNG.s = keep; const during = audio.calls.splice(calls0); // what sounded while the modal was open is the modal's business
   const rec = [];
   for (let i = 0; i < 900; i++) { const c0 = audio.calls.length; app.tick(DT); rec.push(animOf(combat.api().state()) + '|' + audio.calls.slice(c0).join(',')); if (!combat.api().busy && i > 60 && rec.length > 120) break; }
-  assert.ok(!combat.api().busy, 'the enemy turn finished');
+  assert.ok(!combat.api().busy, 'the sequence finished');
   return { rec, engine: engineOf(a.c), anim: animOf(combat.api().state()), mid, during, info, R };
 }
 const stillFrozen = (R, mid, k) => { assert.equal(animOf(combat.api().state()), mid.anim, 'the animation stands still (' + k + ')'); assert.equal(engineOf(combat.api().c), mid.engine); };
@@ -330,6 +337,13 @@ await t('combat: Pause, Settings, the deck view and Pause > Deck freeze an enemy
     for (let i = 0; i < A.rec.length; i++) if (A.rec[i] !== B.rec[i]) assert.fail(`${name}: frame ${i} after the modal differs\n  no modal: ${A.rec[i].slice(0, 400)}\n  ${name}: ${B.rec[i].slice(0, 400)}`);
     assert.equal(B.engine, A.engine, name + ': the same engine state'); assert.equal(B.anim, A.anim);
     assert.ok(!B.during.some((s) => /^sfx:(hit|block|enemy|intent|draw|loseHp|turn)/i.test(s)), name + ': no fight sound while the modal is open: ' + B.during.join(' '));
+  }
+  // the same in the middle of a card animation (the card flies, the hit lands, the numbers pop)
+  const C0 = await enemyTurn(null, { card: true, into: 5 });
+  assert.ok(C0.rec.length > 20, 'control: the card animation goes on for ' + C0.rec.length + ' frames');
+  for (const name of ['pause', 'deck']) {
+    const C1 = await enemyTurn(HOOKS[name], { card: true, into: 5 });
+    assert.deepEqual(C1.rec, C0.rec, name + ' in the middle of a card animation: frame for frame the same'); assert.equal(C1.engine, C0.engine); assert.equal(C1.anim, C0.anim);
   }
   Math.random = realRandom;
 });
