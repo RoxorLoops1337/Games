@@ -1,11 +1,11 @@
 // GRAFTWORK animation lab (graftwork/lab/anim.html + anim.js): the page references files that exist, imports only real modules and exports, has the five
-// scenes, reads its URL params, lists actors from the manifest (no hard coded roster), links from the kit lab and has no em dashes. Headless safe: static
+// scenes, reads its URL params, lists actors from the manifest (no hard coded roster) and has no em dashes. Headless safe: static
 // checks plus a node import of the game modules it drives (no DOM needed).
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 const root = new URL('../graftwork/', import.meta.url).pathname;
-const html = readFileSync(join(root, 'lab/anim.html'), 'utf8'), js = readFileSync(join(root, 'lab/anim.js'), 'utf8'), rooms = readFileSync(join(root, 'lab/rooms.html'), 'utf8');
+const html = readFileSync(join(root, 'lab/anim.html'), 'utf8'), js = readFileSync(join(root, 'lab/anim.js'), 'utf8');
 const man = JSON.parse(readFileSync(join(root, 'assets/ward/manifest.json'), 'utf8'));
 let n = 0;
 const t = async (name, fn) => { try { await fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -54,9 +54,9 @@ await t('failures_are_shown_not_thrown', () => {
   assert.ok(js.includes('failed to load') && js.includes('manifest did not load') && js.includes('Drawing error'), 'visible fallback messages');
   assert.ok(!/console\.(error|warn)/.test(js), 'no console output from the lab');
 });
-await t('linked_from_the_kit_lab_and_no_em_dashes', () => {
-  assert.ok(rooms.includes('href="anim.html"'), 'kit lab links to the animation lab');
-  assert.ok(html.includes('href="rooms.html"'), 'animation lab links back');
-  for (const [name, s] of [['anim.html', html], ['anim.js', js], ['rooms.html', rooms]]) assert.ok(!/[—–]/.test(s), 'em or en dash in ' + name);
+await t('the_room_lab_is_gone_and_no_em_dashes', () => {
+  assert.ok(!existsSync(join(root, 'lab/rooms.html')) && !existsSync(join(root, 'lab/rooms.js')), 'the room lab page was removed');
+  assert.ok(!html.includes('rooms.html'), 'no link to it');
+  for (const [name, s] of [['anim.html', html], ['anim.js', js]]) assert.ok(!/[\u2014\u2013]/.test(s), 'em or en dash in ' + name);
 });
 console.log(n + ' animation lab checks passed');
