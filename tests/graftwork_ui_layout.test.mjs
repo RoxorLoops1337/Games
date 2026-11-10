@@ -408,6 +408,11 @@ for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 
     INST.resetInstall();
   }
   hoverAt(h, 640, 330); look(h, 3, T('title') + '/hover');
+  { // the notice a retired save leaves (meta.notice): the dimmed menu, the panel, the sentence, the button
+    const hn = await make(o); const fn = flowFor(hn); fn.hasSave = () => false; fn.openSettings = () => {}; hn.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; hn.meta.notice = 'classic_retired';
+    hn.app.shared.audio = h.app.shared.audio; hn.app.go('title'); look(hn, 80, T('title') + '/notice'); assert.ok(LAYOUT.getAll().some((r) => r.id === 'title-notice'), 'the notice is up');
+    hoverAt(hn, 640, 400); look(hn, 3, T('title') + '/noticehover'); key(hn.app, 'Enter'); look(hn, 10, T('title') + '/noticegone'); assert.equal(hn.meta.notice, undefined);
+  }
   { // continue present, both pips, a saved hero card, the sewing intro at four moments
     const hv = await make(o); const fv = flowFor(hv); hv.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; fv.hasSave = () => true; fv.resume = () => true; fv.openSettings = () => {}; hv.meta.history = [{ hero: 'wick' }]; hv.meta.unlocked.fresh = { a: 1, b: 1, c: 1 };
     hv.app.shared.audio = h.app.shared.audio; hv.app.go('title'); look(hv, 80, T('title') + '/save'); hoverAt(hv, 640, 336); look(hv, 3, T('title') + '/savehover'); hoverAt(hv, 725, 466); look(hv, 3, T('title') + '/pip');
