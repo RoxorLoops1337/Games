@@ -192,27 +192,37 @@ await t('scale sanity: every prop fits its footprint, stands between knee and wa
 });
 
 // ======================================================= loader =======================================================
-await t('assets loader: the kit manifest loads once, @1x on phones and @2x on desktop, null while loading, a bad kit manifest or a failed file never throws, headless is a no-op', async () => {
+await t('assets loader: the kit manifest loads once, images by recipe (never the whole kit), @1x on phones and @2x on desktop, a change of size is bridged, kit images are never evicted, a bad kit manifest or a failed file never throws, headless is a no-op', async () => {
   const urls = [];
   const fake = createAssets({
     base: 'assets/ward/', fetchJson: async (u) => { urls.push(u); return u.includes('ward_kit') ? { version: 1, world: { tw: 92, th: 48, sub: 4 }, floors: { wood: { file1x: 'floors/w1.webp', file2x: 'floors/w2.webp', tile: 512 } }, walls: {}, pieces: {}, props: { crate: { file1x: 'props/c1.webp', file2x: 'props/c2.webp', w: 10, h: 10, anchorX: 5, anchorY: 9, sw: 9, footprint: [1, 1] } } } : { version: 1, tile: { w: 2, h: 1 }, rooms: {}, actors: {}, icons: {}, cards: {} }; }, makeImage: () => ({}),
   });
   assert.equal(fake.kitReady(), false); fake.ensure(); fake.ensure(); await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(urls.sort(), ['assets/ward/manifest.json', 'assets/ward_kit/manifest.json'], 'both manifests are asked for once, the kit next to the Ward art');
-  assert.ok(fake.kitReady()); assert.equal(fake.kitImg('floors', 'wood', { scale: 1 }), null, 'null while the image is loading'); assert.equal(fake.kitSettled({ scale: 1 }), false);
-  const e = fake.imgs.get('kit:floors/w2.webp'); assert.ok(e, 'desktop asks for the @2x file'); e.ok = true; e.img.width = 512;
-  const got = fake.kitImg('floors', 'wood', { scale: 1 }); assert.ok(got && got.img === e.img && got.def.tile === 512);
-  const e1 = (fake.kitImg('props', 'crate', { scale: 0.5, px: 0.5 }), fake.imgs.get('kit:props/c1.webp')); assert.ok(e1, 'a phone (scale < 0.8) asks for the @1x file');
-  fake.imgs.get('kit:props/c2.webp').bad = true; e1.bad = true; assert.equal(fake.kitSettled({ scale: 1 }), true, 'settled = every image loaded or failed');
-  assert.equal(fake.kitImg('floors', 'nope', { scale: 1 }), null); assert.equal(fake.kitImg('walls', 'wood', { scale: 1 }), null);
-  const prog = fake.kitProgress({ scale: 1 }); assert.equal(prog.total, 2);
+  assert.ok(fake.kitReady()); assert.equal(fake.imgs.size, 0, 'the kit manifest alone starts no download: the kit is never loaded as a whole');
+  const rc = { floor: 'wood', wall: 'none', pieces: [], props: [{ id: 'crate' }] }, desk = { scale: 1 }, phone = { scale: 0.5, px: 0.5 }; // a recipe: one floor, one prop (a wall the kit does not have is nothing to wait for)
+  assert.equal(fake.kitImg('floors', 'wood', desk), null, 'null while the image is loading'); assert.deepEqual([...fake.imgs.keys()], ['kit:floors/w2.webp'], 'desktop asks for the @2x file');
+  assert.equal(fake.kitRecipeSettled(rc, desk), false); assert.deepEqual(fake.kitRecipeProgress(rc, desk), { loaded: 0, total: 2 }); assert.deepEqual([...fake.imgs.keys()].sort(), ['kit:floors/w2.webp', 'kit:props/c2.webp'], 'asking about a recipe starts exactly its files');
+  const e = fake.imgs.get('kit:floors/w2.webp'); e.ok = true; e.img.width = 512;
+  const got = fake.kitImg('floors', 'wood', desk); assert.ok(got && got.img === e.img && got.def.tile === 512); assert.deepEqual(fake.kitRecipeProgress(rc, desk), { loaded: 1, total: 2 });
+  fake.imgs.get('kit:props/c2.webp').bad = true; assert.equal(fake.kitRecipeSettled(rc, desk), true, 'settled = every image of the recipe loaded or failed'); assert.equal(fake.kitImg('props', 'crate', desk), null, 'a failed image is null');
+  assert.equal(fake.kitImg('floors', 'nope', desk), null); assert.equal(fake.kitImg('walls', 'wood', desk), null);
+  // a change of size (a phone stage, a lower quality tier): the @1x file is asked for, and the decoded @2x is drawn until it is in
+  const viaBig = fake.kitImg('floors', 'wood', phone), e1 = fake.imgs.get('kit:floors/w1.webp'); assert.ok(e1, 'a phone (under 0.8 device px per logical px) asks for the @1x file');
+  assert.ok(viaBig && viaBig.img === e.img, 'the size that is already decoded bridges the change'); assert.equal(fake.kitRecipeProgress(rc, phone).loaded >= 1, true, 'and the recipe does not count as loading again for it');
+  e1.ok = true; assert.strictEqual(fake.kitImg('floors', 'wood', phone).img, e1.img, 'then the wanted size is drawn');
+  assert.equal(fake.kitImg('props', 'crate', phone), null, 'a size that never loaded bridges nothing'); assert.ok(fake.imgs.has('kit:props/c1.webp'));
+  // the kit is never evicted: with no budget at all, only other images go
+  fake.imgs.set('other.webp', { ok: true, bad: false, bytes: 4e6, used: 0, img: {} }); e.bytes = e1.bytes = 4e6; e.used = e1.used = 0;
+  assert.equal(fake.maintain(1e9, 1, 0), 1); assert.ok(!fake.imgs.has('other.webp') && fake.imgs.has('kit:floors/w2.webp') && fake.imgs.has('kit:floors/w1.webp'), 'a kit image stays whatever the budget');
+  for (const api of ['kitSettled', 'kitPreload', 'kitProgress', 'kitFilesFor']) assert.equal(fake[api], undefined, 'no whole-kit call: ' + api);
   const bad = createAssets({ fetchJson: async (u) => (u.includes('ward_kit') ? { floors: [], nonsense: 1 } : { version: 1, rooms: {}, actors: {} }), makeImage: () => ({}) }); bad.ensure(); await new Promise((r) => setTimeout(r, 5));
   assert.equal(bad.kitState, 'none'); assert.equal(bad.kitReady(), false); assert.equal(bad.ready(), true, 'a bad kit manifest leaves the painted Ward art alone');
   const old = createAssets({ fetchJson: async () => ({ version: 1, tile: { w: 2, h: 1 }, rooms: {}, actors: {}, icons: {}, cards: {} }), makeImage: () => ({}) }); old.ensure(); await new Promise((r) => setTimeout(r, 5));
   assert.equal(old.kitState, 'none', 'a server that answers the Ward manifest for every URL is not a kit');
   const dead = createAssets({ fetchJson: async (u) => { if (u.includes('ward_kit')) throw new Error('404'); return { version: 1, rooms: {}, actors: {} }; }, makeImage: () => ({}) }); dead.ensure(); await new Promise((r) => setTimeout(r, 5));
   assert.equal(dead.kitState, 'none'); assert.equal(dead.ready(), true);
-  const headless = createAssets(); headless.ensure(); assert.equal(headless.kitState, 'none'); assert.equal(headless.kitImg('floors', 'wood'), null); assert.equal(headless.kitSettled(), false);
+  const headless = createAssets(); headless.ensure(); assert.equal(headless.kitState, 'none'); assert.equal(headless.kitImg('floors', 'wood'), null); assert.equal(headless.kitRecipeProgress({ floor: 'wood', wall: 'wood', pieces: [], props: [] }).total, 0); assert.equal(headless.imgs.size, 0);
   const moved = createAssets({ base: 'x/ward/', fetchJson: async () => ({}) }); moved.ensure(); await new Promise((r) => setTimeout(r, 5)); assert.equal(moved.kitState, 'none');
   assert.equal(assets.kitState === 'idle' || assets.kitState === 'none', true, 'the shared loader never started in headless tests');
 });
@@ -358,26 +368,31 @@ await t('overlap: rooms draw strictly back to front and a front room never walls
 });
 
 // ======================================================= fallback and picking =======================================================
-await t('fallback: a room type with no recipe, or with a missing floor or wall, keeps its painted sprite; modular and painted rooms mix on one floor', async () => {
+await t('fallback: a room type with no recipe, or with a missing floor or wall, stays a procedural block; modular and block rooms mix on one floor; each room waits for its own pieces', async () => {
   installKit();
   const { app, run, flow } = await setup({ seed: 'mix' });
   const ids = layout(run, HOSPITAL); run.ward.deck.hand = []; flow.route(); frames(app, 10);
   let k = ISO.lastKit(); const kitIds = [...k.rooms.keys()];
   for (const id of ids) { const type = run.ward.rooms[id].type; assert.equal(k.rooms.has(id), !!KD.resolveRecipe(type, assets.kit), type + ' is modular exactly when it has a usable recipe'); }
   assert.equal(kitIds.length, ids.length + 1, 'every room type (and the far Theatre) is modular with the kit as delivered'); assert.ok(k.rooms.has(ids[0]) && k.rooms.has(ids[8]), 'the Entrance and the Chapel are modular now');
-  // without the wood floor the sawmill, the ward, the dispensary and the linen room are painted again
+  // without the wood floor the sawmill, the ward, the dispensary and the linen room are blocks
   installKit(without(CUR, 'floors', ['wood'])); flow.route(); frames(app, 10); k = ISO.lastKit();
-  for (const id of ids) { const type = run.ward.rooms[id].type; if (['rm_sawmill', 'rm_dispensary', 'rm_linen'].includes(type)) assert.ok(!k.rooms.has(id), type + ' painted without a wood floor'); }
+  for (const id of ids) { const type = run.ward.rooms[id].type; if (['rm_sawmill', 'rm_dispensary', 'rm_linen'].includes(type)) assert.ok(!k.rooms.has(id), type + ' is a block without a wood floor'); }
   assert.ok(k.rooms.has(ids[5]), 'the quarry (stone) still modular');
-  // without the stone floor the chapel, the quarry and the workshop are painted again while the tile and wood rooms stay modular: painted and modular rooms mix on one floor
+  // without the stone floor the chapel, the quarry and the workshop are blocks while the tile and wood rooms stay modular: block and modular rooms mix on one floor
   installKit(without(CUR, 'floors', ['stone'])); flow.route(); frames(app, 10); k = ISO.lastKit();
-  assert.ok(!k.rooms.has(ids[8]) && !k.rooms.has(ids[5]) && !k.rooms.has(ids[7]), 'chapel, quarry and workshop painted without a stone floor'); assert.ok(k.rooms.has(ids[0]) && k.rooms.has(ids[2]), 'the entrance (tile) and the ward stay modular');
-  // a texture that fails to load: painted
-  installKit(); assets.imgs.get('kit:walls/stone@2x.webp').ok = false; assets.imgs.get('kit:walls/stone@2x.webp').bad = true; frames(app, 10); k = ISO.lastKit(); assert.ok(!k.rooms.has(ids[5]), 'a failed stone wall texture: the quarry is painted');
+  assert.ok(!k.rooms.has(ids[8]) && !k.rooms.has(ids[5]) && !k.rooms.has(ids[7]), 'chapel, quarry and workshop are blocks without a stone floor'); assert.ok(k.rooms.has(ids[0]) && k.rooms.has(ids[2]), 'the entrance (tile) and the ward stay modular');
+  // a texture that fails to load: the block stays (the other size was never downloaded, so there is nothing to bridge with)
+  installKit(); assets.imgs.delete('kit:walls/stone@1x.webp'); assets.imgs.get('kit:walls/stone@2x.webp').ok = false; assets.imgs.get('kit:walls/stone@2x.webp').bad = true; frames(app, 10); k = ISO.lastKit(); assert.ok(!k.rooms.has(ids[5]), 'a failed stone wall texture: the quarry is a block');
+  assert.ok(k.rooms.has(ids[0]), 'the rooms that do not use it are untouched');
   // no kit at all: nothing modular, nothing throws
   removeKit(); flow.route(); frames(app, 10); assert.equal(ISO.lastKit().rooms.size, 0);
-  // a kit whose images are still loading draws painted rooms (no piecemeal pop-in)
-  installKit(); assets.imgs.get('kit:props/crate@2x.webp').ok = false; frames(app, 5); assert.equal(ISO.lastKit().rooms.size, 0, 'unsettled: all painted'); removeKit();
+  // an image still loading holds back exactly the rooms whose recipe needs it (never a room with a piece missing), and no other room
+  installKit(); assets.imgs.delete('kit:props/crate@1x.webp'); assets.imgs.get('kit:props/crate@2x.webp').ok = false; flow.route(); frames(app, 5); k = ISO.lastKit();
+  let withCrate = 0;
+  for (const id of ids) { const rc = KD.resolveRecipe(run.ward.rooms[id].type, assets.kit), uses = rc.props.some((p) => p.id === 'crate'); if (uses) withCrate++; assert.equal(k.rooms.has(id), !uses, run.ward.rooms[id].type + (uses ? ' waits for its crate' : ' does not wait for a crate it does not use')); }
+  assert.ok(withCrate >= 1 && withCrate < ids.length, 'some rooms use the crate, some do not: ' + withCrate);
+  assets.imgs.get('kit:props/crate@2x.webp').ok = true; frames(app, 2); assert.equal(ISO.lastKit().rooms.size, ids.length + 1, 'the crate arrived: every room is modular'); removeKit();
 });
 await t('picking: a tall modular wall takes the click (not the floor behind it), a low wall does not; floors always resolve to their own cell', async () => {
   installKit(); ISO.setWallMode('full');
@@ -477,7 +492,7 @@ await t('grounding: at rest nothing leaves the floor (no vertical offset), only 
     for (const r of ISO.lastActors()) {
       if (r.kind === 'token') continue;
       assert.ok(r.shadow, 'every actor has a shadow'); assert.equal(r.shadow.y, r.y, 'flat on the floor'); assert.equal(r.shadow.x, r.x);
-      if (r.stride !== undefined && r.bob === 0) { idle++; assert.ok(Math.abs(r.sq - 1) <= 0.0201, 'at rest only breathing: sq ' + r.sq); assert.ok(Math.abs(r.tilt) <= 0.0121, 'a small weight shift only: ' + r.tilt); assert.equal(r.frame, 0, 'standing pose'); }
+      if (r.stride !== undefined && r.bob === 0) { idle++; assert.ok(Math.abs(r.sq - 1) <= 0.0201, 'at rest only breathing: sq ' + r.sq); assert.ok(Math.abs(r.tilt) <= 0.0121, 'a small weight shift only: ' + r.tilt); assert.equal(r.cycle, false, 'standing: no walk pose'); }
       else if (r.bob > 0) { hopping++; maxHop = Math.max(maxHop, r.bob); shadows.push([r.bob, r.shadow.a, r.shadow.rx / r.h]); assert.ok(r.bob < 4.5, 'a tiny hop: ' + r.bob); }
     }
   }
@@ -486,19 +501,19 @@ await t('grounding: at rest nothing leaves the floor (no vertical offset), only 
   assert.ok(hi.length && lo.length, 'both hop heights seen'); assert.ok(Math.max(...hi.map((s) => s[1])) < Math.min(...lo.map((s) => s[1])) + 1e-9 || hi[0][1] <= lo[0][1], 'the shadow fades with the hop'); assert.ok(hi.every((s) => s[1] >= 0.46 * 0.7 - 1e-6), 'but only slightly');
   const hero = ISO.lastActors().find((x) => x.kind === 'hero'); assert.equal(hero.bob, 0, 'the hero at rest does not bob'); assert.ok(Math.abs(hero.sq - 1) <= 0.0201);
 });
-await t('grounding: the step cycle follows the DISTANCE moved (stride phase = distance / stride), the walk frames alternate at each plant, a figure lean into its heading, no sliding: still means no stride', async () => {
+await t('grounding: the step cycle follows the DISTANCE moved (stride phase = distance / stride), the hop (the walk of a figure without a puppet) lands on every plant, a figure leans into its heading, no sliding: still means no stride', async () => {
   const { app, run, flow } = await setup({ seed: 'stride', motion: true });
   const [a, b, c] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_corridor', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 120);
   const S = app.screens.ward.st, H = () => ISO.lastActors().find((x) => x.kind === 'hero');
   const s0 = H().stride; frames(app, 60); assert.equal(H().stride, s0, 'standing: the stride does not advance');
   const rows = []; S.walk = { cells: [a, b, c], i: 0, stop: 2, t: 0, done: () => { run.ward.hero.room = c; }, wait: false };
   let px = H().x, py = H().y;
-  for (let f = 0; f < 40 && S.walk; f++) { frames(app, 1); const h = H(); rows.push({ d: Math.hypot(h.x - px, h.y - py), st: h.stride, fr: h.frame, flip: h.flip, tilt: h.tilt, bob: h.bob, sq: h.sq }); px = h.x; py = h.y; }
+  for (let f = 0; f < 40 && S.walk; f++) { frames(app, 1); const h = H(); rows.push({ d: Math.hypot(h.x - px, h.y - py), st: h.stride, cy: h.cycle, flip: h.flip, tilt: h.tilt, bob: h.bob, sq: h.sq }); px = h.x; py = h.y; }
   const mv = rows.filter((r) => r.d > 0.5); assert.ok(mv.length > 8, 'it walked ' + mv.length + ' frames');
   const k = (44 * 0.5); let prev = rows[0].st, dsum = 0;
   for (let i = 1; i < rows.length; i++) { dsum += rows[i].d; const dst = rows[i].st - prev; prev = rows[i].st; assert.ok(Math.abs(dst - rows[i].d / k) < 0.02, 'stride advanced ' + dst.toFixed(3) + ' for a move of ' + rows[i].d.toFixed(2) + ' px (expected ' + (rows[i].d / k).toFixed(3) + ')'); }
   assert.ok(Math.abs((rows[rows.length - 1].st - rows[0].st) - dsum / k) < 0.05, 'total stride = total distance / stride length');
-  const frs = new Set(mv.map((r) => r.fr)); assert.ok(frs.has(0) && frs.has(1), 'the two walk frames alternate');
+  assert.ok(mv.filter((r) => r.cy).length > 6, 'walking: the walk cycle runs'); assert.ok(new Set(mv.map((r) => Math.floor(r.st))).size >= 2, 'more than one plant'); assert.equal(H().frame, undefined, 'no step frame: nothing is swapped');
   assert.ok(mv.some((r) => r.tilt > 0.03), 'it leans into its heading'); assert.ok(mv.some((r) => r.bob > 0.5), 'a little hop between plants'); assert.ok(mv.every((r) => Math.abs(r.flip) <= 1.0001), 'flip is a smooth scale');
   assert.ok(mv.some((r) => r.sq < 0.99), 'squash on the foot plant'); assert.equal(H().flip > 0, true, 'moving right-down: unflipped (the art faces down-right)');
   // walking back (left-moving): the figure turns, flipped

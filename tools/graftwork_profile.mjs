@@ -174,7 +174,7 @@ const WARD_SETUP = async () => {
   app.shared.run = run; flow.route();
   window.__ward = { ids };
 };
-SC.ward12 = { desc: 'Ward map, 12 rooms, hero walking, monsters wandering', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(WARD_SETUP); const t0 = Date.now(); await gwWait(page, "window.__gw.app.current==='ward'"); await page.evaluate(async () => { const { assets } = await import('/graftwork/ui/assets.js'); const t = performance.now(); window.__wardReady = new Promise((res) => { const iv = setInterval(() => { if (assets.ready() && assets.kitSettled(window.__gw.app)) { clearInterval(iv); res(performance.now() - t); } }, 50); setTimeout(() => { clearInterval(iv); res(-1); }, 90000); }); }); this.readyMs = await page.evaluate(() => window.__wardReady); await wait(S(1500)); },
+SC.ward12 = { desc: 'Ward map, 12 rooms, hero walking, monsters wandering', async setup(page) { await gwWait(page, "window.__gw && window.__gw.app.current==='title'"); await page.evaluate(WARD_SETUP); const t0 = Date.now(); await gwWait(page, "window.__gw.app.current==='ward'"); await page.evaluate(async () => { const { assets } = await import('/graftwork/ui/assets.js'), ISO = await import('/graftwork/ui/ward_iso.js'); const t = performance.now(), allKit = () => { const k = ISO.lastKit(); return !!k && k.rooms.size >= Object.keys(window.__gw.app.shared.run.ward.rooms).length; }; /* every built room is drawn from the kit */ window.__wardReady = new Promise((res) => { const iv = setInterval(() => { if (assets.ready() && allKit()) { clearInterval(iv); res(performance.now() - t); } }, 50); setTimeout(() => { clearInterval(iv); res(-1); }, 90000); }); }); this.readyMs = await page.evaluate(() => window.__wardReady); await wait(S(1500)); },
   async run(page) { const end = Date.now() + S(10000); let i = 0; while (Date.now() < end) { await page.evaluate(async (i) => { const ward = (await import('/graftwork/ui/ward.js')).default, ids = window.__ward.ids, app = window.__gw.app; const run = app.shared.run; if (!run.ward.walk) ward.walkTo(app, ids[i % 2 ? 0 : 2], 0); }, i++); await wait(1400); } } };
 
 const COMBAT_SETUP = async () => {
@@ -336,7 +336,7 @@ async function loadMetrics(browser, base, cpu) {
   await gwWait(page, "window.__gw.app.current==='ward'");
   let wardMs = -1;
   try { await gwWait(page, "(async()=>1)() && window.__wardOk===true", 1).catch(() => {}); } catch (e) { /* ignore */ }
-  await page.evaluate(async () => { const { assets } = await import('/graftwork/ui/assets.js'); window.__wardOk = false; const iv = setInterval(() => { if (assets.ready() && assets.kitSettled(window.__gw.app)) { window.__wardOk = true; clearInterval(iv); } }, 50); });
+  await page.evaluate(async () => { const { assets } = await import('/graftwork/ui/assets.js'), ISO = await import('/graftwork/ui/ward_iso.js'); window.__wardOk = false; const iv = setInterval(() => { const k = ISO.lastKit(); if (assets.ready() && k && k.rooms.size >= Object.keys(window.__gw.app.shared.run.ward.rooms).length) { window.__wardOk = true; clearInterval(iv); } }, 50); }); // every built room is drawn from the kit
   try { await gwWait(page, 'window.__wardOk===true', 300000); wardMs = Date.now() - tw0; } catch (e) { /* stays -1 */ }
   await wait(1500);
   const cold = { bytes: h.net.bytes, reqs: h.net.reqs };

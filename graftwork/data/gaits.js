@@ -1,4 +1,4 @@
-// GAITS: how each actor walks when it is animated as a PUPPET (ui/puppet.js). No art is needed: the standing sprite is split into a left leg, a right leg and an
+// GAITS: how each actor walks. Walking on the map IS the puppet (ui/puppet.js). No art is needed: the standing sprite is split into a left leg, a right leg and an
 // upper body from its own alpha (the analysis finds the hip line and the valley between the legs). Actors without two legs get a body gait instead.
 //
 //   gait: 'legged'  two legs found in the alpha (the default for anything the analysis can split): a real step cycle, one foot forward then the other
@@ -10,9 +10,6 @@
 // (ui/puppet.js TUNE) for that actor, for example { lift: 0.05 }. Short forms on the entry: `tuck` (how far the leg part runs up UNDER the garment, figure heights, default
 // TUNE.tuck 0.18; the hip pivot sits there, hidden by the cloth), `garment` (sway of the hem band, 0 = rigid cloth, default 1) and `hang` (true/false forces the garment
 // detection: a hem band that sways and a crisp hem; the default measures the silhouette just above the hip against the legs below it).
-// PUPPET_PREF: true = always use the puppet walk, false = keep the painted walk frames (only where the owner has approved the painted cycle). Anything not listed uses
-// the puppet walk (default for heroes and every actor, because the painted cycles do not alternate feet). tools/graftwork_art_meta.json carries the same `puppet`
-// flags for the art session; tests/graftwork_puppet.test.mjs keeps the two in step.
 export const GAITS = {
   bedpan_slime: { gait: 'hop' },
   pill_swarm: { gait: 'hop' },
@@ -34,12 +31,7 @@ export const GAITS = {
   the_resident: { gait: 'legged', minHip: 0.76, tuck: 0.08 }, // a tattered coat hem: gaps in it would show a longer hidden part
   crutchling: { gait: 'waddle' }, // the crutches are part of the leg runs: a limp rock reads better than swinging crutches
 };
-export const PUPPET_PREF = {
-  marrow: true, wick: true, odile: true, crutchling: true, gauze_mummy: true, leech_jar: true, night_nurse: true, orderly: true,
-};
 export const GAIT_KINDS = ['legged', 'hop', 'waddle', 'roll', 'flap'];
 // the id an actor goes by in this table: Level 2 elites share the Level 1 entry
 export const gaitKey = (id) => String(id || '').replace(/_l2$/, '');
 export const gaitEntry = (id) => GAITS[gaitKey(id)] || null;
-// true unless the owner has approved the painted walk of this actor (PUPPET_PREF false)
-export const wantsPuppet = (id) => PUPPET_PREF[gaitKey(id)] !== false;

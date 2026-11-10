@@ -103,7 +103,7 @@ try {
     assert.ok(f.missingAssets.some((e) => e.includes('rooms/a@2x.webp')), JSON.stringify(f.missingAssets));
     assert.ok(f.missingAssets.some((e) => e.includes('m_atk2@3x.webp')), 'hi3x battle frames need @3x');
     assert.equal(f.missingAssets.length, 2);
-    assert.deepEqual(f.orphanAssets, ['graftwork/assets/ward/rooms/stray@1x.webp']);
+    assert.deepEqual(f.orphanAssets, ['graftwork/assets/ward/actors/m_walk1@1x.webp', 'graftwork/assets/ward/actors/m_walk1@2x.webp', 'graftwork/assets/ward/rooms/stray@1x.webp'], 'a stray file, and the files of a walk list: only battle frames (atk, hit, die) are frames');
   });
   t('duplicate helpers: same name in two files, identical or not', () => {
     const c = f.duplicateDetail.find((d) => d.name === 'clamp'), tau = f.duplicateDetail.find((d) => d.name === 'TAU');

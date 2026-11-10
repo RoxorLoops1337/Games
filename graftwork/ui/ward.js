@@ -206,10 +206,10 @@ export default {
     const w = run.ward;
     if (!w) return;
     ISO.camReset();
-    assets.ensure(app); // the room, actor and icon art (assets/ward/); every draw falls back to the procedural look until it is there
+    assets.ensure(app); // the manifests of the Ward art and the room kit; an image is asked for by the code that draws it, and every draw has a procedural look until it is there
     if (!w.rooms[w.hero.room]) { const e = WD.entranceOf(run); if (e) w.hero.room = e.id; } // a hero is always standing in a room
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
-    if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
+    if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; ISO.newFloor(); }
     ensurePlan(run);
     const P = MEM.plan;
     if (P && P.act !== w.act) MEM.plan = null;
@@ -228,7 +228,7 @@ export default {
     if (!S || !S.run.ward) return;
     app.touchPan = !!S.plans; // a finger drag on the Ward is a plan drag (core.js turns a vertical touch move into a scroll otherwise, and the drop never happened); only the plans overlay scrolls
     S.t += dt; S.fx.update(dt);
-    if (!S.preloaded && assets.ready()) { S.preloaded = true; assets.preload(app); }
+    this.wantHandArt(app);
     if (S.dieRolling > 0) S.dieRolling = Math.max(0, S.dieRolling - dt);
     { const w0 = S.run.ward; if (w0.phase !== 'morning' && !S.banner && S.run.phase === 'ward' && !WD.bossForced(S.run)) { const r0 = WD.rollOf(S.run); if (r0 && MEM.dieKey !== r0.key) { MEM.dieKey = r0.key; startDie(app); } } }
     if (S.toastT > 0) S.toastT -= dt;
@@ -258,6 +258,16 @@ export default {
         if (wk.hold <= 0) { const done = wk.done; S.walk = null; if (done) done(); }
       }
     }
+  },
+  // The hand is drawn in the morning only, so its pictures are asked for here: when the Ward opens and whenever the hand changes. By the time a
+  // plan is on screen its illustration is decoded (or on its way) and the glyph it falls back to is not what the player sees first.
+  wantHandArt(app) {
+    if (!assets.ready()) return;
+    const hand = S.run.ward.deck.hand; let key = '';
+    for (const c of hand) key += c.id + ',';
+    if (S.handArt === key) return;
+    S.handArt = key;
+    for (const c of hand) assets.cardArt(BUILD_CARDS[c.id], app);
   },
   // the walk animation: token steps along P.cells from index a to b, then done()
   animate(app, a, b, done) {
