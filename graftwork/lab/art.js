@@ -52,14 +52,14 @@ FRAMES.push(['junk', 'junk']);
 for (const [type, rarity] of FRAMES) {
   const c = cardOf(type, rarity), own = c && c.rarity === rarity;
   const fid = type === 'junk' ? 'card_front.junk' : `card_front.${type}.${rarity}`;
-  block('cards', fid, `${c ? c.name : '?'} (${c ? c.id : ''})${own ? '' : `: the data has no ${rarity} ${type} card, this one is drawn in that frame`}. Hand size and inspect size, painted then procedural.`, 400, (g) => {
+  block('cards', fid, `${c ? c.name : '?'} (${c ? c.id : ''})${own ? '' : `: the data has no ${rarity} ${type} card, this one is drawn in that frame`}. Hand size and inspect size, painted then procedural.`, 440, (g) => {
     if (!c) return;
     const spec = specFor(c), o = { t: 1, still: true, rarity };
     const cols = [[110, HAND, true, 'hand, painted'], [300, HAND, false, 'hand, procedural'], [560, BIG, true, 'inspect, painted'], [880, BIG, false, 'inspect, procedural']];
     for (const [x, sc, painted, text] of cols) {
-      const run = () => drawCard(g, spec, x + 40, 205, { ...o, scale: sc, compact: sc === HAND });
+      const run = () => drawCard(g, spec, x + 40, 218, { ...o, scale: sc, compact: sc === HAND });
       if (painted) run(); else procedural(run);
-      label(g, text, x + 40, 384, { align: 'center' });
+      label(g, text, x + 40, 420, { align: 'center' });
     }
   });
 }
