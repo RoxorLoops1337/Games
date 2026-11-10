@@ -1,12 +1,13 @@
 // Headless gate for the Shop and Forge screens, each opened by walking the hero into its room (Dispensary, Workshop): buy one of everything,
-// strip, remove, open the building plans, every Forge option, then back to the Ward with the walk finished.
+// strip, remove, open the building plans, every Forge option, then back to the Ward with the walk finished. Then the card pickers: the click
+// that opens one never picks a card, and identical copies carry a tag.
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key, wardOpen } from './graftwork_lib.mjs';
 import { getAll } from '../graftwork/ui/layout_registry.js';
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES } from '../graftwork/data/index.js';
-import shop from '../graftwork/ui/shop.js';
+import shop, { cardTag } from '../graftwork/ui/shop.js';
 import forge, { optionCenterX, optionIndex } from '../graftwork/ui/forge.js';
 
 const sfxLog = [];
@@ -101,5 +102,47 @@ for (const hero of Object.keys(HEROES)) {
     click(app, 640, 646); frames(app, 5);
     assert.equal(run.phase, 'ward', `${hero} ${opt} returns to the Ward`); assert.equal(run.ward.phase, 'evening', 'the midday walk is spent');
   }
+}
+// ---------------- the click that opens a card picker must not also pick a card (it used to upgrade a random card at the Forge) ----------------
+async function forgeApp() {
+  // Arrange: a fresh Forge visit
+  const run = RUN.newRun({ hero: 'marrow', seed: 'clickthrough' });
+  const app = await makeApp({ run, meta: {}, audio: { sfx() {}, music() {} } });
+  app.register('forge', forge); app.register('deckview', { enter() {}, draw() {} });
+  app.shared.flow = { route() { app.go('forge', { run }); }, openDeck() {} };
+  run.phase = 'forge'; run.pending = { kind: 'forge', used: 0 };
+  app.go('forge', { run }); frames(app, 60);
+  return { run, app };
+}
+const REFINE = optionIndex('refine');
+
+// Act: click the Refine option at many points across the card, never clicking a card in the picker.
+// Assert: nothing is upgraded and the Forge visit is still unused.
+let checked = 0;
+for (let y = 140; y <= 520; y += 20) {
+  for (let dx = -80; dx <= 80; dx += 20) {
+    const { run, app } = await forgeApp();
+    click(app, optionCenterX(REFINE) + dx, y); frames(app, 5);
+    assert.equal(run.deck.filter((c) => c.up).length, 0, `refine click at ${optionCenterX(REFINE) + dx},${y} upgraded a card by itself`);
+    assert.equal(run.pending.used, 0, 'the visit is not used until a card is chosen');
+    checked++;
+  }
+}
+// Then choosing a card on purpose still works.
+{
+  const { run, app } = await forgeApp();
+  click(app, optionCenterX(REFINE), 300); frames(app, 20);
+  click(app, 160, 211); frames(app, 20);
+  assert.equal(run.deck.filter((c) => c.up).length, 1, 'a deliberate pick upgrades exactly one card');
+}
+// the card pickers tell identical copies apart with a tag
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'r3tag' });
+  const cuts = run.deck.filter((i) => i.id === 'm_cut');
+  assert.ok(cuts.length >= 2);
+  assert.equal(cardTag(cuts, cuts[1]), '#2');
+  cuts[1].grafts.push('g_arc_clip'); cuts[1].up = 1;
+  assert.equal(cardTag(cuts, cuts[1]), '#2, 1 graft, +');
+  assert.equal(cardTag([run.deck.find((i) => i.id === 'm_transfuse')], run.deck.find((i) => i.id === 'm_transfuse')), null);
 }
 console.log('graftwork ui shop/forge ok');

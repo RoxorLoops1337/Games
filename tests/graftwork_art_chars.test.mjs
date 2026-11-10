@@ -1,6 +1,6 @@
 // Character art: every enemy and hero draws in every state without throwing (fake canvas).
 import assert from 'node:assert/strict';
-import { fakeCtx, installDom } from './graftwork_lib.mjs';
+import { fakeCtx, installDom, canvasCalls } from './graftwork_lib.mjs';
 globalThis.__GW_ART_THROW = 1;
 installDom();
 const { ENEMY_LIST } = await import('../graftwork/data/index.js');
@@ -62,14 +62,15 @@ for (const e of [...ENEMY_LIST, ...newDefs]) {
   const s2 = {}; drawEnemy(ctx, e, 300, 400, { t: 1, hpFrac: 0.9, state: s2 }); assert.ok(!s2.__art.seamPopped, 'no pop above 50%');
   drawEnemy(ctx, e, 300, 400, { t: 1.1, hpFrac: 0.49, state: s2 }); assert.ok(s2.__art.seamPopped, 'pop below 50%');
 }
-{ // benchmark: 6 enemies + hero per frame (fake ctx, so JS cost only; real canvas cost is measured in the browser screenshot script)
+{ // budget: 6 enemies + hero per frame, counted in canvas calls over every fake context (it was "under 3 ms a frame" on the wall clock, which a
+  // busy machine fails; the cost in a real browser is measured by tools/graftwork_profile.mjs). Measured: 1925 calls a frame.
   const six = ENEMY_LIST.slice(0, 6), sts = six.map(() => ({}));
   let tt = 0;
   for (let w = 0; w < 30; w++) { tt += 1 / 60; six.forEach((e, i) => drawEnemy(ctx, e, 100 + i * 150, 500, { t: tt, state: sts[i], hpFrac: 0.6, atk: i === 2 ? { phase: 'act', k: 0.5 } : null })); drawHero(ctx, 'marrow', 80, 500, { t: tt }); }
-  const t0 = performance.now(), N = 120;
+  const c0 = canvasCalls(), N = 120;
   for (let f = 0; f < N; f++) { tt += 1 / 60; six.forEach((e, i) => drawEnemy(ctx, e, 100 + i * 150, 500, { t: tt, state: sts[i], hpFrac: 0.6, atk: i === 2 ? { phase: 'act', k: 0.5 } : null })); drawHero(ctx, 'marrow', 80, 500, { t: tt }); }
-  const per = (performance.now() - t0) / N;
-  console.log('bench ms/frame (6 enemies + hero, fake ctx):', per.toFixed(2));
-  assert.ok(per < 3, 'frame cost ' + per);
+  const per = (canvasCalls() - c0) / N;
+  console.log('canvas calls per frame (6 enemies + hero, every fake context):', per.toFixed(0));
+  assert.ok(per < 2600, 'frame cost ' + per + ' canvas calls');
 }
 console.log('graftwork art chars round 4 ok', n2, 'draws');

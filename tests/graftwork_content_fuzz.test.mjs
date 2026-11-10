@@ -7,8 +7,8 @@ import { fakeCtx, installDom } from './graftwork_lib.mjs';
 installDom();
 globalThis.localStorage = (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), clear: () => m.clear() }; })();
 const RUN = await import('../graftwork/engine/run.js');
-const { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, specOf, HAND_CAP } = await import('../graftwork/engine/combat.js');
-const { newInst, cardSpec, canGraft, canTemper, temper, MAX_GRAFTS } = await import('../graftwork/engine/cards.js');
+const { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, HAND_CAP } = await import('../graftwork/engine/combat.js');
+const { newInst, cardSpec, canGraft, canTemper, temper } = await import('../graftwork/engine/cards.js');
 const T = await import('../graftwork/engine/text.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } = await import('../graftwork/data/index.js');
 const { makeRng } = await import('../graftwork/engine/rng.js');
@@ -107,7 +107,6 @@ function buildDeck(run, specs) {
   return deck;
 }
 function randomGrafts(inst, n) { const out = []; const probe = { ...inst, grafts: inst.grafts.slice(), fused: (inst.fused || []).slice() }; for (const g of shuffled(GRAFT_IDS)) { if (out.length >= n) break; if (canGraft(probe, g)) { out.push(g); probe.grafts.push(g); } } return out; }
-const FILL = { marrow: ['m_strike', 'm_guard', 'm_strike', 'm_guard'], wick: [], odile: [] };
 
 let combats = 0;
 function fuzzCombat(label, o) {
@@ -214,7 +213,7 @@ for (const s of Object.keys(STATUSES)) { tryDo(`status ${s}`, () => ART.icons.dr
 for (const e of ENEMY_IDS) for (const t of [0, 1.3]) tryDo(`enemy ${e}`, () => ART.enemies.drawEnemy(ctx, ENEMIES[e], 300, 400, { t }));
 
 // ---------------- part 3: text templates ----------------
-const badText = (t) => (/undefined|\[object|NaN|null/.test(t) ? 'bad token' : / {2,}/.test(t) ? 'double space' : /—/.test(t) ? 'em dash' : /\s$|^\s/.test(t) ? 'edge space' : '');
+const badText = (t) => (/undefined|\[object|NaN|null/.test(t) ? 'bad token' : / {2,}/.test(t) ? 'double space' : /\s$|^\s/.test(t) ? 'edge space' : '');
 const scan = (what, t) => { if (typeof t !== 'string') return; const w = badText(t); if (w) bug(`TEXT ${what}: ${w}`, JSON.stringify(t).slice(0, 140)); };
 for (const id of CARD_IDS) for (const up of [0, 1]) for (const gs of [0, 2, 3]) {
   const inst = newInst(id, () => 1); inst.up = up; if (gs) inst.grafts.push(...randomGrafts(inst, gs));
@@ -249,6 +248,22 @@ for (const e of Object.values(ENEMIES)) for (const [mid, mv] of Object.entries(e
   tryDo('meta migrate of an old save', () => { const o = meta.loadMeta(); if (!o.tips || !o.seen || !o.settings) bug('SAVE old meta not migrated (tips/seen/settings missing)'); });
   store.set(meta.KEY, '{not json'); tryDo('corrupt meta', () => { const o = meta.loadMeta(); if (!o || !o.tips) bug('SAVE corrupt meta not replaced by defaults'); });
   meta.setStorage(null);
+}
+
+// ---------------- merged card text: same-effect lines add up, nothing repeats (every card x graft x upgrade) ----------------
+{
+  const lines = T.cardLines(cardSpec({ id: 'm_incision', up: false, grafts: ['g_nicked_vein'] }));
+  assert.equal(lines.filter((l) => /Bleed/.test(l)).length, 1, JSON.stringify(lines));
+  assert.ok(lines.some((l) => /Apply 5 Bleed/.test(l)), JSON.stringify(lines));
+  const bad = [];
+  for (const c of Object.values(CARDS)) for (const up of [false, true]) for (const g of [null, ...Object.keys(GRAFTS)]) {
+    let ls; try { ls = T.cardLines(cardSpec({ id: c.id, up, grafts: g ? [g] : [] })); } catch (e) { continue; }
+    const ss = ls.join(' ').split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean), seen = new Set();
+    for (const s of ss) { if (seen.has(s)) { bad.push(`${c.id}${up ? '+' : ''} [${g}] ${s}`); break; } seen.add(s); }
+  }
+  assert.deepEqual(bad.slice(0, 5), [], 'repeated sentences');
+  const liq = T.cardLines(cardSpec({ id: 'o_liquidate', up: false, grafts: [] })).join(' ');
+  assert.match(liq, /Pay 15 gold/); assert.match(liq, /Deal 12 damage again/); assert.doesNotMatch(liq, /Gain -/);
 }
 
 // ---------------- report ----------------

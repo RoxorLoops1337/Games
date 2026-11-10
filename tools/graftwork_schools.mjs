@@ -4,7 +4,7 @@
 //   node tools/graftwork_schools.mjs relics [N=100] [asc=0] [id]  baseline strong bot vs the same bot with each relic forced at start
 // A "forced" build: graft picks are restricted to the given school(s); everything else is the strong bot.
 import * as RUN from '../graftwork/engine/run.js';
-import { cardSpec, canGraft } from '../graftwork/engine/cards.js';
+import { canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, RELICS } from '../graftwork/data/index.js';
 import { POLICIES, graftScore, playWardRun, strongFight } from './graftwork_driver.mjs';
 

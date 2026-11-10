@@ -64,16 +64,18 @@ console.log('graftwork_art_icons ok', n);
   console.log('graftwork_art_icons R1 ok');
 }
 
-// ---- round 4 backgrounds: every theme with parallax, ambient colours, cost benchmark (fake canvas = call overhead only)
+// ---- round 4 backgrounds: every theme with parallax, ambient colours, and what a frame costs. The cost is counted in canvas calls over every
+// fake context (it was "under 2 ms" on the wall clock, which a busy machine fails): a theme that re-ran its baked layers every frame, or
+// grew a heavy live layer, shows here. Measured: 137 (table, event) to 527 (theatre) calls a frame.
 {
-  const { fakeCtx: fc } = await import('./graftwork_lib.mjs');
+  const { fakeCtx: fc, canvasCalls } = await import('./graftwork_lib.mjs');
   const Bg = await import('../graftwork/art/backgrounds.js');
   const g = fc();
   for (const th of Bg.BACKGROUND_THEMES) {
     assert.ok(/^#[0-9a-f]{6}$/i.test(Bg.ambient(th)), 'ambient ' + th);
     for (const par of [0, -1, 1, 5]) { const o = { parallax: par }; Bg.drawBackground(g, th, 1.5, o); assert.ok(o.parallax >= -1 && o.parallax <= 1, 'parallax clamped'); }
-    const t0 = performance.now(); for (let i = 0; i < 30; i++) Bg.drawBackground(g, th, i / 60, {}); const ms = (performance.now() - t0) / 30;
-    assert.ok(ms < 2, th + ' background costs ' + ms.toFixed(2) + ' ms');
+    const c0 = canvasCalls(); for (let i = 0; i < 30; i++) Bg.drawBackground(g, th, i / 60, {}); const calls = (canvasCalls() - c0) / 30;
+    assert.ok(calls < 700, th + ' background costs ' + calls.toFixed(0) + ' canvas calls a frame');
   }
   for (const th of ['ward', 'market', 'theatre', 'title', 'table', 'shop', 'forge', 'event', 'win', 'lose']) assert.ok(Bg.BACKGROUND_THEMES.includes(th), 'theme ' + th);
   assert.equal(Bg.BACKGROUND_THEMES.length, 10, 'no theme without a screen: ' + Bg.BACKGROUND_THEMES);

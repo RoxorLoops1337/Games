@@ -6,7 +6,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { fight, POLICIES } from './graftwork_driver.mjs';
 import { CARDS, GRAFTS, HEROES, ENEMIES } from '../graftwork/data/index.js';
-import { strainInfo, graftWeight } from '../graftwork/engine/cards.js';
+import { graftWeight } from '../graftwork/engine/cards.js';
 
 // Grafts that read the rest of the deck (school stacks, Strain, Tithe) are measured in a mid-run deck: 3 plain same-school
 // grafts on other cards and Strain 2 in BOTH the baseline and the graft deck (the graft's own weight is added to the Budget).

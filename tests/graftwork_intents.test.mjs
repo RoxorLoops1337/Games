@@ -1,14 +1,11 @@
-// S3 late-game fixes: intent icons per move effect, the lethal warning maths, merged card text, the +cost badge, the new move tips.
+// Enemy intents: the icons follow the move's effect (1 to 3 per move, every real move), the lethal warning adds up the visible intents
+// (Block, Vulnerable, Weak, pierce, hidden and dead enemies), and the moves that need one carry a tip.
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, intentOf, lethalIncoming, addStatus } from '../graftwork/engine/combat.js';
 import { intentIcons } from '../graftwork/engine/intent_icons.js';
-import { ENEMIES, CARDS, GRAFTS } from '../graftwork/data/index.js';
-import { cardSpec } from '../graftwork/engine/cards.js';
-import { cardLines } from '../graftwork/engine/text.js';
-import { fakeCtx, installDom } from './graftwork_lib.mjs';
+import { ENEMIES } from '../graftwork/data/index.js';
 
-installDom();
 let n = 0;
 const t = async (name, fn) => { await fn(); n++; console.log('ok', name); };
 const ks = (mv, info, o) => intentIcons(mv, info, o).map((i) => i.k + (i.hits > 1 ? 'x' + i.hits : ''));
@@ -75,53 +72,13 @@ await t('lethal: Vulnerable and Weak are applied, pierce ignores Block, hidden a
   c = fight([a], 0); assert.equal(lethalIncoming(c).lethal, false, 'no HP no warning');
 });
 
-// ---------- card text: no repeated sentences ----------
-await t('merged text: same-effect lines add up, nothing repeats (every card x graft x upgrade)', () => {
-  const lines = cardLines(cardSpec({ id: 'm_incision', up: false, grafts: ['g_nicked_vein'] }));
-  assert.equal(lines.filter((l) => /Bleed/.test(l)).length, 1, JSON.stringify(lines));
-  assert.ok(lines.some((l) => /Apply 5 Bleed/.test(l)), JSON.stringify(lines));
-  const bad = [];
-  for (const c of Object.values(CARDS)) for (const up of [false, true]) for (const g of [null, ...Object.keys(GRAFTS)]) {
-    let ls; try { ls = cardLines(cardSpec({ id: c.id, up, grafts: g ? [g] : [] })); } catch (e) { continue; }
-    const ss = ls.join(' ').split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean), seen = new Set();
-    for (const s of ss) { if (seen.has(s)) { bad.push(`${c.id}${up ? '+' : ''} [${g}] ${s}`); break; } seen.add(s); }
-  }
-  assert.deepEqual(bad.slice(0, 5), [], 'repeated sentences');
-  const liq = cardLines(cardSpec({ id: 'o_liquidate', up: false, grafts: [] })).join(' ');
-  assert.match(liq, /Pay 15 gold/); assert.match(liq, /Deal 12 damage again/); assert.doesNotMatch(liq, /Gain -/);
-});
-
-// ---------- cost badge ----------
-await t('a card whose cost is above its printed cost draws the red +cost badge, an even cost does not', async () => {
-  const { drawCard } = await import('../graftwork/art/cards.js');
-  const spec = cardSpec({ id: 'm_incision', up: false, grafts: [] });
-  const run = (cost) => { const g = fakeCtx(); const seen = []; let fs = ''; Object.defineProperty(g, 'fillStyle', { get: () => fs, set: (v) => { fs = v; seen.push(String(v)); } }); drawCard(g, spec, 0, 0, { cost }); return seen; };
-  assert.ok(run(spec.cost + 1).includes('#e0453a'), 'badge when cost is up');
-  assert.ok(!run(spec.cost).includes('#e0453a'), 'no badge at the printed cost');
-  assert.ok(!run(Math.max(0, spec.cost - 1)).includes('#e0453a') || spec.cost === 0, 'no badge when cost is down');
-});
-
 // ---------- move tips ----------
 await t('Lid Crush has a tip, the Grafter mirror says it copies your card', async () => {
   assert.ok(ENEMIES.pickled_king.moves.crush.tip && /Brined/.test(ENEMIES.pickled_king.moves.crush.tip));
-  assert.ok(!/—/.test(ENEMIES.pickled_king.moves.crush.tip));
   assert.match(ENEMIES.the_grafter.moves.mirror.tip, /copies your own card/);
   const run = RUN.newRun({ hero: 'marrow', seed: 'gm' }); run.relics = [];
   const c = newCombat(run, ['the_grafter']);
   assert.match(c.enemies[0].def.moves.mirror.tip, /copies your own card/, 'the per-fight mirror keeps the tip');
 });
 
-// ---------- tutorial bubble never covers a telegraph ----------
-await t('a first-run tip slides clear of the enemy name, move and intent plates', async () => {
-  const { makeApp, frames } = await import('./graftwork_lib.mjs');
-  const { maybeTip } = await import('../graftwork/ui/tutorial.js');
-  const app = await makeApp({ meta: { settings: {}, tips: {} } });
-  frames(app, 2);
-  const plate = { x: 480, y: 68, w: 200, h: 92 };
-  maybeTip(app, 'energy', 100, 400, 'Energy pays for cards. You get 3 each turn.', { pos: { x: 470, y: 80 }, w: 250, maxBottom: 460, avoid: [plate] });
-  const b = app._tipBox;
-  assert.ok(b, 'tip drawn');
-  assert.ok(b.x + b.w <= plate.x || b.x >= plate.x + plate.w || b.y + b.h <= plate.y || b.y >= plate.y + plate.h, `tip ${JSON.stringify(b)} overlaps the plate`);
-});
-
-console.log(`graftwork_s3_intents ok (${n})`);
+console.log(`graftwork_intents ok (${n})`);

@@ -24,7 +24,8 @@
 //   5 unreferencedLocals* top level function / class / const / destructured name that nothing references
 //   6 missingAssets      a manifest entry whose file does not exist;  orphanAssets*: a file under graftwork/assets nobody refers to
 //   7 duplicateHelpers*  the same small helper (a function or a numeric constant) defined at the top level of several files
-//   8 emDashes           an em dash anywhere in graftwork/, tests/graftwork*, tools/graftwork* (a test may name the character to look
+//   8 emDashes           an em dash or en dash anywhere in graftwork/, tests/graftwork*, tools/graftwork*, written out or (in graftwork/) as an escape; the
+//                        only check of the rule, no suite repeats it (a test may name the character to look
 //                        for it, in a regex literal or a string of dashes: counted apart as emDashDetectors)
 //   9 brokenImports      an import whose file or exported name does not exist;  unmentionedTools*: a tool no doc or script names
 import fs from 'node:fs';
@@ -37,7 +38,9 @@ export const ALLOW_FILE = 'tests/graftwork_hygiene_allow.json';
 export const ALLOW_LISTS = ['unusedExports', 'testOnlyDead', 'exportOnlyOwnFile', 'unreferencedLocals', 'duplicateHelpers', 'orphanAssets', 'unmentionedTools'];
 // the lists that must be empty
 export const STRICT_LISTS = ['unreachable', 'missingAssets', 'emDashes', 'brokenImports'];
-const EM_DASH = '\u2014';
+const EM_DASH = '\u2014', EN_DASH = '\u2013';
+// a dash written as an escape in game code cannot be seen as the character: \u2014, \u{2014}, &mdash;, &#8212;, String.fromCharCode(0x2014) (and the en dash)
+const ESCAPED_DASH = /\\u(?:2014|2013)|\\u\{0*(?:2014|2013)\}|&[mn]dash;|&#(?:x0*(?:2014|2013)|0*(?:8212|8211));|fromCharCode\(\s*(?:0x2014|0x2013|8212|8211)\s*\)/gi;
 
 // ---------------------------------------------------------------- lexer
 // Returns { bare, code, strings, regexes }. `bare` and `code` have the length of `src`, so offsets agree:
@@ -446,16 +449,20 @@ export function audit(root = REPO, opts = {}) { // opts.ignore: repo-relative fi
   }
   const orphanAssets = assetFiles.filter((f) => !referenced.has(f));
 
-  // ---- 8: em dashes. A test or a tool may NAME the character to look for it: inside a regex literal, or as a string that is nothing but
-  // dashes. Those are counted apart (emDashDetectors); anything else, and anything at all under graftwork/, is a finding.
+  // ---- 8: em dashes (and en dashes). This is the ONE owner of the rule: no suite checks it again. The scan reads every text file of the game, the
+  // tests and the tools, so the text a screen builds from the data cannot hold a dash that no source file holds; under graftwork/ a dash
+  // written as an escape is a finding too. A test or a tool may NAME the character to look for it: inside a regex literal, or as a string
+  // that is nothing but dashes. Those are counted apart (emDashDetectors); anything else, and anything at all under graftwork/, is a finding.
   const emDashes = []; let emDashDetectors = 0;
   const detectorAt = (F, pos) => F.regexes.some((r) => pos > r.start && pos < r.end) || F.strings.some((q) => pos > q.start && pos < q.end && /^[\u2014\u2013-]+$/.test(q.value));
   const textFiles = [...walk(G).map(rel).filter((f) => /\.(?:m?js|md|html|json|webmanifest|css|txt|py|svg)$/.test(f)), ...named('tests'), ...toolFiles, ...walk(abs('tests/fixtures')).map(rel).filter((f) => /graftwork/.test(f))];
   for (const f of new Set(textFiles)) {
     if (/\.(?:png|webp|jpe?g)$/.test(f) || !fs.existsSync(abs(f)) || fs.statSync(abs(f)).isDirectory()) continue;
-    const text = fs.readFileSync(abs(f), 'utf8'); if (!text.includes(EM_DASH)) continue;
+    const text = fs.readFileSync(abs(f), 'utf8');
+    if (isGame(f)) for (const m of text.matchAll(ESCAPED_DASH)) emDashes.push(`${f}:${text.slice(0, m.index).split('\n').length}`);
+    if (!text.includes(EM_DASH) && !text.includes(EN_DASH)) continue;
     const F = !isGame(f) && files.get(f); let line = 1;
-    for (let i = 0; i < text.length; i++) { const c = text[i]; if (c === '\n') line++; else if (c === EM_DASH) { if (F && detectorAt(F, i)) emDashDetectors++; else emDashes.push(`${f}:${line}`); } }
+    for (let i = 0; i < text.length; i++) { const c = text[i]; if (c === '\n') line++; else if (c === EM_DASH || c === EN_DASH) { if (F && detectorAt(F, i)) emDashDetectors++; else emDashes.push(`${f}:${line}`); } }
   }
 
   // ---- 9: tools nobody names
@@ -520,7 +527,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   head(`7  small helpers defined in several files: ${found.duplicateDetail.length} names, ${found.duplicateHelpers.length} definitions`);
   for (const d of found.duplicateDetail.slice(0, 40)) console.log(`  ${d.name.padEnd(14)} x${String(d.files.length).padEnd(3)} ${(d.identical ? 'identical' : d.variants + ' variants').padEnd(11)} ${d.files.map((f) => f.replace('graftwork/', '') + (d.nested.includes(f) ? '(inner)' : '')).join(' ')}`);
   if (found.duplicateDetail.length > 40) console.log(`  ... ${found.duplicateDetail.length - 40} more`);
-  head(`8  em dashes: ${found.emDashes.length}   (${found.emDashDetectors} more are tests naming the character to look for it, in a regex or a string of dashes)`); few(found.emDashes);
+  head(`8  em and en dashes: ${found.emDashes.length}   (${found.emDashDetectors} more are tests naming the character to look for it, in a regex or a string of dashes)`); few(found.emDashes);
   head(`9  broken imports: ${found.brokenImports.length}; tools no doc or script names: ${found.unmentionedTools.length}`); few(found.brokenImports); few(found.unmentionedTools);
   for (const [t, note] of Object.entries(found.toolNotes)) console.log(`  (${t}: ${note})`);
   if (found.lexWarnings.length) { head(`lexer warnings (unbalanced brackets after stripping, findings in these files may be off): ${found.lexWarnings.length}`); few(found.lexWarnings); }

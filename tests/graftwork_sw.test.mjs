@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import { buildManifest, serialize, MANIFEST_PATH } from '../tools/graftwork_sw_build.mjs';
 import * as O from '../graftwork/ui/offline.js';
 
@@ -18,7 +19,6 @@ import * as O from '../graftwork/ui/offline.js';
   for (const p of ['sw.js', 'sw-logic.js', 'sw-manifest.json', 'package.json']) assert.ok(!m.files[p], 'managed separately: ' + p);
   assert.ok(m.bytes < 20 * 1048576, 'offline copy stays under 20 MB: ' + m.bytes);
   const m2 = buildManifest(); assert.equal(m2.version, m.version, 'deterministic');
-  assert.ok(!/[—–]/.test(cur));
 }
 
 // ---- pure logic (sw-logic.js is a classic script: load it in a sandbox)
@@ -41,12 +41,74 @@ assert.equal(L.compareVersions(null, 'a'), 'none'); assert.equal(L.compareVersio
 { const p = L.progress(3, 10, 500, 1000); assert.equal(p.pct, 50); assert.equal(L.progress(0, 0, 0, 0).pct, 0); assert.equal(L.progress(9, 9, 2000, 1000).pct, 100); }
 assert.ok(L.validManifest({ version: 'v', files: { a: {} } })); assert.ok(!L.validManifest({ version: 'v', files: {} })); assert.ok(!L.validManifest(null));
 
-// ---- sw.js sanity: scope, no other game's paths, a failed download never moves the pointer
+// ---- sw.js itself, run in a sandbox with a fake Cache API and network: a download is all or nothing, the pointer moves last, and
+// nothing outside /graftwork/ is ever asked for
 {
   const sw = fs.readFileSync(new URL('../graftwork/sw.js', import.meta.url), 'utf8');
-  assert.ok(!/[—–]/.test(sw) && !/api\//.test(sw), 'no api calls in the worker');
-  assert.ok(/caches\.delete\(name\)/.test(sw) && /writeState\(st\)/.test(sw), 'partial cache deleted on failure; pointer written only at the end');
-  assert.ok(sw.lastIndexOf('await writeState(st); await cleanup()') > sw.indexOf("MAN_KEY, new Response"), 'pointer moves after the manifest marker, i.e. after every file');
+  const SC = '/graftwork/', sha16 = (b) => createHash('sha1').update(b).digest('hex').slice(0, 16);
+  const manifestOf = (version, texts) => { const files = {}; let bytes = 0; for (const [p, t] of Object.entries(texts)) { const b = Buffer.from(t); files[p] = { h: sha16(b), s: b.length }; bytes += b.length; } return { version, bytes, count: Object.keys(files).length, files }; };
+  // one worker: its caches, what it fetched, what it wrote (in order) and what it told the page
+  function worker() {
+    const stores = new Map(), puts = [], fetched = [], said = [], on = {};
+    const net = { manifest: null, texts: {}, status: {} }; // what the network answers: the manifest, the bytes of each file, a status per file
+    const keyOf = (k) => (typeof k === 'string' ? k : k.url);
+    const cacheOf = (name) => { const m = stores.get(name); return { match: async (k) => { const r = m.get(keyOf(k)); return r ? r.clone() : undefined; }, put: async (k, r) => { puts.push([name, keyOf(k)]); m.set(keyOf(k), r); } }; };
+    const box = {
+      URL, Response, Request, Promise, Date, JSON, setTimeout, crypto: globalThis.crypto,
+      location: { origin: 'https://games.test' }, registration: { scope: 'https://games.test' + SC }, clients: { claim: async () => {} }, skipWaiting: async () => {},
+      BroadcastChannel: class { postMessage(m) { said.push(m); } },
+      addEventListener: (n, fn) => { on[n] = fn; },
+      importScripts: (f) => vm.runInContext(fs.readFileSync(new URL('../graftwork/' + f, import.meta.url), 'utf8'), box),
+      caches: { open: async (name) => { if (!stores.has(name)) stores.set(name, new Map()); return cacheOf(name); }, keys: async () => [...stores.keys()], delete: async (name) => stores.delete(name) },
+      fetch: async (u) => {
+        const url = String(u); fetched.push(url);
+        if (url === SC + 'sw-manifest.json') return new Response(JSON.stringify(net.manifest), { status: 200 });
+        const p = url.slice(SC.length);
+        if (!(p in net.texts) || net.status[p]) return new Response('nf', { status: net.status[p] || 404 });
+        return new Response(net.texts[p], { status: 200, headers: { 'content-type': 'text/plain' } });
+      },
+    };
+    box.self = box; vm.createContext(box); vm.runInContext(sw, box);
+    const send = async (data) => { const waits = []; on.message({ data, waitUntil: (p) => waits.push(p) }); await Promise.all(waits); };
+    const state = async () => { const m = stores.get('graftwork-meta'), r = m && m.get(SC + '__state'); return r ? r.clone().json() : null; };
+    return { stores, puts, fetched, said, net, send, state };
+  }
+  const V1 = { 'index.html': '<html>one</html>', 'main.js': 'export const a = 1;', 'ui/title.js': 'export const t = 1;', 'assets/ward/a.webp': 'RIFFone' };
+  const V2 = { ...V1, 'main.js': 'export const a = 2;', 'ui/new.js': 'export const n = 1;' };
+  const fileKeys = (texts) => Object.keys(texts).map((p) => SC + p);
+
+  // a first download: every file and the manifest marker are in the new cache BEFORE the one write that moves the pointer
+  const w = worker(); w.net.manifest = manifestOf('v1', V1); w.net.texts = V1;
+  await w.send({ type: 'download' });
+  assert.deepEqual([...w.stores.get('graftwork-v-v1').keys()].sort(), [...fileKeys(V1), SC + '__manifest'].sort(), 'the copy holds every file of the manifest and the marker');
+  assert.deepEqual(await w.state(), { active: 'v1', pending: null, bytes: w.net.manifest.bytes, pendingBytes: 0 }, 'the new copy is the active one');
+  const pointer = w.puts.map(([c]) => c).indexOf('graftwork-meta');
+  assert.equal(pointer, w.puts.length - 1, 'the pointer is written once, after every file and after the manifest marker');
+  assert.deepEqual(w.puts[pointer - 1], ['graftwork-v-v1', SC + '__manifest'], 'the marker is the last thing put into the copy');
+  assert.equal(w.said.at(-1).state, 'ready'); assert.ok(w.said.some((m) => m.state === 'downloading' && m.pct === 100), 'progress reached 100%');
+  assert.ok(w.fetched.length === 5 && w.fetched.every((u) => u.startsWith(SC)), 'the worker asks for nothing outside its scope (no api, no other game): ' + w.fetched);
+
+  // an update where one file fails: the partial cache is deleted, the pointer does not move, the old copy keeps serving
+  for (const [why, breakIt, msg] of [['a file answers 404', (n) => { n.status['ui/new.js'] = 404; }, /ui\/new\.js 404/], ['a file is not what the manifest says', (n) => { n.texts = { ...V2, 'main.js': 'export const a = 3;' }; }, /main\.js changed during download/]]) {
+    const u = worker(); u.net.manifest = manifestOf('v1', V1); u.net.texts = V1; await u.send({ type: 'download' });
+    u.net.manifest = manifestOf('v2', V2); u.net.texts = V2; breakIt(u.net);
+    const before = u.puts.length; await u.send({ type: 'download' });
+    assert.ok(!u.stores.has('graftwork-v-v2'), why + ': the partial cache is deleted');
+    assert.ok(u.stores.has('graftwork-v-v1') && (await u.state()).active === 'v1' && (await u.state()).pending === null, why + ': the previous copy stays active');
+    assert.ok(!u.puts.slice(before).some(([c]) => c === 'graftwork-meta'), why + ': the pointer was not written');
+    assert.equal(u.said.at(-1).state, 'error'); assert.match(u.said.at(-1).message, msg);
+  }
+  // the same on a first download: nothing is left behind
+  { const f = worker(); f.net.manifest = manifestOf('v1', V1); f.net.texts = V1; f.net.status['main.js'] = 500; await f.send({ type: 'download' });
+    assert.ok(!f.stores.has('graftwork-v-v1') && (await f.state()) === null, 'a failed first download leaves no cache and no pointer'); assert.equal(f.said.at(-1).state, 'error'); }
+
+  // an update that succeeds: unchanged files are copied from the old cache, only the changed ones are downloaded, and it waits for the next page load
+  const u = worker(); u.net.manifest = manifestOf('v1', V1); u.net.texts = V1; await u.send({ type: 'download' });
+  u.net.manifest = manifestOf('v2', V2); u.net.texts = V2; const asked = u.fetched.length; await u.send({ type: 'download' });
+  assert.deepEqual(u.fetched.slice(asked).sort(), [SC + 'main.js', SC + 'sw-manifest.json', SC + 'ui/new.js'], 'only the manifest and the two changed files travel');
+  assert.deepEqual([...u.stores.get('graftwork-v-v2').keys()].sort(), [...fileKeys(V2), SC + '__manifest'].sort());
+  const st = await u.state(); assert.equal(st.active, 'v1'); assert.equal(st.pending, 'v2'); assert.equal(u.said.at(-1).state, 'update-ready');
+  assert.ok(u.stores.has('graftwork-v-v1'), 'the running page keeps its copy until the next load');
 }
 
 // ---- page side
@@ -59,7 +121,6 @@ assert.ok(L.validManifest({ version: 'v', files: { a: {} } })); assert.ok(!L.val
   O.apply({ type: 'state', state: 'ready', bytes: 14.2 * 1048576 }); assert.equal(O.offlineLabel(), 'Ready (14.2 MB)'); assert.equal(O.offlineReady(), true);
   O.apply({ type: 'state', state: 'update-ready' }); assert.match(O.offlineLabel(), /restart/i); assert.equal(O.offlineReady(), true);
   O.apply({ type: 'state', state: 'error', message: 'x' }); assert.match(O.offlineLabel(), /failed/);
-  for (const t of ['Not downloaded', 'Downloading 5%', 'Ready (1.0 MB)', 'Update ready, restart to apply']) assert.ok(!/[—–]/.test(t));
   // supported host: registers sw.js at ./ and asks for a check; offer once, never with saveData
   const posted = [], sent = []; let msgHandler = null;
   const reg = { active: { postMessage: (m) => posted.push(m) } };

@@ -51,8 +51,4 @@ t('half_size_variants_are_smaller', () => {
 });
 const dirSize = (d) => readdirSync(d, { withFileTypes: true }).reduce((s, f) => s + (f.isDirectory() ? dirSize(join(d, f.name)) : statSync(join(d, f.name)).size), 0);
 t('kit_folder_under_budget', () => { assert.ok(dirSize(kit) < 4 * 1024 * 1024, 'kit folder is ' + dirSize(kit) + ' bytes'); });
-t('no_em_dashes', () => {
-  const tool = readFileSync(new URL('../tools/graftwork_kit_build.py', import.meta.url), 'utf8');
-  for (const [name, s] of [['graftwork_kit_build.py', tool], ['manifest.json', JSON.stringify(man)]]) assert.ok(!/[—–]/.test(s), 'em or en dash in ' + name);
-});
 console.log(n + ' kit asset checks passed');

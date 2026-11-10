@@ -96,14 +96,16 @@ window.__ready = true;
   const port = await new Promise((r) => { server.once('error', () => server.listen(0, () => r(server.address().port))); server.listen(PORT, () => r(PORT)); });
   let browser = null;
   try {
-    browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+    browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'], timeout: 120000 });
   } catch (e) { console.log('post: chromium unavailable (' + String(e.message).split('\n')[0] + '), skipping browser checks'); }
   if (browser) {
     try {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
       const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(`http://localhost:${port}/__post_test.html`);
-      await page.waitForFunction(() => window.__ready === true, null, { timeout: 15000 });
+      await page.goto(`http://localhost:${port}/__post_test.html`, { timeout: 120000 });
+      // generous on purpose (the launch, the load and this wait): on a busy machine the page's module graph can take far longer than on an
+      // idle one, and a page that never gets ready still fails here (Playwright's 30 s and the 15 s here were tuned to an idle machine)
+      await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
       const info = await page.evaluate(() => { window.T.app.tick(1 / 60); return window.T.glInfo(); });
       if (!info || !info.on) { console.log('post: WebGL2 unavailable in this chromium, skipping rendering checks'); }
       else {

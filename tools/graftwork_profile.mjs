@@ -147,7 +147,6 @@ async function gwWait(page, expr, timeout = 60000) { // own poll loop: page.wait
 }
 
 async function logical(page, x, y) { return page.evaluate(([x, y]) => { const a = window.__gw.app; return { x: a.offX + x * a.scale, y: a.offY + y * a.scale }; }, [x, y]); }
-async function tap(page, x, y) { const p = await logical(page, x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(); await wait(40); await page.mouse.up(); }
 async function sweep(page, n = 6) { for (let i = 0; i < n; i++) { const p = await logical(page, 200 + i * 150, 220 + (i % 3) * 90); await page.mouse.move(p.x, p.y, { steps: 6 }); await wait(120); } }
 
 const SC = {};

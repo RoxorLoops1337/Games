@@ -7,9 +7,9 @@ import * as audio from '../graftwork/ui/audio.js';
 import { ENEMIES, RELICS, POTIONS, STATUSES } from '../graftwork/data/index.js';
 import combat from '../graftwork/ui/combat.js';
 import * as L from '../graftwork/ui/combat_layout.js';
-import { statusSizes } from '../graftwork/ui/combat_hud.js';
+import { statusSizes, shortMove } from '../graftwork/ui/combat_hud.js';
 import { CARD_W, CARD_H } from '../graftwork/art/cards.js';
-import { keywordsIn, KEYWORDS, explainNumber, renderTip, drawCardText } from '../graftwork/ui/tooltips.js';
+import { keywordsIn, KEYWORDS, explainNumber, drawCardText } from '../graftwork/ui/tooltips.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { cardLines } from '../graftwork/engine/text.js';
 
@@ -162,6 +162,13 @@ const spec = cardSpec(inst);
 const why = explainNumber(spec, { player: { st: { strength: 3 } } }, { target: { st: { vulnerable: 2 } } });
 if (spec.fx.some((o) => o.op === 'dmg')) assert.match(why[0], /Base \d+, \+3 Strength, x1\.5 Vulnerable = \d+/, why[0]);
 assert.ok(cardLines(spec).length > 0);
+
+// enemy move plates drop the parenthetical detail
+{
+  assert.equal(shortMove('Stamp (+4 if 3+ junk)'), 'Stamp');
+  assert.equal(shortMove('Clipboard'), 'Clipboard');
+  assert.equal(shortMove(''), '');
+}
 
 if (warns.size) console.log('WARN (other owners):', [...warns].join('; '));
 if (fails.length) { console.log([...new Set(fails)].slice(0, 40).join('\n')); console.log(`${fails.length} layout failures`); process.exit(1); }
