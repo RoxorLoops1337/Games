@@ -9,3 +9,14 @@ export const SCHOOL_LIST = [
   { id: 'static', name: 'Static', color: '#D9E84A', blurb: 'Chain it. Whatever you played last is still ringing.', resonance: { 3: 'Gain 1 Charge at turn start.', 6: 'Gain 2 Charge at turn start.' } },
   { id: 'gilded', name: 'Gilded', color: '#EFD98F', blurb: 'Everything has a price. You can afford it.', resonance: { 3: 'Gain 10 gold after each combat.', 6: 'Gain 20 gold after each combat.' } },
 ];
+// The Thread half of resonance is ONE rule for all seven schools (engine/seam.js payoutFor and timesFor): a payout in a school at
+// tier 3 or more gains 1 stitch (a cut or the turn end, as the Line's top school or its second), and a cut whose top school is at
+// tier 6 pays double. `rule` is the whole of it in one line (the Resonance keyword, the Codex); 3 and 6 follow a school's own text.
+// tests/graftwork_rules_fixes.test.mjs measures both numbers in the engine and rebuilds these texts.
+export const RESONANCE_THREAD = {
+  3: 'Its Thread payout gains 1 Stitch.',
+  6: 'Its cuts pay double.',
+  rule: "Thread: at 3 the school's payout gains 1 Stitch, at 6 its cuts pay double.",
+};
+// Everything one tier of a school does, as the school panels print it: its own bonus, then the Thread half.
+export const resonanceText = (school, tier) => `${school.resonance[tier]} ${RESONANCE_THREAD[tier]}`;

@@ -1,4 +1,5 @@
 // Thread relics. Hooks seamExtend {len, school, card} and seamCut {paid, school, len, card} are fired by engine/seam.js.
+// paid is false for a cut past the turn's 3 paying cuts: it pays no stitch, so no relic here fires on it.
 // Per-combat scratch lives in A.c.rx. mod.seamCap raises the Line length cap (default 5), read by engine/seam.js through relicMod.
 const rx = (A) => A.c.rx || (A.c.rx = {});
 const first = (A, key) => { const r = rx(A); if (r[key] === A.c.turn) return false; r[key] = A.c.turn; return true; };
@@ -21,7 +22,7 @@ export const RELICS_THREAD = [
   { id: 'r_embroidery_hoop', name: 'Embroidery Hoop', rarity: 'uncommon', text: 'When you extend a Line that holds 2 or more schools, heal 1.',
     on: { seamExtend: (A) => { if (nSchools(A) >= 2) A.heal(A.player, 1); } } },
   { id: 'r_pin_cushion', name: 'Pin Cushion', rarity: 'rare', text: 'Cutting a Line of 3 or more applies 2 Vulnerable to all enemies.',
-    on: { seamCut: (A, p) => { if (p && p.len >= 3) for (const e of A.alive()) A.status(e, 'vulnerable', 2); } } },
+    on: { seamCut: (A, p) => { if (p && p.paid !== false && p.len >= 3) for (const e of A.alive()) A.status(e, 'vulnerable', 2); } } },
   { id: 'r_blunt_shears', name: 'Blunt Shears', rarity: 'common', text: 'Your first cut each combat deals 6 damage to all enemies.',
     on: { seamCut: (A, p) => { const r = rx(A); if (r.bluntShears || (p && p.paid === false)) return; r.bluntShears = true; for (const e of A.alive()) A.dmg(A.player, e, 6, { pierce: true }); } } },
   { id: 'r_plain_cloth', name: 'Plain Cloth', rarity: 'uncommon', text: 'While the Line holds a single school, each extend deals 2 damage per knot to a random enemy.',

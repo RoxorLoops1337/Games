@@ -357,6 +357,48 @@ What the player sees is the list under "Classic retirement: what changes for the
 - **What the merges needed.** The strong bot's two new rules from the rules fixes (Odile's declaration, holding a "Cut the Line." card) were moved into `tools/graftwork_driver.mjs`, where the bot lives now (the fight function is the main line's text; the tables above are the check). `tests/graftwork_rules_fixes.test.mjs` saved a Classic and a Ward run and saves one Ward run now; `tests/graftwork_frozen.test.mjs` opened its event with the retired `RUN.startEvent` and uses the Ward's `wardStartEvent`; `tests/graftwork_ui_pause.test.mjs` keeps the main line's frozen assertions on the Ward screen.
 - **Real browser** (Chromium, 1280 x 720 and 1000 x 462 at DPR 2, on the merged branch): title without mode tags, hero select without the switch, Begin lands in the Ward, a route into a fight, reward, back on the Ward; a Classic save gives the notice once and no Continue, a click under the notice does nothing, a reload shows no second notice and counts nothing twice; three old Ward saves (evening, mid walk on a reward, the Dispensary) resume with the save unchanged. No page error.
 
+### Rules leftovers (branch `cleanup-leftovers`)
+
+The four items the rules pass listed under "Not fixed, found on the way". Each has a block in `tests/graftwork_rules_fixes.test.mjs` (sections 9 to 12) that failed on the code before; `graftwork_glossary` reads the new texts and `graftwork_ui_layout` now sweeps cards with a waived Price.
+
+- **Cut hooks fired on unpaid cuts.** Wrong: the hooks that skip a cut that paid nothing tested `paid`, which the engine never set, so the 4th cut of a turn triggered them. Changed: `seamCut` carries `paid: false` for a cut past the turn's 3 paying cuts and for nothing else (an enemy cancel and the turn-end cash are `paid: true`); the event carries `capped: true`. Not fired on such a cut: Marrow's passive, Spool, Bobbin, Seam Ripper, Blunt Shears, Tapestry Frame, Second Colour (their own checks now work), Pin Cushion (it had none; same wording as Spool), and the two grafts that pay "per stitch" when their card cuts (Surgeon's Knot, Surge Loop). Still fired: Scissor Loop, Reef Knot and Spent Thread (they ask for the cut, not for stitches) and the enemy hooks.
+- **A waived Price still read as due.** Wrong: Free Sample took the Price off the card, but the graft's Boon / Price block printed "Price: ..." wherever a card lists its grafts. Changed: `cardSpec` names the waived grafts (`spec.waived`) and one reader, `priceOnCard` in engine/text.js, labels such a Price "Waived" (gold, not red) in the combat card tip and pile view, the deck view panel (live and tempered grafts) and the graft choice of Strip and Reforge; the Strip note says "Its Price was waived." instead of "Frees you of".
+- **The Thread half of resonance was in no text.** Wrong: tier 3 adds a stitch and tier 6 doubles the cut, and nothing a player can read said so. Changed: `RESONANCE_THREAD` in data/schools.js ("Its Thread payout gains 1 Stitch." / "Its cuts pay double.", and one line for both). It is on the Resonance keyword (hover tip and glossary), in the Codex (rule 6, a line above the seven schools), in the school tooltip of the deck view strip, and in the school panel of the graft screen (the patch tip a phone shows instead of that panel keeps the school's own line: with four patches there is no room for more, the layout suite says). The test measures both numbers for every school (top school, second school, cut, turn end) and rebuilds the texts.
+- **Resonance Lens did nothing.** Wrong: it set tier 5 and every rule asks for 3 or 6. Changed: "In Elite and Boss fights, each school at Resonance 3 counts as Resonance 6." The rule is in `resonanceOf(run, kind)`, the one place a tier is decided; the relic is only `mod.resLens`. The deck view strip opened in a fight shows that fight's tiers and its tooltip says "Counts as 6 grafts in this fight."
+
+Balance of the Lens (strong bot, Ward mode, all pool, 500 runs per hero on the same seeds, the relic handed over on the first morning, which is the most a relic can do; "inert" is the Lens in the relic list with its rule switched off, so the relic list and the RNG stream are the same). Win percent for Marrow / Wick / Odile, then all 1500 runs:
+
+| relic held all run | Ascension 0 | all | against no relic |
+|---|---|---|---|
+| none | 34.4 / 29.8 / 38.2 | 34.1 | |
+| Resonance Lens, inert | 34.4 / 30.0 / 38.2 | 34.2 | +0.1 |
+| **Resonance Lens** | 41.4 / 34.8 / 42.2 | 39.5 | **+5.3** |
+| Graft Press (rare) | 39.6 / 35.4 / 44.6 | 39.9 | +5.7 |
+| Tapestry Frame (rare) | 40.2 / 36.6 / 42.8 | 39.9 | +5.7 |
+| Pin Cushion (rare) | 36.6 / 33.8 / 46.8 | 39.1 | +4.9 |
+| Cold Vault (rare) | 35.4 / 32.2 / 40.8 | 36.1 | +2.0 |
+
+| relic held all run | Ascension 5 | all | against the inert Lens |
+|---|---|---|---|
+| Resonance Lens, inert | 21.4 / 17.2 / 26.8 | 21.8 | |
+| **Resonance Lens** | 28.6 / 26.4 / 37.0 | 30.7 | **+8.9** |
+| Tapestry Frame (rare) | 28.2 / 24.4 / 34.8 | 29.1 | +7.3 |
+| Pin Cushion (rare) | 26.4 / 23.4 / 35.4 | 28.4 | +6.6 |
+| Graft Press (rare) | 27.0 / 23.8 / 33.6 | 28.1 | +6.3 |
+
+- The stock harness (`node tools/graftwork_schools.mjs relics 200 0 <id>`, 600 runs each on its own seeds, the relic from the first fight) agrees: baseline 34 percent, Graft Press 43 (+9), Resonance Lens 41 (+8), Pin Cushion 41 (+7), Tapestry Frame 38 (+5). Before the Classic retirement was merged into this branch the same command played the Classic map: baseline 26, Tapestry Frame 39 (+13), Resonance Lens 38 (+12), Graft Press 32 (+6), Pin Cushion 31 (+5).
+- The two tables were measured before that merge. The Lens and inert arms of Ascension 0 and the Lens arm of Ascension 5 were run again on the merged tree: the same wins and the same fight counts, to the last fight.
+- Verdict: strong, at the top of the rare relics, not out of their family. Held from the first morning (the most a relic can do) it stays under the bar of about 10 points in Ward mode: level with Graft Press, Tapestry Frame and Pin Cushion at Ascension 0, ahead of them by about 2 points at Ascension 5 (one hero, Odile, reaches +10.2). On the retired Classic map it passed the bar, and so did Tapestry Frame. Nothing was retuned. It is busy: the bot holds a school at 3 to 5 grafts in 71 percent of its Elite and Boss fights, and there the Lens cuts the fights lost from 2.2 percent (176 of 7899) to 1.0 percent (78 of 8205) at Ascension 0. A player who builds for it (two schools at 3 on a Budget of 6) gets more than the bot does.
+
+Seen on the way, not touched:
+
+- A waived Price comes back under Numb: the muted copy of the graft has another id (`~numb:<id>`), which `inst.waived` does not hold, so a waived "Costs 1 more" is charged while Numb lasts (and reads "Price" then, as it is charged).
+- Reforge moves a graft without its waiver (the Price is due on the new card, the old card keeps a stale entry in `waived`), and a graft stripped and sewn again on the same card is free a second time for the same reason.
+- `seamCut` hooks also run for the turn-end cash (`kind: 'end'`), which the rules call not a cut: Bobbin, Blunt Shears, Tapestry Frame, Seam Ripper, Pin Cushion, Second Colour, Spool and Marrow's passive react to it. The same hooks count stitches from the Line's length, not from what was paid (Resonance, the turn-end minus one and Spool's sixth knot are not in it).
+- The Locksmith gains 4 Block when a Line of the sealed school is cut; no text says so.
+- Deck view: the glossary tip of the hovered card opens over the panel that lists its grafts.
+- Codex, Rules tab: the header says "eight panels", the sheet has eleven.
+
 ### Character rigs (preview)
 
 The owner rejected painted walk frames ("1 foot forward step, next foot forward step") and the map walk became the puppet (one standing sprite cut in three). The part sheets of nine characters arrived, so a character can be a skeleton with painted parts. Built on branch `cleanup-rigs`, OFF by default: `previewOn('rig', app.settings)` in `ui/preview.js` (`?rig=1`, `?preview=1`, or the Settings toggle `previewArt`).
