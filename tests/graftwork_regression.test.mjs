@@ -3,7 +3,7 @@
 //      hp/gold/budget, and serializeRun -> deserializeRun -> serializeRun is byte-identical at EVERY decision (every Ward hour included);
 //  (b) saves from before the Ward are runs on the retired map: see tests/graftwork_retire.test.mjs;
 //  (c) Ward saves made just before the retirement (5f3e252, fixture tests/fixtures/graftwork_wardsave_5f3e252.json) load in the
-//      current code and play to the very same end.
+//      current code and play to the very same end as on the main line without the retirement.
 // GW_REG_SEEDS=30 node tests/graftwork_regression.test.mjs   (seeds per hero and assist mode; default 3 keeps it under 10 s)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -80,7 +80,9 @@ console.log(`ok ${n} strong-bot runs (${SEEDS} seeds x 3 heroes x assist off/on)
 
 // ---- (c) Ward saves made before the Classic map was retired (commit 5f3e252) resume and play to the very same end ----
 // The fixture holds saves at every kind of moment (each Ward hour, mid walk, fights, reward, graft, event, shop, forge, the Grafter) and where
-// the deterministic player of tests/graftwork_lib.mjs ended from each of them on that commit: outcome, day, gold and the hash of the final save.
+// the deterministic player of tests/graftwork_lib.mjs ended from each of them: outcome, day, gold and the hash of the final save. The saves are
+// the bytes of 5f3e252. The ends were played on the main line at b0ed267 (the rules fixes are in, the map is not yet retired): the rules fixes
+// moved 12 of the 28 ends (two Wick and Odile runs by a few hit points and gold, the rest only in the final save), the retirement none.
 const wardOld = JSON.parse(readFileSync(new URL('./fixtures/graftwork_wardsave_5f3e252.json', import.meta.url), 'utf8'));
 let resumed = 0; const kinds = new Set();
 for (const hero of HEROES) {
@@ -92,7 +94,7 @@ for (const hero of HEROES) {
     assert.equal(RUN.serializeRun(run), s.json, `${tag}: loading and saving again changes nothing`);
     const steps = botFinish(run, { deep: s.deep }, (r) => checkNums(r, tag));
     const end = { outcome: run.phase, act: run.act, day: run.ward.day, hp: run.hp, gold: run.gold, floors: run.stats.floors, fights: run.stats.fights, steps, sha1: createHash('sha1').update(RUN.serializeRun(run)).digest('hex') };
-    assert.deepEqual(end, s.end, `${tag}: the resumed run ends where it ended before the retirement`);
+    assert.deepEqual(end, s.end, `${tag}: the resumed run ends where it ended on the main line before the retirement`);
     kinds.add(s.key.split('|')[0]); resumed++;
   }
 }
