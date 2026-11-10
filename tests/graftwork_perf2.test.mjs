@@ -1,5 +1,6 @@
 // Round 2 performance logic, all pure: text width cache, imageSmoothingQuality policy, card face LOD buckets and LRU,
-// Ward room layer cache policy, governor calm screens. No wall time, no DOM (the real-browser numbers live in design/PERF.md).
+// Ward room layer cache policy, governor calm screens; and what a frame of the title, the Ward and a fight costs in fake canvas calls.
+// No wall time, no DOM (the real-browser numbers live in design/PERF.md).
 import assert from 'node:assert/strict';
 import { createTextMetrics } from '../graftwork/ui/text_metrics.js';
 import { smoothingFor, SMOOTH, installSmartDraw } from '../graftwork/ui/smoothing.js';
@@ -7,6 +8,12 @@ import { idealBucket, chooseBucket, createFaceLru, BUCKETS, LEGACY, facePixels, 
 import { bucketOf, pickLayer, evictFor, isMoving, MAX_BUCKETS, BUILDS_PER_FRAME as LB } from '../graftwork/ui/layer_cache.js';
 import { createGovernor } from '../graftwork/ui/quality.js';
 import { fakeCtx, installDom, makeApp, frames } from './graftwork_lib.mjs';
+import * as RUN from '../graftwork/engine/run.js';
+import * as audio from '../graftwork/ui/audio.js';
+import combat from '../graftwork/ui/combat.js';
+import title from '../graftwork/ui/title.js';
+import ward, { resetWardMem } from '../graftwork/ui/ward.js';
+import { Fx, FX_OPTS, CAP_DESKTOP } from '../graftwork/ui/fx.js';
 
 // ---- 1. text metrics: measure once per font + string, tabular digits share the cell of '0'
 {
@@ -163,5 +170,70 @@ import { fakeCtx, installDom, makeApp, frames } from './graftwork_lib.mjs';
   for (let i = 0; i < 100; i++) { app.text('1,234 gold', 100, 100, { size: 16, tab: true, align: 'right' }); app.text('Cost 12', 100, 130, { size: 16, tab: true, bold: true }); app.measure('Draw pile 40', 14, { ui: true, tab: true }); app.measure('Deck', 14, { ui: true }); }
   assert.ok(n < 60, 'repeated tabular text and measures hit the cache, measureText ran ' + n + ' times for 400 calls');
   const after = n; for (let i = 0; i < 100; i++) app.text('1,234 gold', 100, 100, { size: 16, tab: true, align: 'right' }); assert.equal(n, after, 'a warm cache measures nothing');
+}
+
+// ---- 10. what a frame costs, counted in fake canvas calls (never wall time): the title, the Ward and a five enemy fight stay within budget, particles are capped, a still background re-runs nothing ----
+function counted() { // fake ctx that counts every call, gradients and shadow writes separately
+  const st = { calls: 0, grads: 0, shadow: 0, draws: 0 };
+  const grad = { addColorStop() {} };
+  const o = {};
+  const ctx = new Proxy(o, {
+    get(t, k) {
+      if (k === '__st') return st;
+      if (k in t) return t[k];
+      if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => { st.grads++; st.calls++; return grad; };
+      if (k === 'measureText') return (s) => ({ width: String(s).length * 8 });
+      if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+      if (k === 'drawImage') return () => { st.draws++; st.calls++; };
+      return () => { st.calls++; };
+    },
+    set(t, k, v) { if (k === 'shadowBlur' && v) st.shadow++; t[k] = v; return true; },
+  });
+  return ctx;
+}
+async function measure(app, n = 30) {
+  const ctx = counted(); app.ctx = ctx; app.canvas.getContext = () => ctx;
+  frames(app, 5); const st = ctx.__st; st.calls = st.grads = st.shadow = st.draws = 0;
+  frames(app, n);
+  return { calls: st.calls / n, grads: st.grads / n, shadow: st.shadow / n, draws: st.draws / n };
+}
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'perf' });
+  const app = await makeApp({ run, audio, meta: { settings: {} }, flow: { RUN, hasSave: () => false, route() {}, openDeck() {}, openSettings() {} } });
+  app.register('title', title); app.register('ward', ward); app.register('combat', combat);
+  const BUDGET = { title: 2500, ward: 5500, combat: 7000 }; // ward: measured 3582 (first morning, fallback art)
+  const GRAD = { title: 20, ward: 60, combat: 100 };
+  const DRAWS = { title: 40, ward: 45, combat: 70 }; // drawImage blits per frame
+  const SHADOW = { title: 6, ward: 5, combat: 4 }; // shadowBlur writes per frame
+  app.go('title');
+  let r = await measure(app); console.log('perf title', JSON.stringify(r));
+  assert.ok(r.calls < BUDGET.title, 'title ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.title, 'title gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.title, 'title blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.title, 'title shadowBlur/frame ' + r.shadow);
+  // the Ward on the first morning of a run (five plans in hand, the pre-built rooms, the banner gone), in headless fallback art
+  assert.equal(run.phase, 'ward'); resetWardMem(); app.go('ward', { run }); frames(app, 200);
+  r = await measure(app); console.log('perf ward', JSON.stringify(r));
+  assert.ok(r.calls < BUDGET.ward, 'ward ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.ward, 'ward gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.ward, 'ward blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.ward, 'ward shadowBlur/frame ' + r.shadow);
+  run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime', 'orderly', 'leech_jar', 'crutchling', 'fever_moth'] };
+  app.go('combat', { run });
+  frames(app, 200);
+  r = await measure(app); console.log('perf combat', JSON.stringify(r));
+  assert.ok(r.calls < BUDGET.combat, 'combat ctx calls/frame ' + r.calls); assert.ok(r.grads < GRAD.combat, 'combat gradients/frame ' + r.grads); assert.ok(r.draws < DRAWS.combat, 'combat blits/frame ' + r.draws); assert.ok(r.shadow < SHADOW.combat, 'combat shadowBlur/frame ' + r.shadow);
+  // particle load stays bounded by the cap
+  const fx = new Fx(); FX_OPTS.quality = 1;
+  for (let i = 0; i < 400; i++) fx.burst(100 + i, 200, ['ember', 'spark', 'hoard', 'blood'][i % 4], { n: 30 });
+  fx.update(0.016); const c = counted(); fx.draw(c);
+  assert.ok(fx.pool.n <= CAP_DESKTOP, 'live particles capped: ' + fx.pool.n);
+  assert.ok(c.__st.calls < CAP_DESKTOP * 6, 'fx.draw ops ' + c.__st.calls);
+  assert.equal(c.__st.shadow, 0, 'particles never use shadowBlur');
+  // ---- baked backgrounds: a still frame must not rebuild or re-run the static layers ----
+  {
+    const { drawBackground } = await import('../graftwork/art/backgrounds.js');
+    const bc = counted(); const o = { parallax: 0 };
+    for (let i = 0; i < 6; i++) drawBackground(bc, 'ward', i * 0.016, o); // warm: layers built, bake made once the parallax holds still
+    const st = bc.__st; st.calls = st.grads = st.draws = 0;
+    for (let i = 0; i < 20; i++) drawBackground(bc, 'ward', 1 + i * 0.016, o);
+    console.log('perf bg still', JSON.stringify({ calls: st.calls / 20, grads: st.grads / 20, draws: st.draws / 20 }));
+    assert.ok(st.draws / 20 <= 16, 'still background blits/frame ' + st.draws / 20);
+    assert.ok(st.grads / 20 <= 8, 'still background gradients/frame ' + st.grads / 20);
+  }
 }
 console.log('graftwork_perf2: ok');
