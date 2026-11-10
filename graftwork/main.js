@@ -6,6 +6,7 @@ import * as audio from './ui/audio.js';
 import { installPost } from './ui/post.js';
 import { cleanGraphics } from './ui/quality.js';
 import { assets } from './ui/assets.js';
+import { templates } from './ui/templates.js';
 import * as TRANS from './ui/transitions.js';
 import { lights } from './ui/lights.js';
 import * as RUN from './engine/run.js';
@@ -102,7 +103,7 @@ export function boot(canvas) {
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
   const st = meta.settings || {};
   audio.setVolumes({ master: st.master ?? 0.8, sfx: st.sfx ?? 0.8, music: st.music ?? 0.35 });
-  let artVer = assets.ver;
+  let artVer = assets.ver, uiVer = templates.ver;
   app.belowOverlay = () => TRANS.drawTransitions(app, true); // a wipe or a boss plate caught by a modal is part of the frozen picture
   // meta.settings into the switches the screens read (every frame, and at once when a setting is saved)
   function applySettings() {
@@ -113,6 +114,7 @@ export function boot(canvas) {
     const gm = cleanGraphics(st.graphics); if (app.perf.q.mode !== gm) app.perf.q.setMode(gm, performance.now()); // Settings > Graphics: Auto | High | Low
     app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
     A11Y.applySettings(app);
+    templates.sync(app); // the painted art preview: the Settings toggle, the page URL and the graphics tier decide (ui/preview.js), live
   }
   app.overlay = () => {
     applySettings();
@@ -120,7 +122,7 @@ export function boot(canvas) {
     assets.budget = (FX_OPTS.mobile ? 96 : 192) * 1048576 * (app.perf.q.tier === 'minimal' ? 0.66 : 1);
     // (not while a modal is open: the frozen screen draws nothing, so its pictures would look unused and be the first to go)
     if (!app.frozen && (app.frame & 127) === 0) assets.maintain(performance.now());
-    if (artVer !== assets.ver) { artVer = assets.ver; app.refreshBelow('look'); } // a picture arrived: a frozen screen shows it too
+    if (artVer !== assets.ver || uiVer !== templates.ver) { artVer = assets.ver; uiVer = templates.ver; app.refreshBelow('look'); } // a picture arrived (or the painted preview changed): a frozen screen shows it too
     if (!app.frozen) TRANS.drawTransitions(app);
     drawPauseOverlay(app);
     drawInstallToast(app);

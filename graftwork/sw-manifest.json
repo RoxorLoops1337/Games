@@ -1,7 +1,7 @@
 {
- "version": "87d57af80224aa96",
- "bytes": 9000234,
- "count": 498,
+ "version": "9876156d70ea39a9",
+ "bytes": 10140472,
+ "count": 529,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -12,8 +12,8 @@
    "s": 69667
   },
   "art/cards.js": {
-   "h": "01c46b84aaac371f",
-   "s": 136410
+   "h": "bca17194cb0b94b7",
+   "s": 142848
   },
   "art/enemies.js": {
    "h": "42ea984f687ee13a",
@@ -42,6 +42,122 @@
   "art/plates.js": {
    "h": "d6cce7a66d1e3d7a",
    "s": 23191
+  },
+  "assets/ui/atlas/chrome@1x.webp": {
+   "h": "4a0e598262e359e6",
+   "s": 40224
+  },
+  "assets/ui/atlas/chrome@2x.webp": {
+   "h": "775fb9d910e710a4",
+   "s": 122062
+  },
+  "assets/ui/atlas/icons@1x.webp": {
+   "h": "5f37b09b3e30d597",
+   "s": 35512
+  },
+  "assets/ui/atlas/icons@2x.webp": {
+   "h": "2cf733066041d5c9",
+   "s": 103194
+  },
+  "assets/ui/bg/title_keyart@1x.webp": {
+   "h": "56db0674c29449d6",
+   "s": 93714
+  },
+  "assets/ui/bg/title_keyart@2x.webp": {
+   "h": "929fb081ace2aa6d",
+   "s": 164568
+  },
+  "assets/ui/cards/back_plain@1x.webp": {
+   "h": "06f8bc9432f7a99a",
+   "s": 21580
+  },
+  "assets/ui/cards/back_plain@2x.webp": {
+   "h": "0378d36ca4b93362",
+   "s": 78512
+  },
+  "assets/ui/cards/front_attack_common@1x.webp": {
+   "h": "817380af00fb11cd",
+   "s": 9216
+  },
+  "assets/ui/cards/front_attack_common@2x.webp": {
+   "h": "8669e4010ca988ca",
+   "s": 28310
+  },
+  "assets/ui/cards/front_attack_rare@1x.webp": {
+   "h": "82170ac38982b203",
+   "s": 13792
+  },
+  "assets/ui/cards/front_attack_rare@2x.webp": {
+   "h": "c234ebb430dd7904",
+   "s": 41484
+  },
+  "assets/ui/cards/front_attack_uncommon@1x.webp": {
+   "h": "e60901ded4f24623",
+   "s": 10350
+  },
+  "assets/ui/cards/front_attack_uncommon@2x.webp": {
+   "h": "9b1915cdfc19f4a4",
+   "s": 31988
+  },
+  "assets/ui/cards/front_junk@1x.webp": {
+   "h": "df3fe64fc0c48ae5",
+   "s": 10786
+  },
+  "assets/ui/cards/front_junk@2x.webp": {
+   "h": "f0f760e3de85fe9f",
+   "s": 32036
+  },
+  "assets/ui/cards/front_power_common@1x.webp": {
+   "h": "8d21a90e79d128cd",
+   "s": 9644
+  },
+  "assets/ui/cards/front_power_common@2x.webp": {
+   "h": "9868b6d6d6e54889",
+   "s": 29926
+  },
+  "assets/ui/cards/front_power_rare@1x.webp": {
+   "h": "34f4ff79bbbeafcd",
+   "s": 11828
+  },
+  "assets/ui/cards/front_power_rare@2x.webp": {
+   "h": "ca8a56dfc190bf52",
+   "s": 35748
+  },
+  "assets/ui/cards/front_power_uncommon@1x.webp": {
+   "h": "13da2dbeaf4cc954",
+   "s": 9218
+  },
+  "assets/ui/cards/front_power_uncommon@2x.webp": {
+   "h": "893d8a62e8726cb8",
+   "s": 27484
+  },
+  "assets/ui/cards/front_skill_common@1x.webp": {
+   "h": "743b0e07ccc577ea",
+   "s": 10122
+  },
+  "assets/ui/cards/front_skill_common@2x.webp": {
+   "h": "c15b80beac80ee0b",
+   "s": 30162
+  },
+  "assets/ui/cards/front_skill_rare@1x.webp": {
+   "h": "08f6f7fd03037963",
+   "s": 14104
+  },
+  "assets/ui/cards/front_skill_rare@2x.webp": {
+   "h": "7ab01752a725e72f",
+   "s": 41842
+  },
+  "assets/ui/cards/front_skill_uncommon@1x.webp": {
+   "h": "4d1ac1051aa7de75",
+   "s": 11020
+  },
+  "assets/ui/cards/front_skill_uncommon@2x.webp": {
+   "h": "ab5f603d0e999e6e",
+   "s": 33126
+  },
+  "assets/ui/manifest.json": {
+   "h": "bb46ff0704a53535",
+   "s": 14510
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
@@ -1764,8 +1880,8 @@
    "s": 1962
   },
   "main.js": {
-   "h": "ad2bc857f4e26b4b",
-   "s": 8062
+   "h": "7aa4230a1050969a",
+   "s": 8353
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
@@ -1800,8 +1916,8 @@
    "s": 4419
   },
   "ui/chrome.js": {
-   "h": "4e749e0345719977",
-   "s": 16443
+   "h": "cd90212acc6d5233",
+   "s": 19404
   },
   "ui/codex.js": {
    "h": "284c71323e05d3b4",
@@ -1907,6 +2023,10 @@
    "h": "b868f4fb7841b817",
    "s": 5000
   },
+  "ui/preview.js": {
+   "h": "bc4f4194e6537095",
+   "s": 1034
+  },
   "ui/puppet.js": {
    "h": "a0d7bfae1e1c1f58",
    "s": 34193
@@ -1935,13 +2055,17 @@
    "h": "7db01148a15d90e2",
    "s": 54681
   },
+  "ui/skin.js": {
+   "h": "6a08d1722b60d360",
+   "s": 10058
+  },
   "ui/smoothing.js": {
    "h": "7566a23ce539df44",
    "s": 4205
   },
   "ui/templates.js": {
-   "h": "fd68ce59cb3d616b",
-   "s": 20787
+   "h": "7ea553aeda4c2ab8",
+   "s": 24181
   },
   "ui/text_metrics.js": {
    "h": "8ee7c64a202f7bd4",

@@ -1,0 +1,1078 @@
+{
+ "atlases": {
+  "chrome": {
+   "file1x": "atlas/chrome@1x.webp",
+   "file2x": "atlas/chrome@2x.webp",
+   "h": 748,
+   "w": 476
+  },
+  "icons": {
+   "file1x": "atlas/icons@1x.webp",
+   "file2x": "atlas/icons@2x.webp",
+   "h": 152,
+   "w": 502
+  }
+ },
+ "frames": {
+  "bar.hp.fill": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    730,
+    128,
+    16
+   ]
+  },
+  "bar.hp.frame": {
+   "atlas": "chrome",
+   "content": {
+    "h": 16,
+    "w": 79,
+    "x": 17,
+    "y": 4
+   },
+   "rect": [
+    361,
+    664,
+    113,
+    24
+   ],
+   "slice": [
+    20,
+    11,
+    20,
+    11
+   ]
+  },
+  "bg.title_keyart": {
+   "file1x": "bg/title_keyart@1x.webp",
+   "file2x": "bg/title_keyart@2x.webp",
+   "h": 720,
+   "w": 1280
+  },
+  "button.disabled": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    400,
+    327,
+    64
+   ],
+   "scale": "height",
+   "slice": [
+    32,
+    31,
+    32,
+    31
+   ]
+  },
+  "button.down": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    466,
+    327,
+    64
+   ],
+   "scale": "height",
+   "slice": [
+    32,
+    31,
+    32,
+    31
+   ]
+  },
+  "button.hover": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    532,
+    327,
+    64
+   ],
+   "scale": "height",
+   "slice": [
+    32,
+    31,
+    32,
+    31
+   ]
+  },
+  "button.normal": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    598,
+    327,
+    64
+   ],
+   "scale": "height",
+   "slice": [
+    32,
+    31,
+    32,
+    31
+   ]
+  },
+  "button.small": {
+   "atlas": "chrome",
+   "rect": [
+    226,
+    664,
+    90,
+    40
+   ],
+   "slice": [
+    19,
+    12,
+    18,
+    12
+   ],
+   "tile": true
+  },
+  "card_back.plain": {
+   "file1x": "cards/back_plain@1x.webp",
+   "file2x": "cards/back_plain@2x.webp",
+   "h": 310,
+   "w": 220
+  },
+  "card_front": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_junk@1x.webp",
+   "file2x": "cards/front_junk@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.attack": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_attack_common@1x.webp",
+   "file2x": "cards/front_attack_common@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.attack.common": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_attack_common@1x.webp",
+   "file2x": "cards/front_attack_common@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.attack.rare": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_attack_rare@1x.webp",
+   "file2x": "cards/front_attack_rare@2x.webp",
+   "h": 310,
+   "slots": {
+    "fusedSlots": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 21.6
+     },
+     "w": 18,
+     "x": -117,
+     "y": 45.53
+    },
+    "fusedSlotsCompact": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 21.6
+     },
+     "w": 18,
+     "x": -117,
+     "y": 45.53
+    },
+    "graftBand": {
+     "h": 34,
+     "w": 161.17,
+     "x": -80.52,
+     "y": 45.53
+    },
+    "graftSlots": {
+     "h": 30,
+     "n": 3,
+     "step": {
+      "x": 0,
+      "y": 28.4
+     },
+     "w": 34,
+     "x": 97,
+     "y": 42.53
+    },
+    "textBox": {
+     "fit": {
+      "max": 15,
+      "min": 8
+     },
+     "h": 86.79,
+     "w": 163.17,
+     "x": -81.52,
+     "y": 43.53
+    }
+   },
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.attack.uncommon": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_attack_uncommon@1x.webp",
+   "file2x": "cards/front_attack_uncommon@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.junk": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_junk@1x.webp",
+   "file2x": "cards/front_junk@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.power": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_power_common@1x.webp",
+   "file2x": "cards/front_power_common@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.power.common": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_power_common@1x.webp",
+   "file2x": "cards/front_power_common@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.power.rare": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_power_rare@1x.webp",
+   "file2x": "cards/front_power_rare@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.power.uncommon": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_power_uncommon@1x.webp",
+   "file2x": "cards/front_power_uncommon@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.skill": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_skill_common@1x.webp",
+   "file2x": "cards/front_skill_common@2x.webp",
+   "h": 310,
+   "slots": {
+    "fusedSlots": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.0
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.7
+    },
+    "fusedSlotsCompact": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.0
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.7
+    },
+    "graftSlots": {
+     "h": 30,
+     "n": 3,
+     "step": {
+      "x": 0,
+      "y": 30.6
+     },
+     "w": 34,
+     "x": 97,
+     "y": 36.7
+    },
+    "schoolGlyph": {
+     "h": 26,
+     "w": 26,
+     "x": 53.65,
+     "y": 100.83
+    },
+    "textBox": {
+     "fit": {
+      "max": 15,
+      "min": 8
+     },
+     "h": 91.13,
+     "w": 163.17,
+     "x": -81.52,
+     "y": 37.7
+    },
+    "typeGlyph": {
+     "h": 22,
+     "w": 22,
+     "x": -79.52,
+     "y": 102.83
+    }
+   },
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.skill.common": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_skill_common@1x.webp",
+   "file2x": "cards/front_skill_common@2x.webp",
+   "h": 310,
+   "slots": {
+    "fusedSlots": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.0
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.7
+    },
+    "fusedSlotsCompact": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.0
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.7
+    },
+    "graftSlots": {
+     "h": 30,
+     "n": 3,
+     "step": {
+      "x": 0,
+      "y": 30.6
+     },
+     "w": 34,
+     "x": 97,
+     "y": 36.7
+    },
+    "schoolGlyph": {
+     "h": 26,
+     "w": 26,
+     "x": 53.65,
+     "y": 100.83
+    },
+    "textBox": {
+     "fit": {
+      "max": 15,
+      "min": 8
+     },
+     "h": 91.13,
+     "w": 163.17,
+     "x": -81.52,
+     "y": 37.7
+    },
+    "typeGlyph": {
+     "h": 22,
+     "w": 22,
+     "x": -79.52,
+     "y": 102.83
+    }
+   },
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.skill.rare": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_skill_rare@1x.webp",
+   "file2x": "cards/front_skill_rare@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_front.skill.uncommon": {
+   "baked": [
+    "namePlate",
+    "typeBand",
+    "pips"
+   ],
+   "file1x": "cards/front_skill_uncommon@1x.webp",
+   "file2x": "cards/front_skill_uncommon@2x.webp",
+   "h": 310,
+   "under": [
+    "window",
+    "textHole",
+    "keyNumber"
+   ],
+   "w": 220
+  },
+  "card_gem": {
+   "atlas": "chrome",
+   "rect": [
+    331,
+    598,
+    64,
+    64
+   ]
+  },
+  "card_gem.down": {
+   "atlas": "chrome",
+   "rect": [
+    397,
+    598,
+    64,
+    64
+   ]
+  },
+  "card_gem.up": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    664,
+    64,
+    64
+   ]
+  },
+  "chip.intent": {
+   "atlas": "chrome",
+   "rect": [
+    126,
+    664,
+    48,
+    52
+   ]
+  },
+  "chip.status": {
+   "atlas": "chrome",
+   "rect": [
+    176,
+    664,
+    48,
+    48
+   ]
+  },
+  "dial.energy": {
+   "atlas": "chrome",
+   "rect": [
+    184,
+    220,
+    96,
+    96
+   ]
+  },
+  "gauge.budget.cell": {
+   "atlas": "chrome",
+   "rect": [
+    318,
+    664,
+    21,
+    34
+   ],
+   "socket": 13.0
+  },
+  "gauge.budget.l": {
+   "atlas": "chrome",
+   "rect": [
+    341,
+    664,
+    8,
+    34
+   ]
+  },
+  "gauge.budget.r": {
+   "atlas": "chrome",
+   "rect": [
+    351,
+    664,
+    8,
+    34
+   ]
+  },
+  "modal": {
+   "atlas": "chrome",
+   "rect": [
+    220,
+    2,
+    187,
+    186
+   ],
+   "slice": [
+    58,
+    58,
+    58,
+    58
+   ],
+   "tile": true
+  },
+  "panel": {
+   "atlas": "chrome",
+   "fill": false,
+   "rect": [
+    2,
+    2,
+    216,
+    216
+   ],
+   "slice": [
+    39,
+    38,
+    40,
+    40
+   ],
+   "tile": true
+  },
+  "panel.parchment": {
+   "atlas": "chrome",
+   "rect": [
+    2,
+    220,
+    180,
+    178
+   ],
+   "slice": [
+    39,
+    39,
+    39,
+    32
+   ],
+   "tile": true
+  },
+  "plate.block": {
+   "atlas": "chrome",
+   "rect": [
+    68,
+    664,
+    56,
+    56
+   ]
+  }
+ },
+ "icons": {
+  "intent.attack": {
+   "atlas": "icons",
+   "rect": [
+    2,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.block": {
+   "atlas": "icons",
+   "rect": [
+    52,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.buff": {
+   "atlas": "icons",
+   "rect": [
+    102,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.debuff": {
+   "atlas": "icons",
+   "rect": [
+    152,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.escape": {
+   "atlas": "icons",
+   "rect": [
+    202,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.heal": {
+   "atlas": "icons",
+   "rect": [
+    252,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.multi": {
+   "atlas": "icons",
+   "rect": [
+    302,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.poison": {
+   "atlas": "icons",
+   "rect": [
+    352,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.stun": {
+   "atlas": "icons",
+   "rect": [
+    402,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.summon": {
+   "atlas": "icons",
+   "rect": [
+    452,
+    2,
+    48,
+    48
+   ]
+  },
+  "intent.thread": {
+   "atlas": "icons",
+   "rect": [
+    2,
+    52,
+    48,
+    48
+   ]
+  },
+  "intent.unknown": {
+   "atlas": "icons",
+   "rect": [
+    52,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.budget": {
+   "atlas": "icons",
+   "rect": [
+    102,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.cost": {
+   "atlas": "icons",
+   "rect": [
+    152,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.discard": {
+   "atlas": "icons",
+   "rect": [
+    202,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.draw": {
+   "atlas": "icons",
+   "rect": [
+    252,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.energy": {
+   "atlas": "icons",
+   "rect": [
+    302,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.ethereal": {
+   "atlas": "icons",
+   "rect": [
+    352,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.exhaust": {
+   "atlas": "icons",
+   "rect": [
+    402,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.graft": {
+   "atlas": "icons",
+   "rect": [
+    452,
+    52,
+    48,
+    48
+   ]
+  },
+  "rules.innate": {
+   "atlas": "icons",
+   "rect": [
+    2,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.jam": {
+   "atlas": "icons",
+   "rect": [
+    52,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.overload": {
+   "atlas": "icons",
+   "rect": [
+    102,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.retain": {
+   "atlas": "icons",
+   "rect": [
+    152,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.strain": {
+   "atlas": "icons",
+   "rect": [
+    202,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.temper": {
+   "atlas": "icons",
+   "rect": [
+    252,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.tithe": {
+   "atlas": "icons",
+   "rect": [
+    302,
+    102,
+    48,
+    48
+   ]
+  },
+  "rules.upgrade": {
+   "atlas": "icons",
+   "rect": [
+    352,
+    102,
+    48,
+    48
+   ]
+  }
+ },
+ "templates": {
+  "card_back": {
+   "slots": {
+    "title": {
+     "h": 20.23,
+     "w": 95.08,
+     "x": -47.54,
+     "y": 115.81
+    }
+   }
+  },
+  "card_front": {
+   "slots": {
+    "costGem": {
+     "h": 43.4,
+     "w": 43.4,
+     "x": -105.25,
+     "y": -151.61
+    },
+    "costGemCompact": {
+     "h": 48.4,
+     "w": 48.4,
+     "x": -107.75,
+     "y": -154.11
+    },
+    "fusedSlots": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.6
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.56
+    },
+    "fusedSlotsCompact": {
+     "h": 18,
+     "n": 4,
+     "step": {
+      "x": 0,
+      "y": 23.6
+     },
+     "w": 18,
+     "x": -117,
+     "y": 39.56
+    },
+    "graftBand": {
+     "h": 34,
+     "w": 161.3,
+     "x": -80.65,
+     "y": 39.56
+    },
+    "graftSlots": {
+     "h": 30,
+     "n": 3,
+     "step": {
+      "x": 0,
+      "y": 31.4
+     },
+     "w": 34,
+     "x": 97,
+     "y": 36.56
+    },
+    "keyNumber": {
+     "h": 62,
+     "w": 162.5,
+     "x": -81.25,
+     "y": -66.61
+    },
+    "namePlate": {
+     "fit": {
+      "lines": 1,
+      "max": 16,
+      "min": 9.5
+     },
+     "h": 18.98,
+     "w": 155.7,
+     "x": -77.85,
+     "y": 0.68
+    },
+    "namePlateCompact": {
+     "fit": {
+      "lines": 1,
+      "max": 20,
+      "min": 11
+     },
+     "h": 18.98,
+     "w": 155.7,
+     "x": -77.85,
+     "y": 0.68
+    },
+    "schoolGlyph": {
+     "h": 26,
+     "w": 26,
+     "x": 53.65,
+     "y": 102.32
+    },
+    "textBox": {
+     "fit": {
+      "max": 15,
+      "min": 8
+     },
+     "h": 92.76,
+     "w": 163.3,
+     "x": -81.65,
+     "y": 37.56
+    },
+    "textHole": {
+     "h": 100.08,
+     "w": 173.08,
+     "x": -86.54,
+     "y": 32.95
+    },
+    "typeBand": {
+     "fit": {
+      "max": 11,
+      "min": 9
+     },
+     "h": 14.65,
+     "w": 68.36,
+     "x": -55.61,
+     "y": -140.63
+    },
+    "typeGlyph": {
+     "h": 22,
+     "w": 22,
+     "x": -79.65,
+     "y": 104.32
+    },
+    "window": {
+     "h": 120.83,
+     "r": 2,
+     "w": 162.5,
+     "x": -81.25,
+     "y": -125.44
+    },
+    "windowCompact": {
+     "h": 120.83,
+     "r": 2,
+     "w": 162.5,
+     "x": -81.25,
+     "y": -125.44
+    },
+    "windowCompactGrafts": {
+     "h": 120.83,
+     "r": 2,
+     "w": 162.5,
+     "x": -81.25,
+     "y": -125.44
+    }
+   }
+  }
+ },
+ "version": 1
+}

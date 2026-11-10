@@ -2,12 +2,15 @@
 // Everything here is optional: with no manifest, no network or no image yet, every function answers null / false and the caller
 // draws its procedural look (art/cards.js, ui/chrome.js). Headless (node) it is a no-op.
 //
-//   assets/ui/manifest.json  { version, frames:{id:{file,file2x?,w,h,slice:[l,t,r,b],content:{x,y,w,h},atlas?,rect?,baked?,slots?}},
+//   assets/ui/manifest.json  { version, frames:{id:{file,file2x?,w,h,slice:[l,t,r,b],content:{x,y,w,h},atlas?,rect?,baked?,under?,slots?,tile?,scale?}},
 //                              icons:{id:{file,file2x?,w,h,atlas?,rect?}}, atlases:{id:{file,file2x?,w,h}},
 //                              templates:{card_front:{slots:{...}}, card_back:{slots:{...}}} }
 //   All numbers are LOGICAL (@1x) pixels: w x h is the size the part has at 1x, the @2x file is simply twice as many pixels.
 //   slice [l,t,r,b] = 9-slice margins in logical px; content = the rect inside the frame where children go (default: inside the slice).
 //   atlas + rect: the part lives inside a packed sheet (rect is in the atlas' logical px), so many parts cost one request.
+//   under: slot names painted BEFORE the frame image (the frame has a transparent window there); baked: slot names whose plate is in the image.
+//   tile: the edges of a sliced part repeat instead of stretching (a rope, a row of rivets); scale 'height': a pill, its caps follow the height.
+//   Written by tools/graftwork_ui_build.py from the artist's raw files; never edited by hand.
 //
 //   templates.ensure(app?)          start the manifest load once (no-op headless)
 //   templates.frameImg(id, app?)    { img, def, id, ... } once decoded, else null (starts loading it)
@@ -15,11 +18,14 @@
 //   templates.iconImg / drawIcon    icons from the same manifest
 //   drawNineSlice(ctx, fr, x, y, w, h)   slot-based 9-slice draw;  contentRect(def, x, y, w, h)
 //   CARD_TEMPLATE / CARD_BACK_TEMPLATE   the data-driven slot definitions; resolveSlots(); composeCardFront(); cardFrameIds(); cardBackIds()
+//   templates.sync(app)             follow the preview switch (ui/preview.js); templates.ver counts every change of what can be drawn
+import { previewOn } from './preview.js';
 const BASE_DEFAULT = 'assets/ui/';
-// THE SWITCH for the template art. No assets/ui/manifest.json exists yet (the parts are still being produced) and asking for it was a 404 on every page
-// load. While this is false the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look. Set it to true in the
-// commit that adds graftwork/assets/ui/manifest.json (design/ART_MODULAR.md section 5). Tests and tools that feed the loader themselves pass { art: true }.
-export const TEMPLATE_ART = false;
+// THE SWITCH for the painted art is the 'art' preview (ui/preview.js: PREVIEW_DEFAULT.art, the page URL ?art=1, the Settings toggle "Painted art (preview)").
+// While it is off the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look; on the minimal graphics tier
+// (ui/quality.js) it stays off whatever the setting says. Tests and tools that feed the loader themselves pass { art: true } and are not asked.
+const settingsOf = (app) => (app && app.shared && app.shared.meta && app.shared.meta.settings) || null;
+const tierOf = (app) => (app && app.perf && app.perf.q && app.perf.q.tier) || 'full';
 const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -39,8 +45,12 @@ function cleanPart(d, atlases) {
   const slice = cleanSlice(d.slice); if (slice) out.slice = slice;
   const content = cleanRect(d.content); if (content) out.content = content;
   if (Array.isArray(d.baked)) out.baked = d.baked.filter((s) => typeof s === 'string');
+  if (Array.isArray(d.under)) out.under = d.under.filter((s) => typeof s === 'string');
   if (isObj(d.slots)) out.slots = cleanSlots(d.slots);
   if (d.fill === false) out.fill = false; // 9-slice without its centre (the frame is a border only)
+  if (d.tile === true) out.tile = true;   // the edges repeat, they do not stretch
+  if (d.scale === 'height') out.scale = 'height'; // a pill: the caps scale with the height, only the middle stretches
+  if (fin(d.socket) && d.socket > 0) out.socket = d.socket; // gauge cells: the diameter of the hole
   if (typeof d.tint === 'string') out.tint = d.tint;
   return out;
 }
@@ -175,15 +185,17 @@ export function mergeTemplate(base, ...over) {
 // Full faces own typeBand, textBox, graftSlots and pips; compact (hand) faces own graftBand, typeGlyph, schoolGlyph and a derived keyNumber
 // rect (the strip under the window). window, namePlate, costGem and fusedSlots exist in both ('<name>Compact' wins on a compact face).
 const FULL_ONLY = ['typeBand', 'textBox', 'graftSlots', 'pips'], COMPACT_ONLY = ['graftBand', 'typeGlyph', 'schoolGlyph'];
+const SLOT_NAMES = ['window', 'textHole', 'namePlate', 'typeBand', 'textBox', 'costGem', 'graftSlots', 'fusedSlots', 'graftBand', 'typeGlyph', 'schoolGlyph', 'pips', 'title'];
 export function resolveSlots(tpl, { compact = false, grafts = false } = {}) {
-  const out = {}, names = ['window', 'namePlate', 'typeBand', 'textBox', 'costGem', 'graftSlots', 'fusedSlots', 'graftBand', 'typeGlyph', 'schoolGlyph', 'pips', 'title'];
-  for (const n of names) {
+  const out = {};
+  for (const n of SLOT_NAMES) {
     if (compact ? FULL_ONLY.includes(n) : COMPACT_ONLY.includes(n)) continue;
     const s = (compact && tpl.slots[slotName(n, true, grafts)]) || tpl.slots[n];
     const r = s ? resolveSlot(s, tpl.w, tpl.h) : null;
     if (r) out[n] = r;
   }
-  if (compact && out.window) out.keyNumber = { x: out.window.x, y: out.window.y + out.window.h, w: out.window.w, h: 80 };
+  // the big number of a compact face: the template's own keyNumber slot (a painted frame puts it on the picture), else the strip under the window
+  if (compact) { const own = tpl.slots.keyNumber ? resolveSlot(tpl.slots.keyNumber, tpl.w, tpl.h) : null; if (own) { own.own = true; out.keyNumber = own; } else if (out.window) out.keyNumber = { x: out.window.x, y: out.window.y + out.window.h, w: out.window.w, h: 80 }; }
   return out;
 }
 
@@ -216,45 +228,64 @@ export function cardBackIds(back, hero, act) {
   return ids;
 }
 
-// Draw one card face from a template: the frame image, then each slot's painter in order. painters = { window(g, rect, info), namePlate, typeBand,
-// textBox, graftBand, graftSlots, fusedSlots, typeGlyph, schoolGlyph, pips } (all optional, called only when the slot exists).
+// Draw one card face from a template: the painters of the slots the frame lists as `under` (its transparent windows), the frame image, then every
+// other slot's painter in order. painters = { window(g, rect, info), textHole, namePlate, typeBand, textBox, keyNumber, graftBand, graftSlots, fusedSlots,
+// typeGlyph, schoolGlyph, pips } (all optional, called only when the slot exists); info = { baked, under }.
 // Returns the resolved slots. Pure of any game rule: art/cards.js supplies the painters.
-export const FRONT_ORDER = ['window', 'namePlate', 'typeBand', 'textBox', 'keyNumber', 'graftBand', 'graftSlots', 'fusedSlots', 'typeGlyph', 'schoolGlyph', 'pips'];
+export const FRONT_ORDER = ['window', 'textHole', 'namePlate', 'typeBand', 'textBox', 'keyNumber', 'graftBand', 'graftSlots', 'fusedSlots', 'typeGlyph', 'schoolGlyph', 'pips'];
 export function composeCardFront(g, tpl, fr, variant, painters, info = {}) {
   const res = resolveSlots(tpl, variant);
-  const half = { w: tpl.w, h: tpl.h };
-  if (fr) drawNineSlice(g, fr, -half.w / 2, -half.h / 2, half.w, half.h);
-  const baked = new Set((fr && fr.def && fr.def.baked) || []);
-  for (const name of FRONT_ORDER) {
-    const p = painters[name], r = res[name];
-    if (!p || !r) continue;
-    p(g, r, { ...info, baked: baked.has(name) });
-  }
+  const def = (fr && fr.def) || null, baked = new Set((def && def.baked) || []), under = new Set((def && def.under) || []);
+  const run = (name) => { const p = painters[name], r = res[name]; if (p && r) p(g, r, { ...info, baked: baked.has(name), under: under.has(name) }); };
+  if (under.size) for (const name of FRONT_ORDER) if (under.has(name)) run(name); // what shows through the frame's windows goes first
+  if (fr) drawNineSlice(g, fr, -tpl.w / 2, -tpl.h / 2, tpl.w, tpl.h);
+  for (const name of FRONT_ORDER) if (!under.has(name)) run(name);
   return res;
 }
 
 // ---------------------------------------------------------------- the loader
 export function createTemplates(opts = {}) {
   const A = {
-    base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, app: null, res: new Map(),
-    fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null, forceLive: !!opts.live, art: opts.art === undefined ? TEMPLATE_ART : !!opts.art,
+    base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, app: null, res: new Map(), ver: 0,
+    // art: null follows the preview switch (the game), true / false is a test or a tool saying so itself
+    fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null, forceLive: !!opts.live, art: opts.art === undefined ? null : !!opts.art, on: false,
   };
-  const live = () => A.art && !!(A.forceLive || A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
-  A.available = live;
-  A.use2x = (app) => { const a = app || A.app; return !(a && a.scale > 0 && a.scale < 0.8); };
-  // test and tool hook: inject fetch / image factories / base, force the live path off a DOM, or set the art switch
+  const live = () => !!(A.forceLive || A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
+  A.available = () => A.on && live();
+  // which file size: @2x when a logical pixel covers more than about one device pixel (desktop, and phones with a dense screen), @1x otherwise
+  // and on the lighter graphics tiers
+  A.use2x = (app) => { const a = app || A.app; if (!a) return true; if (tierOf(a) !== 'full') return false; return a.px > 0 ? a.px >= 1.2 : !(a.scale > 0 && a.scale < 0.8); };
+  // the switch, asked once per change of its inputs (the Settings toggle, the graphics tier, the page URL)
+  let swKey = null, swVal = false;
+  A.wanted = () => {
+    if (A.art !== null) return A.art;
+    const st = settingsOf(A.app), tier = tierOf(A.app), search = typeof location !== 'undefined' && location ? String(location.search || '') : '';
+    const key = (st && st.previewArt ? '1' : '0') + tier + search;
+    if (key !== swKey) { swKey = key; swVal = tier !== 'minimal' && previewOn('art', st); }
+    return swVal;
+  };
+  // Bring the loader in line with the switch (main.js calls it every frame and after every settings save; ensure(app) does too, once per frame).
+  // Turning it off keeps what was downloaded, so turning it on again is instant. Returns true when the look changed.
+  A.sync = (app) => {
+    if (app) { A.app = app; A.syncFrame = app.frame; }
+    const on = A.wanted();
+    if (on === A.on) return false;
+    A.on = on; A.res.clear(); A.ver++;
+    return true;
+  };
+  // test and tool hook: inject fetch / image factories / base, force the live path off a DOM, or set the art switch (art: null hands it back to the preview)
   A.configure = (o = {}) => {
     if (o.fetchJson !== undefined) A.fetchJson = o.fetchJson;
     if (o.makeImage !== undefined) A.makeImage = o.makeImage;
     if (o.base) A.base = o.base.endsWith('/') ? o.base : o.base + '/';
     if (o.live !== undefined) A.forceLive = !!o.live;
-    if (o.art !== undefined) A.art = !!o.art;
+    if (o.art !== undefined) A.art = o.art === null ? null : !!o.art;
     A.reset();
   };
-  A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.res.clear(); A.failed = 0; A.gen = (A.gen || 0) + 1; };
+  A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.res.clear(); A.failed = 0; A.gen = (A.gen || 0) + 1; swKey = null; A.on = A.wanted(); A.ver++; };
   A.ensure = (app) => {
-    if (app) A.app = app;
-    if (A.state !== 'idle') return;
+    if (app && (app !== A.app || app.frame !== A.syncFrame)) A.sync(app);
+    if (!A.on || A.state !== 'idle') return;
     if (!live()) { A.state = 'none'; return; }
     A.state = 'loading';
     const gen = A.gen;
@@ -263,10 +294,10 @@ export function createTemplates(opts = {}) {
     Promise.resolve(go).then((m) => {
       if (gen !== A.gen) return;
       const p = parseManifest(m); if (!p) throw new Error('bad manifest');
-      A.manifest = p; A.state = 'ready';
+      A.manifest = p; A.state = 'ready'; A.ver++;
     }).catch(() => { if (gen === A.gen) A.state = 'none'; });
   };
-  A.ready = () => A.state === 'ready' && !!A.manifest;
+  A.ready = () => A.on && A.state === 'ready' && !!A.manifest;
   A.setManifest = (m) => { const p = parseManifest(m); if (!p) return false; A.manifest = p; A.state = 'ready'; A.res.clear(); return true; }; // tools / tests
   A.def = (id) => (A.manifest && A.manifest.frames[id]) || null;
   A.has = (id) => !!A.def(id);
@@ -276,7 +307,7 @@ export function createTemplates(opts = {}) {
     e = { img: null, ok: false, bad: false }; A.imgs.set(file, e);
     try {
       const img = A.makeImage ? A.makeImage() : new Image();
-      img.onload = () => { e.ok = true; A.res.clear(); }; img.onerror = () => { e.bad = true; A.failed++; };
+      img.onload = () => { e.ok = true; A.res.clear(); A.ver++; }; img.onerror = () => { e.bad = true; A.failed++; };
       img.src = A.base + file; e.img = img;
       if (e.img && (e.img.complete === true && (e.img.naturalWidth || e.img.width))) e.ok = true;
     } catch (err) { e.bad = true; A.failed++; }
@@ -315,7 +346,7 @@ export function createTemplates(opts = {}) {
   // the card template for a frame: default slots, then the manifest's template, then the frame's own slots
   A.cardTemplate = (fr) => mergeTemplate(CARD_TEMPLATE, A.template('card_front'), fr && fr.def);
   A.cardBackTemplate = (fr) => mergeTemplate(CARD_BACK_TEMPLATE, A.template('card_back'), fr && fr.def);
-  A.gen = 0;
+  A.gen = 0; A.on = A.wanted();
   return A;
 }
 

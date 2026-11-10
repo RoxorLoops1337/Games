@@ -1,5 +1,6 @@
 import { lnw } from '../art/linework.js';
-import { templates, drawNineSlice } from './templates.js';
+import { templates } from './templates.js';
+import * as SK from './skin.js';
 // Physical UI chrome (design/ART_BIBLE.md "UI chrome"): brass-framed slab panels with rivets, inset shadow and a lit top edge,
 // buttons with 2 px press travel, plus plate / rivet / vial / dial / badge helpers.
 // Textures are baked ONCE into offscreen canvases (keyed by size and colours, numeric keys so a hit allocates nothing);
@@ -46,10 +47,47 @@ function checkpx(app) {
   return px;
 }
 export function frameStart(app) { cache.frameBakes = 0; checkpx(app); }
-// Optional art skins (assets/ui/manifest.json, design/ART_MODULAR.md): a 9-slice frame named by o.frame ('panel' / 'button' by default, o.frame === false opts out)
-// replaces the baked vector chrome once its image is decoded. Without one (headless, no manifest, still loading) null comes back and nothing changes.
+// Painted skins (assets/ui/manifest.json through ui/skin.js, design/ART_MODULAR.md; only while the 'art' preview is on, ui/preview.js).
+// A PANEL is painted only where its call asks for it with o.frame ('panel' leather border over the usual dark slab, 'modal', 'panel.parchment'):
+// most panels are rows and chips whose fill and stroke carry a state, and those keep the procedural look. A BUTTON is painted unless o.frame is
+// false: the leather pill in its four states, the small tab for low buttons; a caller's fill tints the leather and its stroke becomes the rim,
+// so a chosen tab or a dangerous action still reads. Without the image (headless, loading, preview off) nothing below changes.
 const STATE_NAMES = ['normal', 'hover', 'down', 'disabled'];
-function skin(app, id) { templates.ensure(app); return templates.ready() ? templates.frameImg(id, app) : null; }
+const DEFAULT_FILLS = new Set(['#26201c', '#1a1614']); // the plain button and slab colours: no tint
+const HUE = new Map();
+function hueOf(col) { // 'gold' | 'green' | '' : which leather a caller's fill asks for
+  if (typeof col !== 'string') return '';
+  let h = HUE.get(col); if (h !== undefined) return h;
+  h = '';
+  const m = /^#([0-9a-f]{6})$/i.exec(col) || /^rgba?\((\d+)\D+(\d+)\D+(\d+)/i.exec(col);
+  if (m && !DEFAULT_FILLS.has(col.toLowerCase())) {
+    const n = m.length === 2 ? parseInt(m[1], 16) : 0, r = m.length === 2 ? n >> 16 : +m[1], g = m.length === 2 ? (n >> 8) & 255 : +m[2], b = m.length === 2 ? n & 255 : +m[3];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (mx > 0 && d / mx > 0.3) { const hue = d === 0 ? 0 : mx === r ? (((g - b) / d) % 6 + 6) % 6 * 60 : mx === g ? ((b - r) / d + 2) * 60 : ((r - g) / d + 4) * 60; h = hue >= 24 && hue < 70 ? 'gold' : hue >= 70 && hue < 190 ? 'green' : ''; }
+  }
+  HUE.set(col, h); return h;
+}
+const TONES = { gold: '#c08a22', green: '#4c8a3a' };
+function paintedPanel(app, x, y, w, h, o) {
+  const fr = SK.has(o.frame) && templates.frameImg(o.frame); if (!fr) return false;
+  const sl = fr.def.slice; if (sl && (w < (sl[0] + sl[2]) * 1.1 || h < (sl[1] + sl[3]) * 1.1)) return false; // too small for the corner pieces: the plain panel
+  return fr.def.fill === false ? 'border' : SK.nine(app.ctx, o.frame, x, y, w, h);
+}
+function paintedButton(app, x, y, w, h, o, state) {
+  const dy = state === 2 ? 2 : 0, tone = hueOf(o.fill), rimCol = o.stroke && o.stroke !== 'brass' && state !== 3 ? o.stroke : null;
+  const small = !o.frame && h <= 34 && SK.has('button.small');
+  if (small) { // one painting: the other states are washes over it
+    const wash = state === 1 ? ['#fff0c8', 0.16, 'lighter'] : state === 2 ? ['#000', 0.3, 'source-over'] : state === 3 ? ['#3a3632', 0.62, 'source-over'] : null;
+    return SK.nine(app.ctx, 'button.small', x, y + dy, w, h, { tone: tone && state !== 3 ? TONES[tone] : null, wash, rim: rimCol ? [rimCol, 9, 1.5] : null, key: state + tone + (rimCol || '') }) ? dy : -1;
+  }
+  const base = o.frame || 'button', id = SK.has(base + '.' + STATE_NAMES[state]) ? base + '.' + STATE_NAMES[state] : SK.has(base) ? base : SK.has(base + '.normal') ? base + '.normal' : null;
+  if (!id) return -1;
+  const dim = state === 3 && !id.endsWith('.disabled');
+  if (dim) app.ctx.globalAlpha *= 0.5;
+  SK.nine(app.ctx, id, x, y + dy, w, h, tone || rimCol ? { tone: tone && state !== 3 ? TONES[tone] : null, rim: rimCol ? [rimCol, h / 2, 1.5] : null, key: tone + (rimCol || '') } : undefined);
+  if (dim) app.ctx.globalAlpha /= 0.5;
+  return dy;
+}
 
 // ---- panel ----
 function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
@@ -83,7 +121,12 @@ function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
   return o.c;
 }
 export function panel(app, x, y, w, h, o) {
-  if (o.frame !== false && !o.plain) { const fr = skin(app, o.frame || 'panel'); if (fr && drawNineSlice(app.ctx, fr, x, y, w, h)) return; }
+  const painted = typeof o.frame === 'string' && !o.plain && (templates.ensure(app), templates.ready()) ? paintedPanel(app, x, y, w, h, o) : false;
+  if (painted === true) return;
+  if (painted === 'border') { panelBody(app, x, y, w, h, o); SK.nine(app.ctx, o.frame, x, y, w, h); return; } // the leather border lies over the usual slab
+  panelBody(app, x, y, w, h, o);
+}
+function panelBody(app, x, y, w, h, o) {
   const ctx = app.ctx, r = o.r === undefined ? 10 : o.r, lw = o.lw || 2, fill = o.fill || 'rgba(26,22,20,.92)', stroke = o.stroke || 'brass';
   const W = Math.round(w), Hh = Math.round(h), R = Math.round(r), L = Math.round(lw * 2);
   if (!o.plain && W > 4 && Hh > 4 && W < 2048 && Hh < 1024 && R < 64 && L < 32) {
@@ -128,16 +171,7 @@ function bakeButton(s, w, h, r, fill, stroke, state, pad) {
 }
 // Draws the button body for a state and returns the vertical travel (2 when pressed) so the caller can offset its label.
 export function button(app, x, y, w, h, o, state) {
-  if (o.frame !== false) {
-    const base = o.frame || 'button', fr = skin(app, base + '.' + STATE_NAMES[state]) || skin(app, base);
-    if (fr) {
-      const dy = state === 2 ? 2 : 0, dim = state === 3 && !templates.has(base + '.disabled');
-      if (dim) app.ctx.globalAlpha *= 0.5;
-      drawNineSlice(app.ctx, fr, x, y + dy, w, h);
-      if (dim) app.ctx.globalAlpha /= 0.5;
-      return dy;
-    }
-  }
+  if (o.frame !== false && (templates.ensure(app), templates.ready())) { const dy = paintedButton(app, x, y, w, h, o, state); if (dy >= 0) return dy; }
   const ctx = app.ctx, r = o.r === undefined ? 8 : o.r, fill = o.fill || '#26201c', stroke = o.stroke || 'brass';
   const W = Math.round(w), Hh = Math.round(h), R = Math.round(r);
   if (W > 4 && Hh > 4 && W < 2048 && Hh < 1024 && R < 64) {
