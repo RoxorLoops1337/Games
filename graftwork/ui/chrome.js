@@ -171,7 +171,6 @@ export function press(app, x, y, w, h, r = 8) {
   const st = app.shared && app.shared.meta && app.shared.meta.settings; if (st && st.reducedMotion) return;
   const p = RIP[ripN++ % RIP.length]; p.t = 0; p.x = x; p.y = y; p.w = w; p.h = h; p.r = r; p.cx = app.mouse.x; p.cy = app.mouse.y;
 }
-export function ripplesActive() { for (let i = 0; i < RIP.length; i++) if (RIP[i].t < 1) return true; return false; }
 export function drawRipples(app) {
   const ctx = app.ctx;
   for (let i = 0; i < RIP.length; i++) {

@@ -465,6 +465,7 @@ const TS = (app) => app._ts || (app._ts = { key: '', since: 0, alpha: 0, shown: 
 let SEQ = 0;
 // resetTips(app): drop every tip, queued, fading or suppressed (core's app.go and app.blur call it).
 export function resetTips(app) { if (!app) return; app._queued = null; app._ts = null; app.tipLayout = null; }
+export function unqueueTips(app) { app._queued = null; } // core.js: a frozen screen painted under a modal never raises a tip
 export function dismissTips(app) { const S = TS(app); S.shown = false; S.ghost = null; S.last = null; S.alpha = 0; S.key = ''; S.cache = null; }
 export function nextTipSeq() { return ++SEQ; }
 // queueTip(app, key, stack, anchor, o): HUD tips from anywhere in a frame; core draws the newest tip last. o: { gloss: false } for tips that carry their own definitions.
