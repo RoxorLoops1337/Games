@@ -1390,15 +1390,15 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.restore(); BB = null;
 }
 
-// The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to 8 at which rules plus price fit. `fits` is false when
-// even 8 spills (the text is then drawn anyway).
-function cardTextFit(g, lines, price, maxW, avail) {
-  let best = null;
-  for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
+// The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to `floor` (8; a painted frame's smaller text window goes to 7)
+// at which rules plus price fit. `fits` is false when even the floor spills (the text is then drawn anyway).
+export function cardTextFit(g, lines, price, maxW, avail, floor = 8) {
+  let best = null; const psMin = floor < 8 ? floor + 0.5 : 8.5;
+  for (let s = 15; s >= floor; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking rather than spill off the face
     g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
     const rl = lines.map((l) => wrapText(g, l, maxW)); const rn = rl.reduce((a, b) => a + b.length, 0);
     const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
-    const ps = Math.max(8.5, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
+    const ps = Math.max(psMin, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
     const pl = price.map((l) => wrapText(g, l, maxW)); const pn = pl.reduce((a, b) => a + b.length, 0);
     const pH = pn ? pn * ps * 1.2 + 12 : 0;
     best = { s, lh, rl, rH, ps, pl, pH };
@@ -1411,7 +1411,7 @@ function layoutText(g, spec, lines, price, o, box) { // box: the text slot of a 
   const MAXW = box ? box.w : 176, TOP = box ? box.y : 2, BOT = box ? box.y + box.h : 143, AVAIL = BOT - TOP, CX = box ? box.x + box.w / 2 : 0;
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   const flavor = spec.flavor ? String(spec.flavor) : '';
-  const { s, lh, rl, rH, ps, pl, pH } = cardTextFit(g, lines, price, MAXW, AVAIL);
+  const { s, lh, rl, rH, ps, pl, pH } = cardTextFit(g, lines, price, MAXW, AVAIL, box && AVAIL < 120 ? 7 : 8);
   let fl = [], fH = 0;
   if (flavor) { g.font = font(11, { italic: true }); fl = wrapText(g, flavor, MAXW); if (fl.length > 2) fl.length = 2; fH = fl.length * 12.5 + 5; }
   const flavorOk = fH && rH + pH + fH + 6 <= AVAIL;
