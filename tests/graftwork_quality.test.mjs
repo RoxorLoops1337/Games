@@ -1,9 +1,11 @@
 // Quality policy: the tier controller (hysteresis, no flapping), the rAF governor (idle 30 fps, hidden pause), the Graphics setting
-// (persisted, cleaned), decoded-image eviction and the recipe-scoped kit settle. Pure logic, no wall time.
+// (persisted, cleaned), decoded-image eviction, the recipe-scoped kit settle, and the Effects quality setting of the particles (ui/fx.js).
+// Pure logic, no wall time.
 import assert from 'node:assert/strict';
 import { createQuality, createGovernor, TIER_SPEC, TIERS, GRAPHICS, cleanGraphics, Q, IDLE_AFTER_MS } from '../graftwork/ui/quality.js';
 import { createAssets } from '../graftwork/ui/assets.js';
 import { makeApp, frames } from './graftwork_lib.mjs';
+import { Fx, FX_OPTS, CAP_DESKTOP, CAP_MOBILE, defaultQuality } from '../graftwork/ui/fx.js';
 
 // feed n frames of ms each, advancing a clock; returns the clock
 function feed(q, n, ms, clock, expected = 16.7) { for (let i = 0; i < n; i++) { clock += ms; q.sample(ms, expected, clock); } return clock; }
@@ -162,5 +164,16 @@ assert.ok(/^full/.test(createQuality().debug()));
   assert.equal(A.kitRecipeSettled(rc, app), false, 'loading'); assert.equal(made.length, 4, 'floor, wall, one piece, one prop: nothing else is requested');
   assert.ok(!made.some((i) => /other|y@1x/.test(i.src)), 'unused pieces and props are not loaded');
   for (const i of made) i.onload(); assert.equal(A.kitRecipeSettled(rc, app), true);
+}
+
+// ---- 9. the effects quality setting (ui/fx.js, the older system: particle caps; the Graphics tier above is the newer one) ----
+{
+  const mob = FX_OPTS.mobile;
+  FX_OPTS.mobile = true; assert.equal(defaultQuality(), 'low', 'mobile defaults to low');
+  FX_OPTS.mobile = false; assert.equal(defaultQuality(), 'high');
+  FX_OPTS.quality = 1; assert.equal(new Fx()._cap(), CAP_DESKTOP);
+  FX_OPTS.quality = 0.5; assert.ok(new Fx()._cap() <= CAP_DESKTOP / 2, 'low halves the particle cap');
+  FX_OPTS.mobile = true; FX_OPTS.quality = 1; assert.equal(new Fx()._cap(), CAP_MOBILE);
+  FX_OPTS.mobile = mob; FX_OPTS.quality = 1;
 }
 console.log('graftwork_quality: all checks passed');

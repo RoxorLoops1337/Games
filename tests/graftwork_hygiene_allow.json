@@ -576,8 +576,5 @@
   "win@graftwork/ui/offline.js"
  ],
  "orphanAssets": [],
- "unmentionedTools": [
-  "tools/graftwork_glossary_audit.mjs",
-  "tools/graftwork_icons.py"
- ]
+ "unmentionedTools": []
 }

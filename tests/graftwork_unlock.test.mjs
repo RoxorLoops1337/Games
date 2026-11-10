@@ -5,7 +5,7 @@ import * as WD from '../graftwork/engine/ward.js';
 import * as M from '../graftwork/engine/meta.js';
 import * as UN from '../graftwork/engine/unlock.js';
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, LOCKED_IDS, UP, TOTAL_COST, START, inventory } from '../graftwork/data/unlocks.js';
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
+import { CARDS, GRAFTS, RELICS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
 import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
@@ -131,7 +131,6 @@ t('API: unlockState, awardRun via recordRunEnd, isUnlocked, lockedHint, codex di
   const res = M.recordRunEnd(m, run, 'dead');
   assert.ok(res.unlock.up >= UP.FLOOR && Array.isArray(res.unlock.unlockedNow)); assert.ok(m.unlocked.points + res.unlock.unlockedNow.reduce((a, b) => a + b.cost, 0) >= 0);
   const lid = LOCKED_IDS.find((k) => !UN.isUnlocked(m, k)); assert.ok(UN.lockedHint(UNLOCKS[lid].itemId).length > 10); assert.equal(UN.lockedHint('nope'), '');
-  assert.ok(!/—/.test(JSON.stringify(Object.values(UNLOCKS).map((e) => e.hint))), 'no em dashes');
   assert.ok(M.isUnlocked === UN.isUnlocked, 'exported from meta.js too (codex)');
 });
 t('affinity: the most played hero\'s cards are pulled forward', () => {

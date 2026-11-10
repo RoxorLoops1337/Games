@@ -1,10 +1,10 @@
 // GRAFTWORK card art: draws every card (base, upgraded, tithed, jammed, 0..3 grafts) and every graft tile on the fake canvas.
 import assert from 'node:assert/strict';
-import { fakeCtx, installDom } from './graftwork_lib.mjs';
+import { fakeCtx, installDom, canvasCalls } from './graftwork_lib.mjs';
 installDom();
 const { CARD_LIST, GRAFT_LIST } = await import('../graftwork/data/index.js');
 const { cardSpec } = await import('../graftwork/engine/cards.js');
-const { motifOf, drawCard, drawCardBack, drawGraftPatch, drawSchoolGlyph, SCHOOL_SHAPES, CARD_W, CARD_H, MOTIF_NAMES, lightDir, SCHOOL_COLORS, clearCardCache } = await import('../graftwork/art/cards.js');
+const { motifOf, drawCard, drawCardBack, drawGraftPatch, drawSchoolGlyph, SCHOOL_SHAPES, CARD_W, CARD_H, MOTIF_NAMES, lightDir, SCHOOL_COLORS, clearCardCache, cardCacheStats } = await import('../graftwork/art/cards.js');
 const { makeRng } = await import('../graftwork/engine/rng.js');
 
 let n = 0;
@@ -75,10 +75,21 @@ t('hand_of_ten_costs_under_budget', () => {
   const rare = CARD_LIST.filter((c) => c.rarity === 'rare').slice(0, 5), unc = CARD_LIST.filter((c) => c.rarity === 'uncommon').slice(0, 5);
   const hand = [...rare, ...unc].map((c, i) => cardSpec({ uid: 2000 + i, id: c.id, grafts: [], up: 0 }));
   const frame = (f) => hand.forEach((sp, i) => drawCard(ctx, sp, 100 + i * 60, 600, { compact: true, scale: 0.6, rot: (i - 5) * 0.03, t: f / 60, tilt: i === 3 ? { x: 0.4, y: -0.4 } : undefined }));
-  for (let f = 0; f < 30; f++) frame(f);
-  const t0 = performance.now(); const N = 300; for (let f = 0; f < N; f++) frame(f);
-  const per = (performance.now() - t0) / N;
-  console.log('hand of 10 cpu ms/frame (fake ctx):', per.toFixed(3));
-  assert.ok(per < 1.5, 'hand cost ' + per);
+  for (let f = 0; f < 30; f++) frame(f); // warm: the ten faces are baked
+  // The budget is counted, not timed (it was "under 1.5 ms a frame" on the wall clock, which a busy machine fails). What it promises: a warm
+  // hand is ten cached faces plus what is drawn live over them. No face is baked again, and a frame stays near the 1180 canvas calls
+  // measured over every fake context (baking one face alone is about 1500 calls).
+  const builds = cardCacheStats().builds, c0 = canvasCalls(), N = 300; for (let f = 0; f < N; f++) frame(f);
+  const per = (canvasCalls() - c0) / N;
+  console.log('hand of 10: canvas calls per frame (every fake context):', per.toFixed(0));
+  assert.equal(cardCacheStats().builds, builds, 'a warm hand bakes no card face');
+  assert.ok(per < 1500, 'hand cost ' + per + ' canvas calls a frame');
+});
+t('a_card_above_its_printed_cost_draws_the_red_cost_badge_an_even_cost_does_not', () => {
+  const spec = cardSpec({ id: 'm_incision', up: false, grafts: [] });
+  const run = (cost) => { const g = fakeCtx(); const seen = []; let fs = ''; Object.defineProperty(g, 'fillStyle', { get: () => fs, set: (v) => { fs = v; seen.push(String(v)); } }); drawCard(g, spec, 0, 0, { cost }); return seen; };
+  assert.ok(run(spec.cost + 1).includes('#e0453a'), 'badge when cost is up');
+  assert.ok(!run(spec.cost).includes('#e0453a'), 'no badge at the printed cost');
+  assert.ok(!run(Math.max(0, spec.cost - 1)).includes('#e0453a') || spec.cost === 0, 'no badge when cost is down');
 });
 console.log(n + ' passed');

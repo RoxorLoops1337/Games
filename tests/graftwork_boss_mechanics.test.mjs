@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, specOf } from '../graftwork/engine/combat.js';
-import { newInst, instWeight } from '../graftwork/engine/cards.js';
+import { newInst } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, ENEMIES } from '../graftwork/data/index.js';
 
 let n = 0;
@@ -223,7 +223,6 @@ t('every signature move with a number has a short name and the new ones carry a 
     const mv = ENEMIES[id].moves[m];
     assert.ok(mv.tip && mv.tip.length > 10, `${id}/${m} tip`);
     assert.ok(mv.name.length <= 16, `${id}/${m} name "${mv.name}" under 17 characters`);
-    assert.ok(!/—/.test(mv.tip + mv.name), 'no em dash');
   }
 });
 

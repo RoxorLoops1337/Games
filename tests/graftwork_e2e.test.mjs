@@ -14,7 +14,6 @@ const { boot } = await import('../graftwork/main.js');
 const RUN = await import('../graftwork/engine/run.js');
 const { loadRun } = await import('../graftwork/engine/save.js');
 const { fight, POLICIES } = await import('../tools/graftwork_driver.mjs');
-const { CARDS, GRAFTS } = await import('../graftwork/data/index.js');
 const { canGraft } = await import('../graftwork/engine/cards.js');
 
 const { app, flow } = boot(canvas);

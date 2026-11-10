@@ -13,7 +13,7 @@ import { audit, againstAllow, lex, ALLOW_LISTS, STRICT_LISTS, ALLOW_FILE } from 
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
-const DASH = String.fromCharCode(0x2014);
+const DASH = String.fromCharCode(0x2014), EN = String.fromCharCode(0x2013);
 
 // ---------------------------------------------------------------- the lexer
 t('lexer: comments, strings, template text and regex bodies are blanked, the code inside ${} stays, offsets hold', () => {
@@ -59,7 +59,8 @@ try {
     'export function testOnlyButUsed() { return 4; } const keep = testOnlyButUsed(); void keep;',
     `// a comment with testOnly and an em dash ${DASH}`,
   ].join('\n'));
-  put('graftwork/star.js', "export const viaStar = 1; export const starUnused = 2;");
+  // line 2: an en dash written out; line 3: a dash as an escape (u2014); line 4: built at run time (fromCharCode): none can be seen as the character
+  put('graftwork/star.js', ["export const viaStar = 1; export const starUnused = 2;", `// an en dash ${EN} in a comment`, 'const e1 = "a\\u2014b";', 'const e2 = String.fromCharCode(0x2014); const e3 = "&mdash;";'].join('\n'));
   put('graftwork/barrel.js', "export { again, never } from './deep.js';");
   put('graftwork/deep.js', 'export const again = 1; export const never = 2;');
   put('graftwork/ns.js', "export const dotted = () => 1; export const drawA = () => 2; export const drawB = () => 3; export const other = () => 4;");
@@ -76,7 +77,7 @@ try {
   put('graftwork/design/NOTES.md', 'See tools/graftwork_known.mjs.');
   put('tests/graftwork_a.test.mjs', "import { testOnly, testOnlyButUsed, gone } from '../graftwork/lib.js';\nimport './graftwork_missing.mjs';\nconst ok = !/" + DASH + "/.test('x') && !'y'.includes('" + DASH + "'); // looks for the character\nconsole.log(testOnly, testOnlyButUsed, gone, ok);");
   // a tool that loads modules by path under an alias; it also has an identifier and a foreign property with the names of two exports it does NOT take
-  put('tools/graftwork_known.mjs', "const load = (p) => import(new URL('../' + p, import.meta.url)); const m = await load('graftwork/lazy.js'), L = await load('graftwork/lib.js');\nconst usesIt = 3, other = { neverImported: 1 }; console.log(m.lazyTwo, L.testOnly, usesIt, other.neverImported);");
+  put('tools/graftwork_known.mjs', `// a tool whose prose has an en dash ${EN} too\nconst load = (p) => import(new URL('../' + p, import.meta.url)); const m = await load('graftwork/lazy.js'), L = await load('graftwork/lib.js');\nconst usesIt = 3, other = { neverImported: 1 }; console.log(m.lazyTwo, L.testOnly, usesIt, other.neverImported);`);
   put('tools/graftwork_forgotten.mjs', 'console.log(1);');
   const f = audit(tmp);
   const has = (list, x) => assert.ok(f[list].some((e) => e.includes(x)), `${list} should hold ${x}: ${JSON.stringify(f[list])}`);
@@ -111,8 +112,8 @@ try {
     assert.ok(tau && !tau.identical && tau.variants === 2, JSON.stringify(tau));
     has('duplicateHelpers', 'clamp@graftwork/main.js'); has('duplicateHelpers', 'TAU@graftwork/lab/lab.js');
   });
-  t('em dashes: prose is a finding, a test naming the character in a regex or a string of dashes is not', () => {
-    assert.deepEqual(f.emDashes, ['graftwork/lib.js:9']);
+  t('em and en dashes: prose is a finding, so is an escape in the game; a test naming the character in a regex or a string of dashes is not', () => {
+    assert.deepEqual(f.emDashes, ['graftwork/lib.js:9', 'graftwork/star.js:2', 'graftwork/star.js:3', 'graftwork/star.js:4', 'tools/graftwork_known.mjs:1']);
     assert.equal(f.emDashDetectors, 2);
   });
   t('imports that do not resolve, and tools nobody names', () => {

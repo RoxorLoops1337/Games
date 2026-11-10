@@ -7,6 +7,11 @@ import * as CB from '../graftwork/engine/combat.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { ENEMIES } from '../graftwork/data/index.js';
 import { BUILD_CARDS } from '../graftwork/data/ward.js';
+// Every call on every fake context made in this process (the app's canvas and each offscreen canvas). canvasCalls() is the load-independent
+// measure of what a frame costs, where a suite used to time it with the wall clock. It counts drawing, not arithmetic: time itself is
+// measured in a real browser (tools/graftwork_profile.mjs).
+let allCalls = 0;
+export const canvasCalls = () => allCalls;
 const CTX_METHODS = ['arc', 'arcTo', 'beginPath', 'bezierCurveTo', 'clearRect', 'clip', 'closePath', 'drawImage', 'ellipse', 'fill', 'fillRect', 'fillText', 'lineTo', 'moveTo', 'putImageData', 'quadraticCurveTo', 'rect', 'resetTransform', 'restore', 'rotate', 'roundRect', 'save', 'scale', 'setLineDash', 'setTransform', 'stroke', 'strokeRect', 'strokeText', 'transform', 'translate'];
 export function fakeCtx() {
   const grad = { addColorStop() {} };
@@ -17,12 +22,12 @@ export function fakeCtx() {
       if (k === 'measureText') return (s) => ({ width: String(s).length * 8 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (typeof k === 'symbol') return undefined;
-      return (...a) => { state.calls++; return undefined; };
+      return (...a) => { state.calls++; allCalls++; return undefined; };
     },
   });
   const ctx = Object.create(fallback);
   ctx.canvas = null;
-  const noop = () => { state.calls++; };
+  const noop = () => { state.calls++; allCalls++; };
   for (const m of CTX_METHODS) ctx[m] = noop;
   ctx.createLinearGradient = ctx.createRadialGradient = ctx.createPattern = () => grad;
   ctx.measureText = (s) => ({ width: String(s).length * 8 });
