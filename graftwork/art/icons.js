@@ -621,7 +621,7 @@ export function drawShield(ctx, x, y, size, n) {
 // (x, y) top left of the row, h its height, w the room. Returns false while the part is not there. Shared by every screen that shows the gauge.
 export function paintedGauge(ctx, x, y, w, h, weight, budget, previewWeight = 0, t = now()) {
   const n = Math.max(1, budget | 0), total = Math.max(n, weight + Math.max(0, previewWeight));
-  let fh = h + 12; const need = SK.gaugeWidth(fh, n); if (!need) return false;
+  let fh = h + 8; const need = SK.gaugeWidth(fh, n); if (!need) return false; // the frame stands 4 px above and below the row the old cells used
   const over = total - n, room = w - (over > 0 ? 6 : 0);
   if (need * (1 + over / (n + 0.76)) > room) fh *= room / (need * (1 + over / (n + 0.76)));
   const G = SK.gauge(ctx, x - 2, y + h / 2 - fh / 2, fh, n); if (!G) return false;

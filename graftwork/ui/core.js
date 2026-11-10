@@ -52,6 +52,8 @@ export function createApp(canvas, opts = {}) {
     navButtons: false, // screens opt in: Tab / Shift-Tab / Enter walk the buttons registered last frame
     focus: { idx: -1, active: false, n: 0, curN: 0, list: [], cur: [], fire: false, lx: -999, ly: -999 },
   };
+  // the player's settings object (meta.settings), for the preview switches of ui/preview.js (previewOn('art' | 'rig', app.settings)); null before a meta exists
+  Object.defineProperty(app, 'settings', { get() { const m = app.shared && app.shared.meta; return (m && m.settings) || null; }, configurable: true });
   const NO = Object.freeze({}); // shared empty options: calls without options allocate nothing
   const TO = {}; // scratch text options for the chrome's own labels (read synchronously by app.text)
 
