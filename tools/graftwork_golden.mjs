@@ -645,8 +645,326 @@ async function sectionResume() {
 }
 
 //@@UI@@
-// TEMP stubs (replaced by the real UI part)
-const VARIANTS = []; const sceneKeys = () => []; const sceneNames = () => []; async function sceneChild() { return {}; } async function verifyScenes() {} async function recordBrowser() { return {}; } function cmdCompareShots() {} function cmdDump() {}
+// ---------------------------------------------------------------- ui / assets: the stage (real boot on a recording canvas)
+// Variants: the first two are the --quick set. The phone stage is 844x390 (scale 0.5417), a touch device: clicks are taps there.
+// In the assets section the phone has device pixel ratio 1, so it asks for the @1x files (the desktop asks for @2x).
+const VARIANTS = [
+  { id: 'desk.motion', w: 1280, h: 720, dpr: 1, reduced: false },
+  { id: 'phone.reduced', w: 844, h: 390, dpr: 3, reduced: true, touch: true },
+  { id: 'desk.reduced', w: 1280, h: 720, dpr: 1, reduced: true },
+  { id: 'phone.motion', w: 844, h: 390, dpr: 3, reduced: false, touch: true },
+];
+const sceneNames = (sec) => Object.keys(SCENES[sec]);
+const sceneKeys = (sec) => { const vs = QUICK ? VARIANTS.slice(0, 2) : VARIANTS, out = []; for (const n of sceneNames(sec)) for (const v of vs) out.push(`${n}@${v.id}`); return out; };
+const num3 = (v) => (typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : v && typeof v === 'object' ? (v.__id || '{}') : String(v));
+
+// size of an image file from its header (WebP: VP8 / VP8L / VP8X, PNG), so a fake image is as big as the real one
+function imageSize(file) {
+  const fd = fs.openSync(file, 'r'), b = Buffer.alloc(32); fs.readSync(fd, b, 0, 32, 0); fs.closeSync(fd);
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') {
+    const cc = b.toString('latin1', 12, 16);
+    if (cc === 'VP8 ') return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+    if (cc === 'VP8L') return [1 + (((b[22] & 0x3f) << 8) | b[21]), 1 + (((b[24] & 0x0f) << 10) | (b[23] << 2) | ((b[22] & 0xc0) >> 6))];
+    if (cc === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+  }
+  if (b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG') return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  return [256, 256];
+}
+// What a pixel read answers in the assets section: every sprite is the same mannequin (head, coat, two separate legs, shoes), so the
+// alpha analysis of ui/puppet.js and the contact point of ui/ward_iso.js run on a figure with real legs. Deterministic in w and h.
+function mannequin(w, h) {
+  const d = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const u = (x + 0.5) / w, v = (y + 0.5) / h; let c = null;
+    if (Math.hypot((u - 0.5) * w / h, v - 0.14) < 0.09) c = [226, 190, 160];
+    else if (v >= 0.22 && v < 0.6 && u >= 0.34 && u < 0.66) c = [120, 60, 70];
+    else if (v >= 0.9 && v < 0.94 && ((u >= 0.33 && u < 0.47) || (u >= 0.53 && u < 0.67))) c = [30, 30, 30];
+    else if (v >= 0.6 && v < 0.94 && ((u >= 0.36 && u < 0.47) || (u >= 0.53 && u < 0.64))) c = [60, 60, 90];
+    if (c) { const i = (y * w + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255; }
+  }
+  return d;
+}
+
+const STAGE = { log: null, first: true, mods: null, pending: [], loads: null };
+// Boots the game on a fresh recorder. Returns the script API S. Called once per pass (cold, then warm in the same process).
+async function bootStage(sec, v, o = {}) {
+  const assetsMode = sec === 'assets';
+  resetDeterminism();
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, val) => { store.set(k, String(val)); }, removeItem: (k) => { store.delete(k); }, clear: () => store.clear() };
+  if (STAGE.first) {
+    STAGE.first = false;
+    Object.defineProperty(globalThis, 'navigator', { value: { userAgent: v.touch ? 'GoldenMaster Mobile' : 'GoldenMaster', maxTouchPoints: v.touch ? 5 : 0 }, configurable: true, writable: true });
+    globalThis.window = { innerWidth: v.w, innerHeight: v.h, devicePixelRatio: assetsMode && v.touch ? 1 : v.dpr, addEventListener() {}, removeEventListener() {} };
+    globalThis.requestAnimationFrame = () => 0; globalThis.cancelAnimationFrame = () => {};
+    let pid = 0; // Path2D objects go into the same log as the canvas calls
+    globalThis.Path2D = class { constructor(a) { const id = 'path#' + (pid++); this.__id = id; STAGE.log.push('new ' + id + (a === undefined ? '' : '(' + num3(a) + ')')); return new Proxy(this, { get: (t, k) => (k in t ? t[k] : typeof k === 'symbol' ? undefined : (...x) => { STAGE.log.push(id + ':' + k + '(' + x.map(num3).join(',') + ')'); }) }); } };
+    if (assetsMode) globalThis.Image = class { constructor() { this.__id = 'img'; this.width = 0; this.height = 0; this.naturalWidth = 0; this.naturalHeight = 0; this.complete = false; this.onload = null; this.onerror = null; } set src(u) { this._src = u; this.__id = 'img:' + u; STAGE.pending.push(this); } get src() { return this._src; } };
+    STAGE.mods = { REC: await imp('tests/graftwork_rec_lib.mjs') };
+  }
+  // the recorder of tests/graftwork_rec_lib.mjs, with its log turned into a running sha1 (a scene makes millions of calls)
+  const R = STAGE.mods.REC.makeRecorder(), sink = o.sink || null;
+  let H = createHash('sha1'), calls = 0;
+  R.log.push = (s) => { H.update(s); H.update('\n'); calls++; if (sink) sink(s); return calls; };
+  STAGE.log = R.log; STAGE.pending = []; STAGE.loads = { n: 0, bytes: 0, list: [], missing: [] };
+  R.install();
+  const doc = globalThis.document; doc.getElementById = () => null;
+  if (assetsMode) { // pixel reads and writes work on every offscreen canvas (see mannequin)
+    const mk0 = doc.createElement;
+    doc.createElement = (tag) => {
+      const c = mk0(tag), g = c.getContext('2d'), def = (k, fn) => Object.defineProperty(g, k, { value: fn, configurable: true, writable: true });
+      def('getImageData', (x, y, w, h) => { R.log.push(`${c.__id}:getImageData(${[x, y, w, h].map(num3).join(',')})`); return { width: w, height: h, data: mannequin(w, h) }; });
+      def('createImageData', (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) }));
+      def('putImageData', (id, x, y) => { R.log.push(`${c.__id}:putImageData(${id && id.data ? h12(Buffer.from(id.data.buffer, id.data.byteOffset, id.data.byteLength)) : '?'},${num3(x)},${num3(y)})`); });
+      return c;
+    };
+  }
+  const cv = R.root; cv.width = 1280; cv.height = 720; cv.addEventListener = () => {}; cv.setPointerCapture = () => {};
+  cv.getBoundingClientRect = () => ({ left: parseFloat(cv.style.left) || 0, top: parseFloat(cv.style.top) || 0, width: parseFloat(cv.style.width) || 1280, height: parseFloat(cv.style.height) || 720 });
+  const M = STAGE.mods;
+  if (!M.META) { for (const [k, f] of Object.entries({ META: 'graftwork/engine/meta.js', RUN: 'graftwork/engine/run.js', WD: 'graftwork/engine/ward.js', K: 'graftwork/engine/cards.js', D: 'graftwork/data/index.js', WDATA: 'graftwork/data/ward.js' })) M[k] = await imp(f); }
+  // the profile: a fresh one (tips off unless the scene wants the first-run tips), or a veteran one built by the real run-end bookkeeping
+  const meta = M.META.defaultMeta();
+  meta.settings.reducedMotion = !!v.reduced; meta.settings.tips = !!o.tips;
+  if (o.veteran) veteranMeta(M, meta);
+  localStorage.setItem('graftwork_meta_v1', JSON.stringify(meta));
+  if (assetsMode) {
+    if (!M.ASSETS) M.ASSETS = await imp('graftwork/ui/assets.js');
+    M.ASSETS.assets.fetchJson = async (url) => { STAGE.loads.list.push(url); return JSON.parse(fs.readFileSync(path.join(ROOT, 'graftwork', url), 'utf8')); };
+  }
+  if (!M.MAIN) { M.MAIN = await imp('graftwork/main.js'); M.WARDUI = await imp('graftwork/ui/ward.js'); }
+  const { app, flow } = M.MAIN.boot(cv);
+  const btns = [], rects = []; let bf = -1;
+  const fresh = () => { if (bf !== app.frame) { bf = app.frame; btns.length = 0; rects.length = 0; } };
+  const button0 = app.button, clicked0 = app.clicked;
+  app.button = (label, x, y, w, h, bo) => { fresh(); btns.push({ label: String(label), x, y, w, h, dis: !!(bo && bo.disabled) || !!app.blocked }); return button0(label, x, y, w, h, bo); };
+  app.clicked = (x, y, w, h) => { fresh(); if (w > 8 && h > 8 && rects.length < 400 && !app.blocked) rects.push([x, y, w, h]); return clicked0(x, y, w, h); }; // only what the top screen offers
+  const marks = {}, trail = [];
+  const fireImages = () => {
+    if (!STAGE.pending.length) return;
+    const list = STAGE.pending; STAGE.pending = [];
+    for (const img of list) {
+      const url = img._src, file = path.join(ROOT, 'graftwork', url), L = STAGE.loads;
+      L.list.push(url);
+      if (fs.existsSync(file)) { const [w, h] = imageSize(file); img.width = img.naturalWidth = w; img.height = img.naturalHeight = h; img.complete = true; L.n++; L.bytes += fs.statSync(file).size; if (img.onload) img.onload(); }
+      else { L.missing.push(url); if (img.onerror) img.onerror(); }
+    }
+  };
+  const S = {
+    app, flow, v, sec, M, trail, btns, rects, assetsMode,
+    get run() { return app.shared.run; }, get meta() { return app.shared.meta; },
+    frames(n = 1) { for (let i = 0; i < n; i++) { if (assetsMode) fireImages(); DET.clock += 1000 / 60; app.tick(1 / 60); } },
+    // frames with a turn of the microtask queue after each: manifest loads (promises) land between frames, as in a browser
+    async wait(n = 1) { for (let i = 0; i < n; i++) { S.frames(1); if (assetsMode) for (let k = 0; k < 4; k++) await null; } },
+    move(x, y) { app.mouse.x = x; app.mouse.y = y; app.mouse.touch = false; },
+    click(x, y) { const m = app.mouse; m.x = x; m.y = y; m.touch = !!v.touch; m.pressed = true; m.down = true; S.frames(1); m.released = true; m.down = false; if (v.touch) m.touchUp = true; S.frames(1); },
+    drag(x0, y0, x1, y1) { const m = app.mouse; m.x = x0; m.y = y0; m.touch = !!v.touch; m.pressed = true; m.down = true; S.frames(1); for (let i = 1; i <= 8; i++) { m.x = x0 + (x1 - x0) * i / 8; m.y = y0 + (y1 - y0) * i / 8; S.frames(1); } m.released = true; m.down = false; if (v.touch) m.touchUp = true; S.frames(3); trail.push(`drag ${Math.round(x0)},${Math.round(y0)} > ${Math.round(x1)},${Math.round(y1)}`); },
+    key(k, extra) { app.pressedKeys.push({ key: k, preventDefault() {}, ...(extra || {}) }); trail.push('key ' + k); S.frames(1); },
+    wheel(dy) { app.mouse.wheel += dy; trail.push('wheel ' + dy); S.frames(1); },
+    rect(id, n = 0) { return app.layout.getAll().filter((r) => (id instanceof RegExp ? id.test(r.id) : r.id === id))[n] || null; },
+    // every helper below notes what it found in the trail (part of the golden), and a miss is a note, never a throw
+    hoverRect(id, k = 12, n = 0) { const r = S.rect(id, n); if (!r) { trail.push('miss rect ' + id); S.frames(k); return false; } trail.push('hover ' + r.id); S.move(r.x + r.w / 2, r.y + r.h / 2); S.frames(k); return true; },
+    clickRect(id, n = 0) { const r = S.rect(id, n); if (!r) { trail.push('miss rect ' + id); S.frames(2); return false; } trail.push('click ' + r.id); S.click(r.x + r.w / 2, r.y + r.h / 2); return true; },
+    btn(re, n = 0) { return btns.filter((b) => re.test(b.label) && !b.dis)[n] || null; },
+    hoverBtn(re, k = 12, n = 0) { const b = S.btn(re, n); if (!b) { trail.push('miss button ' + re); S.frames(k); return false; } trail.push('hover [' + b.label + ']'); S.move(b.x + b.w / 2, b.y + b.h / 2); S.frames(k); return true; },
+    clickBtn(re, n = 0) { const b = S.btn(re, n); if (!b) { trail.push('miss button ' + re); S.frames(2); return false; } trail.push('click [' + b.label + ']'); S.click(b.x + b.w / 2, b.y + b.h / 2); return true; },
+    // the i-th clickable rectangle of the last frame (screens that register nothing, like Settings): hover or click it
+    hoverN(i, k = 6) { const r = rects[i]; if (!r) { trail.push('miss clickable ' + i); S.frames(k); return false; } const p = [r[0] + r[2] / 2, r[1] + r[3] / 2]; trail.push(`hover #${i} ${Math.round(p[0])},${Math.round(p[1])}`); S.move(p[0], p[1]); S.frames(k); return true; },
+    clickN(i) { const r = rects[i]; if (!r) { trail.push('miss clickable ' + i); S.frames(2); return false; } const p = [r[0] + r[2] / 2, r[1] + r[3] / 2]; trail.push(`click #${i} ${Math.round(p[0])},${Math.round(p[1])}`); S.click(p[0], p[1]); return true; },
+    at(x, y, k = 10) { trail.push(`hover ${x},${y}`); S.move(x, y); S.frames(k); },
+    // a point inside a registered rectangle, dx / dy logical px from its corner (grids of cards that register only their scroll box)
+    tapIn(id, dx, dy) { const r = S.rect(id); if (!r) { trail.push('miss rect ' + id); S.frames(2); return false; } trail.push(`click ${r.id}+${dx},${dy}`); S.click(r.x + dx, r.y + dy); return true; },
+    // tap along a row of a rectangle until `done()`: finds the first card of a grid without knowing its layout
+    scanTap(id, fy, done) { const r = S.rect(id); if (!r) { trail.push('miss rect ' + id); return false; } for (let x = r.x + 70; x < r.x + r.w - 40; x += 55) { S.click(x, r.y + r.h * fy); S.frames(4); if (done()) { trail.push(`click ${r.id} row ${fy} at x ${Math.round(x)}`); return true; } } trail.push(`nothing to click in ${r.id} row ${fy}`); return false; },
+    tap(x, y) { trail.push(`click ${x},${y}`); S.click(x, y); },
+    away() { app.mouse.x = -999; app.mouse.y = -999; },
+    note(s) { trail.push(String(s)); },
+    state() { const run = app.shared.run; return `${app.current}[${app.stack.map((s) => s.name).join('>')}]${run ? ` ${run.phase}${run.ward ? ` day ${run.ward.day} ${run.ward.phase}` : ''} hp ${run.hp}/${run.maxHp} gold ${run.gold}` : ''}`; },
+    mark(name) { marks[name] = H.copy().digest('hex').slice(0, 12); trail.push(`-- ${name}: ${S.state()}`); },
+    result() {
+      const L = STAGE.loads, out = { hash: H.copy().digest('hex'), calls, marks, state: S.state(), rects: app.layout.getAll().map((r) => `${r.id} ${[r.x, r.y, r.w, r.h].map(num3).join(',')} ${r.layer}${r.group !== r.id ? ' g:' + r.group : ''}${r.overlay ? ' overlay' : ''}`), trail };
+      if (assetsMode) out.loads = { files: L.n, bytes: L.bytes, requests: L.list.length, list: h12(L.list.join('\n')), missing: L.missing.slice() };
+      return out;
+    },
+  };
+  return S;
+}
+// A profile with history: two finished runs go through the game's own run-end bookkeeping (Credit, unlock points, achievements, seen).
+function veteranMeta(M, meta) {
+  const { RUN, META, D } = M;
+  for (const [hero, outcome, asc] of [['marrow', 'won', 0], ['wick', 'dead', 2], ['odile', 'won', 1]]) {
+    const run = RUN.newRun({ hero, seed: 'golden-veteran-' + hero, ascension: asc });
+    run.act = outcome === 'won' ? 3 : 2; Object.assign(run.stats, { fights: 18, elites: 3, grafts: 9, floors: 27, bosses: outcome === 'won' ? 3 : 1, goldEarned: 640, damageTaken: 210 });
+    run.seenEnemies = Object.keys(D.ENEMIES).slice(0, 30); run.killedEnemies = run.seenEnemies.slice(0, 24); run.phase = outcome; run.ended = true;
+    if (META.onRunStart) META.onRunStart(meta, run);
+    META.recordRunEnd(meta, run, outcome);
+  }
+  for (const h of HEROES) if (!meta.unlocked.heroes.includes(h)) meta.unlocked.heroes.push(h);
+  if (meta.credit && typeof meta.credit === 'object') { meta.credit.bal = (meta.credit.bal || 0) + 400; meta.credit.total = (meta.credit.total || 0) + 400; }
+  return meta;
+}
+// A run with things on it: grafts on the first cards, relics, potions, gold (all through the engine's own functions).
+function enrich(S, o = {}) {
+  const { RUN, K, D } = S.M, run = S.run;
+  const GL = D.GRAFT_LIST; let k = fnv(run.seed) % GL.length;
+  for (const [idx, n] of [[0, 1], [1, 2], [2, o.overload ? 3 : 1]]) { const inst = run.deck[idx]; for (let g = 0; g < GL.length && inst.grafts.length < n; g++, k++) { const gid = GL[k % GL.length].id; if (K.canGraft(inst, gid)) RUN.applyGraft(run, inst.uid, gid, { keepPhase: true }); } }
+  const relics = Object.values(D.RELICS).filter((r) => !r.ward && (!r.hero || r.hero === run.hero) && r.rarity !== 'boss');
+  for (let i = 0; i < (o.relics === undefined ? 5 : o.relics); i++) RUN.addRelic(run, relics[(fnv(run.seed + i) + i * 7) % relics.length].id);
+  const pots = Object.keys(D.POTIONS); for (let i = 0; i < 2; i++) RUN.addPotion(run, pots[(fnv(run.seed) + i * 5) % pots.length]);
+  run.gold = o.gold === undefined ? 400 : o.gold;
+  if (o.up) for (const i of [3, 4]) if (run.deck[i]) run.deck[i].up = 1;
+  S.note('deck ' + deckLine(run).slice(0, 4).join(' ') + ' relics ' + run.relics.join(','));
+  return run;
+}
+const startRunUi = (S, hero, seed, o = {}) => { S.flow.start({ hero, seed: 'golden-ui-' + seed, mode: o.ward ? 'ward' : undefined, ascension: o.asc || 0 }); return S.run; };
+function fightUi(S, enemies, kind = 'normal') { const run = S.run; run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: kind, enemies }; S.flow.route(); }
+// a turn through the real widgets: card, then target; the trail keeps what the engine saw
+function playCards(S, n) {
+  for (let i = 0; i < n; i++) { if (!S.clickRect(/^hand_/, 0)) break; S.frames(8); S.clickRect(/^en\d+:body$/, 0); S.frames(34); }
+  S.note('hand ' + S.app.layout.getAll().filter((r) => /^hand_/.test(r.id)).length + ', foes ' + S.app.layout.getAll().filter((r) => /^en\d+:body$/.test(r.id)).length);
+}
+// a hospital of ten rooms and more, with a two cell Ward Wing and a two cell Generator, built by the engine's own playBuildCard
+function buildHospital(S) {
+  const { WD, WDATA } = S.M, run = S.run, w = run.ward;
+  w.res.wood = 60; w.res.stone = 60; run.gold = 900; w.deck.hand = [];
+  for (const id of ['b_corridor', 'b_ward_wing', 'b_generator', 'b_dispensary', 'b_workshop', 'b_isolation', 'b_corridor', 'b_linen']) {
+    if (!WDATA.BUILD_CARDS[id]) { S.note('no plan ' + id); continue; }
+    const c = { uid: 9000 + w.cardNext++, id }; w.deck.hand.push(c);
+    let ok = false; for (const [x, y] of WD.buildCells(run)) if (WD.playBuildCard(run, c.uid, { x, y }).ok) { ok = true; break; }
+    if (!ok) S.note('not built ' + id);
+  }
+  for (const r of Object.values(w.rooms)) if (WD.everyOf(r)) { r.timers.spawn = 1; WD.tickRoom(run, r); }
+  S.note('rooms ' + Object.values(w.rooms).map((r) => `${r.id}:${r.type}@${r.x},${r.y}${r.w || r.h ? ' ' + (r.w || 1) + 'x' + (r.h || 1) : ''}${r.contents.length ? ' (' + r.contents.map((c) => c.id || c.kind).join(',') + ')' : ''}`).join(' | '));
+}
+
+// ---------------------------------------------------------------- ui / assets: the scenes
+// A scene is { enter(S), inputs(S), pre = 90, post = 60, tips, veteran }: enter, `pre` frames, the scripted inputs, `post` frames.
+// Scripts only use what a player can see: registered rectangles, button labels, keys. Game state is prepared through the engine.
+const wardStart = (S, hero, seed) => startRunUi(S, hero, seed, { ward: true });
+// plan n route steps: click the floor of a legal room (rooms that hold something first; ui/ward.js cellCenter gives the floor's screen point),
+// or walk the keyboard focus when that export is gone
+function wardRoute(S, n, o = {}) {
+  const { WD } = S.M, run = S.run, w = run.ward, UI = STAGE.mods.WARDUI;
+  S.note(`roll ${w.roll ? w.roll.n : '-'} legal ${WD.legalSteps(run).join(',')}`);
+  for (let i = 0; i < n; i++) {
+    const legal = WD.legalSteps(run); if (!legal.length) break;
+    const full = legal.filter((id) => w.rooms[id].contents.length && w.rooms[id].type !== 'rm_theatre'), id = (o.quiet ? legal.filter((x) => !full.includes(x))[0] : full[0]) || legal[0], r = w.rooms[id];
+    if (UI && UI.cellCenter && !o.keys) { const c = UI.cellCenter(r.x, r.y); S.note('step ' + id); S.click(c.x, c.y); S.frames(8); }
+    else { S.key('Tab'); S.frames(4); S.key('Enter'); S.frames(8); }
+  }
+  S.note('route ' + (w.route || []).join('>') + ' triggers ' + WD.routeInfo(run).triggers.map((t) => t.kind + '@' + t.room).join(','));
+}
+const pickerEvent = (S) => { // the first event that offers a card pick on this run
+  const { RUN, D } = S.M, run = S.run;
+  for (const ev of Object.values(D.EVENTS)) {
+    if (ev.ward || (ev.act && ev.act !== run.act)) continue;
+    run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null };
+    const ch = RUN.eventChoices(run).find((c) => c.pick && c.ok && c.cards.length);
+    if (ch) return { id: ev.id, i: ch.i };
+  }
+  return null;
+};
+const SCENES = { ui: {
+  title: { inputs(S) { S.hoverBtn(/^New Run/, 14); S.key('Tab'); S.key('Tab'); S.key('ArrowDown'); S.frames(6); S.hoverRect('title-hero-card', 14); S.hoverRect('title-archive', 14); S.hoverBtn(/^Settings/, 10); S.away(); } },
+  title_intro: { enter(S) { S.app.go('title', { intro: true }); }, inputs(S) { S.frames(110); S.key(' '); S.frames(20); } },
+  title_select: { enter(S) { S.frames(40); S.clickBtn(/^New Run/); }, inputs(S) { S.clickBtn(/^>$/); S.frames(10); S.hoverRect('title-mode', 12); S.clickRect('title-mode'); S.frames(10); S.hoverRect('title-assist', 12); S.key('ArrowRight'); S.frames(8); S.hoverBtn(/^Begin/, 10); } },
+  title_veteran: { veteran: true, enter(S) { startRunUi(S, 'wick', 'veteran'); S.flow.toTitle(); }, inputs(S) { S.hoverBtn(/^Continue/, 14); S.hoverRect('title-hero-card', 12); S.clickBtn(/^Credits/); S.frames(50); S.key('Escape'); S.frames(20); S.hoverBtn(/^Daily Run/, 10); S.clickBtn(/^Daily Run/); } },
+  map: { enter(S) { startRunUi(S, 'marrow', 'map'); enrich(S); }, inputs(S) { for (let i = 0; i < 3; i++) S.hoverRect(/^node:/, 10, i); S.hoverRect('map-relic0', 12); S.hoverRect('map-potion0', 12); S.hoverRect('map-school0', 12); S.hoverRect('map-hp', 10); S.wheel(180); S.frames(10); S.wheel(-180); S.frames(10); S.clickRect('node:' + S.M.RUN.availableNodes(S.run)[0]); } },
+  map_act3: { enter(S) { const run = startRunUi(S, 'odile', 'map3', { asc: 3 }); enrich(S, { overload: true }); S.M.RUN.startAct(run, 3); run.hp = Math.round(run.maxHp * 0.3); S.flow.route(); }, inputs(S) { S.wheel(-240); S.frames(12); for (let i = 2; i < 5; i++) S.hoverRect(/^node:/, 8, i); S.hoverRect('map-school3', 12); S.hoverBtn(/^Deck/, 8); S.hoverBtn(/^Abandon/, 8); S.clickBtn(/^Abandon/); S.frames(16); S.key('Escape'); } },
+  ward_morning: { pre: 190, enter(S) { wardStart(S, 'marrow', 'ward'); }, inputs(S) { S.hoverRect('ward-card0', 14); S.hoverRect('ward-card2', 10); S.clickRect('ward-card0'); S.frames(10); S.key('Tab'); S.frames(6); S.key('Tab'); S.frames(6); S.key('Enter'); S.frames(30); S.hoverRect(/^ward-room-/, 14, 0); S.hoverRect('ward-res', 10); S.clickBtn(/^View$/); S.frames(30); S.key('Escape'); S.frames(8); S.hoverRect('ward-clock', 12); } },
+  ward_midday: { pre: 190, enter(S) { wardStart(S, 'wick', 'ward-midday'); S.M.WD.endMorning(S.run); }, inputs(S) { S.frames(60); wardRoute(S, 2, { keys: true }); S.hoverRect(/^ward-room-/, 14, 1); S.clickBtn(/^Undo step/); S.frames(10); wardRoute(S, 2, { quiet: true }); S.key('Backspace'); S.frames(8); S.hoverRect('ward-die', 12); S.hoverRect('ward-strip', 10); S.clickBtn(/^\+$/); S.frames(12); S.key('c'); S.frames(12); } },
+  ward_evening: { pre: 190, enter(S) { const run = wardStart(S, 'odile', 'ward-evening'); S.M.WD.endMorning(run); S.M.WD.startWalk(run, run.ward.hero.room); S.note('phase ' + run.phase + ' ' + run.ward.phase); S.flow.route(); }, inputs(S) { S.key('w'); S.frames(14); S.key('w'); S.frames(14); for (let i = 0; i < 3; i++) S.hoverRect(/^ward-room-/, 10, i); S.clickBtn(/^-$/); S.frames(12); S.key('f'); S.frames(8); wardRoute(S, 1, { quiet: true }); S.hoverRect('ward-hero', 10); } },
+  ward_night: { pre: 190, enter(S) { const run = wardStart(S, 'marrow', 'ward-night'); const WD = S.M.WD; WD.endMorning(run); for (let i = 0; i < 2 && run.phase === 'ward'; i++) WD.startWalk(run, run.ward.hero.room); S.note('phase ' + run.phase + ' ' + run.ward.phase); S.flow.route(); }, post: 240, inputs(S) { for (let i = 0; i < 2; i++) S.hoverRect(/^ward-room-/, 12, i); S.hoverBtn(/^Wait/, 10); S.clickBtn(/^Wait/); } },
+  ward_built: { pre: 190, post: 300, enter(S) { const run = wardStart(S, 'marrow', 'ward-built'); buildHospital(S); S.M.WD.endMorning(run); }, inputs(S) { for (let i = 0; i < 12; i += 3) S.hoverRect(/^ward-room-/, 8, i); S.key('w'); S.frames(10); wardRoute(S, 3); S.key('g'); } },
+  combat: { pre: 170, enter(S) { startRunUi(S, 'marrow', 'combat'); enrich(S); fightUi(S, ['bedpan_slime', 'gauze_mummy']); }, post: 260, inputs(S) { S.hoverRect(/^hand_/, 16, 0); S.hoverRect('en1:intent', 16); S.hoverRect('seamRail', 10); S.hoverRect('strain', 10); playCards(S, 2); S.note('after plays ' + S.state()); S.clickBtn(/^END TURN/); } },
+  combat_elite: { pre: 170, post: 260, enter(S) { const run = startRunUi(S, 'wick', 'elite', { asc: 5 }); S.M.RUN.startAct(run, 2); enrich(S, { overload: true, up: true }); fightUi(S, ['the_appraiser'], 'elite'); }, inputs(S) { S.hoverRect('potion0', 12); S.clickRect('potion0'); S.frames(10); S.clickRect(/^en\d+:body$/); S.frames(40); S.hoverRect(/^status:/, 12); playCards(S, 3); S.hoverRect('pile_draw', 10); S.clickRect('pile_disc'); S.frames(20); S.key('Escape'); S.frames(8); S.clickBtn(/^END TURN/); } },
+  combat_boss: { pre: 170, post: 300, enter(S) { startRunUi(S, 'odile', 'boss'); enrich(S); fightUi(S, ['the_matron'], 'boss'); }, inputs(S) { S.hoverRect(/^en\d+:name$/, 12); playCards(S, 2); S.clickBtn(/^Deck/); S.frames(24); S.clickRect('deck-x'); S.frames(10); S.clickBtn(/^END TURN/); S.frames(240); playCards(S, 3); S.clickBtn(/^END TURN/); } },
+  combat_three: { pre: 170, post: 260, enter(S) { startRunUi(S, 'marrow', 'three'); fightUi(S, ['stitch_rat', 'pill_swarm', 'night_nurse']); }, inputs(S) { const r = S.rect(/^hand_/, 1), e = S.rect('en2:body'); if (r && e) S.drag(r.x + r.w / 2, r.y + r.h / 2, e.x + e.w / 2, e.y + e.h / 2); S.frames(34); playCards(S, 2); S.key('e'); S.frames(10); S.key('e'); } },
+  combat_tips: { tips: true, pre: 200, post: 200, enter(S) { startRunUi(S, 'marrow', 'tips'); fightUi(S, ['orderly']); }, inputs(S) { S.tap(640, 360); S.frames(30); S.hoverRect(/^hand_/, 20, 1); S.hoverRect('orb', 20); playCards(S, 2); S.frames(20); S.clickBtn(/^END TURN/); } },
+  reward: { enter(S) { const run = startRunUi(S, 'marrow', 'reward'); enrich(S, { relics: 2 }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'elite', enemies: ['the_resident'] }; S.M.RUN.resolveFight(run, { win: true, shattered: [], damageTaken: 9, turns: 4 }); S.flow.route(); }, inputs(S) { S.hoverRect('reward-row0', 12); S.hoverRect('reward-chip0', 12); S.hoverRect('reward-purse', 10); S.hoverRect('reward-notes', 8); S.clickRect('reward-row0'); S.frames(14); S.clickBtn(/Continue/); } },
+  reward_boss: { enter(S) { const run = wardStart(S, 'wick', 'reward-boss'); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'boss', enemies: ['the_matron'], ward: { boss: true, early: true, room: S.M.WD.theatreOf(run).id, count: 1 }, mods: {} }; S.M.RUN.resolveFight(run, { win: true, shattered: [], damageTaken: 30, turns: 9 }); S.flow.route(); }, pre: 150, inputs(S) { for (let i = 0; i < 2; i++) S.hoverRect('reward-choice' + i, 10); S.clickRect('reward-choice1'); S.frames(14); S.clickRect('reward-choose'); S.frames(14); S.clickBtn(/Continue|Take|Skip/); } },
+  graft: { post: 200, enter(S) { const run = startRunUi(S, 'marrow', 'graft'); enrich(S); S.M.RUN.startGraftPick(run); S.flow.route(); }, inputs(S) { S.hoverRect('graft-card0', 14); S.hoverRect('graft-patch0', 14); S.clickRect('graft-card1'); S.frames(12); S.clickRect('graft-patch1'); S.frames(20); S.hoverRect('graft-after', 12); S.hoverRect('graft-strain', 10); S.note('offer ' + JSON.stringify(S.run.pending && S.run.pending.offer)); S.clickBtn(/^Sew it on/); } },
+  graft_decline: { post: 150, enter(S) { const run = startRunUi(S, 'odile', 'graft-decline'); run.hp = 30; S.M.RUN.startGraftPick(run); S.flow.route(); }, inputs(S) { S.clickRect('graft-card2'); S.frames(10); S.clickRect('graft-patch2'); S.frames(14); S.clickBtn(/^Reroll offer/); S.frames(40); S.clickBtn(/^Decline the graft/); S.frames(20); S.hoverRect('graft-skipmenu', 10); S.key('1'); S.frames(10); S.key('Enter'); } },
+  shop: { enter(S) { const run = startRunUi(S, 'wick', 'shop'); enrich(S, { gold: 520 }); run.deck.push(S.M.K.newInst('j_clot', () => run.uidNext++)); run.phase = 'shop'; run.pending = S.M.RUN.makeShop(run); S.flow.route(); }, post: 120, inputs(S) { for (const id of ['shop-card0', 'shop-graft0', 'shop-relic0', 'shop-potion0']) S.hoverRect(id, 12); S.clickRect('shop-card1'); S.frames(30); S.clickRect('shop-potion1'); S.frames(30); S.clickRect('shop-relic0'); S.frames(30); S.note('gold ' + S.run.gold + ' deck ' + S.run.deck.length + ' relics ' + S.run.relics.length); S.clickRect('shop-graft1'); S.frames(24); S.tapIn('scroll-modal', 100, 93); S.frames(40); if (S.rect('modal')) S.clickBtn(/^Back$/); S.frames(10); S.clickBtn(/^Remove a card/); S.frames(24); S.tapIn('scroll-modal', 100, 93); S.frames(40); if (S.rect('modal')) S.clickBtn(/^Back$/); S.note('gold ' + S.run.gold + ' deck ' + deckLine(S.run).slice(0, 3).join(' ') + ' x' + S.run.deck.length); } },
+  forge: { post: 200, enter(S) { const run = startRunUi(S, 'odile', 'forge'); enrich(S, { overload: true }); run.hp = Math.round(run.maxHp * 0.5); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; S.flow.route(); }, inputs(S) { for (let i = 0; i < 6; i++) S.hoverRect('forge-opt' + i, 8); S.clickRect('forge-opt0'); S.frames(30); S.note('forge ' + JSON.stringify(S.run.pending)); } },
+  forge_temper: { post: 240, enter(S) { const run = startRunUi(S, 'marrow', 'temper'); enrich(S, { overload: true }); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; S.flow.route(); }, inputs(S) { S.hoverRect('forge-opt3', 10); S.clickRect('forge-opt3'); S.frames(30); S.at(160, 250, 12); S.tapIn('scroll-modal', 100, 93); S.frames(30); S.note('forge ' + JSON.stringify(S.run.pending) + ' deck ' + deckLine(S.run).slice(0, 3).join(' ')); } },
+  event: { pre: 200, post: 120, enter(S) { const run = startRunUi(S, 'marrow', 'event'); enrich(S); S.M.RUN.startEvent(run); S.note('event ' + (run.pending && run.pending.id)); S.flow.route(); }, inputs(S) { S.tapIn('event-panel', 60, 30); S.frames(20); S.hoverRect('event-choice0', 12); S.hoverRect('event-choice1', 12); S.hoverRect('event-hud', 8); S.clickRect(/^event-choice/, S.M.RUN.eventChoices(S.run).findIndex((c) => c.ok && !c.pick)); S.frames(60); S.note('result ' + (S.run.pending && S.run.pending.result ? 'shown' : 'none') + ' ' + S.state()); S.clickBtn(/^Continue/); } },
+  event_picker: { pre: 200, post: 120, enter(S) { startRunUi(S, 'wick', 'picker'); enrich(S, { up: true }); const ev = pickerEvent(S); S.pick = ev; S.note('event ' + JSON.stringify(ev)); S.flow.route(); }, inputs(S) { if (!S.pick) return; S.tapIn('event-panel', 60, 30); S.frames(20); S.clickRect('event-choice' + S.pick.i); S.frames(30); S.note('picker ' + (S.rect('event-picker') ? 'open' : 'closed')); S.at(300, 300, 12); S.wheel(120); S.frames(8); S.wheel(-120); S.frames(8); S.scanTap('scroll-picker', 0.3, () => !S.rect('event-picker')); S.frames(100); S.note('result ' + (S.run.pending && S.run.pending.result ? 'shown' : 'none') + ' deck ' + deckLine(S.run).slice(0, 3).join(' ')); S.clickBtn(/^Continue/); } },
+  deckview: { enter(S) { startRunUi(S, 'marrow', 'deck'); enrich(S, { overload: true, up: true }); S.flow.openDeck(); }, inputs(S) { S.clickBtn(/^Attack$/); S.frames(10); S.clickBtn(/^Grafted only$/); S.frames(10); S.clickBtn(/^All$/); S.frames(8); S.clickBtn(/^Cost$/); S.frames(10); S.at(420, 330, 16); S.wheel(240); S.frames(10); S.wheel(-240); S.frames(8); S.tap(420, 330); S.frames(30); S.key('Escape'); S.frames(8); S.hoverRect('deck-x', 8); } },
+  codex: { veteran: true, enter(S) { S.flow.openCodex(); }, post: 40, inputs(S) { for (let i = 1; i < 8; i++) { S.clickRect('codex-tab' + i); S.frames(12); S.at(420, 360, 8); S.wheel(200); S.frames(4); } S.clickRect('codex-tab0'); S.frames(10); S.clickBtn(/^Wick$/); S.frames(10); S.tap(330, 330); S.frames(24); S.key('Escape'); } },
+  archive: { veteran: true, enter(S) { S.flow.openArchive(); }, post: 40, inputs(S) { for (let i = 1; i < 6; i++) { S.clickRect('archive-tab' + i); S.frames(12); S.at(520, 400, 8); } S.clickRect('archive-tab0'); S.frames(8); S.clickRect('archive-fwick'); S.frames(10); S.wheel(300); S.frames(8); S.hoverRect('archive-queue', 12); S.hoverRect('archive-totals', 10); } },
+  wardrobe: { veteran: true, enter(S) { S.flow.openWardrobe(); }, post: 40, inputs(S) { for (let i = 1; i < 4; i++) { S.clickRect('wardrobe-cat' + i); S.frames(12); S.hoverRect(/^wardrobe-[a-z]+-\d+$/, 8, 1); } S.clickRect('wardrobe-cat0'); S.frames(10); S.clickBtn(/^Buy|^Need|^Equip/); S.frames(14); S.clickBtn(/^Equip/); S.frames(14); S.hoverRect('wardrobe-credit', 10); S.note('loadout ' + canon(S.meta.loadout) + ' credit ' + canon(S.meta.credit)); } },
+  settings: { enter(S) { S.flow.openSettings(); }, inputs(S) { const n = S.rects.length; S.note('clickables ' + n); for (let i = 0; i < n; i++) S.hoverN(i, 3); for (const i of [2, 5, 8, 11, 14, 17]) { S.clickN(i); S.frames(8); } S.key('ArrowDown'); S.key('ArrowDown'); S.key('ArrowRight'); S.frames(8); S.key('Enter'); S.frames(8); S.note('settings ' + canon(S.meta.settings)); } },
+  settings_app: { enter(S) { S.flow.openSettings(); S.frames(20); S.app.push('app_panel'); }, inputs(S) { const n = S.rects.length; S.note('clickables ' + n); for (let i = 0; i < n; i++) S.hoverN(i, 5); S.note('buttons ' + S.btns.map((b) => b.label).join('|')); S.key('Escape'); S.frames(10); } },
+  install_help: { enter(S) { S.app.push('install_help'); }, post: 30, inputs(S) { for (let i = 0; i < S.rects.length; i++) S.hoverN(i, 4); S.note('buttons ' + S.btns.map((b) => b.label).join('|')); S.frames(10); S.app.pop(); S.app.push('offline_prompt'); S.frames(40); for (let i = 0; i < S.rects.length; i++) S.hoverN(i, 4); S.note('buttons ' + S.btns.map((b) => b.label).join('|')); } },
+  pause: { pre: 170, enter(S) { startRunUi(S, 'wick', 'pause'); enrich(S); fightUi(S, ['night_nurse', 'crutchling']); S.frames(150); S.flow.openPause(); }, inputs(S) { const n = S.rects.length; S.note('clickables ' + n + ' buttons ' + S.btns.map((b) => b.label).join('|')); for (let i = 0; i < n; i++) S.hoverN(i, 4); S.away(); for (let i = 0; i < 3; i++) S.key('ArrowDown'); S.frames(6); S.key('Enter'); S.frames(30); S.at(640, 400, 6); S.wheel(240); S.frames(10); S.key('Escape'); S.frames(12); S.key('ArrowDown'); S.key('Enter'); S.frames(20); S.note('clickables ' + S.rects.length); S.key('Escape'); S.frames(10); S.note('stack ' + S.state()); } },
+  end_won: { veteran: true, post: 150, enter(S) { const run = startRunUi(S, 'odile', 'won', { asc: 2 }); enrich(S, { overload: true, up: true }); Object.assign(run.stats, { fights: 21, elites: 4, grafts: 11, floors: 31, bosses: 3, goldEarned: 812, damageTaken: 301 }); run.act = 3; run.seenEnemies = ['the_matron', 'the_broker', 'the_impresario', 'the_grafter']; run.phase = 'won'; run.pending = null; S.flow.route(); }, inputs(S) { S.hoverRect('end-star', 12); S.hoverRect('end-grid', 12); S.hoverRect('end-news', 10); S.wheel(200); S.frames(8); S.hoverBtn(/^Endless/, 10); S.clickBtn(/^Copy seed/); S.frames(20); S.hoverRect('end-archive', 10); } },
+  end_dead: { post: 150, enter(S) { const run = startRunUi(S, 'marrow', 'dead'); enrich(S); Object.assign(run.stats, { fights: 7, elites: 1, grafts: 4, floors: 9, damageTaken: 96 }); run.hp = 0; run.killedBy = 'two_gurneys'; run.deathCause = 'attack'; run.phase = 'dead'; run.pending = null; S.flow.route(); }, inputs(S) { S.hoverRect('end-recap', 12); S.hoverRect('end-title', 8); S.hoverBtn(/^New Run/, 10); S.wheel(160); S.frames(8); S.clickBtn(/^Back to title/); } },
+}, assets: {
+  title_kit: { post: 120, inputs(S) { S.hoverBtn(/^New Run/, 14); S.hoverRect('title-hero-card', 14); S.away(); S.frames(60); S.clickBtn(/^New Run/); } },
+  ward_kit_morning: { pre: 220, enter(S) { wardStart(S, 'marrow', 'kit'); }, inputs(S) { for (let i = 0; i < 5; i++) S.hoverRect('ward-card' + i, 8); S.clickRect('ward-card1'); S.frames(10); S.key('Tab'); S.frames(6); S.key('Enter'); S.frames(40); for (let i = 0; i < 4; i++) S.hoverRect(/^ward-room-/, 10, i); S.key('w'); S.frames(14); S.key('w'); S.frames(14); S.clickBtn(/^View$/); S.frames(30); S.key('Escape'); } },
+  ward_kit_built: { pre: 220, post: 420, enter(S) { const run = wardStart(S, 'wick', 'kit-built'); buildHospital(S); S.M.WD.endMorning(run); }, inputs(S) { for (let i = 0; i < 12; i += 2) S.hoverRect(/^ward-room-/, 8, i); S.clickBtn(/^\+$/); S.frames(14); S.key('c'); S.frames(14); wardRoute(S, 4); S.key('g'); } },
+  ward_kit_night: { pre: 220, post: 300, enter(S) { const run = wardStart(S, 'odile', 'kit-night'); const WD = S.M.WD; buildHospital(S); WD.endMorning(run); for (let i = 0; i < 2 && run.phase === 'ward'; i++) WD.startWalk(run, run.ward.hero.room); S.note('phase ' + run.phase + ' ' + run.ward.phase); S.flow.route(); }, inputs(S) { for (let i = 0; i < 12; i += 3) S.hoverRect(/^ward-room-/, 8, i); S.key('w'); S.frames(12); wardRoute(S, 2); S.key('g'); } },
+  combat_art: { pre: 200, post: 300, enter(S) { startRunUi(S, 'marrow', 'art'); enrich(S); fightUi(S, ['crutchling', 'bedpan_slime']); }, inputs(S) { S.hoverRect(/^en\d+:body$/, 12); playCards(S, 3); S.clickBtn(/^END TURN/); S.frames(240); playCards(S, 3); S.clickBtn(/^END TURN/); } },
+  combat_art_boss: { pre: 200, post: 300, enter(S) { startRunUi(S, 'wick', 'art-boss'); enrich(S, { overload: true }); fightUi(S, ['the_matron'], 'boss'); }, inputs(S) { playCards(S, 3); S.clickBtn(/^END TURN/); S.frames(260); playCards(S, 2); S.clickBtn(/^END TURN/); } },
+  combat_art_kill: { pre: 200, post: 300, enter(S) { const run = startRunUi(S, 'odile', 'art-kill'); enrich(S); fightUi(S, ['the_resident'], 'elite'); S.frames(120); const combat = S.app.screens.combat; if (combat && combat.api) { const c = combat.api().c; for (const e of c.enemies) e.hp = Math.min(e.hp, 3); S.note('enemy hp set to 3'); } }, inputs(S) { playCards(S, 3); S.frames(120); S.note('after ' + S.state()); } },
+  shop_ward: { pre: 150, enter(S) { const run = wardStart(S, 'marrow', 'kit-shop'); enrich(S, { gold: 600 }); run.phase = 'shop'; run.pending = S.M.RUN.makeShop(run); S.flow.route(); }, inputs(S) { S.hoverRect('shop-plans', 12); for (const id of ['shop-card0', 'shop-relic0']) S.hoverRect(id, 10); S.clickRect('shop-plans'); S.frames(30); S.tap(640, 360); S.frames(30); S.note('gold ' + S.run.gold); } },
+} };
+
+async function runScene(sec, name, v, o = {}) {
+  const sc = SCENES[sec][name];
+  const S = await bootStage(sec, v, { tips: sc.tips, veteran: sc.veteran, sink: o.sink });
+  if (sc.enter) await sc.enter(S);
+  await S.wait(sc.pre === undefined ? 90 : sc.pre); S.mark('enter');
+  if (sc.inputs) await sc.inputs(S);
+  S.mark('inputs');
+  await S.wait(sc.post === undefined ? 60 : sc.post); S.mark('end');
+  return S.result();
+}
+function parseSceneKey(key) {
+  const m = /^(ui|assets)\/([^@]+)@(.+)$/.exec(key || ''), v = m && VARIANTS.find((x) => x.id === m[3]);
+  if (!m || !v || !SCENES[m[1]][m[2]]) throw new Error(`unknown scene ${key} (try: node tools/graftwork_golden.mjs list)`);
+  return { sec: m[1], name: m[2], v };
+}
+// One fresh process per scene and variant. cold = the first pass, warm = the same script again in the same process (caches built).
+async function sceneChild(key) {
+  const { sec, name, v } = parseSceneKey(key), out = {};
+  installDeterminism();
+  try {
+    out.cold = await runScene(sec, name, v);
+    if (!QUICK) { const w = await runScene(sec, name, v); out.warm = { hash: w.hash, calls: w.calls, marks: w.marks, state: w.state }; }
+  } catch (e) { out.error = String(e && e.stack || e).split('\n').slice(0, 5).join(' | ').slice(0, 600); }
+  return out;
+}
+async function cmdDump() {
+  const [key, file] = positional;
+  if (!key || !file) { console.error('usage: dump <ui|assets>/<scene>@<variant> <out.txt> [--root dir] [--warm]'); process.exit(2); }
+  const { sec, name, v } = parseSceneKey(/^(ui|assets)\//.test(key) ? key : 'ui/' + key);
+  installDeterminism();
+  if (flag('warm')) await runScene(sec, name, v);
+  const fd = fs.openSync(file, 'w'); let buf = [];
+  const r = await runScene(sec, name, v, { sink: (s) => { buf.push(s); if (buf.length >= 20000) { fs.writeSync(fd, buf.join('\n') + '\n'); buf = []; } } });
+  fs.writeSync(fd, buf.join('\n') + '\n'); fs.closeSync(fd);
+  console.log(`${key}: ${r.calls} calls, sha1 ${r.hash}, written to ${file}\n${r.trail.join('\n')}`);
+}
+// --verify: every child runs a second time in another fresh process; any key that differs is a failure (the scene is not deterministic)
+async function verifyScenes(out, tasks, jobs, failures) {
+  let n = 0;
+  await pool(tasks, jobs, async (t) => {
+    const r = await runChild(t.args), first = t.sec ? out[t.sec][t.key] : t.name === 'engine' ? out.engine : { resume: out.resume, payloads: out.payloads };
+    const second = r.data && !t.sec && t.name === 'resume' ? { resume: r.data.resume, payloads: r.data.payloads } : r.data;
+    n++;
+    if (!r.data || canon(second) !== canon(first)) {
+      const a = flatten(first, t.name, new Map()), b = r.data ? flatten(second, t.name, new Map()) : new Map();
+      const keys = [...a.keys()].filter((k) => a.get(k) !== b.get(k)).slice(0, 4);
+      failures.push(`${t.name}: NOT DETERMINISTIC, a second fresh process differs in ${keys.join(', ') || 'everything'}`);
+    }
+  });
+  console.log(`verify: ${n} children ran a second time in fresh processes`);
+}
+
+// TEMP
+async function recordBrowser() { return {}; } function cmdCompareShots() {}
 //@@/UI@@
 
 // ---------------------------------------------------------------- record: one child process per section and per UI scene
@@ -697,7 +1015,7 @@ async function cmdRecord() {
     if (flag('verbose')) console.log(`  ${t.name} ${(r.ms / 1000).toFixed(1)}s`);
   });
   for (const sec of ['ui', 'assets']) if (out[sec]) out[sec] = Object.fromEntries(Object.keys(out[sec]).sort().map((k) => [k, out[sec][k]]));
-  if (flag('verify')) await verifyScenes(out, tasks.filter((t) => t.sec), jobs, failures);
+  if (flag('verify')) await verifyScenes(out, tasks, jobs, failures);
   if (flag('browser')) { const tb = REAL_NOW(); out.browser = await recordBrowser(); secMs.browser = REAL_NOW() - tb; }
   for (const k of Object.keys(secMs)) out.meta.seconds[k] = Math.round(secMs[k] / 100) / 10; // summed child time per section (cpu-ish, not wall)
   out.meta.seconds.wall = Math.round((REAL_NOW() - t0) / 100) / 10;
