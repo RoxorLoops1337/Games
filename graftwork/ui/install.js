@@ -20,11 +20,19 @@ export function inAppBrowser() {
   const n = nav(); if (!n) return false;
   return /FBAN|FBAV|Instagram|Line\/|Twitter|MicroMessenger|TikTok|BytedanceWebview|Snapchat|; wv\)/i.test(n.userAgent || '');
 }
+// The three display-mode queries are made ONCE per window and their live `matches` is read after that. isInstalled() runs every frame on the title and
+// twice a frame in Settings, and used to call matchMedia three times each time (six parsed queries per frame while Settings was open).
+let MQ = null, MQW = null;
+function displayModes(w) {
+  if (MQW !== w) { MQW = w; MQ = null; try { if (w && w.matchMedia) MQ = ['fullscreen', 'standalone', 'minimal-ui'].map((m) => w.matchMedia(`(display-mode: ${m})`)); } catch { MQ = null; /* no matchMedia */ } }
+  return MQ;
+}
 export function isInstalled() {
   const w = win(), n = nav();
   if (S.installed) return true;
   if (n && n.standalone === true) return true;
-  try { if (w && w.matchMedia) return ['fullscreen', 'standalone', 'minimal-ui'].some((m) => w.matchMedia(`(display-mode: ${m})`).matches); } catch { /* no matchMedia */ }
+  const mq = displayModes(w);
+  if (mq) for (let i = 0; i < mq.length; i++) if (mq[i] && mq[i].matches) return true;
   return false;
 }
 // 'installed' | 'prompt' (Chrome path) | 'ios' (instruction dialog) | 'none' (hide the button)

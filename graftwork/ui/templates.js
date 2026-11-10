@@ -16,6 +16,10 @@
 //   drawNineSlice(ctx, fr, x, y, w, h)   slot-based 9-slice draw;  contentRect(def, x, y, w, h)
 //   CARD_TEMPLATE / CARD_BACK_TEMPLATE   the data-driven slot definitions; resolveSlots(); composeCardFront(); cardFrameIds(); cardBackIds()
 const BASE_DEFAULT = 'assets/ui/';
+// THE SWITCH for the template art. No assets/ui/manifest.json exists yet (the parts are still being produced) and asking for it was a 404 on every page
+// load. While this is false the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look. Set it to true in the
+// commit that adds graftwork/assets/ui/manifest.json (design/ART_MODULAR.md section 5). Tests and tools that feed the loader themselves pass { art: true }.
+export const TEMPLATE_ART = false;
 const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -233,17 +237,18 @@ export function composeCardFront(g, tpl, fr, variant, painters, info = {}) {
 export function createTemplates(opts = {}) {
   const A = {
     base: opts.base || BASE_DEFAULT, manifest: null, state: 'idle', imgs: new Map(), failed: 0, app: null, res: new Map(),
-    fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null, forceLive: !!opts.live,
+    fetchJson: opts.fetchJson || null, makeImage: opts.makeImage || null, forceLive: !!opts.live, art: opts.art === undefined ? TEMPLATE_ART : !!opts.art,
   };
-  const live = () => !!(A.forceLive || A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
+  const live = () => A.art && !!(A.forceLive || A.fetchJson || (typeof fetch === 'function' && typeof Image !== 'undefined' && typeof document !== 'undefined' && typeof window !== 'undefined' && window.location));
   A.available = live;
   A.use2x = (app) => { const a = app || A.app; return !(a && a.scale > 0 && a.scale < 0.8); };
-  // test and tool hook: inject fetch / image factories / base, or force the live path off a DOM
+  // test and tool hook: inject fetch / image factories / base, force the live path off a DOM, or set the art switch
   A.configure = (o = {}) => {
     if (o.fetchJson !== undefined) A.fetchJson = o.fetchJson;
     if (o.makeImage !== undefined) A.makeImage = o.makeImage;
     if (o.base) A.base = o.base.endsWith('/') ? o.base : o.base + '/';
     if (o.live !== undefined) A.forceLive = !!o.live;
+    if (o.art !== undefined) A.art = !!o.art;
     A.reset();
   };
   A.reset = () => { A.manifest = null; A.state = 'idle'; A.imgs.clear(); A.res.clear(); A.failed = 0; A.gen = (A.gen || 0) + 1; };

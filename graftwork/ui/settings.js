@@ -51,7 +51,8 @@ export default {
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = appRow() ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
+    const inst = appRow(); // asked once a frame and kept live: the browser's install offer can arrive, and Install can be pressed, while this screen is open
+    const w = 600, h = inst ? 690 : 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -76,7 +77,7 @@ export default {
     ];
     const ty0 = sy0 + 3 * 40 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
-    const inst = appRow(), tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
+    const tst = inst ? 27 : 31, sst = inst ? 37 : 40; // an Install row needs room: the rows pack a little tighter while it shows
     toggles.forEach(([key, label, tip], i) => {
       const yy = ty0 + 14 + i * tst;
       const on = !!s[key];
@@ -228,7 +229,7 @@ export default {
     flow.saveMeta();
     this.reset = 0; this.done = 'Progress erased.';
     if (app.shared.audio) app.shared.audio.sfx('tithe');
-    const t = app.stack.find((sc) => sc.name === 'title'); if (t) { t.hasSave = false; t.saveInfo = null; }
+    const t = app.stack.find((sc) => sc.name === 'title'); if (t) { t.hasSave = false; t.saveInfo = null; t._unl = null; }
   },
 };
 

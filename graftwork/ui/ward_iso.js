@@ -136,9 +136,14 @@ const V = {
   ground: null, groundKey: '', dark: new WeakMap(), glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
   gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitOK: false, kitInfo: null, fvHero: 1, rcOf: null,
-  lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
+  plan: null, planKey: '', lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
 };
-export function resetIso() { V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
+// The screen clock (S.t) restarts at 0 every time the Ward is entered, so no value of it may outlive a visit: a monster that checked in at t = 95 s
+// was drawn with alpha 0 for the first 95 s after the next fight. ui/ward.js calls this from enter (like its own MEM.stamps reset).
+export function newVisit() { V.born = Object.create(null); for (const g of V.gt.values()) g.plantT = -9; }
+// 0..1 fade-in of a monster that checked in while the Ward was on screen. A stamp ahead of the clock counts as finished (like buildAge in ui/ward.js).
+export function bornAlpha(stamp, t) { return stamp === undefined || !(stamp <= t) ? 1 : clamp((t - stamp) / 0.35, 0, 1); }
+export function resetIso() { V.born = Object.create(null); V.plan = null; V.planKey = ''; V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
 function glowSprite() {
   if (V.glow || V.glowTried) return V.glow;
   V.glowTried = true;
@@ -481,7 +486,7 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
     if (w > 0.3) { g.plantT = S.t; if (dustN && (dustN > 1 || (step & 1) === 0)) { const p = toScreen(nx, ny); S.fx.burst(p.x, p.y, 'dust', { n: dustN > 1 ? 2 : 1 }); } }
     g.step = step;
   }
-  const plant = Math.exp(-(S.t - g.plantT) * 13) * w;
+  const since = S.t - g.plantT, plant = since >= 0 ? Math.exp(-since * 13) * w : 0; // a plant stamped ahead of the clock (an earlier visit) is over
   rec.stride = ph; // tests: the stride phase follows the distance moved
   rec.frame = w > 0.25 ? (step & 1) : 0;
   rec.cycle = w > 0.25; // the animation frames (walk cycle) run on rec.stride while this is true
@@ -554,6 +559,15 @@ export const setWallMode = (m) => { KR.KITS.mode = m; };
 export const cycleWallMode = () => KR.cycleWallMode();
 export const wallMode = () => KR.KITS.mode;
 
+// The wall plan (doors, shared walls, open edges) changes only when a room is built, grown or removed, so it is kept on a key of the footprints and the
+// grid it is computed from. It used to be rebuilt every frame: per room a Set, six arrays and the engine's neighbour scan. Nobody writes into a plan.
+function planFor(run, w, roomList) {
+  let k = '';
+  for (const r of roomList) k += r.id + ':' + r.x + ',' + r.y + ',' + (r.w || 1) + ',' + (r.h || 1) + ';';
+  for (const row of w.grid) { for (const c of row) k += c ? c + ',' : ','; k += '/'; }
+  if (V.planKey !== k || !V.plan) { V.plan = wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)); V.planKey = k; }
+  return V.plan;
+}
 export const lastActors = () => V.list; // tests: what stood where in the last frame
 export function drawRooms(host, inter) {
   const { app, run, S, MEM } = host, g = app.ctx, w = run.ward, calm = host.reduced, dt = clamp(S.t - V.lastT, 0, 0.1); V.lastT = S.t;
@@ -576,7 +590,7 @@ export function drawRooms(host, inter) {
   const rcOf = (r) => { if (!kitOn) return null; const o = typeof r === 'string' ? { type: r } : r, big = (o.w || 1) * (o.h || 1) > 1, k = o.type + (big ? '@' + (o.w || 1) + 'x' + (o.h || 1) : ''); let v = V.rcm.get(k); if (v === undefined) { v = KR.recipeFor(o.type, app, o.w || 1, o.h || 1); V.rcm.set(k, v); } return v; };
   V.rcOf = rcOf;
   const anyKit = kitOn && roomList.some((r) => rcOf(r));
-  const plan = anyKit ? wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)) : null;
+  const plan = anyKit ? planFor(run, w, roomList) : null;
   const mode = KR.wallModeFor(roomList.filter((r) => r.type !== 'rm_theatre').length); // the Theatre sits far away: it does not make the floor dense
   V.kitInfo = { mode, rooms: new Map() };
   const hero = heroRec(host, n++, rcOf, dt); V.list.push(hero);
@@ -617,10 +631,10 @@ export function drawRooms(host, inter) {
           if (rc) { st2 = KR.monsterAt(key, i, rc, calm, dt, 1.25); kitPos(rec, st2); rec.flip = st2.fv; }
           else { st2 = monState(key, i, calm, dt); rec.x = cc.x + (st2.u * fw - st2.v * fh) * TW / 2; rec.y = cc.y + (st2.u * fw + st2.v * fh) * TH / 2; rec.flip = st2.fv; }
           if (prev !== undefined && cnt > prev && i >= prev) { V.born[key] = S.t; const sp0 = toScreen(rec.x, rec.y); S.fx.burst(sp0.x, sp0.y, 'dust', { n: calm ? 3 : 10 }); } // spawn-in puff
-          const born = V.born[key] || 0, ph = hash(key) * TAU;
+          const ph = hash(key) * TAU;
           rec.kind = 'monster'; rec.id = e.id; rec.h = 30; rec.ph = ph; rec.lvl = 0; rec.ring = 0; rec.kitDrawn = false; rec.room = rc ? id : null;
           gait(key, rec, rec.x, rec.y, dt, calm, rec.h, S, 1);
-          rec.alpha = born && S.t - born < 0.35 ? clamp((S.t - born) / 0.35, 0, 1) : 1;
+          rec.alpha = bornAlpha(V.born[key], S.t);
           if (popAt !== undefined && S.t < popAt && i === cnt - 1) rec.alpha = 0;
           if (rc) items.push({ y: rec.y, rec });
         }

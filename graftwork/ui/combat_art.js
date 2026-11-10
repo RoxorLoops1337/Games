@@ -4,12 +4,13 @@
 //   spriteBounds(def, app)     layout box { w, h } of a painted enemy in layout units (U per 2x pixel), or null: ui/combat_layout.js sizes lanes from it
 //   drawEnemySprite / drawHeroSprite   the figure with its pose: lunge, hit reaction, block, death collapse, status overlays, elite and boss presence
 //   contactShadow(ctx, x, floorY, rx, a)   the one grounding shadow every combatant gets (painted or procedural)
-//   gradeProcedural(ctx, on)   a matching colour grade for the procedural fallbacks
+//   gradeProcedural(on)        a matching colour grade for the procedural fallbacks, baked into their colours (art/grade.js)
 //   drawBackdrop(app, ctx, o)  the kit room behind the combatants (wall, trim, pieces, lamp cones, perspective floor); false = draw the old backdrop
 // The art faces down-right: the hero stands left facing right as drawn, enemies stand right and are flipped to face the hero.
 // Everything is a no-op in node (no Image / fetch): the procedural look is exercised there.
 import { assets, pickAtkFrame } from './assets.js';
 import { pose as atkPose } from '../art/attacks.js';
+import { setGrade } from '../art/grade.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -22,7 +23,6 @@ export const U = 0.8;
 export const KIND_K = { normal: 1, elite: 1.12, boss: 1.22 };
 export const HERO_S = 1.2; // the hero, in 2x sprite px per logical px: 225 px of art becomes ~270
 export const FACING = { hero: 1, enemy: -1 };
-export const GRADE = 'sepia(0.2) saturate(0.82) contrast(1.06) brightness(0.96)';
 
 // ------------------------------------------------------------------ sprites
 const HI = new Map(); // combat (@3x, 512 px) images: { img, ok, bad }, keyed by file
@@ -127,9 +127,10 @@ export function contactShadow(ctx, x, y, rx, a = 1, lift = 0) {
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, w * 0.55, 0, TAU); ctx.fill();
   ctx.restore();
 }
-// a matching colour grade for procedural fallbacks (ctx.filter where the canvas has it)
-// ctx.filter is a software pass per draw on many phones: only the full quality tier grades the procedural figures (lite and minimal draw them ungraded)
-export function gradeProcedural(ctx, on) { try { if ('filter' in ctx) ctx.filter = on && !(assets.app && assets.app.perf && assets.app.perf.q.tier !== 'full') ? GRADE : 'none'; } catch (e) { /* no filters */ } }
+// A matching colour grade for the procedural fallbacks. It used to be ctx.filter, which runs once per draw call (hundreds per figure); now the
+// painters grade their own colours while the switch is on (art/grade.js), so the frame sets no filter. Callers switch it off again right after the figure.
+// As before, only the full quality tier grades (lite and minimal draw the figures ungraded).
+export function gradeProcedural(on) { setGrade(!!on && !(assets.app && assets.app.perf && assets.app.perf.q.tier !== 'full')); }
 
 // ------------------------------------------------------------------ tint overlays (silhouette-only colour: flash, poison, burn...)
 let SC = null;

@@ -63,25 +63,28 @@ export const extentOf = (rc) => { const fw = rc.fw || 1, fh = rc.fh || 1; return
 function poly(g, pts) { g.beginPath(); for (let i = 0; i < pts.length; i++) (i ? g.lineTo(pts[i][0], pts[i][1]) : g.moveTo(pts[i][0], pts[i][1])); g.closePath(); }
 
 // ---------------- textures: mip chains so a pattern never aliases when the camera zooms out ----------------
+// Level 0 is the decoded image itself (it used to be copied into a canvas first: one more full-size bitmap per floor and wall texture, for nothing).
+const srcW = (s) => s.naturalWidth || s.width || 0;
 function mipLevel(img, key, wantPx) {
   let ch = Q.mips.get(key);
   if (!ch) {
-    ch = []; const w0 = img.naturalWidth || img.width || 0, h0 = img.naturalHeight || img.height || 0, o = w0 ? mk(w0, h0) : null;
-    if (!o) { Q.mips.set(key, null); return null; }
-    o.x.drawImage(img, 0, 0); ch.push(o.c);
-    while (ch[ch.length - 1].width > 32) { const p = ch[ch.length - 1], n = mk(p.width / 2, p.height / 2); if (!n) break; n.x.imageSmoothingQuality = 'high'; n.x.drawImage(p, 0, 0, n.c.width, n.c.height); ch.push(n.c); }
+    let w = srcW(img), h = img.naturalHeight || img.height || 0;
+    if (!w || !h) { Q.mips.set(key, null); return null; }
+    ch = [img];
+    while (w > 32) { const n = mk(w / 2, h / 2); if (!n) break; n.x.imageSmoothingQuality = 'high'; n.x.drawImage(ch[ch.length - 1], 0, 0, n.c.width, n.c.height); ch.push(n.c); w = n.c.width; h = n.c.height; }
     Q.mips.set(key, ch);
   }
   if (!ch) return null;
-  let pick = ch[0]; for (const c of ch) if (c.width >= wantPx) pick = c;
+  let pick = ch[0]; for (const c of ch) if (srcW(c) >= wantPx) pick = c;
   return pick;
 }
 // fill the current path with the texture mapped so the unit square lands on origin (ox, oy) + u (ux, uy) + v (vx, vy) (world units)
 function texFill(g, tex, key, ox, oy, ux, uy, vx, vy, fallback, px) {
   if (!tex || typeof DOMMatrix === 'undefined' || !g.createPattern) { g.fillStyle = fallback; g.fill(); return; }
   const lv = mipLevel(tex.img, key, Math.max(Math.hypot(ux, uy), Math.hypot(vx, vy)) * px);
-  if (!lv || !lv.width) { g.fillStyle = fallback; g.fill(); return; }
-  const S = lv.width, pk = key + '|' + S; let pat = Q.pats.get(pk);
+  const S = lv ? srcW(lv) : 0;
+  if (!S) { g.fillStyle = fallback; g.fill(); return; }
+  const pk = key + '|' + S; let pat = Q.pats.get(pk);
   if (!pat) { pat = g.createPattern(lv, 'repeat'); if (!pat) { g.fillStyle = fallback; g.fill(); return; } Q.pats.set(pk, pat); }
   pat.setTransform(new DOMMatrix([ux / S, uy / S, vx / S, vy / S, ox, oy]));
   g.fillStyle = pat; g.fill();

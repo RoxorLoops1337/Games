@@ -15,7 +15,7 @@ Owner direction: make EVERYTHING modular like the Ward room kit. The Ward kit (W
 
 | piece | file | what |
 |---|---|---|
-| loader | `ui/templates.js` | `templates` singleton: lazy manifest + image cache, `frameImg(id)`, `pickFrame(ids)`, `iconImg`, `drawIcon`, `preload`, headless no-op, injectable `fetchJson`/`makeImage` for tests |
+| loader | `ui/templates.js` | `templates` singleton (off until `TEMPLATE_ART` is set, section 5): lazy manifest + image cache, `frameImg(id)`, `pickFrame(ids)`, `iconImg`, `drawIcon`, `preload`, headless no-op, injectable `fetchJson`/`makeImage` for tests |
 | parse | `parseManifest` | validates every entry, drops bad ones (absolute or `..` paths, bad slices, missing atlas) and keeps the rest |
 | 9-slice | `sliceRects`, `drawNineSlice`, `contentRect` | slice margins in logical px, shrink together when the target is smaller, no-centre option, content rect keeps native insets |
 | slots | `resolveSlot(s)`, `CARD_TEMPLATE`, `mergeTemplate` | anchor/pivot/offset or absolute rects, repeat with `step` and `n`; default template = the procedural layout |
@@ -96,6 +96,7 @@ A frame can move any slot by itself: `frames["card_front.attack.rare"].slots = {
 - `file` / `file1x` / `file2x`: relative paths (no `..`, no leading slash). `w`,`h` = logical size. `slice` = `[l,t,r,b]` logical margins, `fill:false` drops the centre. `content` = child rect inside the frame. `atlas` + `rect` replace the files. `baked` = slot names already in the image. `slots` = per-frame slot overrides. Bad entries are dropped individually.
 - Slot grammar: `{x,y,w,h}` in card space or `{anchor:[ax,ay], pivot:[px,py], dx, dy, w, h}`, repeats with `step:{x,y}`, `n`; `fit:{max,min,lines}`.
 - Existing `assets/ward/manifest.json` and `assets/ward_kit/manifest.json` stay as they are.
+- **The switch.** `ui/templates.js` exports `TEMPLATE_ART`, currently `false`: no `assets/ui/manifest.json` exists yet, and asking for it was a 404 on every page load. While it is `false` the loader requests nothing (not the manifest, no image) and every caller draws its procedural look. Set `TEMPLATE_ART = true` in the same commit that adds `graftwork/assets/ui/manifest.json`; nothing else has to change. Tests and tools that feed the loader themselves pass `{ art: true }` to `createTemplates` or `templates.configure`. `tests/graftwork_perf3.test.mjs` fails if the switch is off while the manifest exists or a request is made while it is off.
 
 ## 6. Production order
 
