@@ -1,6 +1,6 @@
 {
- "version": "07c746990153386a",
- "bytes": 9213915,
+ "version": "a61b818ed574ac1e",
+ "bytes": 9213401,
  "count": 518,
  "files": {
   "art/attacks.js": {
@@ -60,7 +60,7 @@
    "s": 17512
   },
   "assets/rigs/manifest.json": {
-   "h": "06ac197f0a906164",
+   "h": "bd710e14a2d5aaca",
    "s": 32537
   },
   "assets/rigs/marrow@1x.webp": {
@@ -112,12 +112,12 @@
    "s": 14316
   },
   "assets/rigs/wick@1x.webp": {
-   "h": "46e1071a21f69775",
-   "s": 6264
+   "h": "8fc7de61b323d5d2",
+   "s": 6056
   },
   "assets/rigs/wick@2x.webp": {
-   "h": "0e7a3abbd8d6c8a8",
-   "s": 15956
+   "h": "4bc28517bfd0db0d",
+   "s": 15650
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
