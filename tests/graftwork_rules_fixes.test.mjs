@@ -538,5 +538,22 @@ await ta('Free Sample: "The first graft Price you accept each act is waived" hol
   delete CARDS.t_big;
 });
 
+// ---------------------------------------------------------------- 7. smaller drifts between a text and the rule
+await ta('Ascension 8 says that graft offers cannot be rerolled; a locked hero shows one unlock rule, the real one', async () => {
+  const { HERO_GATES } = await import('../graftwork/data/unlocks.js');
+  // the engine closes rerolls from Ascension 8 (and the graft screen says "Locked (Ascension 8)"): the ascension list must say so too
+  const firstLocked = [...Array(11).keys()].find((asc) => { const run = RUN.newRun({ hero: 'marrow', seed: 'asc' + asc, ascension: asc }); run.gold = 999; RUN.startGraftPick(run); return !RUN.rerollGraftOffer(run); });
+  assert.equal(firstLocked, 8);
+  for (let a = 0; a < RUN.ASCENSION_TEXT.length; a++) assert.equal(/reroll/i.test(RUN.ASCENSION_TEXT[a]), a === firstLocked, `ASCENSION_TEXT[${a}]: "${RUN.ASCENSION_TEXT[a]}"`);
+  assert.ok(/Shatter chance is 10% higher/.test(RUN.ASCENSION_TEXT[8]), 'and it still names its Shatter rule');
+  // heroes: the unlock rule lives in HERO_GATES only (the hero file carried an older, different sentence)
+  const m = META.defaultMeta();
+  for (const h of Object.values(HEROES)) {
+    if (!h.unlock) { assert.ok(!HERO_GATES[h.id]); continue; }
+    assert.ok(HERO_GATES[h.id], h.id + ' has a gate'); assert.notEqual(typeof h.unlock, 'object', h.id + ' carries no second copy of the rule');
+    assert.ok(META.heroHint(m, h.id).startsWith(HERO_GATES[h.id].text));
+  }
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

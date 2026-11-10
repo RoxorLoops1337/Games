@@ -25,7 +25,7 @@ export const ASCENSION_TEXT = [
   'Shop prices are 15% higher.',
   'Budget is 1 lower.',
   'Bosses have 20% more HP, elites hit 15% harder.',
-  'Overload Shatter chance is 10% higher.',
+  'Shatter chance is 10% higher. No graft rerolls.',
   'Only 2 potion slots and 10% less max HP.',
   'All enemies hit 10% harder.',
 ];
