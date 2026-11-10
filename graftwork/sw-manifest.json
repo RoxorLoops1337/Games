@@ -1,6 +1,6 @@
 {
- "version": "d45a41087dd7c505",
- "bytes": 11586048,
+ "version": "448ad84e3afd82a6",
+ "bytes": 11586186,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2260,8 +2260,8 @@
    "s": 3679
   },
   "data/schools.js": {
-   "h": "cb4b938cf9b47314",
-   "s": 1647
+   "h": "6d22aa72b24d4b03",
+   "s": 1785
   },
   "data/statuses.js": {
    "h": "968dc91f55c94b70",

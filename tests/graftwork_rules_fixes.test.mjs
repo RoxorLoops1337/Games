@@ -412,5 +412,72 @@ await ta('The Grafter, the Locksmith and the card jammers read the real registri
   assert.equal(c3.enemies[0].data.seal, 'static', 'school grafts count');
 });
 
+// ---------------------------------------------------------------- 5. school resonance texts say what engine/resonance.js does
+// Every number in the 14 texts is MEASURED here by driving the engine's hooks, and the text is rebuilt from the measurement.
+// Change a number in resonance.js and this fails until data/schools.js says the same; change a text and it fails too.
+await ta('the 14 resonance texts equal what the engine does (numbers measured, wording pinned)', async () => {
+  const { RES_HOOKS, resonanceOf } = await import('../graftwork/engine/resonance.js');
+  const { SCHOOLS } = await import('../graftwork/data/index.js');
+  const at = (school, tier) => { const c = fight({ enemies: ['bedpan_slime', 'slime_bit'] }); c.res = { [school]: tier }; c.player.hp = 300; return c; };
+  const st = (ent, s) => ent.st[s] || 0;
+  const s1 = (n) => (n === 1 ? '' : 's');
+  const M = {}; // measured: M[school][tier]
+  const attack = (c, e) => RES_HOOKS.cardPlayed(c.A, { spec: { type: 'attack' }, target: e });
+  M.ember = {}; for (const tier of [3, 6]) {
+    const c = at('ember', tier), e = c.enemies[0]; RES_HOOKS.turnStart(c.A);
+    attack(c, e); const first = st(e, 'burn'); attack(c, e); const second = st(e, 'burn') - first;
+    RES_HOOKS.cardPlayed(c.A, { spec: { type: 'skill' }, target: e }); assert.equal(st(e, 'burn'), first + second, 'skills light nothing');
+    RES_HOOKS.turnStart(c.A); attack(c, e); assert.equal(st(e, 'burn') - first - second, first, 'a new turn, the first Attack again');
+    M.ember[tier] = { burn: first, every: second === first, firstOnly: second === 0 };
+  }
+  M.echo = {}; M.static = {}; M.gilded = {}; M.hoard = {}; M.blood = {}; M.rust = {};
+  for (const tier of [3, 6]) {
+    let c = at('echo', tier); const e0 = st(c.player, 'echo'); RES_HOOKS.combatStart(c.A); M.echo[tier] = { echo: st(c.player, 'echo') - e0 };
+    c = at('static', tier); const c0 = st(c.player, 'charge'); RES_HOOKS.turnStart(c.A); M.static[tier] = { charge: st(c.player, 'charge') - c0 };
+    c = at('gilded', tier); const g0 = c.run.gold; RES_HOOKS.combatEnd(c.A); M.gilded[tier] = { gold: c.run.gold - g0, gilt: st(c.player, 'gilt') };
+    // hoard: cards drawn by the turn start hook on turn 1 and on turn 2, and the hand size (cards drawn every turn)
+    c = at('hoard', tier); for (let i = 0; i < 12; i++) c.drawPile.push({ inst: newInst('t_plain', () => 'hd' + i + tier), uid: 'hd' + i + tier, tithed: false, jam: false, costMod: 0, plays: 0, rolled: true, temp: true });
+    const hs = c.handSize; RES_HOOKS.combatStart(c.A); const size = c.handSize - hs;
+    c.turn = 1; let h = c.hand.length; RES_HOOKS.turnStart(c.A); const t1 = c.hand.length - h;
+    c.turn = 2; h = c.hand.length; RES_HOOKS.turnStart(c.A); const t2 = c.hand.length - h;
+    M.hoard[tier] = { size, t1, t2 };
+    // blood: four self hurts in one turn, then one more the next turn
+    c = at('blood', tier); c.player.hp = 100; RES_HOOKS.turnStart(c.A);
+    for (let i = 0; i < 5; i++) RES_HOOKS.selfHurt(c.A, { n: 1 });
+    const heal = c.player.hp - 100, str = st(c.player, 'strength');
+    RES_HOOKS.turnStart(c.A); RES_HOOKS.selfHurt(c.A, { n: 1 });
+    M.blood[tier] = { heal, str, healAgain: c.player.hp - 100 - heal, strAgain: st(c.player, 'strength') - str };
+    // rust: a junk card drawn, and two junk cards in hand at turn end
+    c = at('rust', tier); const b0 = c.player.block; RES_HOOKS.junkDrawn(c.A, {}); const block = c.player.block - b0;
+    mk(c, 'j_clot'); mk(c, 'j_clot'); mk(c, 't_plain'); const hp = c.enemies.map((e) => e.hp); RES_HOOKS.turnEnd(c.A);
+    const lost = c.enemies.map((e, i) => hp[i] - e.hp); assert.equal(lost[0], lost[1], 'all enemies alike');
+    M.rust[tier] = { block, perJunk: lost[0] / 2 };
+  }
+  const want = {
+    ember: { 3: `Your first Attack each turn applies ${M.ember[3].burn} Burn.`, 6: `Every Attack applies ${M.ember[6].burn} Burn.` },
+    echo: { 3: `Start each combat with ${M.echo[3].echo} Echo.`, 6: `Start each combat with ${M.echo[6].echo} Echo.` },
+    hoard: { 3: `Draw ${M.hoard[3].t1} extra card${s1(M.hoard[3].t1)} on turn 1.`, 6: `Draw ${M.hoard[6].size} extra card${s1(M.hoard[6].size)} every turn.` },
+    blood: { 3: `Heal ${M.blood[3].heal} when you lose HP to your own cards (once per turn).`, 6: `Gain 1 Strength when you lose HP to your own cards (max ${M.blood[6].str} per turn).` },
+    rust: { 3: `Gain ${M.rust[3].block} Block whenever a junk card is drawn.`, 6: `Junk cards in hand deal ${M.rust[6].perJunk} damage to all enemies at turn end.` },
+    static: { 3: `Gain ${M.static[3].charge} Charge at turn start.`, 6: `Gain ${M.static[6].charge} Charge at turn start.` },
+    gilded: { 3: `Gain ${M.gilded[3].gold} gold after each combat.`, 6: `Gain ${M.gilded[6].gold} gold after each combat.` },
+  };
+  // the wording's shape is true too: first Attack only at 3, every Attack at 6; turn 1 only at 3; once and max per turn; no Gilt
+  assert.ok(M.ember[3].firstOnly && M.ember[6].every); assert.ok(M.ember[3].burn > 0);
+  assert.deepEqual([M.hoard[3].size, M.hoard[3].t2], [0, 0]); assert.equal(M.hoard[6].t2, 0, 'the extra card at 6 is hand size, not a second draw');
+  assert.deepEqual([M.blood[3].str, M.blood[3].healAgain], [0, M.blood[3].heal]); assert.equal(M.blood[6].strAgain, 1);
+  assert.deepEqual([M.rust[3].perJunk, M.gilded[3].gilt, M.gilded[6].gilt], [0, 0, 0]);
+  const bad = [];
+  for (const sch of SCH) for (const tier of [3, 6]) if (SCHOOLS[sch].resonance[tier] !== want[sch][tier]) bad.push(`${sch} ${tier}: text "${SCHOOLS[sch].resonance[tier]}" but the engine does "${want[sch][tier]}"`);
+  assert.deepEqual(bad, []);
+  assert.deepEqual(Object.keys(SCHOOLS).sort(), SCH.slice().sort()); for (const sch of SCH) assert.deepEqual(Object.keys(SCHOOLS[sch].resonance), ['3', '6']);
+  // wired end to end: a real deck with six Gilded grafts is at tier 6 and is paid when the fight ends; six Hoard grafts draw one more card
+  const deckWith = (school) => { const run = RUN.newRun({ hero: 'odile', seed: 'res-' + school }); const gs = Object.values(GRAFTS).filter((g) => g.school === school && g.tier === 'safe' && !g.mods.some((m) => m.k === 'junk' || m.k === 'maxHp')); let k = 0; for (const inst of run.deck) { if (k >= 6) break; const g = gs.find((x) => RUN.canGraft ? RUN.canGraft(inst, x.id) : true); if (g && cardSpec({ ...inst, grafts: [g.id] })) { inst.grafts = [g.id]; k++; } } assert.equal(resonanceOf(run).tiers[school], 6, school + ' deck reaches tier 6'); return run; };
+  const { finishCombat } = await import('../graftwork/engine/combat.js');
+  const rg = deckWith('gilded'), cg = newCombat(rg, ['bedpan_slime']); cg.over = 'win'; const gold = rg.gold; finishCombat(cg); assert.equal(rg.gold - gold - (cg.player.st.gilt || 0), M.gilded[6].gold);
+  const plain = newCombat(RUN.newRun({ hero: 'odile', seed: 'res-hoard' }), ['bedpan_slime']), rh = deckWith('hoard'), ch = newCombat(rh, ['bedpan_slime']);
+  assert.equal(ch.handSize - plain.handSize, M.hoard[6].size);
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);
