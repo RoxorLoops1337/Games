@@ -1039,5 +1039,37 @@ await ta('Codex, Rules tab: the header names the number of panels the sheet has 
     assert.equal(seen.size, CODEX_RULES.length, 'and the sheet really holds that many panels @' + scale);
   }
 });
+
+// ---------------------------------------------------------------- 18. the deck view: a tip of the hovered card stays off the list of that card's grafts
+// The glossary tip of a hovered card used to open in a band over the side panel, which lists the grafts of that very card.
+await ta('Deck view: the tip of a hovered card does not cover the side panel (hover and Shift hold, desktop and phone stage)', async () => {
+  const deckview = (await import('../graftwork/ui/deckview.js')).default;
+  const LR = await import('../graftwork/ui/layout_registry.js');
+  const audio = await import('../graftwork/ui/audio.js');
+  const inter = (a, b) => Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
+  const GIDS = ['g_hoard_cache', 'g_sutured_seam', 'g_ember_pin', 'g_oxide_patch', 'g_quick_hands', 'g_leaf_gilt'];
+  for (const scale of [1, 0.54]) for (const hold of [false, true]) {
+    const run = RUN.newRun({ hero: 'marrow', seed: 'deck-tip' });
+    let k = 0; for (const inst of run.deck) { if (k < GIDS.length && RUN.applyGraft(run, inst.uid, GIDS[k], { keepPhase: true }).ok) k++; }
+    const app = await makeApp({ run, audio, meta: { settings: { tips: true }, tips: {} } });
+    if (scale < 1) { app.scale = scale; app.minPx = 11; }
+    app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {} };
+    app.register('deckview', deckview); app.register('base', { draw() {} }); app.go('base'); app.push('deckview', { run }); frames(app, 40);
+    const side = LR.getAll().find((q) => q.id === 'scroll-side'); assert.ok(side, 'the side panel (idle: nothing hovered) reports its rectangle'); // inside the panel that lists the hovered card's grafts
+    let tips = 0, covered = [];
+    for (let gy = 170; gy < 600; gy += 36) for (let gx = 50; gx < 710; gx += 44) {
+      app.keys.delete('Shift'); app.mouse.x = gx + 300; app.mouse.y = gy; frames(app, 3); app.mouse.x = gx; app.mouse.y = gy; frames(app, 4); // leave and come back: the delay starts again
+      if (hold) app.keys.add('Shift');
+      frames(app, 30);
+      const L = app.tipLayout;
+      if (app.top().hoverIdx < 0 || !L || L.frame !== app.frame) continue;
+      tips++;
+      if (inter(L.rect, side)) covered.push(`${gx},${gy}`);
+      assert.ok(L.rect.x >= 5.5 && L.rect.y >= 5.5 && L.rect.x + L.rect.w <= 1274.5 && L.rect.y + L.rect.h <= 714.5, 'the tip stays on the stage');
+    }
+    assert.ok(tips >= 20, `cards were hovered and tips shown: ${tips} @${scale}${hold ? ' held' : ''}`);
+    assert.deepEqual(covered, [], `the tip covered the side panel at: ${covered.join(' ')} @${scale}${hold ? ' held' : ''}`);
+  }
+});
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);
