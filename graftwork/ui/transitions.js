@@ -4,6 +4,8 @@
 //   installTransitions(app)       wraps app.go: the OLD frame (captured at the end of every frame) is wiped away over the live new screen.
 //                                 The new screen is live and clickable from frame one, the wipe is only an overlay (350 to 500 ms).
 //   drawTransitions(app)          call once per frame from app.overlay: captures the frame, draws the wipe, the intro plate, the phase strip.
+//   drawTransitions(app, true)    the same picture with no time passing: core.js paints it once into the snapshot under a modal (the wipe, the
+//                                 plate and the strip belong to the screen that is frozen there, and go on when the modal closes).
 //   introCard(app, {name, sub, kind})   name plate slam + swinging lamp + music bump. kind 'boss' | 'elite'. Click skips.
 //   watchPhases(app, combat)      call each frame in combat: fires phaseBeat when a boss/elite enemy.data.phase goes up.
 //   phaseBeat(app, label)         freeze flash + shockwave + a strip across the screen.
@@ -268,8 +270,9 @@ function drawPhase(app, p) {
 }
 
 // ---------------------------------------------------------------- per-frame driver
-export function drawTransitions(app) {
+export function drawTransitions(app, still) {
   const T = state(app); if (!T.on) return;
+  if (still) { if (T.wipe) drawWipe(app, T.wipe); if (T.intro) drawIntro(app, T.intro); if (T.phase) drawPhase(app, T.phase); return; }
   const dt = Math.min(app.dt || 0.016, 0.05);
   if (T.snapNext) { T.snapNext = false; capture(app, T); } // a screen change started during this tick's draw: the canvas now holds the complete old frame
   if (T.wipe) {

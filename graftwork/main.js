@@ -80,7 +80,8 @@ export function boot(canvas) {
     openWardrobe() { app.push('wardrobe', {}); },
     openSettings() { app.push('settings', {}); },
     openPause() { if (!app.stack.some((s) => s.name === 'pause')) app.push('pause', {}); },
-    saveMeta() { META.saveMeta(app.shared.meta); applyLoadout(app.shared.meta); },
+    // a setting or a cosmetic changed: it applies now, and the frozen picture under a modal is painted again with it
+    saveMeta() { META.saveMeta(app.shared.meta); applyLoadout(app.shared.meta); applySettings(); app.refreshBelow('look'); },
   };
   if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
@@ -101,23 +102,30 @@ export function boot(canvas) {
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
   const st = meta.settings || {};
   audio.setVolumes({ master: st.master ?? 0.8, sfx: st.sfx ?? 0.8, music: st.music ?? 0.35 });
-  app.overlay = () => {
+  let artVer = assets.ver;
+  app.belowOverlay = () => TRANS.drawTransitions(app, true); // a wipe or a boss plate caught by a modal is part of the frozen picture
+  // meta.settings into the switches the screens read (every frame, and at once when a setting is saved)
+  function applySettings() {
     const st = app.shared.meta.settings || {};
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
     const ts = [100, 125, 150, 175].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
     app.textScale = ts / 100;
     const gm = cleanGraphics(st.graphics); if (app.perf.q.mode !== gm) app.perf.q.setMode(gm, performance.now()); // Settings > Graphics: Auto | High | Low
     app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
+    A11Y.applySettings(app);
+  }
+  app.overlay = () => {
+    applySettings();
     // decoded image memory: about 96 MB on phones (64 in the minimal tier), 192 MB on desktop; the least recently drawn images go first, every ~2 s
     assets.budget = (FX_OPTS.mobile ? 96 : 192) * 1048576 * (app.perf.q.tier === 'minimal' ? 0.66 : 1);
-    if ((app.frame & 127) === 0) assets.maintain(performance.now());
-    A11Y.applySettings(app);
-    TRANS.drawTransitions(app);
+    // (not while a modal is open: the frozen screen draws nothing, so its pictures would look unused and be the first to go)
+    if (!app.frozen && (app.frame & 127) === 0) assets.maintain(performance.now());
+    if (artVer !== assets.ver) { artVer = assets.ver; app.refreshBelow('look'); } // a picture arrived: a frozen screen shows it too
+    if (!app.frozen) TRANS.drawTransitions(app);
     drawPauseOverlay(app);
     drawInstallToast(app);
   };
   try { if (/[?&]perf\b/.test(location.search)) app.perf.debug = true; } catch (e) { /* no location */ }
-  { let av = assets.ver; app.addBusyProbe(() => { const ch = assets.ver !== av; av = assets.ver; return ch || TRANS.busy(app) || (app.post && app.post.busy && app.post.busy()); }); }
   { const pt = app.preTick; app.preTick = (a, dt) => { cardFrame(); if (pt) pt(a, dt); }; } // the per-frame budget of card face builds (art/face_lod.js)
   A11Y.installA11y(app);
   app.go('title');

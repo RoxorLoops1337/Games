@@ -17,7 +17,8 @@
 // Quality: the tier is the Effects setting (meta.settings.quality) while the game's quality tier is full, and off in lite and minimal. ONE controller
 // decides that tier (ui/quality.js, which knows the 30 fps idle cap); this file measures nothing. It used to keep its own frame-time ring and switched
 // bloom, grade and vignette off after about 11 s on the idle title, because it read the governor's 33 ms frames as a slow device.
-//   app.staticFrame = true                  optional hint from a screen: the 2D canvas did not change, skip the upload
+// While a modal is open (app.frozen, core.js) the effects of the frozen screen stand still and are not shown over the modal: a shockwave, an
+// aberration, a flash, a vignette pulse or a grade ease goes on from the same point when the modal closes.
 // Not thread-safe (main thread only). The frame loop (update/render) allocates nothing.
 import { flashGate } from './fx.js';
 import { FLAGS } from './perf_flags.js';
@@ -59,7 +60,7 @@ export function installPost(app) {
   const maskU = new Float32Array(32);
   const stats = { ms: 0, tier: 'off' };
 
-  const S = { tier: 'off', noGL: !hasDom, lost: false, gradeInit: false, dirty: true, errors: 0, lastWant: undefined, lastNow: 0, lastGrain: 0 };
+  const S = { tier: 'off', noGL: !hasDom, lost: false, gradeInit: false, errors: 0, lastWant: undefined, lastNow: 0 };
   const R = { cv: null, gl: null, P: null, tex: null, texW: 0, texH: 0, T: [], U: [], levels: 0, vao: null, half: false, sw: 0, sh: 0, glW: 0, glH: 0, sLeft: '', sTop: '', sWidth: '', sHeight: '', ignoreLoss: false };
 
   // ---- GL resource management ----
@@ -131,7 +132,7 @@ export function installPost(app) {
   function onLost(e) { if (e.target !== R.cv) return; e.preventDefault(); if (R.ignoreLoss) return; S.lost = true; stats.tier = 'lost'; post.on = false; if (R.cv) R.cv.style.visibility = 'hidden'; }
   function onRestored(e) {
     if (R.ignoreLoss || e.target !== R.cv) return;
-    try { buildGL(); S.lost = false; R.cv.style.visibility = 'visible'; post.on = true; stats.tier = S.tier; S.dirty = true; } catch (err) { goOff(true); }
+    try { buildGL(); S.lost = false; R.cv.style.visibility = 'visible'; post.on = true; stats.tier = S.tier; } catch (err) { goOff(true); }
   }
   function buildGL() {
     const gl = R.gl;
@@ -185,7 +186,7 @@ export function installPost(app) {
     const prev = S.tier; S.tier = q;
     if (!R.cv) { if (!createGL()) { S.tier = 'off'; post.on = false; stats.tier = 'off'; return; } }
     else if (prev !== q) { try { glSize(); R.cv.width = R.glW; R.cv.height = R.glH; allocTargets(); } catch (err) { goOff(true); return; } }
-    post.on = !S.lost; stats.tier = q; S.dirty = true;
+    post.on = !S.lost; stats.tier = q;
   }
 
   // ---- public API ----
@@ -195,9 +196,9 @@ export function installPost(app) {
     setGrade(name, ms) {
       const to = GRADES[name]; if (!to) return;
       for (let i = 0; i < 9; i++) { gFrom[i] = gCur[i]; gTo[i] = to[i]; }
-      g.name = name; g.t = 0; g.ms = Math.max(1, ms === undefined ? 700 : +ms || 1); S.dirty = true;
+      g.name = name; g.t = 0; g.ms = Math.max(1, ms === undefined ? 700 : +ms || 1);
     },
-    setBloom(k, threshold) { if (typeof k === 'number' && k === k) bl.k = clamp(k, 0, 1.5); if (typeof threshold === 'number' && threshold === threshold) bl.thr = clamp(threshold, 0.5, 1.2); S.dirty = true; },
+    setBloom(k, threshold) { if (typeof k === 'number' && k === k) bl.k = clamp(k, 0, 1.5); if (typeof threshold === 'number' && threshold === threshold) bl.thr = clamp(threshold, 0.5, 1.2); },
     shockwave(x, y, strength, ms) {
       if (S.tier === 'off' || reduced() || !(strength > 0)) return;
       let i = sw.n; if (i >= 4) { i = 0; for (let j = 1; j < 4; j++) if (sw.age[j] / sw.ms[j] > sw.age[i] / sw.ms[i]) i = j; } else sw.n++;
@@ -234,8 +235,6 @@ export function installPost(app) {
       if (g.t < 1) { g.t = Math.min(1, g.t + ms / g.ms); const e = g.t * g.t * (3 - 2 * g.t); for (let i = 0; i < 9; i++) gCur[i] = gFrom[i] + (gTo[i] - gFrom[i]) * e; }
     },
     render: () => renderFrame(),
-    // true while an effect, a grade ease or a pending GL refresh needs the next frame to be drawn (ui/frame_state.js asks before skipping a tick)
-    busy: () => S.tier !== 'off' && (fxActive() || S.dirty),
   };
   app.post = post;
 
@@ -264,7 +263,6 @@ export function installPost(app) {
   }
   S.autoKey = '';
   // ---- frame ----
-  function fxActive() { return sw.n > 0 || ab.amt > 0 || vg.a > 0 || fl.a > 0 || g.t < 1; }
   function renderFrame() {
     const t0 = now();
     const frameMs = S.lastNow ? Math.min(100, t0 - S.lastNow) : 16.7; S.lastNow = t0;
@@ -272,7 +270,8 @@ export function installPost(app) {
     const st = settings();
     const want = app.perf && app.perf.q.tier !== 'full' ? 'off' : st.quality; // the Effects setting in the full tier; lite and minimal (ui/quality.js) switch the WebGL post off
     if (want !== S.lastWant) { S.lastWant = want; if (TIERS.includes(want) && want !== S.tier) setTier(want); }
-    post.update(dt);
+    const live = app.frozen !== true; // false: a modal is open and the effects wait under it
+    if (live) post.update(dt);
     autoGrade();
     if (S.tier === 'off' || S.lost || !R.cv) return;
     const gl = R.gl, rm = st.reducedMotion === true;
@@ -280,25 +279,16 @@ export function installPost(app) {
       // follow the 2D canvas box and size
       const cs = canvas.style;
       if (R.texW !== (canvas.width | 0) || R.texH !== (canvas.height | 0)) {
-        glSize(); R.cv.width = R.glW; R.cv.height = R.glH; allocSource(); allocTargets(); S.dirty = true;
+        glSize(); R.cv.width = R.glW; R.cv.height = R.glH; allocSource(); allocTargets();
       }
       if (cs.left !== R.sLeft || cs.top !== R.sTop || cs.width !== R.sWidth || cs.height !== R.sHeight) syncBox();
       const high = S.tier === 'high';
       const grainOn = high && !rm && st.grain !== false;
-      const active = fxActive();
-      const stat = app.staticFrame === true && !S.dirty;
-      let grainDue = false;
-      if (grainOn && stat && t0 - S.lastGrain >= 50) grainDue = true;
-      if (stat && !active && !grainDue) return;
-      if (grainOn && (!stat || grainDue)) S.lastGrain = t0;
       const P = R.P, T = R.T, L = R.levels;
       gl.bindVertexArray(R.vao);
-      if (!stat) {
-        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.tex);
-        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-      }
-      const doBloom = bl.k > 0 && (!stat || S.dirty);
-      if (doBloom) {
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.tex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+      if (bl.k > 0) {
         gl.useProgram(P.thresh.pr); gl.bindFramebuffer(gl.FRAMEBUFFER, T[0].fb); gl.viewport(0, 0, T[0].w, T[0].h);
         gl.bindTexture(gl.TEXTURE_2D, R.tex); gl.uniform1i(P.thresh.t, 0); gl.uniform2f(P.thresh.px, 1 / R.texW, 1 / R.texH);
         gl.uniform1f(P.thresh.thr, bl.thr); gl.uniform1f(P.thresh.knee, bl.knee); gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -318,7 +308,7 @@ export function installPost(app) {
       // composite uniforms
       for (let i = 0; i < 4; i++) {
         const o = i * 4;
-        if (i < sw.n) {
+        if (live && i < sw.n) {
           const k = sw.age[i] / sw.ms[i], inv = 1 - k;
           swA[o] = sw.x[i]; swA[o + 1] = sw.y[i]; swA[o + 2] = (1 - inv * inv) * 0.9; swA[o + 3] = sw.str[i] * inv * inv;
           swB[o] = 0.05 + 0.07 * k; swB[o + 1] = 0; swB[o + 2] = 0; swB[o + 3] = 0;
@@ -326,8 +316,8 @@ export function installPost(app) {
       }
       const nM = maskCount();
       let caK = 0;
-      if (high) { caK = 2 * 0.4 / R.glW; if (ab.amt > 0) { const k = 1 - ab.age / ab.ms; caK += 2 * ab.amt * k * k / W; } }
-      const vgn = clamp(gCur[8] + (vg.a > 0 ? vg.a * (1 - vg.age / vg.ms) : 0), 0, 0.95);
+      if (high) { caK = 2 * 0.4 / R.glW; if (live && ab.amt > 0) { const k = 1 - ab.age / ab.ms; caK += 2 * ab.amt * k * k / W; } }
+      const vgn = clamp(gCur[8] + (live && vg.a > 0 ? vg.a * (1 - vg.age / vg.ms) : 0), 0, 0.95);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, R.glW, R.glH);
       gl.useProgram(P.comp.pr);
       const u = P.comp;
@@ -335,11 +325,10 @@ export function installPost(app) {
       gl.uniform1i(u.t, 0); gl.uniform1i(u.bloom, 1);
       gl.uniform1f(u.bloomK, bl.k); gl.uniform1f(u.caK, caK); gl.uniform1f(u.vig, vgn);
       gl.uniform1f(u.grain, grainOn ? 0.05 : 0); gl.uniform1f(u.seed, Math.floor(app.t * 24) % 997); gl.uniform2f(u.res, R.glW, R.glH);
-      gl.uniform1f(u.flashA, fl.a); gl.uniform3f(u.flashC, fl.c[0], fl.c[1], fl.c[2]);
+      gl.uniform1f(u.flashA, live ? fl.a : 0); gl.uniform3f(u.flashC, fl.c[0], fl.c[1], fl.c[2]);
       gl.uniform3f(u.lift, gCur[0], gCur[1], gCur[2]); gl.uniform3f(u.gain, gCur[3], gCur[4], gCur[5]); gl.uniform1f(u.gamma, gCur[6]); gl.uniform1f(u.sat, gCur[7]);
       gl.uniform4fv(u.swA, swA); gl.uniform4fv(u.swB, swB); gl.uniform4fv(u.mask, maskU); gl.uniform1i(u.nMask, nM);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      S.dirty = false;
       S.errors = 0;
     } catch (err) {
       if (++S.errors >= 3) goOff(true);

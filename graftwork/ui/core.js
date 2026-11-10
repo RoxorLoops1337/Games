@@ -1,10 +1,11 @@
 // Immediate-mode canvas UI toolkit. One 1280x720 logical canvas, scaled to fit. Every screen is an object:
 //   { name, enter(app, params), leave(app), update(app, dt), draw(app), key(app, e) }
-// Screens redraw every frame and call app.button(...) etc.; clicks are resolved from last frame's pointer state.
+// The TOP screen updates and redraws every frame and calls app.button(...) etc.; clicks are resolved from last frame's pointer state.
+// A screen pushed with app.push is a modal: everything under it is frozen (ui/frame_state.js) and drawn once into a snapshot that is blitted under it.
 import * as LAYOUT from './layout_registry.js';
 import * as CH from './chrome.js';
 import { setLineDevice } from '../art/linework.js';
-import { renderTip, resetTips, nextTipSeq } from './tooltips.js';
+import { renderTip, resetTips, unqueueTips, nextTipSeq } from './tooltips.js';
 import { createQuality, createGovernor, TIER_SPEC } from './quality.js';
 import { createTextMetrics } from './text_metrics.js';
 import { resetSmoothing, installSmartDraw } from './smoothing.js';
@@ -44,7 +45,7 @@ export function createApp(canvas, opts = {}) {
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
     // perf: the quality tier controller (ui/quality.js), the rAF governor and the backing-store cap the tier sets (read by app.resize)
     perf: { q: createQuality(), gov: createGovernor(), dprCap: 3, debug: false, lastRun: 0, lastTick: 0, expected: 16.7 },
-    frameState: createFrameState(), staticFrame: false,
+    frameState: createFrameState(), frozen: false, // frozen: this tick a modal is on top and the screens under it stand still (ui/frame_state.js)
     scale: 1, offX: 0, offY: 0, safe: { l: 0, t: 0, r: 0, b: 0 }, minPx: SMALL.minTextPx, minTouch: SMALL.minTouchPx, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
     chrome: CH,
@@ -71,7 +72,7 @@ export function createApp(canvas, opts = {}) {
     } catch { return z; }
   }
   app.resize = () => {
-    app.frameState.markDirty();
+    app.frameState.markDirty('resize');
     const iw = window.innerWidth, ih = window.innerHeight;
     if (!(iw > 0 && ih > 0)) return; // hidden iframe / minimised: keep the last good size
     app.scale = Math.min(iw / W, ih / H);
@@ -140,28 +141,41 @@ export function createApp(canvas, opts = {}) {
 
   // ---- screens ----
   const top = () => app.stack[app.stack.length - 1];
+  const Z = app.frameState;
+  // Who is on top decides who lives. The screen that gets covered keeps the clock it stopped at (and may silence its loops in freeze(app)); the one that is
+  // uncovered gets its clock back, so app.t never jumps for it (thaw(app, ms): ms of real time it stood still, for the rare wall-clock stamp).
+  function retop() {
+    const ch = Z.retop(app.stack, app, nowMs()); if (!ch) return;
+    if (ch.covered && ch.covered.freeze) ch.covered.freeze(app);
+    if (ch.uncovered) { app.t = ch.clock.t; app.sceneT = ch.clock.sceneT; if (ch.uncovered.thaw) ch.uncovered.thaw(app, ch.ms); }
+    app.tip = null; resetTips(app); // no tooltip state survives a screen change
+    app.perf.q.warmup(); // the frames of a modal are not a verdict on the screen under it, nor the other way round
+    if (app.stack.length < 2) dropBelow();
+  }
   app.register = (name, scr) => { scr.name = name; app.screens[name] = scr; };
   app.go = (name, params) => {
-    app.frameState.markDirty();
     for (const s of app.stack) if (s.leave) s.leave(app);
     app.stack = []; app.navButtons = false; app.focus.idx = -1; app.focus.active = false;
-    app.tip = null; resetTips(app); // no tooltip state survives a screen change
     const s = app.screens[name]; if (!s) throw new Error('no screen ' + name);
-    app.stack.push(s); app.current = name; app.sceneT = 0;
-    app.perf.gov.enter(nowMs()); app.perf.q.warmup(); // a new screen is not a verdict on the last one, and an idle screen starts awake
+    app.stack.push(s); app.current = name; Z.forget(); retop(); app.frozen = false; app.sceneT = 0;
+    app.perf.gov.enter(nowMs()); // an idle screen starts awake
     if (s.enter) s.enter(app, params || {});
   };
-  app.push = (name, params) => { app.frameState.markDirty(); const s = app.screens[name]; if (!s) throw new Error('no screen ' + name); app.stack.push(s); if (s.enter) s.enter(app, params || {}); };
-  app.pop = () => { app.frameState.markDirty(); const s = app.stack.pop(); if (s && s.leave) s.leave(app); };
+  // push: a modal. The screens under it freeze until it is popped (they resume exactly where they stopped).
+  app.push = (name, params) => { const s = app.screens[name]; if (!s) throw new Error('no screen ' + name); app.stack.push(s); retop(); if (s.enter) s.enter(app, params || {}); };
+  app.pop = () => { const s = app.stack.pop(); if (s && s.leave) s.leave(app); retop(); };
   app.top = top;
 
   // ---- tweens and timers ----
   app.tween = (obj, props, ms, ease = 'out', done) => {
     const from = {}; for (const k of Object.keys(props)) from[k] = obj[k];
-    const tw = { obj, from, to: props, t: 0, ms, ease: EASE[ease] || ease, done };
+    const tw = { obj, from, to: props, t: 0, ms, ease: EASE[ease] || ease, done, owner: painting || top() };
     app.tweens.push(tw); return tw;
   };
-  app.after = (ms, fn) => { app.timers.push({ ms, fn }); };
+  app.after = (ms, fn) => { app.timers.push({ ms, fn, owner: painting || top() }); };
+  // A tween or timer belongs to the screen that was on top when it was made (or that is being painted into the snapshot) and stands still while that screen is covered by a modal.
+  let painting = null;
+  const liveOne = (o) => Z.isLive(o.owner, app.stack);
   app.clearTweens = (obj) => { app.tweens = app.tweens.filter((t) => !obj || t.obj !== obj); };
 
   // ---- drawing helpers ----
@@ -389,8 +403,8 @@ export function createApp(canvas, opts = {}) {
   // ---- frame loop ----
   let last = 0, running = false;
   const P = app.perf;
-  // tier change: the backing store cap follows (one resize; the controller's warm-up hides the realloc frames)
-  P.q.on((tier) => { const cap = TIER_SPEC[tier].dprCap; if (cap !== P.dprCap) { P.dprCap = cap; if (typeof window !== 'undefined') app.resize(); } });
+  // tier change: the backing store cap follows (one resize; the controller's warm-up hides the realloc frames), and a frozen picture is painted again
+  P.q.on((tier) => { Z.markDirty('look'); const cap = TIER_SPEC[tier].dprCap; if (cap !== P.dprCap) { P.dprCap = cap; if (typeof window !== 'undefined') app.resize(); } });
   if (typeof window !== 'undefined' && window.addEventListener) for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => P.gov.input(nowMs()), { passive: true, capture: true });
   app.shake = { x: 0, y: 0 };
   // One rAF callback. The governor decides whether it runs a tick (idle title at 30 fps, hidden tab: nothing); the quality controller
@@ -398,7 +412,7 @@ export function createApp(canvas, opts = {}) {
   function frame(now) {
     if (!running) return;
     if (typeof document !== 'undefined' && document.hidden) { P.hiddenWait = true; return; } // the visibilitychange handler restarts the loop
-    if (P.gov.shouldRun(now, P.lastRun, app.current, P.q.tier, false, calmNow())) {
+    if (P.gov.shouldRun(now, P.lastRun, (top() || NO).name, P.q.tier, false, calmNow())) {
       const raw = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
       app.tick(raw);
       if (P.lastTick) P.q.sample(now - P.lastTick, P.gov.capped ? 33.3 : 16.7, now);
@@ -441,51 +455,72 @@ export function createApp(canvas, opts = {}) {
       } else if ((k === 'Enter' || k === ' ') && F.active && F.idx >= 0 && F.idx < F.n) F.fire = true;
     }
   }
-  // ---- idle pacing and static frames (round 2) ----
-  // A screen may define calm(app) (nothing on it moves fast: the governor idles it at 30 fps after 4 s without input) and still(app) (nothing on it changes
-  // at all without input: the whole frame is skipped, see ui/frame_state.js). Neither is defined by default, so an unmarked screen is drawn at full rate.
+  // ---- idle pacing ----
+  // A screen may define calm(app) (nothing on it moves fast): the governor idles it at 30 fps after 4 s without input. Only the top screen is asked (the
+  // ones under it are frozen), and only the tweens and timers that are running count. A screen without calm() is drawn at full rate.
   function calmNow() {
-    const st = app.stack; if (!st.length || app.tweens.length || app.timers.length) return false;
-    for (let i = 0; i < st.length; i++) if (typeof st[i].calm !== 'function' || !st[i].calm(app)) return false;
-    return true;
+    const s = top(); if (!s || typeof s.calm !== 'function' || !s.calm(app)) return false;
+    return !app.tweens.some(liveOne) && !app.timers.some(liveOne);
   }
-  let lmx = -999, lmy = -999;
-  function stillNow() { const st = app.stack; if (!st.length) return false; for (let i = 0; i < st.length; i++) if (typeof st[i].still !== 'function' || !st[i].still(app)) return false; return true; }
-  function inputNow() {
-    const m = app.mouse, moved = m.x !== lmx || m.y !== lmy; lmx = m.x; lmy = m.y;
-    // a pointer resting on the stage keeps tooltips and hover alive; a touch that lifted parks the pointer off stage
-    return moved || m.pressed || m.released || m.down || m.wheel !== 0 || m.touchUp || app.pressedKeys.length > 0 || m.x > -900 || app.keys.size > 0;
+  // ---- the frozen stack under a modal ----
+  // Painted once (no update, no time, no input, blocked) and kept in ONE canvas of the backing-store size; painted again only when ui/frame_state.js says
+  // it is stale. Released when the stack is back to one screen. Without a DOM canvas the lower stack is painted every frame instead (still frozen).
+  const QUIET = [];
+  function paintBelow() {
+    const st = app.stack, n = st.length - 1, m = app.mouse, F = app.focus;
+    const t = app.t, sceneT = app.sceneT, dt = app.dt, keys = app.pressedKeys, mx = m.x, my = m.y, pressed = m.pressed, released = m.released, down = m.down, wheel = m.wheel, curN = F.curN, fire = F.fire;
+    app.pressedKeys = QUIET; m.x = m.y = -999; m.pressed = m.released = m.down = false; m.wheel = 0; F.fire = false; app.dt = 0;
+    try {
+      for (let i = 0; i < n; i++) {
+        const s = st[i], c = Z.clocks.get(s); if (c) { app.t = c.t; app.sceneT = c.sceneT; }
+        app.blocked = true; painting = s; if (s.draw) s.draw(app);
+      }
+      painting = st[0]; app.blocked = true; if (app.belowOverlay) app.belowOverlay(app); // what belongs to the frozen world but is drawn by app.overlay while it lives (main.js: the screen wipe, the boss plate)
+    } finally {
+      painting = null; app.t = t; app.sceneT = sceneT; app.dt = dt; app.pressedKeys = keys; QUIET.length = 0; m.x = mx; m.y = my; m.pressed = pressed; m.released = released; m.down = down; m.wheel = wheel; F.curN = curN; F.fire = fire;
+    }
+    // nothing of a frozen screen stays live: its rectangles leave the layout registry, it has no tooltip, no cursor, no tap target and no fullscreen hot spot
+    app.tip = null; unqueueTips(app); app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true;
+    if (rectFrame === app.frame) rectsNow.length = 0;
+    if (app.fsRects) app.fsRects.length = 0;
   }
-  const busyExt = []; // extra "something is animating" probes registered by installers (post effects, transitions): () => bool
-  app.addBusyProbe = (fn) => { busyExt.push(fn); };
-  app.markDirty = () => { app.frameState.markDirty(); };
-  function skipThisTick() {
-    if (!FLAGS.skip || app.noSkip) { inputNow(); return false; }
-    let ext = false; for (let i = 0; i < busyExt.length && !ext; i++) ext = !!busyExt[i](app);
-    const f = { forced: false, input: inputNow(), tweens: app.tweens.length, timers: app.timers.length, ripples: CH.ripplesActive(), transition: ext, fx: false, tip: !!app.tip, screenStill: stillNow() };
-    const skip = app.frameState.begin(f, nowMs());
-    app.staticFrame = skip; return skip;
+  function dropBelow() { const cv = Z.snap; if (cv) { cv.width = cv.height = 0; Z.snap = null; } }
+  function drawBelow() {
+    const bw = canvas.width, bh = canvas.height;
+    let cv = Z.snap;
+    if (!Z.stale(bw, bh) && cv) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(cv, 0, 0); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); return; }
+    paintBelow();
+    if (!cv && typeof document !== 'undefined' && document.createElement) { cv = document.createElement('canvas'); if (cv && cv.getContext && cv.getContext('2d')) Z.snap = cv; else cv = null; }
+    if (cv) {
+      if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+      const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'copy'; g.drawImage(canvas, 0, 0);
+    }
+    Z.painted(bw, bh);
   }
+  // A modal asks for the picture under it to be painted again (it changed something the frozen screens show). main.js calls it after every settings or cosmetics save.
+  app.refreshBelow = (why) => { Z.markDirty(why || 'asked'); };
   // one simulation + draw step (tests call this directly)
   app.tick = (raw) => {
     if (app.preTick) app.preTick(app, raw);
-    const dt = raw * (app.timeScale === undefined ? 1 : app.timeScale);
+    retop(); // a stack changed behind app.push / app.pop is noticed here
+    const dt = raw;
     app.dt = dt; app.t += dt; app.sceneT += dt; app.frame++;
-    if (skipThisTick()) { if (app.post && app.post.render) app.post.render(); return; } // nothing changed: the last picture stays (static frame)
+    app.frozen = app.stack.length > 1;
     // pointer click bookkeeping
     if (app.mouse.pressed) app.mouse.pressStart = { x: app.mouse.x, y: app.mouse.y };
     CH.frameStart(app);
     focusStep();
     // tweens
     for (const tw of app.tweens) {
+      if (!liveOne(tw)) continue;
       tw.t += dt * 1000; const k = clamp(tw.t / tw.ms, 0, 1), e = tw.ease(k);
       for (const p of Object.keys(tw.to)) tw.obj[p] = lerp(tw.from[p], tw.to[p], e);
       if (k >= 1 && tw.done) { const d = tw.done; tw.done = null; d(); }
     }
     app.tweens = app.tweens.filter((tw) => tw.t < tw.ms);
-    for (const tm of app.timers) tm.ms -= dt * 1000;
-    const due = app.timers.filter((tm) => tm.ms <= 0); app.timers = app.timers.filter((tm) => tm.ms > 0);
-    for (const tm of due) tm.fn();
+    let due = null;
+    for (const tm of app.timers) if (liveOne(tm) && (tm.ms -= dt * 1000) <= 0) (due || (due = [])).push(tm);
+    if (due) { app.timers = app.timers.filter((tm) => due.indexOf(tm) < 0); for (const tm of due) tm.fn(); }
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
     if (FLAGS.smooth) resetSmoothing(ctx); // 'low' (bilinear) by default; a draw that shrinks a big source more than 2x asks for 'high' itself (ui/smoothing.js)
@@ -493,7 +528,9 @@ export function createApp(canvas, opts = {}) {
     ctx.clearRect(0, 0, W, H);
     app.tip = null; app.tipBlock = false; app.cursor = 'default'; LAYOUT.clear(); app.touchPan = true; // screens that pan themselves (map, combat) clear it in update
     const stack = app.stack; app.inDraw = true;
-    for (let i = 0; i < stack.length; i++) {
+    let i = Math.max(0, stack.length - 1); // only the top screen runs; a screen it pushes this tick draws its first frame over it
+    if (i > 0) drawBelow();
+    for (; i < stack.length; i++) {
       const s = stack[i];
       app.blocked = i < stack.length - 1; // only the top screen takes pointer input
       if (s.update) s.update(app, dt);
@@ -512,8 +549,8 @@ export function createApp(canvas, opts = {}) {
   };
   // debug only: a tiny readout of the quality tier (enable with ?perf in the URL or app.perf.debug = true)
   function drawPerfDebug() {
-    ctx.save(); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); ctx.font = '12px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 250, 18);
-    ctx.fillStyle = '#9fe6a0'; ctx.fillText(`Q ${P.q.debug()} dpr${(app.dpr || 1).toFixed(1)}${P.gov.capped ? ' 30fps' : ''}`, 8, 7); ctx.restore();
+    ctx.save(); ctx.setTransform(app.px, 0, 0, app.px, 0, 0); ctx.font = '12px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 360, 18);
+    ctx.fillStyle = '#9fe6a0'; ctx.fillText(`Q ${P.q.debug()} dpr${(app.dpr || 1).toFixed(1)}${P.gov.capped ? ' 30fps' : ''}${Z.snap ? ` frozen ${(Z.snap.width * Z.snap.height / 262144).toFixed(0)}MB x${Z.paints}` : ''}`, 8, 7); ctx.restore();
   }
   app.start = () => { app.resize(); running = true; last = performance.now(); P.lastTick = 0; requestAnimationFrame(frame); };
   app.stop = () => { running = false; };
