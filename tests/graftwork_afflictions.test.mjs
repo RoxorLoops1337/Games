@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, usePotion, addStatus, addCard, specOf, effCost, startPlayerTurn, dealDamage, setStatus } from '../graftwork/engine/combat.js';
 import { afflStartTurn } from '../graftwork/engine/afflictions.js';
-import { cardSpec } from '../graftwork/engine/cards.js';
 import { ENEMIES, STATUSES, GRAFTS, CARDS } from '../graftwork/data/index.js';
 
 let n = 0;

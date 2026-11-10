@@ -7,13 +7,11 @@ import { TAGLINES, TAGLINE_S, INTRO_S, WORD, taglineAt } from '../graftwork/ui/t
 import { CLUSTER, CAST } from '../graftwork/ui/title_scene.js';
 import { assets, createAssets } from '../graftwork/ui/assets.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
-import * as KD from '../graftwork/data/ward_kit.js';
 import end from '../graftwork/ui/end.js';
 import settings from '../graftwork/ui/settings.js';
 import * as RUN from '../graftwork/engine/run.js';
 import * as META from '../graftwork/engine/meta.js';
 import { saveRun, clearRun, hasRun } from '../graftwork/engine/save.js';
-import { cardSpec } from '../graftwork/engine/cards.js';
 
 async function rig() {
   const meta = META.loadMeta();

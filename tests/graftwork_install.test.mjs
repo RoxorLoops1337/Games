@@ -1,7 +1,7 @@
 // Install as an app: beforeinstallprompt flow, installed, iOS instructions, in-app browsers, manifest + index.html + icons, title and settings buttons on desktop and phone stages.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { makeApp, frames, click, key } from './graftwork_lib.mjs';
+import { makeApp, frames, click } from './graftwork_lib.mjs';
 import * as INST from '../graftwork/ui/install.js';
 import title from '../graftwork/ui/title.js';
 import settings from '../graftwork/ui/settings.js';

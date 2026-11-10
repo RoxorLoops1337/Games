@@ -1,7 +1,7 @@
 // Tooltips: one lifecycle (a tip exists only while its anchor is hovered / held / focused THIS frame), one compact panel, no card type or school entry,
 // no numbers panel that restates the face, and a placement that keeps off the hand, the Thread rail, intents and the thing described.
 import assert from 'node:assert/strict';
-import { makeApp, frames, click, key } from './graftwork_lib.mjs';
+import { makeApp, frames, key } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { CARDS, SCHOOLS, STATUSES } from '../graftwork/data/index.js';
@@ -12,7 +12,6 @@ import * as audioMod from '../graftwork/ui/audio.js';
 import combat from '../graftwork/ui/combat.js';
 import graft from '../graftwork/ui/graft.js';
 
-const DT = 1 / 60;
 const vis = (app) => !!(app.tipLayout && app.tipLayout.frame === app.frame);
 const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.5;
 const reg = (id) => getAll().find((r) => r.id === id);

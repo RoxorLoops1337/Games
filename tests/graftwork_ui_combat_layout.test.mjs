@@ -9,7 +9,7 @@ import combat from '../graftwork/ui/combat.js';
 import * as L from '../graftwork/ui/combat_layout.js';
 import { statusSizes, shortMove } from '../graftwork/ui/combat_hud.js';
 import { CARD_W, CARD_H } from '../graftwork/art/cards.js';
-import { keywordsIn, KEYWORDS, explainNumber, renderTip, drawCardText } from '../graftwork/ui/tooltips.js';
+import { keywordsIn, KEYWORDS, explainNumber, drawCardText } from '../graftwork/ui/tooltips.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { cardLines } from '../graftwork/engine/text.js';
 

@@ -5,7 +5,7 @@
 // (measured contact point, flat soft shadow, a step cycle tied to the distance moved, no vertical offset at rest).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { makeApp, frames, fakeCtx } from './graftwork_lib.mjs';
+import { makeApp, frames } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as WD from '../graftwork/engine/ward.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';

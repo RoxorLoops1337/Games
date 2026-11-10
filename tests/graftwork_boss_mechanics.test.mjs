@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, specOf } from '../graftwork/engine/combat.js';
-import { newInst, instWeight } from '../graftwork/engine/cards.js';
+import { newInst } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, ENEMIES } from '../graftwork/data/index.js';
 
 let n = 0;

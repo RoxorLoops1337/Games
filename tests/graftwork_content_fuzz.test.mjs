@@ -7,8 +7,8 @@ import { fakeCtx, installDom } from './graftwork_lib.mjs';
 installDom();
 globalThis.localStorage = (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), clear: () => m.clear() }; })();
 const RUN = await import('../graftwork/engine/run.js');
-const { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, specOf, HAND_CAP } = await import('../graftwork/engine/combat.js');
-const { newInst, cardSpec, canGraft, canTemper, temper, MAX_GRAFTS } = await import('../graftwork/engine/cards.js');
+const { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, HAND_CAP } = await import('../graftwork/engine/combat.js');
+const { newInst, cardSpec, canGraft, canTemper, temper } = await import('../graftwork/engine/cards.js');
 const T = await import('../graftwork/engine/text.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } = await import('../graftwork/data/index.js');
 const { makeRng } = await import('../graftwork/engine/rng.js');
@@ -107,7 +107,6 @@ function buildDeck(run, specs) {
   return deck;
 }
 function randomGrafts(inst, n) { const out = []; const probe = { ...inst, grafts: inst.grafts.slice(), fused: (inst.fused || []).slice() }; for (const g of shuffled(GRAFT_IDS)) { if (out.length >= n) break; if (canGraft(probe, g)) { out.push(g); probe.grafts.push(g); } } return out; }
-const FILL = { marrow: ['m_strike', 'm_guard', 'm_strike', 'm_guard'], wick: [], odile: [] };
 
 let combats = 0;
 function fuzzCombat(label, o) {

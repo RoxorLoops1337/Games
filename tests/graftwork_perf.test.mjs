@@ -1,6 +1,6 @@
 // Perf counters: fake-ctx op counts (never wall time) with generous budgets, plus the quality-tier policy.
 import assert from 'node:assert/strict';
-import { makeApp, frames, fakeCtx } from './graftwork_lib.mjs';
+import { makeApp, frames } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as audio from '../graftwork/ui/audio.js';
 import combat from '../graftwork/ui/combat.js';

@@ -5,7 +5,7 @@ import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES, EVENTS, SCHO
 import { cardSpec, newInst, canGraft, MAX_GRAFTS } from '../graftwork/engine/cards.js';
 import { cardLines, priceLines } from '../graftwork/engine/text.js';
 import { makeRng } from '../graftwork/engine/rng.js';
-import { newCombat, playCard, endTurn, intentOf, canPlay, resolvePending, usePotion, finishCombat, needsTarget } from '../graftwork/engine/combat.js';
+import { newCombat, playCard, endTurn, intentOf, canPlay, resolvePending, usePotion } from '../graftwork/engine/combat.js';
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.message); process.exitCode = 1; } };

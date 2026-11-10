@@ -5,7 +5,7 @@ import * as WD from '../graftwork/engine/ward.js';
 import * as M from '../graftwork/engine/meta.js';
 import * as UN from '../graftwork/engine/unlock.js';
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, LOCKED_IDS, UP, TOTAL_COST, START, inventory } from '../graftwork/data/unlocks.js';
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
+import { CARDS, GRAFTS, RELICS, EVENTS, HEROES, SCHOOLS } from '../graftwork/data/index.js';
 import { playWardRun } from '../tools/graftwork_driver.mjs';
 
 let n = 0;
