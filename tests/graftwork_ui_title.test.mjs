@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key, fakeCtx } from './graftwork_lib.mjs';
 import fs from 'node:fs';
-import title, { SCENE, LOGO, resetTitleIntro, GOAL_TEXT as title_GOAL } from '../graftwork/ui/title.js';
+import title, { SCENE, LOGO, resetTitleIntro, GOAL_TEXT as title_GOAL, labelColor } from '../graftwork/ui/title.js';
 import { TAGLINES, TAGLINE_S, INTRO_S, WORD, taglineAt } from '../graftwork/ui/title_logo.js';
 import { CLUSTER, CAST } from '../graftwork/ui/title_scene.js';
 import { assets, createAssets } from '../graftwork/ui/assets.js';
@@ -74,6 +74,13 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   click(app, 50 + 800 + 190, 300); frames(app, 2);
   assert.equal(title.hero, 'marrow'); frames(app, 5);
   key(app, 'Escape'); assert.equal(title.state, 'menu', 'esc goes back');
+}
+
+// ---- hero select labels are readable on the dark panel (contrast 7 or more) ----
+{
+  const lum = (h) => { const v = parseInt(h.slice(1), 16); const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(v >> 16) + 0.7152 * f((v >> 8) & 255) + 0.0722 * f(v & 255); };
+  const bg = lum('#1c1512');
+  for (const col of ['#9E0F2E', '#FF6A2B', '#C9A227']) { const l = lum(labelColor(col)); assert.ok((l + 0.05) / (bg + 0.05) >= 7, `${col} -> ${labelColor(col)} contrast too low`); }
 }
 
 // ---- continue with a saved run ----

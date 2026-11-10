@@ -85,4 +85,11 @@ t('hand_of_ten_costs_under_budget', () => {
   assert.equal(cardCacheStats().builds, builds, 'a warm hand bakes no card face');
   assert.ok(per < 1500, 'hand cost ' + per + ' canvas calls a frame');
 });
+t('a_card_above_its_printed_cost_draws_the_red_cost_badge_an_even_cost_does_not', () => {
+  const spec = cardSpec({ id: 'm_incision', up: false, grafts: [] });
+  const run = (cost) => { const g = fakeCtx(); const seen = []; let fs = ''; Object.defineProperty(g, 'fillStyle', { get: () => fs, set: (v) => { fs = v; seen.push(String(v)); } }); drawCard(g, spec, 0, 0, { cost }); return seen; };
+  assert.ok(run(spec.cost + 1).includes('#e0453a'), 'badge when cost is up');
+  assert.ok(!run(spec.cost).includes('#e0453a'), 'no badge at the printed cost');
+  assert.ok(!run(Math.max(0, spec.cost - 1)).includes('#e0453a') || spec.cost === 0, 'no badge when cost is down');
+});
 console.log(n + ' passed');

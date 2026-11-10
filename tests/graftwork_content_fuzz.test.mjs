@@ -251,6 +251,22 @@ for (const e of Object.values(ENEMIES)) for (const [mid, mv] of Object.entries(e
   meta.setStorage(null);
 }
 
+// ---------------- merged card text: same-effect lines add up, nothing repeats (every card x graft x upgrade) ----------------
+{
+  const lines = T.cardLines(cardSpec({ id: 'm_incision', up: false, grafts: ['g_nicked_vein'] }));
+  assert.equal(lines.filter((l) => /Bleed/.test(l)).length, 1, JSON.stringify(lines));
+  assert.ok(lines.some((l) => /Apply 5 Bleed/.test(l)), JSON.stringify(lines));
+  const bad = [];
+  for (const c of Object.values(CARDS)) for (const up of [false, true]) for (const g of [null, ...Object.keys(GRAFTS)]) {
+    let ls; try { ls = T.cardLines(cardSpec({ id: c.id, up, grafts: g ? [g] : [] })); } catch (e) { continue; }
+    const ss = ls.join(' ').split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean), seen = new Set();
+    for (const s of ss) { if (seen.has(s)) { bad.push(`${c.id}${up ? '+' : ''} [${g}] ${s}`); break; } seen.add(s); }
+  }
+  assert.deepEqual(bad.slice(0, 5), [], 'repeated sentences');
+  const liq = T.cardLines(cardSpec({ id: 'o_liquidate', up: false, grafts: [] })).join(' ');
+  assert.match(liq, /Pay 15 gold/); assert.match(liq, /Deal 12 damage again/); assert.doesNotMatch(liq, /Gain -/);
+}
+
 // ---------------- report ----------------
 const FILE_PROBLEMS = [...problems.entries()];
 for (const [m, p] of FILE_PROBLEMS.sort()) console.log(`  FAIL [${p.n}x] ${m}${p.ctx ? '\n        ' + p.ctx : ''}`);

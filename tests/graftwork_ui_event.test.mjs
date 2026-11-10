@@ -52,6 +52,18 @@ for (const ph of ['ward', 'combat', 'graft']) assert.ok(after.has(ph), 'some eve
   wardOpen(run, 'event', { event: 'e_coin_flip' }); run.pending.result = 'Already done.'; flow.route(); frames(app, 30);
   event.cont(app); assert.equal(run.phase, 'ward'); assert.equal(run.pending, null);
 }
+// Heads, Tails, Teeth: the stake is paid on a win and the text says so
+{
+  const ch = EVENTS.e_coin_flip.choices[0];
+  assert.match(ch.text, /net \+60/);
+  let wins = 0, losses = 0;
+  for (let i = 0; i < 40 && (!wins || !losses); i++) {
+    const run = RUN.newRun({ hero: 'marrow', seed: 'coin' + i }); run.gold = 100;
+    ch.apply(run, RUN.R);
+    if (run.gold === 160) wins++; else { assert.equal(run.gold, 60, 'a loss costs exactly the 40 stake'); losses++; }
+  }
+  assert.ok(wins && losses, 'both outcomes occur');
+}
 // the click that skips the typewriter must not pick a choice (first-hour playtest fix)
 {
   const run = RUN.newRun({ hero: 'marrow', seed: 'q3ev' });

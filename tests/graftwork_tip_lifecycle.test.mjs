@@ -5,8 +5,8 @@ import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { CARDS, SCHOOLS, STATUSES } from '../graftwork/data/index.js';
-import { getAll } from '../graftwork/ui/layout_registry.js';
-import { cardTipStack, tipSections, numberNow, TIP_TIMING, specGloss, KEYWORDS, resetTips } from '../graftwork/ui/tooltips.js';
+import { getAll, clear } from '../graftwork/ui/layout_registry.js';
+import { cardTipStack, tipSections, numberNow, TIP_TIMING, specGloss, KEYWORDS, resetTips, queueTip } from '../graftwork/ui/tooltips.js';
 import { FX_OPTS } from '../graftwork/ui/fx.js';
 import * as audioMod from '../graftwork/ui/audio.js';
 import combat from '../graftwork/ui/combat.js';
@@ -186,5 +186,26 @@ for (const scale of [1, 0.64, 0.54, 0.46]) {
   const app = await combatApp(); over(app, handRects()[1]); settle(app, 30); assert.ok(vis(app));
   resetTips(app); frames(app, 1); assert.ok(app._ts === null || !vis(app) || true);
   app.mouse.x = -999; frames(app, 12); assert.ok(!vis(app));
+}
+// ---- (6) a screen change clears every tooltip, queued or plain
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'r3reset' });
+  const app = await makeApp({ run, meta: { settings: {} } });
+  app.register('a', { draw(a) { queueTip(a, 'k', [[{ title: 'Stale', text: 'x' }]], { x: 10, y: 10, w: 20, h: 20 }); a.tooltip('Plain', 'y'); } });
+  app.register('b', { draw() {} });
+  app.go('a'); frames(app, 5);
+  assert.ok(app.tip, 'tip present on screen a');
+  app.go('b'); assert.equal(app.tip, null, 'app.go clears the tip');
+  clear(); frames(app, 3);
+  assert.equal(getAll().find((r) => r.id === 'tip0'), undefined, 'nothing from screen a is drawn on screen b');
+}
+// ---- (7) under a modal: only the top screen may raise a tooltip
+{
+  const app = await makeApp({ run: RUN.newRun({ hero: 'marrow', seed: 'pol' }), meta: {}, audio: { sfx() {}, music() {} } });
+  app.register('probe', { draw(a) { a.tooltip('Under', 'x'); } });
+  app.register('top', { draw(a) { if (a.inRect(0, 0, 10, 10)) a.tooltip('Top', 'y'); } });
+  app.go('probe'); app.push('top', {}); app.mouse.x = 5; app.mouse.y = 5; frames(app, 3);
+  assert.equal(app.tip && app.tip.title, 'Top', 'only the top screen may raise a tooltip');
+  app.pop(); frames(app, 2); assert.equal(app.tip && app.tip.title, 'Under', 'visible again once uncovered');
 }
 console.log('graftwork_tip_lifecycle ok');

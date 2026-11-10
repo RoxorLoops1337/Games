@@ -269,4 +269,7 @@ for (const sc of SCALES) {
     assert.ok(seen >= 1 || rs.length === 0, `combat hand: a grafted card tip was checked @${sc}`);
   }
 }
+// the words the second-hour playtest asked for are defined, and found inside a sentence
+for (const w of ['Claim', 'Ringing', 'Line', 'Knot', 'Tithe', 'Weight']) assert.ok(KEYWORDS[w] && KEYWORDS[w].text.length > 10, 'keyword ' + w);
+assert.deepEqual(keywordsIn(['Counts as 2 knots on the Line. Claim, Ringing, Tithe.']).sort(), ['Claim', 'Knot', 'Line', 'Ringing', 'Tithe']);
 console.log('graftwork glossary ok');
