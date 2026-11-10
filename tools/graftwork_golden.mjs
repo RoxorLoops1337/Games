@@ -6,7 +6,8 @@
 //                                      [--resume-from <baseline.json>] [--browser [--shots <dir>] [--label <name>]] [--jobs N] [--verify]
 //   node tools/graftwork_golden.mjs compare <a.json> <b.json> [--common]      every differing key, exit 1 on any difference
 //   node tools/graftwork_golden.mjs compare-shots <dirA> <dirB>               mean absolute pixel difference per screenshot
-//   node tools/graftwork_golden.mjs dump <scene@variant> <out.txt> [--root <repo dir>] [--warm]   full draw-call log of one scene (diff two of them)
+//   node tools/graftwork_golden.mjs dump <ui|assets>/<scene>@<variant> <out.txt> [--root <repo dir>] [--warm | --pass N]
+//                                                                             the full draw-call log of one scene: diff two of them
 //   node tools/graftwork_golden.mjs list                                      scene and variant names
 //
 // --root runs against another checkout: the game is imported from <root>/graftwork, the fake-canvas recorder from
@@ -46,7 +47,7 @@ const argv = process.argv.slice(2);
 const CMD = argv[0];
 const flag = (k) => argv.includes('--' + k);
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 || i + 1 >= argv.length || argv[i + 1].startsWith('--') ? d : argv[i + 1]; };
-const VALUE_FLAGS = new Set(['root', 'only', 'resume-from', 'shots', 'label', 'jobs', 'key', 'out']);
+const VALUE_FLAGS = new Set(['root', 'only', 'resume-from', 'shots', 'label', 'jobs', 'key', 'pass', 'tolerance']);
 const positional = (() => { const out = []; for (let i = 1; i < argv.length; i++) { if (argv[i].startsWith('--')) { if (VALUE_FLAGS.has(argv[i].slice(2))) i++; continue; } out.push(argv[i]); } return out; })();
 const ROOT = path.resolve(opt('root', REPO));
 const QUICK = flag('quick');
@@ -436,6 +437,8 @@ function probeRun(E, hero, seed, o = {}) {
   return run;
 }
 const DUMMIES = ['orderly', 'gauze_mummy'];
+// a whole Ward day spent waiting (end the morning, wait three times): the rooms tick and fill the way they do in play
+function passDay(WD, run) { WD.endMorning(run); for (let i = 0; i < 3 && run.phase === 'ward' && run.ward.phase !== 'morning'; i++) WD.startWalk(run, run.ward.hero.room); }
 function probes(E) {
   const { RUN, C, WD, K, D, RNG, TEXT, META } = E, P = {};
   const g = (fn) => { try { return fn(); } catch (e) { return 'error: ' + String(e && e.message || e).slice(0, 160); } };
@@ -566,8 +569,8 @@ function probes(E) {
   P.buildCard = {};
   for (const id of Object.keys(E.WDATA.BUILD_CARDS)) P.buildCard[id] = g(() => {
     const run = RUN.newRun({ hero: 'marrow', seed: 'probe-build', mode: 'ward' }), w = run.ward;
+    passDay(WD, run); // day 2: the first rooms hold something
     w.res.wood = 40; w.res.stone = 40; run.gold = 500;
-    for (const r of Object.values(w.rooms)) if (WD.everyOf(r)) { r.timers.spawn = 1; WD.tickRoom(run, r); }
     const inst = { uid: 9000, id }; w.deck.hand.push(inst);
     const targets = [null, 'wood', 'stone', ...Object.keys(w.rooms)]; for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) targets.push({ x, y });
     const ok = targets.filter((t) => WD.canPlayBuild(run, inst.uid, t).ok);
@@ -644,7 +647,6 @@ async function sectionResume() {
   return { resume: out, payloads, resumeFrom: base ? path.resolve(opt('resume-from')) : null };
 }
 
-//@@UI@@
 // ---------------------------------------------------------------- ui / assets: the stage (real boot on a recording canvas)
 // Variants: the first two are the --quick set. The phone stage is 844x390 (scale 0.5417), a touch device: clicks are taps there.
 // In the assets section the phone has device pixel ratio 1, so it asks for the @1x files (the desktop asks for @2x).
@@ -685,7 +687,7 @@ function mannequin(w, h) {
   return d;
 }
 
-const STAGE = { log: null, first: true, mods: null, pending: [], loads: null };
+const STAGE = { log: null, first: true, mods: null, pending: [], loads: null, pathId: 0 };
 // Boots the game on a fresh recorder. Returns the script API S. Called once per pass (cold, then warm in the same process).
 async function bootStage(sec, v, o = {}) {
   const assetsMode = sec === 'assets';
@@ -697,16 +699,18 @@ async function bootStage(sec, v, o = {}) {
     Object.defineProperty(globalThis, 'navigator', { value: { userAgent: v.touch ? 'GoldenMaster Mobile' : 'GoldenMaster', maxTouchPoints: v.touch ? 5 : 0 }, configurable: true, writable: true });
     globalThis.window = { innerWidth: v.w, innerHeight: v.h, devicePixelRatio: assetsMode && v.touch ? 1 : v.dpr, addEventListener() {}, removeEventListener() {} };
     globalThis.requestAnimationFrame = () => 0; globalThis.cancelAnimationFrame = () => {};
-    let pid = 0; // Path2D objects go into the same log as the canvas calls
-    globalThis.Path2D = class { constructor(a) { const id = 'path#' + (pid++); this.__id = id; STAGE.log.push('new ' + id + (a === undefined ? '' : '(' + num3(a) + ')')); return new Proxy(this, { get: (t, k) => (k in t ? t[k] : typeof k === 'symbol' ? undefined : (...x) => { STAGE.log.push(id + ':' + k + '(' + x.map(num3).join(',') + ')'); }) }); } };
+    // Path2D objects go into the same log as the canvas calls (their ids restart with every pass, like the recorder's canvas ids)
+    globalThis.Path2D = class { constructor(a) { const id = 'path#' + (STAGE.pathId++); this.__id = id; STAGE.log.push('new ' + id + (a === undefined ? '' : '(' + num3(a) + ')')); return new Proxy(this, { get: (t, k) => (k in t ? t[k] : typeof k === 'symbol' ? undefined : (...x) => { STAGE.log.push(id + ':' + k + '(' + x.map(num3).join(',') + ')'); }) }); } };
     if (assetsMode) globalThis.Image = class { constructor() { this.__id = 'img'; this.width = 0; this.height = 0; this.naturalWidth = 0; this.naturalHeight = 0; this.complete = false; this.onload = null; this.onerror = null; } set src(u) { this._src = u; this.__id = 'img:' + u; STAGE.pending.push(this); } get src() { return this._src; } };
     STAGE.mods = { REC: await imp('tests/graftwork_rec_lib.mjs') };
   }
   // the recorder of tests/graftwork_rec_lib.mjs, with its log turned into a running sha1 (a scene makes millions of calls)
   const R = STAGE.mods.REC.makeRecorder(), sink = o.sink || null;
-  let H = createHash('sha1'), calls = 0;
-  R.log.push = (s) => { H.update(s); H.update('\n'); calls++; if (sink) sink(s); return calls; };
-  STAGE.log = R.log; STAGE.pending = []; STAGE.loads = { n: 0, bytes: 0, list: [], missing: [] };
+  const H = createHash('sha1'); let calls = 0, buf = [];
+  const flush = () => { if (buf.length) { H.update(buf.join('\n') + '\n'); buf = []; } };
+  const digest = () => { flush(); return H.copy().digest('hex'); };
+  R.log.push = (s) => { buf.push(s); calls++; if (buf.length >= 8192) flush(); if (sink) sink(s); return calls; };
+  STAGE.log = R.log; STAGE.pathId = 0; STAGE.pending = []; STAGE.loads = { n: 0, bytes: 0, list: [], missing: [] };
   R.install();
   const doc = globalThis.document; doc.getElementById = () => null;
   if (assetsMode) { // pixel reads and writes work on every offscreen canvas (see mannequin)
@@ -780,9 +784,9 @@ async function bootStage(sec, v, o = {}) {
     away() { app.mouse.x = -999; app.mouse.y = -999; },
     note(s) { trail.push(String(s)); },
     state() { const run = app.shared.run; return `${app.current}[${app.stack.map((s) => s.name).join('>')}]${run ? ` ${run.phase}${run.ward ? ` day ${run.ward.day} ${run.ward.phase}` : ''} hp ${run.hp}/${run.maxHp} gold ${run.gold}` : ''}`; },
-    mark(name) { marks[name] = H.copy().digest('hex').slice(0, 12); trail.push(`-- ${name}: ${S.state()}`); },
+    mark(name) { marks[name] = digest().slice(0, 12); trail.push(`-- ${name}: ${S.state()}`); },
     result() {
-      const L = STAGE.loads, out = { hash: H.copy().digest('hex'), calls, marks, state: S.state(), rects: app.layout.getAll().map((r) => `${r.id} ${[r.x, r.y, r.w, r.h].map(num3).join(',')} ${r.layer}${r.group !== r.id ? ' g:' + r.group : ''}${r.overlay ? ' overlay' : ''}`), trail };
+      const L = STAGE.loads, out = { hash: digest(), calls, marks, state: S.state(), rects: app.layout.getAll().map((r) => `${r.id} ${[r.x, r.y, r.w, r.h].map(num3).join(',')} ${r.layer}${r.group !== r.id ? ' g:' + r.group : ''}${r.overlay ? ' overlay' : ''}`), trail };
       if (assetsMode) out.loads = { files: L.n, bytes: L.bytes, requests: L.list.length, list: h12(L.list.join('\n')), missing: L.missing.slice() };
       return out;
     },
@@ -833,7 +837,7 @@ function buildHospital(S) {
     let ok = false; for (const [x, y] of WD.buildCells(run)) if (WD.playBuildCard(run, c.uid, { x, y }).ok) { ok = true; break; }
     if (!ok) S.note('not built ' + id);
   }
-  for (const r of Object.values(w.rooms)) if (WD.everyOf(r)) { r.timers.spawn = 1; WD.tickRoom(run, r); }
+  passDay(WD, run); // the next morning every lit room has ticked: monsters, an elite, an event, the shop, the forge
   S.note('rooms ' + Object.values(w.rooms).map((r) => `${r.id}:${r.type}@${r.x},${r.y}${r.w || r.h ? ' ' + (r.w || 1) + 'x' + (r.h || 1) : ''}${r.contents.length ? ' (' + r.contents.map((c) => c.id || c.kind).join(',') + ')' : ''}`).join(' | '));
 }
 
@@ -933,6 +937,7 @@ async function sceneChild(key) {
   try {
     out.cold = await runScene(sec, name, v);
     if (!QUICK) { const w = await runScene(sec, name, v); out.warm = { hash: w.hash, calls: w.calls, marks: w.marks, state: w.state }; }
+    if (flag('thrice')) { const w = await runScene(sec, name, v), ref = out.warm || out.cold; out.thrice = w.hash === ref.hash && w.calls === ref.calls; } // --verify: is a further pass in this process identical to the one before it?
   } catch (e) { out.error = String(e && e.stack || e).split('\n').slice(0, 5).join(' | ').slice(0, 600); }
   return out;
 }
@@ -941,31 +946,211 @@ async function cmdDump() {
   if (!key || !file) { console.error('usage: dump <ui|assets>/<scene>@<variant> <out.txt> [--root dir] [--warm]'); process.exit(2); }
   const { sec, name, v } = parseSceneKey(/^(ui|assets)\//.test(key) ? key : 'ui/' + key);
   installDeterminism();
-  if (flag('warm')) await runScene(sec, name, v);
+  for (let i = 1, n = flag('warm') ? 2 : Number(opt('pass', 1)) || 1; i < n; i++) await runScene(sec, name, v); // --warm = --pass 2: dump the n-th pass in this process
   const fd = fs.openSync(file, 'w'); let buf = [];
   const r = await runScene(sec, name, v, { sink: (s) => { buf.push(s); if (buf.length >= 20000) { fs.writeSync(fd, buf.join('\n') + '\n'); buf = []; } } });
   fs.writeSync(fd, buf.join('\n') + '\n'); fs.closeSync(fd);
   console.log(`${key}: ${r.calls} calls, sha1 ${r.hash}, written to ${file}\n${r.trail.join('\n')}`);
 }
-// --verify: every child runs a second time in another fresh process; any key that differs is a failure (the scene is not deterministic)
+// --verify: every child runs a second time in another fresh process, and any key that differs is a failure (not deterministic).
+// The second scene child also runs one more pass in its process: with caches warm, two passes in a row should be identical too.
+// A scene where they are not is reported (and kept in meta.verify), not failed: its cold and warm hashes still reproduce.
 async function verifyScenes(out, tasks, jobs, failures) {
-  let n = 0;
+  let n = 0; const unsteady = [];
   await pool(tasks, jobs, async (t) => {
-    const r = await runChild(t.args), first = t.sec ? out[t.sec][t.key] : t.name === 'engine' ? out.engine : { resume: out.resume, payloads: out.payloads };
-    const second = r.data && !t.sec && t.name === 'resume' ? { resume: r.data.resume, payloads: r.data.payloads } : r.data;
+    const r = await runChild(t.sec ? [...t.args, '--thrice'] : t.args), first = t.sec ? out[t.sec][t.key] : t.name === 'engine' ? out.engine : { resume: out.resume, payloads: out.payloads };
+    let second = r.data;
+    if (second && t.sec) { const { thrice, ...rest } = second; second = rest; if (thrice === false) unsteady.push(t.name); }
+    if (second && t.name === 'resume') second = { resume: second.resume, payloads: second.payloads };
     n++;
-    if (!r.data || canon(second) !== canon(first)) {
-      const a = flatten(first, t.name, new Map()), b = r.data ? flatten(second, t.name, new Map()) : new Map();
-      const keys = [...a.keys()].filter((k) => a.get(k) !== b.get(k)).slice(0, 4);
-      failures.push(`${t.name}: NOT DETERMINISTIC, a second fresh process differs in ${keys.join(', ') || 'everything'}`);
+    if (!second || canon(second) !== canon(first)) {
+      const a = flatten(first, t.name, new Map()), b = second ? flatten(second, t.name, new Map()) : new Map();
+      failures.push(`${t.name}: NOT DETERMINISTIC, a second fresh process differs in ${[...a.keys()].filter((k) => a.get(k) !== b.get(k)).slice(0, 4).join(', ') || 'everything'}`);
     }
   });
-  console.log(`verify: ${n} children ran a second time in fresh processes`);
+  unsteady.sort();
+  out.meta.verify = { children: n, unsteady };
+  console.log(`verify: ${n} children ran a second time in fresh processes${unsteady.length ? `; ${unsteady.length} scenes where a further pass in the same process still differs from the one before: ${unsteady.join(' ')}` : '; every scene repeats itself exactly once its caches are warm'}`);
 }
 
-// TEMP
-async function recordBrowser() { return {}; } function cmdCompareShots() {}
-//@@/UI@@
+// ---------------------------------------------------------------- browser (--browser): real Chromium pixels, frozen clock
+// The page never runs its own frame loop: requestAnimationFrame is captured, the clock and Math.random are the tool's, reduced motion
+// is on. Each state is set up twice: a first time to let every image download and decode, then again from a reset clock for a fixed
+// number of ticks, so the picture does not depend on how long the network took.
+const SHOT_VIEWS = [
+  { id: 'desk', viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 },
+  { id: 'phone', viewport: { width: 1000, height: 462 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' },
+];
+const SHOT_STATES = ['title', 'ward_built', 'combat', 'graft', 'shop', 'title_select', 'map', 'ward_morning', 'combat_boss', 'reward', 'forge', 'event', 'deckview', 'codex', 'pause', 'end_won', 'end_dead']; // --quick: the first five
+const SHOT_INIT = `(() => {
+  let clock = 1e6, seed = 0x9e3779b9;
+  const EPOCH = 1767571200000, RealDate = Date;
+  Math.random = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  performance.now = () => clock;
+  class FakeDate extends RealDate { constructor(...a) { if (a.length) super(...a); else super(EPOCH + Math.floor(clock)); } static now() { return EPOCH + Math.floor(clock); } }
+  window.Date = FakeDate;
+  // the game's frame loop never starts: its first requestAnimationFrame is swallowed here; release() gives the real one back (Playwright's screenshot waits on a frame)
+  const raf0 = window.requestAnimationFrame.bind(window), caf0 = window.cancelAnimationFrame.bind(window);
+  window.requestAnimationFrame = () => 1; window.cancelAnimationFrame = () => {};
+  try { localStorage.setItem('graftwork_meta_v1', JSON.stringify({ v: 1, settings: { reducedMotion: true, tips: false, graphics: 'high' } })); localStorage.removeItem('graftwork_run_v1'); } catch (e) {}
+  const btns = []; let bf = -1;
+  window.__golden = {
+    reset() { clock = 1e6; seed = 0x9e3779b9; },
+    release() { window.requestAnimationFrame = raf0; window.cancelAnimationFrame = caf0; },
+    hook() { const app = window.__gw.app; if (app.__goldenHook) return; app.__goldenHook = true; const b0 = app.button; app.button = (label, x, y, w, h, o) => { if (bf !== app.frame) { bf = app.frame; btns.length = 0; } btns.push({ label: String(label), x, y, w, h, dis: !!(o && o.disabled) || !!app.blocked }); return b0(label, x, y, w, h, o); }; },
+    tick(n, dt) { const app = window.__gw.app, d = dt || 1 / 60; for (let i = 0; i < n; i++) { clock += d * 1000; app.tick(d); } },
+    click(x, y) { const m = window.__gw.app.mouse; m.x = x; m.y = y; m.pressed = true; m.down = true; this.tick(1); m.released = true; m.down = false; this.tick(1); m.x = -999; m.y = -999; },
+    clickBtn(src) { const re = new RegExp(src), b = btns.find((q) => re.test(q.label) && !q.dis); if (!b) return false; this.click(b.x + b.w / 2, b.y + b.h / 2); return true; },
+    clickRect(src, n) { const re = new RegExp(src), r = window.__gw.app.layout.getAll().filter((q) => re.test(q.id))[n || 0]; if (!r) return false; this.click(r.x + r.w / 2, r.y + r.h / 2); return true; },
+  };
+})();`;
+// runs in the page: put the game in a named state (the same engine calls the headless scenes use)
+async function shotSetup(name) {
+  const { app, flow } = window.__gw, G = window.__golden;
+  const RUN = await import('/graftwork/engine/run.js'), WD = await import('/graftwork/engine/ward.js'), K = await import('/graftwork/engine/cards.js'), D = await import('/graftwork/data/index.js');
+  G.hook(); G.reset();
+  while (app.stack.length > 1) app.pop();
+  try { localStorage.removeItem('graftwork_run_v1'); } catch (e) { /* no storage */ }
+  const start = (hero, seed, mode) => { flow.start({ hero, seed: 'golden-shot-' + seed, mode }); return app.shared.run; };
+  const rich = (run) => {
+    let k = 3;
+    for (const [idx, n] of [[0, 1], [1, 2], [2, 3]]) { const inst = run.deck[idx]; for (let g = 0; g < D.GRAFT_LIST.length && inst.grafts.length < n; g++, k += 7) { const gid = D.GRAFT_LIST[k % D.GRAFT_LIST.length].id; if (K.canGraft(inst, gid)) RUN.applyGraft(run, inst.uid, gid, { keepPhase: true }); } }
+    const relics = Object.values(D.RELICS).filter((r) => !r.ward && !r.hero && r.rarity !== 'boss'); for (let i = 0; i < 5; i++) RUN.addRelic(run, relics[(i * 11 + 2) % relics.length].id);
+    const pots = Object.keys(D.POTIONS); RUN.addPotion(run, pots[1]); RUN.addPotion(run, pots[5 % pots.length]);
+    run.gold = 400; return run;
+  };
+  const fight = (run, enemies, kind) => { run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: kind || 'normal', enemies }; flow.route(); };
+  let ticks = 30; // 50 ms steps after the setup (reduced motion: screens settle at once)
+  switch (name) {
+    case 'title': app.shared.run = null; flow.toTitle(); break;
+    case 'title_select': app.shared.run = null; flow.toTitle(); G.tick(12, 0.05); G.clickBtn('^New Run'); break;
+    case 'map': rich(start('marrow', 'map')); break;
+    case 'ward_morning': start('marrow', 'ward', 'ward'); ticks = 70; break;
+    case 'ward_built': {
+      const run = start('wick', 'built', 'ward'), w = run.ward; w.res.wood = 60; w.res.stone = 60; run.gold = 900; w.deck.hand = [];
+      for (const id of ['b_corridor', 'b_ward_wing', 'b_generator', 'b_dispensary', 'b_workshop', 'b_isolation', 'b_corridor', 'b_linen']) { if (!WD.BUILD_CARDS[id]) continue; const c = { uid: 9000 + w.cardNext++, id }; w.deck.hand.push(c); for (const [x, y] of WD.buildCells(run)) if (WD.playBuildCard(run, c.uid, { x, y }).ok) break; }
+      WD.endMorning(run); for (let i = 0; i < 3 && run.phase === 'ward' && w.phase !== 'morning'; i++) WD.startWalk(run, w.hero.room); // a day passes: the rooms fill
+      WD.endMorning(run); ticks = 80; break;
+    }
+    case 'combat': fight(rich(start('marrow', 'combat')), ['bedpan_slime', 'gauze_mummy']); G.tick(70, 0.05); G.clickRect('^hand_', 0); G.tick(8); G.clickRect('^en\\d+:body$', 0); ticks = 40; break;
+    case 'combat_boss': fight(rich(start('odile', 'boss')), ['the_matron'], 'boss'); ticks = 80; break;
+    case 'reward': { const run = rich(start('marrow', 'reward')); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'elite', enemies: ['the_resident'] }; RUN.resolveFight(run, { win: true, shattered: [], damageTaken: 9, turns: 4 }); flow.route(); break; }
+    case 'graft': { const run = rich(start('marrow', 'graft')); RUN.startGraftPick(run); flow.route(); G.tick(30, 0.05); G.clickRect('^graft-card1$'); G.tick(6); G.clickRect('^graft-patch1$'); ticks = 20; break; }
+    case 'shop': { const run = rich(start('wick', 'shop')); run.phase = 'shop'; run.pending = RUN.makeShop(run); flow.route(); break; }
+    case 'forge': { const run = rich(start('odile', 'forge')); run.hp = Math.round(run.maxHp / 2); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; flow.route(); break; }
+    case 'event': { const run = rich(start('marrow', 'event')); RUN.startEvent(run); flow.route(); ticks = 100; break; }
+    case 'deckview': rich(start('marrow', 'deck')); flow.openDeck(); break;
+    case 'codex': app.shared.run = null; flow.toTitle(); flow.openCodex(); break;
+    case 'settings': app.shared.run = null; flow.toTitle(); flow.openSettings(); break;
+    case 'pause': fight(rich(start('wick', 'pause')), ['night_nurse', 'crutchling']); G.tick(60, 0.05); flow.openPause(); ticks = 20; break;
+    case 'end_won': { const run = rich(start('odile', 'won')); Object.assign(run.stats, { fights: 21, elites: 4, grafts: 11, floors: 31, bosses: 3, goldEarned: 812, damageTaken: 301 }); run.act = 3; run.phase = 'won'; run.pending = null; flow.route(); ticks = 70; break; }
+    case 'end_dead': { const run = rich(start('marrow', 'dead')); run.hp = 0; run.killedBy = 'two_gurneys'; run.phase = 'dead'; run.pending = null; flow.route(); ticks = 70; break; }
+    default: throw new Error('unknown state ' + name);
+  }
+  return ticks;
+}
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.webp': 'image/webp', '.png': 'image/png', '.css': 'text/css', '.svg': 'image/svg+xml' };
+function serveRoot() {
+  return new Promise((resolve) => {
+    const srv = http.createServer((req, res) => {
+      let p = decodeURIComponent(req.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html';
+      const f = path.join(ROOT, p);
+      if (!f.startsWith(ROOT + path.sep) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('not found'); return; }
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(fs.readFileSync(f));
+    });
+    srv.listen(0, '127.0.0.1', () => resolve(srv));
+  });
+}
+function shotsDir() {
+  const dir = path.resolve(opt('shots', path.join('/tmp/claude-0/golden', opt('label', 'shots_' + (gitHead(ROOT) || path.basename(ROOT))))));
+  for (const r of [REPO, ROOT]) if (dir === r || dir.startsWith(r + path.sep)) { console.error(`screenshots must live outside the repo: ${dir} is inside ${r}`); process.exit(2); }
+  return dir;
+}
+async function recordBrowser() {
+  const { chromium } = createRequire(import.meta.url)('playwright');
+  const dir = shotsDir(), out = {};
+  fs.mkdirSync(dir, { recursive: true });
+  const srv = await serveRoot(), base = 'http://127.0.0.1:' + srv.address().port, browser = await chromium.launch({ headless: true });
+  const states = QUICK ? SHOT_STATES.slice(0, 5) : SHOT_STATES;
+  try {
+    await Promise.all(SHOT_VIEWS.map(async (view) => { // the two viewports side by side, each in its own context
+      const { id, ...ctxOpts } = view, ctx = await browser.newContext({ ...ctxOpts, serviceWorkers: 'block', reducedMotion: 'reduce' });
+      await ctx.addInitScript(SHOT_INIT);
+      const page = await ctx.newPage(), errors = [];
+      let requests = 0, inflight = 0;
+      page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+      page.on('request', () => { requests++; inflight++; });
+      page.on('requestfinished', () => { inflight--; });
+      page.on('requestfailed', () => { inflight--; });
+      await page.goto(base + '/graftwork/', { waitUntil: 'load' });
+      await page.waitForFunction(() => window.__gw && window.__gw.app && window.__gw.app.current === 'title', null, { timeout: 60000 });
+      await page.evaluate(() => window.__golden.release());
+      const settle = async () => { // tick, let every request finish and decode, repeat until a round asks for nothing new
+        for (let round = 0, last = -1; round < 30 && last !== requests; round++) {
+          last = requests; await page.evaluate(() => window.__golden.tick(3, 0.05));
+          for (let w = 0; w < 400 && inflight > 0; w++) await page.waitForTimeout(25);
+          await page.waitForTimeout(100);
+        }
+      };
+      for (const st of states) {
+        const ts = REAL_NOW();
+        await page.evaluate(shotSetup, st); await settle();                       // pass 1: everything this state draws is downloaded and decoded
+        const ticks = await page.evaluate(shotSetup, st);                         // pass 2: the same state from a reset clock
+        await page.evaluate((n) => window.__golden.tick(n, 0.05), ticks); // 50 ms steps: the longest step the game's own loop takes
+        const file = path.join(dir, `${id}_${st}.png`);
+        await page.screenshot({ path: file });
+        const px = decodePng(fs.readFileSync(file));
+        out[`${id}/${st}`] = { w: px.w, h: px.h, pixels: sha1(px.data) };
+        if (flag('verbose')) console.log(`  shot ${id}/${st} ${((REAL_NOW() - ts) / 1000).toFixed(1)}s (${ticks} ticks)`);
+      }
+      if (errors.length) out[`${id}/pageErrors`] = errors.slice(0, 10);
+      await ctx.close();
+    }));
+  } finally { await browser.close(); srv.close(); }
+  console.log(`browser: ${Object.keys(out).length} screenshots in ${dir}`);
+  return Object.fromEntries(Object.keys(out).sort().map((k) => [k, out[k]]));
+}
+// PNG -> { w, h, data: RGBA or RGB bytes } (8 bit, colour type 2 or 6, not interlaced: what Chromium writes)
+function decodePng(buf) {
+  let p = 8, w = 0, h = 0, ct = 6; const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p), type = buf.toString('latin1', p + 4, p + 8), body = buf.subarray(p + 8, p + 8 + len);
+    if (type === 'IHDR') { w = body.readUInt32BE(0); h = body.readUInt32BE(4); ct = body[9]; if (body[8] !== 8 || (ct !== 2 && ct !== 6) || body[12] !== 0) throw new Error('unsupported PNG'); }
+    else if (type === 'IDAT') idat.push(body);
+    p += 12 + len;
+  }
+  const bpp = ct === 6 ? 4 : 3, raw = zlib.inflateSync(Buffer.concat(idat)), stride = w * bpp, data = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? data[dst + x - bpp] : 0, b = y ? data[dst + x - stride] : 0, c = x >= bpp && y ? data[dst + x - stride - bpp] : 0;
+      let v = raw[src + x];
+      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) { const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      data[dst + x] = v & 255;
+    }
+  }
+  return { w, h, bpp, data };
+}
+function cmdCompareShots() {
+  const [da, db] = positional;
+  if (!da || !db) { console.error('usage: compare-shots <dirA> <dirB> [--tolerance <mean abs diff, default 0>]'); process.exit(2); }
+  const tol = Number(opt('tolerance', 0)) || 0, names = [...new Set([...fs.readdirSync(da), ...fs.readdirSync(db)])].filter((n) => n.endsWith('.png')).sort();
+  let bad = 0;
+  for (const n of names) {
+    const fa = path.join(da, n), fb = path.join(db, n);
+    if (!fs.existsSync(fa) || !fs.existsSync(fb)) { console.log(`${n.padEnd(28)} only in ${fs.existsSync(fa) ? 'A' : 'B'}`); bad++; continue; }
+    const a = decodePng(fs.readFileSync(fa)), b = decodePng(fs.readFileSync(fb));
+    if (a.w !== b.w || a.h !== b.h || a.bpp !== b.bpp) { console.log(`${n.padEnd(28)} size differs: ${a.w}x${a.h} vs ${b.w}x${b.h}`); bad++; continue; }
+    let sum = 0, max = 0, px = 0;
+    for (let i = 0; i < a.data.length; i += a.bpp) { let d = 0; for (let k = 0; k < a.bpp; k++) { const e = Math.abs(a.data[i + k] - b.data[i + k]); sum += e; if (e > max) max = e; d |= e; } if (d) px++; }
+    const mean = sum / a.data.length;
+    if (mean > tol) bad++;
+    console.log(`${n.padEnd(28)} mean abs diff ${mean.toFixed(4)}  max ${max}  pixels changed ${px} of ${a.w * a.h} (${(100 * px / (a.w * a.h)).toFixed(3)}%)${mean > tol ? '  DIFFERENT' : ''}`);
+  }
+  console.log(bad ? `${bad} of ${names.length} screenshots differ` : `${names.length} screenshots identical${tol ? ' within ' + tol : ''}`);
+  process.exit(bad ? 1 : 0);
+}
 
 // ---------------------------------------------------------------- record: one child process per section and per UI scene
 const MARK = '@@GOLDEN@@';
@@ -1016,7 +1201,7 @@ async function cmdRecord() {
   });
   for (const sec of ['ui', 'assets']) if (out[sec]) out[sec] = Object.fromEntries(Object.keys(out[sec]).sort().map((k) => [k, out[sec][k]]));
   if (flag('verify')) await verifyScenes(out, tasks, jobs, failures);
-  if (flag('browser')) { const tb = REAL_NOW(); out.browser = await recordBrowser(); secMs.browser = REAL_NOW() - tb; }
+  if (flag('browser')) { const tb = REAL_NOW(); out.browser = await recordBrowser(); out.meta.shots = shotsDir(); secMs.browser = REAL_NOW() - tb; }
   for (const k of Object.keys(secMs)) out.meta.seconds[k] = Math.round(secMs[k] / 100) / 10; // summed child time per section (cpu-ish, not wall)
   out.meta.seconds.wall = Math.round((REAL_NOW() - t0) / 100) / 10;
   const ordered = {}; for (const k of ['meta', 'engine', 'resume', 'ui', 'assets', 'browser', 'payloads']) if (out[k] !== undefined) ordered[k] = out[k];
