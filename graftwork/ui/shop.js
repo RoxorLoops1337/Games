@@ -705,7 +705,7 @@ export default {
 
     // ---- services ----
     const rp = RUN.servicePrice(run, 'remove'), sp = RUN.servicePrice(run, 'strip');
-    const wardShop = !!shop.builds, SW = wardShop ? 200 : 300, SX2 = wardShop ? 480 : 590; // Ward mode: a third service, the Dispensary's building plans
+    const SW = 200, SX2 = 480, builds = shop.builds || []; // three services: remove a card, strip a graft, the Dispensary's building plans
     app.reg('shop-remove', 270, 614, SW, 66, { group: 'remove' }); app.reg('shop-strip', SX2, 614, SW, 66, { group: 'strip' }); app.reg('shop-leave', 940, 600, 310, 90, { group: 'leave' });
     const grafted = run.deck.some((c) => c.grafts.length);
     if (app.button('Remove a card', 270, 614, SW, 66, { size: 20, fit: true, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
@@ -714,9 +714,9 @@ export default {
     if (app.button('Strip a graft', SX2, 614, SW, 66, { size: 20, fit: true, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
     if (app.inRect(SX2, 614, SW, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
-    if (wardShop) {
+    {
       app.reg('shop-plans', 690, 614, 230, 66, { group: 'plans' });
-      const left = shop.builds.filter((b) => !b.sold).length;
+      const left = builds.filter((b) => !b.sold).length;
       if (app.button('Building plans', 690, 614, 230, 66, { size: 20, fit: true, sub: left ? `${left} for sale, strike ${shop.buildRemovePrice}` : 'Sold out', subColor: COL.gold })) { S.disp = { tab: 'buy' }; sfx(app, 'uiClick'); }
       if (app.inRect(690, 614, 230, 66)) app.tooltip('Building plans', `The Dispensary sells plans for your building deck and strikes one for ${shop.buildRemovePrice} gold.`, { terms: ['Dispensary'] });
     }

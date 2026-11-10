@@ -3,7 +3,7 @@
 // Record once on the baseline, record again after a refactor, compare: every key must be identical.
 //
 //   node tools/graftwork_golden.mjs record <out.json> [--root <repo dir>] [--only engine,ui,assets,resume] [--scenes a,b] [--merge]
-//                                      [--quick] [--jobs N] [--resume-from <baseline.json>] [--verify]
+//                                      [--quick] [--jobs N] [--resume-from <baseline.json>] [--verify] [--classic-rng]
 //                                      [--browser [--label <name> | --shots <dir>]]
 //   node tools/graftwork_golden.mjs compare <a.json> <b.json> [--common]      every differing key, exit 1 on any difference
 //   node tools/graftwork_golden.mjs compare-shots <dirA> <dirB> [--tolerance x]   mean absolute pixel difference per screenshot
@@ -16,21 +16,25 @@
 //                    compare base.json now.json                         (--common when now.json is a --quick record)
 //
 // --root runs against another checkout: the game is imported from <root>/graftwork, the fake-canvas recorder from
-// <root>/tests/graftwork_rec_lib.mjs and the bots from <root>/tools/graftwork_sim.mjs + graftwork_strong.mjs, all by file URL, so
-// this file may live outside that checkout. Default root: the repo this file is in.
+// <root>/tests/graftwork_rec_lib.mjs and the bots from <root>/tools/graftwork_driver.mjs (an older root without the shared driver:
+// graftwork_sim.mjs + graftwork_strong.mjs), all by file URL, so this file may live outside that checkout. Default root: the repo
+// this file is in. Every run is a Ward run: a root that still has the Classic map is recorded with the tool version of that root.
 //
 // Sections (each key of the JSON is one comparable fact; `meta` and `payloads` are never compared):
-//   engine  seeded full runs for every hero x mode (classic, ward) x 8 seeds (ascension 0 / 4 / 7 / 10, Assist, the starting pool,
-//           two "deep" seeds with a hit point cheat that reach the last act and one Endless loop; one run per Daily modifier): the
-//           strong bot from the root's tools, the Ward builder and walker replicated here. Per run a step trace (every node, fight,
-//           reward, graft, shop, forge and event choice with hp, gold and the rng state after it), the final deck, relics, stats,
-//           the save payload hash and the meta progression after it. Plus probes: rng streams, cardSpec and rules text for every
-//           card x grafts, every card / graft / relic / potion / event choice / enemy / building card driven through a fixed fight
-//           or choice, a new run for every hero and ascension, unlock tables, Ward tables and kit recipes.
+//   engine  seeded full runs for every hero x 9 seeds (ascension 0 / 4 / 7 / 10, Assist, the starting pool, two "deep" seeds with
+//           a hit point cheat that reach the last floor, one of them through an Endless loop; one run per Daily modifier): the strong
+//           bot from the root's driver, the Ward builder and walker replicated here. Per run a step trace (every morning, walk,
+//           fight, reward, graft, shop, forge and event choice with hp, gold and the rng state after it), the final deck, relics,
+//           stats, the save payload hash and the meta progression after it. Keys keep the `ward` segment (`runs/marrow.ward.a0`) they
+//           had while there were two modes. Plus probes: rng streams, cardSpec and rules text for every card x grafts, every card /
+//           graft / relic / potion / event choice / enemy / building card driven through a fixed fight or choice, a new run for
+//           every hero and ascension, unlock tables, Ward tables and kit recipes.
 //   resume  save compatibility: runs saved after k steps (between screens, mid combat, mid Ward walk, after a graft, on a reward,
 //           event, shop, at night), the payload stored in the file, then continued FROM THE PAYLOAD to the end. With
 //           --resume-from <baseline.json> the baseline's payloads are continued under this root's code (`end`), next to what this
-//           root's code would have saved at the same point (`savedBy`). The saves of tests/fixtures/graftwork_oldsave_*.json too.
+//           root's code would have saved at the same point (`savedBy`). The Ward saves of tests/fixtures/graftwork_wardsave_*.json
+//           are continued too (`wardFixture`). The saves of tests/fixtures/graftwork_oldsave_*.json are runs on the retired Classic
+//           map: each gets the trace of its closing (`retired`: what engine/meta.js retireClassicRun returns and leaves in the meta).
 //   ui      the real boot (main.js) on the recording canvas: every screen, on the desktop stage (1280x720) and the phone stage
 //           (844x390, scale 0.54, touch taps, device pixel ratio 3), reduced motion off and on, fixed dt 1/60, a fake clock for
 //           performance.now and Date, a seeded Math.random. Script: enter, 90 frames, scripted inputs, 60 frames (some longer).
@@ -48,6 +52,10 @@
 // pass only, 5 screenshots): compare a quick record with a full baseline with `compare --common`.
 // --scenes shop,forge records only those ui / assets scenes; --merge keeps everything this run does not record from the file that
 // is already at <out.json> (to re-record one section or one scene of a golden file).
+// --classic-rng is for ONE comparison: against a record made before the Classic map was retired. Fights, graft tables, forges and
+// content probes were recorded on Classic runs then, and the map generator had drawn from run.rng before the scene's first draw. With
+// this flag the vehicles of those probes and scenes get that very stream (the retired generator's draws are replayed, see
+// classicMapDraws; no map is built), so everything that did not depend on the map compares equal. Never use it for a new reference.
 // --verify runs every child a second time in a fresh process and fails on any difference (the proof that a record is
 // deterministic); it also reports the scenes where a third pass in the same process still differs from the second.
 // Determinism: cold and warm differ by design (card faces, panel textures, sprite layers are cached per process), which is why
@@ -73,7 +81,8 @@ const VALUE_FLAGS = new Set(['root', 'only', 'scenes', 'resume-from', 'shots', '
 const positional = (() => { const out = []; for (let i = 1; i < argv.length; i++) { if (argv[i].startsWith('--')) { if (VALUE_FLAGS.has(argv[i].slice(2))) i++; continue; } out.push(argv[i]); } return out; })();
 const ROOT = path.resolve(opt('root', REPO));
 const QUICK = flag('quick');
-const TOOL_VERSION = 1;
+const CLASSIC_RNG = flag('classic-rng');
+const TOOL_VERSION = 2; // 2: Ward runs only (the Classic map is retired), bots from tools/graftwork_driver.mjs, --classic-rng
 const sha1 = (s) => createHash('sha1').update(s).digest('hex');
 const h12 = (s) => sha1(s).slice(0, 12);
 const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
@@ -122,36 +131,22 @@ const REAL_NOW = (() => { const hr = process.hrtime.bigint; return () => Number(
 // ---------------------------------------------------------------- engine: loader
 function memoryStorage() { const m = new Map(); globalThis.localStorage = { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); }, clear: () => m.clear() }; }
 async function loadEngine() {
-  const files = { RUN: 'graftwork/engine/run.js', C: 'graftwork/engine/combat.js', WD: 'graftwork/engine/ward.js', K: 'graftwork/engine/cards.js', D: 'graftwork/data/index.js', RNG: 'graftwork/engine/rng.js', TEXT: 'graftwork/engine/text.js', META: 'graftwork/engine/meta.js', UNL: 'graftwork/data/unlocks.js', WDATA: 'graftwork/data/ward.js', KIT: 'graftwork/data/ward_kit.js', KITBIG: 'graftwork/data/ward_kit_big.js', SIM: 'tools/graftwork_sim.mjs', STRONG: 'tools/graftwork_strong.mjs' };
+  const driver = fs.existsSync(path.join(ROOT, 'tools/graftwork_driver.mjs')); // the shared driver of the balance tools; an older root keeps the bots in two files
+  const files = { RUN: 'graftwork/engine/run.js', C: 'graftwork/engine/combat.js', WD: 'graftwork/engine/ward.js', K: 'graftwork/engine/cards.js', D: 'graftwork/data/index.js', RNG: 'graftwork/engine/rng.js', TEXT: 'graftwork/engine/text.js', META: 'graftwork/engine/meta.js', SAVE: 'graftwork/engine/save.js', UNL: 'graftwork/data/unlocks.js', WDATA: 'graftwork/data/ward.js', KIT: 'graftwork/data/ward_kit.js', KITBIG: 'graftwork/data/ward_kit_big.js', ...(driver ? { SIM: 'tools/graftwork_driver.mjs' } : { SIM: 'tools/graftwork_sim.mjs', STRONG: 'tools/graftwork_strong.mjs' }) };
   const E = {};
   for (const [k, f] of Object.entries(files)) E[k] = await imp(f);
-  E.pol = E.SIM.POLICIES.strong; // tools/graftwork_strong.mjs registers it on import
+  E.pol = E.SIM.POLICIES.strong; // the strong policy (an older root: tools/graftwork_strong.mjs registers it on import)
   E.wardPol = { ...E.pol, pickGraft: (run, pol) => wardPickGraft(E, run, pol) };
   return E;
 }
 
 // ---------------------------------------------------------------- engine: the run driver (one call = one screen's worth of decisions)
-// Fights, graft picks, shop, forge and events use the root's own bots (tools/graftwork_sim.mjs, tools/graftwork_strong.mjs). The map
-// choice and the Ward builder / walker are not exported there, so their logic is replicated here (from tools/graftwork_sim.mjs chooseNode
-// and tools/graftwork_ward_sim.mjs strongMorning / strongWalk); the walker's tie-break dice come from the run state, never from a
-// bot-side rng, so a run resumed from a save makes the same choices.
+// Fights, graft picks, shop, forge and events use the root's own bots (tools/graftwork_driver.mjs). The Ward builder and walker are
+// replicated here (from the driver's strongMorning / strongWalk) with one difference: the walker's tie-break dice come from the run
+// state, never from a bot-side rng, so a run resumed from a save makes the same choices.
 const fnv = (s) => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; };
 const manh = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
 const roomCount = (run, type) => Object.values(run.ward.rooms).filter((r) => r.type === type).length;
-
-function nodeChoice(E, run) {
-  const hpF = run.hp / run.maxHp;
-  const scored = E.RUN.availableNodes(run).map((id) => run.map.nodes[id]).map((n) => {
-    let s = run.rng.next() * 0.5;
-    if (n.type === 'forge') s += hpF < 0.65 ? 10 : hpF < 0.85 ? 3 : 0.5;
-    if (n.type === 'shop') s += run.gold >= 150 ? 6 : run.gold >= 80 ? 2 : 0;
-    if (n.type === 'event') s += hpF < 0.4 ? -1 : 2;
-    if (n.type === 'elite') s += hpF > 0.8 ? 3.5 : hpF > 0.6 ? 1 : -6;
-    if (n.type === 'fight') s += hpF < 0.35 ? -2 : 1.5;
-    return { n, s };
-  });
-  return scored.sort((a, b) => b.s - a.s)[0].n;
-}
 
 const WANT = { rm_sawmill: 2, rm_quarry: 2, rm_ward: 3, rm_isolation: 2, rm_chapel: 1, rm_dispensary: 1, rm_workshop: 1, rm_linen: 1, rm_counting: 1, rm_generator: 3, rm_pharmacy: 1, rm_library: 1, rm_morgue: 1, rm_kitchen: 1, rm_boiler: 1, rm_laundry: 1, rm_isolation2: 1 };
 const EXPAND_W = { rm_ward: 4.2, rm_workshop: 3.2, rm_chapel: 3, rm_library: 2.8, rm_kitchen: 2.4 };
@@ -301,10 +296,9 @@ const deckLine = (run) => run.deck.map((i) => i.id + (i.up ? '+' : '') + (i.graf
 
 // One step. Appends one line to the trace T: what was chosen, then hp/maxHp, gold and the rng state.
 function stepRun(E, run, T, o = {}) {
-  const { RUN, WD, SIM } = E, ward = run.mode === 'ward', pol = ward ? E.wardPol : E.pol;
+  const { RUN, WD, SIM } = E, pol = E.wardPol;
   let ev;
   switch (run.phase) {
-    case 'map': { const n = nodeChoice(E, run); RUN.enterNode(run, n.id); ev = ['node', n.id, n.type]; break; }
     case 'ward': {
       const w = run.ward, day = w.day, ph = w.phase;
       if (ph === 'morning') ev = ['morning', day, wardMorning(E, run).join(' ') || '-'];
@@ -314,7 +308,7 @@ function stepRun(E, run, T, o = {}) {
     case 'combat': {
       const p = run.pending, kind = p.fightKind, foes = p.enemies.join('+');
       if (o.deep) run.hp = run.maxHp;
-      const where = ward ? `d${run.ward.day}${run.ward.phase[0]}` : `f${run.stats.floors}`, act = run.act;
+      const where = `d${run.ward.day}${run.ward.phase[0]}`, act = run.act;
       const { res } = pol.fight(run, pol);
       RUN.resolveFight(run, res);
       ev = ['fight', 'a' + act, where, kind, foes, res.win ? 'win' : 'loss', 't' + res.turns];
@@ -325,8 +319,8 @@ function stepRun(E, run, T, o = {}) {
       RUN.claimGold(run, rw);
       if (rw.relic) { RUN.addRelic(run, rw.relic); ev.push('relic:' + rw.relic); }
       if (rw.relicChoices && rw.relicChoices.length) {
-        let id;
-        if (ward) { const classic = rw.relicChoices.filter((r) => !E.D.RELICS[r].ward); id = classic.length ? pol.pickRelic(classic) : rw.relicChoices[0]; } else id = pol.pickRelic(rw.relicChoices);
+        let id; // eslint-disable-line prefer-const
+        const plain = rw.relicChoices.filter((r) => !E.D.RELICS[r].ward); id = plain.length ? pol.pickRelic(plain) : rw.relicChoices[0]; // the ranking knows the combat relics; a building relic only when nothing else is offered
         RUN.addRelic(run, id); ev.push('pick:' + id + '/' + rw.relicChoices.join(','));
       }
       if (rw.potion) { RUN.addPotion(run, rw.potion); ev.push('potion:' + rw.potion); }
@@ -341,7 +335,7 @@ function stepRun(E, run, T, o = {}) {
     }
     case 'shop': {
       const shop = run.pending;
-      if (ward && shop.builds) { const want = shop.builds.map((b, i) => ({ b, i, v: buildValue(E, run, b.id) })).filter((x) => x.v >= 5 && run.gold >= x.b.price + 60).sort((a, b) => b.v - a.v)[0]; if (want) RUN.shopBuy(run, 'build', want.i); }
+      if (shop.builds) { const want = shop.builds.map((b, i) => ({ b, i, v: buildValue(E, run, b.id) })).filter((x) => x.v >= 5 && run.gold >= x.b.price + 60).sort((a, b) => b.v - a.v)[0]; if (want) RUN.shopBuy(run, 'build', want.i); }
       SIM.doShop(run, pol, { shops: 0 });
       ev = ['shop'];
       for (const k of ['cards', 'grafts', 'relics', 'potions', 'builds']) for (const it of shop[k] || []) ev.push((it.sold ? '*' : '') + it.id + '@' + it.price);
@@ -370,7 +364,7 @@ function finishRun(E, run, T, o = {}) {
   let guard = 0, looped = false;
   for (;;) {
     while (!ended(run) && guard++ < 4000) stepRun(E, run, T, o);
-    if (run.phase === 'won' && o.loop && !looped && run.mode !== 'ward') { looped = true; E.RUN.startLoop(run); run.phase = 'map'; T.push(`loop ${run.loop} | ${run.hp}/${run.maxHp} ${run.gold}g rng${run.rng.state}`); continue; } // Endless: what the end screen does
+    if (run.phase === 'won' && o.loop && !looped) { looped = true; E.RUN.startLoop(run); T.push(`loop ${run.loop} | ${run.hp}/${run.maxHp} ${run.gold}g rng${run.rng.state}`); continue; } // Endless: what the end screen does (the next loop opens on a fresh first floor)
     break;
   }
   return summarize(E, run, T);
@@ -384,30 +378,32 @@ function summarize(E, run, T) {
     save: sha1(payload), saveCanon: hc(JSON.parse(payload)), traceHash: sha1(T.join('\n')),
   };
 }
-function startRun(E, v, hero, mode, seed) {
-  const run = E.RUN.newRun({ hero, seed, mode: mode === 'ward' ? 'ward' : undefined, ascension: v.asc || 0, assist: v.assist, unlocked: v.unlocked || 'all', daily: v.daily });
+function startRun(E, v, hero, seed) {
+  const run = E.RUN.newRun({ hero, seed, ascension: v.asc || 0, assist: v.assist, unlocked: v.unlocked || 'all', daily: v.daily });
   if (v.deep) { run.maxHp += 200; run.hp = run.maxHp; } // the tool's own cheat: these seeds reach the late acts (and the final boss) whatever the bot does
   return run;
 }
 const RUN_VARIANTS = [
-  { tag: 'a0' }, { tag: 'deep', deep: true, loop: true }, // the two --quick seeds
+  { tag: 'a0' }, { tag: 'deep', deep: true }, // the two --quick seeds
   { tag: 'a0b' }, { tag: 'a4', asc: 4 }, { tag: 'a10deep', asc: 10, deep: true }, { tag: 'a7', asc: 7 },
   { tag: 'assist', assist: { on: true, sturdy: true, gentle: true, kind: true, mercy: true } }, { tag: 'start', unlocked: 'start' },
+  { tag: 'endless', deep: true, loop: true }, // a won run goes on into one Endless loop (added with the Classic retirement: `deep` keeps the trace it always had)
 ];
 function guarded(fn) { try { return fn(); } catch (e) { return { error: String(e && e.message || e).slice(0, 300) }; } }
 
 async function sectionEngine() {
   installDeterminism(); memoryStorage();
   const E = await loadEngine(), { RUN, D, META } = E;
-  const out = { runs: {}, daily: {}, probes: {} };
+  const out = { runs: {}, dailyWard: {}, probes: {} };
   const variants = QUICK ? RUN_VARIANTS.slice(0, 2) : RUN_VARIANTS;
   // what main.js does around a run (onRunStart, recordRunEnd): the meta progression (Credit, unlock points, achievements, history) is part
-  // of the golden. One profile plays the two --quick seeds of every hero and mode in a row; every other seed has a fresh profile.
+  // of the golden. One profile plays the two --quick seeds of every hero in a row; every other seed has a fresh profile.
+  // Keys and seeds keep the `ward` segment from the time there were two modes, so a record stays comparable with an older one.
   const career = META.defaultMeta();
-  for (const hero of HEROES) for (const mode of ['classic', 'ward']) for (const v of variants) {
-    const key = `${hero}.${mode}.${v.tag}`, T = [], meta = RUN_VARIANTS.indexOf(v) < 2 ? career : META.defaultMeta();
+  for (const hero of HEROES) for (const v of variants) {
+    const key = `${hero}.ward.${v.tag}`, T = [], meta = RUN_VARIANTS.indexOf(v) < 2 ? career : META.defaultMeta();
     out.runs[key] = guarded(() => {
-      const run = startRun(E, v, hero, mode, `golden-${key}`);
+      const run = startRun(E, v, hero, `golden-${key}`);
       if (META.onRunStart) META.onRunStart(meta, run);
       const s = finishRun(E, run, T, v);
       if (ended(run)) { run.ended = true; s.endInfo = hc(META.recordRunEnd(meta, run, run.phase === 'won' ? 'won' : 'dead')); s.metaAfter = hc(meta); }
@@ -415,11 +411,11 @@ async function sectionEngine() {
     });
     if (out.runs[key].error) out.runs[key].trace = T;
   }
-  if (!QUICK) { // one short classic run per Daily modifier (the hero rotates)
+  if (!QUICK) { // one run per Daily modifier (the hero rotates). `dailyWard`: the `daily` key of older records held Classic runs
     RUN.DAILY_MODS.forEach((m, i) => {
       let seed = null; for (let k = 0; k < 4000 && !seed; k++) { const s = `daily-2026-01-${String(1 + (k % 28)).padStart(2, '0')}-${k}`; if (E.RNG.hashSeed(s) % RUN.DAILY_MODS.length === i) seed = s; }
       const T = [];
-      out.daily[m.id] = guarded(() => finishRun(E, startRun(E, { daily: seed }, HEROES[i % 3], 'classic', seed), T, {}));
+      out.dailyWard[m.id] = guarded(() => finishRun(E, startRun(E, { daily: seed }, HEROES[i % 3], seed), T, {}));
     });
   }
   Object.assign(out.probes, probes(E));
@@ -453,8 +449,64 @@ function fightProbe(E, run, enemies, kind, turns, o = {}) {
   }
   return { c, turns: out, over: c.over || '-' };
 }
+// ---------------------------------------------------------------- --classic-rng: the stream a Classic run had
+// The retired map generator (engine/run.js genMap as it was at 5f3e252b), kept here for its random draws only: nothing is returned. A
+// vehicle that calls it after a bare newRun has the rng state a Classic run had when its first screen opened. See the header.
+function classicMapDraws(run, act) {
+  const rng = run.rng, COLS = 6;
+  const rows = { 1: 10, 2: 10, 3: 11 }[act];
+  const bossRows = act === 3 ? 2 : 1;
+  const nodes = [];
+  const byRow = [];
+  for (let r = 0; r < rows; r++) {
+    const last = r >= rows - bossRows;
+    const count = last ? 1 : (r === 0 ? rng.range(3, 4) : rng.range(2, 4));
+    const cols = last ? [2] : rng.sample([0, 1, 2, 3, 4, 5], count).sort((a, b) => a - b);
+    const row = cols.map((col) => ({ id: `${act}-${r}-${col}`, row: r, col, type: 'fight', next: [], visited: false }));
+    byRow.push(row); nodes.push(...row);
+  }
+  // edges: every node links to 1 or 2 nodes in the next row, and every node has an incoming edge
+  for (let r = 0; r < rows - 1; r++) {
+    const a = byRow[r], b = byRow[r + 1];
+    const nearest = (n) => b.slice().sort((x, y) => Math.abs(x.col - n.col) - Math.abs(y.col - n.col));
+    for (const n of a) {
+      const near = nearest(n);
+      n.next.push(near[0].id);
+      if (near[1] && rng.chance(0.45) && Math.abs(near[1].col - n.col) <= 2) n.next.push(near[1].id);
+    }
+    for (const m of b) if (!a.some((n) => n.next.includes(m.id))) { const n = a.slice().sort((x, y) => Math.abs(x.col - m.col) - Math.abs(y.col - m.col))[0]; n.next.push(m.id); }
+  }
+  // types
+  const set = (n, type) => { n.type = type; };
+  const bossRow = rows - bossRows;
+  if (act === 3) { set(byRow[rows - 2][0], 'boss'); set(byRow[rows - 1][0], 'final'); } else set(byRow[rows - 1][0], 'boss');
+  const forgeRow = bossRow - 1;
+  for (const n of byRow[forgeRow]) set(n, 'forge');
+  for (const n of byRow[0]) set(n, 'fight');
+  const mid = nodes.filter((n) => n.row >= 1 && n.row < forgeRow);
+  const weights = [['fight', 52], ['event', 20], ['shop', 8], ['forge', 8], ['elite', 12]];
+  for (const n of mid) {
+    let w = weights.filter(([t]) => (t !== 'elite' || n.row >= 3) && (t !== 'shop' || n.row >= 2) && (t !== 'forge' || n.row >= 3));
+    if (n.row === forgeRow - 1) w = w.filter(([t]) => t !== 'forge');
+    set(n, rng.weighted(w, ([, k]) => k)[0]);
+  }
+  // guarantees: a shop around the middle, at least 2 elites (3 on A1+), and two events
+  const need = (type, count, rowMin, rowMax) => {
+    let have = mid.filter((n) => n.type === type).length;
+    const pool = mid.filter((n) => n.row >= rowMin && n.row <= rowMax && n.type === 'fight');
+    while (have < count && pool.length) { set(pool.splice(rng.int(pool.length), 1)[0], type); have++; }
+  };
+  need('shop', 1, 3, 6); need('elite', 2 + (run.ascension >= 1 ? 1 : 0), 3, forgeRow - 1); need('event', 2, 1, forgeRow - 2);
+  // no two shops or forges in a row on one path would be nice; keep it simple
+  for (const n of nodes) { n.x = (n.col + 0.5) / COLS + (rng.next() - 0.5) * 0.04; }
+}
+
+// The run a probe happens on. o.ward: a Ward run with its first floor laid out (what the content needs a floor for, or always had one).
+// Otherwise a bare run, no floor: a fight, a potion or a card needs none. (--classic-rng: plus the draws of the retired map generator,
+// which is the run those probes were recorded on before the retirement.)
 function probeRun(E, hero, seed, o = {}) {
-  const run = E.RUN.newRun({ hero, seed, mode: o.ward ? 'ward' : undefined });
+  const run = E.RUN.newRun({ hero, seed, bare: !o.ward });
+  if (!o.ward && CLASSIC_RNG) classicMapDraws(run, 1);
   run.maxHp = run.hp = 400; if (o.act) run.act = o.act;
   return run;
 }
@@ -526,7 +578,7 @@ function probes(E) {
   P.relic = {}; P.potion = {};
   Object.values(D.RELICS).forEach((r, i) => {
     P.relic[r.id] = g(() => {
-      const run = probeRun(E, HEROES.includes(r.hero) ? r.hero : HEROES[i % 3], 'probe-relic-' + r.id, { ward: !!r.ward });
+      const run = probeRun(E, HEROES.includes(r.hero) ? r.hero : HEROES[i % 3], 'probe-relic-' + r.id, { ward: !!r.ward || !CLASSIC_RNG }); // a relic reaches into the reward and the shop: it is probed on a floor
       const added = RUN.addRelic(run, r.id);
       run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: DUMMIES.slice() };
       const f = fightProbe(E, run, DUMMIES, 'normal', 4, {}), res = C.finishCombat(f.c);
@@ -541,7 +593,7 @@ function probes(E) {
   P.event = {};
   Object.values(D.EVENTS).forEach((ev, i) => {
     const prep = () => {
-      const run = probeRun(E, HEROES[i % 3], 'probe-event-' + ev.id, { ward: !!ev.ward, act: ev.act || 1 });
+      const run = probeRun(E, HEROES[i % 3], 'probe-event-' + ev.id, { ward: !!ev.ward || !CLASSIC_RNG, act: ev.act || 1 }); // an event ends back on the Ward
       run.gold = 300; run.hp = 250;
       graftsFor(run.deck[0], 1, fnv(ev.id) % GL.length); graftsFor(run.deck[1], 2, (fnv(ev.id) + 29) % GL.length);
       run.deck.push(K.newInst('j_clot', () => run.uidNext++));
@@ -559,10 +611,10 @@ function probes(E) {
     });
     P.event[ev.id] = o;
   });
-  // a fresh run for every hero, mode and ascension: the map or the Ward floor, the deck, the first offers
+  // a fresh run for every hero and ascension 0 / 5 / 10: the Ward floor, the deck, the first offers
   P.newRun = {};
-  for (const hero of HEROES) for (const mode of ['classic', 'ward']) for (let asc = 0; asc <= 10; asc += (mode === 'ward' ? 5 : 1)) P.newRun[`${hero}.${mode}.a${asc}`] = g(() => {
-    const run = RUN.newRun({ hero, seed: `probe-new-${hero}-${asc}`, ascension: asc, mode: mode === 'ward' ? 'ward' : undefined });
+  for (const hero of HEROES) for (let asc = 0; asc <= 10; asc += 5) P.newRun[`${hero}.ward.a${asc}`] = g(() => {
+    const run = RUN.newRun({ hero, seed: `probe-new-${hero}-${asc}`, ascension: asc });
     const o = { run: h12(RUN.serializeRun(run)) };
     for (const act of [2, 3]) { RUN.startAct(run, act); o['act' + act] = h12(RUN.serializeRun(run)); }
     o.shop = hc(RUN.makeShop(run)); o.offer = hc(RUN.makeGraftOffer(run)); o.encounters = ['normal', 'elite', 'boss', 'final'].map((k) => RUN.makeEncounter(run, k).join('+')).join(' ');
@@ -590,7 +642,7 @@ function probes(E) {
   // every building card: where it may be played on a fixed floor, and the floor after its first legal play
   P.buildCard = {};
   for (const id of Object.keys(E.WDATA.BUILD_CARDS)) P.buildCard[id] = g(() => {
-    const run = RUN.newRun({ hero: 'marrow', seed: 'probe-build', mode: 'ward' }), w = run.ward;
+    const run = RUN.newRun({ hero: 'marrow', seed: 'probe-build' }), w = run.ward;
     passDay(WD, run); // day 2: the first rooms hold something
     w.res.wood = 40; w.res.stone = 40; run.gold = 500;
     const inst = { uid: 9000, id }; w.deck.hand.push(inst);
@@ -610,14 +662,14 @@ const RESUME_OPTS = { deep: true };
 const RESUME_CASES = [
   { tag: 'k17', steps: 17 }, // --quick: k17, combat, walk
   { tag: 'combat', min: 8, when: (run) => run.phase === 'combat', midCombat: 2 },
-  { tag: 'walk', ward: true, min: 6, when: (run) => run.phase !== 'ward' && !!run.ward.walk && run.ward.walk.i < run.ward.walk.path.length },
+  { tag: 'walk', min: 6, when: (run) => run.phase !== 'ward' && !!run.ward.walk && run.ward.walk.i < run.ward.walk.path.length },
   { tag: 'k5', steps: 5 }, { tag: 'k41', steps: 41 }, { tag: 'k90', steps: 90 },
   { tag: 'graft', min: 4, afterLine: (l) => l.startsWith('graft ') },
   { tag: 'reward', min: 10, when: (run) => run.phase === 'reward' },
   { tag: 'event', min: 6, when: (run) => run.phase === 'event' },
   { tag: 'shop', min: 6, when: (run) => run.phase === 'shop' },
-  { tag: 'night', ward: true, min: 6, when: (run) => run.phase === 'ward' && run.ward.phase === 'night' },
-  { tag: 'day3', ward: true, min: 6, when: (run) => run.phase === 'ward' && run.ward.phase === 'morning' && run.ward.day >= 3 },
+  { tag: 'night', min: 6, when: (run) => run.phase === 'ward' && run.ward.phase === 'night' },
+  { tag: 'day3', min: 6, when: (run) => run.phase === 'ward' && run.ward.phase === 'morning' && run.ward.day >= 3 },
 ];
 // what "Save and quit" from the pause menu stores in the middle of a fight: the run object as the fight left it so far
 function partialCombat(E, run, turns) {
@@ -633,39 +685,49 @@ function partialCombat(E, run, turns) {
   }
   return `turn ${c.turn}${c.over ? ' over ' + c.over : ''}`;
 }
-function makeSave(E, hero, mode, cs) {
-  const run = startRun(E, RESUME_OPTS, hero, mode, `golden-resume-${hero}-${mode}`), T = [];
+function makeSave(E, hero, cs) {
+  const run = startRun(E, RESUME_OPTS, hero, `golden-resume-${hero}-ward`), T = [];
   let prev = E.RUN.serializeRun(run), at = 'start', n = 0;
   const hit = () => (cs.steps !== undefined ? n >= cs.steps : n >= (cs.min || 0) && ((cs.when && cs.when(run)) || (cs.afterLine && T.length && cs.afterLine(T[T.length - 1]))));
   while (!ended(run) && n < 3000 && !hit()) { prev = E.RUN.serializeRun(run); stepRun(E, run, T, RESUME_OPTS); n++; }
   if (ended(run)) return { payload: prev, at: `before the last step (${n - 1} steps, the run ended before the save point)` }; // a finished run has no save
-  at = `${n} steps, ${run.phase}${run.ward ? ' day ' + run.ward.day + ' ' + run.ward.phase : ' act ' + run.act}`;
+  at = `${n} steps, ${run.phase} day ${run.ward.day} ${run.ward.phase}`;
   if (cs.midCombat && run.phase === 'combat') at += ', ' + partialCombat(E, run, cs.midCombat);
   return { payload: E.RUN.serializeRun(run), at };
 }
 function continueSave(E, payload, o) { const run = E.RUN.deserializeRun(payload), T = []; return finishRun(E, run, T, o); }
 async function sectionResume() {
   installDeterminism(); memoryStorage();
-  const E = await loadEngine(), out = { cases: {}, fixture: {} }, payloads = {};
+  const E = await loadEngine(), out = { cases: {}, wardFixture: {}, retired: {} }, payloads = {};
   const base = opt('resume-from', null) ? JSON.parse(fs.readFileSync(path.resolve(opt('resume-from')), 'utf8')) : null;
   const cases = QUICK ? RESUME_CASES.slice(0, 3) : RESUME_CASES;
-  for (const hero of HEROES) for (const mode of ['classic', 'ward']) for (const cs of cases) {
-    if (cs.ward && mode !== 'ward') continue;
-    const key = `${hero}.${mode}.${cs.tag}`;
+  for (const hero of HEROES) for (const cs of cases) {
+    const key = `${hero}.ward.${cs.tag}`;
     out.cases[key] = guarded(() => {
-      const fresh = makeSave(E, hero, mode, cs);
+      const fresh = makeSave(E, hero, cs);
       const from = base && base.payloads && base.payloads[key] !== undefined ? base.payloads[key] : fresh.payload;
       payloads[key] = from;
       // savedBy: what THIS root's code writes at the save point. end: where the stored payload (the baseline's with --resume-from) ends up under this root's code.
       return { at: fresh.at, savedBy: sha1(fresh.payload), savedByCanon: hc(JSON.parse(fresh.payload)), bytes: fresh.payload.length, end: continueSave(E, from, RESUME_OPTS) };
     });
   }
-  // saves written by an older commit (the regression fixture): load and play each to the end
   const dir = [path.join(ROOT, 'tests/fixtures'), path.join(REPO, 'tests/fixtures')].find((d) => fs.existsSync(d));
-  for (const f of dir ? fs.readdirSync(dir).filter((n) => /^graftwork_oldsave_.*\.json$/.test(n)).sort() : []) {
-    const fx = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')), tag = f.replace(/^graftwork_oldsave_|\.json$/g, '');
-    for (const hero of Object.keys(fx)) fx[hero].forEach((s, i) => { out.fixture[`${tag}.${hero}.${i}.${s.phase}`] = guarded(() => ({ payload: sha1(s.json), end: continueSave(E, s.json, {}) })); });
-  }
+  const fixtures = (re) => (dir ? fs.readdirSync(dir).filter((n) => re.test(n)).sort() : []).map((f) => [f.replace(/^graftwork_[a-z]+save_|\.json$/g, ''), JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))]);
+  // Ward saves written by an older commit (tests/fixtures/graftwork_wardsave_*.json): load and play each to the end
+  for (const [tag, fx] of fixtures(/^graftwork_wardsave_.*\.json$/)) for (const hero of Object.keys(fx)) fx[hero].forEach((sv, i) => { out.wardFixture[`${tag}.${hero}.${i}.${sv.phase}`] = guarded(() => ({ payload: sha1(sv.json), end: continueSave(E, sv.json, { deep: !!sv.deep }) })); });
+  // Saves from before the Ward (tests/fixtures/graftwork_oldsave_*.json) are runs on the retired Classic map: no longer played on. Each one is put
+  // where the game looks for a save and closed by the engine (engine/meta.js retireClassicRun: counted like an abandoned run, deleted, a notice left).
+  const { META, SAVE } = E, RUN_KEY = 'graftwork_run_v1';
+  for (const [tag, fx] of fixtures(/^graftwork_oldsave_.*\.json$/)) for (const hero of Object.keys(fx)) fx[hero].forEach((sv, i) => {
+    out.retired[`${tag}.${hero}.${i}.${sv.phase}`] = guarded(() => {
+      if (!META.retireClassicRun) return { error: 'this root has no retireClassicRun' };
+      globalThis.localStorage.clear(); globalThis.localStorage.setItem(RUN_KEY, sv.json);
+      const meta = META.defaultMeta(), info = META.retireClassicRun(meta), h = meta.history[0] || {};
+      return { payload: sha1(sv.json), closed: !!info, saveLeft: SAVE.hasRun(), notice: String(meta.notice), endInfo: hc(info), metaAfter: hc(meta),
+        history: `${h.hero} ${h.outcome} floors ${h.floors} grafts ${h.grafts}`, stats: canon(meta.stats), up: info && info.unlock ? info.unlock.up : null, credit: canon(meta.credit), again: META.retireClassicRun(meta) === null };
+    });
+  });
+  globalThis.localStorage.clear();
   return { resume: out, payloads, resumeFrom: base ? path.resolve(opt('resume-from')) : null };
 }
 
@@ -842,7 +904,28 @@ function enrich(S, o = {}) {
   S.note('deck ' + deckLine(run).slice(0, 4).join(' ') + ' relics ' + run.relics.join(','));
   return run;
 }
-const startRunUi = (S, hero, seed, o = {}) => { S.flow.start({ hero, seed: 'golden-ui-' + seed, mode: o.ward ? 'ward' : undefined, ascension: o.asc || 0 }); return S.run; };
+// Start a run through the real flow: it opens on the Ward. (--classic-rng, for the scenes that were recorded on a Classic run: that run
+// without its map, a bare run with the map generator's draws, parked on an empty screen where the map screen used to be.)
+const startRunUi = (S, hero, seed, o = {}) => {
+  const opts = { hero, seed: 'golden-ui-' + seed, ascension: o.asc || 0 };
+  if (!CLASSIC_RNG || o.ward) { S.flow.start(opts); return S.run; }
+  const { RUN, META } = S.M, app = S.app, run = RUN.newRun(META.withUnlocks(app.shared.meta, { ...opts, bare: true }));
+  classicMapDraws(run, 1);
+  app.shared.run = run; if (META.onRunStart) META.onRunStart(app.shared.meta, run);
+  if (!app.screens.golden_parked) app.register('golden_parked', { draw() {} });
+  app.go('golden_parked', { run });
+  return run;
+};
+// the next floor of a run (--classic-rng: what the next act of a Classic run drew)
+const toAct = (S, run, act) => { if (CLASSIC_RNG && !run.ward) { run.act = act; classicMapDraws(run, act); } else S.M.RUN.startAct(run, act); };
+// an event as the Chapel draws it (--classic-rng: the uniform draw a Classic event node made)
+function drawEvent(S, run) {
+  const { WD, D, META } = S.M;
+  if (!CLASSIC_RNG || run.ward) return WD.wardStartEvent(run);
+  const pool = Object.values(D.EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id) && !e.ward), open = pool.filter((e) => META.runAllows(run, e.id));
+  const ev = run.rng.pick(open.length ? open : pool); run.seenEvents.push(ev.id); run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null };
+  return run.pending;
+}
 function fightUi(S, enemies, kind = 'normal') { const run = S.run; run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: kind, enemies }; S.flow.route(); }
 // a turn through the real widgets: card, then target; the trail keeps what the engine saw
 function playCards(S, n) {
@@ -866,7 +949,7 @@ function buildHospital(S) {
 // ---------------------------------------------------------------- ui / assets: the scenes
 // A scene is { enter(S), inputs(S), pre = 90, post = 60, tips, veteran }: enter, `pre` frames, the scripted inputs, `post` frames.
 // Scripts only use what a player can see: registered rectangles, button labels, keys. Game state is prepared through the engine.
-const wardStart = (S, hero, seed) => startRunUi(S, hero, seed, { ward: true });
+const wardStart = (S, hero, seed) => startRunUi(S, hero, seed, { ward: true }); // the scenes that have always been Ward scenes
 // plan n route steps: click the floor of a legal room (rooms that hold something first; ui/ward.js cellCenter gives the floor's screen point),
 // or walk the keyboard focus when that export is gone
 function wardRoute(S, n, o = {}) {
@@ -893,17 +976,15 @@ const pickerEvent = (S) => { // the first event that offers a card pick on this 
 const SCENES = { ui: {
   title: { inputs(S) { S.hoverBtn(/^New Run/, 14); S.key('Tab'); S.key('Tab'); S.key('ArrowDown'); S.frames(6); S.hoverRect('title-hero-card', 14); S.hoverRect('title-archive', 14); S.hoverBtn(/^Settings/, 10); S.away(); } },
   title_intro: { enter(S) { S.app.go('title', { intro: true }); }, inputs(S) { S.frames(110); S.key(' '); S.frames(20); } },
-  title_select: { enter(S) { S.frames(40); S.clickBtn(/^New Run/); }, inputs(S) { S.clickBtn(/^>$/); S.frames(10); S.hoverRect('title-mode', 12); S.clickRect('title-mode'); S.frames(10); S.hoverRect('title-assist', 12); S.key('ArrowRight'); S.frames(8); S.hoverBtn(/^Begin/, 10); } },
+  title_select: { enter(S) { S.frames(40); S.clickBtn(/^New Run/); }, inputs(S) { S.clickBtn(/^>$/); S.frames(10); S.hoverRect('title-assist', 12); S.key('ArrowRight'); S.frames(8); S.hoverBtn(/^Begin/, 10); } },
   title_veteran: { veteran: true, enter(S) { startRunUi(S, 'wick', 'veteran'); S.flow.toTitle(); }, inputs(S) { S.hoverBtn(/^Continue/, 14); S.hoverRect('title-hero-card', 12); S.clickBtn(/^Credits/); S.frames(50); S.key('Escape'); S.frames(20); S.hoverBtn(/^Daily Run/, 10); S.clickBtn(/^Daily Run/); } },
-  map: { enter(S) { startRunUi(S, 'marrow', 'map'); enrich(S); }, inputs(S) { for (let i = 0; i < 3; i++) S.hoverRect(/^node:/, 10, i); S.hoverRect('map-relic0', 12); S.hoverRect('map-potion0', 12); S.hoverRect('map-school0', 12); S.hoverRect('map-hp', 10); S.wheel(180); S.frames(10); S.wheel(-180); S.frames(10); S.clickRect('node:' + S.M.RUN.availableNodes(S.run)[0]); } },
-  map_act3: { enter(S) { const run = startRunUi(S, 'odile', 'map3', { asc: 3 }); enrich(S, { overload: true }); S.M.RUN.startAct(run, 3); run.hp = Math.round(run.maxHp * 0.3); S.flow.route(); }, inputs(S) { S.wheel(-240); S.frames(12); for (let i = 2; i < 5; i++) S.hoverRect(/^node:/, 8, i); S.hoverRect('map-school3', 12); S.hoverBtn(/^Deck/, 8); S.hoverBtn(/^Abandon/, 8); S.clickBtn(/^Abandon/); S.frames(16); S.key('Escape'); } },
   ward_morning: { pre: 190, enter(S) { wardStart(S, 'marrow', 'ward'); }, inputs(S) { S.hoverRect('ward-card0', 14); S.hoverRect('ward-card2', 10); S.clickRect('ward-card0'); S.frames(10); S.key('Tab'); S.frames(6); S.key('Tab'); S.frames(6); S.key('Enter'); S.frames(30); S.hoverRect(/^ward-room-/, 14, 0); S.hoverRect('ward-res', 10); S.clickBtn(/^View$/); S.frames(30); S.key('Escape'); S.frames(8); S.hoverRect('ward-clock', 12); } },
   ward_midday: { pre: 190, enter(S) { wardStart(S, 'wick', 'ward-midday'); S.M.WD.endMorning(S.run); }, inputs(S) { S.frames(60); wardRoute(S, 2, { keys: true }); S.hoverRect(/^ward-room-/, 14, 1); S.clickBtn(/^Undo step/); S.frames(10); wardRoute(S, 2, { quiet: true }); S.key('Backspace'); S.frames(8); S.hoverRect('ward-die', 12); S.hoverRect('ward-strip', 10); S.clickBtn(/^\+$/); S.frames(12); S.key('c'); S.frames(12); } },
   ward_evening: { pre: 190, enter(S) { const run = wardStart(S, 'odile', 'ward-evening'); S.M.WD.endMorning(run); S.M.WD.startWalk(run, run.ward.hero.room); S.note('phase ' + run.phase + ' ' + run.ward.phase); S.flow.route(); }, inputs(S) { S.key('w'); S.frames(14); S.key('w'); S.frames(14); for (let i = 0; i < 3; i++) S.hoverRect(/^ward-room-/, 10, i); S.clickBtn(/^-$/); S.frames(12); S.key('f'); S.frames(8); wardRoute(S, 1, { quiet: true }); S.hoverRect('ward-hero', 10); } },
   ward_night: { pre: 190, enter(S) { const run = wardStart(S, 'marrow', 'ward-night'); const WD = S.M.WD; WD.endMorning(run); for (let i = 0; i < 2 && run.phase === 'ward'; i++) WD.startWalk(run, run.ward.hero.room); S.note('phase ' + run.phase + ' ' + run.ward.phase); S.flow.route(); }, post: 240, inputs(S) { for (let i = 0; i < 2; i++) S.hoverRect(/^ward-room-/, 12, i); S.hoverBtn(/^Wait/, 10); S.clickBtn(/^Wait/); } },
   ward_built: { pre: 190, post: 300, enter(S) { const run = wardStart(S, 'marrow', 'ward-built'); buildHospital(S); S.M.WD.endMorning(run); }, inputs(S) { for (let i = 0; i < 12; i += 3) S.hoverRect(/^ward-room-/, 8, i); S.key('w'); S.frames(10); wardRoute(S, 3); S.key('g'); } },
   combat: { pre: 170, enter(S) { startRunUi(S, 'marrow', 'combat'); enrich(S); fightUi(S, ['bedpan_slime', 'gauze_mummy']); }, post: 260, inputs(S) { S.hoverRect(/^hand_/, 16, 0); S.hoverRect('en1:intent', 16); S.hoverRect('seamRail', 10); S.hoverRect('strain', 10); playCards(S, 2); S.note('after plays ' + S.state()); S.clickBtn(/^END TURN/); } },
-  combat_elite: { pre: 170, post: 260, enter(S) { const run = startRunUi(S, 'wick', 'elite', { asc: 5 }); S.M.RUN.startAct(run, 2); enrich(S, { overload: true, up: true }); fightUi(S, ['the_appraiser'], 'elite'); }, inputs(S) { S.hoverRect('potion0', 12); S.clickRect('potion0'); S.frames(10); S.clickRect(/^en\d+:body$/); S.frames(40); S.hoverRect(/^status:/, 12); playCards(S, 3); S.hoverRect('pile_draw', 10); S.clickRect('pile_disc'); S.frames(20); S.key('Escape'); S.frames(8); S.clickBtn(/^END TURN/); } },
+  combat_elite: { pre: 170, post: 260, enter(S) { const run = startRunUi(S, 'wick', 'elite', { asc: 5 }); toAct(S, run, 2); enrich(S, { overload: true, up: true }); fightUi(S, ['the_appraiser'], 'elite'); }, inputs(S) { S.hoverRect('potion0', 12); S.clickRect('potion0'); S.frames(10); S.clickRect(/^en\d+:body$/); S.frames(40); S.hoverRect(/^status:/, 12); playCards(S, 3); S.hoverRect('pile_draw', 10); S.clickRect('pile_disc'); S.frames(20); S.key('Escape'); S.frames(8); S.clickBtn(/^END TURN/); } },
   combat_boss: { pre: 170, post: 300, enter(S) { startRunUi(S, 'odile', 'boss'); enrich(S); fightUi(S, ['the_matron'], 'boss'); }, inputs(S) { S.hoverRect(/^en\d+:name$/, 12); playCards(S, 2); S.clickBtn(/^Deck/); S.frames(24); S.clickRect('deck-x'); S.frames(10); S.clickBtn(/^END TURN/); S.frames(240); playCards(S, 3); S.clickBtn(/^END TURN/); } },
   combat_three: { pre: 170, post: 260, enter(S) { startRunUi(S, 'marrow', 'three'); fightUi(S, ['stitch_rat', 'pill_swarm', 'night_nurse']); }, inputs(S) { const r = S.rect(/^hand_/, 1), e = S.rect('en2:body'); if (r && e) S.drag(r.x + r.w / 2, r.y + r.h / 2, e.x + e.w / 2, e.y + e.h / 2); S.frames(34); playCards(S, 2); S.key('e'); S.frames(10); S.key('e'); } },
   combat_tips: { tips: true, pre: 200, post: 200, enter(S) { startRunUi(S, 'marrow', 'tips'); fightUi(S, ['orderly']); }, inputs(S) { S.tap(640, 360); S.frames(30); S.hoverRect(/^hand_/, 20, 1); S.hoverRect('orb', 20); playCards(S, 2); S.frames(20); S.clickBtn(/^END TURN/); } },
@@ -914,7 +995,7 @@ const SCENES = { ui: {
   shop: { enter(S) { const run = startRunUi(S, 'wick', 'shop'); enrich(S, { gold: 520 }); run.deck.push(S.M.K.newInst('j_clot', () => run.uidNext++)); run.phase = 'shop'; run.pending = S.M.RUN.makeShop(run); S.flow.route(); }, post: 120, inputs(S) { for (const id of ['shop-card0', 'shop-graft0', 'shop-relic0', 'shop-potion0']) S.hoverRect(id, 12); S.clickRect('shop-card1'); S.frames(30); S.clickRect('shop-potion1'); S.frames(30); S.clickRect('shop-relic0'); S.frames(30); S.note('gold ' + S.run.gold + ' deck ' + S.run.deck.length + ' relics ' + S.run.relics.length); S.clickRect('shop-graft1'); S.frames(24); S.tapIn('scroll-modal', 100, 93); S.frames(40); if (S.rect('modal')) S.clickBtn(/^Back$/); S.frames(110); S.clickBtn(/^Remove a card/); S.frames(24); S.tapIn('scroll-modal', 100, 93); S.frames(40); if (S.rect('modal')) S.clickBtn(/^Back$/); S.note('gold ' + S.run.gold + ' deck ' + deckLine(S.run).slice(0, 3).join(' ') + ' x' + S.run.deck.length); } },
   forge: { post: 200, enter(S) { const run = startRunUi(S, 'odile', 'forge'); enrich(S, { overload: true }); run.hp = Math.round(run.maxHp * 0.5); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; S.flow.route(); }, inputs(S) { for (let i = 0; i < 6; i++) S.hoverRect('forge-opt' + i, 8); S.clickRect('forge-opt0'); S.frames(30); S.note('forge ' + JSON.stringify(S.run.pending)); } },
   forge_temper: { post: 240, enter(S) { const run = startRunUi(S, 'marrow', 'temper'); enrich(S, { overload: true }); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; S.flow.route(); }, inputs(S) { S.hoverRect('forge-opt3', 10); S.clickRect('forge-opt3'); S.frames(30); S.at(160, 250, 12); S.tapIn('scroll-modal', 100, 93); S.frames(30); S.note('forge ' + JSON.stringify(S.run.pending) + ' deck ' + deckLine(S.run).slice(0, 3).join(' ')); } },
-  event: { pre: 200, post: 120, enter(S) { const run = startRunUi(S, 'marrow', 'event'); enrich(S); S.M.RUN.startEvent(run); S.note('event ' + (run.pending && run.pending.id)); S.flow.route(); }, inputs(S) { S.tapIn('event-panel', 60, 30); S.frames(20); S.hoverRect('event-choice0', 12); S.hoverRect('event-choice1', 12); S.hoverRect('event-hud', 8); S.clickRect(/^event-choice/, S.M.RUN.eventChoices(S.run).findIndex((c) => c.ok && !c.pick)); S.frames(60); S.note('result ' + (S.run.pending && S.run.pending.result ? 'shown' : 'none') + ' ' + S.state()); S.clickBtn(/^Continue/); } },
+  event: { pre: 200, post: 120, enter(S) { const run = startRunUi(S, 'marrow', 'event'); enrich(S); drawEvent(S, run); S.note('event ' + (run.pending && run.pending.id)); S.flow.route(); }, inputs(S) { S.tapIn('event-panel', 60, 30); S.frames(20); S.hoverRect('event-choice0', 12); S.hoverRect('event-choice1', 12); S.hoverRect('event-hud', 8); S.clickRect(/^event-choice/, S.M.RUN.eventChoices(S.run).findIndex((c) => c.ok && !c.pick)); S.frames(60); S.note('result ' + (S.run.pending && S.run.pending.result ? 'shown' : 'none') + ' ' + S.state()); S.clickBtn(/^Continue/); } },
   event_picker: { pre: 200, post: 120, enter(S) { startRunUi(S, 'wick', 'picker'); enrich(S, { up: true }); const ev = pickerEvent(S); S.pick = ev; S.note('event ' + JSON.stringify(ev)); S.flow.route(); }, inputs(S) { if (!S.pick) return; S.tapIn('event-panel', 60, 30); S.frames(20); S.clickRect('event-choice' + S.pick.i); S.frames(30); S.note('picker ' + (S.rect('event-picker') ? 'open' : 'closed')); S.at(300, 300, 12); S.wheel(120); S.frames(8); S.wheel(-120); S.frames(8); S.scanTap('scroll-picker', 0.3, () => !S.rect('event-picker')); S.frames(100); S.note('result ' + (S.run.pending && S.run.pending.result ? 'shown' : 'none') + ' deck ' + deckLine(S.run).slice(0, 3).join(' ')); S.clickBtn(/^Continue/); } },
   deckview: { enter(S) { startRunUi(S, 'marrow', 'deck'); enrich(S, { overload: true, up: true }); S.flow.openDeck(); }, inputs(S) { S.clickBtn(/^Attack$/); S.frames(10); S.clickBtn(/^Grafted only$/); S.frames(10); S.clickBtn(/^All$/); S.frames(8); S.clickBtn(/^Cost$/); S.frames(10); S.at(420, 330, 16); S.wheel(240); S.frames(10); S.wheel(-240); S.frames(8); S.tap(420, 330); S.frames(30); S.key('Escape'); S.frames(8); S.hoverRect('deck-x', 8); } },
   codex: { veteran: true, enter(S) { S.flow.openCodex(); }, post: 40, inputs(S) { for (let i = 1; i < 8; i++) { S.clickRect('codex-tab' + i); S.frames(12); S.at(420, 360, 8); S.wheel(200); S.frames(4); } S.clickRect('codex-tab0'); S.frames(10); S.clickBtn(/^Wick$/); S.frames(10); S.tap(330, 330); S.frames(24); S.key('Escape'); } },
@@ -1005,7 +1086,7 @@ const SHOT_VIEWS = [
   { id: 'desk', viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 },
   { id: 'phone', viewport: { width: 1000, height: 462 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' },
 ];
-const SHOT_STATES = ['title', 'ward_built', 'combat', 'graft', 'shop', 'title_select', 'map', 'ward_morning', 'combat_boss', 'reward', 'forge', 'event', 'deckview', 'codex', 'pause', 'end_won', 'end_dead']; // --quick: the first five
+const SHOT_STATES = ['title', 'ward_built', 'combat', 'graft', 'shop', 'title_select', 'ward_morning', 'combat_boss', 'reward', 'forge', 'event', 'deckview', 'codex', 'pause', 'end_won', 'end_dead']; // --quick: the first five
 const SHOT_INIT = `(() => {
   let clock = 1e6, seed = 0x9e3779b9;
   const EPOCH = 1767571200000, RealDate = Date;
@@ -1035,7 +1116,7 @@ async function shotSetup(name) {
   G.hook(); G.reset();
   while (app.stack.length > 1) app.pop();
   try { localStorage.removeItem('graftwork_run_v1'); } catch (e) { /* no storage */ }
-  const start = (hero, seed, mode) => { flow.start({ hero, seed: 'golden-shot-' + seed, mode }); return app.shared.run; };
+  const start = (hero, seed) => { flow.start({ hero, seed: 'golden-shot-' + seed }); return app.shared.run; };
   const rich = (run) => {
     let k = 3;
     for (const [idx, n] of [[0, 1], [1, 2], [2, 3]]) { const inst = run.deck[idx]; for (let g = 0; g < D.GRAFT_LIST.length && inst.grafts.length < n; g++, k += 7) { const gid = D.GRAFT_LIST[k % D.GRAFT_LIST.length].id; if (K.canGraft(inst, gid)) RUN.applyGraft(run, inst.uid, gid, { keepPhase: true }); } }
@@ -1048,10 +1129,9 @@ async function shotSetup(name) {
   switch (name) {
     case 'title': app.shared.run = null; flow.toTitle(); break;
     case 'title_select': app.shared.run = null; flow.toTitle(); G.tick(12, 0.05); G.clickBtn('^New Run'); break;
-    case 'map': rich(start('marrow', 'map')); break;
-    case 'ward_morning': start('marrow', 'ward', 'ward'); ticks = 70; break;
+    case 'ward_morning': start('marrow', 'ward'); ticks = 70; break;
     case 'ward_built': {
-      const run = start('wick', 'built', 'ward'), w = run.ward; w.res.wood = 60; w.res.stone = 60; run.gold = 900; w.deck.hand = [];
+      const run = start('wick', 'built'), w = run.ward; w.res.wood = 60; w.res.stone = 60; run.gold = 900; w.deck.hand = [];
       for (const id of ['b_corridor', 'b_ward_wing', 'b_generator', 'b_dispensary', 'b_workshop', 'b_isolation', 'b_corridor', 'b_linen']) { if (!WD.BUILD_CARDS[id]) continue; const c = { uid: 9000 + w.cardNext++, id }; w.deck.hand.push(c); for (const [x, y] of WD.buildCells(run)) if (WD.playBuildCard(run, c.uid, { x, y }).ok) break; }
       WD.endMorning(run); for (let i = 0; i < 3 && run.phase === 'ward' && w.phase !== 'morning'; i++) WD.startWalk(run, w.hero.room); // a day passes: the rooms fill
       WD.endMorning(run); ticks = 80; break;
@@ -1062,7 +1142,7 @@ async function shotSetup(name) {
     case 'graft': { const run = rich(start('marrow', 'graft')); RUN.startGraftPick(run); flow.route(); G.tick(30, 0.05); G.clickRect('^graft-card1$'); G.tick(6); G.clickRect('^graft-patch1$'); ticks = 20; break; }
     case 'shop': { const run = rich(start('wick', 'shop')); run.phase = 'shop'; run.pending = RUN.makeShop(run); flow.route(); break; }
     case 'forge': { const run = rich(start('odile', 'forge')); run.hp = Math.round(run.maxHp / 2); run.phase = 'forge'; run.pending = { kind: 'forge', used: false }; flow.route(); break; }
-    case 'event': { const run = rich(start('marrow', 'event')); RUN.startEvent(run); flow.route(); ticks = 100; break; }
+    case 'event': { const run = rich(start('marrow', 'event')); WD.wardStartEvent(run); flow.route(); ticks = 100; break; }
     case 'deckview': rich(start('marrow', 'deck')); flow.openDeck(); break;
     case 'codex': app.shared.run = null; flow.toTitle(); flow.openCodex(); break;
     case 'settings': app.shared.run = null; flow.toTitle(); flow.openSettings(); break;
@@ -1207,8 +1287,8 @@ async function cmdRecord() {
   if (!fs.existsSync(path.join(ROOT, 'graftwork/main.js'))) { console.error(`no graftwork/main.js under ${ROOT}`); process.exit(2); }
   const only = String(opt('only', 'engine,ui,assets,resume')).split(',').map((s) => s.trim()).filter(Boolean);
   const jobs = Math.max(1, Number(opt('jobs', Math.min(4, os.cpus().length))) || 1);
-  const pass = ['--root', ROOT, ...(QUICK ? ['--quick'] : []), ...(opt('resume-from', null) ? ['--resume-from', path.resolve(opt('resume-from'))] : [])];
-  const t0 = REAL_NOW(), out = { meta: { tool: TOOL_VERSION, root: ROOT, head: gitHead(ROOT), quick: QUICK, sections: only.slice(), node: process.version, recorded: new Date().toISOString(), seconds: {} } };
+  const pass = ['--root', ROOT, ...(QUICK ? ['--quick'] : []), ...(CLASSIC_RNG ? ['--classic-rng'] : []), ...(opt('resume-from', null) ? ['--resume-from', path.resolve(opt('resume-from'))] : [])];
+  const t0 = REAL_NOW(), out = { meta: { tool: TOOL_VERSION, root: ROOT, head: gitHead(ROOT), quick: QUICK, ...(CLASSIC_RNG ? { classicRng: true } : {}), sections: only.slice(), node: process.version, recorded: new Date().toISOString(), seconds: {} } };
   const failures = [], tasks = [];
   if (only.includes('engine')) tasks.push({ name: 'engine', args: ['engine', ...pass] });
   if (only.includes('resume')) tasks.push({ name: 'resume', args: ['resume', ...pass] });
