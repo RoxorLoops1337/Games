@@ -258,7 +258,7 @@ function drawChip(app, c, rect, pv) {
 // Sits on the rail's top left edge. A press, G or the gamepad's left trigger arms it: the next card also counts as that school
 // (hand badges and the rail preview follow at once, they read the engine). Pressing again takes it back. Spent for the turn
 // once a card has used it. Drawn only for a hero with `declare`. Returns true when it changed the declaration.
-export const DECLARE_KEY = 'g';
+const DECLARE_KEY = 'g';
 export function declareShown(c) { return !!(c && c.seam && SEAM.declareOf(c)); }
 export function drawSeamDeclare(app, c, can) {
   if (!c || !c.seam) return false;

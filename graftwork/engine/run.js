@@ -307,7 +307,7 @@ export function previewPick(run, uid, gid) {
   return p;
 }
 // Free Sample (perk freeFirstGraft): the first graft Price accepted each act is waived, every kind of it (engine/cards.js isPriceMod).
-export function sampleReady(run) { return perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]; }
+function sampleReady(run) { return perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]; }
 export function applyGraft(run, uid, gid, o = {}) {
   const inst = findInst(run, uid);
   if (!inst || !canGraft(inst, gid)) return { ok: false };
@@ -559,7 +559,7 @@ export function deserializeRun(json) {
 // A save may name content that no longer exists (a removed card, graft, relic or potion). Drop those entries so the run keeps
 // loading. A save without such ids is returned untouched (same bytes when saved again).
 const keepKnown = (list, known) => (Array.isArray(list) && list.some((x) => !known(x)) ? list.filter(known) : list);
-export function repairRun(run) {
+function repairRun(run) {
   if (!Array.isArray(run.deck)) return run;
   run.deck = keepKnown(run.deck, (i) => !!(i && CARDS[i.id]));
   for (const i of run.deck) for (const k of ['grafts', 'fused', 'waived']) if (i[k]) i[k] = keepKnown(i[k], (g) => !!GRAFTS[g]);
