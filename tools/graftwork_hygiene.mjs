@@ -92,7 +92,9 @@ export function lex(src) {
     }
     return n;
   }
-  run(0, false);
+  let start = 0;
+  if (src.startsWith('#!')) { start = src.indexOf('\n'); if (start < 0) start = n; blank(bare, 0, start); blank(code, 0, start); } // a hashbang line is not code
+  run(start, false);
   return { bare: bare.join(''), code: code.join(''), strings, regexes };
 }
 
@@ -105,7 +107,7 @@ function matchClose(text, open, from) { // index of the bracket that closes text
   return from === undefined ? text.length - 1 : from;
 }
 const STMT_START = /^(?:const|let|var|function|class|export|import|if|for|while|switch|return|try|async)\b/;
-function parseFile(rel, src) {
+export function parseFile(rel, src) { // exported for tests and for cross-checks against a real parser
   const { bare, code, strings, regexes } = lex(src), n = bare.length;
   const F = { rel, src, bare, code, strings, regexes, tokens: new Map(), decls: [], exports: new Map(), stars: [], imports: [], holds: new Map(), nested: [], lexOk: true };
   for (const m of bare.matchAll(/[A-Za-z_$][\w$]*/g)) F.tokens.set(m[0], (F.tokens.get(m[0]) || 0) + 1);
