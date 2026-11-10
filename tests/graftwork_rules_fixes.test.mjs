@@ -584,8 +584,9 @@ t('the seamCut payload carries paid: false for a cut past the 3 paying cuts of a
     const c = fight({ relics: ['r_test_paid'] }), m = mark(c);
     for (let k = 0; k < SEAM_CUTS_TURN + 3; k++) lineOf(c, k % 2 ? 'ember' : 'blood', 2); // six Lines, each cuts the one before it: 5 cuts
     assert.equal(c.seam.cuts, SEAM_CUTS_TURN, 'only the paying cuts are counted');
-    P(c, 'ember'); endTurn(c); // a Line of 3 is left standing: the turn end cashes it, and that is not a cut
-    assert.deepEqual(seen, [['cut', true, 1], ['cut', true, 1], ['cut', true, 1], ['cut', false, 0], ['cut', false, 0], ['end', true, 1]]);
+    P(c, 'ember'); const mEnd = mark(c); endTurn(c); // a Line of 3 is left standing: the turn end cashes it, and that is not a cut
+    assert.equal(since(c, mEnd, 'seamPay').length, 1, 'the turn end paid it'); assert.equal(since(c, mEnd, 'seamCut')[0].kind, 'end');
+    assert.deepEqual(seen, [['cut', true, 1], ['cut', true, 1], ['cut', true, 1], ['cut', false, 0], ['cut', false, 0]], 'a cut hook hears the cuts, not the turn end');
     const cuts = since(c, m, 'seamCut').filter((e) => e.kind === 'cut');
     assert.deepEqual(cuts.map((e) => [e.paid, !!e.capped]), [[1, false], [1, false], [1, false], [0, true], [0, true]], 'the event log marks the same cuts');
     assert.ok(cuts.slice(0, 3).every((e) => !('capped' in e)), 'a paying cut logs the event it always did');
@@ -936,5 +937,67 @@ t('a save with stale waiver entries (left behind by Reforge and Strip) loads cle
   assert.equal(RUN.serializeRun(RUN.deserializeRun(RUN.serializeRun(back))), RUN.serializeRun(back), 'and a repaired save is stable');
 });
 
+
+// ---------------------------------------------------------------- 15. a cut is a cut: the turn-end cash is not one, and "per stitch" counts what was paid
+// The Line cashes itself at the end of your turn (the Line rule: "Pays when cut or at turn end"). Every relic and hero text that
+// says "cut" is about a cut. The hooks used to run for the turn-end cash too, and counted stitches from the length of the Line.
+t('relic and hero cut hooks do not hear the turn-end cash: the turn ends exactly as it does without them', () => {
+  const turnEnd = (o) => {
+    const c = fight(o); c.player.hp = 300;
+    P(c, 'blood'); P(c, 'blood', { grafts: [GOF.rust] }); P(c, 'blood'); P(c, 'blood'); // a Line of 4 is left standing
+    const m = mark(c); endTurn(c);
+    return JSON.stringify({ hp: c.player.hp, block: c.player.block, ehp: c.enemies[0].hp, est: { ...c.enemies[0].st }, pst: { ...c.player.st }, hand: c.hand.map((k) => k.uid), draw: c.drawPile.length, rx: c.rx || null,
+      pays: pays(c, m), cash: since(c, m, 'seamCut').map((e) => [e.kind, e.paid]) });
+  };
+  const bare = turnEnd({}), bareM = turnEnd({ hero: 'marrow' });
+  assert.ok(JSON.parse(bare).pays.length > 0 && JSON.parse(bare).cash[0][0] === 'end' && JSON.parse(bare).cash[0][1] > 0, 'the turn end does pay the Line');
+  for (const id of Object.keys(PAID_ONLY)) {
+    if (id === 'marrow') { assert.equal(turnEnd({ hero: 'marrow', passive: true }), bareM, "Marrow's passive: Blood cuts, not the turn end"); continue; }
+    assert.equal(turnEnd({ relics: [id] }), bare, id + ' reacted to the turn-end cash');
+  }
+  // the same hooks, handed a real cut afterwards, still do their work (the rest of this file measures each one)
+  assert.deepEqual(oneCut({ relics: ['r_bobbin'] }, false).drawn, 1);
+});
+t('"per stitch" counts the stitches that were paid: Resonance and a second school included, none for a voided payout', () => {
+  // Blood Line of 4 knots, Rust on two of them: Blood pays 3 stitches and Rust 1 (half); at tier 3 each gets one more (4 + 2), at tier 6 both pay twice (8 + 4)
+  const cut = (o, tier, cancel) => {
+    const c = fight(o); c.player.hp = 300; if (tier) c.res = { blood: tier, rust: tier };
+    P(c, 'blood'); P(c, 'blood', { grafts: [GOF.rust] }); P(c, 'blood', { grafts: [GOF.rust] }); P(c, 'blood');
+    const card = mk(c, 't_ember'), e = c.enemies[0], b = { hp: c.player.hp, block: c.player.block, ehp: e.hp, hand: c.hand.length - 1 }, m = mark(c);
+    const old = ENEMIES.bedpan_slime.on;
+    try { if (cancel) ENEMIES.bedpan_slime.on = { ...(old || {}), seamCash: (A, en, i) => { i.cancel = true; } }; play(c, card); } finally { ENEMIES.bedpan_slime.on = old; }
+    const all = pays(c, m);
+    return { heal: c.player.hp - b.hp, block: c.player.block - b.block, dmg: b.ehp - e.hp, drawn: c.hand.length - b.hand, str: c.player.st.strength || 0, paid: all.reduce((a, p) => a + p[1], 0), blood: (all.find((p) => p[0] === 'blood') || [0, 0])[1] };
+  };
+  for (const tier of [0, 3, 6]) {
+    const base = cut({}, tier), tag = 'tier ' + tier;
+    assert.deepEqual([base.paid, base.blood], [[4, 6, 12][[0, 3, 6].indexOf(tier)], [3, 4, 8][[0, 3, 6].indexOf(tier)]], 'the payout itself, ' + tag);
+    const d = (o) => { const r = cut(o, tier); return { heal: r.heal - base.heal, block: r.block - base.block, dmg: r.dmg - base.dmg }; };
+    assert.deepEqual(d({ relics: ['r_seam_ripper'] }), { heal: 0, block: 0, dmg: 2 * base.paid + base.str }, 'Seam Ripper: 2 damage per stitch paid, ' + tag + (base.str ? ' (+ the Strength Blood 6 gives)' : ''));
+    assert.deepEqual(d({ relics: ['r_tapestry_frame'] }), { heal: 0, block: 4 * base.paid, dmg: 0 }, 'Tapestry Frame: 4 Block per stitch paid, ' + tag);
+    assert.deepEqual(d({ relics: ['r_second_colour'] }), { heal: 0, block: 2 * base.paid, dmg: 0 }, 'Second Colour: 2 Block per stitch paid, ' + tag);
+    assert.deepEqual(d({ hero: 'marrow', passive: true }), { heal: base.blood, block: 0, dmg: 0 }, 'Marrow: 1 extra per Blood stitch paid, ' + tag);
+  }
+  // a payout an enemy voided paid no stitch: the per-stitch hooks add nothing, the hooks that only ask for the cut still fire
+  const none = cut({}, 3, true); assert.equal(none.paid, 0);
+  for (const id of ['r_seam_ripper', 'r_tapestry_frame', 'r_second_colour']) { const r = cut({ relics: [id] }, 3, true); assert.deepEqual([r.dmg, r.block], [0, 0], id + ' on a voided payout'); }
+  assert.equal(cut({ hero: 'marrow', passive: true }, 3, true).heal, 0, 'Marrow on a voided payout');
+  assert.equal(cut({ relics: ['r_bobbin'] }, 3, true).drawn, 1, 'Bobbin: it was still a cut');
+  // the grafts that pay per stitch when their card cuts read the same number (Surgeon's Knot 4 gold, Surge Loop 1 Charge, per stitch)
+  const g1 = (gid, tier) => { const c = fight(); if (tier) c.res = { blood: tier }; lineOf(c, 'blood', 3); const gold = c.run.gold; play(c, mk(c, 'ta_rust', { grafts: [gid] })); return { gold: c.run.gold - gold, charge: c.player.st.charge || 0 }; };
+  assert.deepEqual([g1('g_surgeons_knot', 0).gold, g1('g_surgeons_knot', 3).gold], [8 - 1, 12 - 1], "Surgeon's Knot: the stitch Resonance adds is paid for");
+  assert.deepEqual([g1('g_surge_loop', 0).charge, g1('g_surge_loop', 3).charge], [2, 3], 'Surge Loop: the same');
+});
+t('enemies that speak of a Line cashed (Ferric Warden, Scissor Nurse, Locksmith, Knitter) still see the turn-end cash', () => {
+  const line4 = (enemy, o = {}) => { const c = fight({ enemies: [enemy] }); c.player.hp = 300; const e = c.enemies[0]; Object.assign(e.data, o); e.block = 0; P(c, 'blood'); P(c, 'blood'); P(c, 'blood'); P(c, 'blood'); return { c, e, m: mark(c) }; };
+  { const { c, e, m } = line4('ferric_warden', { allergy: 'blood' }); SEAM.seamEnd(c); assert.equal(pays(c, m).length, 0, 'Allergy: "a Line cashed in that school pays nothing this turn", turn end included'); assert.equal(since(c, m, 'seamCut')[0].paid, 0);
+    const o = line4('ferric_warden', { allergy: 'ember' }); SEAM.seamEnd(o.c); assert.ok(pays(o.c, o.m).length > 0, 'another school pays'); void e; }
+  { const { c, e, m } = line4('scissor_nurse'); SEAM.seamEnd(c); assert.equal(pays(c, m).length, 0, 'a Line of 4 or more is snipped, at the turn end too'); assert.equal(e.block, 2, 'and she takes 2 Block');
+    const t3 = line4('scissor_nurse'); t3.c.hand = []; SEAM.seamTurnStart(t3.c); P(t3.c, 'blood'); P(t3.c, 'blood'); P(t3.c, 'blood'); const m3 = mark(t3.c); SEAM.seamEnd(t3.c); assert.ok(pays(t3.c, m3).length > 0, 'a Line of 3 is not snipped'); }
+  { const { c, e } = line4('locksmith', { seal: 'blood' }); e.block = 0; SEAM.seamEnd(c); assert.equal(e.block, 4, 'the sealed school, cashed at the turn end');
+    const o = line4('locksmith', { seal: 'ember' }); o.e.block = 0; SEAM.seamEnd(o.c); assert.equal(o.e.block, 0, 'another school gives it nothing');
+    const k = line4('locksmith', { seal: 'blood' }); k.e.block = 0; play(k.c, mk(k.c, 't_ember')); assert.equal(k.e.block, 4, 'and the sealed school cut by a card'); }
+  { const { c, e } = line4('knitter'); e.data.cut = false; SEAM.seamEnd(c); assert.equal(e.data.cut, true, 'the cashed Line pays at +50%'); }
+});
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

@@ -1,12 +1,11 @@
 // Deck-building relics (H3). They reward a SHAPE of deck: one school, two schools bridged, Overload, Tempered cards, unused Budget.
-// Hooks: seamExtend {len, school, card, spec}, seamCut {paid, school, len}, seamPay {school, stitches, amount}; cardPlayed {card, spec}.
+// Hooks: seamExtend {len, school, card, spec}, seamCut {paid, school, len, stitches} (a cut only), seamPay {school, stitches, amount}; cardPlayed {card, spec}.
 // Per-combat scratch lives in A.c.rx. c.res = resonance tiers keyed by every school that owns at least one graft (engine/resonance.js).
 const rx = (A) => A.c.rx || (A.c.rx = {});
 const first = (A, key) => { const r = rx(A); if (r[key] === A.c.turn) return false; r[key] = A.c.turn; return true; };
 const seam = (A) => A.c.seam || { len: 0, set: [], counts: {} };
 const nSchools = (A) => Object.keys(seam(A).counts || {}).filter((k) => seam(A).counts[k] > 0).length;
 const randFoe = (A) => { const a = A.alive(); return a.length ? a[A.rng.int(a.length)] : null; };
-const stitches = (p) => Math.max(0, Math.min(6, (p && p.len) || 0) - 1);
 const deckSchools = (A) => Object.keys((A.c && A.c.res) || {}).length;
 const tempered = (p) => !!(p && p.spec && p.spec.fused && p.spec.fused.length);
 
@@ -34,7 +33,7 @@ export const RELICS_MORE = [
   { id: 'r_bridge_pin', name: 'Bridge Pin', rarity: 'uncommon', text: 'The first time each turn you extend a Line of 3 or more knots that holds 2 or more schools, draw 1 card.',
     on: { seamExtend: (A) => { if (nSchools(A) >= 2 && seam(A).len >= 3 && first(A, 'bridgePinTurn')) A.draw(1); } } },
   { id: 'r_second_colour', name: 'Second Colour', rarity: 'uncommon', text: 'Cutting a Line that holds 2 or more schools gives 2 Block per stitch.',
-    on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (nSchools(A) >= 2) { const n = stitches(p); if (n > 0) A.block(A.player, 2 * n); } } } },
+    on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (nSchools(A) >= 2) { const n = p.stitches | 0; if (n > 0) A.block(A.player, 2 * n); } } } },
   // ---- Overload ----
   { id: 'r_stitched_third', name: 'Stitched Third', rarity: 'rare', text: 'An Overloaded card that extends the Line adds one extra knot (still capped by the Line limit). Playing an Overload card gains 9 Block and Ties the Line.',
     on: { seamExtend: (A, p) => { if (!(p && p.spec && p.spec.overload)) return; const s = seam(A); const cap = (A.c.run.relics || []).includes('r_spool') ? 6 : 5; if (s.len < cap) { s.len += 1; if (p.school) s.counts[p.school] = (s.counts[p.school] || 0) + 1; } },

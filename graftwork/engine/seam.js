@@ -4,10 +4,13 @@
 // seamCutNow (A.cutLine: a card effect that says "Cut the Line.").
 // Payouts go through the combat API (c.A.*) so statuses and relics react. Hard caps: 3 paying cuts per turn, 3 draws per
 // turn, 6 charge per turn, 20 gold per combat, len cap 5 (Spool: mod.seamCap).
-// Hooks: relics/hero via fire(c,'seamExtend'|'seamCut'|'seamPay',info); enemies via def.on.seamExtend/seamCut/seamPay(A,e,info).
-// An enemy or relic may set info.cancel = true on a seamCut hook to void that payout (Scissor Nurse).
-// seamCut info.paid is false for a cut past the turn's paying cuts (it cuts the Line and pays nothing), true for every other cut
-// and for the turn-end cash: a hook that rides on a paying cut tests it. The seamCut event carries capped: true for the same cut.
+// Hooks: relics/hero via fire(c,'seamExtend'|'seamCut'|'seamPay',info); enemies via def.on.seamExtend/seamCut/seamCash/seamPay(A,e,info).
+// A cut is a cut: seamCut (relics, hero, enemies) fires when the Line is cut, never for the turn-end cash. seamCash (enemies) fires for
+// every cash, a cut or the turn end (info.kind), before anything is paid, and may set info.cancel = true to void the payout (Scissor
+// Nurse, Ferric Warden). A cancelled payout paid nothing: the hooks that follow see stitches 0 and no pays.
+// info.stitches is what was paid (every school, Resonance included), info.pays the same per school: a "per stitch" hook reads them,
+// never the length of the Line. info.paid is false for a cut past the turn's paying cuts (it cuts the Line and pays nothing): a hook
+// that rides on a paying cut tests it. The seamCut event carries capped: true for the same cut.
 // A hero with `declare: <school>` (Odile, 'gilded') may declare one card a turn: canDeclare / setDeclare below.
 import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
@@ -217,12 +220,16 @@ function cash(c, kind, card) {
     list = payoutFor(c, s.counts, s.order, s.set, s.len, mode, kind === 'cut' ? timesFor(c, base[0].school) : 1);
   }
   const hadStitches = base.length > 0;
-  const info = { len: s.len, school: list[0] ? list[0].school : base[0] ? base[0].school : null, stitches: list.reduce((a, x) => a + x.stitches, 0), kind, card: card ? card.uid : null, cancel: false, paid: !capped };
+  const info = { len: s.len, school: list[0] ? list[0].school : base[0] ? base[0].school : null, stitches: list.reduce((a, x) => a + x.stitches, 0), pays: list, kind, card: card ? card.uid : null, cancel: false, paid: !capped };
   if (hadStitches && kind === 'cut' && !capped) s.cuts++;
-  if (hadStitches) { fire(c, 'seamCut', info); enemyHook(c, 'seamCut', info); }
+  if (hadStitches) {
+    enemyHook(c, 'seamCash', info); // a cut or the turn end: an enemy may void the payout
+    if (info.cancel) { info.stitches = 0; info.pays = []; }
+    if (kind === 'cut') { fire(c, 'seamCut', info); enemyHook(c, 'seamCut', info); }
+  }
   const paid = info.cancel ? 0 : list.reduce((a, x) => a + x.stitches, 0);
   const ev = { t: 'seamCut', paid, school: info.school, len: s.len, card: card ? card.uid : null, kind };
-  if (capped) ev.capped = true; // the cap, not an enemy cancel or a Line too short to pay (data/grafts_thread.js reads it)
+  if (capped) ev.capped = true; // the cap, as opposed to an enemy cancel or a Line too short to pay: both of those also read paid 0
   c.ev.push(ev);
   if (!info.cancel) for (const e of list) pay(c, e, kind);
   return paid;
