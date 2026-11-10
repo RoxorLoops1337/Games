@@ -33,7 +33,9 @@ export function hpPerPlay(spec) {
   return own * (1 + (spec.repeat || 0)) + ((spec.price && spec.price.selfHurt) || 0);
 }
 
-// School resonance line: "Ember 2/3 resonance" and what the next step does.
+// School resonance line: "Ember 2/3 resonance" and what the next step does. These lines go into the patch tip of a phone, which has no
+// room for more than the school's own bonus: the Thread half (data/schools.js RESONANCE_THREAD) is in the school panel of the big
+// screen, on the Resonance keyword and in the deck view.
 export function resonanceInfo(run, schoolId, counts) {
   const s = SCHOOLS[schoolId]; if (!s) return null;
   const n = (counts && counts[schoolId]) || 0;

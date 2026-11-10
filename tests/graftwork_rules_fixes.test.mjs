@@ -5,7 +5,7 @@ import { makeApp, frames } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as META from '../graftwork/engine/meta.js';
 import { newCombat, playCard, endTurn, specOf } from '../graftwork/engine/combat.js';
-import { newInst, cardSpec } from '../graftwork/engine/cards.js';
+import { newInst, cardSpec, canGraft } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, POTIONS, EVENTS, HEROES, ROOMS, BUILD_CARDS } from '../graftwork/data/index.js';
 
 let n = 0, bad = 0;
@@ -572,6 +572,280 @@ await ta('the strong bot declares Gilded with Odile and cuts with Snip (the sims
     assert.ok(seen.turns >= 6); assert.ok(seen.declared >= 3, `the bot declared on ${seen.declared} of ${seen.turns} turns`);
     assert.ok(seen.snipCuts.length >= 1, 'Snip cut a paying Line at least once'); assert.ok(seen.snipCuts.every((len) => len >= 2));
   } finally { delete RELICS.r_test_spy; }
+});
+
+// ================================================================ Rules leftovers (CLEANUP_PLAN.md, "Rules leftovers")
+// ---------------------------------------------------------------- 9. a cut past the turn's 3 paying cuts pays nothing, and says so to the hooks
+t('the seamCut payload carries paid: false for a cut past the 3 paying cuts of a turn, and for nothing else', () => {
+  const seen = [];
+  RELICS.r_test_paid = { id: 'r_test_paid', name: 'x', rarity: 'common', text: 'x', on: { seamCut: (A, i) => seen.push([i.kind, i.paid, i.stitches]) } };
+  const def = ENEMIES.bedpan_slime, old = def.on;
+  try {
+    const c = fight({ relics: ['r_test_paid'] }), m = mark(c);
+    for (let k = 0; k < SEAM_CUTS_TURN + 3; k++) lineOf(c, k % 2 ? 'ember' : 'blood', 2); // six Lines, each cuts the one before it: 5 cuts
+    assert.equal(c.seam.cuts, SEAM_CUTS_TURN, 'only the paying cuts are counted');
+    P(c, 'ember'); endTurn(c); // a Line of 3 is left standing: the turn end cashes it, and that is not a cut
+    assert.deepEqual(seen, [['cut', true, 1], ['cut', true, 1], ['cut', true, 1], ['cut', false, 0], ['cut', false, 0], ['end', true, 1]]);
+    const cuts = since(c, m, 'seamCut').filter((e) => e.kind === 'cut');
+    assert.deepEqual(cuts.map((e) => [e.paid, !!e.capped]), [[1, false], [1, false], [1, false], [0, true], [0, true]], 'the event log marks the same cuts');
+    assert.ok(cuts.slice(0, 3).every((e) => !('capped' in e)), 'a paying cut logs the event it always did');
+    // an enemy that voids a payout is not the cap: the cut was a paying cut, the hook decided otherwise afterwards
+    seen.length = 0; c.hand = []; def.on = { ...(old || {}), seamCut: (A, e, i) => { i.cancel = true; } };
+    lineOf(c, 'rust', 3); const m2 = mark(c); P(c, 'gilded');
+    assert.deepEqual(seen, [['cut', true, 2]]); assert.equal(since(c, m2, 'seamPay').length, 0);
+  } finally { def.on = old; delete RELICS.r_test_paid; }
+});
+// One cut of a Blood Line of 4 knots that also holds Rust (3 stitches, Blood heals 6), as a paying cut and as a cut past the cap.
+// The cutting card has no effect of its own, so everything measured comes from the cut. The cap is set by hand at the start of
+// the turn: in play a capped cut is never the first cut of a turn, and the "first cut" relics must not fire on one either.
+function oneCut(o, capped) {
+  const c = fight(o); c.player.hp = 300;
+  P(c, 'blood'); P(c, 'blood', { grafts: [GOF.rust] }); P(c, 'blood'); P(c, 'blood');
+  if (capped) c.seam.cuts = SEAM_CUTS_TURN;
+  const card = mk(c, 't_ember'), e = c.enemies[0], b = { hp: c.player.hp, block: c.player.block, ehp: e.hp, hand: c.hand.length - 1 }, m = mark(c);
+  play(c, card);
+  return { heal: c.player.hp - b.hp, block: c.player.block - b.block, dmg: b.ehp - e.hp, vuln: e.st.vulnerable || 0, drawn: c.hand.length - b.hand, stitches: pays(c, m).reduce((a, p) => a + p[1], 0), c };
+}
+const NOTHING = { heal: 0, block: 0, dmg: 0, vuln: 0, drawn: 0, stitches: 0 };
+const PAID_ONLY = { // what each "paid only" hook adds to a paying cut of that Line (the Line itself heals 6)
+  marrow: { heal: 9 }, r_spool: { drawn: 1 }, r_bobbin: { drawn: 1 }, r_seam_ripper: { dmg: 6 }, r_pin_cushion: { vuln: 2 },
+  r_blunt_shears: { dmg: 6 }, r_tapestry_frame: { block: 12 }, r_second_colour: { block: 6 },
+};
+t('relic and hero cut hooks: a paying cut triggers every one of them, a cut past the cap triggers none', () => {
+  const pick = (r) => { const { c, ...rest } = r; void c; return rest; };
+  assert.deepEqual(pick(oneCut({}, false)), { ...NOTHING, heal: 6, stitches: 3 }, 'the bare cut: 3 Blood stitches');
+  assert.deepEqual(pick(oneCut({}, true)), NOTHING, 'past the cap the Line pays nothing');
+  // every relic and hero that listens to seamCut is in the table (the test relics of this file aside)
+  const listeners = [...Object.values(RELICS).filter((r) => r.on && r.on.seamCut).map((r) => r.id), ...Object.values(HEROES).filter((h) => h.on && h.on.seamCut).map((h) => h.id)];
+  assert.deepEqual(listeners.filter((id) => !/^r_test_/.test(id)).sort(), Object.keys(PAID_ONLY).sort());
+  for (const [id, gain] of Object.entries(PAID_ONLY)) {
+    const o = id === 'marrow' ? { hero: 'marrow', passive: true } : { relics: [id] };
+    assert.deepEqual(pick(oneCut(o, false)), { ...NOTHING, heal: 6, stitches: 3, ...gain }, id + ' on a paying cut');
+    const cap = oneCut(o, true);
+    assert.deepEqual(pick(cap), NOTHING, id + ' on a cut past the cap');
+    if (id === 'r_blunt_shears') assert.ok(!cap.c.rx || !cap.c.rx.bluntShears, 'an unpaid cut does not use up the first cut of the combat');
+  }
+  // a real turn: three small paying cuts, then the Line of 4 as the fourth cut, with the hooks that could still fire on it
+  const c = fight({ hero: 'marrow', passive: true, relics: ['r_spool', 'r_seam_ripper', 'r_pin_cushion', 'r_second_colour'] }); c.player.hp = 300;
+  for (let k = 0; k < SEAM_CUTS_TURN + 1; k++) lineOf(c, k % 2 ? 'ember' : 'gilded', 2);
+  assert.equal(c.seam.cuts, SEAM_CUTS_TURN); c.hand = [];
+  P(c, 'blood'); P(c, 'blood', { grafts: [GOF.rust] }); P(c, 'blood'); P(c, 'blood'); // the first Blood card made the 4th cut, this Line is the 5th
+  const e = c.enemies[0], b = { hp: c.player.hp, block: c.player.block, ehp: e.hp, vuln: e.st.vulnerable || 0 }, m = mark(c);
+  P(c, 'ember');
+  assert.equal(since(c, m, 'seamCut')[0].capped, true); assert.equal(c.hand.length, 0, 'Spool draws nothing');
+  assert.deepEqual([c.player.hp - b.hp, c.player.block - b.block, b.ehp - e.hp, (e.st.vulnerable || 0) - b.vuln], [0, 0, 0, 0]);
+});
+t('grafts that react to their own cut: "per stitch" needs a paying cut, "when it cuts the Line" does not', () => {
+  const run1 = (gid, capped) => { const c = fight(); lineOf(c, 'blood', 3); if (capped) c.seam.cuts = SEAM_CUTS_TURN; const gold = c.run.gold, hp = c.enemies[0].hp; play(c, mk(c, 'ta_rust', { grafts: [gid] })); return { c, gold: c.run.gold - gold, dmg: hp - c.enemies[0].hp }; };
+  assert.deepEqual([run1('g_surgeons_knot', false).gold, run1('g_surgeons_knot', true).gold], [8 - 1, -1], "Surgeon's Knot: 4 gold per stitch, and no stitch past the cap (its 1 gold cost stays)");
+  assert.deepEqual([run1('g_surge_loop', false).c.player.st.charge, run1('g_surge_loop', true).c.player.st.charge || 0], [2, 0], 'Surge Loop: 1 Charge per stitch');
+  // the card still cut the Line: the grafts that count knots, or only ask for the cut, fire as before
+  assert.equal(run1('g_scissor_loop', true).dmg, 1 + 9, 'Scissor Loop: 3 damage per knot of the Line it cut');
+  assert.equal(run1('g_reef_knot', true).c.player.st.echo, 1, 'Reef Knot: 1 Echo when it cuts');
+  assert.equal(run1('g_spent_thread', true).c.seam.len, 2, 'Spent Thread: the new Line starts at 2 knots');
+});
+
+// ---------------------------------------------------------------- 10. Resonance Lens: a school at 3 fights at the top tier in Elite and Boss fights
+// k grafts of one school, one per card, on a fresh deck (safe grafts without a junk or max HP price: nothing else changes)
+function schoolDeck(school, k, relics = []) {
+  const run = RUN.newRun({ hero: 'marrow', seed: 'lens-' + school + k }); run.relics = relics.slice();
+  const gs = Object.values(GRAFTS).filter((g) => g.school === school && !g.mods.some((m) => m.k === 'junk' || m.k === 'maxHp'));
+  let done = 0;
+  for (const inst of run.deck) { if (done >= k) break; const g = gs.find((x) => canGraft(inst, x.id)); if (g) { inst.grafts = [g.id]; done++; } }
+  assert.equal(done, k, `${k} ${school} grafts placed`);
+  return run;
+}
+await ta('Resonance Lens: in Elite and Boss fights a school at 3 grafts counts as 6; no effect in a normal fight, outside a fight, or below 3', async () => {
+  const { resonanceOf, RES_HOOKS } = await import('../graftwork/engine/resonance.js');
+  const { finishCombat } = await import('../graftwork/engine/combat.js');
+  const LENS = RELICS.r_resonance_lens, BIG = ['elite', 'boss', 'final'];
+  assert.equal(LENS.text, 'In Elite and Boss fights, each school at Resonance 3 counts as Resonance 6.');
+  assert.ok(LENS.mod && LENS.mod.resLens > 0 && !LENS.on, 'the relic only switches the rule on: the tier is decided in resonanceOf, nowhere else');
+  // the tier table, as the rule decides it and as a fight gets it
+  for (const lens of [false, true]) for (const k of [0, 1, 2, 3, 4, 5, 6, 7]) {
+    const run = schoolDeck('echo', k, lens ? ['r_resonance_lens'] : []);
+    for (const kind of [undefined, 'normal', ...BIG]) {
+      const want = k >= 6 ? 6 : k < 3 ? 0 : lens && BIG.includes(kind) ? 6 : 3, tag = `echo ${k} grafts, ${kind || 'no fight'}, ${lens ? 'Lens' : 'no Lens'}`;
+      const got = resonanceOf(run, kind); assert.equal(got.tiers.echo || 0, want, tag); assert.equal(got.counts.echo || 0, k, 'the count is never changed: ' + tag);
+      if (kind) assert.equal(newCombat(schoolDeck('echo', k, lens ? ['r_resonance_lens'] : []), ['bedpan_slime'], { kind }).res.echo || 0, want, 'in the fight: ' + tag);
+    }
+  }
+  // the tier 6 effects themselves, at 3 grafts: with the Lens in a big fight, against the same deck without it and in a normal fight
+  const start = (school, kind, lens, k = 3) => newCombat(schoolDeck(school, k, lens ? ['r_resonance_lens'] : []), ['bedpan_slime'], { kind });
+  const cutEmber = (c) => { c.hand = []; c.energy = 99; lineOf(c, 'ember', 3); const m = mark(c); P(c, 'blood'); return pays(c, m); };
+  for (const kind of ['normal', ...BIG]) for (const lens of [false, true]) {
+    const top = lens && kind !== 'normal', tag = `${kind}, ${lens ? 'Lens' : 'no Lens'}`;
+    assert.equal(start('echo', kind, lens).player.st.echo, top ? 2 : 1, 'Echo at combat start: ' + tag);
+    assert.equal(start('static', kind, lens).player.st.charge, top ? 2 : 1, 'Charge at turn start: ' + tag);
+    assert.equal(start('hoard', kind, lens).handSize - start('hoard', kind, lens, 0).handSize, top ? 1 : 0, 'Hoard hand size: ' + tag);
+    const g = start('gilded', kind, lens); g.over = 'win'; const gold = g.run.gold; finishCombat(g);
+    assert.equal(g.run.gold - gold - (g.player.st.gilt || 0), top ? 20 : 10, 'Gilded gold after the fight: ' + tag);
+    const e = start('ember', kind, lens), foe = e.enemies[0]; foe.hp = foe.maxHp = 9999; foe.st.burn = 0;
+    RES_HOOKS.turnStart(e.A); for (let i = 0; i < 2; i++) RES_HOOKS.cardPlayed(e.A, { spec: { type: 'attack' }, target: foe });
+    assert.equal(foe.st.burn, top ? 4 : 2, 'Ember: every Attack lights Burn at the top tier, only the first one at 3: ' + tag);
+    assert.deepEqual(cutEmber(start('ember', kind, lens)), [['ember', top ? 6 : 3]], 'the Thread: a Line of 3 pays (2 + 1) stitches, twice at the top tier: ' + tag);
+  }
+  // a school below 3 gets nothing from the Lens, a school at 6 nothing more
+  const low = start('echo', 'boss', true, 2); assert.equal(low.player.st.echo || 0, 0); assert.deepEqual(cutEmber(start('ember', 'boss', true, 2)), [['ember', 2]]);
+  assert.equal(start('echo', 'boss', true, 6).player.st.echo, 2); assert.deepEqual(cutEmber(start('ember', 'boss', true, 6)), [['ember', 6]]);
+  // the deck view, opened in the fight, shows the tier the fight uses (and the plain one on the map)
+  const deckview = (await import('../graftwork/ui/deckview.js')).default;
+  const { SCHOOLS } = await import('../graftwork/data/index.js');
+  const shown = async (phase, fightKind) => {
+    const run = schoolDeck('echo', 3, ['r_resonance_lens']); run.phase = phase; if (fightKind) run.pending = { kind: 'combat', fightKind, enemies: ['bedpan_slime'] };
+    const app = await makeApp({ run, meta: { settings: {} }, audio: { sfx() {}, music() {} } });
+    const said = []; const raw = app.text; app.text = (str, x, y, o) => { said.push(String(str)); return raw(str, x, y, o); };
+    app.shared.flow = { route() {}, openDeck() {} }; app.register('deckview', deckview); app.register('base', { draw() {} }); app.go('base');
+    app.push('deckview', { run }); frames(app, 20);
+    let tip = ''; // the tooltip of the Echo column
+    for (let x = 40; x < 1260 && !tip; x += 30) { app.mouse.x = x; app.mouse.y = 680; frames(app, 30); if (app.tip && String(app.tip.title).startsWith('Echo:')) tip = app.tip.text; }
+    return { said, tip };
+  };
+  const [r3, r6] = [SCHOOLS.echo.resonance[3], SCHOOLS.echo.resonance[6]], LIFT = 'Counts as 6 grafts in this fight.';
+  let v = await shown('combat', 'boss'); assert.ok(v.said.includes(r6) && !v.said.includes(r3), 'in a Boss fight the strip reads the tier 6 text'); assert.ok(v.tip.startsWith(LIFT), 'and its tooltip says why: ' + v.tip);
+  v = await shown('combat', 'normal'); assert.ok(v.said.includes(r3) && !v.said.includes(r6), 'in a normal fight the tier 3 text'); assert.ok(v.tip && !v.tip.includes(LIFT));
+  v = await shown('ward'); assert.ok(v.said.includes(r3) && !v.said.includes(r6), 'outside a fight the tier 3 text'); assert.ok(v.tip && !v.tip.includes(LIFT));
+});
+
+// ---------------------------------------------------------------- 11. the Thread half of resonance is written where the rest of it is
+// Measured like the 14 school texts: the stitches a Line pays at tier 0, 3 and 6, for every school, as the top school and as the
+// second one, on a cut and at the turn end. The texts are rebuilt from the measurement, then looked for on every surface.
+await ta('the Thread half of resonance (tier 3 adds a stitch, tier 6 doubles the cut) equals the engine and is on every resonance surface', async () => {
+  const { RESONANCE_THREAD, resonanceText } = await import('../graftwork/data/schools.js');
+  const { SCHOOLS } = await import('../graftwork/data/index.js');
+  const { KEYWORDS, glossaryFor, tipSections } = await import('../graftwork/ui/tooltips.js');
+  const other = (sch) => SCH[(SCH.indexOf(sch) + 1) % SCH.length], third = (sch) => SCH[(SCH.indexOf(sch) + 2) % SCH.length];
+  const stitchesOf = (sch, tier, how) => { // a Line of 4 knots (3 stitches): four of `sch`, two of them also `other`
+    const c = fight(); c.res = { [sch]: tier };
+    const o = other(sch), top = how === 'second' ? o : sch, sec = how === 'second' ? sch : o;
+    P(c, top); P(c, top, { grafts: [GOF[sec]] }); P(c, top, { grafts: [GOF[sec]] }); P(c, top);
+    const m = mark(c);
+    if (how === 'end') endTurn(c); else P(c, third(sch));
+    return Object.fromEntries(pays(c, m))[sch] || 0;
+  };
+  const extra = new Set(), mul = new Set();
+  for (const sch of SCH) {
+    const top = [0, 3, 6].map((tier) => stitchesOf(sch, tier, 'top')), sec = [0, 3, 6].map((tier) => stitchesOf(sch, tier, 'second')), end = [0, 3, 6].map((tier) => stitchesOf(sch, tier, 'end'));
+    assert.deepEqual([top[0], sec[0], end[0]], [3, 1, 2], sch + ': a Line of 4 pays 3 stitches, half to a second school, one less at the turn end');
+    extra.add(top[1] - top[0]); extra.add(sec[1] - sec[0]); extra.add(end[1] - end[0]); // tier 3: on a cut, as the second school, at the turn end
+    mul.add(top[2] / top[1]); // tier 6: the cut of a Line whose top school it is
+    assert.equal(end[2], end[1], sch + ': the turn end is not a cut, tier 6 doubles nothing there');
+    assert.equal(sec[2], sec[1], sch + ': a cut is doubled by its top school only');
+  }
+  assert.deepEqual([[...extra], [...mul]], [[1], [2]], 'one rule for all seven schools');
+  const [k] = [...extra], times = { 2: 'double' }[[...mul][0]];
+  assert.deepEqual(RESONANCE_THREAD, {
+    3: `Its Thread payout gains ${k} Stitch${k === 1 ? '' : 'es'}.`, 6: `Its cuts pay ${times}.`,
+    rule: `Thread: at 3 the school's payout gains ${k} Stitch${k === 1 ? '' : 'es'}, at 6 its cuts pay ${times}.`,
+  });
+  for (const sch of SCH) for (const tier of [3, 6]) assert.equal(resonanceText(SCHOOLS[sch], tier), `${SCHOOLS[sch].resonance[tier]} ${RESONANCE_THREAD[tier]}`);
+  // 1. the keyword (the hover tip and the glossary of every text that says Resonance, the Resonance Lens among them)
+  assert.ok(KEYWORDS.Resonance.text.endsWith(RESONANCE_THREAD.rule)); assert.ok(KEYWORDS.Resonance.text.length <= 120, 'still one short definition');
+  assert.ok(glossaryFor(RELICS.r_resonance_lens.text, { max: 9 }).some((g) => g.term === 'Resonance' && g.definition.includes(RESONANCE_THREAD.rule)));
+  // 2. the Codex: the rule sheet and the Schools tab
+  const codex = (await import('../graftwork/ui/codex.js')).default, { CODEX_RULES } = await import('../graftwork/ui/codex.js');
+  assert.ok(CODEX_RULES.find((r) => r[0] === 'Schools and Resonance')[1].endsWith(RESONANCE_THREAD.rule));
+  const deckview = (await import('../graftwork/ui/deckview.js')).default, graft = (await import('../graftwork/ui/graft.js')).default;
+  const LR = await import('../graftwork/ui/layout_registry.js');
+  const { resonanceInfo } = await import('../graftwork/ui/graft_parts.js');
+  const boot = async (run, name, mod, params = {}) => {
+    const app = await makeApp({ run, meta: META.defaultMeta(), audio: { sfx() {}, music() {} } });
+    const said = []; const raw = app.text; app.text = (str, x, y, o) => { said.push(String(str)); return raw(str, x, y, o); };
+    app.shared.flow = { app, RUN, META, route() {}, toTitle() {}, openDeck() {}, openCodex() {}, openArchive() {}, openSettings() {}, saveMeta() {}, hasSave: () => false, start() {} };
+    app.register(name, mod); app.register('deckview', deckview); app.register('base', { draw() {} }); app.go('base');
+    if (params.go) app.go(name, { run }); else app.push(name, { run, ...params });
+    frames(app, 40);
+    return { app, said };
+  };
+  const tipText = (app) => (app.tip ? [app.tip.title, app.tip.text, ...(app.tip.lines || []), ...tipSections(app.tip).flat().map((x) => `${x.title} ${x.text}`)].join('\n') : '');
+  { const { app, said } = await boot(schoolDeck('ember', 3), 'codex', codex);
+    codex.setTab(5); said.length = 0; frames(app, 10);
+    assert.ok(said.some((x) => x.endsWith(RESONANCE_THREAD.rule) && /every school/i.test(x)), 'the Schools tab says it once, for every school'); }
+  // 3. the school panels: the deck view strip (its tooltip holds the full text of both tiers) and the graft screen
+  { const { app } = await boot(schoolDeck('ember', 3), 'deckview', deckview);
+    let seen = 0;
+    for (let x = 40; x < 1260; x += 30) {
+      app.mouse.x = x; app.mouse.y = 680; frames(app, 30);
+      const tt = tipText(app), sch = SCH.find((id) => tt.startsWith(SCHOOLS[id].name + ':')); if (!sch) continue;
+      assert.ok(tt.includes('3 grafts: ' + resonanceText(SCHOOLS[sch], 3)) && tt.includes('6 grafts: ' + resonanceText(SCHOOLS[sch], 6)), sch + ' strip tip:\n' + tt); seen++;
+    }
+    assert.ok(seen >= 7, 'every school column of the strip was hovered: ' + seen); }
+  // the patch tip a phone shows instead of that panel keeps the school's own line: with four patches there is no room for more
+  for (const [n, next] of [[0, 3], [2, 3], [3, 6], [5, 6]]) assert.ok(resonanceInfo(null, 'rust', { rust: n }).lines.includes(`At ${next}: ${SCHOOLS.rust.resonance[next]}`));
+  { const run = schoolDeck('gilded', 2); RUN.startGraftPick(run); run.pending.offer.grafts[0] = GOF.gilded;
+    const { app, said } = await boot(run, 'graft', graft, { go: true }); frames(app, 80);
+    const r = LR.getAll().find((q) => q.id === 'graft-patch0'); app.mouse.x = r.x + r.w / 2; app.mouse.y = r.y + r.h / 2; said.length = 0; frames(app, 30);
+    const panel = said.join(' ').replace(/\s+/g, ' ');
+    assert.ok(panel.includes(RESONANCE_THREAD[3]), 'the school panel of the graft screen names the Thread half of the next step:\n' + panel); }
+});
+
+// ---------------------------------------------------------------- 12. a waived Price reads as waived wherever a card lists its grafts
+// Free Sample leaves the Price off the card's own text (section 6). The graft's Boon / Price block, which every screen prints
+// from the graft itself, went on saying "Price: ...". Checked at desktop size and on the phone stage, with the longest Price.
+await ta('a waived Price is labelled Waived on the card that carries the graft (combat tip, deck view, strip and reforge), and it fits a phone', async () => {
+  const { priceOnCard, priceLines } = await import('../graftwork/engine/text.js');
+  const SHOP = await import('../graftwork/ui/shop.js');
+  const audio = await import('../graftwork/ui/audio.js');
+  const combat = (await import('../graftwork/ui/combat.js')).default, deckview = (await import('../graftwork/ui/deckview.js')).default;
+  const LR = await import('../graftwork/ui/layout_registry.js');
+  const GID = Object.values(GRAFTS).reduce((a, g) => (g.price.length > a.price.length ? g : a)).id, G = GRAFTS[GID]; // the longest Price in the game
+  // the spec knows, and the card's own Price block is gone
+  const one = (waived) => { const run = RUN.newRun({ hero: 'marrow', seed: 'waive' }); const inst = run.deck.find((i) => canGraft(i, GID)); inst.grafts = [GID]; if (waived) inst.waived = [GID]; return { run, inst }; };
+  const sw = cardSpec(one(true).inst), sp = cardSpec(one(false).inst);
+  assert.deepEqual([sw.waived, sp.waived], [[GID], []]); assert.ok(priceLines(sp).length > 0 && priceLines(sw).length === 0);
+  assert.deepEqual(priceOnCard(sw, GID), { waived: true, label: 'Waived', text: G.price }); assert.deepEqual(priceOnCard(sp, GID), { waived: false, label: 'Price', text: G.price });
+  // the real path: Free Sample waives the first graft of the act and only that one
+  { const run = RUN.newRun({ hero: 'marrow', seed: 'waive2' }); RUN.addRelic(run, 'r_free_sample');
+    const [a, b] = run.deck.filter((i) => canGraft(i, GID));
+    RUN.applyGraft(run, a.uid, GID, { keepPhase: true }); RUN.applyGraft(run, b.uid, GID, { keepPhase: true });
+    assert.deepEqual([priceOnCard(cardSpec(a), GID).label, priceOnCard(cardSpec(b), GID).label], ['Waived', 'Price']); }
+  assert.equal(SHOP.stripFrees(one(true).inst, GID, 'Frees you of'), 'Its Price was waived.'); assert.equal(SHOP.stripFrees(one(false).inst, GID, 'Frees you of'), 'Frees you of: ' + G.price);
+  const boot = async (run, scale) => {
+    const app = await makeApp({ run, audio, meta: { settings: { tips: false }, tips: {} } });
+    if (scale < 1) { app.scale = scale; app.minPx = 11; }
+    app.ctx.measureText = (t) => { const m = /(\d+(?:\.\d+)?)px/.exec(String(app.ctx.font || '')); const sz = m ? +m[1] : 16; return { width: String(t).length * sz * (/bold/.test(String(app.ctx.font || '')) ? 0.56 : 0.52) }; }; // proportional, as in the layout suite
+    const said = []; const raw = app.text; app.text = (str, x, y, o = {}) => { said.push({ s: String(str), cut: !!o.fit && app.layoutText(String(str), o).trunc }); return raw(str, x, y, o); };
+    app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {} };
+    return { app, said };
+  };
+  const strs = (said) => said.map((x) => x.s);
+  for (const scale of [1, 0.54]) for (const waived of [true, false]) {
+    const want = `${waived ? 'Waived' : 'Price'}: ${G.price}`, not = `${waived ? 'Price' : 'Waived'}: ${G.price}`, tag = `${waived ? 'waived' : 'due'} @${scale}`;
+    { // combat: the tip of the hand card
+      const { run, inst } = one(waived); run.deck = run.deck.filter((i) => i === inst || run.deck.indexOf(i) < 2); // three cards (and the junk of an unwaived Price): the card is in the opening hand
+      run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime'] };
+      const { app } = await boot(run, scale); app.register('combat', combat); app.go('combat', { run }); frames(app, 220);
+      let tip = '';
+      for (const r of LR.getAll().filter((q) => /^hand_/.test(q.id))) {
+        app.mouse.x = r.x + r.w / 2; app.mouse.y = r.y + Math.min(r.h / 2, 60); frames(app, 40);
+        const L = app.tipLayout; if (!L || L.frame !== app.frame) continue;
+        const txt = L.panels.flatMap((p) => p.secs).map((x) => `${x.title}\n${x.text}`).join('\n'); if (!txt.includes(G.name)) continue;
+        tip = txt; assert.ok(L.rect.x >= 5.5 && L.rect.y >= 5.5 && L.rect.x + L.rect.w <= 1274.5 && L.rect.y + L.rect.h <= 714.5, 'the tip stays on the stage: ' + tag);
+      }
+      assert.ok(tip.includes(want) && !tip.includes(not) && tip.includes('Boon: ' + G.boon), `combat tip, ${tag}:\n${tip}`);
+    }
+    { // deck view: the side panel of the hovered card
+      const { run, inst } = one(waived); run.deck = [inst];
+      const { app, said } = await boot(run, scale); app.register('deckview', deckview); app.register('base', { draw() {} }); app.go('base'); app.push('deckview', { run }); frames(app, 40);
+      let panel = null;
+      for (let gy = 180; gy < 520 && !panel; gy += 40) for (let gx = 40; gx < 500 && !panel; gx += 40) { app.mouse.x = gx; app.mouse.y = gy; said.length = 0; frames(app, 3); if (strs(said).includes(G.price)) panel = said.slice(); }
+      assert.ok(panel, 'the card was hovered: ' + tag);
+      assert.ok(strs(panel).includes(waived ? 'Waived' : 'Price') && !strs(panel).includes(waived ? 'Price' : 'Waived'), `deck view label, ${tag}`);
+      // Tempered for good: the fused graft keeps its waiver and says so in its one line
+      inst.fused = [GID]; inst.grafts = []; said.length = 0; frames(app, 3);
+      assert.ok(strs(said).includes(`${G.boon} ${want}`), `deck view, tempered, ${tag}`);
+    }
+    { // the graft choice of Strip and Reforge (Forge and Dispensary share it)
+      const { run, inst } = one(waived), st = {};
+      SHOP.openGraftChoice(st, { title: 'Strip which graft?', inst, info: (gid) => SHOP.infoFromDeck(run, SHOP.stripDeck(run, inst.uid, gid), [{ t: SHOP.stripFrees(inst, gid, 'Frees you of'), c: '#8fd18f' }]) });
+      const { app, said } = await boot(run, scale); app.register('m', { draw(a) { SHOP.drawModal(a, st, run); } }); app.go('m');
+      app.mouse.x = 700; app.mouse.y = 180; frames(app, 30);
+      const line = said.filter((x) => x.s === want);
+      assert.ok(line.length > 0 && !strs(said).includes(not), `strip modal, ${tag}: ` + strs(said).filter((x) => /Price|Waived/.test(x)).join(' | '));
+      assert.ok(line.every((x) => !x.cut), `the line is not cut short, ${tag}`);
+      assert.ok(strs(said).join(' ').replace(/\s+/g, ' ').includes(waived ? 'Its Price was waived.' : 'Frees you of: ' + G.price), `strip note (the info panel wraps it), ${tag}`);
+    }
+  }
 });
 
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);

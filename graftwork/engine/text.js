@@ -1,5 +1,5 @@
 // Rules text generated from the spec, so a card always shows its REAL numbers (grafts, Overload and Tithe included).
-import { STATUSES, CARDS } from '../data/index.js';
+import { STATUSES, CARDS, GRAFTS } from '../data/index.js';
 import { mult, scaleNum } from './combat.js';
 
 const SRC_NAMES = {
@@ -110,5 +110,11 @@ export function priceLines(spec) {
   if (p.drawdown) out.push(`Draw ${p.drawdown} fewer next turn.`);
   if (p.gold) out.push(`Costs ${p.gold} gold to play.`);
   return out;
+}
+// The Price of a graft as it reads on a card that carries it (spec = cardSpec of that card). A Price that Free Sample waived
+// is not due, and the card's own text no longer has it: every screen that lists the card's grafts labels it Waived, not Price.
+export function priceOnCard(spec, gid) {
+  const waived = spec.waived.includes(gid);
+  return { waived, label: waived ? 'Waived' : 'Price', text: GRAFTS[gid].price };
 }
 export function statusText(id, n) { const d = STATUSES[id]; return d ? d.desc(n || 1) : id; }
