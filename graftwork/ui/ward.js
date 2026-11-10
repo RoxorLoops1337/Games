@@ -221,6 +221,7 @@ export default {
     if (params && params.then && !S.walk) app.after(1, () => app.shared.flow.route()); // nothing to show: on to the trigger's screen
   },
   leave() { },
+  thaw(app, ms) { if (S && S.banner && S.banner.t0) S.banner.t0 += ms; }, // a modal covered the Ward for ms: the banner's wall clock did not run either
   // the Ward idles at 30 fps after 4 s without input, but never while something is moving on its own: the hero walking, a banner, a transition, the die, rest of day, particles
   calm() { return !!S && !S.walk && !S.banner && !S.trans && !S.dieRolling && !S.rest && !S.fx.busy; },
   key(app, e) { return !!(S && S.run && S.run.ward && e.key === 'Tab' && app.top() === this); }, // Tab walks the rooms (kbItems): keep the browser focus on the page

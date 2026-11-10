@@ -10,5 +10,4 @@ export const FLAGS = Object.assign({
   bloomShift: 0, // bloom base resolution: 0 = auto (half res, quarter above 1800 px wide), 1 = half, 2 = quarter
   bloomFloat: 1, // 0 = RGBA8 bloom buffers even where half float renders (much cheaper on software GL)
   metrics: 1, // text width cache (ui/text_metrics.js); 0 = measureText every time
-  skip: 1, // static frame skipping (ui/frame_state.js)
 }, G);

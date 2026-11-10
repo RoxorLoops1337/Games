@@ -87,6 +87,7 @@ export function drawInstallToast(app) {
 
 // The iOS instruction dialog, a screen (app.register('install_help', installHelp)): pushed by install().
 export const installHelp = {
+  calm() { return true; },
   enter() { this.fresh = true; },
   leave() {},
   draw(app) {
