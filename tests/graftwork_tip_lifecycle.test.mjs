@@ -42,7 +42,10 @@ const settle = (app, n = 40) => frames(app, n);
   FX_OPTS.reduced = false;
   const app = await combatApp(); const r = handRects()[1];
   over(app, r); frames(app, 6); assert.ok(!vis(app), 'no tip in the first 0.1 s of a hover (a sweep across the hand shows nothing)');
-  frames(app, Math.ceil(TIP_TIMING.SHOW_DELAY * 60) + 4); assert.ok(vis(app), 'the tip shows after the hover delay');
+  // the real delay: this is the one suite that runs it (the layout sweeps switch it off)
+  assert.equal(TIP_TIMING.SHOW_DELAY, 0.25, 'the show delay is a quarter of a second');
+  frames(app, 8); assert.ok(!vis(app), 'and none after 14 frames (0.23 s): just under the delay');
+  frames(app, Math.ceil(TIP_TIMING.SHOW_DELAY * 60) + 4 - 8); assert.ok(vis(app), 'the tip shows after the hover delay');
   assert.ok(app.tipLayout.panels.length === 1, 'one panel');
   settle(app, 20);
   off(app); frames(app, 1); frames(app, 1);
