@@ -7,7 +7,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, drawGraftPatch, CARD_W, CARD_H } from '../art/cards.js';
 import { drawRelic, drawPotion, drawCoin, paintedGauge } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
-import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
+import { cardSpec, canGraft, strainInfo, previewGraft, deckStripped, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines, priceOnCard } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
 import { tscale, hpPerPlay } from './graft_parts.js';
@@ -81,13 +81,7 @@ export function graftPreview(run, uid, gid) {
   { const hb = hpPerPlay(cardSpec(inst)), ha = hpPerPlay(cardSpec({ ...inst, grafts: [...inst.grafts, gid] })); if (hb > 0 && ha > hb) lines.unshift({ t: `HP stacks: this card already costs ${hb} HP a play, with this graft ${ha}.`, c: COL.bad }); }
   return { before: p.before, after: p.after, names: p.tithedNames, lines };
 }
-export function stripDeck(run, uid, gid) {
-  return run.deck.map((i) => {
-    if (i.uid !== uid) return i;
-    const k = i.grafts.indexOf(gid);
-    return { ...i, grafts: i.grafts.filter((_, idx) => idx !== k) };
-  });
-}
+export function stripDeck(run, uid, gid) { return deckStripped(run.deck, uid, gid); }
 
 // ---- modal pickers --------------------------------------------------------------------------------------------------
 // st = { m: null | modal }. Cards: openCards(st, {title, sub, cards:[inst], reason(inst)->str|null, info(inst)->preview, onPick(inst), canCancel})

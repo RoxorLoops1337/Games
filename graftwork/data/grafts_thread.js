@@ -5,15 +5,14 @@ const hasD = (s) => s.fx.some((o) => o.op === 'dmg');
 const hasB = (s) => s.fx.some((o) => o.op === 'block');
 const numbers = (s) => hasD(s) || hasB(s);
 const foe = (A, ctx) => (ctx.target && !ctx.target.dead ? ctx.target : (A.alive()[0] || null));
-const stitchesOf = (len) => Math.max(0, Math.min(5, len || 0) - 1);
 const seam = (A) => A.c.seam || { len: 0, set: [], counts: {}, cuts: 0 };
 const schoolsIn = (s) => Object.keys(s.counts || {}).filter((k) => s.counts[k] > 0);
 
 // What did the engine do with THIS card? Reads the events since its 'play' event (seamExtend / seamCut / seamSlack / seamFray).
 //   extend: it tied a knot (it extended a Line, or started one on an empty rail). len = the Line then.
 //   cut:    it cut a Line, by school or by its own "Cut the Line." effect. len = the Line it cut. The Line the card starts
-//           right after its own cut is the new Line, not an extend. stitches = what that Line held for a "per stitch" boon:
-//           none when the cut came after the turn's paying cuts (the engine marks the event capped), since it paid no stitch.
+//           right after its own cut is the new Line, not an extend. stitches = what the cut paid, for a "per stitch" boon (the paid
+//           field of the event): none when the cut came after the turn's paying cuts or an enemy voided it. Never the Line's length.
 function kindsOf(A, ctx) {
   const ev = A.c.ev, uid = ctx.card && ctx.card.uid, out = {};
   let i = ev.length - 1;
@@ -21,7 +20,7 @@ function kindsOf(A, ctx) {
   for (i = Math.max(0, i); i < ev.length; i++) {
     const e = ev[i];
     if (e.card !== uid) continue;
-    if (e.t === 'seamCut') { if (e.kind === 'cut' && !out.cut) out.cut = { kind: 'cut', len: e.len, stitches: e.capped ? 0 : stitchesOf(e.len) }; }
+    if (e.t === 'seamCut') { if (e.kind === 'cut' && !out.cut) out.cut = { kind: 'cut', len: e.len, stitches: e.paid | 0 }; }
     else if (e.t === 'seamExtend') { if (!out.cut && !out.extend) out.extend = { kind: 'extend', len: e.len }; }
     else if (e.t === 'seamSlack') out.slack = { kind: 'slack' };
     else if (e.t === 'seamFray') out.fray = { kind: 'fray' };

@@ -3,7 +3,7 @@
 //   map poses   ui/ward_iso.js  gait() (distance driven stride, hop, squash, lean) + drawActor() (grounding, contact shadow, the puppet walk of ui/puppet.js)
 //   battle      ui/combat_art.js drawHeroSprite / drawEnemySprite / drawBackdrop (lunge, hit, block, death, auras, statuses) + ui/juice.js timing
 //   rooms       ui/ward_kit_iso.js (the modular kit floor) + data/ward_kit.js recipes
-//   rig         ui/rig.js (the placeholder humanoid and its step cycle)
+//   rig         ui/rig.js + ui/rigs.js (the painted character rigs of assets/rigs: idle and the two-step walk; and the capsule placeholder)
 //   frames      ui/assets.js (frames, frame, pickAtkFrame, normalizeFrames): the battle frames atk, hit, die
 // The map walk has two sources, the game's two paths: `puppet` (what the game draws) and `procedural` (the hop the game falls back to when a sprite cannot be
 // cut into a puppet; in the battle scenes it hides the painted frames).
@@ -11,6 +11,8 @@
 //   &t=1.2 (freeze at a time) &frame=2 (jump to a frame) &speed=0.5 &grid=1 &feet=1 &contact=1 &onion=1 &flip=1 &calm=1 &scale=1.5
 //   map: &pace=normal|fast|wander &tod=morning|midday|evening|night   battle: &hero=marrow &enemies=a,b,c &act=1..3 &do=attack|eattack|hit|block|die|heal|status
 //   compare: &actor2=wick &source2=procedural
+//   rig: &who=marrow|...|placeholder &anim=idle|walk &pace=slow|game|fast &heading=flat|down|up &bones=1 &onion=1 &flip=1 &cmp=0 (the rig alone)
+//   The Rig lab shows every rig of the manifest whatever the preview switch says; add ?rig=1 to see the rigs in the other scenes as the game would draw them.
 import { assets } from '../ui/assets.js';
 import * as CA from '../ui/combat_art.js';
 import * as ISO from '../ui/ward_iso.js';
@@ -19,6 +21,7 @@ import * as RIG from '../ui/rig.js';
 // The figures are seen from the front: the character's own RIGHT side is on the screen's LEFT. Internal ids stay by screen side (L, R); everything shown goes through these.
 const SN = RIG.sideName, SNs = (s) => String(s === undefined || s === null ? '' : s).replace(/[LR]/g, (c) => SN(c));
 import * as PUP from '../ui/puppet.js';
+import { rigs } from '../ui/rigs.js';
 import { gaitEntry } from '../data/gaits.js';
 import * as J from '../ui/juice.js';
 import * as L from '../ui/combat_layout.js';
@@ -43,6 +46,7 @@ const APP = {
 };
 assets.setBase('../assets/ward/');
 assets.ensure(APP);
+rigs.setBase('../assets/rigs/');
 let PACE = { normal: { step: 1.1, dwell: 0.35 }, fast: { step: 0.65, dwell: 0.15 }, reduced: { step: 0.12, dwell: 0 } }; // the game's PACE (ui/ward.js), replaced below when it loads
 import('../ui/ward.js').then((m) => { if (m && m.PACE) PACE = m.PACE; }).catch(() => { /* keep the copy above */ });
 let ART_META = {}; // tools/graftwork_art_meta.json: the framesOk flag lives there (the build drops rejected frames from the manifest)
@@ -60,7 +64,8 @@ const ST = {
   actor2: Q.get('actor2') || Q.get('actor') || 'marrow', source2: srcOf(Q.get('source2'), 'procedural'), split: qb('split', true),
   map: { actor: Q.get('actor') || 'marrow', pace: Q.get('pace') || 'normal', tod: Q.get('tod') || 'midday', zoom: qn('zoom', 1), trail: true },
   battle: { hero: Q.get('hero') || 'marrow', enemies: (Q.get('enemies') || 'gauze_mummy,bedpan_slime').split(',').filter(Boolean).slice(0, 3), act: clamp(qn('act', 1), 1, 3), status: false, aura: true, frames: true, target: 'enemies' },
-  rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true },
+  rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true,
+    who: Q.get('who') || 'marrow', anim: Q.get('anim') === 'idle' ? 'idle' : 'walk', pace: ['slow', 'game', 'fast'].includes(Q.get('pace')) ? Q.get('pace') : 'game', heading: ['flat', 'down', 'up'].includes(Q.get('heading')) ? Q.get('heading') : 'flat', bones: qb('bones', false), marks: qb('marks', true), cmp: qb('cmp', true) },
 };
 const CLK = { t: 0, abs: 0, playing: !((Q.has('t') || Q.has('frame')) && ['viewer', 'compare', 'rig'].includes(ST.scene)) && qb('play', true), speed: qn('speed', 1), loop: qb('loop', true) };
 if (Q.has('t')) CLK.t = qn('t', 0);
@@ -427,7 +432,7 @@ function pickItem(m, anim, source, it) {
 const READ = $('read');
 let readT = 0;
 const SMALLV = () => innerHeight < 560;
-const SKIP_SMALL = new Set(['actor', 'image', 'contact', 'pace', 'shadow', 'clock']);
+const SKIP_SMALL = new Set(['actor', 'image', 'contact', 'pace', 'shadow', 'clock', 'rig', 'reach', 'body']);
 function setRead(rows) {
   READ.textContent = '';
   if (SMALLV()) rows = rows.filter((r) => typeof r === 'string' || !SKIP_SMALL.has(r[0]));
@@ -814,10 +819,9 @@ function rigStrip() {
   });
   stripSet('rig|' + key, items, (it) => { CLK.playing = false; RG.ph = it.key * 0.25 + 2 * Math.floor(RG.ph / 2); });
 }
-SC.rig = {
+const RIGPH = { // the capsule placeholder (no art): the first proof of the step cycle, kept as one entry of the Rig lab's picker
   build() {
-    UI.reset();
-    UI.note('Rig lab', 'The procedural placeholder humanoid from ui/rig.js walking with its real step cycle (walkPose over a distance driven phase). It is not art: it shows the walk the rig approach will give once the art parts exist. Feet alternate by construction.',
+    UI.note('Placeholder', 'The procedural placeholder humanoid from ui/rig.js walking with its real step cycle (walkPose over a distance driven phase). It is not art: it was the proof of the walk before the painted parts existed. Feet alternate by construction.',
       'Does one foot plant, then the other, with the body lowest at contact and highest at passing? Does the planted foot slide (slide readout near 0)? Do arms swing against the legs?');
     const R = ST.rig;
     UI.range(UI.group('Cycle'), 'Stride', 10, 52, 1, () => R.stride, (v) => { R.stride = v; }, (v) => v + ' u');
@@ -869,12 +873,139 @@ SC.rig = {
         ['planted foot slide', `${RG.slide.toFixed(1)} units/s (${(sl / Math.max(1, speed) * 100).toFixed(0)}% of speed)`, sl / Math.max(1, speed) < 0.25 ? 'good' : 'warn'], ['body bob', `${P.bob.toFixed(2)}  lean ${P.lean.toFixed(3)}`]]);
     }
   },
-  leave() { $('plant').style.display = 'none'; },
 };
 function transport2(row) {
   UI.button(row, '◀', () => { CLK.playing = false; RG.ph = Math.max(0, Math.floor(RG.ph / 0.25 + 1e-6) * 0.25 - 0.25); });
   UI.button(row, 'Play', () => { CLK.playing = !CLK.playing; }, () => CLK.playing);
   UI.button(row, '▶', () => { CLK.playing = false; RG.ph = (Math.floor(RG.ph / 0.25 + 1e-6) + 1) * 0.25; });
+}
+
+// ---------------- scene: Rig lab, the painted rigs ----------------
+// The rig of one character (assets/rigs, posed by ui/rig.js exactly as the Ward poses it) next to the same character as the game's puppet and as the painted
+// standing sprite, all three on one clock and one distance walked, so drift and quality show at a glance.
+const RL = { dist: 0, w: 1, slotP: null, who: '', st: { ph: 0, w: 0, t: 0, ux: 1, uy: 0, calm: false }, seen: {}, slide: 0, deep: 0, peak: 0, key: '' };
+const HEADINGS = { flat: [1, 0], down: [0.886, 0.463], up: [0.886, -0.463] }; // the Ward's floor is a 2:1 diamond: its rooms lie down-right and up-right of each other
+const rigIds = () => rigs.ids();
+function rigSpeed() { const base = KR.worldLen(4, 0) / PACE.normal.step; return ST.rig.pace === 'slow' ? base * 0.5 : ST.rig.pace === 'fast' ? KR.worldLen(4, 0) / PACE.fast.step : base; }
+function rigBones(gg, rig, c) {
+  gg.lineWidth = 1.2; gg.strokeStyle = 'rgba(120,220,255,.9)';
+  for (const b of rig.bones) { if (!b.p) continue; const q = rig.B[b.p]; gg.beginPath(); gg.moveTo(q.m[4], q.m[5]); gg.lineTo(b.m[4], b.m[5]); gg.stroke(); }
+  for (const b of rig.bones) { gg.fillStyle = b.empty ? '#ff5ad0' : b.n.endsWith('L') || b.n.includes('L_') ? '#5aa0ff' : b.n.endsWith('R') || b.n.includes('R_') ? '#ff9a4a' : '#ffd24a'; gg.beginPath(); gg.arc(b.m[4], b.m[5], 2.2, 0, 7); gg.fill(); }
+  for (const s of ['L', 'R']) { RIG.footContact(rig, s, c); gg.strokeStyle = s === 'L' ? '#5aa0ff' : '#ff9a4a'; gg.beginPath(); gg.moveTo(c.x - 5, c.y); gg.lineTo(c.x + 5, c.y); gg.stroke(); }
+}
+// one posed rig at the origin (= the floor point), in world px; s0 = world px per rig unit
+function rigFigure(gg, R, s0, st, o = {}) {
+  RIG.poseRig(R.rig, st);
+  if (o.shadow !== false) ISO.groundShadow(gg, 0, 0, clamp(R.rig.foot[2] * s0 * 0.8, R.rig.H * s0 * 0.27, R.rig.H * s0 * 0.7), 0.5);
+  const m6 = RIG.rigPlace(R.rig, 0, 0, s0, false);
+  gg.save(); gg.transform(m6[0], m6[1], m6[2], m6[3], m6[4], m6[5]); RIG.drawRigged(gg, R.rig, R.img); if (o.bones) rigBones(gg, R.rig, { x: 0, y: 0, bx: 0, by: 0 }); gg.restore();
+}
+function rigStripReal(R, s0world) {
+  const u = HEADINGS[ST.rig.heading], key = 'rigreal|' + R.rig.id + '|' + ST.rig.heading;
+  const items = [];
+  const thumb = (st) => (x, W, H) => { x.fillStyle = '#0d0907'; x.fillRect(0, 0, W, H); const k = (H - 26) / R.rig.H; x.strokeStyle = '#6a4a2a'; x.beginPath(); x.moveTo(0, H - 12 - (u[1] / u[0]) * W / 2); x.lineTo(W, H - 12 + (u[1] / u[0]) * W / 2); x.stroke(); x.save(); x.translate(W / 2, H - 12); rigFigure(x, R, k, st, { shadow: false }); x.restore(); };
+  for (let i = 0; i < 8; i++) { const ph = i * 0.25; items.push({ key: 'w' + i, ph, name: ['contact', 'down', 'passing', 'up'][i % 4], sub: SN(RIG.leadFoot(ph)) + ' leads', draw: thumb({ ph, w: 1, t: 0, ux: u[0], uy: u[1], calm: false }) }); }
+  for (let i = 0; i < 4; i++) items.push({ key: 'i' + i, idle: i * 0.75, name: 'idle', sub: (i * 0.75).toFixed(2) + ' s', draw: thumb({ ph: 0, w: 0, t: i * 0.75, ux: 1, uy: 0, calm: false }) });
+  stripSet(key, items, (it) => { CLK.playing = false; if (it.ph !== undefined) { ST.rig.anim = 'walk'; RL.w = 1; RL.dist = (it.ph + 2 * Math.floor(RL.dist / s0world / 2)) * s0world; } else { ST.rig.anim = 'idle'; RL.w = 0; CLK.abs = it.idle; } UI.sync(); });
+}
+SC.rig = {
+  build() {
+    UI.reset();
+    const R = ST.rig, ids = rigIds();
+    const who = UI.group('Character');
+    UI.select(who, [{ label: 'Painted rigs', items: ids.map((id) => { const e = rigs.entry(id); return { v: id, t: nameOf(id) + (e && e.ship ? '' : '  (lab only)') }; }) }, { label: 'No art', items: [{ v: 'placeholder', t: 'Placeholder (capsules)' }] }], () => R.who, (v) => { R.who = v; RL.who = ''; SC.rig.build(); });
+    if (R.who === 'placeholder') { RIGPH.build(); return; }
+    UI.note('Rig lab', 'A character as a skeleton with painted parts (ui/rig.js, assets/rigs): idle and a two-step walk, posed by the same code the Ward uses with the rig preview on. Beside it the same character as the puppet the game draws today and as its painted standing sprite, on one clock.',
+      'Do the feet alternate, one forward step then the other? Does a planted sole stay on its floor mark (slide near 0)? Do the legs come out from UNDER the hem, with no gap and no dark wedge beside the cloth? Does the head sit on the neck, is the prop in the right hand and in front? Is it the same person as the standing sprite?');
+    const an = UI.group('Animation'); UI.button(an, 'Idle', () => { R.anim = 'idle'; }, () => R.anim === 'idle'); UI.button(an, 'Walk', () => { R.anim = 'walk'; }, () => R.anim === 'walk');
+    const pc = UI.group('Walk speed'); for (const k of ['slow', 'game', 'fast']) UI.button(pc, k[0].toUpperCase() + k.slice(1), () => { R.pace = k; }, () => R.pace === k, k === 'game' ? 'The hero at the Normal pace: one room in ' + PACE.normal.step + ' s' : k === 'fast' ? 'The Fast walk setting' : 'Half the game speed');
+    const hd = UI.group('Heading on the floor'); for (const [k, lab] of [['flat', 'Level'], ['down', 'Down-right'], ['up', 'Up-right']]) UI.button(hd, lab, () => { R.heading = k; }, () => R.heading === k, 'The Ward walks along its diamond floor: down the screen the reaching leg is longer, up the screen shorter');
+    const t = UI.group('Playback'); UI.button(t, '◀', () => rigStep(-1), null, 'Back a quarter step'); UI.button(t, 'Play', () => { CLK.playing = !CLK.playing; }, () => CLK.playing); UI.button(t, '▶', () => rigStep(1), null, 'On a quarter step');
+    UI.range(UI.group(), 'Speed', 0.1, 2, 0.05, () => CLK.speed, (v) => { CLK.speed = v; }, (v) => v.toFixed(2) + 'x');
+    const o = UI.group('View');
+    UI.toggle(o, 'Bones', () => R.bones, (v) => { R.bones = v; }, 'Joints and bones; pink = a bone that is empty on purpose, the short bars = where each sole meets the floor'); UI.toggle(o, 'Floor marks', () => R.marks, (v) => { R.marks = v; }, 'Marks fixed to the floor: a planted foot must travel with them');
+    UI.toggle(o, 'Onion skin', () => ST.onion, (v) => { ST.onion = v; }, 'Blue = a quarter step back, orange = a quarter step on'); UI.toggle(o, 'Flip', () => ST.flip, (v) => { ST.flip = v; }); UI.toggle(o, 'Puppet + sprite', () => R.cmp, (v) => { R.cmp = v; }, 'The same character as the game\'s puppet and as the standing sprite');
+    UI.toggle(o, 'Reduced motion', () => ST.calm, (v) => { ST.calm = v; });
+    UI.range(UI.group('Rig tune (ui/rig.js RIG_TUNE)'), 'Depth', 0, 1, 0.05, () => RIG.RIG_TUNE.depth, (v) => { RIG.RIG_TUNE.depth = v; }, (v) => (v * 100).toFixed(0) + '%'); // how much of the floor's screen-y travel the feet follow on a diagonal: 100% = no slide at all, but the legs grow and fold
+    UI.range(UI.group(), 'Boot roll', 0, 1, 0.02, () => RIG.RIG_TUNE.roll, (v) => { RIG.RIG_TUNE.roll = v; }, (v) => (v * 57.3).toFixed(0) + '\u00b0');
+    UI.range(UI.group(), 'Scale', 0.5, 2.5, 0.05, () => ST.scale, (v) => { ST.scale = v; }, (v) => v.toFixed(2) + 'x');
+  },
+  draw(w, h) {
+    const R = ST.rig;
+    if (!rigs.ids().length) rigs.get(R.who, APP, true); // the first ask starts the manifest
+    else if (RL.key !== 'built') { RL.key = 'built'; if (R.who !== 'placeholder' && !rigs.entry(R.who)) R.who = rigs.ids()[0]; SC.rig.build(); UI.sync(); }
+    if (R.who === 'placeholder') { RIGPH.draw(w, h); return; }
+    if (!rigs.ids().length) { g.fillStyle = '#a8977a'; g.font = '14px Georgia'; g.textAlign = 'center'; g.fillText(rigs.state === 'none' ? 'The rig manifest did not load (assets/rigs/manifest.json).' : 'Loading the rigs...', w / 2, h / 2); setRead([]); RL.key = ''; return; }
+    const m = metaOf(R.who), RG2 = rigs.get(R.who, APP, true), e = rigs.entry(R.who);
+    if (!m || !RG2) { g.fillStyle = '#a8977a'; g.font = '14px Georgia'; g.textAlign = 'center'; g.fillText('Loading ' + R.who + '...', w / 2, h / 2); setRead([]); return; }
+    warm(m);
+    const rig = RG2.rig, s0 = m.h * (m.d.scale || 1) / m.d.h, stepW = rig.stride * rig.H * s0, u = HEADINGS[R.heading], walk = R.anim === 'walk' && !ST.calm;
+    const dt = CLK.playing ? DT * CLK.speed : 0; CLK.abs += dt;
+    if (RL.who !== R.who) { RL.who = R.who; RL.slotP = newSlot(); RL.seen = {}; RL.peak = 0; }
+    RL.w += ((walk ? 1 : 0) - RL.w) * Math.min(1, (CLK.playing ? DT : 1) * 9); if (Math.abs(RL.w - (walk ? 1 : 0)) < 0.01) RL.w = walk ? 1 : 0;
+    const speed = rigSpeed(); if (walk) RL.dist += speed * dt;
+    const ph = RL.dist / stepW, st = RL.st; st.ph = ph; st.w = RL.w; st.t = CLK.abs; st.ux = u[0]; st.uy = u[1]; st.calm = ST.calm;
+    // layout: the rig large, the puppet and the standing sprite beside it
+    const cmp = R.cmp, pw = cmp ? w * 0.44 : w, sw = cmp ? (w - pw) / 2 : 0, top = 22, gy = (h - top) * 0.84, fl = ST.flip ? -1 : 1;
+    const z = Math.min((h - top) * 0.62, (cmp ? sw : pw * 0.5) * 1.15) / (rig.H * s0) * ST.scale, slope = u[1] / u[0] * fl;
+    const floor = (cx, half) => { g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx - half, gy - slope * half); g.lineTo(cx + half, gy + slope * half); g.stroke(); };
+    g.fillStyle = '#17110c'; g.fillRect(0, 0, w, h);
+    // ---- the rig
+    const cx = pw / 2; floor(cx, pw * 0.46);
+    if (R.marks) { // marks that are fixed to the floor: they travel back as the figure walks, and a planted foot travels with them
+      const gap = stepW * z, off = ((RL.dist * z) % gap + gap) % gap;
+      g.fillStyle = 'rgba(234,223,198,.4)'; for (let x = -Math.ceil(pw / gap) * gap - off; x < pw * 0.46; x += gap) { if (x < -pw * 0.46) continue; g.fillRect(cx + x * fl - 1, gy + slope * x * fl, 2, 7); }
+    }
+    g.save(); g.beginPath(); g.rect(0, 0, pw, h - top); g.clip(); g.translate(cx, gy); g.scale(z * fl, z);
+    if (ST.onion && walk) { const q = { ...st }; q.ph = ph - 0.25; ghost(g, '#4aa0ff', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false })); q.ph = ph + 0.25; ghost(g, '#ff6a4a', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false })); }
+    rigFigure(g, RG2, s0, st, { bones: R.bones });
+    g.restore();
+    // where each sole meets the floor, and how still a planted sole stands in the world (units of the rig per second)
+    const I = rig.info, c = { x: 0, y: 0, bx: 0, by: 0 }; let slide = 0, deep = 0;
+    for (const s of ['L', 'R']) {
+      const L = rig.legs[s]; RIG.footContact(rig, s, c);
+      const sx = cx + (c.x - rig.foot[0]) * s0 * z * fl, sy = gy + (c.y - rig.foot[1]) * s0 * z;
+      g.strokeStyle = s === 'L' ? '#5aa0ff' : '#ff9a4a'; g.fillStyle = g.strokeStyle; g.lineWidth = 2;
+      if (L.plant && RL.w > 0.5) { g.fillRect(sx - 7, sy + 2, 14, 3); g.font = 'bold 11px Georgia'; g.textAlign = 'center'; g.fillText(SN(s), sx, sy + 17); } else { g.strokeRect(sx - 6, sy + 2, 12, 3); }
+      const wx = c.x + ph * rig.stride * rig.H * u[0], wy = c.y + ph * rig.stride * rig.H * u[1], k = s + (L.phi > 0 ? 't' : 'h'), p = RL.seen[k], nth = Math.floor(ph / 2 + (s === 'L' ? 0 : 0.5));
+      if (L.plant && RL.w === 1 && p && dt > 0 && p.n === nth) { slide = Math.max(slide, Math.abs(wx - p.x) / dt); deep = Math.max(deep, Math.abs(wy - p.y) / dt); }
+      RL.seen[k] = { x: wx, y: wy, n: nth };
+    }
+    if (dt > 0 && walk) { RL.slide = slide; RL.deep = deep; RL.peak = Math.max(RL.peak * 0.99, slide); }
+    const label = (x0, ww, txt, col) => { g.fillStyle = 'rgba(18,13,10,.85)'; g.fillRect(x0, h - top, ww, top); g.fillStyle = col || '#eadfc6'; g.font = '12px Georgia'; g.textAlign = 'left'; g.fillText(txt.slice(0, Math.max(8, Math.floor(ww / 6.3))), x0 + 8, h - 7); };
+    label(0, pw, 'RIG: ' + m.name + (e.ship ? ' (ships in the preview)' : ' (lab only, the game keeps the puppet)'), e.ship ? '#9fd89a' : '#e0a050');
+    if (cmp) {
+      // ---- the puppet: the game's own actor draw, forced to the puppet, walking the same distance
+      const sl = RL.slotP, rec = sl.rec; setupRec(rec, m); rec.x = 0; rec.y = 0; rec.flip = fl; rec.pm = 'puppet';
+      runGait(sl, rec, walk ? 'walk' : 'idle', sl.g ? RL.dist / (rec.h * (sl.g.sl || ISO.STRIDE)) : 0, ST.calm, dt || 1 / 60);
+      floor(pw + sw / 2, sw * 0.44);
+      g.save(); g.beginPath(); g.rect(pw, 0, sw, h - top); g.clip(); g.translate(pw + sw / 2, gy); g.scale(z, z); ISO.drawActor(APP, g, rec, { hero: m.id }); g.restore();
+      label(pw, sw, 'PUPPET (the game today)');
+      // ---- the standing sprite
+      const sp = assets.actor(m.id, APP); floor(pw + sw * 1.5, sw * 0.44);
+      if (sp) { const d = sp.def, cc = ISO.contactOf(sp), fx = cc ? cc.fx : d.anchorX, fy = cc ? cc.fy : d.anchorY; g.save(); g.beginPath(); g.rect(pw + sw, 0, sw, h - top); g.clip(); g.translate(pw + sw * 1.5, gy); g.scale(z * fl, z); ISO.groundShadow(g, 0, 0, clamp((cc ? cc.fw : d.w * 0.45) * s0 * 0.8, rec.h * 0.24, rec.h * 0.62), 0.5); g.drawImage(sp.img, -fx * s0, -fy * s0, d.w * s0, d.h * s0); g.restore(); }
+      label(pw + sw, sw, 'STANDING sprite');
+      g.strokeStyle = '#4a3624'; g.lineWidth = 1; g.beginPath(); g.moveTo(pw, 0); g.lineTo(pw, h); g.moveTo(pw + sw, 0); g.lineTo(pw + sw, h); g.stroke();
+    }
+    rigStripReal(RG2, stepW); stripHighlight(walk || R.anim === 'walk' ? 'w' + (Math.floor((((ph % 2) + 2) % 2) / 0.25 + 1e-6) % 8) : '');
+    const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt'));
+    pl.children[0].classList.toggle('lit', I.plantL && RL.w > 0.5); pl.children[1].classList.toggle('lit', I.plantR && RL.w > 0.5); pl.children[2].style.whiteSpace = 'pre';
+    pl.children[2].textContent = RL.w > 0.5 ? `planted ${SNs(I.plant) || '-'}  lead ${SN(I.lead)}\nsole slide ${RL.slide.toFixed(2)} u/s across (peak ${RL.peak.toFixed(2)})${u[1] ? `\nin depth ${(RL.deep || 0).toFixed(0)} u/s (Depth ${(RIG.RIG_TUNE.depth * 100).toFixed(0)}%)` : ''}` : 'idle: both feet planted';
+    if (performance.now() - readT > 90) {
+      readT = performance.now();
+      const cad = speed / stepW;
+      setRead([['rig', `${m.name}: ${e.parts.length} parts, atlas ${e.w} x ${e.h}${e.borrowed ? ', borrowed from the standing sprite: ' + e.borrowed.join(', ') : ''}`], ['ships', e.ship ? 'yes, in the rig preview' : 'no: ' + (e.note || 'lab only'), e.ship ? 'good' : 'warn'],
+        ['step', `${(rig.stride * 100).toFixed(0)}% of the height, planted ${(rig.duty * 100).toFixed(0)}% of the cycle`], ['pace', `${R.pace}: ${speed.toFixed(0)} world px/s, ${cad.toFixed(1)} steps/s`, cad > 3.6 ? 'warn' : 'good'],
+        ['reach', `thigh x${I.thigh.toFixed(2)} (hidden)  shin x${I.stretch.toFixed(2)}  hip slip ${I.slip.toFixed(1)}`, I.slip > 0.04 * rig.H ? 'warn' : null], ['body', `drop ${I.down.toFixed(1)}  lean ${I.lean.toFixed(3)}  hem ${(rig.parts.find((p) => p.hem !== undefined) || { hx: 0 }).hx.toFixed(3)}`]]);
+    }
+  },
+  leave() { $('plant').style.display = 'none'; RL.key = ''; },
+};
+function rigStep(dir) {
+  if (ST.rig.who === 'placeholder') return;
+  const R2 = rigs.get(ST.rig.who, APP, true), m = metaOf(ST.rig.who); if (!R2 || !m) return;
+  const stepW = R2.rig.stride * R2.rig.H * m.h * (m.d.scale || 1) / m.d.h; CLK.playing = false; ST.rig.anim = 'walk'; RL.w = 1;
+  RL.dist = Math.max(0, (Math.round(RL.dist / stepW * 4) + dir) / 4) * stepW;
 }
 
 // ---------------- shell: nav, resize, loop ----------------
@@ -886,7 +1017,7 @@ function mountScene(id) {
   READ.style.top = id === 'compare' ? '32px' : '8px';
   document.querySelectorAll('#scenes button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
   const url = new URL(location.href); url.searchParams.set('scene', id); history.replaceState(null, '', url);
-  $('hint').textContent = id === 'map' ? 'space: play or pause' : 'space: play or pause, comma and period: step';
+  $('hint').textContent = id === 'rig' ? '' : id === 'map' ? 'space: play or pause' : 'space: play or pause, comma and period: step';
 }
 for (const id of SCENES) { const b = mk('button', null, SCENE_LABEL[id]); b.dataset.id = id; b.onclick = () => mountScene(id); $('scenes').append(b); }
 $('ctlBtn').onclick = () => { $('ctl').classList.toggle('hidden'); resize(); };
@@ -929,7 +1060,7 @@ function initJump() {
   if (ST.anim === 'walk') CLK.t = ((n % WALK_N + 0.5) * 2 / WALK_N) / SPS;
   else { const ks = keysOf(m, ST.anim); if (ks.length) CLK.t = ks[clamp(n, 0, ks.length - 1)].t; }
 }
-window.__lab = { SLIDE, PUP, BT, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
+window.__lab = { SLIDE, PUP, BT, RL, rigs, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };
 mountScene(ST.scene);
 requestAnimationFrame(loop);
 setInterval(() => { UI.sync(); }, 1500);

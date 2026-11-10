@@ -1392,7 +1392,7 @@ export function drawCardBack(ctx, x, y, o = {}) {
 
 // The size the rules text gets in a box maxW wide and avail high: the largest of 15 down to `floor` (8; a painted frame's smaller text window goes to 7)
 // at which rules plus price fit. `fits` is false when even the floor spills (the text is then drawn anyway).
-export function cardTextFit(g, lines, price, maxW, avail, floor = 8) {
+function cardTextFit(g, lines, price, maxW, avail, floor = 8) {
   let best = null; const psMin = floor < 8 ? floor + 0.5 : 8.5;
   for (let s = 15; s >= floor; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking rather than spill off the face
     g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);

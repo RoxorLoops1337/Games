@@ -6,8 +6,8 @@ export const HERO_LIST = [
     blurb: 'Blunt, kind and terrifying. Pays for power in his own blood and heals it back with a steady hand.',
     passive: 'Heal 9 HP at the end of each combat. Blood cuts heal 1 extra per stitch.',
     perks: { hp: 82, gold: 99, combatHeal: 9 },
-    // Thread: engine/seam.js fires seamCut {paid, school, len, card}; stitches = min(len,5)-1.
-    on: { seamCut: (A, p) => { if (!p || p.school !== 'blood' || p.paid === false) return; const n = Math.max(0, Math.min(5, p.len || 0) - 1); if (n > 0) A.heal(A.player, n); } },
+    // Thread: engine/seam.js fires seamCut {paid, school, len, card, pays} when the Line is cut (not at the turn end); pays holds the Blood stitches that were paid.
+    on: { seamCut: (A, p) => { if (!p || p.school !== 'blood' || p.paid === false) return; const n = (p.pays.find((x) => x.school === 'blood') || { stitches: 0 }).stitches; if (n > 0) A.heal(A.player, n); } },
     deck: ['m_cut', 'm_cut', 'm_cut', 'm_cut', 'm_cut', 'm_dress', 'm_dress', 'm_dress', 'm_dress', 'm_incision', 'm_incision', 'm_transfuse', 'm_bonesaw', 'm_anesthetic', 'm_tourniquet'],
   },
   {
