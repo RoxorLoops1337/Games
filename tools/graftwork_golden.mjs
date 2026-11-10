@@ -3,7 +3,7 @@
 // Record once on the baseline, record again after a refactor, compare: every key must be identical.
 //
 //   node tools/graftwork_golden.mjs record <out.json> [--root <repo dir>] [--only engine,ui,assets,resume] [--scenes a,b] [--merge]
-//                                      [--quick] [--jobs N] [--resume-from <baseline.json>] [--verify] [--classic-rng]
+//                                      [--quick] [--jobs N] [--resume-from <baseline.json>] [--verify]
 //                                      [--browser [--label <name> | --shots <dir>]]
 //   node tools/graftwork_golden.mjs compare <a.json> <b.json> [--common]      every differing key, exit 1 on any difference
 //   node tools/graftwork_golden.mjs compare-shots <dirA> <dirB> [--tolerance x]   mean absolute pixel difference per screenshot
@@ -52,10 +52,6 @@
 // pass only, 5 screenshots): compare a quick record with a full baseline with `compare --common`.
 // --scenes shop,forge records only those ui / assets scenes; --merge keeps everything this run does not record from the file that
 // is already at <out.json> (to re-record one section or one scene of a golden file).
-// --classic-rng is for ONE comparison: against a record made before the Classic map was retired. Fights, graft tables, forges and
-// content probes were recorded on Classic runs then, and the map generator had drawn from run.rng before the scene's first draw. With
-// this flag the vehicles of those probes and scenes get that very stream (the retired generator's draws are replayed, see
-// classicMapDraws; no map is built), so everything that did not depend on the map compares equal. Never use it for a new reference.
 // --verify runs every child a second time in a fresh process and fails on any difference (the proof that a record is
 // deterministic); it also reports the scenes where a third pass in the same process still differs from the second.
 // Determinism: cold and warm differ by design (card faces, panel textures, sprite layers are cached per process), which is why
@@ -81,8 +77,7 @@ const VALUE_FLAGS = new Set(['root', 'only', 'scenes', 'resume-from', 'shots', '
 const positional = (() => { const out = []; for (let i = 1; i < argv.length; i++) { if (argv[i].startsWith('--')) { if (VALUE_FLAGS.has(argv[i].slice(2))) i++; continue; } out.push(argv[i]); } return out; })();
 const ROOT = path.resolve(opt('root', REPO));
 const QUICK = flag('quick');
-const CLASSIC_RNG = flag('classic-rng');
-const TOOL_VERSION = 2; // 2: Ward runs only (the Classic map is retired), bots from tools/graftwork_driver.mjs, --classic-rng
+const TOOL_VERSION = 3; // 2: Ward runs only (the Classic map is retired), bots from tools/graftwork_driver.mjs; 3: the --classic-rng flag is gone (records made before the retirement no longer compare; the fresh reference is the one in design/CLEANUP_PLAN.md)
 const sha1 = (s) => createHash('sha1').update(s).digest('hex');
 const h12 = (s) => sha1(s).slice(0, 12);
 const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
@@ -449,64 +444,10 @@ function fightProbe(E, run, enemies, kind, turns, o = {}) {
   }
   return { c, turns: out, over: c.over || '-' };
 }
-// ---------------------------------------------------------------- --classic-rng: the stream a Classic run had
-// The retired map generator (engine/run.js genMap as it was at 5f3e252b), kept here for its random draws only: nothing is returned. A
-// vehicle that calls it after a bare newRun has the rng state a Classic run had when its first screen opened. See the header.
-function classicMapDraws(run, act) {
-  const rng = run.rng, COLS = 6;
-  const rows = { 1: 10, 2: 10, 3: 11 }[act];
-  const bossRows = act === 3 ? 2 : 1;
-  const nodes = [];
-  const byRow = [];
-  for (let r = 0; r < rows; r++) {
-    const last = r >= rows - bossRows;
-    const count = last ? 1 : (r === 0 ? rng.range(3, 4) : rng.range(2, 4));
-    const cols = last ? [2] : rng.sample([0, 1, 2, 3, 4, 5], count).sort((a, b) => a - b);
-    const row = cols.map((col) => ({ id: `${act}-${r}-${col}`, row: r, col, type: 'fight', next: [], visited: false }));
-    byRow.push(row); nodes.push(...row);
-  }
-  // edges: every node links to 1 or 2 nodes in the next row, and every node has an incoming edge
-  for (let r = 0; r < rows - 1; r++) {
-    const a = byRow[r], b = byRow[r + 1];
-    const nearest = (n) => b.slice().sort((x, y) => Math.abs(x.col - n.col) - Math.abs(y.col - n.col));
-    for (const n of a) {
-      const near = nearest(n);
-      n.next.push(near[0].id);
-      if (near[1] && rng.chance(0.45) && Math.abs(near[1].col - n.col) <= 2) n.next.push(near[1].id);
-    }
-    for (const m of b) if (!a.some((n) => n.next.includes(m.id))) { const n = a.slice().sort((x, y) => Math.abs(x.col - m.col) - Math.abs(y.col - m.col))[0]; n.next.push(m.id); }
-  }
-  // types
-  const set = (n, type) => { n.type = type; };
-  const bossRow = rows - bossRows;
-  if (act === 3) { set(byRow[rows - 2][0], 'boss'); set(byRow[rows - 1][0], 'final'); } else set(byRow[rows - 1][0], 'boss');
-  const forgeRow = bossRow - 1;
-  for (const n of byRow[forgeRow]) set(n, 'forge');
-  for (const n of byRow[0]) set(n, 'fight');
-  const mid = nodes.filter((n) => n.row >= 1 && n.row < forgeRow);
-  const weights = [['fight', 52], ['event', 20], ['shop', 8], ['forge', 8], ['elite', 12]];
-  for (const n of mid) {
-    let w = weights.filter(([t]) => (t !== 'elite' || n.row >= 3) && (t !== 'shop' || n.row >= 2) && (t !== 'forge' || n.row >= 3));
-    if (n.row === forgeRow - 1) w = w.filter(([t]) => t !== 'forge');
-    set(n, rng.weighted(w, ([, k]) => k)[0]);
-  }
-  // guarantees: a shop around the middle, at least 2 elites (3 on A1+), and two events
-  const need = (type, count, rowMin, rowMax) => {
-    let have = mid.filter((n) => n.type === type).length;
-    const pool = mid.filter((n) => n.row >= rowMin && n.row <= rowMax && n.type === 'fight');
-    while (have < count && pool.length) { set(pool.splice(rng.int(pool.length), 1)[0], type); have++; }
-  };
-  need('shop', 1, 3, 6); need('elite', 2 + (run.ascension >= 1 ? 1 : 0), 3, forgeRow - 1); need('event', 2, 1, forgeRow - 2);
-  // no two shops or forges in a row on one path would be nice; keep it simple
-  for (const n of nodes) { n.x = (n.col + 0.5) / COLS + (rng.next() - 0.5) * 0.04; }
-}
-
 // The run a probe happens on. o.ward: a Ward run with its first floor laid out (what the content needs a floor for, or always had one).
-// Otherwise a bare run, no floor: a fight, a potion or a card needs none. (--classic-rng: plus the draws of the retired map generator,
-// which is the run those probes were recorded on before the retirement.)
+// Otherwise a bare run, no floor: a fight, a potion or a card needs none.
 function probeRun(E, hero, seed, o = {}) {
   const run = E.RUN.newRun({ hero, seed, bare: !o.ward });
-  if (!o.ward && CLASSIC_RNG) classicMapDraws(run, 1);
   run.maxHp = run.hp = 400; if (o.act) run.act = o.act;
   return run;
 }
@@ -578,7 +519,7 @@ function probes(E) {
   P.relic = {}; P.potion = {};
   Object.values(D.RELICS).forEach((r, i) => {
     P.relic[r.id] = g(() => {
-      const run = probeRun(E, HEROES.includes(r.hero) ? r.hero : HEROES[i % 3], 'probe-relic-' + r.id, { ward: !!r.ward || !CLASSIC_RNG }); // a relic reaches into the reward and the shop: it is probed on a floor
+      const run = probeRun(E, HEROES.includes(r.hero) ? r.hero : HEROES[i % 3], 'probe-relic-' + r.id, { ward: true }); // a relic reaches into the reward and the shop: it is probed on a floor
       const added = RUN.addRelic(run, r.id);
       run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: DUMMIES.slice() };
       const f = fightProbe(E, run, DUMMIES, 'normal', 4, {}), res = C.finishCombat(f.c);
@@ -593,7 +534,7 @@ function probes(E) {
   P.event = {};
   Object.values(D.EVENTS).forEach((ev, i) => {
     const prep = () => {
-      const run = probeRun(E, HEROES[i % 3], 'probe-event-' + ev.id, { ward: !!ev.ward || !CLASSIC_RNG, act: ev.act || 1 }); // an event ends back on the Ward
+      const run = probeRun(E, HEROES[i % 3], 'probe-event-' + ev.id, { ward: true, act: ev.act || 1 }); // an event ends back on the Ward
       run.gold = 300; run.hp = 250;
       graftsFor(run.deck[0], 1, fnv(ev.id) % GL.length); graftsFor(run.deck[1], 2, (fnv(ev.id) + 29) % GL.length);
       run.deck.push(K.newInst('j_clot', () => run.uidNext++));
@@ -904,28 +845,12 @@ function enrich(S, o = {}) {
   S.note('deck ' + deckLine(run).slice(0, 4).join(' ') + ' relics ' + run.relics.join(','));
   return run;
 }
-// Start a run through the real flow: it opens on the Ward. (--classic-rng, for the scenes that were recorded on a Classic run: that run
-// without its map, a bare run with the map generator's draws, parked on an empty screen where the map screen used to be.)
-const startRunUi = (S, hero, seed, o = {}) => {
-  const opts = { hero, seed: 'golden-ui-' + seed, ascension: o.asc || 0 };
-  if (!CLASSIC_RNG || o.ward) { S.flow.start(opts); return S.run; }
-  const { RUN, META } = S.M, app = S.app, run = RUN.newRun(META.withUnlocks(app.shared.meta, { ...opts, bare: true }));
-  classicMapDraws(run, 1);
-  app.shared.run = run; if (META.onRunStart) META.onRunStart(app.shared.meta, run);
-  if (!app.screens.golden_parked) app.register('golden_parked', { draw() {} });
-  app.go('golden_parked', { run });
-  return run;
-};
-// the next floor of a run (--classic-rng: what the next act of a Classic run drew)
-const toAct = (S, run, act) => { if (CLASSIC_RNG && !run.ward) { run.act = act; classicMapDraws(run, act); } else S.M.RUN.startAct(run, act); };
-// an event as the Chapel draws it (--classic-rng: the uniform draw a Classic event node made)
-function drawEvent(S, run) {
-  const { WD, D, META } = S.M;
-  if (!CLASSIC_RNG || run.ward) return WD.wardStartEvent(run);
-  const pool = Object.values(D.EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id) && !e.ward), open = pool.filter((e) => META.runAllows(run, e.id));
-  const ev = run.rng.pick(open.length ? open : pool); run.seenEvents.push(ev.id); run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null };
-  return run.pending;
-}
+// Start a run through the real flow: it opens on the Ward.
+const startRunUi = (S, hero, seed, o = {}) => { S.flow.start({ hero, seed: 'golden-ui-' + seed, ascension: o.asc || 0 }); return S.run; };
+// the next floor of a run
+const toAct = (S, run, act) => S.M.RUN.startAct(run, act);
+// an event as the Chapel draws it
+function drawEvent(S, run) { return S.M.WD.wardStartEvent(run); }
 function fightUi(S, enemies, kind = 'normal') { const run = S.run; run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: kind, enemies }; S.flow.route(); }
 // a turn through the real widgets: card, then target; the trail keeps what the engine saw
 function playCards(S, n) {
@@ -1287,8 +1212,8 @@ async function cmdRecord() {
   if (!fs.existsSync(path.join(ROOT, 'graftwork/main.js'))) { console.error(`no graftwork/main.js under ${ROOT}`); process.exit(2); }
   const only = String(opt('only', 'engine,ui,assets,resume')).split(',').map((s) => s.trim()).filter(Boolean);
   const jobs = Math.max(1, Number(opt('jobs', Math.min(4, os.cpus().length))) || 1);
-  const pass = ['--root', ROOT, ...(QUICK ? ['--quick'] : []), ...(CLASSIC_RNG ? ['--classic-rng'] : []), ...(opt('resume-from', null) ? ['--resume-from', path.resolve(opt('resume-from'))] : [])];
-  const t0 = REAL_NOW(), out = { meta: { tool: TOOL_VERSION, root: ROOT, head: gitHead(ROOT), quick: QUICK, ...(CLASSIC_RNG ? { classicRng: true } : {}), sections: only.slice(), node: process.version, recorded: new Date().toISOString(), seconds: {} } };
+  const pass = ['--root', ROOT, ...(QUICK ? ['--quick'] : []), ...(opt('resume-from', null) ? ['--resume-from', path.resolve(opt('resume-from'))] : [])];
+  const t0 = REAL_NOW(), out = { meta: { tool: TOOL_VERSION, root: ROOT, head: gitHead(ROOT), quick: QUICK, sections: only.slice(), node: process.version, recorded: new Date().toISOString(), seconds: {} } };
   const failures = [], tasks = [];
   if (only.includes('engine')) tasks.push({ name: 'engine', args: ['engine', ...pass] });
   if (only.includes('resume')) tasks.push({ name: 'resume', args: ['resume', ...pass] });
