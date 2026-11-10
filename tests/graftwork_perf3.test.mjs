@@ -207,5 +207,37 @@ await t('Ward stamps: after a visit with walking, no figure has a non-finite squ
   }
 });
 
+// ------------------------------------------------------------------ the template art switch
+await t('templates: no request is made while TEMPLATE_ART is off (no manifest, no image), and the switch is the only thing in the way', async () => {
+  const T = await import('../graftwork/ui/templates.js');
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  let fetched = 0, images = 0;
+  const fetchJson = () => { fetched++; return Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] } } }); }, makeImage = () => { images++; return {}; };
+  // the shipped default: whatever fetch it is given, it asks for nothing
+  const L = T.createTemplates({ live: true, fetchJson, makeImage });
+  L.ensure({}); L.ensure({}); L.preload({}); await tick();
+  assert.equal(fetched, 0, 'no manifest request'); assert.equal(images, 0, 'no image request');
+  assert.equal(L.state, 'none'); assert.equal(L.ready(), false); assert.equal(L.available(), false); assert.equal(L.frameImg('panel'), null); assert.equal(L.pickFrame(['panel']), null);
+  // the real browser path (global fetch, Image, window.location): the page load asked for assets/ui/manifest.json here and got a 404
+  const g = globalThis, keep = { fetch: g.fetch, Image: g.Image, loc: g.window && g.window.location };
+  const urls = [];
+  g.fetch = (u) => { urls.push(String(u)); return Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('404')) }); };
+  g.Image = class { }; g.window = g.window || {}; g.window.location = { href: 'http://localhost/graftwork/' };
+  try {
+    const P = T.createTemplates(); P.ensure({}); await tick();
+    T.templates.reset(); T.templates.ensure({}); await tick(); // the singleton every panel, button and card face asks
+    const { app } = await setup(); app.go('ward', { run: app.shared.run }); frames(app, 3); await tick(); // a real screen full of panels and buttons
+    assert.deepEqual(urls, [], 'the page requests nothing for template art');
+    // switch on: the very same loader asks once
+    const Q = T.createTemplates({ art: true }); Q.ensure({}); Q.ensure({}); await tick();
+    assert.deepEqual(urls, ['assets/ui/manifest.json'], 'with the switch on the manifest is requested, once'); assert.equal(Q.state, 'none', 'a 404 still degrades to the procedural look');
+  } finally { g.fetch = keep.fetch; g.Image = keep.Image; if (g.window) g.window.location = keep.loc; T.templates.reset(); }
+  const R = T.createTemplates({ art: true, live: true, fetchJson, makeImage }); R.ensure({}); await tick(); assert.equal(fetched, 1); assert.ok(R.ready());
+  // the switch itself: off exactly while the manifest is absent, and written down where the art pipeline will look
+  assert.equal(T.TEMPLATE_ART, fs.existsSync(new URL('../graftwork/assets/ui/manifest.json', import.meta.url)), 'TEMPLATE_ART is true exactly when graftwork/assets/ui/manifest.json exists');
+  const doc = fs.readFileSync(new URL('../graftwork/design/ART_MODULAR.md', import.meta.url), 'utf8');
+  assert.ok(/TEMPLATE_ART/.test(doc) && /assets\/ui\/manifest\.json/.test(doc), 'design/ART_MODULAR.md names the switch');
+});
+
 console.log(`graftwork perf3: ${n} checks passed`);
 if (process.exitCode) process.exit(process.exitCode);

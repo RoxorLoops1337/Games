@@ -83,23 +83,23 @@ await t('loader_is_a_noop_headless_and_lazy_with_fakes', async () => {
   const L = T.createTemplates();
   L.ensure(); assert.equal(L.state, 'none'); assert.equal(L.ready(), false); assert.equal(L.frameImg('x'), null); assert.equal(L.pickFrame(['a', 'b']), null);
   let fetched = 0;
-  const L2 = T.createTemplates({ live: true, fetchJson: (u) => { fetched++; assert.equal(u, 'assets/ui/manifest.json'); return Promise.resolve({ frames: { p: { file: 'p@1x.webp', file2x: 'p@2x.webp', w: 64, h: 64, slice: [8, 8, 8, 8] } } }); }, makeImage: fakeImg(128, 128) });
+  const L2 = T.createTemplates({ art: true, live: true, fetchJson: (u) => { fetched++; assert.equal(u, 'assets/ui/manifest.json'); return Promise.resolve({ frames: { p: { file: 'p@1x.webp', file2x: 'p@2x.webp', w: 64, h: 64, slice: [8, 8, 8, 8] } } }); }, makeImage: fakeImg(128, 128) });
   L2.ensure(); L2.ensure(); assert.equal(fetched, 1); assert.equal(L2.frameImg('p'), null);
   await tick(); assert.ok(L2.ready());
   assert.equal(L2.frameImg('p'), null); // image requested, not decoded yet
   await tick();
   const fr = L2.frameImg('p'); assert.ok(fr && fr.src.k === 2 && fr.src.lw === 64);
   assert.equal(L2.frameImg('nope'), null); assert.equal(L2.pickFrame(['nope', 'p']).id, 'p');
-  const L3 = T.createTemplates({ live: true, fetchJson: () => Promise.reject(new Error('404')) }); L3.ensure(); await tick(); assert.equal(L3.state, 'none');
-  const L4 = T.createTemplates({ live: true, fetchJson: () => Promise.resolve('<html>') }); L4.ensure(); await tick(); assert.equal(L4.state, 'none');
+  const L3 = T.createTemplates({ art: true, live: true, fetchJson: () => Promise.reject(new Error('404')) }); L3.ensure(); await tick(); assert.equal(L3.state, 'none');
+  const L4 = T.createTemplates({ art: true, live: true, fetchJson: () => Promise.resolve('<html>') }); L4.ensure(); await tick(); assert.equal(L4.state, 'none');
 });
 await t('phone_scale_picks_the_1x_file', async () => {
   const seen = [];
-  const L = T.createTemplates({ live: true, fetchJson: () => Promise.resolve({ frames: { p: { file1x: 'a1.webp', file2x: 'a2.webp', w: 10, h: 10 } } }), makeImage: () => { const im = { width: 10, height: 10 }; Object.defineProperty(im, 'src', { set(v) { seen.push(v); setTimeout(() => im.onload(), 0); } }); return im; } });
+  const L = T.createTemplates({ art: true, live: true, fetchJson: () => Promise.resolve({ frames: { p: { file1x: 'a1.webp', file2x: 'a2.webp', w: 10, h: 10 } } }), makeImage: () => { const im = { width: 10, height: 10 }; Object.defineProperty(im, 'src', { set(v) { seen.push(v); setTimeout(() => im.onload(), 0); } }); return im; } });
   L.ensure({ scale: 0.6 }); await tick(); L.frameImg('p'); await tick(); assert.deepEqual(seen, ['assets/ui/a1.webp']);
 });
 await t('draw_icon_fits_inside_the_box', async () => {
-  const L = T.createTemplates({ live: true, fetchJson: () => Promise.resolve({ atlases: { a: { file: 'a.webp', w: 100, h: 100 } }, icons: { star: { atlas: 'a', rect: [0, 0, 20, 10] } } }), makeImage: fakeImg(200, 200) });
+  const L = T.createTemplates({ art: true, live: true, fetchJson: () => Promise.resolve({ atlases: { a: { file: 'a.webp', w: 100, h: 100 } }, icons: { star: { atlas: 'a', rect: [0, 0, 20, 10] } } }), makeImage: fakeImg(200, 200) });
   L.ensure(); await tick(); assert.equal(L.drawIcon(fakeCtx(), 'star', 0, 0, 40, 40), false); await tick();
   const calls = []; const ctx = { drawImage: (...a) => calls.push(a) };
   assert.equal(L.drawIcon(ctx, 'star', 10, 10, 40, 40), true);
@@ -120,7 +120,7 @@ for (const mode of ['plain', 'empty', 'broken']) {
 await t('card_template_mode_composes_frame_then_painters', async () => {
   const { templates } = T;
   const man = { frames: { 'card_front.attack': { file: 'f.webp', w: 220, h: 310, slots: { window: { x: -80, y: -100, w: 160, h: 80 } }, baked: ['namePlate'] }, 'card_back': { file: 'b.webp', w: 220, h: 310 } } };
-  templates.configure({ live: true, fetchJson: () => Promise.resolve(man), makeImage: fakeImg(440, 620) });
+  templates.configure({ art: true, live: true, fetchJson: () => Promise.resolve(man), makeImage: fakeImg(440, 620) });
   templates.ensure(); await tick(); templates.preload(); await tick();
   const { CARD_LIST } = await import('../graftwork/data/index.js');
   const { cardSpec } = await import('../graftwork/engine/cards.js');
@@ -140,7 +140,7 @@ await t('card_template_mode_composes_frame_then_painters', async () => {
   assert.deepEqual(T.resolveSlots(templates.cardTemplate(fr), {}).window, { x: -80, y: -100, w: 160, h: 80, r: 5 });
   // the back
   const b0 = log.length; C.drawCardBack(fakeCtx(), 0, 0, { t: 1, back: 'plain' }); assert.ok(log.length > b0, 'template back drawn');
-  globalThis.document.createElement = prev; templates.configure({ live: false, fetchJson: null, makeImage: null }); C.clearCardCache();
+  globalThis.document.createElement = prev; templates.configure({ art: T.TEMPLATE_ART, live: false, fetchJson: null, makeImage: null }); C.clearCardCache();
 });
 await t('compose_calls_painters_in_order_with_baked_flags', () => {
   const calls = [];
@@ -158,13 +158,13 @@ await t('panel_and_button_use_a_9_slice_skin_only_when_a_frame_decoded', async (
   const { templates } = T; const CH = await import('../graftwork/ui/chrome.js');
   const mk = () => { const calls = []; return { calls, scale: 1, px: 1, ctx: { globalAlpha: 1, drawImage: (...a) => calls.push(a), save() {}, restore() {}, beginPath() {}, fill() {}, stroke() {}, fillRect() {}, createLinearGradient: () => ({ addColorStop() {} }) }, rr() {} }; };
   const base = mk(); CH.panel(base, 10, 10, 200, 100, {}); CH.button(base, 10, 10, 100, 40, {}, 2);
-  templates.configure({ live: true, fetchJson: () => Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] }, 'button.down': { file: 'bd.webp', w: 48, h: 24, slice: [8, 8, 8, 8] }, button: { file: 'b.webp', w: 48, h: 24, slice: [8, 8, 8, 8] } } }), makeImage: fakeImg(96, 96) });
+  templates.configure({ art: true, live: true, fetchJson: () => Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] }, 'button.down': { file: 'bd.webp', w: 48, h: 24, slice: [8, 8, 8, 8] }, button: { file: 'b.webp', w: 48, h: 24, slice: [8, 8, 8, 8] } } }), makeImage: fakeImg(96, 96) });
   const a = mk(); CH.panel(a, 10, 10, 200, 100, {}); await tick(); CH.panel(a, 10, 10, 200, 100, {}); await tick();
   const n0 = a.calls.length; CH.panel(a, 10, 10, 200, 100, {}); assert.equal(a.calls.length - n0, 9);
   const n1 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { frame: false }); assert.ok(a.calls.length - n1 <= 1, 'opt out bakes the vector panel'); // one drawImage of the baked canvas at most
   const n2 = a.calls.length; CH.panel(a, 10, 10, 200, 100, { plain: true }); assert.ok(a.calls.length - n2 <= 1);
   CH.button(a, 10, 10, 100, 40, {}, 0); await tick(); const n3 = a.calls.length; const dy = CH.button(a, 10, 10, 100, 40, {}, 2); assert.equal(a.calls.length - n3, 9); assert.equal(dy, 2);
-  templates.configure({ live: false, fetchJson: null, makeImage: null });
+  templates.configure({ art: T.TEMPLATE_ART, live: false, fetchJson: null, makeImage: null });
   const b = mk(); CH.panel(b, 10, 10, 200, 100, {}); CH.button(b, 10, 10, 100, 40, {}, 2);
   assert.equal(b.calls.length, base.calls.length, 'no assets: same drawing as before');
 });
