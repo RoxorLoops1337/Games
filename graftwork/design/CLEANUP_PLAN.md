@@ -78,15 +78,15 @@ Nothing else is lost: no achievement, relic, perk, event or Daily modifier was m
 
 - `engine/run.js`: `newRun` (always `mode: 'ward'`, set at the same place so a new save is byte identical to an old Ward save), `startAct` (always `wardInit`), `fightRewards` (always `wardRewards`), `makeShop` (always the Dispensary's plans), `shopBuy` (`build`, `buildRemove`), `relicPool` (Ward relics always in the pool), `afterEvent` and `advance` (always back to the walk), `startLoop`.
 - `main.js`: `PHASE_SCREEN` without `map`, the walk interlude without the mode check, the music table without the map row.
-- `ui/ward.js` `wardInterlude`, `ui/event.js` (room and hour heading), `ui/end.js` (death line: day of the floor; the floor line stays for practice fights, which have no floor), `ui/title.js` (Continue line, Daily, Begin).
+- `ui/ward.js` `wardInterlude`, `ui/event.js` (room and hour heading), `ui/end.js` (death line: day of the floor; the floor line stays for practice fights, which have no floor), `ui/title.js` (Continue line, Daily, Begin), `ui/shop.js` (one service row: remove a card, strip a graft, building plans; the two-button row of a shop without plans is gone, every shop is the Dispensary).
 - `engine/save.js` + `engine/meta.js`: loading a run decides between resume (Ward, practice) and retirement (everything else).
 
 ### (c) Looks Classic, the Ward uses it: kept
 
 - Rewards, graft offers, shop, forge, events, `R` helpers, `queueFight`, `queueGraftPick`: the Ward opens the same screens through the same engine calls.
 - Acts as floors (`run.act`, `startAct`, act themes and music), the boss flow, the Grafter (`startFight(run, 'final')`), ascension rules 2 to 10, Daily modifiers, boss practice, Endless.
-- `makeEncounter` whole: the Ward uses the boss and final branches; the normal branch is the combat screen's fallback when a fight has no enemy list.
-- `run.row`, `run.node`, `run.map`: always `-1`, `null`, `null` in a Ward run. They stay in the save so the Ward save shape does not change, and the shop greeting is seeded from them.
+- `makeEncounter`: the Ward uses the boss and final branches; the normal branch is the combat screen's fallback when a fight has no enemy list. Its "later rows of the map" budget went with the map; what is left is the small-fight budget it always used in a Ward run.
+- `run.row`, `run.node`, `run.map`: always `-1`, `null`, `null` in a Ward run. They stay in the save so the Ward save shape does not change; nothing reads them (the shop greeting keeps the seed string they used to give, so the greeting is the same).
 - `run.mode = 'ward'` stays in every save: it is what tells a Ward save from a retired one.
 - `stats.floors` and "Floors climbed" on the end screen, `UP.PER_FLOOR`: Ward trigger rooms count as floors.
 - `drawNodeIcon` (the Ward's trigger seals), the `mapStep` sound (the Ward's footstep), "Continue to the map" on the reward and Forge buttons (the Ward is the hospital map; the label and so the picture of those screens do not change).
@@ -99,11 +99,20 @@ Nothing else is lost: no achievement, relic, perk, event or Daily modifier was m
 
 ### Tests
 
-Suites that used a Classic run as the vehicle now start a Ward run and reach the screen through the Ward (`wardOpen(run, kind)` in `tests/graftwork_lib.mjs` lays the room next to the hero and walks in, so `run.pending` is what a real walk makes) or through the engine call the Ward itself uses. Shared helpers live in `tests/graftwork_lib.mjs`: `wardLayout`, `wardOpen`, `botFight`, `botStep`, `botFinish`, `WIN`, `LOSS`, `actEnemies`.
+Suites that used a Classic run as the vehicle now start a Ward run and reach the screen through the Ward (`wardOpen(run, kind)` in `tests/graftwork_lib.mjs` lays the room next to the hero and walks in, so `run.pending` is what a real walk makes) or through the engine call the Ward itself uses. Shared helpers live in `tests/graftwork_lib.mjs`: `wardLayout`, `wardOpen`, `botFight`, `botStep`, `botFinish`, `WIN`, `LOSS`, `actEnemies`. `graftwork_ui_map` is gone; its second half (every event, every choice, through the event screen) is `graftwork_ui_event`. New: `graftwork_retire` (the closing of old saves, the notice, boot and Continue with old Ward saves).
 
 ### Tools
 
-One shared driver, `tools/graftwork_driver.mjs`: the fight policies (careful, greedy, none, strong, the slip and low tiers), graft, shop, forge and event choices, the Ward builder and walker policies (strong, careful, sloppy, random, passive, fill) and `playWardRun(hero, seed, policy, asc, opts)`. Every balance tool is a thin command on top of it: `graftwork_sim.mjs` (careful, greedy, none), `graftwork_strong.mjs` (the reference), `graftwork_ward_sim.mjs` (the per-act table), `graftwork_tiers.mjs`, `graftwork_schools.mjs`, `graftwork_audit.mjs`, `graftwork_cardsweep.mjs`, `graftwork_unlocks.mjs`. Dropped: `GW_MODE` (unlock pacing is always the Ward) and `GW_OLDPICK` (`GW_WEIRD_K=1` is the same pick). No tool is deleted: none was map only, each one measures the combat game or a whole run, and a whole run is now a Ward run. `tools/graftwork_golden.mjs` and `tools/graftwork_profile.mjs` belong to other phases and are not edited here (the golden recorder still records Classic runs and map scenes; its owner drops them).
+One shared driver, `tools/graftwork_driver.mjs`: the fight policies (careful, greedy, none, strong, the slip and low tiers), graft, shop, forge and event choices, the Ward builder and walker policies (strong, careful, sloppy, random, passive, fill) and `playWardRun(hero, seed, policy, asc, opts)`. Every balance tool is a thin command on top of it: `graftwork_sim.mjs` (careful, greedy, none), `graftwork_strong.mjs` (the reference), `graftwork_ward_sim.mjs` (the per-act table), `graftwork_tiers.mjs`, `graftwork_schools.mjs`, `graftwork_audit.mjs`, `graftwork_cardsweep.mjs`, `graftwork_unlocks.mjs`. Dropped: `GW_MODE` (unlock pacing is always the Ward) and `GW_OLDPICK` (`GW_WEIRD_K=1` is the same pick). No tool is deleted: none was map only, each one measures the combat game or a whole run, and a whole run is now a Ward run. `tools/graftwork_golden.mjs` records Ward runs only (bots from the driver, no Classic runs, no map scenes, the closing of each old save under `resume/retired`); its `--classic-rng` flag exists for the one comparison against a record made before the retirement.
+
+### Layout faults the port found (open, not fixed here)
+
+The layout gate (`tests/graftwork_ui_layout.test.mjs`) swept the reward and the shop on Classic runs. On scenes the Ward really makes it found faults that are older than the retirement. They are listed in the test as `OPEN_WARD` (scene, kind and text; anything else still fails, and an entry that stops matching fails the test until it is deleted) and need their own fix, with before and after pictures:
+
+- **Elite reward with a relic, a potion and the building plan row**, at text scale 125 and 150 and on all three phone stages: the plan row runs into the "left behind" notes and the Continue button (224 findings in the sweep: overlaps and text over widgets). At text scale 100 on the desktop it fits.
+- **Boss reward with the plan row**: the row's caption "Pick 1 for your building deck, or pass." is cut at text scale 125 and 150 and on the phone stages; on the two small phone stages (0.54, 0.46) the texts of the boss relic cards under the row are cut too.
+- **Ward hand on the two small phone stages**: a plan's name is drawn over its cost digits ("Workshop", "Isolation"), and the two lines of the deck counter ("7 draw", "0 used") touch. The Ward's own sweep has no text-over-text check; the layout gate's tooltip sweep of the Ward has.
+- **Dispensary on the smallest phone stage (0.46)**: the one-line subtitle of the graft card picker cuts a long boon ("When it extends the Line, ..."), and the relic name "Featherweight" is 2 px too wide for its column in the test's metric.
 
 ## Rules for everyone working on this
 

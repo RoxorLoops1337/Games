@@ -7,6 +7,14 @@ being fixed nodes on a path. They are ROOMS you build, which SPAWN their content
 which only trigger when your hero WALKS THROUGH them. The combat game (cards, grafts, the Thread)
 is unchanged: the Ward decides what you fight, when, in what order and with what bonuses.
 
+Status after the Classic retirement (design/CLEANUP_PLAN.md): the Ward is the game. There is no mode switch and no node map; every
+run, the Daily and Endless included, is a Ward run. The sections below are the record of how the Ward was built next to the old map,
+so read them with these changes in mind: `RUN.newRun()` needs no `mode` (a run still carries `mode: 'ward'`, which is what tells its
+save from a save of the retired map); `RUN.runMode`, `RUN.startEvent`, the map generator and "classic" branches are gone; the Ward
+relics and Ward events are part of every run's pool; the bots live in `tools/graftwork_driver.mjs` (`playWardRun`, the policies),
+`tools/graftwork_ward_sim.mjs` is its per-act table command, `GW_MODE` is gone (unlock pacing is always the Ward) and `GW_OLDPICK`
+is `GW_WEIRD_K=1`. Ascension 1 ("One extra elite on every map") was a rule of the map generator and has no effect on a Ward floor.
+
 Goal of the layer: every day asks a real question. "Do I build a second ward to farm cards, or a
 generator so my workshop stays lit? Do I walk through the full fight room now (5 monsters, big
 reward) or let it fester? Do I go to the event at midday when it pays gold, or at night when the
