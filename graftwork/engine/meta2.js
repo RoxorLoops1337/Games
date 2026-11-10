@@ -118,7 +118,7 @@ export function practiceList(m) {
     .sort((a, b) => (ENEMIES[a.boss].act - ENEMIES[b.boss].act)).map((p) => ({ ...p, name: ENEMIES[p.boss].name }));
 }
 export function newPracticeRun(snap, m) {
-  const run = RUN.newRun({ hero: snap.hero, seed: 'practice-' + snap.boss, ascension: snap.asc || 0, unlocked: m }); // practice uses the player's unlocked set
+  const run = RUN.newRun({ hero: snap.hero, seed: 'practice-' + snap.boss, ascension: snap.asc || 0, unlocked: m, mode: 'classic' }); // practice uses the player's unlocked set
   run.deck = snap.deck.map((d) => ({ uid: RUN.nextUid(run), id: d.id, grafts: (d.grafts || []).slice(), fused: (d.fused || []).slice(), up: d.up || 0 }));
   run.relics = (snap.relics || []).filter((r) => RELICS[r]);
   run.maxHp = Math.max(1, snap.maxHp | 0); run.hp = run.maxHp; run.act = snap.act || 1;

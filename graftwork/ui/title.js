@@ -331,7 +331,7 @@ export default {
     const seed = todaySeed(), hero = RUN.dailyHero(seed);
     meta.daily = meta.daily || {}; meta.daily.lastPlayed = seed; flow.saveMeta();
     const opts = { hero, ascension: 0, seed, daily: seed };
-    if (modeOf(meta) === 'ward') opts.mode = 'ward'; // same seeded case, played in the Ward; classic keeps the exact old options
+    if (modeOf(meta) === 'classic') opts.mode = 'classic'; // same seeded case, played on the map
     this.begin(app, opts);
   },
   dailyH(app) { return app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; },
@@ -438,7 +438,7 @@ export default {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
       const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
-      if (modeOf(meta) === 'ward') opts.mode = 'ward'; // Classic map | The Ward (ui/ward_kit.js drawModeSwitch)
+      if (modeOf(meta) === 'classic') opts.mode = 'classic'; // Classic map | The Ward (ui/ward_kit.js drawModeSwitch)
       const af = assistFlags(this.assistOf(app)); if (af) opts.assist = af; // Assist mode (engine/assist.js)
       this.begin(app, opts);
     }

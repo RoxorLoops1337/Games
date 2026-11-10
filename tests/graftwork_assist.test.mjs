@@ -9,7 +9,7 @@ import { strainInfo, budgetOf } from '../graftwork/engine/cards.js';
 import { ENEMIES, GRAFTS, HEROES } from '../graftwork/data/index.js';
 import { POLICIES, strongFight, strongPickGraft } from '../tools/graftwork_driver.mjs';
 import { canGraft } from '../graftwork/engine/cards.js';
-import { makeApp, frames, click } from './graftwork_lib.mjs';
+import { makeApp, frames, click, botStep, runEnded } from './graftwork_lib.mjs';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
 import title from '../graftwork/ui/title.js';
 
@@ -102,20 +102,15 @@ await t('assisted daily run does not set the daily best or count a daily win', (
 });
 
 // ---- normal runs unchanged byte for byte in a seeded sim ----
+// fights and graft picks by the strong bot, everything else (building, walking, rewards, shop, forge, events) by the deterministic player of the test lib
 function drive(opts) {
   const run = RUN.newRun(opts), pol = POLICIES.strong; let guard = 0;
-  while (run.phase !== 'dead' && run.phase !== 'won' && guard++ < 800) {
-    switch (run.phase) {
-      case 'map': { const ns = RUN.availableNodes(run).map((id) => run.map.nodes[id]); RUN.enterNode(run, ns[0].id); break; }
-      case 'combat': { const { res } = strongFight(run, pol); RUN.resolveFight(run, res); break; }
-      case 'reward': { const rw = run.pending; RUN.claimGold(run, rw); if (rw.relic) RUN.addRelic(run, rw.relic); if (rw.potion) RUN.addPotion(run, rw.potion); RUN.afterReward(run); break; }
-      case 'graft': { const pick = strongPickGraft(run, pol); if (pick && canGraft(RUN.findInst(run, pick[0]), pick[1])) RUN.applyGraft(run, pick[0], pick[1]); else RUN.skipGraft(run, 'budget'); RUN.afterGraft(run); break; }
-      case 'shop': RUN.advance(run); break;
-      case 'forge': RUN.forgeAct(run, 'expand'); RUN.advance(run); break;
-      case 'event': { const ch = RUN.eventChoices(run).filter((x) => x.ok); const c = ch.find((x) => !x.pick) || ch[0]; RUN.eventChoose(run, c.i, c.cards ? c.cards[0] : undefined); RUN.afterEvent(run); break; }
-      default: throw new Error('phase ' + run.phase);
-    }
+  while (!runEnded(run) && guard++ < 2000) {
+    if (run.phase === 'combat') { const { res } = strongFight(run, pol); RUN.resolveFight(run, res); }
+    else if (run.phase === 'graft') { const pick = strongPickGraft(run, pol); if (pick && canGraft(RUN.findInst(run, pick[0]), pick[1])) RUN.applyGraft(run, pick[0], pick[1]); else RUN.skipGraft(run, 'budget'); RUN.afterGraft(run); }
+    else botStep(run);
   }
+  assert.ok(runEnded(run), 'the run ended');
   return RUN.serializeRun(run);
 }
 await t('seeded sim: a run with assist off is byte identical to one that never heard of Assist', () => {

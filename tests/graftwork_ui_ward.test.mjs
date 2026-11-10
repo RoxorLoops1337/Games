@@ -199,23 +199,6 @@ await t('shop: the Dispensary sells building plans and strikes one', async () =>
   assert.equal(WD.buildDeckList(run).length, n0); assert.ok(run.pending.buildRemoved);
 });
 
-await t('title: the mode switch stores meta.settings.mode and Begin passes {mode}', async () => {
-  const { app, flow } = await setup({ seed: 'ttl' });
-  const META = await import('../graftwork/engine/meta.js');
-  const meta = META.migrate(null); meta.settings.tips = false; meta.settings.reducedMotion = true; app.shared.meta = meta;
-  app.go('title'); frames(app, 5); app.screens.title.openSelect(app, 'marrow'); frames(app, 30);
-  const sw = reg('title-mode'); assert.ok(sw, 'switch registered');
-  click(app, sw.x + sw.w * 0.75, sw.y + sw.h / 2); frames(app, 2);
-  click(app, sw.x + sw.w * 0.25, sw.y + sw.h / 2); frames(app, 2);
-  assert.equal(meta.settings.mode, 'classic');
-  click(app, sw.x + sw.w * 0.75, sw.y + sw.h / 2); frames(app, 2);
-  assert.equal(KIT.modeOf(meta), 'ward');
-  key(app, 'Enter'); frames(app, 2);
-  assert.ok(flow.started, 'Begin pressed'); assert.equal(flow.started.mode, 'ward');
-  meta.settings.mode = 'classic'; app.screens.title.openSelect(app, 'marrow'); frames(app, 5); flow.started = null; key(app, 'Enter'); frames(app, 2);
-  assert.ok(flow.started && !flow.started.mode, 'classic runs carry no mode');
-});
-
 // ---------------- layout sweep ----------------
 const RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
 const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;

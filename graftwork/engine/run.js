@@ -50,7 +50,7 @@ export function newRun(opts = {}) {
     ...(snap ? { unlockedAtStart: snap } : {}),
     seenEvents: [], rerolls: 0, shopUses: { remove: 0, strip: 0 }, pending: null,
   };
-  if (opts.mode === 'ward') run.mode = 'ward'; // Ward mode (engine/ward.js); classic runs carry no mode field so their saves stay byte identical
+  if (opts.mode !== 'classic') run.mode = 'ward'; // a Ward run (engine/ward.js) unless the Classic map is asked for by name; classic runs carry no mode field
   run.uidNext = uid;
   if (asc >= 9) { run.maxHp = Math.round(run.maxHp * 0.9); run.hp = run.maxHp; }
   if (asc >= 3) run.deck.push(newInst('j_clot', () => run.uidNext++));
