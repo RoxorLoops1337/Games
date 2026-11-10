@@ -3,7 +3,7 @@
 //   Ward backdrop     one cached layer blitted per frame, baked once per act (it was painted live, then dimmed, every frame)
 //   post quality      one controller: 20 s of 33.3 ms frames (the 30 fps idle cap) leave the post tier at the Effects setting
 //   born stamps       a monster that checked in during one Ward visit is visible after the next; no gait value goes non-finite
-//   template switch   no request for assets/ui/manifest.json while TEMPLATE_ART is off
+//   template switch   no request for assets/ui/manifest.json while the art preview (ui/preview.js) is off
 //   small ones        mip level 0 is the decoded image, unlock state is read once per visit, display-mode queries are made once, the wall plan is kept
 // The baked colour grade of the battle figures has its own suite (graftwork_grade.test.mjs).
 import assert from 'node:assert/strict';
@@ -208,17 +208,18 @@ await t('Ward stamps: after a visit with walking, no figure has a non-finite squ
 });
 
 // ------------------------------------------------------------------ the template art switch
-await t('templates: no request is made while TEMPLATE_ART is off (no manifest, no image), and the switch is the only thing in the way', async () => {
+await t('templates: no request is made while the art preview is off (no manifest, no image), and the switch is the only thing in the way', async () => {
   const T = await import('../graftwork/ui/templates.js');
+  const { PREVIEW_DEFAULT } = await import('../graftwork/ui/preview.js');
   const tick = () => new Promise((r) => setTimeout(r, 0));
   let fetched = 0, images = 0;
   const fetchJson = () => { fetched++; return Promise.resolve({ frames: { panel: { file: 'p.webp', w: 48, h: 48, slice: [12, 12, 12, 12] } } }); }, makeImage = () => { images++; return {}; };
-  // the shipped default: whatever fetch it is given, it asks for nothing
+  // the shipped default: whatever fetch it is given, it asks for nothing (and stays idle, so the Settings toggle can still turn it on)
   const L = T.createTemplates({ live: true, fetchJson, makeImage });
   L.ensure({}); L.ensure({}); L.preload({}); await tick();
   assert.equal(fetched, 0, 'no manifest request'); assert.equal(images, 0, 'no image request');
-  assert.equal(L.state, 'none'); assert.equal(L.ready(), false); assert.equal(L.available(), false); assert.equal(L.frameImg('panel'), null); assert.equal(L.pickFrame(['panel']), null);
-  // the real browser path (global fetch, Image, window.location): the page load asked for assets/ui/manifest.json here and got a 404
+  assert.equal(L.on, false); assert.equal(L.state, 'idle'); assert.equal(L.ready(), false); assert.equal(L.available(), false); assert.equal(L.frameImg('panel'), null); assert.equal(L.pickFrame(['panel']), null);
+  // the real browser path (global fetch, Image, window.location): a page load asks for nothing under assets/ui
   const g = globalThis, keep = { fetch: g.fetch, Image: g.Image, loc: g.window && g.window.location };
   const urls = [];
   g.fetch = (u) => { urls.push(String(u)); return Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('404')) }); };
@@ -227,16 +228,19 @@ await t('templates: no request is made while TEMPLATE_ART is off (no manifest, n
     const P = T.createTemplates(); P.ensure({}); await tick();
     T.templates.reset(); T.templates.ensure({}); await tick(); // the singleton every panel, button and card face asks
     const { app } = await setup(); app.go('ward', { run: app.shared.run }); frames(app, 3); await tick(); // a real screen full of panels and buttons
-    assert.deepEqual(urls, [], 'the page requests nothing for template art');
-    // switch on: the very same loader asks once
-    const Q = T.createTemplates({ art: true }); Q.ensure({}); Q.ensure({}); await tick();
-    assert.deepEqual(urls, ['assets/ui/manifest.json'], 'with the switch on the manifest is requested, once'); assert.equal(Q.state, 'none', 'a 404 still degrades to the procedural look');
+    assert.deepEqual(urls, [], 'the page requests nothing for the painted art');
+    // the preview setting on: the very same loader asks once; the minimal graphics tier keeps it off
+    const low = T.createTemplates(); low.ensure({ shared: { meta: { settings: { previewArt: true } } }, perf: { q: { tier: 'minimal' } } }); await tick();
+    assert.deepEqual(urls, [], 'minimal tier: nothing is asked for even with the setting on');
+    const Q = T.createTemplates(); Q.ensure({ shared: { meta: { settings: { previewArt: true } } } }); Q.ensure({ shared: { meta: { settings: { previewArt: true } } } }); await tick();
+    assert.deepEqual(urls, ['assets/ui/manifest.json'], 'with the preview on the manifest is requested, once'); assert.equal(Q.state, 'none', 'a 404 still degrades to the procedural look');
   } finally { g.fetch = keep.fetch; g.Image = keep.Image; if (g.window) g.window.location = keep.loc; T.templates.reset(); }
   const R = T.createTemplates({ art: true, live: true, fetchJson, makeImage }); R.ensure({}); await tick(); assert.equal(fetched, 1); assert.ok(R.ready());
-  // the switch itself: off exactly while the manifest is absent, and written down where the art pipeline will look
-  assert.equal(T.TEMPLATE_ART, fs.existsSync(new URL('../graftwork/assets/ui/manifest.json', import.meta.url)), 'TEMPLATE_ART is true exactly when graftwork/assets/ui/manifest.json exists');
+  // the switch itself: one place (ui/preview.js). The default may only be on while the art it turns on is in the repo, and the docs name it.
+  assert.ok(!PREVIEW_DEFAULT.art || fs.existsSync(new URL('../graftwork/assets/ui/manifest.json', import.meta.url)), 'PREVIEW_DEFAULT.art may be on only while graftwork/assets/ui/manifest.json exists');
+  assert.equal(T.TEMPLATE_ART, undefined, 'the old constant is gone: ui/preview.js is the one switch');
   const doc = fs.readFileSync(new URL('../graftwork/design/ART_MODULAR.md', import.meta.url), 'utf8');
-  assert.ok(/TEMPLATE_ART/.test(doc) && /assets\/ui\/manifest\.json/.test(doc), 'design/ART_MODULAR.md names the switch');
+  assert.ok(/ui\/preview\.js/.test(doc) && /PREVIEW_DEFAULT/.test(doc) && /assets\/ui\/manifest\.json/.test(doc), 'design/ART_MODULAR.md names the switch');
 });
 
 // ------------------------------------------------------------------ small ones

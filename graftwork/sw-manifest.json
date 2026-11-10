@@ -1,6 +1,6 @@
 {
- "version": "a3473991b4d5a62c",
- "bytes": 10095547,
+ "version": "4bd0aada94c9ac18",
+ "bytes": 10174552,
  "count": 528,
  "files": {
   "art/attacks.js": {
@@ -12,8 +12,8 @@
    "s": 66762
   },
   "art/cards.js": {
-   "h": "bca17194cb0b94b7",
-   "s": 142848
+   "h": "fd6e4e831bf99205",
+   "s": 143606
   },
   "art/enemies.js": {
    "h": "42ea984f687ee13a",
@@ -32,8 +32,8 @@
    "s": 31433
   },
   "art/icons.js": {
-   "h": "47992dc7651a55c4",
-   "s": 100146
+   "h": "5f2f9265b4879e9b",
+   "s": 104945
   },
   "art/linework.js": {
    "h": "7e1322768a8cdbf9",
@@ -60,12 +60,12 @@
    "s": 103194
   },
   "assets/ui/bg/title_keyart@1x.webp": {
-   "h": "56db0674c29449d6",
-   "s": 93714
+   "h": "3aae6ba1b69f1214",
+   "s": 93476
   },
   "assets/ui/bg/title_keyart@2x.webp": {
-   "h": "929fb081ace2aa6d",
-   "s": 164568
+   "h": "0515019021e45051",
+   "s": 233968
   },
   "assets/ui/cards/back_plain@1x.webp": {
    "h": "06f8bc9432f7a99a",
@@ -156,8 +156,8 @@
    "s": 33126
   },
   "assets/ui/manifest.json": {
-   "h": "bb46ff0704a53535",
-   "s": 14510
+   "h": "9f9a6423b6cd34a3",
+   "s": 15104
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
@@ -1916,24 +1916,24 @@
    "s": 4419
   },
   "ui/chrome.js": {
-   "h": "cd90212acc6d5233",
-   "s": 19404
+   "h": "7929a8a6aeeba528",
+   "s": 20010
   },
   "ui/codex.js": {
    "h": "78c2d164131f7ffa",
    "s": 40387
   },
   "ui/combat.js": {
-   "h": "2858183ed9e4ecda",
-   "s": 121433
+   "h": "7954cde855c6facc",
+   "s": 121798
   },
   "ui/combat_art.js": {
    "h": "4a911bb17ed8e49e",
    "s": 31807
   },
   "ui/combat_hud.js": {
-   "h": "432ec6ac6d191060",
-   "s": 30431
+   "h": "6526dd771a7ff14d",
+   "s": 30951
   },
   "ui/combat_layout.js": {
    "h": "ed89fe130fa80493",
@@ -2044,24 +2044,24 @@
    "s": 35885
   },
   "ui/settings.js": {
-   "h": "205a41fbb756aba3",
-   "s": 16705
+   "h": "d34fa021b3f32320",
+   "s": 17305
   },
   "ui/shop.js": {
-   "h": "0f86848a80dcbf09",
-   "s": 54740
+   "h": "897dad3063575a44",
+   "s": 54917
   },
   "ui/skin.js": {
-   "h": "6a08d1722b60d360",
-   "s": 10058
+   "h": "26320e003d3597e0",
+   "s": 9858
   },
   "ui/smoothing.js": {
    "h": "7566a23ce539df44",
    "s": 4205
   },
   "ui/templates.js": {
-   "h": "7ea553aeda4c2ab8",
-   "s": 24181
+   "h": "56e3a34685563354",
+   "s": 24701
   },
   "ui/text_metrics.js": {
    "h": "8ee7c64a202f7bd4",
@@ -2076,8 +2076,8 @@
    "s": 17047
   },
   "ui/title_scene.js": {
-   "h": "2b760ec39a838047",
-   "s": 25527
+   "h": "8daf534d7552d35b",
+   "s": 26631
   },
   "ui/tooltips.js": {
    "h": "bbc3dc2125ecaa13",
