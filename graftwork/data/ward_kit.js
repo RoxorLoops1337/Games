@@ -222,7 +222,6 @@ export function propAt(rc, u, v) { for (const p of rc.props) if (u >= p.u && u <
 export function wallHeight(mode, shared) { return mode === 'full' ? WALL_FULL : mode === 'low' ? WALL_LOW : shared ? WALL_LOW : WALL_FULL; }
 // the default wall mode by density: one room stands tall, a few rooms are cut away at the shared walls, a built floor is low
 export function defaultWallMode(nRooms) { return nRooms <= 1 ? 'full' : nRooms <= 5 ? 'cutaway' : 'low'; }
-export const WALL_MODES = ['auto', 'full', 'low', 'cutaway'];
 
 // ---------------- doors and shared walls (the engine's neighbours are the single source of truth) ----------------
 // rooms: the list of { id, x, y, w?, h? }; nbrs(id) -> ids of the rooms connected to it (engine/ward.js neighbors). The wall between two connected rooms

@@ -483,7 +483,7 @@ function drawAfter(app, c) {
   let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} on Bare cards.`;
   // max hp
   let hpMod = null;
-  if (pair) { const m = c.g.mods.find((k) => k.k === 'maxHp'); if (m && !(c.inst.waived && c.inst.waived.includes(c.g.id))) hpMod = m; }
+  if (pair) { const m = c.g.mods.find((k) => k.k === 'maxHp'); if (m && !(c.inst.waived && c.inst.waived.includes(c.g.id)) && !pv.waived) hpMod = m; }
   let vw = x + w - 16 - (lx + 262);
   if (hpMod) {
     const after = Math.max(10, run.maxHp + hpMod.n), hpTxt = `MAX HP ${run.maxHp} → ${after}`, hpO = { size: 20, bold: true, fit: { w: 200, lines: 1 } }, hpL = app.layoutText(hpTxt, hpO);
@@ -525,6 +525,7 @@ function drawAfter(app, c) {
 
   // warnings
   const warns = [];
+  if (pair && pv.waived) warns.push({ gold: true, head: 'FREE SAMPLE', text: 'the Price of this graft is waived, as the first one you accept this act.' });
   if (pair && pv.overload) {
     const pct = Math.round(shatterChance(run) * 100);
     warns.push({ gold: true, head: 'OVERLOAD', text: `numbers x1.5, ${pct}% to SHATTER on first play, weighs +1.` });

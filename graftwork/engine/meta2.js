@@ -2,7 +2,7 @@
 // Pure functions over the meta object. Re-exported by engine/meta.js. Must NOT import meta.js (it imports us).
 // Save compatibility: graftwork_meta_v1 keeps m.v = 1. New fields are additive and carry m.rev = 2; migrate2() fills and
 // sanitises them, and grants a one-time welcome Credit to old saves (migrate2 is idempotent).
-import { ENEMIES, RELICS } from '../data/index.js';
+import { ENEMIES, RELICS, CARDS, GRAFTS } from '../data/index.js';
 import * as RUN from './run.js';
 
 export const REV = 2;
@@ -119,7 +119,8 @@ export function practiceList(m) {
 }
 export function newPracticeRun(snap, m) {
   const run = RUN.newRun({ hero: snap.hero, seed: 'practice-' + snap.boss, ascension: snap.asc || 0, unlocked: m, bare: true }); // one fight, no floor; practice uses the player's unlocked set
-  run.deck = snap.deck.map((d) => ({ uid: RUN.nextUid(run), id: d.id, grafts: (d.grafts || []).slice(), fused: (d.fused || []).slice(), up: d.up || 0 }));
+  const live = (l) => (l || []).filter((g) => GRAFTS[g]); // a saved deck may name cards or grafts that no longer exist: they are left out
+  run.deck = snap.deck.filter((d) => d && CARDS[d.id]).map((d) => ({ uid: RUN.nextUid(run), id: d.id, grafts: live(d.grafts), fused: live(d.fused), up: d.up || 0 }));
   run.relics = (snap.relics || []).filter((r) => RELICS[r]);
   run.maxHp = Math.max(1, snap.maxHp | 0); run.hp = run.maxHp; run.act = snap.act || 1;
   run.practice = snap.boss; run.metaDone = true; run.phase = 'combat';
@@ -170,7 +171,7 @@ export const DEATH_ADVICE = {
 };
 export function deathAdviceCategory(run) {
   const cs = (run && run.deathCause) || null;
-  if (!cs) return (run && run.strain) ? 'strain' : 'generic';
+  if (!cs) return 'generic';
   if (cs.status && DEATH_ADVICE[cs.status]) return cs.status;
   if ((cs.strain || 0) >= 2) return 'strain';
   if ((cs.backfire || 0) > 0) return 'backfire';

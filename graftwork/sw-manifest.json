@@ -1,7 +1,7 @@
 {
- "version": "70d5d0f02c4ba6e2",
- "bytes": 11549247,
- "count": 662,
+ "version": "bfb07c67b70ef048",
+ "bytes": 11554848,
+ "count": 655,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -2155,29 +2155,25 @@
    "h": "79a7c7214b777b84",
    "s": 4888
   },
-  "data/bosses.js": {
-   "h": "a6c8a95adddbb149",
-   "s": 26
-  },
   "data/cards_any.js": {
    "h": "15b3e9eacde89345",
    "s": 4062
   },
   "data/cards_junk.js": {
-   "h": "5dfb9726c8710d07",
-   "s": 2539
+   "h": "2d41ae579c2765cd",
+   "s": 1335
   },
   "data/cards_marrow.js": {
-   "h": "8326cb2e808bac43",
-   "s": 17223
+   "h": "15b2ca9ad8be2ba5",
+   "s": 17137
   },
   "data/cards_odile.js": {
    "h": "3edea24fa71450dc",
    "s": 16240
   },
   "data/cards_thread.js": {
-   "h": "cb68f5ad169dafa8",
-   "s": 9318
+   "h": "6742e69c0555971f",
+   "s": 9072
   },
   "data/cards_wick.js": {
    "h": "3aa5eee085244b1d",
@@ -2196,8 +2192,8 @@
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "87408658007ce34d",
-   "s": 24406
+   "h": "ed41d6eefb38f410",
+   "s": 23815
   },
   "data/enemies_new1.js": {
    "h": "ae7961b1a3de65e4",
@@ -2220,8 +2216,8 @@
    "s": 3655
   },
   "data/grafts_extra.js": {
-   "h": "4cbecbb513a1756a",
-   "s": 15292
+   "h": "00f2b29e703d69d3",
+   "s": 15508
   },
   "data/grafts_greedy.js": {
    "h": "6a7d98c0b861ab39",
@@ -2232,20 +2228,20 @@
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "892172b4f700a86f",
-   "s": 9956
+   "h": "054407790e11c4d4",
+   "s": 10361
   },
   "data/grafts_weird.js": {
-   "h": "2c11aed6b9fd5af3",
-   "s": 16063
+   "h": "e4bd9e9db3c1b70e",
+   "s": 16252
   },
   "data/heroes.js": {
-   "h": "de8570a5eb34ec80",
-   "s": 2994
+   "h": "23e350f2bfe441b7",
+   "s": 2917
   },
   "data/index.js": {
-   "h": "4eac9e6c74f57cb9",
-   "s": 3735
+   "h": "1d0fb3deb429c453",
+   "s": 3271
   },
   "data/potions.js": {
    "h": "04fa30ed924bcc9e",
@@ -2268,8 +2264,8 @@
    "s": 3717
   },
   "data/schools.js": {
-   "h": "cb4b938cf9b47314",
-   "s": 1647
+   "h": "6d22aa72b24d4b03",
+   "s": 1785
   },
   "data/statuses.js": {
    "h": "968dc91f55c94b70",
@@ -2291,22 +2287,6 @@
    "h": "0ec213683f9311ee",
    "s": 3509
   },
-  "data/statuses_ggraftsx.js": {
-   "h": "e635161d41a7f36c",
-   "s": 254
-  },
-  "data/statuses_ggreedy.js": {
-   "h": "36920b7f8c6db8dd",
-   "s": 110
-  },
-  "data/statuses_grafts.js": {
-   "h": "c605d172869c7729",
-   "s": 109
-  },
-  "data/statuses_gsafe.js": {
-   "h": "cc1c872b50ebf72f",
-   "s": 108
-  },
   "data/statuses_marrow.js": {
    "h": "3ac81936dc6a2975",
    "s": 1991
@@ -2315,61 +2295,53 @@
    "h": "38d8e40f4b7d10e8",
    "s": 2340
   },
-  "data/statuses_relics.js": {
-   "h": "ee4a79d679b7e0c9",
-   "s": 109
-  },
-  "data/statuses_thread.js": {
-   "h": "6de16c6f4e14a7c8",
-   "s": 104
-  },
   "data/statuses_wick.js": {
    "h": "6c84ba53226a5620",
    "s": 1922
   },
   "data/unlocks.js": {
-   "h": "e1cfdbfd5dc95ec8",
-   "s": 12494
+   "h": "9c0e6a9da13a5e4c",
+   "s": 12417
   },
   "data/ward.js": {
-   "h": "df759bd1563539d3",
-   "s": 18584
+   "h": "d1b1b201579a5bb7",
+   "s": 18516
   },
   "data/ward_kit.js": {
-   "h": "a14f2bcfafad3840",
-   "s": 22460
+   "h": "2eb5242c69cfa505",
+   "s": 22398
   },
   "data/ward_kit_big.js": {
    "h": "665c92bfc16bf0eb",
    "s": 5178
   },
   "engine/afflictions.js": {
-   "h": "1c3d5f401a24066f",
-   "s": 8555
+   "h": "5d92f7a5878ff9eb",
+   "s": 8289
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
    "s": 2535
   },
   "engine/cards.js": {
-   "h": "c76175b13b0f0c9d",
-   "s": 12800
+   "h": "369224a1e09c7f9c",
+   "s": 13383
   },
   "engine/combat.js": {
-   "h": "0c5ad811a4c98ee0",
-   "s": 39930
+   "h": "0f2f1ea709014150",
+   "s": 39241
   },
   "engine/intent_icons.js": {
-   "h": "92bf86cf68329be9",
-   "s": 3176
+   "h": "d9c814fa71665a0f",
+   "s": 3164
   },
   "engine/meta.js": {
-   "h": "89bc77830a40266a",
-   "s": 11827
+   "h": "058028e5dc50bfc2",
+   "s": 11819
   },
   "engine/meta2.js": {
-   "h": "9c9fc095e6018745",
-   "s": 13482
+   "h": "f596d92def70e7ee",
+   "s": 13615
   },
   "engine/resonance.js": {
    "h": "f98a69e798a34a63",
@@ -2380,28 +2352,28 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "8f80f2262fd42c4a",
-   "s": 26501
+   "h": "b0de2b5c9fa6c828",
+   "s": 28419
   },
   "engine/save.js": {
    "h": "c6149ebc081318fa",
    "s": 1743
   },
   "engine/seam.js": {
-   "h": "9ec4588f5ce0a9db",
-   "s": 11936
+   "h": "638ce7c62e8b8c03",
+   "s": 16680
   },
   "engine/text.js": {
-   "h": "460ecb55f755fa45",
-   "s": 8097
+   "h": "b9c8e9d6a3afe0e2",
+   "s": 8066
   },
   "engine/unlock.js": {
    "h": "669f19021efcda9e",
    "s": 11837
   },
   "engine/ward.js": {
-   "h": "564ea124e65ff647",
-   "s": 46407
+   "h": "8f2ee08b3a3d4dbb",
+   "s": 46182
   },
   "icons/apple-touch-icon.png": {
    "h": "6a1af503636154d7",
@@ -2424,16 +2396,16 @@
    "s": 1962
   },
   "main.js": {
-   "h": "fb25c25bb4b9b468",
-   "s": 7603
+   "h": "04cd8f9568a602e9",
+   "s": 7574
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
    "s": 798
   },
   "ui/a11y.js": {
-   "h": "8e5150b70b7cd6b0",
-   "s": 8902
+   "h": "f155d93f1c97adea",
+   "s": 8967
   },
   "ui/app_panel.js": {
    "h": "ae3745884251d20d",
@@ -2468,8 +2440,8 @@
    "s": 40387
   },
   "ui/combat.js": {
-   "h": "fc8481045cb63f3e",
-   "s": 120601
+   "h": "52c5db52f3957b5a",
+   "s": 120988
   },
   "ui/combat_art.js": {
    "h": "4a911bb17ed8e49e",
@@ -2480,8 +2452,8 @@
    "s": 30431
   },
   "ui/combat_layout.js": {
-   "h": "dcc16b6f9a40b2f7",
-   "s": 5870
+   "h": "ed89fe130fa80493",
+   "s": 6047
   },
   "ui/core.js": {
    "h": "18d3934c833e557e",
@@ -2516,8 +2488,8 @@
    "s": 32802
   },
   "ui/graft.js": {
-   "h": "f8b087eaa01f4939",
-   "s": 49725
+   "h": "5d82e0fe08bf9a38",
+   "s": 49895
   },
   "ui/graft_parts.js": {
    "h": "48587179176397ba",
@@ -2548,8 +2520,8 @@
    "s": 4454
   },
   "ui/pause.js": {
-   "h": "bb27d03da657d115",
-   "s": 19017
+   "h": "a18be1b1d698df7c",
+   "s": 19057
   },
   "ui/perf_flags.js": {
    "h": "cf5a21a500aca0d7",
@@ -2580,8 +2552,8 @@
    "s": 6824
   },
   "ui/seam_ui.js": {
-   "h": "4187ca597d6f1907",
-   "s": 34465
+   "h": "2263d7fa77934da3",
+   "s": 35885
   },
   "ui/settings.js": {
    "h": "205a41fbb756aba3",
@@ -2604,8 +2576,8 @@
    "s": 2446
   },
   "ui/title.js": {
-   "h": "5929c504d134f6e1",
-   "s": 50316
+   "h": "41c35060b550b134",
+   "s": 50287
   },
   "ui/title_logo.js": {
    "h": "33ab328c6f4610c7",

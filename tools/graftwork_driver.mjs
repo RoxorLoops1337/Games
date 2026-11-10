@@ -14,12 +14,13 @@
 //   GW_WEIRD_K (credit for custom-hook grafts, default 0.5; 1 is the old full credit)  GW_OVERLOAD_P  GW_TEMPER_P  GW_FLOOR  GW_MS  GW_GREED
 //   GW_PICK=0 (no card buys)  GW_MARGIN  GW_MAXBUY  GW_RESERVE  GW_THRESH  GW_FIRST  GW_BUY  GW_SLIP (careful tier misplays)
 //   GW_ROAD  GW_EARLY_HP  GW_EARLY=0 (early boss rules)  GW_EXPAND=0  GW_OLDWALK=1 (the walker from before the dice: shortest path within MOVE)
+//   GW_DECLARE=0 (the strong bot never uses Odile's declaration)  GW_HOLDCUT=0 (it plays "Cut the Line." cards as soon as they score)
 // Commands: graftwork_sim.mjs, graftwork_strong.mjs, graftwork_ward_sim.mjs, graftwork_tiers.mjs, graftwork_schools.mjs, graftwork_audit.mjs,
 // graftwork_cardsweep.mjs, graftwork_unlocks.mjs. Seeds are fixed per run index, so compare before and after with the same N.
 import * as RUN from '../graftwork/engine/run.js';
 import * as W from '../graftwork/engine/ward.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf, effCost, mult, val, cond } from '../graftwork/engine/combat.js';
-import { seamPreview } from '../graftwork/engine/seam.js';
+import { seamPreview, canDeclare, declareOf, setDeclare, cutsLine, seamCap } from '../graftwork/engine/seam.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
 import { cardSpec, strainInfo, canGraft, canTemper, schoolsOf, newInst } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, HEROES, POTIONS, STATUSES, RELICS } from '../graftwork/data/index.js';
@@ -423,17 +424,25 @@ export function strongFight(run, pol, maxTurns = 40) {
       if (pi >= 0) { usePotion(c, pi, c.enemies.indexOf(st.target)); c.ev.length = 0; continue; }
       let best = -1, bs = 0.01, bestSetup = -1, bss = 0;
       const echo = c.player.st.echo > 0;
+      const threadOf = (k) => { // Thread value of playing k now: a knot, a paying cut, or a wasted cut
+        try {
+          const pv = seamPreview(c, k);
+          if (pv.kind === 'extend') return 1.2 + (c.seam.len > 0 ? 1.0 * c.seam.len : 0) + payoutValue(c, pv.payout) * 0.35;
+          if (pv.kind === 'cut') return payoutValue(c, pv.payout) - (pv.payout.length ? 0 : c.seam.len >= 2 ? 2.5 : 0);
+        } catch { /* a card the preview cannot read is worth nothing to the Thread */ }
+        return 0;
+      };
+      const decl = DECLARE_ON && canDeclare(c) ? declareOf(c) : null, declFor = {};
+      // knots still in hand: affordable cards that would start or extend the Line (a cutting card waits for them)
+      const growing = HOLDCUT_ON && c.seam.len < seamCap(c) ? c.hand.filter((k, i) => { const ck = canPlay(c, i); if (!ck.ok || cutsLine(ck.spec)) return false; try { return seamPreview(c, k).kind === 'extend'; } catch { return false; } }).length : 0;
       c.hand.forEach((k, i) => {
         const ck = canPlay(c, i); if (!ck.ok) return;
         const cost = ck.cost === 'X' ? Math.max(1, c.energy) : ck.cost;
         const { v, setup } = cardValue(c, k, ck, st);
         const sp = ck.spec;
-        let th = 0;
-        try {
-          const pv = seamPreview(c, k);
-          if (pv.kind === 'extend') th = 1.2 + (c.seam.len > 0 ? 1.0 * c.seam.len : 0) + payoutValue(c, pv.payout) * 0.35;
-          else if (pv.kind === 'cut') th = payoutValue(c, pv.payout) - (pv.payout.length ? 0 : c.seam.len >= 2 ? 2.5 : 0);
-        } catch { th = 0; }
+        let th = threadOf(k);
+        if (decl) { c.seam.declare = decl; const t2 = threadOf(k); c.seam.declare = null; if (t2 > th + DECLARE_MIN) { th = t2; declFor[i] = true; } }
+        if (growing && cutsLine(sp)) th -= 3 + 2.5 * growing;
         if (setup > 0 && v > -2) {
           const sscore = (setup + Math.max(0, v)) / Math.max(0.7, cost + 0.2) + (cost === 0 ? 5 : 0);
           if (sscore > bss && !(echo && sp.fx.every((o) => o.op === 'status' && o.s === 'echo'))) { bss = sscore; bestSetup = i; }
@@ -449,6 +458,7 @@ export function strongFight(run, pol, maxTurns = 40) {
       const sp = specOf(c, c.hand[best]);
       const ti = sp.target === 'enemy' ? c.enemies.indexOf(st.target) : null;
       if (globalThis.GW_TRACE) console.log(`T${c.turn} hp${c.player.hp} blk${c.player.block} en${c.energy} play ${sp.id} (need ${st.need}) foes ${live.map((e) => e.id + ':' + e.hp).join(',')}`);
+      if (decl && declFor[best]) setDeclare(c, true);
       playCard(c, best, ti);
       c.ev.length = 0;
     }
@@ -461,6 +471,8 @@ export function strongFight(run, pol, maxTurns = 40) {
   res.turns = c.turn;
   return { res, c };
 }
+const DECLARE_ON = process.env.GW_DECLARE !== '0', DECLARE_MIN = 1; // Odile's declaration: only when the Thread gains more than this
+const HOLDCUT_ON = process.env.GW_HOLDCUT !== '0';
 // Graft pick: the plain score plus focus on the deck's dominant Thread school (only grafts that bridge into it).
 // graftScore credits every custom-hook (weird) graft a flat rarity bonus because fxValue cannot see inside hooks; that over-rewards weird grafts that
 // cost more than they pay, so the strong pick takes back (1 - GW_WEIRD_K) of it (default half; design/WARD.md section 11). GRAFT_ADJ is a per-graft

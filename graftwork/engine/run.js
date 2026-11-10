@@ -1,13 +1,13 @@
 // Run layer: a run is plain JSON (plus run.rng). Everything between fights lives here: rewards, the graft offer (the heart of
 // the game), shop, forge, events, ascension, daily seed, endless loops, save/restore. Where the hero goes between them is the
 // Ward (engine/ward.js): every run is a Ward run, the node map it replaced is retired (design/CLEANUP_PLAN.md).
-import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../data/index.js';
+import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { runAllows, snapshotFor } from './unlock.js';
 import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
-import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
+import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod } from './cards.js';
 
 export const POTION_SLOTS = 3;
 export const SKIP_HEAL = 8;
@@ -25,7 +25,7 @@ export const ASCENSION_TEXT = [
   'Shop prices are 15% higher.',
   'Budget is 1 lower.',
   'Bosses have 20% more HP, elites hit 15% harder.',
-  'Overload Shatter chance is 10% higher.',
+  'Shatter chance is 10% higher. No graft rerolls.',
   'Only 2 potion slots and 10% less max HP.',
   'All enemies hit 10% harder.',
 ];
@@ -111,7 +111,7 @@ export function startAct(run, act) { run.act = act; wardInit(run, act); }
 
 // ---------- encounters ----------
 function actEnemies(run, kind) {
-  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.noPick && !e.summonOnly);
+  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.summonOnly);
 }
 export function makeEncounter(run, kind) {
   const rng = run.rng;
@@ -224,17 +224,21 @@ export function previewPick(run, uid, gid) {
   const p = previewGraft(run, uid, gid);
   const inst = findInst(run, uid);
   const after = { ...inst, grafts: [...inst.grafts, gid] };
+  p.waived = sampleReady(run) && GRAFTS[gid].mods.some(isPriceMod); // Free Sample would waive this graft's Price
+  if (p.waived) after.waived = [...(inst.waived || []), gid];
   p.spec = cardSpec(after);
   p.overload = after.grafts.length > 2;
   return p;
 }
+// Free Sample (perk freeFirstGraft): the first graft Price accepted each act is waived, every kind of it (engine/cards.js isPriceMod).
+function sampleReady(run) { return perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]; }
 export function applyGraft(run, uid, gid, o = {}) {
   const inst = findInst(run, uid);
   if (!inst || !canGraft(inst, gid)) return { ok: false };
   inst.grafts.push(gid);
   const g = GRAFTS[gid];
+  if (!o.free && sampleReady(run)) { run.flags['pf' + run.act] = 1; (inst.waived = inst.waived || []).push(gid); } // decided first: a waived Price costs no max HP either
   if (!(inst.waived && inst.waived.includes(gid))) for (const m of g.mods) if (m.k === 'maxHp') { run.maxHp = Math.max(10, run.maxHp + m.n); run.hp = Math.min(run.hp, run.maxHp); }
-  if (!o.free && perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]) { run.flags['pf' + run.act] = 1; (inst.waived = inst.waived || []).push(gid); }
   const bounty = perkN(run, 'graftBounty'); if (bounty) { run.gold += bounty; run.stats.goldEarned += bounty; }
   run.stats.grafts++;
   if (!o.keepPhase) { run.pending = null; }
@@ -429,13 +433,11 @@ export function resolveFight(run, result) {
 // Leave a reward screen: first the graft pick if one is offered, then back to the walk (or the next floor).
 export function afterReward(run) {
   const rw = run.pending;
-  if (rw && rw.kind === 'boss') { /* boss relic chosen in UI before this */ }
   if (rw && rw.graft && graftableCards(run).length) { rw.graft = false; return startGraftPick(run), 'graft'; }
   return advance(run);
 }
 export function afterGraft(run) {
   if (run.flags.queueGraft > 0) { run.flags.queueGraft--; startGraftPick(run); return 'graft'; }
-  const rw = run.postReward;
   return advance(run);
 }
 // After a reward, a graft pick, the shop or the forge: the walk continues, or the next floor opens after the boss (Act 3: the Grafter).
@@ -456,6 +458,28 @@ export function deserializeRun(json) {
   rng.state = o.rngState;
   const run = { ...o, rng };
   delete run.rngState;
+  return repairRun(run);
+}
+// A save may name content that no longer exists (a removed card, graft, relic or potion). Drop those entries so the run keeps
+// loading. A save without such ids is returned untouched (same bytes when saved again).
+const keepKnown = (list, known) => (Array.isArray(list) && list.some((x) => !known(x)) ? list.filter(known) : list);
+function repairRun(run) {
+  if (!Array.isArray(run.deck)) return run;
+  run.deck = keepKnown(run.deck, (i) => !!(i && CARDS[i.id]));
+  for (const i of run.deck) for (const k of ['grafts', 'fused', 'waived']) if (i[k]) i[k] = keepKnown(i[k], (g) => !!GRAFTS[g]);
+  run.relics = keepKnown(run.relics, (r) => !!RELICS[r]);
+  run.potions = keepKnown(run.potions, (p) => !!POTIONS[p]);
+  const p = run.pending;
+  if (p && p.kind === 'shop') {
+    for (const [k, reg] of [['cards', CARDS], ['grafts', GRAFTS], ['relics', RELICS], ['potions', POTIONS]]) p[k] = keepKnown(p[k], (it) => !!(it && reg[it.id]));
+  } else if (p && p.kind === 'graft' && p.offer) {
+    const cards = keepKnown(p.offer.cards, (u) => run.deck.some((i) => i.uid === u)), grafts = keepKnown(p.offer.grafts, (g) => !!GRAFTS[g]);
+    if (cards !== p.offer.cards || grafts !== p.offer.grafts) p.offer = makeGraftOffer(run, { rerolled: p.offer.rerolled || 0 }); // deal a fresh offer from what is left
+  } else if (p && p.gold !== undefined && 'graft' in p) { // a reward screen
+    if (p.relic && !RELICS[p.relic]) p.relic = null;
+    if (p.potion && !POTIONS[p.potion]) p.potion = null;
+    if (p.relicChoices) p.relicChoices = keepKnown(p.relicChoices, (r) => !!RELICS[r]);
+  }
   return run;
 }
 export { strainInfo, budgetOf };

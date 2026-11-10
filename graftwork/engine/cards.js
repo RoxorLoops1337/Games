@@ -5,13 +5,21 @@
 import { CARDS, GRAFTS, RELICS, HEROES } from '../data/index.js';
 
 export const BASE_BUDGET = 6;
-const PRICE_KINDS = new Set(['selfHurt', 'jam', 'junk', 'selfStatus', 'drawdown', 'goldCost', 'maxHp']);
+// What a Price is: ONE table for every reader. Free Sample waives exactly these mods (cardSpec, run.js applyGraft), Numb keeps
+// exactly these (afflictions.js). A price written inside a hook is its own custom mod marked price: true.
+const PRICE_FLAGS = new Set(['exhaust', 'ethereal', 'needsAttackPlayed']);
+const PRICE_MODS = {
+  selfHurt: () => true, jam: () => true, junk: () => true, selfStatus: () => true, drawdown: () => true, goldCost: () => true,
+  maxHp: (m) => m.n < 0, cost: (m) => m.d > 0, pct: (m) => m.pct < 0, flag: (m) => PRICE_FLAGS.has(m.f), custom: (m) => !!m.price,
+};
+export const isPriceMod = (m) => { const f = PRICE_MODS[m.k]; return !!f && f(m); };
 export const MAX_GRAFTS_NORMAL = 2; // the 3rd graft is an Overload
 export const MAX_GRAFTS = 3;
 export const FUSE_CAP = 4; // tempered (permanent) grafts one card can hold
 export const OVERLOAD_MULT = 1.5;
 export const OVERLOAD_SHATTER = 0.25;
 export const TITHE_MULT = 0.75;
+const LIFESTEAL_CAP = 6; // most HP one play of a lifesteal card heals
 
 // ops can hold functions (custom, cond.fn), so clone ops by hand-preserving functions
 export function cloneFx(fx) {
@@ -33,7 +41,7 @@ export function newInst(id, uidGen) {
 }
 
 function emptyPrice() {
-  return { selfHurt: 0, jam: 0, junk: [], selfStatus: [], drawdown: 0, gold: 0, maxHp: 0, shuffleIn: [] };
+  return { selfHurt: 0, jam: 0, junk: [], selfStatus: [], drawdown: 0, gold: 0, maxHp: 0 };
 }
 
 // Fold one graft mod into a spec.
@@ -46,7 +54,7 @@ function applyMod(s, m, g) {
     case 'addFx': { const add = cloneFx(m.fx); if (m.pos === 'start') s.fx.unshift(...add); else s.fx.push(...add); break; }
     case 'pct': s.pct += m.pct; break;
     case 'aoe': s.fx.forEach((o) => { if (o.op === 'dmg' && (!o.to || o.to === 'enemy')) o.to = 'all'; }); if (s.target === 'enemy') s.target = 'all'; break;
-    case 'lifesteal': s.lifesteal = Math.max(s.lifesteal, m.cap || 6); break;
+    case 'lifesteal': s.lifesteal = Math.max(s.lifesteal, m.cap || LIFESTEAL_CAP); break;
     case 'target': s.target = m.t; break;
     case 'type': s.type = m.t; break;
     case 'selfHurt': s.price.selfHurt += m.n; break;
@@ -85,7 +93,7 @@ export function cardSpec(inst) {
     const g = GRAFTS[gid];
     if (!g) throw new Error('unknown graft ' + gid);
     const waived = inst.waived && inst.waived.includes(gid);
-    for (const m of g.mods || []) { if (waived && PRICE_KINDS.has(m.k)) continue; applyMod(s, m, g); }
+    for (const m of g.mods || []) { if (waived && isPriceMod(m)) continue; applyMod(s, m, g); }
   }
   if (s.flags.unplayable) s.unplayable = true;
   return s;
@@ -143,7 +151,7 @@ export function canGraft(inst, gid) {
   if (inst.grafts.length >= MAX_GRAFTS) return false;
   if (inst.grafts.includes(gid) || (inst.fused || []).includes(gid)) return false;
   const base = CARDS[inst.id];
-  if (base.type === 'junk' || base.type === 'curse') return false;
+  if (base.type === 'junk') return false;
   if (g.not && g.not.some((x) => inst.grafts.includes(x) || (inst.fused || []).includes(x))) return false;
   const spec = cardSpec(inst);
   if (g.types && !g.types.includes(spec.type)) return false;
@@ -205,7 +213,7 @@ export function cantGraftWhy(inst, gid) {
   if (inst.grafts.length >= MAX_GRAFTS) return 'Card is full';
   if (inst.grafts.includes(gid) || (inst.fused || []).includes(gid)) return `Already has ${g.name}`;
   const base = CARDS[inst.id];
-  if (base.type === 'junk' || base.type === 'curse') return 'Junk cannot be grafted';
+  if (base.type === 'junk') return 'Junk cannot be grafted';
   if (g.not) {
     const clash = g.not.find((x) => inst.grafts.includes(x) || (inst.fused || []).includes(x));
     if (clash) { const cg = GRAFTS[clash]; return cg ? `Clashes with ${cg.name}${cg.school ? ' (' + cg.school + ')' : ''}` : 'Clashes with another graft'; }

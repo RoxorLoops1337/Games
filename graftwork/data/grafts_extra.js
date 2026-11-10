@@ -38,6 +38,7 @@ function again(A, ctx, k) {
   if (b > 0) A.block(A.player, Math.max(1, Math.round(b * (ctx.mult || 1))) * k);
 }
 const hook = (fn) => ({ k: 'custom', hooks: { onPlay: fn } });
+const priceHook = (fn) => ({ k: 'custom', price: true, hooks: { onPlay: fn } }); // a Price written as a hook: Free Sample waives it, Numb keeps it (engine/cards.js isPriceMod)
 const G = (o) => o;
 
 export const GRAFTS_EXTRA = [
@@ -50,11 +51,8 @@ export const GRAFTS_EXTRA = [
     mods: [{ k: 'flag', f: 'exhaust' }, { k: 'selfHurt', n: 3 }, hook((A, ctx) => { const t = pick(A, ctx); const n = Math.min(12, 2 * stack(A, 'ember')); if (t && n) A.status(t, 'burn', n); })] }),
   G({ id: 'g_fever_wick', name: 'Fever Wick', school: 'ember', weight: 2, tier: 'weird', rarity: 'rare', types: ATK, ok: (s) => hits(s) && num(s) && s.cost <= 2,
     boon: 'Apply 1 Burn, plus 2 per point of Strain (max 13).', price: '15% chance to jam. Lose 1 HP per Strain when played (max 3).',
-    mods: [{ k: 'jam', p: 0.15 }, hook((A, ctx) => {
-      const s = strainOf(A); const t = pick(A, ctx);
-      if (t) A.status(t, 'burn', Math.min(13, 1 + 2 * s));
-      if (s > 0 && !ctx.replay) A.loseHp(A.player, Math.min(3, s), { floor1: true, src: 'graft' });
-    })] }),
+    mods: [{ k: 'jam', p: 0.15 }, hook((A, ctx) => { const s = strainOf(A); const t = pick(A, ctx); if (t) A.status(t, 'burn', Math.min(13, 1 + 2 * s)); }),
+      priceHook((A, ctx) => { const s = strainOf(A); if (s > 0 && !ctx.replay) A.loseHp(A.player, Math.min(3, s), { floor1: true, src: 'graft' }); })] }),
   G({ id: 'g_hearth_choir', name: 'Hearth Choir', school: 'ember', weight: 1, tier: 'weird', rarity: 'uncommon', types: AB,
     boon: 'Apply 1 Burn to all enemies per 2 Ember or Rust grafts in your deck (min 1, max 5).', price: '25% chance to jam. Lose 1 HP when played.',
     mods: [{ k: 'jam', p: 0.25 }, { k: 'selfHurt', n: 1 }, hook((A) => { const n = Math.min(5, Math.max(1, Math.floor(stack(A, 'ember', 'rust') / 2))); for (const e of A.alive()) A.status(e, 'burn', n); })] }),
@@ -99,11 +97,8 @@ export const GRAFTS_EXTRA = [
     mods: [{ k: 'selfHurt', n: 4 }, { k: 'jam', p: 0.25 }, hook((A, ctx) => boost(A, ctx, Math.min(18, 3 * stack(A, 'blood', 'ember'))))] }),
   G({ id: 'g_feverish_vein', name: 'Feverish Vein', school: 'blood', weight: 2, tier: 'weird', rarity: 'rare', types: ATK, ok: hits,
     boon: '+3 damage per point of Strain (max 21).', price: 'Lose HP when played equal to your Strain (min 2, max 6).',
-    mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => {
-      const s = strainOf(A);
-      boost(A, ctx, Math.min(21, 3 * s));
-      if (!ctx.replay) A.loseHp(A.player, Math.max(1, Math.min(5, s - 1)), { floor1: true, src: 'graft' });
-    })] }),
+    mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => boost(A, ctx, Math.min(21, 3 * strainOf(A)))),
+      priceHook((A, ctx) => { if (!ctx.replay) A.loseHp(A.player, Math.max(1, Math.min(5, strainOf(A) - 1)), { floor1: true, src: 'graft' }); })] }),
   G({ id: 'g_tithe_leech', name: 'Tithe Leech', school: 'blood', weight: 1, tier: 'weird', rarity: 'uncommon', types: ATK, ok: hits,
     boon: 'After the hit, heal 2 per Tithed card in your deck (max 8).', price: 'Lose 2 HP when played.',
     mods: [{ k: 'selfHurt', n: 2 }, hook((A, ctx) => { const n = Math.min(8, 2 * tithedOf(A)); if (n && !ctx.replay) A.heal(A.player, n); })] }),

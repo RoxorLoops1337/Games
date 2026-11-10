@@ -67,7 +67,6 @@ export const bossForced = (run) => { const w = W(run); return !!w && w.day >= w.
 export const bossOpen = (run) => { const w = W(run); return w.day >= w.dayLimit - T.earlyDays; };
 export const theatreOf = (run) => Object.values(W(run).rooms).find((r) => r.type === 'rm_theatre');
 export const entranceOf = (run) => Object.values(W(run).rooms).find((r) => r.type === 'rm_entrance');
-export const cardInst = (run, uid) => { const d = W(run).deck; return [...d.hand, ...d.draw, ...d.discard].find((c) => c.uid === uid) || null; };
 export const buildDeckList = (run) => { const d = W(run).deck; return [...d.draw, ...d.hand, ...d.discard]; };
 
 function newRoom(run, type, x, y, fw = 1, fh = 1) {
@@ -162,8 +161,7 @@ export function placement(run, size, x, y, dir) {
     if (!first) first = { why, f };
   }
   // pointed cell itself is the problem: say so; otherwise the second cell has no room
-  const w0 = W(run);
-  const cellWhy = w0.grid[y][x] === 'rubble' ? 'rubble' : w0.grid[y][x] ? 'occupied' : null;
+  const cellWhy = w.grid[y][x] === 'rubble' ? 'rubble' : w.grid[y][x] ? 'occupied' : null;
   return { ok: false, why: cellWhy || (one || dir ? first.why : first.why === 'adjacent' ? 'adjacent' : 'space'), f: first.f, cells: rectCells(first.f) };
 }
 // Expand: the sides a room can grow toward. { ok, why, to: [w, h], dirs: [{dir, cells, f}], cost }. why: type already norecipe space
@@ -219,11 +217,11 @@ export function connectedRooms(run, without = null) {
 
 // ---------------- morning ----------------
 function pickMonster(run) {
-  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'normal' && !e.minion && !e.noPick && !e.summonOnly);
+  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'normal' && !e.minion && !e.summonOnly);
   return run.rng.pick(pool).id;
 }
 function pickElite(run) {
-  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'elite' && !e.minion && !e.noPick && !e.summonOnly);
+  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'elite' && !e.minion && !e.summonOnly);
   return run.rng.pick(pool).id;
 }
 function spawnInto(run, room) {
@@ -407,7 +405,7 @@ export function playBuildCard(run, uid, target) {
 // what Demolish refunds half of: the build cost, plus the Expand cost when the room grew (a Ward Wing card already paid for both)
 function refundBase(room) {
   const d = def(room), c = { ...d.cost };
-  if (isBig(room) && d.expand && !d.foot && !room.paidWide) for (const k in d.expand.cost) c[k] = (c[k] || 0) + d.expand.cost[k];
+  if (isBig(room) && d.expand && !d.foot) for (const k in d.expand.cost) c[k] = (c[k] || 0) + d.expand.cost[k];
   return c;
 }
 export function togglePower(run, rid) {
@@ -706,7 +704,7 @@ export function wardAdvance(run) {
 // Each walk phase (midday, evening, night) the player ROLLS a die (run.ward.dice sides, default 4). The roll N is the longest route: the
 // player plans it one room at a time (orthogonally adjacent, never the same room twice), then every room entered activates in order.
 // extendRoute / undoRoute / clearRoute edit run.ward.route (room ids after the hero); startRoute walks it through afterTrigger.
-export const diceOf = (run) => (T.dice || 4) + (W(run).dieUp || 0) + perkN(run, 'dieSides'); // Loaded Dice (w.dieUp) and Bone Dice (relic) add sides
+export const diceOf = (run) => 4 + (W(run).dieUp || 0) + perkN(run, 'dieSides'); // Loaded Dice (w.dieUp) and Bone Dice (relic) add sides
 export function rollWalk(run) {
   const w = W(run); if (!w) return null;
   const sides = diceOf(run), base = run.rng.int(sides) + 1; // 1..sides (rng.int(n) is 0..n-1)
