@@ -7,6 +7,7 @@ import { maybeTip } from './tutorial.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft } from '../engine/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
+import { resonanceText } from '../data/schools.js';
 import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
@@ -445,7 +446,7 @@ function drawInfoPanel(app, R, counts) {
   const wakes = after === 3 || after === 6;
   let yy = y + 36;
   if (wakes) { app.text(`Sewing this wakes the ${after}-graft bonus.`, x + 14, yy, { size: 14, ui: true, bold: true, color: COL.lamp }); yy += 18; }
-  const bonus = info.n >= 6 ? SCHOOLS[g.school].resonance[6] : SCHOOLS[g.school].resonance[info.n >= 3 ? 6 : 3];
+  const bonus = resonanceText(SCHOOLS[g.school], info.n >= 3 ? 6 : 3); // the whole step: the school's own bonus and the Thread half
   const lines = wrapLimit(app, `${info.n >= 6 ? 'Active at 6' : info.n >= 3 ? 'Next at 6' : 'At 3'}: ${bonus}`, w - 28, 14, Math.max(1, Math.floor((y + h - yy - 4) / 17)), { ui: true });
   lines.forEach((ln, i) => app.text(ln, x + 14, yy + i * 17, { size: 14, ui: true, color: COL.vellum }));
 }

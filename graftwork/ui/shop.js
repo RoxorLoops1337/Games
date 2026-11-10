@@ -8,7 +8,7 @@ import { drawCard, drawGraftPatch, CARD_W, CARD_H } from '../art/cards.js';
 import { drawRelic, drawPotion, drawCoin } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
-import { cardLines, priceLines } from '../engine/text.js';
+import { cardLines, priceLines, priceOnCard } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
 import { tscale, hpPerPlay } from './graft_parts.js';
 import { specGloss, cardGlossTip, glossTip, withGloss } from './tooltips.js';
@@ -93,6 +93,8 @@ export function stripDeck(run, uid, gid) {
 export function openCards(st, o) { st.m = { kind: 'cards', scroll: 0, scrollT: 0, t: 0, hov: -1, ...o }; }
 // Grafts of one card: openGraft(st, {title, inst, info(gid)->preview, onPick(gid)})
 export function openGraftChoice(st, o) { st.m = { kind: 'grafts', t: 0, hov: -1, ...o }; }
+// What stripping a graft takes off the card besides its Boon: its Price, unless Free Sample waived it (then there is none to shed).
+export function stripFrees(inst, gid, lead) { const p = priceOnCard(cardSpec(inst), gid); return p.waived ? 'Its Price was waived.' : `${lead}: ${p.text}`; }
 
 // The coloured result lines of the info panel, laid out as one block: the largest size at which all of them fit the box (wrapped as needed); only at the
 // smallest legible size is the last line that still fits cut with an ellipsis.
@@ -220,8 +222,9 @@ export function drawModal(app, st, run, extra = {}) {
       drawGraftPatch(g, gr, bx + 14, by + 14, 250, 90, {});
       app.text(`Weight ${gr.weight}${i >= MAX_GRAFTS_NORMAL ? ' +1 Overload' : ''}`, bx + 280, by + 10, { size: 15, ui: true, bold: true, color: COL.lamp, fit: { w: bw - 300, h: 20, lines: 1 } });
       app.text('Boon: ' + gr.boon, bx + 280, by + 33, { size: 15, ui: true, color: COL.good, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
-      app.text('Price: ' + gr.price, bx + 280, by + 73, { size: 15, ui: true, color: COL.bad, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
-      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Boon: ${gr.boon}\nPrice: ${gr.price}`, { color: COL[gr.school], gloss: [gr.boon, gr.price, 'W' + gr.weight, String(gr.tier || 'safe').toUpperCase()], school: gr.school, anchor: { x: bx, y: by, w: bw, h: bh } }); }
+      const pr = priceOnCard(spec, gid); // a Price that Free Sample waived reads Waived, and is not red
+      app.text(`${pr.label}: ${pr.text}`, bx + 280, by + 73, { size: 15, ui: true, color: pr.waived ? COL.lamp : COL.bad, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Boon: ${gr.boon}\n${pr.label}: ${pr.text}`, { color: COL[gr.school], gloss: [gr.boon, gr.price, 'W' + gr.weight, String(gr.tier || 'safe').toUpperCase()], school: gr.school, anchor: { x: bx, y: by, w: bw, h: bh } }); }
       if (app.clicked(bx, by, bw, bh)) { if (why) { sfx(app, 'error'); m.toast = why; m.toastT = 1.6; } else picked = gid; }
     });
     if (hover !== m.hov) { m.hov = hover; if (hover >= 0) sfx(app, 'uiHover', { vol: 0.3 }); }
@@ -477,7 +480,7 @@ function startStrip(app) {
     info: null, hint: 'Pick the card, then the graft to unpick.',
     onPick: (inst) => openGraftChoice(S.modal, {
       title: `Strip which graft from ${CARDS[inst.id].name}?`, inst,
-      info: (gid) => infoFromDeck(run, stripDeck(run, inst.uid, gid), [{ t: `Loses: ${GRAFTS[gid].boon} Also frees: ${GRAFTS[gid].price}`, c: COL.vellum }]),
+      info: (gid) => infoFromDeck(run, stripDeck(run, inst.uid, gid), [{ t: `Loses: ${GRAFTS[gid].boon} ${stripFrees(inst, gid, 'Also frees')}`, c: COL.vellum }]),
       onPick: (gid) => {
         const before = cardSpec(inst);
         const r = RUN.shopBuy(run, 'strip', 0, { uid: inst.uid, gid });

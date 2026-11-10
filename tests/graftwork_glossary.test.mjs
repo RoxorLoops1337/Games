@@ -5,6 +5,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { cardLines, opText } from '../graftwork/engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, ENEMIES, STATUSES, SCHOOLS } from '../graftwork/data/index.js';
+import { RESONANCE_THREAD, resonanceText } from '../graftwork/data/schools.js';
 import { specGloss, glossaryFor, glossaryEntry, keywordsIn, KEYWORDS, tipSections, defineTerm } from '../graftwork/ui/tooltips.js';
 import { getAll } from '../graftwork/ui/layout_registry.js';
 import graft from '../graftwork/ui/graft.js';
@@ -20,7 +21,7 @@ import { GRAFT_LIST } from '../graftwork/data/index.js';
 // ---- (1) the resolver ----
 const REQUIRED = ['Gilt', 'Burn', 'Bleed', 'Poison', 'Charge', 'Echo', 'Strength', 'Dexterity', 'Weak', 'Vulnerable', 'Frail', 'Thorns', 'Ritual', 'Plated', 'Barricade', 'Intangible', 'Regen', 'Marked', 'Stunned',
   'Line', 'Stitch', 'Cut', 'Knot', 'Slack', 'Tied', 'Frayed', 'Thread', 'Budget', 'Strain', 'Tithe', 'Backfire', 'Overload', 'Shatter', 'Temper', 'Exhaust', 'Retain', 'Jam', 'Bare', 'Weight', 'Claim', 'Ringing',
-  'Ember', 'Hoard', 'Blood', 'Rust', 'Static', 'Gilded', 'Attack', 'Skill', 'Power', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After'];
+  'Ember', 'Hoard', 'Blood', 'Rust', 'Static', 'Gilded', 'Attack', 'Skill', 'Power', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After', 'Resonance'];
 for (const t of REQUIRED) { const g = glossaryFor(['Safe', 'Greedy', 'Weird', 'After'].includes(t) ? t.toUpperCase() : t, { max: 1 }); assert.ok(g.length === 1 && g[0].definition.length > 8, 'resolves: ' + t); }
 for (const id of Object.keys(STATUSES)) { const e = glossaryEntry(id); assert.ok(e && e.text && e.text.length > 4, 'status id resolves: ' + id); const e2 = glossaryEntry(STATUSES[id].name); assert.ok(e2 && e2.text, 'status name resolves: ' + STATUSES[id].name); }
 for (const w of ['pierce', 'jammed', 'bare', 'x cost', 'W2', 'SAFE', 'GREEDY', 'WEIRD', 'AFTER']) assert.equal(glossaryFor(w).length, 1, 'loose / tag word: ' + w);
@@ -51,7 +52,11 @@ for (const r of Object.values(RELICS)) check('relic ' + r.id, [r.text]);
 for (const p of Object.values(POTIONS)) check('potion ' + p.id, [p.text]);
 for (const ev of Object.values(EVENTS)) check('event ' + ev.id, [ev.text, (ev.choices || []).map((c) => [c.label, c.text])]);
 for (const e of Object.values(ENEMIES)) for (const [mid, m] of Object.entries(e.moves || {})) check(`enemy ${e.id}.${mid}`, [m.name, m.note, m.tip, (m.fx || []).map((op) => { try { return opText(op, 0); } catch (x) { return ''; } })]);
-for (const s of Object.values(SCHOOLS)) check('school ' + s.id, [s.blurb, s.resonance[3], s.resonance[6]]);
+for (const s of Object.values(SCHOOLS)) check('school ' + s.id, [s.blurb, s.resonance[3], s.resonance[6], resonanceText(s, 3), resonanceText(s, 6)]);
+// resonance has a Thread half (one rule for every school): its texts name Thread words, each resolves, and the Resonance entry carries the rule
+check('resonance on the Thread', Object.values(RESONANCE_THREAD));
+for (const w of ['Thread', 'Stitch', 'Cut']) assert.ok(keywordsIn(Object.values(RESONANCE_THREAD)).includes(w), 'the Thread half of resonance names ' + w);
+assert.ok(glossaryFor('Resonance', { max: 1 })[0].definition.includes(RESONANCE_THREAD.rule), 'the Resonance entry says what resonance does on the Thread');
 assert.ok(scanned > 100, 'cards scanned: ' + scanned);
 assert.deepEqual(failures, [], 'keywords without a definition:\n' + failures.join('\n'));
 // the keyword in a graft's own text is explained by its tip: every Boon / Price word is found by the resolver

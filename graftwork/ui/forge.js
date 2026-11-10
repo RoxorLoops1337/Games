@@ -11,7 +11,7 @@ import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUS
 import { CARDS, GRAFTS } from '../data/index.js';
 import { withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
-import { drawGauge, gaugeLabel, drawModal, openCards, openGraftChoice, makeAnim, updateAnim, drawAnim, infoFromDeck, stripDeck, toastDraw, cardName } from './shop.js';
+import { drawGauge, gaugeLabel, drawModal, openCards, openGraftChoice, makeAnim, updateAnim, drawAnim, infoFromDeck, stripDeck, stripFrees, toastDraw, cardName } from './shop.js';
 import { lnw } from '../art/linework.js';
 
 const BRASS = '#C9A227';
@@ -151,7 +151,7 @@ function pickStrip(app) {
     info: null, hint: 'Pick a card, then choose the graft to pull out.',
     onPick: (inst) => openGraftChoice(S.modal, {
       title: `Strip which graft from ${CARDS[inst.id].name}?`, inst,
-      info: (gid) => infoFromDeck(run, stripDeck(run, inst.uid, gid), [{ t: `Loses: ${GRAFTS[gid].boon}`, c: COL.vellum }, { t: `Frees you of: ${GRAFTS[gid].price}`, c: COL.good }]),
+      info: (gid) => infoFromDeck(run, stripDeck(run, inst.uid, gid), [{ t: `Loses: ${GRAFTS[gid].boon}`, c: COL.vellum }, { t: stripFrees(inst, gid, 'Frees you of'), c: COL.good }]),
       onPick: (gid) => {
         const before = cardSpec(inst);
         const info = infoFromDeck(run, stripDeck(run, inst.uid, gid));

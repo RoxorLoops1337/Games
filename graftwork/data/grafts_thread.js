@@ -12,7 +12,8 @@ const schoolsIn = (s) => Object.keys(s.counts || {}).filter((k) => s.counts[k] >
 // What did the engine do with THIS card? Reads the events since its 'play' event (seamExtend / seamCut / seamSlack / seamFray).
 //   extend: it tied a knot (it extended a Line, or started one on an empty rail). len = the Line then.
 //   cut:    it cut a Line, by school or by its own "Cut the Line." effect. len = the Line it cut. The Line the card starts
-//           right after its own cut is the new Line, not an extend.
+//           right after its own cut is the new Line, not an extend. stitches = what that Line held for a "per stitch" boon:
+//           none when the cut came after the turn's paying cuts (the engine marks the event capped), since it paid no stitch.
 function kindsOf(A, ctx) {
   const ev = A.c.ev, uid = ctx.card && ctx.card.uid, out = {};
   let i = ev.length - 1;
@@ -20,7 +21,7 @@ function kindsOf(A, ctx) {
   for (i = Math.max(0, i); i < ev.length; i++) {
     const e = ev[i];
     if (e.card !== uid) continue;
-    if (e.t === 'seamCut') { if (e.kind === 'cut' && !out.cut) out.cut = { kind: 'cut', len: e.len }; }
+    if (e.t === 'seamCut') { if (e.kind === 'cut' && !out.cut) out.cut = { kind: 'cut', len: e.len, stitches: e.capped ? 0 : stitchesOf(e.len) }; }
     else if (e.t === 'seamExtend') { if (!out.cut && !out.extend) out.extend = { kind: 'extend', len: e.len }; }
     else if (e.t === 'seamSlack') out.slack = { kind: 'slack' };
     else if (e.t === 'seamFray') out.fray = { kind: 'fray' };
@@ -69,13 +70,13 @@ export const GRAFTS_THREAD = [
   G('g_reef_knot', 'Reef Knot', 'echo', 2, 'greedy', 'uncommon', 'When it cuts the Line, gain 1 Echo. Extending also gains 1 Echo once per turn.', '15% chance to jam.',
     [H({ onPlay: on(['cut', 'extend'], (A, ctx, i) => { const c = A.c; c.rx = c.rx || {}; if (i.kind === 'cut') A.status(A.player, 'echo', 1); else if (c.rx.reefTurn !== c.turn) { c.rx.reefTurn = c.turn; A.status(A.player, 'echo', 1); } }) }), { k: 'jam', p: 0.15 }], { ok: (s) => s.cost !== 'X' }),
   G('g_surgeons_knot', 'Surgeon\'s Knot', 'gilded', 2, 'greedy', 'rare', 'When it cuts the Line, gain 4 gold per stitch (max 20).', 'Costs 1 gold to play.',
-    [H({ onPlay: on(['cut'], (A, ctx, i) => A.gold(Math.min(20, 4 * stitchesOf(i.len)))) }), { k: 'goldCost', n: 1 }]),
+    [H({ onPlay: on(['cut'], (A, ctx, i) => { if (i.stitches > 0) A.gold(Math.min(20, 4 * i.stitches)); }) }), { k: 'goldCost', n: 1 }]),
   G('g_pure_thread', 'Pure Thread', 'hoard', 2, 'greedy', 'uncommon', 'If the Line holds only one school, +3 damage or Block per knot.', '-20% numbers.',
     [H({ onPlay: (A, ctx) => { if (ctx.replay) return; const s = seam(A); if (schoolsIn(s).length === 1) bonus(A, ctx, 3 * Math.max(0, s.len - 1)); } }), { k: 'pct', pct: -20 }], { ok: numbers }),
   G('g_tight_seam', 'Tight Seam', 'hoard', 2, 'greedy', 'rare', 'When it extends the Line, Tie it. Retain.', 'Exhaust.',
     [H({ onPlay: on(['extend'], (A) => { seam(A).tied = true; }) }), { k: 'flag', f: 'retain' }, { k: 'flag', f: 'exhaust' }], { ok: (s) => !s.flags.exhaust && !s.flags.ethereal }),
   G('g_surge_loop', 'Surge Loop', 'static', 3, 'greedy', 'rare', 'When it cuts the Line, gain 1 Charge per stitch (max 4).', 'Lose 1 HP when played.',
-    [H({ onPlay: on(['cut'], (A, ctx, i) => A.status(A.player, 'charge', Math.min(4, stitchesOf(i.len)))) }), { k: 'selfHurt', n: 1 }]),
+    [H({ onPlay: on(['cut'], (A, ctx, i) => A.status(A.player, 'charge', Math.min(4, i.stitches))) }), { k: 'selfHurt', n: 1 }]),
 
   // ================= WEIRD (changes how the card works) =================
   G('g_granny_knot', 'Granny Knot', 'rust', 1, 'weird', 'uncommon', 'Counts as every school in the Line, adds no count.', '-25% numbers.',
