@@ -848,5 +848,93 @@ await ta('a waived Price is labelled Waived on the card that carries the graft (
   }
 });
 
+// ================================================================ Rules follow-ups (CLEANUP_PLAN.md, "Rules follow-ups")
+// ---------------------------------------------------------------- 13. a waived Price stays waived under Numb
+await ta('Numb keeps every Price except the one Free Sample waived (the muted copy of a graft is looked up under its own id)', async () => {
+  const { afflStartTurn } = await import('../graftwork/engine/afflictions.js');
+  const { priceOnCard } = await import('../graftwork/engine/text.js');
+  CARDS.t_big = { id: 't_big', name: 'big', type: 'attack', cost: 2, rarity: 'common', school: 'blood', target: 'enemy', fx: [{ op: 'dmg', n: 10 }], flavor: 'x', flags: {} };
+  try {
+    const numbed = (gid, waived) => { const c = fight(); const card = mk(c, 't_big', { grafts: [gid] }); if (waived) card.inst.waived = [gid]; c.player.st.numb = 1; afflStartTurn(c); return { c, card, spec: specOf(c, card) }; };
+    // "Costs 1 more": due under Numb, waived stays waived (Hoard Cache is also muted: no Retain)
+    const due = numbed('g_hoard_cache', false), free = numbed('g_hoard_cache', true);
+    assert.deepEqual([due.spec.cost, free.spec.cost], [3, 2], 'Numb: "Their prices still bite", unless the Price was waived');
+    assert.ok(!due.spec.flags.retain && !free.spec.flags.retain, 'and the boon is silent either way');
+    assert.deepEqual([priceOnCard(due.spec, due.spec.grafts[0]).waived, priceOnCard(free.spec, free.spec.grafts[0]).waived], [false, true], 'the card says which');
+    // a price that lives in a hook, played for real
+    const burn = (waived) => { const n = numbed('g_ash_pact', waived); play(n.c, n.card); return n.c.player.st.burn || 0; };
+    assert.deepEqual([burn(false), burn(true)], [2, 0], 'Ash Pact under Numb: "Also gain 2 Burn yourself" unless waived');
+    // every graft: with Numb on, a waived graft leaves exactly what a waived graft leaves without it
+    const bare = cardSpec(newInst('t_big', () => 1));
+    for (const g of Object.values(GRAFTS)) {
+      const w = numbed(g.id, true).spec, P = w.price;
+      assert.deepEqual([P.selfHurt, P.jam, P.junk.length, P.selfStatus.length, P.drawdown, P.gold, P.maxHp], [0, 0, 0, 0, 0, 0, 0], g.id + ' price under Numb: ' + JSON.stringify(P));
+      assert.ok(w.cost <= bare.cost && w.pct >= 0, g.id + ' still costs more or lowers the numbers under Numb');
+      for (const f of ['exhaust', 'ethereal', 'needsAttackPlayed']) assert.ok(!w.flags[f], `${g.id} still has ${f} under Numb`);
+    }
+  } finally { delete CARDS.t_big; }
+});
+
+// ---------------------------------------------------------------- 14. a waiver belongs to one sewing of one graft
+// Free Sample waives the Price of the graft you accept. The waiver goes with that graft when Reforge (or an event) moves it
+// and ends when the graft is stripped: sewing it on again is a new graft and pays its Price.
+await ta('Free Sample: the waiver moves with the graft on Reforge and ends with a Strip', async () => {
+  const CARDSJS = await import('../graftwork/engine/cards.js');
+  const GID = 'g_hoard_cache'; // "Costs 1 more. Lose 4 max HP when grafted."
+  const start = () => {
+    const run = RUN.newRun({ hero: 'marrow', seed: 'sew' }); RUN.addRelic(run, 'r_free_sample');
+    const [a, b, d] = run.deck.filter((i) => canGraft(i, GID)); a.grafts = []; b.grafts = []; d.grafts = [];
+    run.pending = { kind: 'forge', used: 0 };
+    return { run, a, b, d, hp0: run.maxHp };
+  };
+  const cost = (inst) => cardSpec(inst).cost - CARDS[inst.id].cost;
+  // Reforge: the Price is waived on the card that gets the graft, and the old card keeps no entry
+  { const { run, a, b, hp0 } = start();
+    assert.ok(RUN.applyGraft(run, a.uid, GID, { keepPhase: true }).ok); assert.equal(run.maxHp, hp0, 'the sample waived "Lose 4 max HP"');
+    assert.ok(RUN.forgeAct(run, 'reforge', a.uid, GID, b.uid).ok);
+    assert.deepEqual([a.grafts, b.grafts], [[], [GID]]);
+    assert.deepEqual([a.waived || [], b.waived], [[], [GID]], 'no stale entry behind, the waiver arrived');
+    assert.equal(cost(b), 0, 'Reforge: a waived "Costs 1 more" is still waived on the new card'); assert.equal(run.maxHp, hp0, 'and nothing was charged');
+    // a Price that was due is still due after Reforge
+    const c2 = start(); c2.run.flags['pf' + c2.run.act] = 1; // this act's sample is spent
+    RUN.applyGraft(c2.run, c2.a.uid, GID, { keepPhase: true }); assert.equal(c2.run.maxHp, c2.hp0 - 4);
+    RUN.forgeAct(c2.run, 'reforge', c2.a.uid, GID, c2.b.uid); assert.equal(cost(c2.b), 1, 'a Price that was due moves with the graft and stays due'); assert.deepEqual(c2.b.waived || [], []);
+    // Strip, then sew the same graft on the same card: a new graft, its Price is due (the old entry is gone)
+    const { run: r3, a: a3, hp0: h3 } = start();
+    RUN.applyGraft(r3, a3.uid, GID, { keepPhase: true }); assert.equal(cost(a3), 0);
+    assert.ok(RUN.forgeAct(r3, 'strip', a3.uid, GID).ok); assert.deepEqual(a3.waived || [], [], 'a stripped graft takes its waiver with it');
+    RUN.applyGraft(r3, a3.uid, GID, { keepPhase: true });
+    assert.equal(cost(a3), 1, 'sewn on again: "Costs 1 more" is due'); assert.equal(r3.maxHp, h3 - 4, 'and so is "Lose 4 max HP"');
+    // the shop's Strip and an event's strip do the same
+    const { run: r4, a: a4 } = start(); RUN.applyGraft(r4, a4.uid, GID, { keepPhase: true });
+    r4.gold = 999; r4.pending = { kind: 'shop', cards: [], grafts: [], relics: [], potions: [], removeUses: 0 }; assert.ok(RUN.shopBuy(r4, 'strip', 0, { uid: a4.uid, gid: GID }).ok); assert.deepEqual(a4.waived || [], []);
+    const { run: r5, a: a5 } = start(); RUN.applyGraft(r5, a5.uid, GID, { keepPhase: true }); RUN.R.stripGraft(r5, a5.uid, GID); assert.deepEqual(a5.waived || [], []);
+    // an event that moves a graft (R.moveGraft) is Reforge too
+    const { run: r6, a: a6, b: b6 } = start(); RUN.applyGraft(r6, a6.uid, GID, { keepPhase: true });
+    assert.ok(RUN.R.moveGraft(r6, a6.uid, b6.uid, GID)); assert.deepEqual([a6.waived || [], b6.waived], [[], [GID]]); assert.equal(cost(b6), 0);
+    // Temper keeps the waiver: the fused graft is the same graft
+    const { run: r7, a: a7 } = start(); RUN.applyGraft(r7, a7.uid, GID, { keepPhase: true }); assert.ok(CARDSJS.temper(a7));
+    assert.deepEqual(a7.waived, [GID]); assert.equal(cost(a7), 0);
+  }
+  // the Forge previews the same deck the Forge then makes
+  { const { run, a, b } = start(); RUN.applyGraft(run, a.uid, GID, { keepPhase: true });
+    const pv = CARDSJS.deckMoved(run.deck, a.uid, GID, b.uid).find((i) => i.uid === b.uid), sv = CARDSJS.deckStripped(run.deck, a.uid, GID).find((i) => i.uid === a.uid);
+    assert.deepEqual([cardSpec(pv).cost - CARDS[pv.id].cost, cardSpec(pv).waived], [0, [GID]], 'the Reforge preview shows the Price still waived');
+    assert.deepEqual([sv.grafts, sv.waived], [[], []]); assert.deepEqual([a.grafts, a.waived, b.grafts], [[GID], [GID], []], 'and touches nothing real'); }
+});
+t('a save with stale waiver entries (left behind by Reforge and Strip) loads cleanly, and the entries are gone', () => {
+  const GID = 'g_hoard_cache', run = RUN.newRun({ hero: 'marrow', seed: 'stale' });
+  const [a, b] = run.deck.filter((i) => canGraft(i, GID));
+  const raw = JSON.parse(RUN.serializeRun(run)); const ra = raw.deck.find((i) => i.uid === a.uid), rb = raw.deck.find((i) => i.uid === b.uid);
+  ra.grafts = []; ra.waived = [GID];                  // the graft was reforged away: the entry stayed on the old card
+  rb.grafts = [GID, 'g_ember_pin']; rb.waived = [GID]; // a live waiver, which must survive
+  raw.deck[2].fused = [GID]; raw.deck[2].waived = [GID]; // a tempered graft keeps its waiver
+  const back = RUN.deserializeRun(JSON.stringify(raw));
+  const [x, y, z] = [a.uid, b.uid, raw.deck[2].uid].map((u) => back.deck.find((i) => i.uid === u));
+  assert.deepEqual([x.waived, y.waived, z.waived], [[], [GID], [GID]]);
+  RUN.applyGraft(back, x.uid, GID, { keepPhase: true }); assert.equal(cardSpec(x).cost - CARDS[x.id].cost, 1, 'sewn on again, the old entry does not make it free');
+  assert.equal(RUN.serializeRun(RUN.deserializeRun(RUN.serializeRun(back))), RUN.serializeRun(back), 'and a repaired save is stable');
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);
