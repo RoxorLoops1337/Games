@@ -95,7 +95,7 @@ function gateable() {
 }
 const power = (it, i) => {
   const d = it.d;
-  if (it.kind === 'card') return (RANK[d.rarity] || 0) * 10 + (d.cost === 'X' ? 2.5 : d.cost || 0) + (TYPER[d.type] || 0) * 0.5 + (d.flags && d.flags.unplayable ? 0 : 0);
+  if (it.kind === 'card') return (RANK[d.rarity] || 0) * 10 + (d.cost === 'X' ? 2.5 : d.cost || 0) + (TYPER[d.type] || 0) * 0.5;
   if (it.kind === 'graft') return (TIERR[d.tier] || 0) * 10 + (RANK[d.rarity] || 0) * 3 + (d.weight || 1);
   if (it.kind === 'relic' || it.kind === 'potion' || it.kind === 'build') return (RANK[d.rarity] || 0) * 10 + 0.001 * i;
   return (d.act || 0) * 10 + 0.001 * i; // events: neutral first, then Act 1..3
@@ -152,7 +152,6 @@ export const UNLOCK_OF_ITEM = B.byItem;    // itemId -> entry
 export const STEPS = B.steps;              // ordered queue: { id, kind, hero, pos, cost, items:[entries] }
 export const TOTAL_COST = B.total;         // exact UP that opens every locked item
 export const LOCKED_IDS = Object.keys(B.items).filter((k) => B.items[k].tier === 'locked');
-export const UNLOCK_KINDS = KINDS;
 export function inventory() {
   const o = { total: {}, start: {}, locked: {} };
   for (const e of Object.values(UNLOCKS)) { o.total[e.kind] = (o.total[e.kind] || 0) + 1; const t = e.tier === 'start' ? 'start' : 'locked'; o[t][e.kind] = (o[t][e.kind] || 0) + 1; }

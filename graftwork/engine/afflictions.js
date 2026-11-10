@@ -6,8 +6,8 @@
 // (and of each enemy, for the guard statuses) is wrapped in a Proxy whose set trap clamps to each status's `cap`, rejects a
 // 3rd distinct new debuff inside one enemy move and a 4th distinct affliction type overall (that one refreshes the durations
 // of the afflictions already active instead), and whose delete trap keeps Infection through card/relic cleanses.
-import { STATUSES, GRAFTS, RELICS } from '../data/index.js';
-import { instWeight } from './cards.js';
+import { STATUSES, GRAFTS } from '../data/index.js';
+import { instWeight, isPriceMod } from './cards.js';
 import { refreshStrain, specOf } from './combat.js';
 
 const AFF = new Set(['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden']);
@@ -84,14 +84,12 @@ function guard(c, target, isPlayer) {
 }
 
 // ---------- the inst view (Numb / Unpicked) ----------
-const priceMod = (m) => m.k === 'selfHurt' || m.k === 'jam' || m.k === 'junk' || m.k === 'selfStatus' || m.k === 'drawdown' || m.k === 'goldCost' || m.k === 'maxHp'
-  || (m.k === 'cost' && m.d > 0) || (m.k === 'flag' && (m.f === 'exhaust' || m.f === 'ethereal')) || (m.k === 'pct' && m.pct < 0);
-// a graft with its boons removed: only the price mods stay (custom hooks are boons too, they go)
+// a graft with its boons removed: only the price mods stay (engine/cards.js isPriceMod; boon hooks go, price hooks stay)
 function mutedId(gid) {
   const id = '~numb:' + gid;
   if (!GRAFTS[id] && GRAFTS[gid]) {
     const g = GRAFTS[gid];
-    Object.defineProperty(GRAFTS, id, { value: { ...g, id, mods: (g.mods || []).filter(priceMod) }, enumerable: false, configurable: true });
+    Object.defineProperty(GRAFTS, id, { value: { ...g, id, mods: (g.mods || []).filter(isPriceMod) }, enumerable: false, configurable: true });
   }
   return id;
 }

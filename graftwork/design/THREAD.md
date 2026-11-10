@@ -30,3 +30,10 @@ Knitter: heals 3 per extend and takes +50% from cuts. Scissor Nurse: +2 block pe
 ## Engine sketch
 cards.js: add `schoolsOf(spec)`. combat.js: `newCombat` init `c.seam`; `playCard` calls `seamStep(c, card, spec)` after the energy spend and BEFORE runFx so a card's own effects can read `knots`; `readSrc` adds `knots`; `endTurn` calls `seamEnd` before `fire('turnEnd')`; `startPlayerTurn` calls `seamTurnStart`. Payouts live in engine/seam.js. Events for the UI: seamExtend, seamCut, seamSlack, seamFray, seamPay.
 Open decision (made by lead): Tied/Tempered cards as the reliable bridge is a real reward for Temper; keep it, balance later.
+
+## As built (rules fixes, see CLEANUP_PLAN.md "Rules fixes")
+- "Cut the Line." (Snip, Tailor's Shears, Hemostatic Snip) is `A.cutLine()`: the Line is cashed as a cut (same hooks, same 3 cuts a turn, same enemy cancels). A card that joined the Line starts the next one at its own knots, as a card that cuts by school does; a Slack card (Snip, a Frayed or Tempered card) leaves the rail empty. A replay does not cut again.
+- Slip Knot: a card that would cut by school goes Slack instead (its own "Cut the Line." effect, if it has one, still cuts). Granny Knot: on a standing Line the card always extends it, adds no count, and stands for every school in the Line for the next card; on an empty rail it starts a Line as its own schools.
+- "When it cuts the Line" grafts fire on a cut by school or by effect, with the length of the Line that was cut. "When it extends the Line" grafts fire when the card ties a knot (the first knot of a Line counts), not when it cuts.
+- Odile: once per turn the player may declare the next card Gilded (rail tab, key G). The card also counts as Gilded for its Thread step. The declaration is spent by the card that uses it; a card that is already Gilded, Frayed or Tempered leaves it armed. It can be taken back before a card is played.
+- Tapestry is a Gilt power, not "the first cut each turn pays twice"; Resonance: tier 3 adds a stitch to that school's payout, tier 6 pays its cuts twice.

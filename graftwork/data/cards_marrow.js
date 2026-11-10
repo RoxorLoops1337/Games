@@ -5,7 +5,7 @@ const bleedOf = { per: 'st:bleed@target' };
 const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
 const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
 const LINE2 = (c) => !!c.seam && Object.keys(c.seam.counts || {}).filter((k) => c.seam.counts[k] > 0).length >= 2; // the Line bridges 2+ schools
-const cutLine = (A) => { const s = A.c.seam; if (!s) return; if (typeof A.cutLine === 'function') A.cutLine(); else s.forceCut = true; };
+const CUT = { op: 'custom', fn: (A) => A.cutLine(), text: 'Cut the Line.', seam: 'cut' }; // engine/seam.js seamCutNow; seam: 'cut' tells the preview
 const temperedIn = (A) => A.c.run.deck.filter((i) => i.fused && i.fused.length).length;
 const plateTempered = (A) => A.status(A.player, 'plated', Math.min(6, 2 + temperedIn(A)));
 export const CARDS_MARROW = [
@@ -72,8 +72,8 @@ export const CARDS_MARROW = [
     fx: [{ op: 'block', n: 6 }, { op: 'if', cond: { src: 'strain', eq: 0 }, ifText: 'you have no Strain', then: [{ op: 'draw', n: 1 }, { op: 'heal', n: 2 }] }],
     up: { fx: [{ op: 'block', n: 8 }, { op: 'if', cond: { src: 'strain', eq: 0 }, ifText: 'you have no Strain', then: [{ op: 'draw', n: 1 }, { op: 'heal', n: 3 }] }] }, flavor: 'Nothing declared, nothing carried.' },
   { id: 'm_hemostatic_snip', name: 'Hemostatic Snip', hero: 'marrow', type: 'attack', cost: 0, rarity: 'uncommon', school: 'blood', art: 'scissors', target: 'enemy',
-    fx: [{ op: 'dmg', n: 3 }, { op: 'status', s: 'bleed', n: 2 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 4 }] }, { op: 'custom', fn: cutLine, text: 'Cut the Line.' }],
-    up: { fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'bleed', n: 3 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 5 }] }, { op: 'custom', fn: cutLine, text: 'Cut the Line.' }] }, flavor: 'Quick, tidy, final.' },
+    fx: [{ op: 'dmg', n: 3 }, { op: 'status', s: 'bleed', n: 2 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 4 }] }, CUT],
+    up: { fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'bleed', n: 3 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 5 }] }, CUT] }, flavor: 'Quick, tidy, final.' },
   { id: 'm_hammered_plate', name: 'Hammered Plate', hero: 'marrow', type: 'power', cost: 2, rarity: 'rare', school: 'rust', art: 'hammerrivet', target: 'self',
     fx: [{ op: 'custom', fn: plateTempered, text: 'Gain Plated equal to 2 + the Tempered cards in your deck (max 6).' }],
     up: { cost: 1, fx: [{ op: 'custom', fn: plateTempered, text: 'Gain Plated equal to 2 + the Tempered cards in your deck (max 6).' }] }, flavor: 'Every hammered seam is a rivet.' },

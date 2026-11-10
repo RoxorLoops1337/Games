@@ -10,7 +10,7 @@ import * as TRANS from './ui/transitions.js';
 import { lights } from './ui/lights.js';
 import * as RUN from './engine/run.js';
 import * as META from './engine/meta.js';
-import { saveRun, loadRun, clearRun, hasRun } from './engine/save.js';
+import { saveRun, loadRun, hasRun } from './engine/save.js';
 
 import title from './ui/title.js';
 import map from './ui/map.js';
@@ -50,7 +50,7 @@ export function boot(canvas) {
     app, audio, RUN, META,
     start(opts) {
       const run = RUN.newRun(META.withUnlocks(app.shared.meta, opts)); // content gating: the player's unlocked set (Daily: starting pool)
-      app.shared.run = run; META.onRunStart && META.onRunStart(app.shared.meta, run); saveRun(run);
+      app.shared.run = run; META.onRunStart(app.shared.meta, run); saveRun(run);
       flow.route();
     },
     startPractice(snap) { const run = META.newPracticeRun(snap, app.shared.meta); app.shared.run = run; saveRun(run); flow.route(); },

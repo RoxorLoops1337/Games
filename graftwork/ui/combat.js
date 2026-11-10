@@ -15,7 +15,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
 import { watchCombat, announceEnding } from './a11y.js';
-import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
+import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip, drawSeamDeclare, declareShown } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import { drawCardZoom } from './card_zoom.js';
@@ -1223,6 +1223,7 @@ function dropDrag(m) {
 }
 function clickAt(m, dn) {
   const x = m.x, y = m.y, u = U();
+  if (declareShown(S.c)) { const g = APP.hitRect(L.DECLARE_BTN.x, L.DECLARE_BTN.y, L.DECLARE_BTN.w, L.DECLARE_BTN.h); if (L.inRectXY(x, y, g.x, g.y, g.w, g.h)) return; } // the declaration tab is a button: it keeps the selected card
   // potion target mode
   if (S.potSel !== null && S.potSel !== undefined) { const ed = enemyAt(x, y); if (ed) tryPotion(S.potSel, ed); else if (y > L.BAR_H) { S.potSel = null; } return; }
   // end-turn confirm chip
@@ -1511,6 +1512,7 @@ function draw(app) {
   drawSprites(app);
   drawCoins(app);
   { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
+  if (drawSeamDeclare(app, c, canAct())) absorb(); // Odile: declare the next card Gilded (press, G, gamepad left trigger)
   if (c.seam && app.inRect(L.SEAM.x, L.SEAM.y, L.SEAM.w, L.SEAM.h)) { const n = c.seam.len || 0; queueTip(app, 'seamrail' + n, [[{ title: `The Line: ${n} knot${n === 1 ? '' : 's'}`, text: 'Same-school cards extend it. Another school cuts it and pays Stitches. Slack cards change nothing. A Tied Line carries over.', color: '#e8dcc4', glyph: 'diamond' }]], { x: L.SEAM.x, y: L.SEAM.y, w: L.SEAM.w, h: L.SEAM.h }, { gloss: false }); } // the Thread rail names its own words: Line, Knot, Stitch, Cut, Slack, Tied
   drawHand(app);
   drawHudBottom(app);

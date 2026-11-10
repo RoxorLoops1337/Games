@@ -27,7 +27,6 @@ export const ROOMS = {
   rm_isolation2: { id: 'rm_isolation2', name: 'Isolation Ward II', cost: { stone: 4, gold: 40 }, power: 2, spawn: { kind: 'elite', every: 3, cap: 1 }, level2: true, hint: 'An elite every 3 days, always Level 2 (+30% HP, +2 Strength, one more relic to choose from). Uses 2 power.', art: 'ward_isolation' },
   rm_linen: { id: 'rm_linen', name: 'Linen Room', cost: { wood: 2 }, power: 1, spawn: { kind: 'rest', every: 2, cap: 1 }, heal: 0.3, hint: 'Clean sheets every 2 days: walk in to heal 30% of max HP.', art: 'ward_linen' },
 };
-export const ROOM_LIST = Object.values(ROOMS);
 
 // Building cards. kind: room (builds `room` on a legal cell) | upgrade (installs on a room of type `on`) | effect.
 // target: 'cell' | 'room' | 'res' (wood or stone) | 'none'. cost: what PLAYING the card costs (room cards: the room's cost).
@@ -124,5 +123,5 @@ export const WARD_TUNE = {
   earlyBossHp: 0.85, earlyBossGold: 60, earlyDays: 2,
   resPerMonster: 1, resPerElite: 2,
   bossIdle: { need: 6, per: 2 }, // the boss gets +1 Strength per 2 fights (of 6) you skipped on this floor
-  buildRemovePrice: 50, kitchenDraw: 2, morgueStone: 1, libraryChance: 0.25, pharmacyGold: 15, otPayPer: 5, otPayMax: 50, quarantineDays: 2, fireDoorCap: 3, buildPrice: { common: 35, uncommon: 55, rare: 85 },
+  buildRemovePrice: 50, kitchenDraw: 2, morgueStone: 1, pharmacyGold: 15, otPayPer: 5, otPayMax: 50, quarantineDays: 2, fireDoorCap: 3, buildPrice: { common: 35, uncommon: 55, rare: 85 },
 };
