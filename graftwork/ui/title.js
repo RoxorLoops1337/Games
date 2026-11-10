@@ -118,7 +118,7 @@ export default {
     flow.start(opts);
   },
   draw(app) {
-    const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow, cm = calm(app), dt = Math.min(0.05, app.dt || 0.016);
+    const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow, cm = calm(app), dt = Math.min(0.05, app.dt ?? 0.016);
     // any input skips the intro and is used up by it (a click must not also press a button that is not there yet)
     if (this.introPlanned && !app.blocked && (app.mouse.pressed || app.mouse.released || app.pressedKeys.length)) {
       this.skipIntro(app); app.mouse.pressed = false; app.mouse.released = false; app.mouse.pressStart = null; app.pressedKeys.length = 0;
@@ -209,7 +209,7 @@ export default {
   tick(app, n) {
     const a = app.shared.audio; if (!a || !a.sfx) return;
     a.sfx('stitchTk');
-    if (n > 1) app.timers.push({ ms: 120, fn: () => { if (app.current === 'title' || !app.current) a.sfx('stitchTk', { pitch: 0.9 }); } });
+    if (n > 1) app.after(120, () => { if (app.current === 'title' || !app.current) a.sfx('stitchTk', { pitch: 0.9 }); });
   },
   // the room tone swells now and then, a candle crackles in the distance; only on the menu and when nothing covers the title
   audioTick(app, dt, cm) {
@@ -223,7 +223,7 @@ export default {
   // A brass-framed slab: app.button does the work (hit area, keyboard focus ring, press travel, ripple); this adds the lift on hover or focus (eased, drawn
   // by moving the picture, never the hit area), a drop shadow that opens under the lifted slab, a sheen that crosses it, and stitched ends.
   slab(app, key, label, x, y, w, h, o = {}) {
-    const g = app.ctx, F = app.focus, cm = calm(app), dt = Math.min(0.05, app.dt || 0.016);
+    const g = app.ctx, F = app.focus, cm = calm(app), dt = Math.min(0.05, app.dt ?? 0.016);
     const fo = !!(F.active && F.idx >= 0 && F.idx < F.n && F.list[F.idx] && F.list[F.idx].x === x && F.list[F.idx].y === y);
     const hot = !o.disabled && (app.inRect(x, y, w, h) || fo), cur = this.lifts[key] || 0, to = hot ? 1 : 0;
     const lift = this.lifts[key] = cm ? to : cur + (to - cur) * Math.min(1, dt * 14);

@@ -1,7 +1,7 @@
 {
- "version": "bfb07c67b70ef048",
- "bytes": 11554848,
- "count": 655,
+ "version": "74145270d299d6d8",
+ "bytes": 8955309,
+ "count": 497,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -55,14 +55,6 @@
    "h": "8b2eb5f84a1e20c0",
    "s": 68728
   },
-  "assets/ward/actors/bedpan_slime_b@1x.webp": {
-   "h": "8eaf9cf822f629c6",
-   "s": 5978
-  },
-  "assets/ward/actors/bedpan_slime_b@2x.webp": {
-   "h": "2ebb88ec56ae7a86",
-   "s": 17922
-  },
   "assets/ward/actors/candy_striper@1x.webp": {
    "h": "5ecea952ee5af158",
    "s": 4216
@@ -74,14 +66,6 @@
   "assets/ward/actors/candy_striper@3x.webp": {
    "h": "ca3bae73148ba622",
    "s": 38068
-  },
-  "assets/ward/actors/candy_striper_b@1x.webp": {
-   "h": "c01e23bce2b197ca",
-   "s": 4344
-  },
-  "assets/ward/actors/candy_striper_b@2x.webp": {
-   "h": "cb7abeab47c3d983",
-   "s": 12502
   },
   "assets/ward/actors/crutchling@1x.webp": {
    "h": "3a2fbaf6eecee1f7",
@@ -107,14 +91,6 @@
    "h": "f098dc7a3febf93c",
    "s": 24884
   },
-  "assets/ward/actors/crutchling_b@1x.webp": {
-   "h": "3328d3c162aeeb41",
-   "s": 4256
-  },
-  "assets/ward/actors/crutchling_b@2x.webp": {
-   "h": "983098a490197333",
-   "s": 11832
-  },
   "assets/ward/actors/crutchling_die@1x.webp": {
    "h": "f9ef1d370ddb9429",
    "s": 5044
@@ -139,38 +115,6 @@
    "h": "08cfd76c5baa7d9e",
    "s": 38434
   },
-  "assets/ward/actors/crutchling_walk1@1x.webp": {
-   "h": "b71ff3aaa1f4b801",
-   "s": 3808
-  },
-  "assets/ward/actors/crutchling_walk1@2x.webp": {
-   "h": "33726a162978ebd0",
-   "s": 9728
-  },
-  "assets/ward/actors/crutchling_walk2@1x.webp": {
-   "h": "21ee02bf524036de",
-   "s": 3826
-  },
-  "assets/ward/actors/crutchling_walk2@2x.webp": {
-   "h": "1280af9f5b619b21",
-   "s": 9828
-  },
-  "assets/ward/actors/crutchling_walk3@1x.webp": {
-   "h": "07738cabd0b1c5b9",
-   "s": 3758
-  },
-  "assets/ward/actors/crutchling_walk3@2x.webp": {
-   "h": "d2bbc7f9fcb60785",
-   "s": 9742
-  },
-  "assets/ward/actors/crutchling_walk4@1x.webp": {
-   "h": "bdc9871fc41b016e",
-   "s": 3860
-  },
-  "assets/ward/actors/crutchling_walk4@2x.webp": {
-   "h": "aa847adcb35da718",
-   "s": 9924
-  },
   "assets/ward/actors/defibrillator@1x.webp": {
    "h": "f15e28fa4971d586",
    "s": 7398
@@ -183,14 +127,6 @@
    "h": "2ce8c74edceb4f07",
    "s": 71462
   },
-  "assets/ward/actors/defibrillator_b@1x.webp": {
-   "h": "6464a55098d0b5a8",
-   "s": 7004
-  },
-  "assets/ward/actors/defibrillator_b@2x.webp": {
-   "h": "09b22a6884655e55",
-   "s": 20734
-  },
   "assets/ward/actors/fever_moth@1x.webp": {
    "h": "60b76acfbabaa618",
    "s": 5640
@@ -202,14 +138,6 @@
   "assets/ward/actors/fever_moth@3x.webp": {
    "h": "cf2ab9e89cf23ff8",
    "s": 60066
-  },
-  "assets/ward/actors/fever_moth_b@1x.webp": {
-   "h": "87921ec9f274b333",
-   "s": 5558
-  },
-  "assets/ward/actors/fever_moth_b@2x.webp": {
-   "h": "ea052f6012f21c97",
-   "s": 17142
   },
   "assets/ward/actors/gauze_mummy@1x.webp": {
    "h": "fd7ca3ca4903e243",
@@ -235,14 +163,6 @@
    "h": "fe505f8ec2cf4299",
    "s": 29650
   },
-  "assets/ward/actors/gauze_mummy_b@1x.webp": {
-   "h": "6f214396c50b3f2d",
-   "s": 4850
-  },
-  "assets/ward/actors/gauze_mummy_b@2x.webp": {
-   "h": "f6803f424c3ec890",
-   "s": 13546
-  },
   "assets/ward/actors/gauze_mummy_die@1x.webp": {
    "h": "129a6e24092b1835",
    "s": 4668
@@ -267,38 +187,6 @@
    "h": "46eb5be76f9ce432",
    "s": 35876
   },
-  "assets/ward/actors/gauze_mummy_walk1@1x.webp": {
-   "h": "ccb0225af571c6bd",
-   "s": 4534
-  },
-  "assets/ward/actors/gauze_mummy_walk1@2x.webp": {
-   "h": "420b4ada7d3564bb",
-   "s": 11774
-  },
-  "assets/ward/actors/gauze_mummy_walk2@1x.webp": {
-   "h": "15923d6ca78d7153",
-   "s": 4324
-  },
-  "assets/ward/actors/gauze_mummy_walk2@2x.webp": {
-   "h": "4ca02294c9b5079d",
-   "s": 11194
-  },
-  "assets/ward/actors/gauze_mummy_walk3@1x.webp": {
-   "h": "99234b7f34ff7b1a",
-   "s": 5464
-  },
-  "assets/ward/actors/gauze_mummy_walk3@2x.webp": {
-   "h": "fc6166153966714a",
-   "s": 14066
-  },
-  "assets/ward/actors/gauze_mummy_walk4@1x.webp": {
-   "h": "37b8a4dee55fe121",
-   "s": 4306
-  },
-  "assets/ward/actors/gauze_mummy_walk4@2x.webp": {
-   "h": "b08713b3dc742280",
-   "s": 11114
-  },
   "assets/ward/actors/gurney_foot@1x.webp": {
    "h": "fca0fccbb4065391",
    "s": 4494
@@ -310,14 +198,6 @@
   "assets/ward/actors/gurney_foot@3x.webp": {
    "h": "2bc645a679a93717",
    "s": 42486
-  },
-  "assets/ward/actors/gurney_foot_b@1x.webp": {
-   "h": "4615e372778f9f43",
-   "s": 4490
-  },
-  "assets/ward/actors/gurney_foot_b@2x.webp": {
-   "h": "48195b7d256ace4d",
-   "s": 13348
   },
   "assets/ward/actors/iron_lung@1x.webp": {
    "h": "cffdca1bbcc109c1",
@@ -331,14 +211,6 @@
    "h": "a561471716ae9300",
    "s": 54664
   },
-  "assets/ward/actors/iron_lung_b@1x.webp": {
-   "h": "0bc66722d90730d2",
-   "s": 4954
-  },
-  "assets/ward/actors/iron_lung_b@2x.webp": {
-   "h": "cdb53ea04ca20606",
-   "s": 14382
-  },
   "assets/ward/actors/knitter@1x.webp": {
    "h": "bd784d9c60a7b139",
    "s": 4724
@@ -350,14 +222,6 @@
   "assets/ward/actors/knitter@3x.webp": {
    "h": "6438baf30a5ca9ee",
    "s": 43558
-  },
-  "assets/ward/actors/knitter_b@1x.webp": {
-   "h": "e0d0997db928c39a",
-   "s": 4852
-  },
-  "assets/ward/actors/knitter_b@2x.webp": {
-   "h": "959393bf93760596",
-   "s": 13818
   },
   "assets/ward/actors/leech_jar@1x.webp": {
    "h": "31d183a5ca7bc7bf",
@@ -383,14 +247,6 @@
    "h": "115ae6b21be98d16",
    "s": 21588
   },
-  "assets/ward/actors/leech_jar_b@1x.webp": {
-   "h": "84809e2a5cb765a9",
-   "s": 3864
-  },
-  "assets/ward/actors/leech_jar_b@2x.webp": {
-   "h": "f97a6f3839c28f13",
-   "s": 11048
-  },
   "assets/ward/actors/leech_jar_die@1x.webp": {
    "h": "95ef479f2a2af0bf",
    "s": 4514
@@ -415,38 +271,6 @@
    "h": "bd651df8c44243ad",
    "s": 24396
   },
-  "assets/ward/actors/leech_jar_walk1@1x.webp": {
-   "h": "71d062de2fd82e0b",
-   "s": 3992
-  },
-  "assets/ward/actors/leech_jar_walk1@2x.webp": {
-   "h": "0dd02a12cef6d63e",
-   "s": 10850
-  },
-  "assets/ward/actors/leech_jar_walk2@1x.webp": {
-   "h": "54325809b9333c59",
-   "s": 3432
-  },
-  "assets/ward/actors/leech_jar_walk2@2x.webp": {
-   "h": "0dac2b1a9ae927c0",
-   "s": 9146
-  },
-  "assets/ward/actors/leech_jar_walk3@1x.webp": {
-   "h": "2b4bf4fade8c515a",
-   "s": 3634
-  },
-  "assets/ward/actors/leech_jar_walk3@2x.webp": {
-   "h": "de8a065f1f631ade",
-   "s": 9586
-  },
-  "assets/ward/actors/leech_jar_walk4@1x.webp": {
-   "h": "f322fcb8c6f4fa1e",
-   "s": 3422
-  },
-  "assets/ward/actors/leech_jar_walk4@2x.webp": {
-   "h": "707d886dc32c2a15",
-   "s": 9004
-  },
   "assets/ward/actors/marrow@1x.webp": {
    "h": "21660a7a0dcbe2e5",
    "s": 3544
@@ -458,46 +282,6 @@
   "assets/ward/actors/marrow@3x.webp": {
    "h": "c02388ebb909c690",
    "s": 34142
-  },
-  "assets/ward/actors/marrow_b@1x.webp": {
-   "h": "db9c2b38befc2d0c",
-   "s": 3898
-  },
-  "assets/ward/actors/marrow_b@2x.webp": {
-   "h": "68cfff3f1933bfb6",
-   "s": 10788
-  },
-  "assets/ward/actors/marrow_walk1@1x.webp": {
-   "h": "b7658c066e060b43",
-   "s": 3126
-  },
-  "assets/ward/actors/marrow_walk1@2x.webp": {
-   "h": "44cd29c333848b72",
-   "s": 8506
-  },
-  "assets/ward/actors/marrow_walk2@1x.webp": {
-   "h": "402cbf30f38d84b6",
-   "s": 2952
-  },
-  "assets/ward/actors/marrow_walk2@2x.webp": {
-   "h": "3ca1fac20f0d55e9",
-   "s": 7976
-  },
-  "assets/ward/actors/marrow_walk3@1x.webp": {
-   "h": "a484b9923e016ce3",
-   "s": 3122
-  },
-  "assets/ward/actors/marrow_walk3@2x.webp": {
-   "h": "1e0731b5898931d5",
-   "s": 8330
-  },
-  "assets/ward/actors/marrow_walk4@1x.webp": {
-   "h": "cf3cef9938e817f4",
-   "s": 2946
-  },
-  "assets/ward/actors/marrow_walk4@2x.webp": {
-   "h": "e7bd02291d6e5f2d",
-   "s": 7948
   },
   "assets/ward/actors/night_nurse@1x.webp": {
    "h": "766f5a6577ac8bd8",
@@ -547,38 +331,6 @@
    "h": "60181f6528b6865c",
    "s": 26432
   },
-  "assets/ward/actors/night_nurse_walk1@1x.webp": {
-   "h": "6372bbdef9caa5c9",
-   "s": 3220
-  },
-  "assets/ward/actors/night_nurse_walk1@2x.webp": {
-   "h": "13761e0b9d3d4140",
-   "s": 8408
-  },
-  "assets/ward/actors/night_nurse_walk2@1x.webp": {
-   "h": "9e9ccbfdcc1e5b39",
-   "s": 3134
-  },
-  "assets/ward/actors/night_nurse_walk2@2x.webp": {
-   "h": "973bfd1131885080",
-   "s": 8040
-  },
-  "assets/ward/actors/night_nurse_walk3@1x.webp": {
-   "h": "71f731ffd29617e3",
-   "s": 3346
-  },
-  "assets/ward/actors/night_nurse_walk3@2x.webp": {
-   "h": "51b8c0dcfa384e03",
-   "s": 8360
-  },
-  "assets/ward/actors/night_nurse_walk4@1x.webp": {
-   "h": "2a20ecb909799ef1",
-   "s": 3170
-  },
-  "assets/ward/actors/night_nurse_walk4@2x.webp": {
-   "h": "3fe5588aa9f16f23",
-   "s": 8076
-  },
   "assets/ward/actors/npc_nurse@1x.webp": {
    "h": "bcd034bb332e79ab",
    "s": 3638
@@ -627,46 +379,6 @@
    "h": "4e74a9fb602bc2c6",
    "s": 34430
   },
-  "assets/ward/actors/odile_b@1x.webp": {
-   "h": "68a3991cc08578a6",
-   "s": 3928
-  },
-  "assets/ward/actors/odile_b@2x.webp": {
-   "h": "b72cba034222cebc",
-   "s": 10996
-  },
-  "assets/ward/actors/odile_walk1@1x.webp": {
-   "h": "8e30d0e534c6cf60",
-   "s": 3242
-  },
-  "assets/ward/actors/odile_walk1@2x.webp": {
-   "h": "48cd22544b320e78",
-   "s": 8678
-  },
-  "assets/ward/actors/odile_walk2@1x.webp": {
-   "h": "7cb7a7bfd7be0584",
-   "s": 3160
-  },
-  "assets/ward/actors/odile_walk2@2x.webp": {
-   "h": "73e056c8df5d11b2",
-   "s": 8494
-  },
-  "assets/ward/actors/odile_walk3@1x.webp": {
-   "h": "4aaaae0b6bd36d9c",
-   "s": 3162
-  },
-  "assets/ward/actors/odile_walk3@2x.webp": {
-   "h": "331516a38ae428b4",
-   "s": 8502
-  },
-  "assets/ward/actors/odile_walk4@1x.webp": {
-   "h": "6260b1c5226b5436",
-   "s": 3190
-  },
-  "assets/ward/actors/odile_walk4@2x.webp": {
-   "h": "12ef06a96198313c",
-   "s": 8652
-  },
   "assets/ward/actors/orderly@1x.webp": {
    "h": "a025a41556bcdac4",
    "s": 5098
@@ -690,14 +402,6 @@
   "assets/ward/actors/orderly_atk2@3x.webp": {
    "h": "46025fa5701a2ab0",
    "s": 29334
-  },
-  "assets/ward/actors/orderly_b@1x.webp": {
-   "h": "7d1352cb2fc15f9c",
-   "s": 4732
-  },
-  "assets/ward/actors/orderly_b@2x.webp": {
-   "h": "c6e5e67b3b426c4f",
-   "s": 13500
   },
   "assets/ward/actors/orderly_die@1x.webp": {
    "h": "b42df9375527dd35",
@@ -723,38 +427,6 @@
    "h": "bfd836c5fda2435c",
    "s": 21808
   },
-  "assets/ward/actors/orderly_walk1@1x.webp": {
-   "h": "ee48dfd7edca036a",
-   "s": 4268
-  },
-  "assets/ward/actors/orderly_walk1@2x.webp": {
-   "h": "f13f474c2e5047ee",
-   "s": 11008
-  },
-  "assets/ward/actors/orderly_walk2@1x.webp": {
-   "h": "c357405688c112a3",
-   "s": 4358
-  },
-  "assets/ward/actors/orderly_walk2@2x.webp": {
-   "h": "aad332041adadadf",
-   "s": 11152
-  },
-  "assets/ward/actors/orderly_walk3@1x.webp": {
-   "h": "3552d5ac53285990",
-   "s": 4572
-  },
-  "assets/ward/actors/orderly_walk3@2x.webp": {
-   "h": "5854ae271c0c0428",
-   "s": 11882
-  },
-  "assets/ward/actors/orderly_walk4@1x.webp": {
-   "h": "455d93ebbb71f1bd",
-   "s": 4424
-  },
-  "assets/ward/actors/orderly_walk4@2x.webp": {
-   "h": "f471147beb89e754",
-   "s": 11398
-  },
   "assets/ward/actors/pill_swarm@1x.webp": {
    "h": "05e29be90c4383ab",
    "s": 6706
@@ -766,14 +438,6 @@
   "assets/ward/actors/pill_swarm@3x.webp": {
    "h": "d3c4ecf91bd874d2",
    "s": 51780
-  },
-  "assets/ward/actors/pill_swarm_b@1x.webp": {
-   "h": "d242beaaba02d63b",
-   "s": 6966
-  },
-  "assets/ward/actors/pill_swarm_b@2x.webp": {
-   "h": "fb494879b77b7ca9",
-   "s": 19346
   },
   "assets/ward/actors/stitch_rat@1x.webp": {
    "h": "1c9b880cefca6323",
@@ -799,14 +463,6 @@
    "h": "d2dcba67893fb488",
    "s": 64740
   },
-  "assets/ward/actors/surge_tick_b@1x.webp": {
-   "h": "7a0dad069999dc06",
-   "s": 5888
-  },
-  "assets/ward/actors/surge_tick_b@2x.webp": {
-   "h": "2a66577bc391f66a",
-   "s": 17486
-  },
   "assets/ward/actors/suture_wasp@1x.webp": {
    "h": "822bb8a8c807e750",
    "s": 5390
@@ -818,14 +474,6 @@
   "assets/ward/actors/suture_wasp@3x.webp": {
    "h": "46f7c0a3b3e44567",
    "s": 50690
-  },
-  "assets/ward/actors/suture_wasp_b@1x.webp": {
-   "h": "73cc4c3cc0fd2544",
-   "s": 4710
-  },
-  "assets/ward/actors/suture_wasp_b@2x.webp": {
-   "h": "fa9a3f5a4e270693",
-   "s": 13802
   },
   "assets/ward/actors/the_matron@1x.webp": {
    "h": "8d0bae6e3d124c4e",
@@ -875,14 +523,6 @@
    "h": "1aa6c9573239eed7",
    "s": 70906
   },
-  "assets/ward/actors/two_gurneys_b@1x.webp": {
-   "h": "8bd7e0e0cb8829dd",
-   "s": 7240
-  },
-  "assets/ward/actors/two_gurneys_b@2x.webp": {
-   "h": "2c59b2697d67d52d",
-   "s": 20970
-  },
   "assets/ward/actors/ward_clerk@1x.webp": {
    "h": "e3c9de212cab894b",
    "s": 3468
@@ -895,14 +535,6 @@
    "h": "b845a41ff8d4ee22",
    "s": 32316
   },
-  "assets/ward/actors/ward_clerk_b@1x.webp": {
-   "h": "9e77ed72d051a8fb",
-   "s": 3518
-  },
-  "assets/ward/actors/ward_clerk_b@2x.webp": {
-   "h": "806a8c86fd6382e2",
-   "s": 10158
-  },
   "assets/ward/actors/wick@1x.webp": {
    "h": "e887f680e5308554",
    "s": 4440
@@ -914,46 +546,6 @@
   "assets/ward/actors/wick@3x.webp": {
    "h": "106ad31a15a4e9cc",
    "s": 40746
-  },
-  "assets/ward/actors/wick_b@1x.webp": {
-   "h": "cf28a3069c936ceb",
-   "s": 4456
-  },
-  "assets/ward/actors/wick_b@2x.webp": {
-   "h": "ed8b01e6b5d865dd",
-   "s": 12840
-  },
-  "assets/ward/actors/wick_walk1@1x.webp": {
-   "h": "6c9798f76346dd6b",
-   "s": 3708
-  },
-  "assets/ward/actors/wick_walk1@2x.webp": {
-   "h": "145d03352a22cea9",
-   "s": 10016
-  },
-  "assets/ward/actors/wick_walk2@1x.webp": {
-   "h": "712ec512f6af958d",
-   "s": 3666
-  },
-  "assets/ward/actors/wick_walk2@2x.webp": {
-   "h": "01bdeb6ebaedb966",
-   "s": 9910
-  },
-  "assets/ward/actors/wick_walk3@1x.webp": {
-   "h": "b951ed7adabb5084",
-   "s": 3684
-  },
-  "assets/ward/actors/wick_walk3@2x.webp": {
-   "h": "fa227677dbfe4312",
-   "s": 10114
-  },
-  "assets/ward/actors/wick_walk4@1x.webp": {
-   "h": "68f5fa17a4a703ad",
-   "s": 3778
-  },
-  "assets/ward/actors/wick_walk4@2x.webp": {
-   "h": "8fdc6fb37d67e0e4",
-   "s": 10064
   },
   "assets/ward/cards/ward_bowl@1x.webp": {
    "h": "4882d819bd14f061",
@@ -1108,8 +700,8 @@
    "s": 5738
   },
   "assets/ward/manifest.json": {
-   "h": "fd4949158badeace",
-   "s": 27282
+   "h": "85d70d3df97fb424",
+   "s": 13382
   },
   "assets/ward/rooms/plot_empty@1x.webp": {
    "h": "d02205762c8b26a5",
@@ -1119,14 +711,6 @@
    "h": "521ec552a740c24c",
    "s": 41210
   },
-  "assets/ward/rooms/rm_boiler@1x.webp": {
-   "h": "58a76518507e438d",
-   "s": 22624
-  },
-  "assets/ward/rooms/rm_boiler@2x.webp": {
-   "h": "168410767560ad16",
-   "s": 77256
-  },
   "assets/ward/rooms/rm_chapel@1x.webp": {
    "h": "ad6180bc24cb45c3",
    "s": 21970
@@ -1134,14 +718,6 @@
   "assets/ward/rooms/rm_chapel@2x.webp": {
    "h": "48c872681ff2af30",
    "s": 71074
-  },
-  "assets/ward/rooms/rm_chapel_low@1x.webp": {
-   "h": "2455b86eff6488a1",
-   "s": 11218
-  },
-  "assets/ward/rooms/rm_chapel_low@2x.webp": {
-   "h": "bba3557db8937325",
-   "s": 34094
   },
   "assets/ward/rooms/rm_corridor@1x.webp": {
    "h": "64492d98ead49bde",
@@ -1151,14 +727,6 @@
    "h": "43269e8e7b4306fc",
    "s": 55102
   },
-  "assets/ward/rooms/rm_corridor_low@1x.webp": {
-   "h": "cbc3288e9e88096e",
-   "s": 7980
-  },
-  "assets/ward/rooms/rm_corridor_low@2x.webp": {
-   "h": "ed35aae6c417e743",
-   "s": 24376
-  },
   "assets/ward/rooms/rm_counting@1x.webp": {
    "h": "19f7fac875720049",
    "s": 22974
@@ -1166,14 +734,6 @@
   "assets/ward/rooms/rm_counting@2x.webp": {
    "h": "01e0d460beeb089c",
    "s": 73366
-  },
-  "assets/ward/rooms/rm_counting_low@1x.webp": {
-   "h": "e5f8ef1ec008b9cd",
-   "s": 11846
-  },
-  "assets/ward/rooms/rm_counting_low@2x.webp": {
-   "h": "8f52562a84b345c5",
-   "s": 36760
   },
   "assets/ward/rooms/rm_dispensary@1x.webp": {
    "h": "10dd836addbd867c",
@@ -1183,30 +743,6 @@
    "h": "5197b0d0912d937b",
    "s": 77642
   },
-  "assets/ward/rooms/rm_dispensary_low@1x.webp": {
-   "h": "00c5632c41854d5f",
-   "s": 11874
-  },
-  "assets/ward/rooms/rm_dispensary_low@2x.webp": {
-   "h": "bea036c73105bf1c",
-   "s": 36820
-  },
-  "assets/ward/rooms/rm_entrance@1x.webp": {
-   "h": "0a676c0b32f2622f",
-   "s": 20158
-  },
-  "assets/ward/rooms/rm_entrance@2x.webp": {
-   "h": "bbf8fd1503fbe4c6",
-   "s": 65428
-  },
-  "assets/ward/rooms/rm_entrance_low@1x.webp": {
-   "h": "590c4921777703da",
-   "s": 9674
-  },
-  "assets/ward/rooms/rm_entrance_low@2x.webp": {
-   "h": "dca33ac8a4584948",
-   "s": 30770
-  },
   "assets/ward/rooms/rm_generator@1x.webp": {
    "h": "a73a5eea3e08d1e1",
    "s": 25244
@@ -1214,30 +750,6 @@
   "assets/ward/rooms/rm_generator@2x.webp": {
    "h": "cd0585805e0d1d3a",
    "s": 84270
-  },
-  "assets/ward/rooms/rm_generator_low@1x.webp": {
-   "h": "d71bc9893e1b0904",
-   "s": 17218
-  },
-  "assets/ward/rooms/rm_generator_low@2x.webp": {
-   "h": "eb4ce92046bc644d",
-   "s": 53474
-  },
-  "assets/ward/rooms/rm_isolation2@1x.webp": {
-   "h": "5737f9a49616788e",
-   "s": 20078
-  },
-  "assets/ward/rooms/rm_isolation2@2x.webp": {
-   "h": "a5addbca54a496d4",
-   "s": 68858
-  },
-  "assets/ward/rooms/rm_isolation2_low@1x.webp": {
-   "h": "faa8d6830c379bbf",
-   "s": 9676
-  },
-  "assets/ward/rooms/rm_isolation2_low@2x.webp": {
-   "h": "6ed0164834741728",
-   "s": 30292
   },
   "assets/ward/rooms/rm_isolation@1x.webp": {
    "h": "5891622411980fe8",
@@ -1247,62 +759,6 @@
    "h": "14e04f07e78ab8ab",
    "s": 69638
   },
-  "assets/ward/rooms/rm_isolation_low@1x.webp": {
-   "h": "95cbc5fa71813709",
-   "s": 10104
-  },
-  "assets/ward/rooms/rm_isolation_low@2x.webp": {
-   "h": "49cf47a6649b6f8b",
-   "s": 32072
-  },
-  "assets/ward/rooms/rm_kitchen@1x.webp": {
-   "h": "e51ff26dd8b8dd02",
-   "s": 22714
-  },
-  "assets/ward/rooms/rm_kitchen@2x.webp": {
-   "h": "89c21333656a1291",
-   "s": 74168
-  },
-  "assets/ward/rooms/rm_kitchen_low@1x.webp": {
-   "h": "634e0034d4f34b67",
-   "s": 12706
-  },
-  "assets/ward/rooms/rm_kitchen_low@2x.webp": {
-   "h": "244684fc6ab2c4da",
-   "s": 39040
-  },
-  "assets/ward/rooms/rm_laundry@1x.webp": {
-   "h": "d64751bde75beda3",
-   "s": 23684
-  },
-  "assets/ward/rooms/rm_laundry@2x.webp": {
-   "h": "05028fd71539d59c",
-   "s": 75616
-  },
-  "assets/ward/rooms/rm_laundry_low@1x.webp": {
-   "h": "f1deb9d052e51873",
-   "s": 12346
-  },
-  "assets/ward/rooms/rm_laundry_low@2x.webp": {
-   "h": "3c91595f232200ce",
-   "s": 37914
-  },
-  "assets/ward/rooms/rm_library@1x.webp": {
-   "h": "275b3091a3d27718",
-   "s": 22904
-  },
-  "assets/ward/rooms/rm_library@2x.webp": {
-   "h": "10e0fe9efab79c06",
-   "s": 75600
-  },
-  "assets/ward/rooms/rm_library_low@1x.webp": {
-   "h": "223a5d62a2657dea",
-   "s": 13328
-  },
-  "assets/ward/rooms/rm_library_low@2x.webp": {
-   "h": "dc6e43205c20b813",
-   "s": 40696
-  },
   "assets/ward/rooms/rm_linen@1x.webp": {
    "h": "8e311662703a4059",
    "s": 22016
@@ -1310,46 +766,6 @@
   "assets/ward/rooms/rm_linen@2x.webp": {
    "h": "89770191aa6826fe",
    "s": 70528
-  },
-  "assets/ward/rooms/rm_linen_low@1x.webp": {
-   "h": "7264fe46298ebc2b",
-   "s": 11532
-  },
-  "assets/ward/rooms/rm_linen_low@2x.webp": {
-   "h": "025484a7bca9f5df",
-   "s": 35284
-  },
-  "assets/ward/rooms/rm_morgue@1x.webp": {
-   "h": "f2cb9a6a43ff2561",
-   "s": 20514
-  },
-  "assets/ward/rooms/rm_morgue@2x.webp": {
-   "h": "730f3d72a5c315ee",
-   "s": 65768
-  },
-  "assets/ward/rooms/rm_morgue_low@1x.webp": {
-   "h": "8170254c23fce1e6",
-   "s": 10154
-  },
-  "assets/ward/rooms/rm_morgue_low@2x.webp": {
-   "h": "e02fbeb797e3e4e8",
-   "s": 30342
-  },
-  "assets/ward/rooms/rm_pharmacy@1x.webp": {
-   "h": "8af1410432c1f7a6",
-   "s": 24130
-  },
-  "assets/ward/rooms/rm_pharmacy@2x.webp": {
-   "h": "79447c0bfdcc5230",
-   "s": 79130
-  },
-  "assets/ward/rooms/rm_pharmacy_low@1x.webp": {
-   "h": "964494731b27c576",
-   "s": 12684
-  },
-  "assets/ward/rooms/rm_pharmacy_low@2x.webp": {
-   "h": "802d71fc401dc10b",
-   "s": 39590
   },
   "assets/ward/rooms/rm_quarry@1x.webp": {
    "h": "dc298dda92fc9138",
@@ -1359,14 +775,6 @@
    "h": "5e8537b56c4753ff",
    "s": 80502
   },
-  "assets/ward/rooms/rm_quarry_low@1x.webp": {
-   "h": "7ef70572a214bb0c",
-   "s": 13120
-  },
-  "assets/ward/rooms/rm_quarry_low@2x.webp": {
-   "h": "5ddf2ae52c304efc",
-   "s": 41256
-  },
   "assets/ward/rooms/rm_sawmill@1x.webp": {
    "h": "ce0b37aea6b6709e",
    "s": 24600
@@ -1374,30 +782,6 @@
   "assets/ward/rooms/rm_sawmill@2x.webp": {
    "h": "f1d5e7502c0b38f6",
    "s": 79488
-  },
-  "assets/ward/rooms/rm_sawmill_low@1x.webp": {
-   "h": "eb92f868600730ec",
-   "s": 13812
-  },
-  "assets/ward/rooms/rm_sawmill_low@2x.webp": {
-   "h": "d64f3d315160e32d",
-   "s": 43144
-  },
-  "assets/ward/rooms/rm_theatre@1x.webp": {
-   "h": "14901dd6022fce86",
-   "s": 22554
-  },
-  "assets/ward/rooms/rm_theatre@2x.webp": {
-   "h": "ba93ecc155a4d375",
-   "s": 74872
-  },
-  "assets/ward/rooms/rm_theatre_low@1x.webp": {
-   "h": "895d1e59476a2335",
-   "s": 13474
-  },
-  "assets/ward/rooms/rm_theatre_low@2x.webp": {
-   "h": "106998cc8226b022",
-   "s": 40778
   },
   "assets/ward/rooms/rm_ward@1x.webp": {
    "h": "b73df9401271fe89",
@@ -1407,14 +791,6 @@
    "h": "85403864c8e7c7da",
    "s": 72236
   },
-  "assets/ward/rooms/rm_ward_low@1x.webp": {
-   "h": "775609fee2158331",
-   "s": 11994
-  },
-  "assets/ward/rooms/rm_ward_low@2x.webp": {
-   "h": "122f3a8f21cd48df",
-   "s": 35408
-  },
   "assets/ward/rooms/rm_workshop@1x.webp": {
    "h": "6af14e5b813c5583",
    "s": 23134
@@ -1422,14 +798,6 @@
   "assets/ward/rooms/rm_workshop@2x.webp": {
    "h": "65241910f5841a68",
    "s": 76828
-  },
-  "assets/ward/rooms/rm_workshop_low@1x.webp": {
-   "h": "173019bf6506110c",
-   "s": 12350
-  },
-  "assets/ward/rooms/rm_workshop_low@2x.webp": {
-   "h": "3c179c277a7cf2d4",
-   "s": 38986
   },
   "assets/ward_kit/floors/brick@1x.webp": {
    "h": "0d280fea7373a277",
@@ -2212,8 +1580,8 @@
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "b38f31efc0b3bd8d",
-   "s": 3655
+   "h": "a00cb98133bee50a",
+   "s": 2920
   },
   "data/grafts_extra.js": {
    "h": "00f2b29e703d69d3",
@@ -2396,20 +1764,20 @@
    "s": 1962
   },
   "main.js": {
-   "h": "04cd8f9568a602e9",
-   "s": 7574
+   "h": "8b8431c0a3a0e5bc",
+   "s": 8164
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
    "s": 798
   },
   "ui/a11y.js": {
-   "h": "f155d93f1c97adea",
-   "s": 8967
+   "h": "6fe8d5c9d5e471e4",
+   "s": 9052
   },
   "ui/app_panel.js": {
-   "h": "ae3745884251d20d",
-   "s": 6006
+   "h": "48f3925a539a663a",
+   "s": 6160
   },
   "ui/archive.js": {
    "h": "779e0928e40ffbd6",
@@ -2420,8 +1788,8 @@
    "s": 8750
   },
   "ui/assets.js": {
-   "h": "939cb56a6efaeadf",
-   "s": 16878
+   "h": "50eba9e6a438f139",
+   "s": 14887
   },
   "ui/audio.js": {
    "h": "ef368225df7d30da",
@@ -2432,16 +1800,16 @@
    "s": 4419
   },
   "ui/chrome.js": {
-   "h": "d541879264fa1b80",
-   "s": 16561
+   "h": "4e749e0345719977",
+   "s": 16443
   },
   "ui/codex.js": {
    "h": "78c2d164131f7ffa",
    "s": 40387
   },
   "ui/combat.js": {
-   "h": "52c5db52f3957b5a",
-   "s": 120988
+   "h": "2858183ed9e4ecda",
+   "s": 121433
   },
   "ui/combat_art.js": {
    "h": "4a911bb17ed8e49e",
@@ -2456,8 +1824,8 @@
    "s": 6047
   },
   "ui/core.js": {
-   "h": "18d3934c833e557e",
-   "s": 38443
+   "h": "a25d5c7e33256310",
+   "s": 41593
   },
   "ui/deckview.js": {
    "h": "24cf1a908c0dc330",
@@ -2476,8 +1844,8 @@
    "s": 26937
   },
   "ui/frame_state.js": {
-   "h": "433b0a4d4542518c",
-   "s": 3194
+   "h": "4ee183083fbc16d0",
+   "s": 3250
   },
   "ui/fullscreen.js": {
    "h": "1228bc5230f6cda1",
@@ -2496,8 +1864,8 @@
    "s": 9525
   },
   "ui/install.js": {
-   "h": "d62e63fcbe680947",
-   "s": 6258
+   "h": "c2b56d8ceef5ffd7",
+   "s": 6285
   },
   "ui/juice.js": {
    "h": "961af54dab9bfe33",
@@ -2520,16 +1888,16 @@
    "s": 4454
   },
   "ui/pause.js": {
-   "h": "a18be1b1d698df7c",
-   "s": 19057
+   "h": "fccd789075aebf04",
+   "s": 18202
   },
   "ui/perf_flags.js": {
-   "h": "cf5a21a500aca0d7",
-   "s": 1327
+   "h": "f69ba3cd7e27ce97",
+   "s": 1271
   },
   "ui/post.js": {
-   "h": "40fb9e24720f85c9",
-   "s": 22385
+   "h": "5197cbcacb606037",
+   "s": 21844
   },
   "ui/post_shaders.js": {
    "h": "b868f4fb7841b817",
@@ -2576,44 +1944,44 @@
    "s": 2446
   },
   "ui/title.js": {
-   "h": "41c35060b550b134",
-   "s": 50287
+   "h": "9afbd99b8d08a3a3",
+   "s": 50269
   },
   "ui/title_logo.js": {
    "h": "33ab328c6f4610c7",
    "s": 17047
   },
   "ui/title_scene.js": {
-   "h": "1cf56ed5771af4bb",
-   "s": 24713
+   "h": "2b760ec39a838047",
+   "s": 25527
   },
   "ui/tooltips.js": {
-   "h": "4330727f02c4808d",
-   "s": 54700
+   "h": "bbc3dc2125ecaa13",
+   "s": 54826
   },
   "ui/transitions.js": {
-   "h": "7c0c29b8d3163f43",
-   "s": 26278
+   "h": "9e5b59cd73808e7c",
+   "s": 26697
   },
   "ui/tutorial.js": {
    "h": "4e843e79f523ca9f",
    "s": 10232
   },
   "ui/ward.js": {
-   "h": "d1172c6d57bb193d",
-   "s": 83193
+   "h": "e22f005626c5e8d7",
+   "s": 83905
   },
   "ui/ward_iso.js": {
-   "h": "27e0fba6b2bb1321",
-   "s": 74668
+   "h": "b98f98da5ea7c9cd",
+   "s": 70991
   },
   "ui/ward_kit.js": {
    "h": "08b14b7b4c136db2",
    "s": 35003
   },
   "ui/ward_kit_iso.js": {
-   "h": "8a69444b67de4e08",
-   "s": 26641
+   "h": "644cab85d55cb403",
+   "s": 28361
   },
   "ui/wardrobe.js": {
    "h": "9d06431f2fe168c7",

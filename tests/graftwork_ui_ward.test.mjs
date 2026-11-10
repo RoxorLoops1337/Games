@@ -684,42 +684,50 @@ await t('iso: the hero stands on its room and walks smoothly cell to cell (betwe
 });
 
 await t('assets loader: lazy, @1x on phones and @2x on desktop, null while loading, failures swallowed, headless is a no-op', async () => {
-  const fake = createAssets({ fetchJson: async () => ({ version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: { file1x: 'w1.webp', file2x: 'w2.webp', w: 100, h: 100, floorCx: 50, floorCy: 75, floorW: 96, floorH: 48 } }, actors: { marrow: { file1x: 'h1.webp', file2x: 'h2.webp', walk1x: 'hb1.webp', walk2x: 'hb2.webp', w: 40, h: 60, anchorX: 20, anchorY: 58, kind: 'hero' }, gone: { file1x: 'x.webp', w: 1, h: 1, kind: 'normal' } }, icons: {}, cards: {}, cardsById: { b_ward: { room: 'rm_ward' } } }), makeImage: () => ({}) });
-  assert.equal(fake.room('rm_ward'), null, 'nothing before ensure'); assert.equal(fake.state, 'idle');
+  const fake = createAssets({ fetchJson: async () => ({ version: 1, tile: { w: 2, h: 1 }, rooms: { plot_empty: { file1x: 'p1.webp', file2x: 'p2.webp', w: 100, h: 100, floorCx: 50, floorCy: 75, floorW: 96, floorH: 48 } }, actors: { marrow: { file1x: 'h1.webp', file2x: 'h2.webp', w: 40, h: 60, anchorX: 20, anchorY: 58, kind: 'hero' }, gone: { file1x: 'x.webp', w: 1, h: 1, kind: 'normal' } }, icons: {}, cards: { ward_beds: { file1x: 'rooms/w1.webp', file2x: 'rooms/w2.webp', w: 512, h: 512, fromRoom: 'rm_ward' } } }), makeImage: () => ({}) });
+  assert.equal(fake.room('plot_empty'), null, 'nothing before ensure'); assert.equal(fake.state, 'idle');
   const desk = { scale: 1, px: 2 }, phone = { scale: 0.6, px: 0.6 }; // @1x only when the backing store has under 0.8 device px per logical px (a DPR 2 phone has 1.2 and gets @2x)
   fake.ensure(desk); await new Promise((r) => setTimeout(r, 5)); assert.ok(fake.ready());
-  assert.equal(fake.room('rm_ward', desk), null, 'requested, still loading');
-  const e2 = fake.imgs.get('w2.webp'); assert.ok(e2, 'desktop asks for the @2x file'); assert.ok(!fake.imgs.has('w1.webp'));
-  e2.img.onload(); const got = fake.room('rm_ward', desk); assert.ok(got && got.def.floorCx === 50);
-  fake.room('rm_ward', phone); assert.ok(fake.imgs.has('w1.webp'), 'a stage under 0.8 device px per logical px asks for @1x'); assert.equal(fake.use2x({ scale: 0.6, px: 1.3 }), true, 'a DPR 2 phone asks for @2x');
-  fake.imgs.get('w1.webp').img.onerror(); assert.ok(fake.room('rm_ward', phone), 'a missing @1x falls back to the loaded @2x');
-  fake.actor('marrow', phone, true); assert.ok(fake.imgs.has('hb1.webp'), 'the walk frame is its own file');
+  assert.equal(fake.imgs.size, 0, 'the manifest alone starts no download: nothing is loaded ahead');
+  assert.equal(fake.room('plot_empty', desk), null, 'requested, still loading');
+  const e2 = fake.imgs.get('p2.webp'); assert.ok(e2, 'desktop asks for the @2x file'); assert.ok(!fake.imgs.has('p1.webp'));
+  e2.img.onload(); const got = fake.room('plot_empty', desk); assert.ok(got && got.def.floorCx === 50);
+  fake.room('plot_empty', phone); assert.ok(fake.imgs.has('p1.webp'), 'a stage under 0.8 device px per logical px asks for @1x'); assert.equal(fake.use2x({ scale: 0.6, px: 1.3 }), true, 'a DPR 2 phone asks for @2x');
+  fake.imgs.get('p1.webp').img.onerror(); assert.ok(fake.room('plot_empty', phone), 'a missing @1x falls back to the loaded @2x');
   fake.actor('gone', phone); fake.imgs.get('x.webp').img.onerror(); assert.equal(fake.actor('gone', phone), null); assert.ok(fake.failed >= 1);
-  assert.equal(fake.room('nope', desk), null); assert.equal(fake.actor('marrow', desk), null);
+  assert.equal(fake.room('nope', desk), null); assert.equal(fake.actor('marrow', desk), null); assert.deepEqual([...fake.imgs.keys()].filter((k) => k.startsWith('h')), ['h2.webp'], 'an actor is one file: walking needs none');
   assert.deepEqual(fake.kindIds('hero'), ['marrow']);
-  fake.preload(desk); assert.ok(fake.imgs.has('h2.webp') && fake.imgs.has('hb2.webp'), 'preload queues the actors and their walk frames'); assert.equal(fake.progress().total, 3);
-  assert.equal(fake.cardArt({ id: 'b_ward', kind: 'room', room: 'rm_ward' }, desk).kind, 'room', 'a card without its own art shows its room');
-  const dead = createAssets({ fetchJson: async () => { throw new Error('404'); } }); dead.ensure(); await new Promise((r) => setTimeout(r, 5)); assert.equal(dead.state, 'none'); assert.equal(dead.room('rm_ward'), null);
+  // a building card is illustrated by its own art id; a room card's art is a room painting, and that is the only way a room painting is ever asked for
+  assert.equal(fake.cardArt({ id: 'b_ward', kind: 'room', room: 'rm_ward', art: 'ward_beds' }, desk), null); assert.ok(fake.imgs.has('rooms/w2.webp'), 'the card asks for its illustration');
+  fake.imgs.get('rooms/w2.webp').img.onload(); assert.equal(fake.cardArt({ id: 'b_ward', kind: 'room', room: 'rm_ward', art: 'ward_beds' }, desk).def.fromRoom, 'rm_ward');
+  const before = fake.imgs.size; assert.equal(fake.cardArt({ id: 'b_x', kind: 'room', room: 'rm_ward', art: 'no_such_art' }, desk), null, 'no art id in the manifest: the glyph, never the room it builds'); assert.equal(fake.cardArt({ id: 'b_y', kind: 'room', room: 'rm_ward' }, desk), null); assert.equal(fake.cardArt(null, desk), null); assert.equal(fake.imgs.size, before);
+  const dead = createAssets({ fetchJson: async () => { throw new Error('404'); } }); dead.ensure(); await new Promise((r) => setTimeout(r, 5)); assert.equal(dead.state, 'none'); assert.equal(dead.room('plot_empty'), null);
   const headless = createAssets(); headless.ensure(); assert.equal(headless.state, 'none', 'no fetch / Image in node: a harmless no-op');
   assert.equal(assets.state === 'idle' || assets.state === 'none', true, 'the shared loader never started in headless tests');
 });
 
-await t('iso: with no art the rooms are procedural blocks; with a manifest the sprites are drawn aligned by floorCx / floorCy / floorW', async () => {
+await t('iso: rooms are procedural blocks without the kit, a room painting is never drawn as a room; the plot tile is the one painting on the map, aligned by floorCx / floorCy / floorW', async () => {
   const { app, run, flow } = await setup({ seed: 'iso6' });
-  const [ent, cor, wd, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]]);
+  layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]]);
   run.ward.deck.hand = []; flow.route(); frames(app, 100);
   const calls = []; const dI = app.ctx.drawImage; app.ctx.drawImage = (...a) => { calls.push(a); };
-  const img = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 };
+  const img = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 }, plot = { naturalWidth: 512, naturalHeight: 512, width: 512, height: 512 };
   const def = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 200, floorCy: 300, floorW: 380, floorH: 190 });
   try {
-    frames(app, 3); assert.equal(calls.filter((c) => c[0] === img).length, 0, 'no sprite without a manifest');
-    assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: def('a.webp'), rm_quarry: def('q.webp') }, actors: {}, icons: {}, cards: {}, cardsById: {} };
-    assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, img }); assets.imgs.set('q.webp', { ok: true, img: { ...img } });
-    run.ward.rooms[qu].on = false; frames(app, 3);
-    const sp = calls.filter((c) => c[0] === img && c.length === 5), c1 = ISO.cellW(run.ward, 2, 2), s = ISO.TW / 380;
-    assert.ok(sp.length >= 1, 'the ward sprite was drawn');
-    const call = sp[sp.length - 1]; assert.ok(Math.abs(call[1] - (c1.x - 200 * s)) < 1 && Math.abs(call[2] - (c1.y - 300 * s)) < 1 && Math.abs(call[3] - 400 * s) < 1, 'aligned by the floor centre and scaled by the floor width');
-    assert.ok(calls.filter((c) => c[0] === assets.imgs.get('q.webp').img).length === 0, 'the dark quarry is not drawn from the plain sprite');
+    frames(app, 3); assert.equal(calls.filter((c) => c[0] === img || c[0] === plot).length, 0, 'no sprite without a manifest');
+    // a manifest that still carried room paintings (an old cached one): they are not drawn and not even asked for
+    assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: def('a.webp'), rm_quarry: def('q.webp'), rm_ward_low: def('al.webp'), plot_empty: { file1x: 'p.webp', file2x: 'p.webp', w: 512, h: 512, floorCx: 256, floorCy: 400, floorW: 480, floorH: 240 } }, actors: {}, icons: {}, cards: {} };
+    assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, img }); assets.imgs.set('q.webp', { ok: true, img }); assets.imgs.set('al.webp', { ok: true, img }); assets.imgs.set('p.webp', { ok: true, img: plot });
+    const used0 = assets.imgs.get('a.webp').used; calls.length = 0; frames(app, 3);
+    assert.equal(calls.filter((c) => c[0] === img).length, 0, 'a room painting is never drawn as a room'); assert.equal(assets.imgs.get('a.webp').used, used0, 'nor touched');
+    assert.equal(ISO.lastKit().rooms.size, 0, 'no kit either: the four rooms are procedural blocks'); assert.equal(typeof ISO.paintedKind, 'undefined', 'the painted renderer is gone');
+    // the plot tile on every buildable cell in the morning, its floor diamond scaled to the cell
+    assert.equal(run.ward.phase, 'morning'); const cells = WD.buildCells(run); assert.ok(cells.length >= 2);
+    const sp = calls.filter((c) => c[0] === plot && c.length === 5), s = ISO.TW / 480;
+    assert.ok(sp.length >= cells.length, 'a plot tile per buildable cell');
+    for (const [x, y] of cells) { const c = ISO.cellW(run.ward, x, y); assert.ok(sp.some((q) => Math.abs(q[1] - (c.x - 256 * s)) < 0.01 && Math.abs(q[2] - (c.y - 400 * s)) < 0.01 && Math.abs(q[3] - 512 * s) < 0.01 && Math.abs(q[4] - 512 * s) < 0.01), `plot tile aligned on ${x},${y}`); }
+    // not in the morning: no plots
+    run.ward.phase = 'midday'; calls.length = 0; frames(app, 2); assert.equal(calls.filter((c) => c[0] === plot).length, 0); run.ward.phase = 'morning';
   } finally { assets.reset(); app.ctx.drawImage = dI; }
   frames(app, 3);
 });
@@ -777,46 +785,34 @@ await t('camera: wheel and pinch zoom, a drag pans without tapping a room, C and
 await t('kit: without a kit manifest (headless) every room stays painted, the wall mode button sits under Recenter, and the iso map still registers ward-room-<id>', async () => {
   const { app, run, flow } = await setup({ seed: 'kit0' });
   const ids = layout(run, [['rm_entrance', 0, 2], ['rm_sawmill', 1, 2], ['rm_ward', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 30);
-  assert.equal(ISO.lastKit().rooms.size, 0, 'no kit manifest: painted rooms only');
+  assert.equal(ISO.lastKit().rooms.size, 0, 'no kit manifest: block rooms only');
   for (const id of ids) assert.ok(reg('ward-room-' + id), 'ward-room-' + id);
   const b = reg('ward-walls'); assert.ok(b && b.y > reg('ward-recenter').y && b.group === 'map-ctl', 'the W button joins the map controls');
 });
 
-// ---- painted fallback: the lowered-wall paintings (rm_<id>_low) and the hero's walk pacing ----
-await t('painted low: the low painting replaces the tall one wherever the tall one would hide a neighbour, each by its own measured floor diamond, the tall one stays for a lone room or a room without a low painting', async () => {
-  const mkRun = async (spec, seed) => { const o = await setup({ seed }); const ids = layout(o.run, spec); o.run.ward.deck.hand = []; o.flow.route(); frames(o.app, 100); return { ...o, ids }; };
-  const tall = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 }, low = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 };
-  const T = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 200, floorCy: 300, floorW: 380, floorH: 190 });
-  const L = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 190, floorCy: 310, floorW: 360, floorH: 180, low: true }); // NOT the tall diamond
-  const install = (app) => {
-    assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_entrance: T('e.webp'), rm_corridor: T('c.webp'), rm_ward: T('w.webp'), rm_quarry: T('q.webp'), rm_entrance_low: L('el.webp'), rm_corridor_low: L('cl.webp'), rm_ward_low: L('wl.webp') }, actors: {}, icons: {}, cards: {}, cardsById: {} };
-    assets.state = 'ready';
-    for (const f of ['e', 'c', 'w', 'q']) assets.imgs.set(f + '.webp', { ok: true, img: tall });
-    for (const f of ['el', 'cl', 'wl']) assets.imgs.set(f + '.webp', { ok: true, img: low });
-  };
-  const calls = []; let dI;
+// ---- the procedural block (a room without its kit pieces) and the hero's walk pacing ----
+await t('block rooms: a block in front of a focus room (the hero, hover, selection) turns see-through, eased; picking and the hero are untouched', async () => {
+  const mkRun = async (spec, seed) => { const o = await setup({ seed }); const ids = layout(o.run, spec); o.run.ward.deck.hand = []; o.meta.settings.reduceMotion = false; o.flow.route(); frames(o.app, 100); return { ...o, ids }; };
+  const row = await mkRun([['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]], 'blockrow');
+  // the alpha a block is drawn with: the fake canvas gets a real alpha stack, and the back corner post of a block (fillRect(cx - 2, .., 4, WALL + 6)) reports it
+  const g = row.app.ctx, st = [], posts = []; let cur = 1;
+  const d0 = Object.getOwnPropertyDescriptor(g, 'globalAlpha'), save0 = g.save, restore0 = g.restore, fr0 = g.fillRect;
+  Object.defineProperty(g, 'globalAlpha', { configurable: true, get: () => cur, set(v) { cur = v; } });
+  g.save = () => { st.push(cur); }; g.restore = () => { if (st.length) cur = st.pop(); };
+  g.fillRect = (x, y, w, h) => { if (w === 4 && h === 54) posts.push({ x: x + 2, a: cur }); };
+  const alphas = () => { posts.length = 0; cur = 1; st.length = 0; frames(row.app, 1); return [0, 1, 2, 3].map((x) => { const c = ISO.cellW(row.run.ward, x, 2), p = posts.find((q) => Math.abs(q.x - c.x) < 0.01); assert.ok(p, 'block ' + x + ' was drawn'); return p.a; }); };
   try {
-    // a lone room: the tall painting
-    const one = await mkRun([['rm_entrance', 2, 2]], 'lowone'); dI = one.app.ctx.drawImage; one.app.ctx.drawImage = (...a) => { calls.push(a); };
-    install(one.app); ISO.setWallMode('auto'); frames(one.app, 4);
-    assert.equal(ISO.paintedKind(one.ids[0]), 'tall', 'a lone room keeps the tall painting'); assert.ok(calls.some((c) => c[0] === tall), 'tall drawn'); assert.ok(!calls.some((c) => c[0] === low), 'no low painting for a lone room');
-    one.app.ctx.drawImage = dI; assets.reset(); ISO.resetIso();
-    // a row of four (a hero in the entrance): cutaway lowers what has a room behind it, low lowers all, full keeps the tall ones except in front of the hero
-    const row = await mkRun([['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_ward', 2, 2], ['rm_quarry', 3, 2]], 'lowrow'); dI = row.app.ctx.drawImage; row.app.ctx.drawImage = (...a) => { calls.push(a); };
-    install(row.app); const kinds = () => row.ids.map((i) => ISO.paintedKind(i));
-    ISO.setWallMode('low'); frames(row.app, 40); assert.deepEqual(kinds(), ['low', 'low', 'low', 'tall'], 'Low: every room that has a low painting (the quarry has none: tall + crop)');
-    ISO.setWallMode('cutaway'); frames(row.app, 40); assert.deepEqual(kinds(), ['tall', 'low', 'low', 'tall'], 'Cutaway: the hero room has nothing behind it and stays tall, rooms with a room behind are lowered');
-    ISO.setWallMode('full'); frames(row.app, 40); assert.deepEqual(kinds().slice(0, 3), ['tall', 'low', 'tall'], 'Full: tall, except the front neighbour of the hero room');
-    // aligned by its OWN diamond: the low painting of the corridor is placed with floorCx 190 / floorCy 310 / floorW 360
-    ISO.setWallMode('low'); frames(row.app, 40); calls.length = 0; frames(row.app, 1);
-    const c1 = ISO.cellW(row.run.ward, 1, 2), s = ISO.TW / 360, hit = calls.filter((c) => c[0] === low && c.length === 5).find((c) => Math.abs(c[1] - (c1.x - 190 * s)) < 1);
-    assert.ok(hit, 'the low painting is placed by its own floor centre'); assert.ok(Math.abs(hit[2] - (c1.y - 310 * s)) < 1 && Math.abs(hit[3] - 400 * s) < 1, 'and scaled by its own floor width');
-    // a dark room is drawn from the cold copy of the LOW painting, never the tall one plain
-    row.run.ward.rooms[row.ids[2]].on = false; frames(row.app, 3); assert.equal(ISO.paintedKind(row.ids[2]), 'low');
-    // picking and the hero are untouched: the floor of every cell still resolves, the hero stands in the entrance
+    assert.equal(ISO.lastKit().rooms.size, 0, 'no kit: four blocks');
+    // the hero stands in the entrance: its front neighbour (the corridor) is see-through, the others are solid
+    let a = alphas(); assert.ok(Math.abs(a[1] - 0.55) < 1e-6 && a[0] === 1 && a[2] === 1 && a[3] === 1, 'only the block in front of the hero: ' + a.join(' '));
+    // select the ward: its front neighbour (the quarry) eases down to 0.55 too (never a jump)
+    row.app.screens.ward.st.selRoom = row.ids[2]; a = alphas();
+    assert.ok(a[3] < 1 && a[3] > 0.56, 'one frame later it is part of the way: ' + a[3]); assert.ok(Math.abs(a[1] - 0.55) < 1e-6);
+    frames(row.app, 90); a = alphas(); assert.ok(Math.abs(a[3] - 0.55) < 1e-3 && Math.abs(a[1] - 0.55) < 1e-6 && a[0] === 1 && a[2] === 1, 'settled: two see-through blocks: ' + a.join(' '));
+    row.app.screens.ward.st.selRoom = null; frames(row.app, 90); a = alphas(); assert.ok(a[3] > 0.999, 'and solid again when the selection goes: ' + a[3]);
     let picked = 0; for (let x = 0; x < 4; x++) { const c = ISO.cellC(row.run.ward, x, 2); if (!ISO.overMap(c.x, c.y)) continue; picked++; assert.deepEqual(ISO.pick(row.run.ward, c.x, c.y), { x, y: 2 }, 'pick ' + x); } assert.ok(picked >= 3, 'cells on the panel: ' + picked);
-    assert.ok(ISO.lastActors().some((a) => a.kind === 'hero'), 'the hero is drawn');
-  } finally { assets.reset(); ISO.resetIso(); ISO.setWallMode('auto'); }
+    assert.ok(ISO.lastActors().some((q) => q.kind === 'hero'), 'the hero is drawn');
+  } finally { if (d0) Object.defineProperty(g, 'globalAlpha', d0); else delete g.globalAlpha; g.save = save0; g.restore = restore0; g.fillRect = fr0; assets.reset(); ISO.resetIso(); ISO.setWallMode('auto'); }
 });
 
 await t('walk pacing: about 1.1 s per room (about 3 steps a second), a beat at the room that fires, clearly quicker with Fast walk, quick with reduced motion, no beat on a wait; the F key saves the setting', async () => {

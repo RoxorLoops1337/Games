@@ -1,12 +1,11 @@
-// GRAFTWORK modular room kit and its lab page: kit manifest valid, every file exists and is a WebP, size budget, the lab page and script
-// reference files that exist, the lab only uses kit ids the manifest knows, no em dashes anywhere in the kit, the lab or the build tool.
+// GRAFTWORK modular room kit (graftwork/assets/ward_kit/): the manifest is valid, every file exists and is a WebP, sprites carry alpha and
+// anchors, textures are 512 px tiles, the folder is under its budget, no em dashes in the kit or its build tool.
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 const root = new URL('../graftwork/', import.meta.url).pathname;
 const kit = join(root, 'assets/ward_kit');
 const man = JSON.parse(readFileSync(join(kit, 'manifest.json'), 'utf8'));
-const wardMan = JSON.parse(readFileSync(join(root, 'assets/ward/manifest.json'), 'utf8'));
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
 const files = (e) => [e.file, e.file1x, e.file2x].filter(Boolean);
@@ -26,6 +25,10 @@ t('kit_files_exist_and_are_webp', () => {
     assert.ok(e.file && e.file1x && e.file2x, group + '.' + id + ' files');
     for (const f of files(e)) { assert.ok(existsSync(join(kit, f)), f); webp(f); }
   }
+});
+t('every_kit_file_on_disk_is_named_by_the_manifest', () => {
+  const named = new Set(); for (const group of ['floors', 'walls', 'pieces', 'props']) for (const e of Object.values(man[group])) for (const f of files(e)) named.add(f);
+  for (const group of ['floors', 'walls', 'pieces', 'props']) for (const f of readdirSync(join(kit, group))) assert.ok(named.has(group + '/' + f), 'a file nothing asks for: ' + group + '/' + f);
 });
 t('sprites_have_alpha_and_anchors', () => {
   for (const group of ['pieces', 'props']) for (const [id, e] of Object.entries(man[group])) {
@@ -48,33 +51,8 @@ t('half_size_variants_are_smaller', () => {
 });
 const dirSize = (d) => readdirSync(d, { withFileTypes: true }).reduce((s, f) => s + (f.isDirectory() ? dirSize(join(d, f.name)) : statSync(join(d, f.name)).size), 0);
 t('kit_folder_under_budget', () => { assert.ok(dirSize(kit) < 4 * 1024 * 1024, 'kit folder is ' + dirSize(kit) + ' bytes'); });
-const html = readFileSync(join(root, 'lab/rooms.html'), 'utf8'), js = readFileSync(join(root, 'lab/rooms.js'), 'utf8');
-t('lab_page_references_existing_files', () => {
-  assert.ok(/<script[^>]+type="module"[^>]+src="rooms\.js"/.test(html));
-  assert.ok(existsSync(join(root, 'lab/rooms.js')));
-  assert.ok(html.includes('name="viewport"') && html.includes('id="cv"') && html.includes('id="banner"'), 'viewport, canvas, fallback banner');
-  assert.ok(js.includes("'../assets/ward_kit/'") && js.includes("'../assets/ward/'"));
-  assert.ok(existsSync(join(root, 'assets/ward_kit/manifest.json')) && existsSync(join(root, 'assets/ward/manifest.json')));
-});
-t('lab_uses_only_known_ids', () => {
-  const ids = (re) => [...js.matchAll(re)].map((m) => m[1]);
-  const props = new Set(), pieces = new Set();
-  for (const m of js.matchAll(/\[\s*'([a-z]+)'\s*,\s*(\d)\s*,\s*(\d)(?:\s*,\s*\d)?\s*\]/g)) props.add(m[1]);
-  for (const m of js.matchAll(/\[\s*'([a-z]+)'\s*,\s*'[LR]'\s*,\s*[\d.]+\s*\]/g)) pieces.add(m[1]);
-  assert.ok(props.size >= 8 && pieces.size >= 3);
-  for (const id of props) assert.ok(man.props[id], 'unknown prop ' + id);
-  for (const id of pieces) assert.ok(man.pieces[id], 'unknown piece ' + id);
-  for (const id of ids(/'(?:floor|wall)':\s*'([a-z]+)'/g)) assert.ok(man.floors[id] || man.walls[id], 'unknown theme ' + id);
-  for (const id of ids(/mkActor\('([a-z_]+)'/g)) assert.ok(wardMan.actors[id], 'unknown actor ' + id);
-  const mon = [...js.matchAll(/MONSTERS = \{([^}]*)\}/g)][0][1]; for (const m of mon.matchAll(/'([a-z_]{4,})'/g)) assert.ok(wardMan.actors[m[1]], 'unknown monster ' + m[1]);
-  assert.ok(wardMan.rooms.rm_sawmill, 'painted sawmill for the comparison');
-});
-t('lab_has_the_four_scenes_and_controls', () => {
-  for (const s of ['compare:', 'build:', 'hospital:', 'day:']) assert.ok(js.includes(s), s);
-  for (const w of ["'full'", "'low'", "'cutaway'", 'wheel', 'pointerdown', 'Generator', 'Structure']) assert.ok(js.includes(w), w);
-});
 t('no_em_dashes', () => {
   const tool = readFileSync(new URL('../tools/graftwork_kit_build.py', import.meta.url), 'utf8');
-  for (const [name, s] of [['rooms.html', html], ['rooms.js', js], ['graftwork_kit_build.py', tool], ['manifest.json', JSON.stringify(man)]]) assert.ok(!/[—–]/.test(s), 'em or en dash in ' + name);
+  for (const [name, s] of [['graftwork_kit_build.py', tool], ['manifest.json', JSON.stringify(man)]]) assert.ok(!/[—–]/.test(s), 'em or en dash in ' + name);
 });
-console.log(n + ' lab checks passed');
+console.log(n + ' kit asset checks passed');

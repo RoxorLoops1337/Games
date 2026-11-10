@@ -1,46 +1,38 @@
-// Dirty-frame logic (pure, no DOM). Decides when a whole frame may be SKIPPED: no 2D redraw, no WebGL upload, the last picture stays on screen.
-// Round 2 perf. A frame is static only when EVERY source of change is quiet for two frames in a row:
-//   input      a pointer move / press / release, a wheel tick, a key, a touch since the last tick (hover, drag, tooltips, focus rings all follow input)
-//   tweens     any tween or timer pending (they move numbers the screen draws, or fire callbacks that change state)
-//   ripples    tap ripples and other chrome animations
-//   transition a screen transition, a modal fade, the overlay hook
-//   fx         particles / floats / shake / flash owned by the screen, post-processing effects (shockwave, flash, vignette, grade ease)
-//   tip        a tooltip that is showing, fading or waiting for its 0.25 s delay
-//   screen     the active screen's own `still(app)` answer: only a screen that knows it has no wall-clock animation says yes.
-//              The default is NO, so a screen that never opted in is redrawn every frame exactly as before.
-//   forced     markDirty() (settings changes, resize, quality tier change, assets arriving, a screen entering)
-// A refresh every `maxSkipMs` redraws anyway (cheap insurance against a time-driven detail nobody declared).
-export const FS = { quietFrames: 2, maxSkipMs: 1000 };
-export const SOURCES = ['input', 'tweens', 'timers', 'ripples', 'transition', 'fx', 'tip', 'screen', 'forced', 'stack'];
-// f: { input, tweens, timers, ripples, transition, fx, tip, screenStill, forced, modalStack } -> the name of the first thing that is not quiet, or '' when all are
-export function busyReason(f) {
-  if (f.forced) return 'forced';
-  if (f.input) return 'input';
-  if (f.tweens > 0) return 'tweens';
-  if (f.timers > 0) return 'timers';
-  if (f.ripples) return 'ripples';
-  if (f.transition) return 'transition';
-  if (f.fx) return 'fx';
-  if (f.tip) return 'tip';
-  if (f.screenStill !== true) return 'screen';
-  return '';
-}
-export function createFrameState(o = {}) {
-  const s = { quiet: 0, last: '', skipped: 0, drawn: 0, sinceDraw: 0, reasons: {}, quietFrames: o.quietFrames || FS.quietFrames, maxSkipMs: o.maxSkipMs || FS.maxSkipMs, lastDrawAt: 0, forced: false };
-  s.markDirty = () => { s.forced = true; };
-  // Call once per tick BEFORE drawing. Returns true when this tick may be skipped. `now` in ms.
-  s.begin = (f, now) => {
-    const why = busyReason(s.forced ? Object.assign({}, f, { forced: true }) : f);
-    s.forced = false;
-    s.last = why;
-    if (why) { s.quiet = 0; s.reasons[why] = (s.reasons[why] || 0) + 1; return s.draw(now); }
-    s.quiet++;
-    if (s.quiet <= s.quietFrames) return s.draw(now); // the frames right after the last change still have to be painted (and the one that proves it settled)
-    if (now - s.lastDrawAt >= s.maxSkipMs) return s.draw(now);
-    s.skipped++; return true;
+// Frozen screens under a modal (pure, no DOM). While a screen pushed with app.push is on top (Pause, Settings, the deck view, ...) every screen
+// below it is FROZEN: no update, no draw, no input, and none of its time passes. core.js draws the lower stack ONCE into a snapshot canvas and blits
+// that under the modal each frame. This module is the bookkeeping behind it; core.js owns the canvas.
+//   retop    who is on top now: the screen that got covered keeps the clock it stopped at, the one that is uncovered gets it back (app.t is the
+//            clock of the top screen, so a covered screen resumes at the very instant it stopped)
+//   isLive   who owns a tween or a timer: the screen that was on top when it was made. It advances only while that screen is on top, or once the
+//            screen has left the stack (nobody owns it any more: it runs out as before)
+//   stale    when the snapshot has to be painted again. The reasons (kept in `dirty`, counted in `why`):
+//              stack   a screen was pushed, popped or replaced
+//              resize  the backing store changed (window size, rotation, fullscreen, a quality tier with another device pixel ratio cap)
+//              look    a setting or a cosmetic changed what the frozen screens look like, a picture finished loading, the quality tier moved
+//              asked   app.refreshBelow() from a modal
+const REASONS = ['stack', 'resize', 'look', 'asked'];
+export function createFrameState() {
+  const s = { top: null, clocks: new Map(), dirty: 'stack', w: 0, h: 0, snap: null, paints: 0, why: {} };
+  s.markDirty = (why) => { if (!s.dirty) s.dirty = REASONS.includes(why) ? why : 'asked'; };
+  s.isLive = (owner, stack) => !owner || owner === stack[stack.length - 1] || stack.indexOf(owner) < 0;
+  // Call whenever the stack may have changed. clock = { t, sceneT } of the screen that was on top until now, now in ms.
+  // Returns null while the same screen is on top, else { covered, uncovered, clock, ms }: covered is the old top when it is still in the stack (it is
+  // frozen from here on), uncovered the new top when it was frozen (clock: where it stopped, ms: how long ago).
+  s.retop = (stack, clock, now) => {
+    const top = stack[stack.length - 1] || null, prev = s.top;
+    if (top === prev) return null;
+    const out = { covered: null, uncovered: null, clock: null, ms: 0 };
+    if (prev && stack.indexOf(prev) >= 0) { s.clocks.set(prev, { t: clock.t, sceneT: clock.sceneT, at: now }); out.covered = prev; }
+    for (const k of [...s.clocks.keys()]) if (stack.indexOf(k) < 0) s.clocks.delete(k);
+    const c = top && s.clocks.get(top);
+    if (c) { s.clocks.delete(top); out.uncovered = top; out.clock = c; out.ms = now - c.at; }
+    s.top = top; s.dirty = 'stack';
+    return out;
   };
-  s.draw = (now) => { s.drawn++; s.lastDrawAt = now; return false; };
-  // true while the picture on screen is the last one drawn and nothing is about to change: post.js reads this as app.staticFrame
-  s.isStatic = () => s.last === '' && s.quiet > s.quietFrames;
+  // app.go: every screen left, nobody is frozen
+  s.forget = () => { s.top = null; s.clocks.clear(); s.dirty = 'stack'; };
+  // w, h: the backing store now. Returns the reason the snapshot must be painted again, or ''.
+  s.stale = (w, h) => { if (!s.dirty && (w !== s.w || h !== s.h)) s.dirty = 'resize'; return s.dirty; };
+  s.painted = (w, h) => { if (s.dirty) s.why[s.dirty] = (s.why[s.dirty] || 0) + 1; s.paints++; s.dirty = ''; s.w = w; s.h = h; };
   return s;
 }

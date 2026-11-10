@@ -14,415 +14,6 @@
    "floorCy": 327.9,
    "floorW": 506.1,
    "floorH": 269.1
-  },
-  "rm_boiler": {
-   "file1x": "rooms/rm_boiler@1x.webp",
-   "file2x": "rooms/rm_boiler@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.3,
-   "floorCy": 372.9,
-   "floorW": 495.2,
-   "floorH": 259.5
-  },
-  "rm_chapel": {
-   "file1x": "rooms/rm_chapel@1x.webp",
-   "file2x": "rooms/rm_chapel@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.7,
-   "floorCy": 372.5,
-   "floorW": 496.0,
-   "floorH": 260.8
-  },
-  "rm_corridor": {
-   "file1x": "rooms/rm_corridor@1x.webp",
-   "file2x": "rooms/rm_corridor@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.3,
-   "floorCy": 373.2,
-   "floorW": 497.9,
-   "floorH": 261.6
-  },
-  "rm_counting": {
-   "file1x": "rooms/rm_counting@1x.webp",
-   "file2x": "rooms/rm_counting@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 372.8,
-   "floorW": 495.5,
-   "floorH": 260.8
-  },
-  "rm_dispensary": {
-   "file1x": "rooms/rm_dispensary@1x.webp",
-   "file2x": "rooms/rm_dispensary@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.3,
-   "floorCy": 372.8,
-   "floorW": 494.7,
-   "floorH": 261.3
-  },
-  "rm_entrance": {
-   "file1x": "rooms/rm_entrance@1x.webp",
-   "file2x": "rooms/rm_entrance@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.6,
-   "floorCy": 372.5,
-   "floorW": 494.7,
-   "floorH": 260.8
-  },
-  "rm_generator": {
-   "file1x": "rooms/rm_generator@1x.webp",
-   "file2x": "rooms/rm_generator@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.3,
-   "floorCy": 373.2,
-   "floorW": 495.2,
-   "floorH": 261.1
-  },
-  "rm_isolation": {
-   "file1x": "rooms/rm_isolation@1x.webp",
-   "file2x": "rooms/rm_isolation@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 254.9,
-   "floorCy": 373.7,
-   "floorW": 494.9,
-   "floorH": 260.0
-  },
-  "rm_isolation2": {
-   "file1x": "rooms/rm_isolation2@1x.webp",
-   "file2x": "rooms/rm_isolation2@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 373.3,
-   "floorW": 496.3,
-   "floorH": 261.9
-  },
-  "rm_kitchen": {
-   "file1x": "rooms/rm_kitchen@1x.webp",
-   "file2x": "rooms/rm_kitchen@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 372.9,
-   "floorW": 495.2,
-   "floorH": 261.6
-  },
-  "rm_laundry": {
-   "file1x": "rooms/rm_laundry@1x.webp",
-   "file2x": "rooms/rm_laundry@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.3,
-   "floorCy": 372.7,
-   "floorW": 494.7,
-   "floorH": 260.0
-  },
-  "rm_library": {
-   "file1x": "rooms/rm_library@1x.webp",
-   "file2x": "rooms/rm_library@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 373.2,
-   "floorW": 494.9,
-   "floorH": 259.5
-  },
-  "rm_linen": {
-   "file1x": "rooms/rm_linen@1x.webp",
-   "file2x": "rooms/rm_linen@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.7,
-   "floorCy": 373.2,
-   "floorW": 495.5,
-   "floorH": 260.5
-  },
-  "rm_morgue": {
-   "file1x": "rooms/rm_morgue@1x.webp",
-   "file2x": "rooms/rm_morgue@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 256.0,
-   "floorCy": 373.2,
-   "floorW": 496.0,
-   "floorH": 260.0
-  },
-  "rm_pharmacy": {
-   "file1x": "rooms/rm_pharmacy@1x.webp",
-   "file2x": "rooms/rm_pharmacy@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 372.7,
-   "floorW": 494.9,
-   "floorH": 261.1
-  },
-  "rm_quarry": {
-   "file1x": "rooms/rm_quarry@1x.webp",
-   "file2x": "rooms/rm_quarry@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 372.9,
-   "floorW": 496.3,
-   "floorH": 259.5
-  },
-  "rm_sawmill": {
-   "file1x": "rooms/rm_sawmill@1x.webp",
-   "file2x": "rooms/rm_sawmill@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.7,
-   "floorCy": 373.2,
-   "floorW": 497.1,
-   "floorH": 260.5
-  },
-  "rm_theatre": {
-   "file1x": "rooms/rm_theatre@1x.webp",
-   "file2x": "rooms/rm_theatre@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.2,
-   "floorCy": 372.7,
-   "floorW": 494.9,
-   "floorH": 262.1
-  },
-  "rm_ward": {
-   "file1x": "rooms/rm_ward@1x.webp",
-   "file2x": "rooms/rm_ward@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.6,
-   "floorCy": 373.2,
-   "floorW": 495.2,
-   "floorH": 262.1
-  },
-  "rm_workshop": {
-   "file1x": "rooms/rm_workshop@1x.webp",
-   "file2x": "rooms/rm_workshop@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.1,
-   "floorCy": 372.9,
-   "floorW": 494.7,
-   "floorH": 261.6
-  },
-  "rm_chapel_low": {
-   "file1x": "rooms/rm_chapel_low@1x.webp",
-   "file2x": "rooms/rm_chapel_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 372.4,
-   "floorW": 495.8,
-   "floorH": 261.2,
-   "low": true
-  },
-  "rm_corridor_low": {
-   "file1x": "rooms/rm_corridor_low@1x.webp",
-   "file2x": "rooms/rm_corridor_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.4,
-   "floorCy": 373.1,
-   "floorW": 497.8,
-   "floorH": 261.8,
-   "low": true
-  },
-  "rm_counting_low": {
-   "file1x": "rooms/rm_counting_low@1x.webp",
-   "file2x": "rooms/rm_counting_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.4,
-   "floorCy": 372.8,
-   "floorW": 495.2,
-   "floorH": 261.0,
-   "low": true
-  },
-  "rm_dispensary_low": {
-   "file1x": "rooms/rm_dispensary_low@1x.webp",
-   "file2x": "rooms/rm_dispensary_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.4,
-   "floorCy": 372.4,
-   "floorW": 494.8,
-   "floorH": 261.8,
-   "low": true
-  },
-  "rm_entrance_low": {
-   "file1x": "rooms/rm_entrance_low@1x.webp",
-   "file2x": "rooms/rm_entrance_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.6,
-   "floorCy": 372.5,
-   "floorW": 494.8,
-   "floorH": 261.5,
-   "low": true
-  },
-  "rm_generator_low": {
-   "file1x": "rooms/rm_generator_low@1x.webp",
-   "file2x": "rooms/rm_generator_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 373.1,
-   "floorW": 495.5,
-   "floorH": 261.8,
-   "low": true
-  },
-  "rm_isolation2_low": {
-   "file1x": "rooms/rm_isolation2_low@1x.webp",
-   "file2x": "rooms/rm_isolation2_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 256.0,
-   "floorCy": 373.2,
-   "floorW": 496.5,
-   "floorH": 262.5,
-   "low": true
-  },
-  "rm_isolation_low": {
-   "file1x": "rooms/rm_isolation_low@1x.webp",
-   "file2x": "rooms/rm_isolation_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 254.9,
-   "floorCy": 373.9,
-   "floorW": 494.8,
-   "floorH": 260.2,
-   "low": true
-  },
-  "rm_kitchen_low": {
-   "file1x": "rooms/rm_kitchen_low@1x.webp",
-   "file2x": "rooms/rm_kitchen_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 372.8,
-   "floorW": 494.8,
-   "floorH": 261.5,
-   "low": true
-  },
-  "rm_laundry_low": {
-   "file1x": "rooms/rm_laundry_low@1x.webp",
-   "file2x": "rooms/rm_laundry_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.0,
-   "floorCy": 372.6,
-   "floorW": 494.5,
-   "floorH": 260.2,
-   "low": true
-  },
-  "rm_library_low": {
-   "file1x": "rooms/rm_library_low@1x.webp",
-   "file2x": "rooms/rm_library_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.4,
-   "floorCy": 373.2,
-   "floorW": 494.8,
-   "floorH": 260.0,
-   "low": true
-  },
-  "rm_linen_low": {
-   "file1x": "rooms/rm_linen_low@1x.webp",
-   "file2x": "rooms/rm_linen_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.9,
-   "floorCy": 373.1,
-   "floorW": 495.2,
-   "floorH": 260.8,
-   "low": true
-  },
-  "rm_morgue_low": {
-   "file1x": "rooms/rm_morgue_low@1x.webp",
-   "file2x": "rooms/rm_morgue_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 256.0,
-   "floorCy": 373.1,
-   "floorW": 496.0,
-   "floorH": 259.8,
-   "low": true
-  },
-  "rm_pharmacy_low": {
-   "file1x": "rooms/rm_pharmacy_low@1x.webp",
-   "file2x": "rooms/rm_pharmacy_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 372.5,
-   "floorW": 494.5,
-   "floorH": 261.0,
-   "low": true
-  },
-  "rm_quarry_low": {
-   "file1x": "rooms/rm_quarry_low@1x.webp",
-   "file2x": "rooms/rm_quarry_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.8,
-   "floorCy": 372.8,
-   "floorW": 496.0,
-   "floorH": 259.0,
-   "low": true
-  },
-  "rm_sawmill_low": {
-   "file1x": "rooms/rm_sawmill_low@1x.webp",
-   "file2x": "rooms/rm_sawmill_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.6,
-   "floorCy": 373.1,
-   "floorW": 497.2,
-   "floorH": 260.8,
-   "low": true
-  },
-  "rm_theatre_low": {
-   "file1x": "rooms/rm_theatre_low@1x.webp",
-   "file2x": "rooms/rm_theatre_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.2,
-   "floorCy": 372.5,
-   "floorW": 495.0,
-   "floorH": 262.0,
-   "low": true
-  },
-  "rm_ward_low": {
-   "file1x": "rooms/rm_ward_low@1x.webp",
-   "file2x": "rooms/rm_ward_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 255.5,
-   "floorCy": 373.1,
-   "floorW": 495.0,
-   "floorH": 261.8,
-   "low": true
-  },
-  "rm_workshop_low": {
-   "file1x": "rooms/rm_workshop_low@1x.webp",
-   "file2x": "rooms/rm_workshop_low@2x.webp",
-   "w": 512,
-   "h": 512,
-   "floorCx": 254.9,
-   "floorCy": 372.8,
-   "floorW": 494.8,
-   "floorH": 263.0,
-   "low": true
   }
  },
  "actors": {
@@ -435,8 +26,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/bedpan_slime_b@1x.webp",
-   "walk2x": "actors/bedpan_slime_b@2x.webp",
    "bbox": [
     19,
     18,
@@ -454,8 +43,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/candy_striper_b@1x.webp",
-   "walk2x": "actors/candy_striper_b@2x.webp",
    "bbox": [
     68,
     18,
@@ -473,8 +60,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/crutchling_b@1x.webp",
-   "walk2x": "actors/crutchling_b@2x.webp",
    "bbox": [
     70,
     18,
@@ -483,12 +68,6 @@
    ],
    "file3x": "actors/crutchling@3x.webp",
    "frames": {
-    "walk": [
-     "crutchling_walk1",
-     "crutchling_walk2",
-     "crutchling_walk3",
-     "crutchling_walk4"
-    ],
     "atk": [
      "crutchling_atk2"
     ],
@@ -506,8 +85,6 @@
    "anchorY": 243.0,
    "kind": "elite",
    "scale": 1.2,
-   "walk1x": "actors/defibrillator_b@1x.webp",
-   "walk2x": "actors/defibrillator_b@2x.webp",
    "bbox": [
     16,
     18,
@@ -525,8 +102,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/fever_moth_b@1x.webp",
-   "walk2x": "actors/fever_moth_b@2x.webp",
    "bbox": [
     15,
     42,
@@ -544,8 +119,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/gauze_mummy_b@1x.webp",
-   "walk2x": "actors/gauze_mummy_b@2x.webp",
    "bbox": [
     53,
     18,
@@ -554,12 +127,6 @@
    ],
    "file3x": "actors/gauze_mummy@3x.webp",
    "frames": {
-    "walk": [
-     "gauze_mummy_walk1",
-     "gauze_mummy_walk2",
-     "gauze_mummy_walk3",
-     "gauze_mummy_walk4"
-    ],
     "atk": [
      "gauze_mummy_atk2"
     ],
@@ -577,8 +144,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/gurney_foot_b@1x.webp",
-   "walk2x": "actors/gurney_foot_b@2x.webp",
    "bbox": [
     49,
     18,
@@ -596,8 +161,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/iron_lung_b@1x.webp",
-   "walk2x": "actors/iron_lung_b@2x.webp",
    "bbox": [
     46,
     18,
@@ -615,8 +178,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/knitter_b@1x.webp",
-   "walk2x": "actors/knitter_b@2x.webp",
    "bbox": [
     64,
     18,
@@ -634,8 +195,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/leech_jar_b@1x.webp",
-   "walk2x": "actors/leech_jar_b@2x.webp",
    "bbox": [
     71,
     18,
@@ -644,12 +203,6 @@
    ],
    "file3x": "actors/leech_jar@3x.webp",
    "frames": {
-    "walk": [
-     "leech_jar_walk1",
-     "leech_jar_walk2",
-     "leech_jar_walk3",
-     "leech_jar_walk4"
-    ],
     "atk": [
      "leech_jar_atk2"
     ],
@@ -673,15 +226,7 @@
     171,
     243
    ],
-   "file3x": "actors/marrow@3x.webp",
-   "frames": {
-    "walk": [
-     "marrow_walk1",
-     "marrow_walk2",
-     "marrow_walk3",
-     "marrow_walk4"
-    ]
-   }
+   "file3x": "actors/marrow@3x.webp"
   },
   "night_nurse": {
    "file1x": "actors/night_nurse@1x.webp",
@@ -700,12 +245,6 @@
    ],
    "file3x": "actors/night_nurse@3x.webp",
    "frames": {
-    "walk": [
-     "night_nurse_walk1",
-     "night_nurse_walk2",
-     "night_nurse_walk3",
-     "night_nurse_walk4"
-    ],
     "atk": [
      "night_nurse_atk2"
     ],
@@ -780,16 +319,7 @@
     177,
     243
    ],
-   "file3x": "actors/odile@3x.webp",
-   "frames": {
-    "walk": [
-     "odile_walk1",
-     "odile_walk2",
-     "odile_walk3",
-     "odile_walk4"
-    ],
-    "walkOk": false
-   }
+   "file3x": "actors/odile@3x.webp"
   },
   "orderly": {
    "file1x": "actors/orderly@1x.webp",
@@ -800,8 +330,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/orderly_b@1x.webp",
-   "walk2x": "actors/orderly_b@2x.webp",
    "bbox": [
     39,
     18,
@@ -810,12 +338,6 @@
    ],
    "file3x": "actors/orderly@3x.webp",
    "frames": {
-    "walk": [
-     "orderly_walk1",
-     "orderly_walk2",
-     "orderly_walk3",
-     "orderly_walk4"
-    ],
     "atk": [
      "orderly_atk2"
     ],
@@ -833,8 +355,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/pill_swarm_b@1x.webp",
-   "walk2x": "actors/pill_swarm_b@2x.webp",
    "bbox": [
     46,
     18,
@@ -869,8 +389,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/surge_tick_b@1x.webp",
-   "walk2x": "actors/surge_tick_b@2x.webp",
    "bbox": [
     15,
     25,
@@ -888,8 +406,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/suture_wasp_b@1x.webp",
-   "walk2x": "actors/suture_wasp_b@2x.webp",
    "bbox": [
     15,
     21,
@@ -958,8 +474,6 @@
    "anchorY": 243.0,
    "kind": "elite",
    "scale": 1.2,
-   "walk1x": "actors/two_gurneys_b@1x.webp",
-   "walk2x": "actors/two_gurneys_b@2x.webp",
    "bbox": [
     15,
     21,
@@ -977,8 +491,6 @@
    "anchorY": 243.0,
    "kind": "normal",
    "scale": 1.0,
-   "walk1x": "actors/ward_clerk_b@1x.webp",
-   "walk2x": "actors/ward_clerk_b@2x.webp",
    "bbox": [
     76,
     18,
@@ -1002,15 +514,7 @@
     177,
     243
    ],
-   "file3x": "actors/wick@3x.webp",
-   "frames": {
-    "walk": [
-     "wick_walk1",
-     "wick_walk2",
-     "wick_walk3",
-     "wick_walk4"
-    ]
-   }
+   "file3x": "actors/wick@3x.webp"
   }
  },
  "icons": {
@@ -1130,20 +634,6 @@
    "w": 256,
    "h": 256
   },
-  "ward_entrance": {
-   "file1x": "rooms/rm_entrance@1x.webp",
-   "file2x": "rooms/rm_entrance@2x.webp",
-   "w": 512,
-   "h": 512,
-   "fromRoom": "rm_entrance"
-  },
-  "ward_theatre": {
-   "file1x": "rooms/rm_theatre@1x.webp",
-   "file2x": "rooms/rm_theatre@2x.webp",
-   "w": 512,
-   "h": 512,
-   "fromRoom": "rm_theatre"
-  },
   "ward_corridor": {
    "file1x": "rooms/rm_corridor@1x.webp",
    "file2x": "rooms/rm_corridor@2x.webp",
@@ -1220,152 +710,6 @@
    "w": 512,
    "h": 512,
    "fromRoom": "rm_linen"
-  }
- },
- "cardsById": {
-  "b_corridor": {
-   "room": "rm_corridor"
-  },
-  "b_ward": {
-   "room": "rm_ward"
-  },
-  "b_isolation": {
-   "room": "rm_isolation"
-  },
-  "b_chapel": {
-   "room": "rm_chapel"
-  },
-  "b_dispensary": {
-   "room": "rm_dispensary"
-  },
-  "b_workshop": {
-   "room": "rm_workshop"
-  },
-  "b_sawmill": {
-   "room": "rm_sawmill"
-  },
-  "b_quarry": {
-   "room": "rm_quarry"
-  },
-  "b_counting": {
-   "room": "rm_counting"
-  },
-  "b_generator": {
-   "room": "rm_generator"
-  },
-  "b_linen": {
-   "room": "rm_linen"
-  },
-  "b_pharmacy": {
-   "room": "rm_pharmacy"
-  },
-  "b_library": {
-   "room": "rm_library"
-  },
-  "b_morgue": {
-   "room": "rm_morgue"
-  },
-  "b_kitchen": {
-   "room": "rm_kitchen"
-  },
-  "b_boiler": {
-   "room": "rm_boiler"
-  },
-  "b_laundry": {
-   "room": "rm_laundry"
-  },
-  "b_isolation2": {
-   "room": "rm_isolation2"
-  },
-  "b_scaffold": {
-   "room": "rm_corridor"
-  },
-  "b_reinforced_beds": {
-   "card": "ward_beds"
-  },
-  "b_sterile_field": {
-   "card": "ward_chapel"
-  },
-  "b_overtime": {
-   "card": "ward_overtime"
-  },
-  "b_iron_doors": {
-   "card": "ward_doors"
-  },
-  "b_night_shift": {
-   "card": "ward_moon"
-  },
-  "b_scrub_in": {
-   "card": "ward_isolation"
-  },
-  "b_double_doors": {
-   "card": "ward_doors"
-  },
-  "b_soundproofing": {
-   "card": "ward_doors"
-  },
-  "b_fire_door": {
-   "card": "ward_doors"
-  },
-  "b_morning_rounds": {
-   "card": "ward_sun"
-  },
-  "b_rations": {
-   "card": "ward_bowl"
-  },
-  "b_lamp_oil": {
-   "card": "ward_lamp"
-  },
-  "b_triage": {
-   "card": "ward_cross"
-  },
-  "b_requisition": {
-   "card": "ward_crate"
-  },
-  "b_bribe": {
-   "card": "ward_coin"
-  },
-  "b_double_shift": {
-   "card": "ward_clock"
-  },
-  "b_demolish": {
-   "card": "ward_hammer"
-  },
-  "b_floodlights": {
-   "card": "ward_lamp"
-  },
-  "b_overtime_pay": {
-   "card": "ward_coin"
-  },
-  "b_night_nurse": {
-   "card": "ward_cross"
-  },
-  "b_quarantine": {
-   "card": "ward_isolation"
-  },
-  "b_fumigate": {
-   "card": "ward_crate"
-  },
-  "b_skeleton_crew": {
-   "card": "ward_generator"
-  },
-  "b_fresh_linens": {
-   "card": "ward_linen"
-  },
-  "b_shift_change": {
-   "card": "ward_clock"
-  },
-  "b_loaded_dice": {
-   "card": "ward_clock"
-  },
-  "b_lucky_roll": {
-   "card": "ward_coin"
-  },
-  "b_weighted_die": {
-   "card": "ward_clock"
-  },
-  "b_open_ledger": {
-   "card": "ward_crate"
   }
  }
 }

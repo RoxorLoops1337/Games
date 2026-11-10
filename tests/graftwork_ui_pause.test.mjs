@@ -30,13 +30,14 @@ assert.equal(FS.canFullscreen(), false, 'headless: no fullscreen'); assert.equal
 async function rig(host) {
   const meta = META.loadMeta(); meta.settings = {};
   const app = await makeApp({ run: null, meta });
-  const log = { saved: 0, abandon: 0, title: 0, deck: 0 };
+  const log = { saved: 0, abandon: 0, title: 0, deck: 0, updates: 0 }; // updates: ticks the run screen under the menu was given (none while paused)
   const flow = { app, RUN, META, saveMeta() { log.saved++; }, openSettings() { app.push('settings'); }, openDeck() { log.deck++; app.push('settings'); },
     abandon() { log.abandon++; const r = app.shared.run; if (r) { r.phase = 'dead'; r.abandoned = true; } app.go('end'); }, toTitle() { log.title++; app.go('title'); }, hasSave: () => false };
   app.shared.flow = flow; app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   app.register('pause', pause); app.register('settings', settings); app.register('title', title);
-  app.register('ward', { draw() {}, update() {} }); app.register('end', { draw() {}, update() {} });
-  app.register('combat', { draw() {}, update() {}, enter() {}, leave() {} });
+  const upd = () => { log.updates++; };
+  app.register('ward', { draw() {}, update: upd }); app.register('end', { draw() {}, update() {} });
+  app.register('combat', { draw() {}, update: upd, enter() {}, leave() {} });
   if (host) FS.setHost(host);
   installPause(app); FS.installFullscreen(app);
   app.overlay = (a) => drawPauseOverlay(a);
@@ -45,21 +46,22 @@ async function rig(host) {
 const run = () => RUN.newRun({ hero: 'marrow', seed: 'pause' });
 const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the Controls gap)
 
-// ---- Esc opens, Esc resumes, timeScale restored ----
+// ---- Esc opens, Esc resumes; the run screen stands still in between ----
 {
-  const { app } = await rig(null);
+  const { app, log } = await rig(null);
   app.shared.run = run(); app.go('ward', {}); frames(app, 5);
-  assert.ok(IN_RUN.has('ward')); assert.ok(!IN_RUN.has('map'), 'the map screen is gone'); assert.deepEqual([...IN_RUN].sort(), ['combat', 'event', 'forge', 'graft', 'reward', 'shop', 'ward']);
-  app.timeScale = 1; key(app, 'Escape'); frames(app, 3);
-  assert.equal(app.top().name, 'pause', 'Esc opens pause'); assert.equal(app.timeScale, 0, 'paused freezes time');
+  assert.ok(IN_RUN.has('ward')); assert.ok(!IN_RUN.has('map'), 'the map screen is gone'); assert.deepEqual([...IN_RUN].sort(), ['combat', 'event', 'forge', 'graft', 'reward', 'shop', 'ward']); assert.equal(log.updates, 5);
+  key(app, 'Escape'); const u0 = log.updates; frames(app, 30);
+  assert.equal(app.top().name, 'pause', 'Esc opens pause'); assert.equal(log.updates, u0, 'paused: the run screen gets no update'); assert.equal(app.frozen, true);
+  assert.equal(pause.k, 1, 'the menu itself runs on real time'); assert.ok(pause.clock > 0.4);
   key(app, 'Escape'); frames(app, 3);
-  assert.equal(app.stack.length, 1, 'Esc resumes and does not reopen'); assert.equal(app.timeScale, 1, 'timeScale restored');
+  assert.equal(app.stack.length, 1, 'Esc resumes and does not reopen'); assert.equal(log.updates, u0 + 3, 'and the run screen goes on');
   // buttons registered in the reserved zone
   const regs = app.layout.getAll(); const pb = regs.find((r) => r.id === 'pause_btn');
   assert.deepEqual([pb.x, pb.y, pb.w, pb.h], [PAUSE_BTN.x, PAUSE_BTN.y, PAUSE_BTN.w, PAUSE_BTN.h]); assert.equal(pb.layer, 'hud');
   // click the button
   click(app, 1158, 28); frames(app, 3); assert.equal(app.top().name, 'pause', 'pause button opens'); click(app, 640, rowY(0)); frames(app, 3);
-  assert.equal(app.stack.length, 1, 'Resume row closes'); assert.equal(app.timeScale, 1);
+  assert.equal(app.stack.length, 1, 'Resume row closes'); assert.equal(app.frozen, false);
   // escBusy blocks Esc
   app.escBusy = true; key(app, 'Escape'); frames(app, 2); assert.equal(app.stack.length, 1, 'escBusy blocks pause');
   // a screen that pops on Esc does not reopen pause
@@ -68,11 +70,11 @@ const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the C
 // ---- every item ----
 {
   const { app, log } = await rig(null);
-  app.shared.run = run(); app.go('ward', {}); frames(app, 3); app.timeScale = 0.5;
-  key(app, 'Escape'); frames(app, 3); assert.equal(app.timeScale, 0); assert.equal(pause.sel, 0, 'Resume is the default focus');
+  app.shared.run = run(); app.go('ward', {}); frames(app, 3);
+  key(app, 'Escape'); const u0 = log.updates; frames(app, 3); assert.equal(pause.sel, 0, 'Resume is the default focus');
   // keyboard navigation: Down to Settings, Enter
   key(app, 'ArrowDown'); assert.equal(pause.sel, 1); key(app, 'Enter'); frames(app, 3); assert.equal(app.top().name, 'settings', 'Settings opens over pause');
-  key(app, 'Escape'); frames(app, 3); assert.equal(app.top().name, 'pause'); assert.equal(app.timeScale, 0, 'still paused');
+  key(app, 'Escape'); frames(app, 3); assert.equal(app.top().name, 'pause'); assert.equal(log.updates, u0, 'still paused');
   // no fullscreen row headless: rows are resume, settings, deck, help, abandon, quit
   key(app, 'ArrowDown'); assert.equal(pause.sel, 2); key(app, 'Enter'); frames(app, 3); assert.equal(log.deck, 1, 'Deck'); key(app, 'Escape'); frames(app, 3);
   key(app, 'ArrowDown'); key(app, 'Enter'); frames(app, 3); assert.equal(pause.mode, 'help', 'help panel'); for (let i = 0; i < 4; i++) key(app, 'ArrowDown'); key(app, 'Escape'); assert.equal(pause.mode, 'menu');
@@ -82,17 +84,18 @@ const rowY = (i) => 80 + 84 + i * 58 + 25; // centre of menu row i (before the C
   pause.sel = 4; key(app, 'Enter'); frames(app, 2); assert.ok(pause.confirm && pause.confirm.kind === 'abandon'); assert.equal(pause.sel, 1, 'default focus is Cancel');
   key(app, 'Enter'); frames(app, 2); assert.equal(pause.confirm, null, 'cancel'); assert.equal(log.abandon, 0);
   pause.sel = 4; key(app, 'Enter'); frames(app, 2); key(app, 'ArrowLeft'); key(app, 'Enter'); frames(app, 3);
-  assert.equal(log.abandon, 1, 'abandon confirmed'); assert.equal(app.shared.run.phase, 'dead'); assert.equal(app.timeScale, 0.5, 'timeScale restored after abandon'); assert.equal(app.current, 'end');
+  assert.equal(log.abandon, 1, 'abandon confirmed'); assert.equal(app.shared.run.phase, 'dead'); assert.equal(log.updates, u0, 'the run never moved under the menu'); assert.equal(app.current, 'end');
+  frames(app, 2); assert.equal(app.frozen, false, 'nothing is frozen after leaving through the menu'); assert.equal(app.frameState.snap, null);
 }
 // ---- quit: saves, confirm only in combat ----
 {
   const { app, log } = await rig(null);
   app.shared.run = run(); app.go('ward', {}); frames(app, 3); key(app, 'Escape'); frames(app, 3);
-  pause.sel = 5; key(app, 'Enter'); frames(app, 3); assert.equal(log.title, 1, 'quit outside combat is immediate'); assert.equal(app.timeScale ?? 1, 1);
+  pause.sel = 5; key(app, 'Enter'); frames(app, 3); assert.equal(log.title, 1, 'quit outside combat is immediate'); assert.equal(app.frozen, false);
   app.shared.run.phase = 'combat'; app.go('combat', {}); frames(app, 3); key(app, 'Escape'); frames(app, 3);
-  assert.equal(app.top().name, 'pause'); assert.equal(app.timeScale, 0);
+  assert.equal(app.top().name, 'pause'); assert.equal(app.frozen, true);
   pause.sel = 5; key(app, 'Enter'); frames(app, 3); assert.equal(log.title, 1); assert.ok(pause.confirm, 'combat quit confirms');
-  click(app, 640 - 100, 80 + 290 + 27); frames(app, 3); assert.equal(log.title, 2, 'confirmed quit'); assert.equal(app.timeScale, 1);
+  click(app, 640 - 100, 80 + 290 + 27); frames(app, 3); assert.equal(log.title, 2, 'confirmed quit'); assert.equal(app.frozen, false);
 }
 // ---- fullscreen mocked ----
 for (const webkit of [false, true]) {
@@ -169,7 +172,7 @@ for (const webkit of [false, true]) {
   realKey('Escape'); frames(app, 3); assert.equal(app.top().name, 'pause');
   pause.sel = 2; realKey('Enter'); frames(app, 3); assert.equal(app.top().name, 'deckview', 'Deck opened over Pause');
   realKey('Escape'); frames(app, 3);
-  assert.equal(app.top().name, 'pause', 'Esc closed only the Deck: Pause stays'); assert.equal(app.timeScale, 0, 'still paused');
+  assert.equal(app.top().name, 'pause', 'Esc closed only the Deck: Pause stays'); assert.equal(app.frozen, true, 'still paused');
   realKey('Escape'); frames(app, 3); assert.notEqual(app.top().name, 'pause', 'a second Esc resumes');
 }
 

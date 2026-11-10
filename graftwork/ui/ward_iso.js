@@ -1,7 +1,7 @@
 // THE WARD, isometric view (design/WARD.md "Isometric view and art pipeline"). The 9 x 6 floor plan is projected to a 2:1 diamond grid;
-// each room is an illustrated cutaway diorama (assets/ward/ sprites via ui/assets.js, a procedural block when no image is there), monsters
-// stand and wander inside their rooms, the hero walks cell to cell, the thread is stitched across the floor, and the whole map is lit by the
-// time of day. ui/ward.js owns the rules and the screen; this module only draws and picks.
+// each room is drawn from the modular kit (ui/ward_kit_iso.js) once the images of ITS recipe are in, and as a procedural block until then (or
+// for good: headless, a failed download). Monsters stand and wander inside their rooms, the hero walks cell to cell, the thread is stitched
+// across the floor, and the whole map is lit by the time of day. ui/ward.js owns the rules and the screen; this module only draws and picks.
 //
 //   cellW(w, x, y)            screen centre of a cell's floor (also ward.js cellCenter)
 //   pick(w, mx, my)           the cell under a point: floors first (exact diamonds), then the wall volume of a room -> {x, y} | null
@@ -16,10 +16,9 @@ import { ENEMIES } from '../data/index.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
-import { assets, walkIndex } from './assets.js';
+import { assets } from './assets.js';
 import * as PUP from './puppet.js';
 import { deviceScale } from './smoothing.js';
-import { wantsPuppet, gaitEntry } from '../data/gaits.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
@@ -133,17 +132,19 @@ function mk(w, h) {
   try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
 }
 const V = {
-  ground: null, groundKey: '', dark: new WeakMap(), glow: null, glowTried: false, mon: new Map(), hero: new Map(),
+  ground: null, groundKey: '', glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
-  gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitOK: false, kitInfo: null, fvHero: 1, rcOf: null,
-  plan: null, planKey: '', lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
+  gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitInfo: null, fvHero: 1, rcOf: null, kitRooms: new Set(), part: new Set(),
+  plan: null, planKey: '', lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
 };
 // The screen clock (S.t) restarts at 0 every time the Ward is entered, so no value of it may outlive a visit: a monster that checked in at t = 95 s
 // was drawn with alpha 0 for the first 95 s after the next fight. ui/ward.js calls this from enter (like its own MEM.stamps reset).
 export function newVisit() { V.born = Object.create(null); for (const g of V.gt.values()) g.plantT = -9; }
+// a new floor (another act, another run): room ids start over, so nobody is "a room that has shown the kit" yet
+export function newFloor() { V.kitRooms.clear(); }
 // 0..1 fade-in of a monster that checked in while the Ward was on screen. A stamp ahead of the clock counts as finished (like buildAge in ui/ward.js).
 export function bornAlpha(stamp, t) { return stamp === undefined || !(stamp <= t) ? 1 : clamp((t - stamp) / 0.35, 0, 1); }
-export function resetIso() { V.born = Object.create(null); V.plan = null; V.planKey = ''; V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
+export function resetIso() { V.born = Object.create(null); V.plan = null; V.planKey = ''; V.gt.clear(); V.kitInfo = null; V.kitRooms.clear(); V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.fadeA = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
 function glowSprite() {
   if (V.glow || V.glowTried) return V.glow;
   V.glowTried = true;
@@ -213,7 +214,13 @@ function drawRubble(g, c, legal, pulse, t) {
 }
 function drawPlot(app, g, c, alpha) {
   const spr = assets.room('plot_empty', app);
-  if (spr) { drawSprite(g, spr, c.x, c.y, 0, alpha); return; }
+  if (spr) { // the painted plot tile (the one room painting still drawn on the map), its floor diamond scaled to the cell
+    const d = spr.def, s = TW * FILL / (d.floorW || d.w * 0.96), fx = d.floorCx === undefined ? d.w / 2 : d.floorCx, fy = d.floorCy === undefined ? d.h * 0.75 : d.floorCy;
+    if (alpha < 1) { g.save(); g.globalAlpha *= alpha; }
+    g.drawImage(spr.img, c.x - fx * s, c.y - fy * s, d.w * s, d.h * s);
+    if (alpha < 1) g.restore();
+    return;
+  }
   // blueprint tile: chalk border, corner stakes, a pinned plan
   g.save(); g.globalAlpha = alpha;
   diamond(g, c.x, c.y, TW / 2 - 4, TH / 2 - 2); g.fillStyle = 'rgba(72,92,128,.30)'; g.fill();
@@ -245,33 +252,8 @@ export function drawGround(host, inter) {
   g.restore();
 }
 
-// ---------------- sprites ----------------
-// Draw a room / plot sprite so its floor centre lands on (cx, cy). tw is the tile width the sprite's floor diamond is scaled to.
-function drawSprite(g, spr, cx, cy, lift, alpha, img, keep = 1) {
-  const d = spr.def, s = TW * FILL / (d.floorW || d.w * 0.96), dw = d.w * s, dh = d.h * s, im = img || spr.img;
-  const fx = d.floorCx === undefined ? d.w / 2 : d.floorCx, fy = d.floorCy === undefined ? d.h * 0.75 : d.floorCy;
-  if (alpha < 1) { g.save(); g.globalAlpha *= alpha; }
-  if (keep < 0.99) { // lowered walls: crop the top of the wall region away (a section cut), nothing below the floor changes
-    const topY = fy - (d.floorH || d.h * 0.5) / 2, cut = (1 - keep) * Math.max(0, topY - 6), k = (im.naturalWidth || im.width || d.w) / d.w;
-    g.drawImage(im, 0, cut * k, d.w * k, (d.h - cut) * k, cx - fx * s, cy - fy * s - lift + cut * s, dw, (d.h - cut) * s);
-  } else g.drawImage(im, cx - fx * s, cy - fy * s - lift, dw, dh);
-  if (alpha < 1) g.restore();
-  return { top: cy - fy * s - lift, s };
-}
-function darkOf(spr) {
-  let v = V.dark.get(spr.img);
-  if (v !== undefined) return v;
-  const iw = spr.img.naturalWidth || spr.img.width || 0, ih = spr.img.naturalHeight || spr.img.height || 0, k = Math.min(1, 640 / Math.max(1, iw));
-  const o = iw ? mk(iw * k, ih * k) : null;
-  if (o) {
-    o.x.drawImage(spr.img, 0, 0, o.c.width, o.c.height);
-    o.x.globalCompositeOperation = 'source-atop';
-    o.x.fillStyle = 'rgba(88,96,128,.5)'; o.x.fillRect(0, 0, o.c.width, o.c.height); // cold, desaturated
-    o.x.fillStyle = 'rgba(8,8,16,.45)'; o.x.fillRect(0, 0, o.c.width, o.c.height);
-  }
-  v = o ? o.c : null; V.dark.set(spr.img, v); return v;
-}
-// procedural diorama block: the fallback while the art is missing or still loading
+// ---------------- the procedural room ----------------
+// procedural diorama block: a room whose kit recipe is not in yet (or never will be: headless, a failed download)
 function drawBlock(g, type, cx, cy, lift, dark, theatre) {
   const hw = TW * FILL / 2, hh = TH * FILL / 2, H = WALL + (theatre ? 8 : 0), tint = K.ROOM_TINT[type] || '#8a7a5c';
   const y0 = cy - lift;
@@ -298,7 +280,7 @@ function drawBlock(g, type, cx, cy, lift, dark, theatre) {
   g.restore();
 }
 
-// a big room with no kit and no painting (headless, a failed download): the footprint floor with two back walls
+// a big room without its kit recipe: the footprint floor with two back walls
 function drawBigBlock(g, w, r, lift, dark, theatre) {
   const [fw, fh] = fpOf(r), a = cellW(w, r.x, r.y), top = { x: a.x, y: a.y - TH / 2 - lift }, R = { x: top.x + fw * TW / 2, y: top.y + fw * TH / 2 }, L = { x: top.x - fh * TW / 2, y: top.y + fh * TH / 2 }, H = WALL + (theatre ? 8 : 0), tint = K.ROOM_TINT[r.type] || '#8a7a5c';
   g.save();
@@ -311,7 +293,7 @@ function drawBigBlock(g, w, r, lift, dark, theatre) {
 
 // ---------------- actors ----------------
 const MON_SLOTS = [[-0.26, -0.01], [0.26, -0.03], [-0.09, -0.1], [0.11, -0.11], [0.0, 0.07]];
-function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false, pose: '', used: '' }); }
+function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false }); }
 function enemyCanvas(id, targetH) {
   const key = id + '|' + targetH, hit = V.mon.get(key);
   if (hit !== undefined) return hit;
@@ -339,19 +321,6 @@ function actorIdOf(kind, id, lvl) {
   if (assets.has('actors', own)) return own;
   const pool = assets.kindIds(kind === 'elite' ? 'elite' : 'normal'); if (!pool.length) return null;
   return pool[Math.floor(hash(id) * pool.length)];
-}
-function actorSprite(app, kind, id, run, lvl, alt) {
-  const aid = actorIdOf(kind, id, lvl);
-  return aid ? assets.actor(aid, app, alt) : null;
-}
-// Animation frames (assets.js, WARD.md 12c): the stem to draw instead of the standing / _b image, or null. A pose ('hit' | 'die') set by a map event wins over the walk;
-// the walk cycle runs only while the figure is really moving and only once every walk frame has decoded. Frames share the standing canvas and feet, so they use its contact.
-export function frameStemFor(F, rec, noWalk) {
-  if (!F) return null;
-  if (rec.pose === 'die' && F.die) return F.die;
-  if (rec.pose === 'hit' && F.hit) return F.hit;
-  if (!noWalk && rec.cycle && F.walk.length >= 2) return F.walk[walkIndex(rec.stride, F.walk.length)];
-  return null;
 }
 // ---- grounding: where a sprite really touches the floor, and the soft contact shadow under it ----
 // The manifest anchor is a hand-set point; the real contact is measured once per image from its alpha: the lowest opaque row, and the centre
@@ -400,33 +369,31 @@ function groundShadow(g, x, y, rx, a) {
   else { g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); }
 }
 export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
-// PUPPET WALK (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Wanted unless the owner approved the
-// painted cycle (data/gaits.js PUPPET_PREF false) or the caller forces it off (r.pm = 'off', the animation lab). Returns the prepared info or null.
+// THE WALK is the puppet (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Returns the prepared
+// info, or null when the sprite cannot be read (no pixels: headless) or the caller wants to see the hop under it (r.pm = 'off', the animation lab): then the
+// hop that gait() worked out is the walk.
 function puppetInfo(g, r, aid, spr, s) {
-  const pm = r.pm; if (pm === 'off' || !(pm === 'on' || wantsPuppet(aid))) return null;
+  if (r.pm === 'off') return null;
   const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g), dev = (dsc === dsc ? dsc : 1) * s * d.w / iw;
   const e = PUP.prepare(spr.img, aid, dev, PUP.tuneFor(aid)); return e && e.kind ? e : null;
 }
 const tuneOf = PUP.tuneFor; // per actor tune (data/gaits.js) over the global puppet tune
 function drawActor(app, g, r, run) {
   const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
-  let spr = aid ? assets.actor(aid, app, false) : null, img = null, pe = null, parts = null;
-  r.used = ''; r.pp = r.pp || null;
+  const spr = aid ? assets.actor(aid, app) : null; let pe = null, parts = null;
+  r.pp = r.pp || null;
   let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
   if (spr) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
     fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
     pe = r.kind === 'token' ? null : puppetInfo(g, r, aid, spr, s);
     const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(PUP.geomFor(pe, tuneOf(aid)), tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
-    const F = assets.frames(aid), stem = frameStemFor(F, r, !!pe);
-    if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
-    if (!img && r.frame === 1 && !pe) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
   }
-  // the puppet pose of this frame (only while really walking; at rest and in poses the standing / painted image is drawn as before)
+  // the puppet pose of this frame (only while really walking; at rest the standing image is drawn)
   let pose = null, Hw = 0;
-  if (pe && r.cycle && !r.pose && !img) {
+  if (pe && r.cycle) {
     pose = r.pp || (r.pp = PUP.newPose()); Hw = pe.geom.H * spr.def.h * s;
-    PUP.walkPuppet(r.pph === undefined ? r.stride : r.pph, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, PUP.geomFor(pe, tuneOf(aid)));
+    PUP.walkPuppet(r.stride, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, PUP.geomFor(pe, tuneOf(aid)));
     if (pe.kind === 'legged') { parts = PUP.partsOf(pe, 0, tuneOf(aid)); if (!parts) { const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g); parts = PUP.partsOf(pe, (dsc === dsc ? dsc : 1) * s * d.w / iw, tuneOf(aid)); } if (!parts) pose = null; }
     if (pose) { if (pe.kind === 'legged') { r.bob = 0; r.tilt = 0; r.sq = pose.sq; } else { r.bob = pose.hop * Hw; r.sq = pose.sq; r.tilt = pose.lean + pose.rock; } }
   } else r.pp = null;
@@ -448,8 +415,8 @@ function drawActor(app, g, r, run) {
   if (spr) {
     const d = spr.def;
     if (pose && parts) PUP.drawLegged(g, parts, pose, s, fx, fy, d.w, d.h, pe.geom.H * d.h);
-    else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
-    else g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
+    else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
+    else g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
     if (o) g.drawImage(o.c, -o.fx, -o.fy, o.w, o.h);
@@ -467,17 +434,18 @@ function drawActor(app, g, r, run) {
 }
 
 // ---- gait: one place turns movement into the body language, for monsters, elites and the hero ----
-// The step cycle follows the DISTANCE moved (not time): every stride = 0.5 x the figure height, the two walk frames swap at each plant, the body
-// hops a little between plants (the shadow stays flat), squashes when a foot lands and leans into the heading; at rest nothing leaves the
-// ground: a slow breathing scale about the feet and a small weight shift. With reduced motion the figure just stands.
+// The step cycle follows the DISTANCE moved (not time): every stride = 0.5 x the figure height (the puppet's own stride when it has one, g.sl).
+// This is also THE HOP, the walk of a figure without a puppet: the body hops a little between plants (the shadow stays flat), squashes when a
+// foot lands and leans into the heading; at rest nothing leaves the ground: a slow breathing scale about the feet and a small weight shift.
+// With reduced motion the figure just stands.
 const HOP = 2.2, STRIDE = 0.5;
-export { gait, drawActor, groundShadow, HOP, STRIDE }; // additive: lab/anim.html drives the real gait and the real actor draw
+export { gait, drawActor, groundShadow, HOP, STRIDE }; // the title scene's monsters and lab/anim.html use the real gait and the real actor draw
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
   const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
   rec.gk = key; rec.dist = g.dist;
-  if (calm) { g.vk = 0; rec.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
+  if (calm) { g.vk = 0; rec.vk = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
   if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
   const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
   g.vk += (target - g.vk) * Math.min(1, dt * (target ? 9 : 12)); if (g.vk < 0.01) g.vk = 0;
@@ -488,8 +456,7 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   }
   const since = S.t - g.plantT, plant = since >= 0 ? Math.exp(-since * 13) * w : 0; // a plant stamped ahead of the clock (an earlier visit) is over
   rec.stride = ph; // tests: the stride phase follows the distance moved
-  rec.frame = w > 0.25 ? (step & 1) : 0;
-  rec.cycle = w > 0.25; // the animation frames (walk cycle) run on rec.stride while this is true
+  rec.cycle = w > 0.25; // walking: the puppet pose runs on rec.stride while this is true
   rec.bob = Math.sin(Math.PI * frac) * HOP * (sz / 36 + 0.4) * w; // hop height in world px, 0 at rest
   const breathe = 1 + 0.02 * Math.sin(S.t * 2.2 + g.ph), shift = 0.012 * Math.sin(S.t * 0.9 + g.ph);
   rec.sq = (1 - w) * breathe + w * (1 - 0.07 * plant + 0.025 * Math.sin(Math.PI * frac));
@@ -547,8 +514,7 @@ function monState(key, i, calm, dt, speed = 0.3) {
 function dust(g, id, c, t) { // a few motes drifting up through the light of each lit room
   for (let i = 0; i < 3; i++) { const q = (t * 0.1 + hash(id + 'd' + i)) % 1, x = c.x + (hash(id + 'x' + i) - 0.5) * TW * 0.7 + Math.sin(q * 6 + i) * 3, y = c.y + TH * 0.1 - q * UP * 0.85; g.fillStyle = `rgba(255,232,176,${Math.sin(q * Math.PI) * 0.4})`; g.beginPath(); g.arc(x, y, 1.1, 0, TAU); g.fill(); }
 }
-// ---- the modular kit: which room types are drawn from kit pieces (data/ward_kit.js recipes against assets/ward_kit/manifest.json) ----
-function kitUsable(app) { if (V.kitOK) return true; if (assets.kitReady() && assets.kitSettled(app)) V.kitOK = true; return V.kitOK; }
+// ---- the modular kit: a room is drawn from kit pieces once ITS recipe is in (KR.recipeFor: data/ward_kit.js against assets/ward_kit/manifest.json) ----
 const roomIdAt = (w, x, y) => { const id = w.grid[y] && w.grid[y][x]; return id && id !== 'rubble' ? id : null; };
 // global sub-tile coordinates (x * 4 + u, y * 4 + v) to world
 function subWorld(w, gu, gv) { const g = geo(w); return { x: g.ox + (gu - gv) * TW / 8, y: g.oy - TH / 2 + (gu + gv) * TH / 8 }; }
@@ -579,17 +545,26 @@ export function drawRooms(host, inter) {
   // which rooms must stay visible (focus rooms, rooms with monsters) and which front neighbours cut their walls down to show them
   // (a front neighbour is lowered even when it is a focus room itself: rooms draw strictly back to front, so the room in front is the one that would cover)
   const tk = V.tk; for (const k in tk) delete tk[k];
-  const roomList = Object.values(w.rooms), nRooms = roomList.length, dense = nRooms >= 9;
+  const roomList = Object.values(w.rooms);
   for (const r of roomList) {
     const def0 = ROOMS[r.type], awake = !(!r.on && def0.power > 0), pr = focus(r.id) ? 2 : awake && r.contents.length && r.type !== 'rm_theatre' && (r.contents[0].kind === 'monster' || r.contents[0].kind === 'elite') ? 1 : 0;
     if (!pr) continue;
     for (const [cx, cy] of WD.cellsOf(r)) for (const [ddx, ddy] of [[1, 0], [0, 1], [1, 1]]) { const oid = w.grid[cy + ddy] && w.grid[cy + ddy][cx + ddx]; if (oid && oid !== 'rubble' && oid !== r.id) tk[oid] = Math.max(tk[oid] || 0, pr); }
   }
-  // modular rooms: a recipe per type (null = painted), doors and shared walls from the engine's connections, the wall mode by density
-  const kitOn = kitUsable(app); V.rcm.clear();
-  const rcOf = (r) => { if (!kitOn) return null; const o = typeof r === 'string' ? { type: r } : r, big = (o.w || 1) * (o.h || 1) > 1, k = o.type + (big ? '@' + (o.w || 1) + 'x' + (o.h || 1) : ''); let v = V.rcm.get(k); if (v === undefined) { v = KR.recipeFor(o.type, app, o.w || 1, o.h || 1); V.rcm.set(k, v); } return v; };
+  // modular rooms: a recipe per type (null = the block), doors and shared walls from the engine's connections, the wall mode by density
+  // A room turns from its block into the kit when the images of ITS recipe have settled (KR.recipeFor), and from then on it is a kit room for good
+  // (V.kitRooms). If its plan changes later (it grows), the new plan is drawn at once from the pieces that are in (KR.recipeHeld; the pieces still on
+  // their way are left out until they arrive, V.part), never the block again.
+  V.rcm.clear(); V.part.clear();
+  const rcOf = (r) => {
+    const o = typeof r === 'string' ? { type: r } : r, big = (o.w || 1) * (o.h || 1) > 1, k = o.type + (big ? '@' + (o.w || 1) + 'x' + (o.h || 1) : ''); let v = V.rcm.get(k);
+    if (v === undefined) { v = KR.recipeFor(o.type, app, o.w || 1, o.h || 1); V.rcm.set(k, v); }
+    if (v) { if (o.id) V.kitRooms.add(o.id); return v; }
+    if (!o.id || !V.kitRooms.has(o.id)) return null;
+    v = KR.recipeHeld(o.type, app, o.w || 1, o.h || 1); if (v) V.part.add(o.id); return v;
+  };
   V.rcOf = rcOf;
-  const anyKit = kitOn && roomList.some((r) => rcOf(r));
+  const anyKit = roomList.some((r) => rcOf(r));
   const plan = anyKit ? planFor(run, w, roomList) : null;
   const mode = KR.wallModeFor(roomList.filter((r) => r.type !== 'rm_theatre').length); // the Theatre sits far away: it does not make the floor dense
   V.kitInfo = { mode, rooms: new Map() };
@@ -604,18 +579,9 @@ export function drawRooms(host, inter) {
     const lt = (hov || sel) ? 1 : 0, lv = V.lift[id] || 0; V.lift[id] = calm ? lt : lv + (lt - lv) * Math.min(1, dt * 14);
     const st = host.buildAge(MEM.stamps[id], S.t), drop = st < 1 ? (1 - EASE.out(st)) * 70 : 0, lift = V.lift[id] * 6 + drop + (theatre && host.bossOpen && !calm ? Math.sin(S.t * 47) * 0.7 : 0);
     if (MEM.stamps[id] !== undefined && st < 1) V.landed[id] = 0;
-    const tp = tk[id] || 0, spr = rc ? null : assets.room(r.type, app);
-    // painted fallback: the tall diorama for a lone room, the LOWERED-WALL painting (rm_<id>_low) wherever the tall one would hide a neighbour
-    // (wall mode Low, Cutaway with a room behind, a front neighbour of a focus room or of a room with monsters, a dense floor); the old crop
-    // of the tall sprite remains the fallback while a room has no low painting. The two cross-fade when the choice changes.
-    const sprLow = rc || !spr ? null : assets.room(r.type + '_low', app);
-    const behind = !!(roomIdAt(w, x - 1, y) || roomIdAt(w, x, y - 1) || roomIdAt(w, x - 1, y - 1));
-    const wantLow = !!sprLow && (mode === 'low' || (mode === 'cutaway' && behind) || tp > 0 || (dense && behind && KR.KITS.mode !== 'full'));
-    const lw = wantLow ? 1 : 0, lv0 = V.lowK[id] === undefined ? lw : V.lowK[id];
-    const lowK = V.lowK[id] = calm || Math.abs(lw - lv0) < 0.02 ? lw : lv0 + (lw - lv0) * Math.min(1, dt * 7);
-    const tKeep = sprLow ? 1 : tp === 2 ? 0.5 : tp === 1 ? 0.62 : focus(id) ? 1 : dense ? 0.85 : 1, tFade = tp === 2 && !sprLow ? 0.55 : 1;
-    const kv = V.keep[id] === undefined ? tKeep : V.keep[id], fv = V.fadeA[id] === undefined ? tFade : V.fadeA[id];
-    const keep = V.keep[id] = calm ? tKeep : kv + (tKeep - kv) * Math.min(1, dt * 7), fade = V.fadeA[id] = calm ? tFade : fv + (tFade - fv) * Math.min(1, dt * 7);
+    const tp = tk[id] || 0;
+    // a block has no walls to lower: in front of a focus room (hovered, selected, the hero's) it turns see-through instead (eased)
+    const tFade = tp === 2 ? 0.55 : 1, fv = V.fadeA[id] === undefined ? tFade : V.fadeA[id], fade = V.fadeA[id] = calm ? tFade : fv + (tFade - fv) * Math.min(1, dt * 7);
     const alpha = (st < 1 ? clamp(st * 2.5, 0, 1) : 1) * (rc ? 1 : fade);
     // ---- collect the actors that stand in this room (kit rooms draw them with their props, the others in the actor pass) ----
     const items = V.items; items.length = 0;
@@ -647,7 +613,7 @@ export function drawRooms(host, inter) {
         if (rc) items.push({ y: rec.y, rec });
       } else { // event / shop / forge / rest: a floating token over the floor
         const rec = poolRec(n++); V.list.push(rec);
-        rec.kind = 'token'; rec.id = k0; rec.x = cc.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = cc.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
+        rec.kind = 'token'; rec.id = k0; rec.x = cc.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = cc.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
       }
       V.cnt[id] = r.contents.length;
     };
@@ -656,20 +622,14 @@ export function drawRooms(host, inter) {
     g.save();
     if (st >= 0.55 && st < 1) { const sq = 1 + 0.06 * Math.sin((st - 0.55) / 0.45 * Math.PI) * (1 - st); g.translate(cc.x, cc.y); g.scale(1 + (sq - 1) * -0.6, sq); g.translate(-cc.x, -cc.y); }
     if (rc) {
-      const pl = plan.get(id), hs = KR.wallHeights(id, pl, mode, tp, dt, calm), info = { key: rc.key, HL: hs.HL, HR: hs.HR, doorL: pl.L, doorR: pl.R, slabL: pl.slabL, slabR: pl.slabR, dark, dL: pl.Ls, dR: pl.Rs, slabLs: pl.slabLs, slabRs: pl.slabRs };
+      const pl = plan.get(id), hs = KR.wallHeights(id, pl, mode, tp, dt, calm), info = { key: rc.key, HL: hs.HL, HR: hs.HR, doorL: pl.L, doorR: pl.R, slabL: pl.slabL, slabR: pl.slabR, dark, dL: pl.Ls, dR: pl.Rs, slabLs: pl.slabLs, slabRs: pl.slabRs, part: V.part.has(id) };
       V.kitInfo.rooms.set(id, info); V.kw.push({ x, y, id, tx: T.x, ty: T.y, HL: hs.HL, HR: hs.HR, fw, fh });
       if (alpha < 1) g.globalAlpha *= alpha;
       KR.drawStatic(app, g, id, rc, T.x, T.y - lift, info, CAM.z * (app.px || app.scale || 1));
       for (const it of items) it.rec.kitDrawn = true;
       const pg = V.pg; pg.length = 0;
-      KR.drawItems(app, g, rc, T.x, T.y, lift, items, { dark, calm, t: S.t, glow: pg, actor: (rec) => drawActor(app, g, rec, run) });
+      KR.drawItems(app, g, rc, T.x, T.y, lift, items, { dark, calm, t: S.t, glow: pg, part: info.part, actor: (rec) => drawActor(app, g, rec, run) });
       if (!dark) for (let i = 0; i < pg.length; i += 3) host.glows.push(pg[i], pg[i + 1] - lift, pg[i + 2]);
-    } else if (spr) {
-      const imgOf = (sp) => { let im = sp.img; if (dark) { const dk = darkOf(sp); if (dk) im = dk; } return im; };
-      if (alpha < 1) g.globalAlpha *= alpha;
-      if (lowK < 0.98) drawSprite(g, spr, c.x, c.y, lift, 1, imgOf(spr), keep);
-      if (sprLow && lowK > 0.01) drawSprite(g, sprLow, c.x, c.y, lift, lowK, imgOf(sprLow), 1);
-      V.paint[id] = lowK > 0.5 ? 'low' : 'tall';
     } else {
       g.globalAlpha *= alpha; if (big) drawBigBlock(g, w, r, lift, dark, theatre); else drawBlock(g, r.type, c.x, c.y, lift, dark, theatre);
       if (dark) { g.globalAlpha = 0.5; rectDiam(g, w, x, y, fw, fh, lift); g.fillStyle = '#0c0a10'; g.fill(); }
@@ -711,7 +671,7 @@ function drawToken(app, g, r, t) {
   else { g.save(); g.fillStyle = r.id === 'shop' ? '#5a8fd8' : r.id === 'forge' ? '#E8571F' : '#6a9a6a'; g.beginPath(); g.arc(r.x, y, 9, 0, TAU); g.fill(); g.strokeStyle = '#2B1E1A'; g.lineWidth = 1.2; g.stroke(); g.strokeStyle = '#fff6e0'; g.lineWidth = 2; g.beginPath(); g.moveTo(r.x - 4, y); g.lineTo(r.x - 1, y + 3); g.lineTo(r.x + 5, y - 4); g.stroke(); g.restore(); }
   if (r.id === 'event' && r.data > 1) app.text('x' + r.data, r.x + 12, y - 4, { size: 11, ui: true, bold: true, color: '#9fe0d6', stroke: '#1a1210', strokeW: 3, fixed: true });
 }
-// where the hero stands in a room: the free sub-tile nearest the middle of a modular room, the old offset spot on a painted one
+// where the hero stands in a room: the free sub-tile nearest the middle of a modular room, a spot just off the centre of a block
 function heroStand(w, r, rcOf, off = true) {
   const rc = r && rcOf(r);
   if (rc) return { ...subWorld(w, r.x * 4 + rc.stand[0] + 0.5, r.y * 4 + rc.stand[1] + 0.5), kit: true };
@@ -762,7 +722,6 @@ function heroRec(host, n, rcOf, dt) {
 }
 // a hero on the move is drawn in the final pass (over every wall): a room in front walls him off in its doorway otherwise; at rest he is sorted with the props
 const heroAtEdge = (w, rec, id) => !!rec.moving;
-const hxy = (w, rid) => { const r = w.rooms[rid]; return r ? [r.x, r.y] : [0, 0]; };
 
 // ---------------- lighting over the whole map ----------------
 const motes = V.motes;
@@ -835,13 +794,16 @@ export function drawThread(host, path, dest, curP) {
 // ---------------- overlays: the ghost of the room being dragged, the keyboard focus ring ----------------
 export function drawGhost(host, inter) {
   const { app, run, S } = host, g = app.ctx, w = run.ward, uid = S.drag ? S.drag.uid : S.sel;
-  if (uid === null || uid === undefined || !inter.hoverCell || !inter.drop) return;
+  if (uid === null || uid === undefined) return;
   const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === uid) || {}).id];
   if (!card) return;
+  if (card.kind === 'room') { const sz = card.size || [1, 1]; KR.recipeFor(card.room, app, sz[0], sz[1]); } // a room plan picked up (dragged or selected): its kit pieces are asked for now, before the ghost is over a cell
+  if (!inter.hoverCell || !inter.drop) return;
   const pulse = 0.5 + 0.5 * Math.sin(S.t * 6), ok = inter.drop.ok;
   if (card.kind === 'expand') { // the room that would grow: the new cell glows, a dashed outline shows the whole new floor
     const tgt = inter.drop.tgt, rid = tgt && typeof tgt === 'object' ? tgt.room : tgt, room = rid && w.rooms[rid]; if (!room) return;
     const ex = WD.expandOptions(run, rid), opt = ex.ok ? (tgt && tgt.dir ? ex.dirs.find((d) => d.dir === tgt.dir) : ex.dirs[0]) : null; if (!opt) return;
+    KR.recipeFor(room.type, app, opt.f.w, opt.f.h); // the bigger plan is asked for while the Expand plan is held over the room
     g.save();
     for (const [cx, cy] of opt.cells) { const c = cellW(w, cx, cy); diamond(g, c.x, c.y, TW / 2 - 1, TH / 2 - 0.5); g.fillStyle = rgba(ok ? '#ffd060' : '#a3142f', 0.38 + 0.2 * pulse); g.fill(); }
     rectDiam(g, w, opt.f.x, opt.f.y, opt.f.w, opt.f.h, 0, 1); g.strokeStyle = ok ? '#fff2b8' : '#ff8a96'; g.lineWidth = 2.4; g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]);
@@ -851,10 +813,10 @@ export function drawGhost(host, inter) {
   if (card.kind !== 'room') return;
   const x = inter.hoverCell.x, y = inter.hoverCell.y; if (w.grid[y][x]) return;
   const size = card.size || [1, 1], pl = WD.placement(run, size, x, y), f = pl.f || { x, y, w: 1, h: 1 };
-  const c = cellW(w, f.x, f.y), rc = kitUsable(app) ? KR.recipeFor(card.room, app, f.w, f.h) : null, spr = rc || f.w * f.h > 1 ? null : assets.room(card.room, app);
+  const c = cellW(w, f.x, f.y), rc = KR.recipeFor(card.room, app, f.w, f.h);
   g.save(); g.globalAlpha = ok ? 0.62 : 0.3;
   if (rc) { KR.drawStatic(app, g, 'ghost', rc, c.x, c.y - TH / 2, { HL: 24, HR: 24, doorL: false, doorR: false, slabL: true, slabR: true, dark: false }, CAM.z * (app.px || app.scale || 1)); KR.drawItems(app, g, rc, c.x, c.y - TH / 2, 0, [], { dark: false, calm: true, t: 0, glow: [], actor() {} }); }
-  else if (spr) drawSprite(g, spr, c.x, c.y, 0, 1); else if (f.w * f.h > 1) drawBigBlock(g, w, { type: card.room, x: f.x, y: f.y, w: f.w, h: f.h }, 0, false, false); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
+  else if (f.w * f.h > 1) drawBigBlock(g, w, { type: card.room, x: f.x, y: f.y, w: f.w, h: f.h }, 0, false, false); else drawBlock(g, card.room, c.x, c.y, 0, false, false);
   if (!ok) { g.globalAlpha = 0.5; rectDiam(g, w, f.x, f.y, f.w, f.h); g.fillStyle = '#a3142f'; g.fill(); }
   g.restore();
   if (f.w * f.h > 1) { g.save(); rectDiam(g, w, f.x, f.y, f.w, f.h, 0, 1); g.strokeStyle = ok ? '#fff2b8' : '#ff8a96'; g.lineWidth = 2.4; g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 18; g.stroke(); g.setLineDash([]); g.restore(); }
@@ -875,7 +837,7 @@ export function drawWorld(host, inter) {
   camEnd(host.app);
   return hr;
 }
-export const pending = (host) => assets.state === 'loading' || assets.kitState === 'loading' || (assets.ready() && assets.progress().loaded < assets.progress().total) || (assets.kitReady() && !assets.kitSettled(host.app));
+const LOADP = { loaded: 0, total: 0 };
 export function drawLoading(host) {
   const { app, S, run } = host, g = app.ctx, w = run.ward;
   const th = Object.values(w.rooms).find((r) => r.type === 'rm_theatre');
@@ -888,13 +850,13 @@ export function drawLoading(host) {
       app.text('Theatre ' + (Math.cos(ang) > 0.3 ? '>' : Math.cos(ang) < -0.3 ? '<' : Math.sin(ang) > 0 ? 'v' : '^'), ex, ey - 7, { size: 11, ui: true, bold: true, align: 'center', color: '#ffb3bd', fixed: true });
     }
   }
-  if (!assets.available() || assets.state === 'none' || !assets.ready()) { if (assets.state !== 'loading' && assets.kitState !== 'loading') return; }
-  const p0 = assets.progress(), kp = assets.kitProgress(app), p = { loaded: p0.loaded + kp.loaded, total: p0.total + kp.total, state: p0.state };
-  if (assets.state === 'ready' && p.loaded >= p.total && assets.kitState !== 'loading') return;
+  // "Stitching rooms": only while a BUILT room is a block that will turn into the kit (the kit manifest is on its way, or a piece of one of their
+  // recipes is still downloading). No kit (headless, a failed manifest) and a failed piece: nothing to wait for.
+  const p = KR.recipesProgress(Object.values(w.rooms), app, LOADP);
+  if (assets.kitState !== 'loading' && p.loaded >= p.total) return;
   const x = MAPR.x + MAPR.w - 118, y = MAPR.y + 8, bw = 108;
   g.save(); g.fillStyle = 'rgba(14,11,10,.8)'; app.rr(x, y, bw, 22, 6); g.fill();
   const k = p.total ? p.loaded / p.total : 0.1 + 0.1 * Math.sin(S.t * 3);
   g.fillStyle = COL.lamp; app.rr(x + 4, y + 16, (bw - 8) * clamp(k, 0.04, 1), 3, 1.5); g.fill(); g.restore();
   app.text('Stitching rooms', x + bw / 2, y + 2, { size: 11, ui: true, align: 'center', color: 'rgba(232,220,196,.85)', fixed: true });
 }
-export const paintedKind = (id) => V.paint[id] || null; // tests: which painting a room used last frame (tall | low)

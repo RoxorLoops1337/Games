@@ -199,6 +199,123 @@ Not fixed, found on the way (owner decisions):
 - A waived Price still reads on the graft patch of the card: the patch does not mark it as waived.
 - The golden master must be recorded again after this branch: the engine traces change by design.
 
+### One path per job, load only what is drawn (phase 2)
+
+Before = `428b6499`. What is left in the game:
+
+- **Ward rooms: the modular kit, else the procedural block.** The painted room renderer is gone from `ui/ward_iso.js` (tall and `_low` paintings, the wall crop, the cross-fade, the dark copy, the dense-floor rule). A room is its block until the images of ITS recipe have settled (`KR.recipeFor`, one recipe at a time), the kit from then on.
+- **Map walking: the puppet (`ui/puppet.js`), else the hop.** The painted 4-frame cycle, the `_b` step swap, `PUPPET_PREF` and `wantsPuppet` are gone. The title scene's monsters are drawn by the Ward's own `gait` and `drawActor`.
+- **Loading: nothing ahead.** `assets.preload`, `assets.progress`, `kitPreload`, `kitSettled`, `kitProgress` and the whole-kit gate (`kitUsable`, `V.kitOK`) are gone. A screen asks for what it draws; the art of the plans in hand is asked for when the Ward opens and when the hand changes; a room plan picked up, or an Expand plan held over a room, asks for the kit pieces of its ghost.
+- **Pipeline.** `tools/graftwork_art_build.py --prune` (new) brought `assets/ward` to what is drawn: 39 room entries, 2 card entries and 45 fields out of the manifest, 158 files deleted. The `--low` pass and all walk and step handling are gone from the script; `--frames` builds battle frames only. The manifest now names exactly the files on disk (tested).
+- **Lab.** `lab/rooms.html` and `lab/rooms.js` are deleted; the animation lab offers the game's two walks and Compare is puppet versus hop.
+
+What a player can see (listed on purpose):
+
+1. While the kit pieces of a room download, the room is a procedural block. It used to be a block and then its painting, until the WHOLE kit was in. With a warm cache this is a frame or two.
+2. The title monsters walk with the puppet (the hop when a sprite cannot be cut) instead of swapping two images; the Night Nurse, which had no step image and glided, walks too. At rest they idle like Ward monsters (a breath of 2 percent instead of 1.6). With reduced motion the title is pixel identical.
+3. An illustration that is not in hand (the Plans list, a plan offered as a reward or in the Dispensary) is asked for when it is first drawn, so it shows its engraved glyph until it has arrived. It used to be warm, because opening the Ward downloaded every room painting.
+4. "Stitching rooms" shows only while a built room waits for its kit pieces (it used to count every room painting and actor in the manifest).
+5. When the image size changes (a lower quality tier, a resize), kit rooms keep the size already decoded until the other one is in. By the old code path every kit room dropped to its block meanwhile (read from the code, not captured).
+
+Kept on purpose, and one thing found on the way:
+
+- `plot_empty` (risk R1) is still the painted plot tile on buildable cells: the morning looks the same. It is the only entry left under `rooms` in the manifest.
+- The see-through block: a block in front of a focus room is drawn at alpha 0.55. The review listed this fade with the painted code, but it is what the block path itself does (a block has no walls to lower), and the headless golden hashes depend on it.
+- Kit images are exempt from the loader's eviction (the whole kit is 25 MB decoded at @2x, 31 MB with both sizes). That, and item 5, is what makes "a room that has shown the kit never goes back to its block" true by construction.
+- Growth: the two-cell Ward needs one prop its one-cell plan does not (`screen`); every other big plan uses the pieces of the small one. Loading by recipe would have dropped a Ward that grows back to a block while that one file loads. A kit room whose plan changes is therefore drawn with the new plan at once and the missing piece is added when it arrives (`KR.recipeHeld`, tested).
+
+Golden master (`tools/graftwork_golden.mjs`, reference recorded from `428b6499` with the same tool, both continuing the payloads of the phase 0 baseline): 33,681 keys identical, 112 differ, all in the `assets` section.
+
+- engine, resume, every headless `ui` scene (the Ward and title scenes included: the procedural path is untouched): identical.
+- `assets` combat_art, combat_art_boss, combat_art_kill, shop_ward: identical.
+- `assets` ward_kit_built and ward_kit_night (4 variants each): the draw-call hashes are identical, cold and warm; only what was asked of the network differs (desktop @2x: 214 files / 5.29 MB to 76 / 1.54 MB and 217 / 5.32 MB to 79 / 1.58 MB; phone @1x: 1.68 MB to 0.48 MB).
+- `assets` ward_kit_morning: the warm pass is identical; the cold pass differs on ONE frame (631 calls): the script opens the Plans list, and the six room illustrations of the draw pile show their glyph on the frame they are first asked for (item 3). Network: 210 files / 5.12 MB to 63 / 1.79 MB.
+- `assets` title_kit: every variant differs, as intended (item 2). With motion: the walk, and three fewer files (the `_b` images of the three monsters). With reduced motion the pixels are the same and the call stream is not: per monster a save and restore, one `getTransform` (the puppet asks for the device scale) and the Ward's own shadow sprite instead of the title's identical copy.
+
+Real Chromium (Playwright, headless, service worker blocked, Graphics High, Effects off, cold cache; "title until idle, then a fresh Ward, seed `bench`, until idle"; bytes are file sizes as served):
+
+| | before | after |
+|---|---|---|
+| title, 1280 x 720: requests / bytes | 176 / 3,568,815 | 173 / 3,506,337 |
+| opening the Ward, 1280 x 720: requests / bytes | 167 / 4,120,230 | 34 / 808,788 |
+| title, 1000 x 462 at DPR 2 | 173 / 3,525,515 | 173 / 3,506,337 |
+| opening the Ward, 1000 x 462 at DPR 2 | 170 / 4,163,530 | 34 / 808,788 |
+| decoded images once the Ward is open (`assets.decodedBytes`, both sizes) | 87.9 MB in 210 images | 26.0 MB in 74 images |
+| Slow 4G, CPU 4x, 1000 x 462 at DPR 2: first room drawn from the kit after opening the Ward (4 runs each) | 21.8 to 22.1 s | 0.7 to 1.2 s |
+| same: every room drawn from the kit | 21.8 to 22.1 s | 5.2 to 5.7 s |
+| same: everything the Ward asked for has arrived | 22.5 s | 5.2 to 5.7 s |
+
+Of the 167 requests the old Ward made: 39 room paintings (2.17 MB, 19 of them `_low`), 21 standing actors, 13 `_b` and 28 walk frames (0.79 MB together) and 55 kit files (1.03 MB) on top of the 34 the title had loaded. The new Ward asks for 20 kit files (0.44 MB), 8 icons, the plot tile and 5 card illustrations (3 of them room paintings, 0.24 MB). Slow 4G is the preset of `tools/graftwork_profile.mjs` (1.6 Mbit/s down, 150 ms). The first room turns at once because the title scene had already loaded the Ward recipe; the floor banner covers the map for the first 2.6 s. The sandbox was shared with other jobs while these ran: the request counts and bytes are exact, the seconds are network bound (4.16 MB against 0.81 MB at 200 KB/s) and repeat within 0.5 s.
+
+Pixels (the method of `tools/graftwork_golden.mjs --browser`: frozen clock, seeded `Math.random`, reduced motion, each state set up twice so the picture does not depend on the network; screenshots in `/tmp/claude-0/shots/onepath/`): title, a fresh Ward with its hand of room plans, a selected room plan with its ghost, a 10 room Ward in the morning and at night, two-cell rooms (Generator 2 x 1, Ward 1 x 2), each at 1280 x 720 and at 1000 x 462 DPR 2. Before against after: 0 pixels differ in all 12. With motion on, read from the real page: the four title monsters and the Ward hero have a puppet pose on every walking frame, no page error.
+
+Sizes:
+
+| | before | after | |
+|---|---|---|---|
+| files under `graftwork/assets` | 526 | 368 | 158 fewer |
+| bytes under `graftwork/assets` | 9,034,506 | 6,434,660 | 2,599,846 fewer (29 percent) |
+| offline copy (`sw-manifest.json`): files / bytes | 663 / 11,594,262 | 505 / 8,991,106 | 2,603,156 bytes fewer (22 percent) |
+| `graftwork/**/*.js` and `.html`: lines | | | 930 removed, 229 added |
+| the six game files touched (`ward_iso`, `assets`, `ward_kit_iso`, `ward`, `title_scene`, `gaits`) | 229,764 bytes | 226,454 bytes | 3,310 fewer |
+
+The 158 files: 38 `_low` room paintings (928,186 bytes), 18 tall paintings no card shows (856,056), 64 walk frames (430,058), 38 `_b` step frames (371,646; six of them, the heroes', were in no manifest). The lab page was 54,545 bytes of source outside the offline copy.
+
+Tests: `tests/graftwork_ward_loading.test.mjs` (new: the exact set a fresh Ward asks for, one request per thing drawn later, no flicker under eviction, a size change, a neighbour loading and a room that grows, the indicator; it fails on `428b6499`), the monsters block of `graftwork_ui_title` (puppet or hop on every walking frame, read from the scene), `graftwork_art_assets` (manifest = disk, the prune pass on a synthetic folder), `graftwork_kit_assets` (the kit checks of the deleted lab test), rewritten parts of `ui_ward`, `ui_ward_kit`, `anim_frames`, `puppet`, `lab_anim`, `hygiene`. Hygiene: 0 orphan assets, 0 missing files, 0 new findings; 35 allowlist entries pruned. `node tests/run_graftwork.mjs`: 74 of 74 suites pass.
+
+### Frozen screens under modals
+
+What it is. The frame loop (`ui/core.js`) runs only the top screen of the stack. Every screen opened with `app.push` is a modal and freezes everything under it: Pause, Settings and its App panel (`app_panel`), the install help and the offline offer (`install_help`, `offline_prompt`), the Codex, the Archive, the Wardrobe and the deck view (view and pick mode). No pushed screen is exempt; pickers that are part of their own screen (event, graft, the combat piles) are not modals and are untouched. Three deep (deck view from Pause over a fight) freezes both lower screens; Esc and back order are unchanged.
+
+Time has an owner (`ui/frame_state.js`, pure):
+- `app.t` is the clock of the top screen. A screen that gets covered keeps the clock it stopped at and gets it back when it is uncovered, so nothing that reads `app.t` (the Thread rail, card zoom, hold timers, ambient sines) jumps.
+- A tween or an `app.after` timer belongs to the screen that was on top when it was made (or that is being painted into the snapshot). It advances only while its owner is on top, or once the owner has left the stack. The modal's own run. A timer that is due but frozen waits.
+- Everything driven by a screen's `update(app, dt)` stops with it: the combat queue and hit-stop, `Fx` instances, the Ward walk, the die, toasts.
+- The transition layer (screen wipe, boss plate, phase strip) belongs to the frozen world: it is not stepped and is painted into the snapshot (`app.belowOverlay`), and goes on when the modal closes. Before, it ran on over the modal because of a `dt || 0.016` fallback.
+- The WebGL post layer holds its effect timers (shockwave, aberration, flash, vignette pulse, grade ease) and does not show them over the modal; bloom, grade and grain keep working (it reads the 2D canvas, which holds snapshot plus modal).
+- Wall clock: the Ward's floor banner is shifted by the frozen time (`thaw(app, ms)`); the fight's heartbeat loop rests in `freeze` and comes back in `thaw` (it would have beaten on alone, forever during a death sequence).
+- Pause no longer stops all time: `app.timeScale`, `app.paused`, `app.rawDt` and Pause's own tween stepping are gone.
+
+Snapshot. The lower stack is painted once (no update, `dt` 0, blocked, no pointer, no keys) and copied into ONE canvas of the backing-store size; every later frame blits it under the modal. It is painted again when the stack changes, the backing store changes (resize, rotation, fullscreen, a tier with another DPR cap), a setting or cosmetic is saved (`flow.saveMeta()` now applies the settings at once and asks for the repaint: text size, high contrast, colourblind mode and palette, reduced motion, flashes, Effects, Graphics, mute, wardrobe and codex cosmetics, erase progress), art finishes loading, the quality tier moves, or a modal calls `app.refreshBelow()`. It is released (backing store given back) when the stack is back to one screen. While a modal is open no image is evicted (the frozen screen draws nothing, so its pictures would look unused and go first). `?perf` shows the snapshot's megabytes.
+
+Registry and input. Frozen rectangles are dropped, not kept inert: the layout registry, the tooltip state, the tap-target list and the fullscreen hot spots hold only what the modal registers, so tips are placed against the modal alone and the layout sweeps check the modal on its own stage. Frozen screens get no input at all; before, three things leaked through `app.blocked`: button shortcuts (E, E on the Pause menu over the Ward ended the morning behind it), the Ward claiming finger drags every frame (the deck view over the Ward could not be scrolled by touch), and the title's fullscreen corner staying live under Settings.
+
+Not frozen: audio and music, saving, the install toast, the offline download and service worker messages, the quality controller (it samples the modal's own frames, with a warm-up at open and close) and the 30 fps idle governor (only the top screen's `calm()` and only running tweens and timers count: Settings over a fight now idles).
+
+The unused half mechanism is gone: `still()`, `FLAGS.skip`, `app.staticFrame`, `app.noSkip`, `app.markDirty`, the busy probes, `post.busy` and `CH.ripplesActive` (no screen ever opted in). `ui/frame_state.js` now holds the frozen-stack bookkeeping instead.
+
+Tick cost, method as in "Performance and bug fixes" above (real Chromium headless, 1000 x 462 at DPR 2, canvas 1643 x 924, Graphics High, Effects off, loop stopped, `app.tick(1/60)` plus a 1 px read back, median of 40 ticks, 24 under 4x CPU throttle, best of 3 runs). Before = `428b6499`. The sandbox ran other jobs during the measurements (load average about 20 on 4 cores), so the milliseconds are inflated and noisy (single runs differ by 20 to 40 percent); read the ratios. The three screens alone were measured again with before and after interleaved.
+
+| ms per tick | 1x before | 1x after | | 4x before | 4x after | |
+|---|---|---|---|---|---|---|
+| title alone | 36.8 | 36.3 | same | 110.6 | 119.8 | same |
+| title + Settings | 38.1 | 6.4 | 6.0x | 178.5 | 34.0 | 5.3x |
+| Ward alone | 27.8 | 25.4 | same | 141.3 | 112.0 | noise |
+| Ward + Settings | 31.4 | 6.2 | 5.1x | 133.8 | 34.7 | 3.9x |
+| Ward + Pause | 32.1 | 5.8 | 5.5x | 131.3 | 25.2 | 5.2x |
+| Ward + deck view | 55.3 | 27.7 | 2.0x | 224.9 | 112.5 | 2.0x |
+| fight alone | 27.3 | 25.0 | same | 129.0 | 133.6 | same |
+| fight + Settings | 36.3 | 6.6 | 5.5x | 158.9 | 37.6 | 4.2x |
+| fight + Pause | 28.8 | 5.1 | 5.6x | 143.6 | 22.9 | 6.3x |
+| fight + deck view | 44.9 | 24.3 | 1.8x | 265.7 | 124.8 | 2.1x |
+| fight + Pause + deck view | 41.0 | 24.8 | 1.7x | 179.7 | 122.3 | 1.5x |
+
+What is left of a modal tick is the modal itself plus one blit: Settings and Pause cost 5 to 7 ms, the deck view 24 to 28 ms (15 cards, the vellum, the school strip: its own drawing, not touched here). Opening a modal costs one extra frame of the lower screen (the snapshot paint and one full-canvas copy); so does every repaint (a setting click, a resize). Memory while a modal is open: one canvas of the backing store, 1643 x 924 x 4 = 6.1 MB on this phone size, 3.7 MB at 1280 x 720, at most 38 MB at the 9.5 megapixel cap; 0 after closing.
+
+Bugs this fixed on the way (each has a test):
+- The deck view opened from Pause never appeared with motion on (Pause stopped all time, so its open animation stayed at 0): only the preview card and the school strip showed over the Pause menu.
+- Settings (Esc on your turn) and the deck view opened straight from a fight let the fight run on behind them: in the test the whole enemy turn played and the hero lost 10 HP behind Settings. Under Pause the fight queue and the Ward walk already stood still (`timeScale` 0), but the wipe, the boss plate, the Ward banner, post effects and the heartbeat did not.
+- A timer could change the screen under an open deck view (graft: 450 ms after the staple the flow routes on).
+- The three input leaks above.
+
+Pixels. Each modal over the title, the Ward and a fight (15 combinations: Settings, Codex, Archive, Wardrobe over the title; Pause, deck view, Settings, Pause then Settings, Pause then deck view over the Ward and over a fight; Codex over a fight), desktop 1280 x 720 and phone 1000 x 462 at DPR 2, same seed, frozen clock, 40 ticks after opening, the old build's lower screens pinned the way the new loop freezes them. Reduced motion: all 30 pictures identical (0 pixels differ). Motion: 22 of 30 identical; the 4 Pause then deck view pictures differ everywhere because the old build did not show the deck view (the bug above); Pause then Settings differs by 1 level on 0.10 to 0.17 percent of the pixels (the focused Pause row no longer pulses under Settings); Settings over a fight differs by 1 level on 138 (desktop) and 280 (phone) pixels (one flicker in the Thread rail, seen through the panel, stands still). With Effects High (WebGL post on, page screenshots): Settings over the title, Pause and Settings over the Ward with reduced motion, and Pause over a fight, Settings over the title and the deck view over the Ward with motion and the film grain off: 0 pixels differ. With the grain on, its pattern under Pause is another one (the grain seed reads `app.t`, which the old Pause stopped), and a post effect that is in flight when a modal opens is not shown over it.
+
+Golden master (`tools/graftwork_golden.mjs`, before = `428b6499`): engine, resume and assets sections identical (0 keys differ). In `ui`, 25 of 35 scenes are identical in every variant (100 of 140 scene variants). The 10 that differ, on purpose: the eight modal scenes `pause`, `settings`, `settings_app`, `install_help`, `deckview`, `codex`, `archive`, `wardrobe` (hash, calls, the three marks, and `rects`: the frozen screen's rectangles are gone; `trail` where the script lists the buttons it sees: only the modal's now); `combat_boss` (its script opens the deck view in the middle of the fight: `inputs` and `end` marks, same final `rects`, `state` and `trail`); `map_act3` (its script ends with Esc, which opens Pause: `end` mark and `rects`; and the warm pass of the two motion variants also in `enter` and `inputs`, because the old Pause stopped `app.t` for the whole app and the map's ambient animation reads it, so the second pass in the same process started one second earlier on that clock). Draw calls of a whole scene fall where a modal is open, for example `archive` desk.motion 2,600,157 to 1,597,991 and `map_act3` 3,005,919 to 2,256,162.
+
+Tests: `tests/graftwork_frozen.test.mjs` (11 blocks; every block was run against the old loop and failed there): the bookkeeping; call counts (no update, one paint, blocked, no keys, no pointer, `dt` 0); tween and timer owners; the snapshot (one canvas, repaint on resize, request and tier, released, no leak over 20 rounds three deep); the real boot (each look-changing setting repaints the frozen title exactly once and is saved, fullscreen, art arriving, cosmetics, the toast runs, the quality controller samples, Settings idles at 30 fps over a busy screen); a wipe and a boss plate caught by Pause; an enemy turn interrupted by Pause, Settings, the deck view and Pause then deck view compared frame by frame with a run without a modal (animation state, engine state and sounds); heartbeat, registry and tooltips; a Ward walk paused twice, the banner, the finger drag and the shortcuts; every run screen under Pause then deck view with repaints and an untouched save payload; the post layer. `graftwork_ui_pause` now asserts the frozen run screen instead of `timeScale`; the dirty-frame cases left `graftwork_perf2`.
+
+Known limits: ambient motion that reads the wall clock directly (the lamp on cards, portrait breathing, icon liquids, the room pulse in `ui/ward_iso.js`) is not on a pausable clock, so it continues at the wall-clock phase after a modal; in Graphics Auto the controller can rise a tier on cheap modal frames and drop again after closing (its own lock then stops it after two tries).
+
 ### Classic retirement
 
 What the player sees is the list under "Classic retirement: what changes for the player". Measured on the branch against main at `428b6499`:

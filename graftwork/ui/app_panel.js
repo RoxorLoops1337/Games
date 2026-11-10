@@ -8,6 +8,7 @@ const X = 330, Y = 96, W = 620, H = 528;
 export const APP_ROWS = { install: { x: X + W - 32 - 190, y: Y + 78, w: 190, h: 44 }, dl: { x: X + W - 32 - 250, y: Y + 214, w: 250, h: 44 }, check: { x: X + 32, y: Y + 312, w: 250, h: 44 }, remove: { x: X + W - 32 - 250, y: Y + 312, w: 250, h: 44 }, restart: { x: X + 32, y: Y + 372, w: 250, h: 44 }, close: { x: X + W / 2 - 80, y: Y + H - 62, w: 160, h: 44 } };
 
 export const appPanel = {
+  calm() { return true; }, // a still panel (a progress bar at most): the frame governor may idle it at 30 fps (ui/quality.js)
   enter() { this.fresh = true; },
   leave() {},
   draw(app) {
@@ -55,6 +56,7 @@ export const appPanel = {
 };
 
 export const offlinePrompt = {
+  calm() { return true; },
   enter() { this.fresh = true; O.clearOffer(); },
   leave() {},
   draw(app) {

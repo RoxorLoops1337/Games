@@ -1,5 +1,6 @@
 // TITLE SCENE: the live backdrop of the title screen (ui/title.js). A small cutaway cluster of five hospital rooms drawn with the modular kit
-// renderer (ui/ward_kit_iso.js, called only), the painted Ward actors idling and wandering in it (grounded with the same contact shadow as the Ward),
+// renderer (ui/ward_kit_iso.js, called only), the painted Ward actors idling and wandering in it (grounded with the same contact shadow as the Ward;
+// the monsters ARE Ward figures: ui/ward_iso.js gait and drawActor, so they walk with the puppet, or the hop when a sprite cannot be read),
 // candle and window light, dust, and a slow camera drift. Three modes, chosen every frame by what is loaded:
 //   'keyart'   graftwork/assets/title/manifest.json has a `keyart` entry whose image decoded: it is the backdrop (parallax, light, motes on top)
 //   'kit'      the kit manifest and its images settled: the live cluster
@@ -11,7 +12,7 @@ import { W, H, COL, clamp } from './core.js';
 import { assets } from './assets.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
-import { contactOf } from './ward_iso.js';
+import { contactOf, gait, drawActor as drawWardActor } from './ward_iso.js';
 import { drawHero } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { lnw } from '../art/linework.js';
@@ -30,7 +31,7 @@ export const CLUSTER = [
 ];
 const LINKS = [['disp', 'morg'], ['morg', 'gen'], ['disp', 'ward'], ['morg', 'corr'], ['ward', 'corr']];
 const NB = {}; for (const [a, b] of LINKS) { (NB[a] = NB[a] || []).push(b); (NB[b] = NB[b] || []).push(a); }
-// kind: hero | npc | monster. `at` is a preferred sub-tile; monsters wander, the hero and the nurse stay on their feet (the hero breathes, the nurse sways)
+// kind: hero | npc | monster. `at` is a preferred sub-tile; monsters wander (and walk like they do on the Ward), the hero and the nurse stay on their feet (the hero breathes, the nurse sways)
 export const CAST = [
   { id: 'marrow', kind: 'hero', room: 'ward', at: [1.5, 2.5], h: 50, face: 1 },
   { id: 'npc_nurse', kind: 'npc', room: 'ward', at: [3.5, 2.5], h: 42, face: -1 },
@@ -129,7 +130,8 @@ export function createScene(opts = {}) {
     S.cast = CAST.filter((a) => rcs[a.room]).map((a, i) => {
       const rc = rcs[a.room]; let cell = null, bd = 1e9;
       if (a.at) for (const f of rc.free) { const d = Math.hypot(f[0] + 0.5 - a.at[0], f[1] + 0.5 - a.at[1]); if (d < bd) { bd = d; cell = f; } }
-      const rec = { ...a, key: 'title:' + a.id, gu: cell ? cell[0] + 0.5 : 2, gv: cell ? cell[1] + 0.5 : 2, x: 0, y: 0, flip: a.face || (i % 2 ? -1 : 1), ph: hash(a.id) * TAU, frame: 0, fstep: 0, mv: false, alpha: 0 };
+      // lvl ... cycle: what the Ward's gait and actor draw keep on a figure (monsters only)
+      const rec = { ...a, key: 'title:' + a.id, gu: cell ? cell[0] + 0.5 : 2, gv: cell ? cell[1] + 0.5 : 2, x: 0, y: 0, flip: a.face || (i % 2 ? -1 : 1), ph: hash(a.id) * TAU, mv: false, alpha: 0, lvl: 0, ring: 0, bob: 0, sq: 1, tilt: 0, stride: 0, cycle: false };
       void byId; return rec;
     });
     return true;
@@ -142,9 +144,13 @@ export function createScene(opts = {}) {
     if (s) { g.save(); g.globalAlpha *= a; g.drawImage(s, x - rx, y - rx * 0.5, rx * 2, rx); g.restore(); }
     else { g.save(); g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); g.restore(); }
   }
+  const WARD_RUN = { hero: 'marrow' }; // the Ward's actor draw takes the run for a hero without art: never the case for a monster
   function drawActor(app, g, a, t, calm) {
-    const spr = assets.ready() ? assets.actor(a.id, app, a.frame === 1) : null;
+    const spr = assets.ready() ? assets.actor(a.id, app) : null;
     if (!spr || a.alpha <= 0.01) return;
+    if (a.kind === 'monster') { // a Ward figure, drawn by the Ward: grounding, the idle, and the walk (the puppet, else the hop); the fade-in is applied from outside
+      const al = a.alpha; g.save(); g.globalAlpha *= al; a.alpha = 1; drawWardActor(app, g, a, WARD_RUN); a.alpha = al; g.restore(); return;
+    }
     const d = spr.def, c = contactOf(spr), s = a.h * (d.scale || 1) / (d.h || 1);
     const fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX), fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY), fw = (c ? c.fw : d.w * 0.45) * s;
     const rx = clamp(fw * 0.8, a.h * 0.24, a.h * 0.62);
@@ -169,7 +175,10 @@ export function createScene(opts = {}) {
       // the floor lamp pool: a flat warm ellipse on the floor, brighter where the room has a lit sconce
       glows.push(T.x, T.y + KR.HH, -1, hash(r.id) * TAU);
       const items = [];
-      for (const a of S.cast) if (a.room === r.id) { const p = sub(T, a.gu, a.gv); a.x = p.x; a.y = p.y; items.push({ y: a.y, rec: a }); }
+      for (const a of S.cast) if (a.room === r.id) {
+        const p = sub(T, a.gu, a.gv); a.x = p.x; a.y = p.y; items.push({ y: a.y, rec: a });
+        if (a.kind === 'monster') gait(a.key, a, a.x, a.y, dt, calm, a.h, S, 0); // the Ward's gait: stride by the distance moved, hop, squash, lean (no dust here)
+      }
       const pg = [];
       KR.drawItems(app, g, rc, T.x, T.y, 0, items, { dark: false, calm, t, glow: pg, actor: (rec) => drawActor(app, g, rec, t, calm) });
       for (let i = 0; i < pg.length; i += 3) glows.push(pg[i], pg[i + 1], pg[i + 2], hash(r.id + 'p' + i) * TAU);
@@ -181,7 +190,6 @@ export function createScene(opts = {}) {
       if (a.kind !== 'monster') continue;
       const rc = S.rcs[a.room], st = KR.monsterAt(a.key, 0, rc, calm, dt, a.speed || 0.5);
       a.gu = st.gu; a.gv = st.gv; a.flip = st.fv; a.mv = st.mv;
-      if (st.mv && !calm) { a.fstep += dt; if (a.fstep > 0.3) { a.fstep = 0; a.frame = a.frame ? 0 : 1; } } else { a.frame = 0; a.fstep = 0; }
     }
   }
 
@@ -268,7 +276,7 @@ export function createScene(opts = {}) {
 
   // ---------- the frame ----------
   S.draw = (app, o = {}) => {
-    const g = app.ctx, dt = Math.min(0.05, app.dt || 0.016), calm = !!o.calm, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    const g = app.ctx, dt = Math.min(0.05, app.dt ?? 0.016), calm = !!o.calm, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     S.frame++; if (!calm) S.t += dt; const t = S.t;
     S.ensure(app);
     // slow device: three frames of dt over 30 ms in a row for 90 frames flips `lite`; it never flips back
