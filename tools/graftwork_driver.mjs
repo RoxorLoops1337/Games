@@ -79,11 +79,6 @@ function fxValue(spec, threat = 6) {
 }
 
 // ---------- combat bot ----------
-function incomingDmg(c) {
-  let t = 0;
-  for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) t += intentOf(c, e).dmg;
-  return t;
-}
 export function cardValue(c, card, ck, st) {
   const sp = ck.spec;
   const m = mult(sp, card.tithed) * (card.brand ? 1.5 : 1);
