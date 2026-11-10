@@ -13,8 +13,6 @@
   header h1 { margin:0; font-size:15px; letter-spacing:.04em; color:var(--brass); white-space:nowrap; font-weight:normal; }
   nav { display:flex; gap:6px; overflow-x:auto; flex:1; scrollbar-width:none; }
   nav::-webkit-scrollbar { display:none; }
-  a.lnk { color:var(--dim); text-decoration:none; border:1px solid var(--line); border-radius:6px; padding:5px 10px; min-height:32px; display:inline-flex; align-items:center; white-space:nowrap; background:var(--panel2); }
-  a.lnk:hover { border-color:var(--brass); color:var(--ink); }
   button, select { font:inherit; color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:5px 10px; min-height:32px; cursor:pointer; white-space:nowrap; }
   button:hover { border-color:var(--brass); }
   button.on { background:#5a4118; border-color:var(--brass); color:#fff3d0; }
@@ -61,7 +59,7 @@
   .th.gone canvas { opacity:.3; }
   .th.wide { width:96px; } .th.wide canvas { width:86px; }
   @media (max-height:560px) {
-    header { padding:3px 8px; } header h1 { font-size:13px; } button, select, a.lnk { min-height:30px; padding:3px 8px; font-size:12px; }
+    header { padding:3px 8px; } header h1 { font-size:13px; } button, select { min-height:30px; padding:3px 8px; font-size:12px; }
     aside#ctl { width:206px; padding:6px 7px 10px; font-size:12px; }
     .rng { grid-template-columns:58px 1fr 36px; }
     #strip { height:92px; padding:4px 6px; } .th canvas { width:54px; height:54px; } .th { width:64px; } .th.wide { width:84px; } .th.wide canvas { width:74px; }
@@ -74,7 +72,6 @@
   <h1>Animation Lab</h1>
   <nav id="scenes"></nav>
   <button id="ctlBtn" title="Show or hide the controls">Controls</button>
-  <a class="lnk" href="rooms.html" title="The modular room kit lab">Kit lab</a>
 </header>
 <div class="body">
   <aside id="ctl"></aside>

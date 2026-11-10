@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as P from '../graftwork/ui/puppet.js';
-import { GAITS, PUPPET_PREF, GAIT_KINDS, wantsPuppet, gaitEntry } from '../graftwork/data/gaits.js';
+import * as GAITMOD from '../graftwork/data/gaits.js';
+const { GAITS, GAIT_KINDS, gaitEntry } = GAITMOD;
 
 const root = new URL('../graftwork/', import.meta.url).pathname;
 let n = 0;
@@ -270,25 +271,26 @@ await t('analysis_ignores_a_third_run_such_as_a_cart_wheel', () => {
   const W = 120, H = 160, a = mask(W, H, (x, y) => (y >= 10 && y < 100 && x >= 50 && x < 90) || (y >= 100 && y < 150 && ((x >= 52 && x < 68) || (x >= 72 && x < 88))) || (y >= 120 && y < 150 && x >= 10 && x < 24));
   const an = P.analyseAlpha(a, W, H); assert.ok(an.legs, an.reason); assert.ok(an.valley > 0.55 && an.valley < 0.68, 'valley between the two LEGS, not the wheel: ' + an.valley);
 });
-await t('the_gait_table_wins_and_the_policy_defaults_to_puppet', () => {
+await t('the_gait_table_wins_and_the_puppet_is_simply_the_walk', () => {
   assert.equal(P.classify('bedpan_slime', null), 'hop'); assert.equal(P.classify('gurney_foot', { ok: true, legs: true }), 'roll'); assert.equal(P.classify('suture_wasp', null), 'flap'); assert.equal(P.classify('leech_jar', null), 'waddle');
   assert.equal(P.classify('the_resident_l2', { ok: true, legs: false, bottomFill: 0.1 }), 'legged', 'Level 2 shares the Level 1 entry');
   assert.equal(P.classify('unknown', null), null);
   for (const [id, e] of Object.entries(GAITS)) { assert.ok(GAIT_KINDS.includes(e.gait), id); if (e.split) assert.ok(e.split.hip > 0.4 && e.split.hip < 0.95 && e.split.valley > 0.2 && e.split.valley < 0.8, 'split of ' + id); }
-  assert.equal(wantsPuppet('marrow'), true); assert.equal(wantsPuppet('anything'), true);
+  assert.equal(GAITMOD.PUPPET_PREF, undefined); assert.equal(GAITMOD.wantsPuppet, undefined, 'no per actor switch: there is no other walk to prefer');
   assert.ok(gaitEntry('the_resident_l2') === GAITS.the_resident);
-  assert.equal(P.prepare({ width: 0, height: 0 }, 'marrow', 1), null, 'no pixels (node): the caller keeps the old walk');
+  assert.equal(P.prepare({ width: 0, height: 0 }, 'marrow', 1), null, 'no pixels (node) and no table entry: the caller draws the hop');
+  assert.equal(P.prepare({ width: 0, height: 0 }, 'bedpan_slime', 1).kind, 'hop', 'a table entry needs no pixels: a body gait works on any sprite');
 });
-await t('actor_table_and_art_meta_agree_and_ids_exist', () => {
+await t('gait_table_ids_exist_and_the_art_meta_carries_no_walk_switches', () => {
   const man = JSON.parse(readFileSync(root + 'assets/ward/manifest.json', 'utf8')), meta = JSON.parse(readFileSync(new URL('../tools/graftwork_art_meta.json', import.meta.url).pathname, 'utf8'));
   for (const id of Object.keys(GAITS)) assert.ok(man.actors[id], 'gait table id ' + id + ' is in the manifest');
-  for (const [id, v] of Object.entries(PUPPET_PREF)) { assert.ok(man.actors[id], id); if (meta[id] && meta[id].puppet !== undefined) assert.equal(meta[id].puppet, v, 'meta puppet flag of ' + id); }
-  for (const [id, m] of Object.entries(meta)) if (m.puppet !== undefined) assert.equal(PUPPET_PREF[id], m.puppet, 'the art meta flag for ' + id + ' must match data/gaits.js PUPPET_PREF');
+  for (const [id, m] of Object.entries(meta)) for (const k of ['puppet', 'walkOk']) assert.equal(m[k], undefined, `tools/graftwork_art_meta.json ${id}.${k}: the painted walks are gone, nothing reads this`);
 });
 await t('lab_and_game_are_wired_to_the_puppet', () => {
   const js = readFileSync(root + 'lab/anim.js', 'utf8'), iso = readFileSync(root + 'ui/ward_iso.js', 'utf8'), ca = readFileSync(root + 'ui/combat_art.js', 'utf8');
-  for (const w of ['Source: Puppet walk', 'Leg split', 'Leg swing', "'Lift'", "'Bob'", "'Sway'", "'Lean'", 'foot slide', 'plantL', "source: Q.get('source') || 'puppet'", 'gaitRows', 'PUP.infoOf']) assert.ok(js.includes(w), 'lab: ' + w);
-  for (const w of ['PUP.walkPuppet(', 'PUP.drawLegged(', 'PUP.prepare(', 'wantsPuppet(', "r.pm"]) assert.ok(iso.includes(w), 'ward_iso: ' + w);
+  for (const w of ['Source: Puppet walk', 'Leg split', 'Leg swing', "'Lift'", "'Bob'", "'Sway'", "'Lean'", 'foot slide', 'plantL', "source: srcOf(Q.get('source'), 'puppet')", 'gaitRows', 'PUP.infoOf']) assert.ok(js.includes(w), 'lab: ' + w);
+  for (const w of ['PUP.walkPuppet(', 'PUP.drawLegged(', 'PUP.prepare(', "r.pm === 'off'"]) assert.ok(iso.includes(w), 'ward_iso: ' + w);
+  for (const gone of ['wantsPuppet', 'walkIndex', 'walkReady', 'frameStemFor', 'r.frame', 'rec.frame']) assert.ok(!iso.includes(gone), 'ward_iso still has the painted walk: ' + gone);
   assert.ok(ca.length > 0);
   for (const [name, s] of [['puppet.js', readFileSync(root + 'ui/puppet.js', 'utf8')], ['gaits.js', readFileSync(root + 'data/gaits.js', 'utf8')], ['anim.js', js]]) assert.ok(!/[—–]/.test(s), 'dash in ' + name);
 });

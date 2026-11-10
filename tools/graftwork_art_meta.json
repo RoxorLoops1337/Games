@@ -1,16 +1,12 @@
 {
  "marrow": {
-  "kind": "hero",
-  "puppet": true
+  "kind": "hero"
  },
  "wick": {
-  "kind": "hero",
-  "puppet": true
+  "kind": "hero"
  },
  "odile": {
-  "kind": "hero",
-  "walkOk": false,
-  "puppet": true
+  "kind": "hero"
  },
  "the_resident": {
   "kind": "elite"
@@ -59,19 +55,9 @@
   "kind": "normal",
   "framesOk": false
  },
- "crutchling": {
-  "puppet": true
- },
- "gauze_mummy": {
-  "puppet": true
- },
- "leech_jar": {
-  "puppet": true
- },
- "night_nurse": {
-  "puppet": true
- },
- "orderly": {
-  "puppet": true
- }
+ "crutchling": {},
+ "gauze_mummy": {},
+ "leech_jar": {},
+ "night_nurse": {},
+ "orderly": {}
 }

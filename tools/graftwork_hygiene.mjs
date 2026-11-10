@@ -431,11 +431,10 @@ export function audit(root = REPO, opts = {}) { // opts.ignore: repo-relative fi
       for (const k of Object.keys(v)) visit(v[k], where + '.' + k);
     };
     visit(data, '');
-    // animation frames: stems without a size tag; every frame has @1x and @2x, the battle frames (atk, hit, die) also @3x when hi3x is set
+    // battle frames (atk, hit, die): stems without a size tag; every frame has @1x and @2x, and @3x when hi3x is set
     for (const [id, a] of Object.entries(data.actors || {})) {
       const f = a && a.frames; if (!f || typeof f !== 'object') continue;
       const list = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => typeof x === 'string');
-      for (const st of list(f.walk)) for (const tag of ['@1x', '@2x']) need(`actors/${st}${tag}.webp`, `.actors.${id}.frames.walk`);
       for (const st of [...list(f.atk), ...list(f.hit), ...list(f.die)]) for (const tag of f.hi3x ? ['@1x', '@2x', '@3x'] : ['@1x', '@2x']) need(`actors/${st}${tag}.webp`, `.actors.${id}.frames`);
     }
   }
