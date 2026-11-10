@@ -492,7 +492,7 @@ await t('grounding: at rest nothing leaves the floor (no vertical offset), only 
     for (const r of ISO.lastActors()) {
       if (r.kind === 'token') continue;
       assert.ok(r.shadow, 'every actor has a shadow'); assert.equal(r.shadow.y, r.y, 'flat on the floor'); assert.equal(r.shadow.x, r.x);
-      if (r.stride !== undefined && r.bob === 0) { idle++; assert.ok(Math.abs(r.sq - 1) <= 0.0201, 'at rest only breathing: sq ' + r.sq); assert.ok(Math.abs(r.tilt) <= 0.0121, 'a small weight shift only: ' + r.tilt); assert.equal(r.frame, 0, 'standing pose'); }
+      if (r.stride !== undefined && r.bob === 0) { idle++; assert.ok(Math.abs(r.sq - 1) <= 0.0201, 'at rest only breathing: sq ' + r.sq); assert.ok(Math.abs(r.tilt) <= 0.0121, 'a small weight shift only: ' + r.tilt); assert.equal(r.cycle, false, 'standing: no walk pose'); }
       else if (r.bob > 0) { hopping++; maxHop = Math.max(maxHop, r.bob); shadows.push([r.bob, r.shadow.a, r.shadow.rx / r.h]); assert.ok(r.bob < 4.5, 'a tiny hop: ' + r.bob); }
     }
   }
@@ -501,19 +501,19 @@ await t('grounding: at rest nothing leaves the floor (no vertical offset), only 
   assert.ok(hi.length && lo.length, 'both hop heights seen'); assert.ok(Math.max(...hi.map((s) => s[1])) < Math.min(...lo.map((s) => s[1])) + 1e-9 || hi[0][1] <= lo[0][1], 'the shadow fades with the hop'); assert.ok(hi.every((s) => s[1] >= 0.46 * 0.7 - 1e-6), 'but only slightly');
   const hero = ISO.lastActors().find((x) => x.kind === 'hero'); assert.equal(hero.bob, 0, 'the hero at rest does not bob'); assert.ok(Math.abs(hero.sq - 1) <= 0.0201);
 });
-await t('grounding: the step cycle follows the DISTANCE moved (stride phase = distance / stride), the walk frames alternate at each plant, a figure lean into its heading, no sliding: still means no stride', async () => {
+await t('grounding: the step cycle follows the DISTANCE moved (stride phase = distance / stride), the hop (the walk of a figure without a puppet) lands on every plant, a figure leans into its heading, no sliding: still means no stride', async () => {
   const { app, run, flow } = await setup({ seed: 'stride', motion: true });
   const [a, b, c] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_corridor', 2, 2]]); run.ward.deck.hand = []; flow.route(); frames(app, 120);
   const S = app.screens.ward.st, H = () => ISO.lastActors().find((x) => x.kind === 'hero');
   const s0 = H().stride; frames(app, 60); assert.equal(H().stride, s0, 'standing: the stride does not advance');
   const rows = []; S.walk = { cells: [a, b, c], i: 0, stop: 2, t: 0, done: () => { run.ward.hero.room = c; }, wait: false };
   let px = H().x, py = H().y;
-  for (let f = 0; f < 40 && S.walk; f++) { frames(app, 1); const h = H(); rows.push({ d: Math.hypot(h.x - px, h.y - py), st: h.stride, fr: h.frame, flip: h.flip, tilt: h.tilt, bob: h.bob, sq: h.sq }); px = h.x; py = h.y; }
+  for (let f = 0; f < 40 && S.walk; f++) { frames(app, 1); const h = H(); rows.push({ d: Math.hypot(h.x - px, h.y - py), st: h.stride, cy: h.cycle, flip: h.flip, tilt: h.tilt, bob: h.bob, sq: h.sq }); px = h.x; py = h.y; }
   const mv = rows.filter((r) => r.d > 0.5); assert.ok(mv.length > 8, 'it walked ' + mv.length + ' frames');
   const k = (44 * 0.5); let prev = rows[0].st, dsum = 0;
   for (let i = 1; i < rows.length; i++) { dsum += rows[i].d; const dst = rows[i].st - prev; prev = rows[i].st; assert.ok(Math.abs(dst - rows[i].d / k) < 0.02, 'stride advanced ' + dst.toFixed(3) + ' for a move of ' + rows[i].d.toFixed(2) + ' px (expected ' + (rows[i].d / k).toFixed(3) + ')'); }
   assert.ok(Math.abs((rows[rows.length - 1].st - rows[0].st) - dsum / k) < 0.05, 'total stride = total distance / stride length');
-  const frs = new Set(mv.map((r) => r.fr)); assert.ok(frs.has(0) && frs.has(1), 'the two walk frames alternate');
+  assert.ok(mv.filter((r) => r.cy).length > 6, 'walking: the walk cycle runs'); assert.ok(new Set(mv.map((r) => Math.floor(r.st))).size >= 2, 'more than one plant'); assert.equal(H().frame, undefined, 'no step frame: nothing is swapped');
   assert.ok(mv.some((r) => r.tilt > 0.03), 'it leans into its heading'); assert.ok(mv.some((r) => r.bob > 0.5), 'a little hop between plants'); assert.ok(mv.every((r) => Math.abs(r.flip) <= 1.0001), 'flip is a smooth scale');
   assert.ok(mv.some((r) => r.sq < 0.99), 'squash on the foot plant'); assert.equal(H().flip > 0, true, 'moving right-down: unflipped (the art faces down-right)');
   // walking back (left-moving): the figure turns, flipped

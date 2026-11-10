@@ -1,15 +1,17 @@
 // GRAFTWORK animation lab: a standalone page to LOOK at the actor animations without playing the game. No build step, plain ES modules.
 // It does not re-implement the game: every pose is drawn by the game's own code.
-//   map poses   ui/ward_iso.js  gait() (distance driven stride, hop, squash, lean) + drawActor() (grounding, contact shadow, walk frame by stride phase)
+//   map poses   ui/ward_iso.js  gait() (distance driven stride, hop, squash, lean) + drawActor() (grounding, contact shadow, the puppet walk of ui/puppet.js)
 //   battle      ui/combat_art.js drawHeroSprite / drawEnemySprite / drawBackdrop (lunge, hit, block, death, auras, statuses) + ui/juice.js timing
 //   rooms       ui/ward_kit_iso.js (the modular kit floor) + data/ward_kit.js recipes
 //   rig         ui/rig.js (the placeholder humanoid and its step cycle)
-//   frames      ui/assets.js (frames, frame, walkIndex, pickAtkFrame, normalizeFrames)
-// URL params: ?scene=viewer|map|battle|rig|compare &actor=marrow &anim=idle|walk|attack|hit|die &source=puppet|auto|frames|swap|procedural
+//   frames      ui/assets.js (frames, frame, pickAtkFrame, normalizeFrames): the battle frames atk, hit, die
+// The map walk has two sources, the game's two paths: `puppet` (what the game draws) and `procedural` (the hop the game falls back to when a sprite cannot be
+// cut into a puppet; in the battle scenes it hides the painted frames).
+// URL params: ?scene=viewer|map|battle|rig|compare &actor=marrow &anim=idle|walk|attack|hit|die &source=puppet|procedural
 //   &t=1.2 (freeze at a time) &frame=2 (jump to a frame) &speed=0.5 &grid=1 &feet=1 &contact=1 &onion=1 &flip=1 &calm=1 &scale=1.5
 //   map: &pace=normal|fast|wander &tod=morning|midday|evening|night   battle: &hero=marrow &enemies=a,b,c &act=1..3 &do=attack|eattack|hit|block|die|heal|status
 //   compare: &actor2=wick &source2=procedural
-import { assets, walkIndex } from '../ui/assets.js';
+import { assets } from '../ui/assets.js';
 import * as CA from '../ui/combat_art.js';
 import * as ISO from '../ui/ward_iso.js';
 import * as KR from '../ui/ward_kit_iso.js';
@@ -17,7 +19,7 @@ import * as RIG from '../ui/rig.js';
 // The figures are seen from the front: the character's own RIGHT side is on the screen's LEFT. Internal ids stay by screen side (L, R); everything shown goes through these.
 const SN = RIG.sideName, SNs = (s) => String(s === undefined || s === null ? '' : s).replace(/[LR]/g, (c) => SN(c));
 import * as PUP from '../ui/puppet.js';
-import { gaitEntry, wantsPuppet } from '../data/gaits.js';
+import { gaitEntry } from '../data/gaits.js';
 import * as J from '../ui/juice.js';
 import * as L from '../ui/combat_layout.js';
 import { Fx } from '../ui/fx.js';
@@ -50,11 +52,12 @@ fetch('../../tools/graftwork_art_meta.json', { cache: 'no-cache' }).then((r) => 
 const SCENES = ['viewer', 'map', 'battle', 'rig', 'compare'];
 const SCENE_LABEL = { viewer: 'Actor viewer', map: 'Map walk', battle: 'Battle', rig: 'Rig lab', compare: 'Compare' };
 const ANIMS = ['idle', 'walk', 'attack', 'hit', 'die'];
+const srcOf = (v, d) => (v === 'procedural' || v === 'hop' ? 'procedural' : v ? 'puppet' : d); // older links (auto, frames, swap) open the puppet walk
 const ST = {
   scene: SCENES.includes(Q.get('scene')) ? Q.get('scene') : (Q.get('scene') === 'actor' ? 'viewer' : 'viewer'),
-  actor: Q.get('actor') || 'marrow', anim: ANIMS.includes(Q.get('anim')) ? Q.get('anim') : 'walk', source: Q.get('source') || 'puppet',
+  actor: Q.get('actor') || 'marrow', anim: ANIMS.includes(Q.get('anim')) ? Q.get('anim') : 'walk', source: srcOf(Q.get('source'), 'puppet'),
   scale: qn('scale', 1), flip: qb('flip', false), grid: qb('grid', false), feet: qb('feet', true), contact: qb('contact', true), onion: qb('onion', false), calm: qb('calm', reducedOS),
-  actor2: Q.get('actor2') || 'wick', source2: Q.get('source2') || 'frames', split: qb('split', true),
+  actor2: Q.get('actor2') || Q.get('actor') || 'marrow', source2: srcOf(Q.get('source2'), 'procedural'), split: qb('split', true),
   map: { actor: Q.get('actor') || 'marrow', pace: Q.get('pace') || 'normal', tod: Q.get('tod') || 'midday', zoom: qn('zoom', 1), trail: true },
   battle: { hero: Q.get('hero') || 'marrow', enemies: (Q.get('enemies') || 'gauze_mummy,bedpan_slime').split(',').filter(Boolean).slice(0, 3), act: clamp(qn('act', 1), 1, 3), status: false, aura: true, frames: true, target: 'enemies' },
   rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true },
@@ -129,7 +132,7 @@ function metaOf(id) {
   const mapKind = hero ? 'hero' : kind === 'npc' ? 'npc' : dk === 'elite' ? 'elite' : 'monster';
   const h = hero ? 44 : kind === 'npc' ? 42 : dk === 'elite' ? (lvl >= 2 ? 46 : 42) : dk === 'boss' ? 52 : 30;
   const raw = d.frames || null, F = assets.frames(id);
-  m = { id, d, kind: dk, hero, def, base, lvl, mapKind, h, raw, F, swap: !!(d.walk1x || d.walk2x), name: nameOf(id), meta: ART_META[id] || {}, tm: hero ? null : safeTiming(def) };
+  m = { id, d, kind: dk, hero, def, base, lvl, mapKind, h, raw, F, name: nameOf(id), meta: ART_META[id] || {}, tm: hero ? null : safeTiming(def) };
   metaCache.set(key, m); return m;
 }
 function safeTiming(def) { try { return J.atkTiming(def); } catch (e) { return null; } }
@@ -137,17 +140,13 @@ function actorGroups(filter) {
   const man = assets.ready() ? assets.manifest.actors : {}, bins = { hero: [], normal: [], elite: [], boss: [], npc: [] };
   for (const id of Object.keys(man)) {
     const m = metaOf(id); if (!m || (filter && !filter(m))) continue;
-    const tags = (m.F ? (m.F.walk.length ? 'W' : '') + (m.F.atk.length ? 'A' : '') + (m.F.hit ? 'H' : '') + (m.F.die ? 'D' : '') : '');
+    const tags = (m.F ? (m.F.atk.length ? 'A' : '') + (m.F.hit ? 'H' : '') + (m.F.die ? 'D' : '') : '');
     (bins[m.kind] || bins.normal).push({ v: id, t: m.name + (id.endsWith('_l2') ? ' L2' : '') + (tags ? '  [' + tags.split('').join(' ') + ']' : '') });
   }
   const lab = { hero: 'Heroes', normal: 'Act 1 monsters', elite: 'Elites', boss: 'Boss', npc: 'NPCs' };
   return Object.keys(bins).filter((k) => bins[k].length).map((k) => ({ label: lab[k], items: bins[k].sort((a, b) => a.t.localeCompare(b.t)) }));
 }
-function warm(m) {
-  assets.actor(m.id, APP); assets.actor(m.id, APP, true);
-  if (m.F) for (const st of m.F.walk) assets.frame(m.id, st, APP);
-  CA.warm(APP, [m.id]);
-}
+function warm(m) { assets.actor(m.id, APP); CA.warm(APP, [m.id]); }
 function withFramesHidden(hide, fn) {
   if (!hide) return fn();
   const f = assets.frames; assets.frames = () => null;
@@ -202,11 +201,11 @@ function keysOf(m, anim) {
   if (anim === 'die') return m.hero ? [{ t: 0.02, stem: m.F && m.F.hit }, { t: 0.54 + E, stem: m.F && m.F.die }, { t: 1.7, stem: m.F && m.F.die }] : [{ t: 0.02, stem: m.F && m.F.hit }, { t: 0.289 + E, stem: m.F && m.F.die }, { t: 0.8, stem: m.F && m.F.die }];
   return [];
 }
-function walkN(m, source) { const s = walkSrc(m, source); return s === 'puppet' ? 4 : s === 'frames' ? m.F.walk.length : s === 'swap' ? 2 : 4; }
+const WALK_N = 4; // the walk is stepped and onion-skinned in quarters of the two-step cycle (contact, passing, contact, passing)
 function stepFrame(m, anim, dir) {
   CLK.playing = false;
   if (anim === 'walk') {
-    const n = walkN(m, ST.scene === 'compare' ? ST.source : ST.source), ph = CLK.t * SPS, k = Math.floor(ph * n / 2), nk = ((k + dir) % (n * 50) + n * 50) % (n * 50);
+    const n = WALK_N, ph = CLK.t * SPS, k = Math.floor(ph * n / 2), nk = ((k + dir) % (n * 50) + n * 50) % (n * 50);
     CLK.t = ((nk + 0.5) * 2 / n) / SPS; return;
   }
   const ks = keysOf(m, anim); if (!ks.length) return;
@@ -215,27 +214,14 @@ function stepFrame(m, anim, dir) {
 }
 
 // ---------------- sources: what the game would draw, and the override ----------------
-function walkSrc(m, source) {
-  if (source === 'puppet' || (source === 'auto' && wantsPuppet(m.id))) return 'puppet';
-  const hasF = !!(m.F && m.F.walk.length >= 2);
-  if ((source === 'auto' || source === 'frames') && hasF) return 'frames';
-  if (source === 'procedural') return 'procedural';
-  return m.swap ? 'swap' : 'procedural';
-}
+const walkSrc = (source) => (source === 'procedural' ? 'procedural' : 'puppet');
 function puppetOf(m) { const a = assets.actor(m.id, APP); return a ? PUP.infoOf(a.img, m.id) : null; }
 function walkLabel(m, source) {
-  const s = walkSrc(m, source);
-  if (s === 'puppet') { const pe = puppetOf(m); return 'PUPPET walk: ' + (pe ? pe.kind + (pe.kind === 'legged' ? ', legs split at the hip, one foot then the other' : ' gait, body only') : 'analysing the sprite') + (source === 'auto' ? ' (the game default)' : ''); }
-  return walkLabel2(m, source, s);
-}
-function walkLabel2(m, source, s) {
-  const note = source === 'frames' && s !== 'frames' ? ' (no walk frames for this actor, game fallback shown)' : '';
-  if (s === 'frames') return `painted walk cycle, ${m.F.walk.length} frames` + (assets.walkReady(m.id, APP) ? '' : ' (decoding, step swap meanwhile)');
-  if (s === 'swap') return 'step swap: standing + _b, 2 frames' + note;
-  return 'procedural walk: standing frame with hop, squash and lean' + note;
+  if (walkSrc(source) === 'puppet') { const pe = puppetOf(m); return 'PUPPET walk (the game): ' + (pe ? pe.kind + (pe.kind === 'legged' ? ', legs split at the hip, one foot then the other' : ' gait, body only') : 'analysing the sprite'); }
+  return 'procedural walk, the hop: standing frame with hop, squash and lean (what the game draws when a sprite cannot be cut into a puppet)';
 }
 function combatLabel(m, anim, source) {
-  if (source === 'procedural' || source === 'swap') return 'procedural only (frames hidden)';
+  if (source === 'procedural') return 'procedural only (frames hidden)';
   const F = m.F, by = (F && F.atkBy) || {};
   if (anim === 'attack') { const n = [1, 2, 3].filter((i) => by[i]).length; return n === 3 ? 'painted atk1, atk2, atk3 on the attack timing' : n >= 1 ? `painted ${[1, 2, 3].filter((i) => by[i]).map((i) => 'atk' + i).join(', ')} + procedural ${by[1] ? '' : 'wind-up'}` : 'procedural lunge only (attack rig, no atk frames)'; }
   if (anim === 'hit') return F && F.hit ? 'painted hit frame during the flinch' : 'procedural flinch (flash and shake)';
@@ -244,7 +230,7 @@ function combatLabel(m, anim, source) {
 }
 
 // ---------------- one actor, one pose (map space or battle space), drawn at the current origin = the feet ----------------
-function newRec() { return { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 1, bob: 0, sq: 1, ph: 0, lvl: 1, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false, pose: '', used: '' }; }
+function newRec() { return { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 1, bob: 0, sq: 1, ph: 0, lvl: 1, alpha: 1, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false }; }
 let SLOT_N = 0;
 const newSlot = () => ({ key: 'lab' + (SLOT_N++), rec: newRec(), nx: 0, g: null, primed: false, hs: {}, ed: null });
 const newPanel = (actor, source) => ({ actor, source, slots: [newSlot(), newSlot(), newSlot()] });
@@ -257,18 +243,14 @@ function runGait(slot, rec, anim, ph, calm, dt) {
     for (let i = 0; i < n; i++) { slot.g.dist = ph * sz * (slot.g.sl || ISO.STRIDE) - 0.5; slot.nx += 0.5; slot.g = ISO.gait(slot.key, rec, slot.nx, 0, 1 / 60, calm, sz, S, 0); }
   } else { slot.primed = false; slot.g = ISO.gait(slot.key, rec, slot.nx, 0, Math.max(0.001, dt), calm, sz, S, 0); }
 }
-function setupRec(rec, m) { rec.kind = m.mapKind; rec.id = m.base; rec.lvl = m.lvl; rec.h = m.h; rec.alpha = 1; rec.ring = 0; rec.ph = 0; rec.pose = ''; }
+function setupRec(rec, m) { rec.kind = m.mapKind; rec.id = m.base; rec.lvl = m.lvl; rec.h = m.h; rec.alpha = 1; rec.ring = 0; rec.ph = 0; }
 function renderMap(gg, slot, m, anim, t, source, o) {
   const rec = slot.rec; setupRec(rec, m); rec.x = 0; rec.y = 0; rec.flip = o.flip ? -1 : 1;
   const ph = anim === 'walk' ? t * SPS : 0;
   runGait(slot, rec, anim, ph, o.calm, o.dt === undefined ? DT : o.dt);
-  const sw = walkSrc(m, source), hide = sw !== 'frames' && anim === 'walk' || source === 'swap' || source === 'procedural';
-  rec.pm = sw === 'puppet' && (anim === 'walk' || anim === 'idle') ? 'on' : 'off';
-  if (anim !== 'walk') rec.frame = 0;
-  if (source === 'procedural' || (anim === 'walk' && sw === 'procedural')) rec.frame = 0;
-  withFramesHidden(hide, () => ISO.drawActor(APP, gg, rec, { hero: m.id }));
-  const key = rec.used ? rec.used : rec.frame === 1 && m.swap && !(source === 'procedural') ? '_b' : '_stand';
-  return { key, space: 'map', ph, rec };
+  rec.pm = walkSrc(source) === 'puppet' ? '' : 'off'; // 'off': the game's actor draw skips the puppet, so the hop under it shows
+  ISO.drawActor(APP, gg, rec, { hero: m.id });
+  return { key: '_stand', space: 'map', ph, rec };
 }
 function stateBattle(slot, m, anim, t, calm) {
   if (m.hero) {
@@ -295,7 +277,7 @@ function stateBattle(slot, m, anim, t, calm) {
   return ed;
 }
 function renderBattle(gg, slot, m, anim, t, source, o) {
-  const st = stateBattle(slot, m, anim, t, o.calm), hide = source === 'procedural' || source === 'swap';
+  const st = stateBattle(slot, m, anim, t, o.calm), hide = source === 'procedural';
   let key = '_stand', loading = false, sp = null, s = 1, px = 0;
   withFramesHidden(hide, () => {
     sp = CA.spriteOf(m.id, APP);
@@ -338,7 +320,7 @@ function drawPanel(P, box, o) {
   g.translate(cx, fy); g.scale(z, z);
   const ro = { flip: ST.flip, calm: o.calm, aura: ST.battle.aura };
   if (o.onion) {
-    const n = anim === 'walk' ? walkN(m, P.source) : 0, step = anim === 'walk' ? (2 / n) / SPS : 0;
+    const n = anim === 'walk' ? WALK_N : 0, step = anim === 'walk' ? (2 / n) / SPS : 0;
     let ts = [null, null];
     if (anim === 'walk') ts = [t - step, t + step];
     else if (!map) { const ks = keysOf(m, anim); let i = 0; for (let j = 0; j < ks.length; j++) if (ks[j].t <= t + 1e-4) i = j; ts = [ks[i - 1] ? ks[i - 1].t : null, ks[i + 1] ? ks[i + 1].t : null]; }
@@ -355,7 +337,6 @@ function drawPanel(P, box, o) {
 }
 function curImg(m, key) {
   if (key === '_stand') { const a = assets.actor(m.id, APP); return a && a.img; }
-  if (key === '_b') { const a = assets.actor(m.id, APP, true); return a && a.img; }
   const f = assets.frame(m.id, key, APP); return f && f.img;
 }
 function overlays(info, cx, fy, z) {
@@ -427,15 +408,9 @@ function stripHighlight(key) { STRIP.els.forEach((e) => e.th.classList.toggle('c
 function stripItemsFor(m, anim, source) {
   const it = (name, key, img, extra) => ({ name, key, img, ...extra });
   const stand = it('standing', '_stand', () => curImg(m, '_stand'));
-  if (anim === 'idle') return [stand];
-  if (anim === 'walk') {
-    const s = walkSrc(m, source);
-    if (s === 'frames') return m.F.walk.map((st, i) => it('walk' + (i + 1), st, () => curImg(m, st), { title: st }));
-    if (s === 'swap') return [stand, it('_b step', '_b', () => curImg(m, '_b'))];
-    return [stand];
-  }
+  if (anim === 'idle' || anim === 'walk') return [stand]; // the walk moves the standing image: the puppet cuts it, the hop bounces it
   const out = [stand];
-  if (source === 'procedural' || source === 'swap') return out;
+  if (source === 'procedural') return out;
   if (anim === 'attack' && m.F) for (const st of m.F.atk) out.push(it(st.replace(m.id + '_', ''), st, () => curImg(m, st), { title: st }));
   if (anim === 'hit' && m.F && m.F.hit) out.push(it('hit', m.F.hit, () => curImg(m, m.F.hit)));
   if (anim === 'die' && m.F) { if (m.F.hit) out.push(it('hit', m.F.hit, () => curImg(m, m.F.hit))); if (m.F.die) out.push(it('die', m.F.die, () => curImg(m, m.F.die))); }
@@ -443,7 +418,7 @@ function stripItemsFor(m, anim, source) {
 }
 function pickItem(m, anim, source, it) {
   CLK.playing = false;
-  if (anim === 'walk') { const n = walkN(m, source), idx = Math.max(0, STRIP.items.indexOf(it)); CLK.t = ((idx + 0.5) * 2 / n) / SPS; return; }
+  if (anim === 'walk') { const idx = Math.max(0, STRIP.items.indexOf(it)); CLK.t = ((idx + 0.5) * 2 / WALK_N) / SPS; return; }
   const ks = keysOf(m, anim), hit = ks.find((k) => k.stem && k.stem === it.key) || ks.find((k) => !k.stem);
   if (hit) CLK.t = hit.t;
 }
@@ -459,8 +434,8 @@ function setRead(rows) {
   for (const r of rows) { const d = mk('div'); if (typeof r === 'string') d.textContent = r; else { const k = mk('span', 'k', r[0] + ' '); const v = mk('span', r[2] || null, r[1]); d.append(k, v); } READ.append(d); }
 }
 function flagRows(m) {
-  const walkOk = m.raw ? m.raw.walkOk !== false : null, metaFO = m.meta.framesOk;
-  return [['flags', `framesOk ${metaFO === false ? 'false (rejected)' : m.raw ? 'true' : 'n/a'}, walkOk ${walkOk === null ? 'n/a' : walkOk}`, metaFO === false || walkOk === false ? 'warn' : null]];
+  const metaFO = m.meta.framesOk;
+  return [['flags', `framesOk ${metaFO === false ? 'false (battle frames rejected)' : m.raw ? 'true' : 'n/a'}`, metaFO === false ? 'warn' : null]];
 }
 function gaitRows(m, info) {
   const a = assets.actor(m.id, APP), pe = a && PUP.infoOf(a.img, m.id), rows = [];
@@ -475,11 +450,11 @@ function gaitRows(m, info) {
 function viewerRead(info, P, anim) {
   const m = info.m, rows = [];
   rows.push(['actor', `${m.name} (${m.id}), ${m.kind}`]);
-  rows.push(['source', anim === 'walk' ? walkLabel(m, P.source) : anim === 'idle' ? 'standing frame, breathing from the gait (idle)' : combatLabel(m, anim, P.source), P.source === 'auto' ? 'good' : 'warn']);
+  rows.push(['source', anim === 'walk' ? walkLabel(m, P.source) : anim === 'idle' ? 'standing frame, breathing from the gait (idle)' : combatLabel(m, anim, P.source), P.source === 'puppet' ? 'good' : 'warn']);
   rows.push(...flagRows(m));
   if (anim === 'walk' || anim === 'idle') rows.push(...gaitRows(m, info));
   const key = info.key, im = info.img, d = m.d;
-  rows.push(['frame', key === '_stand' ? 'standing (' + m.id + ')' : key === '_b' ? m.id + '_b (step swap frame)' : key]);
+  rows.push(['frame', key === '_stand' ? 'standing (' + m.id + ')' : key]);
   if (im && d) {
     rows.push(['image', `${im.naturalWidth || im.width}x${im.naturalHeight || im.height} px, canvas ${d.w}x${d.h}`]);
     const st = assets.actor(m.id, APP), ms = measure(im, d), m0 = st && measure(st.img, d);
@@ -494,10 +469,9 @@ function viewerRead(info, P, anim) {
     }
   } else rows.push(['image', 'not decoded yet', 'warn']);
   if (anim === 'walk' && info.space === 'map') {
-    const n = walkN(m, P.source), ph = info.ph;
-    const pp = info.rec && info.rec.pp;
-    if (walkSrc(m, P.source) === 'puppet') rows.push(['stride', pp ? `${info.rec.stride.toFixed(2)} steps, plant ${pp.plant || '-'} (read from the pose), step length ${(pp.stride * 100).toFixed(0)}% of height` : `${info.rec.stride.toFixed(2)} steps, no puppet pose`]);
-    else rows.push(['stride', `${ph.toFixed(2)} plants, foot ${SN(Math.floor(ph) % 2 === 0 ? 'L' : 'R')} planted, frame ${walkIndex(ph, n) + 1} of ${n}`]);
+    const ph = info.ph, pp = info.rec && info.rec.pp;
+    if (walkSrc(P.source) === 'puppet') rows.push(['stride', pp ? `${info.rec.stride.toFixed(2)} steps, plant ${pp.plant || '-'} (read from the pose), step length ${(pp.stride * 100).toFixed(0)}% of height` : `${info.rec.stride.toFixed(2)} steps, no puppet pose`]);
+    else rows.push(['stride', `${ph.toFixed(2)} plants, foot ${SN(Math.floor(ph) % 2 === 0 ? 'L' : 'R')} planted (the hop has no feet: it lands on every plant)`]);
   } else if (anim !== 'idle') rows.push(['time', `${CLK.t.toFixed(2)} s of ${durOf(m, anim).toFixed(2)} s`]);
   setRead(rows);
 }
@@ -510,7 +484,7 @@ function transport(row, getM) {
   UI.button(row, '▶', () => { const m = getM(); if (m) stepFrame(m, ST.anim, 1); }, null, 'Next frame (.)');
 }
 function animButtons(row) { for (const a of ANIMS) UI.button(row, a[0].toUpperCase() + a.slice(1), () => { ST.anim = a; CLK.t = 0; }, () => ST.anim === a); }
-function sourceSelect(row, get, set) { return UI.select(row, [{ v: 'puppet', t: 'Source: Puppet walk' }, { v: 'auto', t: 'Source: auto (the game)' }, { v: 'frames', t: 'Source: painted frames' }, { v: 'swap', t: 'Source: step swap (_b)' }, { v: 'procedural', t: 'Source: procedural only' }], get, set); }
+function sourceSelect(row, get, set) { return UI.select(row, [{ v: 'puppet', t: 'Source: Puppet walk (the game)' }, { v: 'procedural', t: 'Source: hop, procedural only' }], get, set); }
 function commonControls() {
   const r = UI.group('Playback'); transport(r, () => metaOf(ST.scene === 'viewer' ? ST.actor : ST.actor));
   const r2 = UI.group(); UI.toggle(r2, 'Loop', () => CLK.loop, (v) => { CLK.loop = v; });
@@ -543,7 +517,7 @@ function plantPanel(rec, label) {
   const pads = pl.children, pp = rec && rec.pp, Hw = rec && rec.pHw;
   pads[0].classList.toggle('lit', !!(pp && pp.plantL)); pads[1].classList.toggle('lit', !!(pp && pp.plantR));
   pads[2].style.whiteSpace = 'pre';
-  if (!pp || !Hw) { pads[2].textContent = (label || '') + '\nno puppet pose (painted or idle)'; SLIDE.key = ''; return null; }
+  if (!pp || !Hw) { pads[2].textContent = (label || '') + '\nno puppet pose (the hop, or idle)'; SLIDE.key = ''; return null; }
   // the foot position along the path in world px: distance walked + the foot offset; speed of the planted foot = its change per simulated second
   const dt = Math.max(1e-4, CLK.playing ? DT * CLK.speed : 0), key = rec.gk, dist = rec.dist;
   const fxL = dist + pp.footLx * Hw, fxR = dist + pp.footRx * Hw;
@@ -562,7 +536,7 @@ SC.viewer = {
   build() {
     UI.reset();
     UI.note('Actor viewer', 'One actor, one animation, drawn by the same code paths as the game. Idle and Walk use the map actor draw and gait (stride tied to distance). Attack, Hit and Die use the battle sprite draw and the battle timings.',
-      'Does each frame stand on the same feet line? Does the painted walk read as one foot forward, then the other? Is the scale steady from frame to frame (scale drift near 0)? Does the attack wind up, strike, recover?');
+      'Does each frame stand on the same feet line? Does the walk read as one foot forward, then the other? Is the scale steady from frame to frame (scale drift near 0)? Does the attack wind up, strike, recover?');
     actorSelect(UI.group('Actor'), () => ST.actor, (v) => { ST.actor = v; viewerP.P = null; CLK.t = 0; });
     animButtons(UI.group('Animation'));
     sourceSelect(UI.group(), () => ST.source, (v) => { ST.source = v; });
@@ -573,7 +547,7 @@ SC.viewer = {
     if (m) tickClock(DT, m, ST.anim);
     const info = drawPanel(P, box, { anim: ST.anim, calm: ST.calm, onion: ST.onion });
     if (!info) { setRead([]); return; }
-    stripSet(`${m.id}|${ST.anim}|${walkSrc(m, ST.source)}|${ST.source}`, stripItemsFor(m, ST.anim, ST.source), (it) => pickItem(m, ST.anim, ST.source, it));
+    stripSet(`${m.id}|${ST.anim}|${ST.source}`, stripItemsFor(m, ST.anim, ST.source), (it) => pickItem(m, ST.anim, ST.source, it));
     stripHighlight(info.key);
     if (ST.anim === 'walk' && info.space === 'map') plantPanel(info.slot.rec, 'viewer'); else { $('plant').style.display = 'none'; SLIDE.key = ''; }
     if (performance.now() - readT > 90) { readT = performance.now(); viewerRead(info, P, ST.anim); }
@@ -586,12 +560,11 @@ const cmpP = { A: null, B: null };
 SC.compare = {
   build() {
     UI.reset();
-    UI.note('Compare', 'Two actors, or one actor with two sources, drawn side by side on the same clock. Left defaults to what the game does, right to the procedural look of the same actor.',
-      'Do the painted frames land on the same beat as the procedural hop? Which side reads as walking? Does the painted attack feel longer or shorter than the procedural lunge?');
+    UI.note('Compare', 'Two actors, or one actor with its two walks, drawn side by side on the same clock. Left defaults to the puppet walk the game draws, right to the hop it falls back to for the same actor.',
+      'Do the puppet steps land on the same beat as the hop? Which side reads as walking? Does the painted attack feel longer or shorter than the procedural lunge?');
     const pr = UI.group('Presets');
-    UI.button(pr, 'Frames vs procedural', () => { ST.actor2 = ST.actor; ST.source = 'auto'; ST.source2 = 'procedural'; cmpP.A = cmpP.B = null; });
-    UI.button(pr, 'Frames vs step swap', () => { ST.actor2 = ST.actor; ST.source = 'auto'; ST.source2 = 'swap'; cmpP.A = cmpP.B = null; });
-    UI.button(pr, 'Hero vs hero', () => { ST.actor = 'marrow'; ST.actor2 = 'wick'; ST.source = 'auto'; ST.source2 = 'auto'; cmpP.A = cmpP.B = null; });
+    UI.button(pr, 'Puppet vs hop', () => { ST.actor2 = ST.actor; ST.source = 'puppet'; ST.source2 = 'procedural'; cmpP.A = cmpP.B = null; });
+    UI.button(pr, 'Hero vs hero', () => { ST.actor = 'marrow'; ST.actor2 = 'wick'; ST.source = 'puppet'; ST.source2 = 'puppet'; cmpP.A = cmpP.B = null; });
     animButtons(UI.group('Animation'));
     const a = UI.group('Left'); actorSelect(a, () => ST.actor, (v) => { ST.actor = v; cmpP.A = null; }); sourceSelect(a, () => ST.source, (v) => { ST.source = v; });
     const b = UI.group('Right'); actorSelect(b, () => ST.actor2, (v) => { ST.actor2 = v; cmpP.B = null; }); sourceSelect(b, () => ST.source2, (v) => { ST.source2 = v; });
@@ -653,7 +626,7 @@ const mapLayoutBounds = () => {
 SC.map = {
   build() {
     UI.reset();
-    UI.note('Map walk', 'A small isometric kit floor (ward, corridor, dispensary, joined by doors). The chosen actor walks the room to room route with the Ward\'s own stride logic: stride tied to distance, hop, squash, lean, grounding shadow and the painted walk frames.',
+    UI.note('Map walk', 'A small isometric kit floor (ward, corridor, dispensary, joined by doors). The chosen actor walks the room to room route with the Ward\'s own stride logic: stride tied to distance, the puppet walk (or the hop, squash and lean under it) and the grounding shadow.',
       'Does each foot plant read as one foot forward, then the other? Does the shadow stay flat on the floor? Does the figure slide or float? Does the pace feel right for the room size?');
     actorSelect(UI.group('Actor'), () => ST.map.actor, (v) => { ST.map.actor = v; MP.slot = null; });
     const p = UI.group('Pace (the game\'s PACE)');
@@ -698,7 +671,6 @@ SC.map = {
     slot.fv = slot.fv === undefined ? 1 : slot.fv; const face = slot.face || 1; slot.fv += (face - slot.fv) * (ST.calm ? 1 : Math.min(1, dt * 18)); if (Math.abs(slot.fv - face) < 0.02) slot.fv = face; rec.flip = ST.flip ? -slot.fv : slot.fv;
     GST.t = CLK.abs;
     slot.g = ISO.gait(slot.key, rec, rec.x, rec.y, Math.max(0.0001, dt), ST.calm, rec.h, GST, 0);
-    if (ST.source === 'procedural') rec.frame = 0;
     if (!moving) { /* gait decides rest by speed */ }
     // footprints: one per plant
     const P = MP.plants;
@@ -707,9 +679,8 @@ SC.map = {
       if (s !== P.last) { if (P.last >= 0 && s - P.last !== 1 && s > P.last) P.skips++; P.last = s; P.n++; const foot = s % 2 === 0 ? 'L' : 'R'; P[foot]++; P.lit = foot; P.litT = CLK.abs; MP.prints.push({ x: rec.x + (foot === 'L' ? -2.2 : 2.2), y: rec.y, t: CLK.abs, foot }); if (MP.prints.length > 24) MP.prints.shift(); }
     } else if (!rec.cycle) P.last = Math.floor(rec.stride + 1e-9) - 0;
     if (ST.map.trail) for (const f of MP.prints) { const a = clamp(1 - (CLK.abs - f.t) / 3, 0, 1) * 0.65; if (a <= 0) continue; g.fillStyle = f.foot === 'L' ? `rgba(90,170,255,${a})` : `rgba(255,150,70,${a})`; g.beginPath(); g.ellipse(f.x, f.y, 2.4, 1.2, 0, 0, 7); g.fill(); }
-    const sw = walkSrc(m, ST.source), hide = ST.source === 'swap' || ST.source === 'procedural' || (sw !== 'frames' && ST.source !== 'auto');
-    rec.pm = sw === 'puppet' ? 'on' : 'off';
-    withFramesHidden(hide, () => ISO.drawActor(APP, g, rec, { hero: m.id }));
+    rec.pm = walkSrc(ST.source) === 'puppet' ? '' : 'off';
+    ISO.drawActor(APP, g, rec, { hero: m.id });
     g.restore();
     // time of day: a multiply tint like the Ward's light pass
     const ls = ISO.lightState(ST.map.tod);
@@ -719,13 +690,12 @@ SC.map = {
     else {
       const pl = $('plant'); pl.style.display = 'flex'; if (!pl.firstChild) { pl.append(mk('div', 'pad', SN('L')), mk('div', 'pad', SN('R')), mk('div', 'txt')); }
       const pads = pl.children; pads[0].classList.toggle('lit', P.lit === 'L' && CLK.abs - (P.litT || 0) < 0.18); pads[1].classList.toggle('lit', P.lit === 'R' && CLK.abs - (P.litT || 0) < 0.18);
-      const n4 = sw === 'frames' ? m.F.walk.length : 2;
-      pads[2].textContent = `plants ${P.n}  (L ${P.L} / R ${P.R})\nalternation breaks ${P.skips}\nwalk frame ${rec.cycle ? walkIndex(rec.stride, n4) + 1 : '-'} of ${n4}`; pads[2].style.whiteSpace = 'pre';
+      pads[2].textContent = `plants ${P.n}  (L ${P.L} / R ${P.R})\nalternation breaks ${P.skips}\n${rec.cycle ? 'hopping' : 'standing'}`; pads[2].style.whiteSpace = 'pre';
     }
     if (performance.now() - readT > 90) {
       readT = performance.now();
-      setRead([['actor', `${m.name} (${m.id}), h ${rec.h} world px`], ['walk source', walkLabel(m, ST.source), ST.source === 'auto' ? 'good' : 'warn'], ...flagRows(m),
-        ['pace', `${ST.calm ? 'reduced' : ST.map.pace}, ${mapSpeed().toFixed(0)} world px/s, stride ${(rec.h * ISO.STRIDE).toFixed(0)} px`], ...gaitRows(m, { rec }), ['frame drawn', rec.used || (rec.frame === 1 ? m.id + '_b' : 'standing')],
+      setRead([['actor', `${m.name} (${m.id}), h ${rec.h} world px`], ['walk source', walkLabel(m, ST.source), ST.source === 'puppet' ? 'good' : 'warn'], ...flagRows(m),
+        ['pace', `${ST.calm ? 'reduced' : ST.map.pace}, ${mapSpeed().toFixed(0)} world px/s, stride ${(rec.h * ISO.STRIDE).toFixed(0)} px`], ...gaitRows(m, { rec }),
         ['gait', `stride ${rec.stride.toFixed(2)}  bob ${rec.bob.toFixed(2)}  squash ${rec.sq.toFixed(3)}  lean ${rec.tilt.toFixed(3)}`], ['shadow', rec.shadow ? `rx ${rec.shadow.rx.toFixed(1)} alpha ${rec.shadow.a.toFixed(2)}, flat on the floor` : '-']]);
     }
     STRIP.key = ''; STRIP.el.classList.add('none');
@@ -956,7 +926,7 @@ function initJump() {
   if (!Q.has('frame')) { if (Q.get('do') && curScene === 'battle') for (const a of Q.get('do').split(',')) btAct(a === 'eattack' ? 'eattack' : a); return; }
   const m = metaOf(ST.actor), n = qn('frame', 1) - 1; if (!m) return;
   CLK.playing = false;
-  if (ST.anim === 'walk') { const nn = walkN(m, ST.source); CLK.t = ((n % nn + 0.5) * 2 / nn) / SPS; }
+  if (ST.anim === 'walk') CLK.t = ((n % WALK_N + 0.5) * 2 / WALK_N) / SPS;
   else { const ks = keysOf(m, ST.anim); if (ks.length) CLK.t = ks[clamp(n, 0, ks.length - 1)].t; }
 }
 window.__lab = { SLIDE, PUP, BT, ready: false, ST, CLK, SCENES, frame: 0, err: '', mount: mountScene, act: btAct, metaOf, assets };

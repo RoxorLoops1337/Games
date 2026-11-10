@@ -1,11 +1,12 @@
-// Actor animation frames (design/WARD.md 12c): walk cycle on the Ward map, attack / hit / die frames in battle, and the fallback for every missing piece.
+// Actor animation frames (design/WARD.md 12c): attack / hit / die frames in battle and the fallback for every missing piece; and the Ward map, where
+// walking is never a frame: the puppet (ui/puppet.js) when the sprite can be read, else the hop, both drawn from the ONE standing image.
 // Everything uses fake manifests and fake images (a frame is told apart by the tag of its image); no real art is needed.
 import assert from 'node:assert/strict';
-import { makeApp, frames } from './graftwork_lib.mjs';
+import { makeApp, frames, fakeCtx } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as WD from '../graftwork/engine/ward.js';
 import { ENEMIES } from '../graftwork/data/index.js';
-import { assets, createAssets, normalizeFrames, walkIndex, pickAtkFrame } from '../graftwork/ui/assets.js';
+import { assets, createAssets, normalizeFrames, pickAtkFrame } from '../graftwork/ui/assets.js';
 import * as CA from '../graftwork/ui/combat_art.js';
 const wardMod = await import('../graftwork/ui/ward.js');
 const ward = wardMod.default;
@@ -28,7 +29,7 @@ function install(actors, decoded = 'all') {
     d.file1x = `${id}-s1.webp`; d.file2x = `${id}-s2.webp`; // one standing image per actor
     const std = img('stand:' + id); assets.imgs.set(d.file1x, { img: std, ok: true, bad: false }); assets.imgs.set(d.file2x, { img: std, ok: true, bad: false });
     const F = normalizeFrames(d.frames); if (!F) continue;
-    for (const st of [...F.walk, ...F.atk, F.hit, F.die].filter(Boolean)) {
+    for (const st of [...F.atk, F.hit, F.die].filter(Boolean)) {
       if (decoded !== 'all' && !decoded.includes(st)) continue;
       const im = img(st); for (const s of ['1x', '2x', '3x']) assets.imgs.set(`actors/${st}@${s}.webp`, { img: im, ok: true, bad: false });
     }
@@ -36,18 +37,15 @@ function install(actors, decoded = 'all') {
 }
 // records the tag of each sprite image drawn through a ctx
 function tape(ctx) { const rec = []; const o = ctx.drawImage; ctx.drawImage = function (im, ...a) { if (im && im.tag) rec.push({ tag: im.tag, a }); return o && o.apply(this, a); }; return { rec, stop: () => { ctx.drawImage = o; } }; }
-const HERO_FR = { walk: stems('marrow', ...W4), atk: stems('marrow', 'atk1', 'atk2', 'atk3'), hit: 'marrow_hit', die: 'marrow_die', hi3x: false };
+const HERO_FR = { atk: stems('marrow', 'atk1', 'atk2', 'atk3'), hit: 'marrow_hit', die: 'marrow_die', hi3x: false };
+const OLD_WALK = { walk: stems('marrow', ...W4), walkOk: true }; // what a manifest built before the painted walks were removed still carries: ignored
 
 // ---------------- pure helpers ----------------
-await t('normalizeFrames_keeps_valid_stems_and_maps_atk_by_number', () => {
-  const F = normalizeFrames({ walk: ['a_walk1', 'a_walk2', 7, ''], atk: ['a_atk2'], hit: 'a_hit', die: 5 });
-  assert.deepEqual(F.walk, ['a_walk1', 'a_walk2']); assert.deepEqual(F.atkBy, { 2: 'a_atk2' }); assert.equal(F.hit, 'a_hit'); assert.equal(F.die, null);
+await t('normalizeFrames_keeps_valid_stems_maps_atk_by_number_and_knows_no_walk', () => {
+  const F = normalizeFrames({ walk: ['a_walk1', 'a_walk2', 7, ''], atk: ['a_atk2', 3, ''], hit: 'a_hit', die: 5 });
+  assert.deepEqual(F, { atk: ['a_atk2'], atkBy: { 2: 'a_atk2' }, hit: 'a_hit', die: null, hi3x: false }, 'battle frames only: a walk list is not a frame group');
   assert.equal(normalizeFrames(undefined), null); assert.equal(normalizeFrames({}), null); assert.equal(normalizeFrames({ walk: [], atk: [] }), null); assert.equal(normalizeFrames('x'), null);
-});
-await t('walkIndex_advances_by_half_steps_and_plants_walk1_at_every_even_contact', () => {
-  assert.deepEqual([0, 0.49, 0.5, 0.99, 1, 1.5, 2, 2.5, 3.9, 4].map((p) => walkIndex(p, 4)), [0, 0, 1, 1, 2, 3, 0, 1, 3, 0]);
-  assert.deepEqual([0, 0.9, 1, 1.9, 2].map((p) => walkIndex(p, 2)), [0, 0, 1, 1, 0], 'two frames swap at each plant like the old _b frame');
-  assert.equal(walkIndex(-3, 4), 0); assert.equal(walkIndex(1, 1), 0, 'one frame is not a cycle');
+  assert.equal(normalizeFrames(OLD_WALK), null, 'an actor that only ever had a painted walk has no frames');
 });
 await t('pickAtkFrame_maps_phases_and_degrades_with_missing_frames', () => {
   const all = { 1: 'a1', 2: 'a2', 3: 'a3' }, only2 = { 2: 'a2' };
@@ -55,33 +53,23 @@ await t('pickAtkFrame_maps_phases_and_degrades_with_missing_frames', () => {
   assert.equal(pickAtkFrame(only2, 'tell'), null, 'no anticipation frame: stand'); assert.equal(pickAtkFrame(only2, 'act'), 'a2'); assert.equal(pickAtkFrame(only2, 'rec', 0.1), 'a2', 'strike held at the start of the recovery');
   assert.equal(pickAtkFrame(only2, 'rec', 0.8), null, 'then back to standing'); assert.equal(pickAtkFrame({ 3: 'a3' }, 'act'), 'a3'); assert.equal(pickAtkFrame({}, 'act'), null); assert.equal(pickAtkFrame(undefined, 'act'), null);
 });
-await t('walkOk_false_drops_the_painted_walk_but_keeps_the_combat_frames', () => {
-  const F = normalizeFrames({ walk: stems('odile', ...W4), walkOk: false, hit: 'odile_hit' });
-  assert.deepEqual(F.walk, [], 'the painted cycle is ignored'); assert.equal(F.walkOk, false); assert.equal(F.hit, 'odile_hit');
-  assert.equal(normalizeFrames({ walk: stems('odile', ...W4), walkOk: false }), null, 'a walk-only actor with walkOk false has no usable frames: the procedural walk and the standing figure stay');
-  assert.equal(ISO.frameStemFor(F, { pose: '', cycle: true, stride: 1 }), null, 'moving: no painted frame is chosen');
-  assert.deepEqual(normalizeFrames({ walk: stems('a', ...W4) }).walk.length, 4); assert.equal(normalizeFrames({ walk: stems('a', ...W4) }).walkOk, true, 'walkOk defaults to true');
-});
 await t('assets_frame_answers_decoded_frames_with_the_standing_def_and_null_otherwise', () => {
   install({ marrow: actor('hero', HERO_FR), orderly: actor('normal') });
   const f = assets.frame('marrow', 'marrow_atk2', null);
   assert.equal(f.img.tag, 'marrow_atk2'); assert.equal(f.def, assets.def('actors', 'marrow'), 'a frame is drawn with the standing def (same canvas, same feet)');
   assert.equal(assets.frame('orderly', 'orderly_atk2', null), null, 'an actor without frames'); assert.equal(assets.frame('nobody', 'x', null), null);
-  assert.ok(assets.walkReady('marrow', null)); assert.ok(!assets.walkReady('orderly', null));
-  install({ marrow: actor('hero', HERO_FR) }, ['marrow_walk1', 'marrow_walk2', 'marrow_walk3']);
-  assert.ok(!assets.walkReady('marrow', null), 'one walk frame still decoding: the cycle does not start');
   assets.reset(); assert.equal(assets.frame('marrow', 'marrow_atk2', null), null, 'no manifest');
 });
-await t('assets_loader_requests_frame_files_by_stem_when_they_are_asked_for', async () => {
-  const asked = [], A = createAssets({ fetchJson: async (u) => (u.endsWith('ward/manifest.json') ? { version: 1, tile: { w: 2, h: 1 }, rooms: { r: {} }, actors: { marrow: actor('hero', HERO_FR) }, icons: {}, cards: {} } : Promise.reject(new Error('no kit'))), makeImage: () => { const o = {}; Object.defineProperty(o, 'src', { set: (v) => { asked.push(v); o.onload && o.onload(); } }); return o; } });
+await t('assets_loader_asks_for_a_frame_file_only_when_that_frame_is_asked_for', async () => {
+  const asked = [], A = createAssets({ fetchJson: async (u) => (u.endsWith('ward/manifest.json') ? { version: 1, tile: { w: 2, h: 1 }, rooms: { r: {} }, actors: { marrow: actor('hero', { ...HERO_FR, ...OLD_WALK }) }, icons: {}, cards: {} } : Promise.reject(new Error('no kit'))), makeImage: () => { const o = {}; Object.defineProperty(o, 'src', { set: (v) => { asked.push(v); o.onload && o.onload(); } }); return o; } });
   A.ensure(null); await new Promise((r) => setTimeout(r, 5));
-  assert.deepEqual(asked, [], 'the manifest alone loads no image: nothing is preloaded');
-  A.walkReady('marrow', null); // asking whether the walk cycle is ready is what starts its frames
-  for (const w of W4) assert.ok(asked.some((u) => u.endsWith(`actors/marrow_${w}@2x.webp`)), 'walk frame ' + w + ' asked for by its stem: ' + asked.join(' '));
-  assert.ok(!asked.some((u) => u.includes('atk')), 'combat frames are loaded by the battle, not the map');
+  assert.deepEqual(asked, [], 'the manifest alone loads no image');
+  A.actor('marrow', null); assert.deepEqual(asked, ['assets/ward/a2.webp'], 'the standing figure: one file');
+  A.frame('marrow', 'marrow_atk2', null); assert.deepEqual(asked.slice(1), ['assets/ward/actors/marrow_atk2@2x.webp'], 'a battle frame by its stem, when the battle asks');
+  assert.ok(!asked.some((u) => /walk/.test(u)), 'a walk frame is never asked for');
 });
 
-// ---------------- the Ward map ----------------
+// ---------------- the Ward map: the standing image only, moved by the puppet or by the hop ----------------
 async function mapSetup(actors, o = {}) {
   wardMod.resetWardMem(); install(actors, o.decoded);
   const run = RUN.newRun({ hero: 'marrow', seed: o.seed || 'animw', mode: 'ward' });
@@ -98,68 +86,61 @@ async function mapSetup(actors, o = {}) {
   return { app, run, ids, st: app.screens.ward.st };
 }
 const hero = () => ISO.lastActors().find((x) => x.kind === 'hero');
-// walk the hero across the rooms and collect what was drawn each frame
-function walkTape(ctx, st, ids, nFrames = 150) {
-  const T = tape(ctx); st.walk = { cells: ids, i: 0, a: 0, stop: ids.length - 1, t: 0.05, done: null, wait: false };
-  const used = [], moving = [];
-  for (let i = 0; i < nFrames; i++) { frames(ctx.__app || null, 0); }
-  return { T, used, moving };
-}
+// walk the hero across the rooms: per frame, the hero record and the tagged images drawn
 async function runWalk(S, nFrames = 140) {
-  const { app, ids, st } = S, T = tape(app.ctx), used = [], tags = [];
+  const { app, ids, st } = S, T = tape(app.ctx), rows = [];
   st.walk = { cells: ids, i: 0, a: 0, stop: ids.length - 1, t: 0, done: null, wait: false };
-  for (let i = 0; i < nFrames; i++) { const k = T.rec.length; frames(app, 1); const h = hero(); used.push(h.used); tags.push(T.rec.slice(k).map((r) => r.tag)); }
-  T.stop(); return { used, tags, rec: T.rec };
+  for (let i = 0; i < nFrames; i++) { const k = T.rec.length; frames(app, 1); const h = hero(); rows.push({ cycle: h.cycle, stride: h.stride, bob: h.bob, pp: h.pp ? { ...h.pp } : null, tags: T.rec.slice(k).map((r) => r.tag) }); }
+  T.stop(); return { rows, rec: T.rec };
 }
-await t('map_walk_cycle_plays_the_four_frames_in_order_while_the_hero_moves_and_stands_at_rest', async () => {
-  const S = await mapSetup({ marrow: actor('hero', HERO_FR) }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
-  assert.equal(hero().used, '', 'idle is the standing frame'); const idle = tape(S.app.ctx); frames(S.app, 3); idle.stop();
-  assert.ok(idle.rec.some((r) => r.tag === 'stand:marrow') && !idle.rec.some((r) => r.tag.startsWith('marrow_')), 'at rest only the standing image');
-  const { used } = await runWalk(S); const seq = used.filter(Boolean);
-  assert.ok(seq.length > 20, 'frames were used while walking: ' + seq.length);
-  const order = []; for (const u of seq) if (order[order.length - 1] !== u) order.push(u);
-  assert.ok(order.length >= 5, 'the cycle advances: ' + order.join(','));
-  for (let i = 1; i < order.length; i++) { const a = W4.indexOf(order[i - 1].slice(7)), b = W4.indexOf(order[i].slice(7)); assert.equal(b, (a + 1) % 4, `walk frames advance in order (${order[i - 1]} then ${order[i]})`); }
-  assert.ok(seq.every((u) => W4.includes(u.slice(7))), 'only walk frames, no attack frames on the map');
-});
-await t('map_walk_frames_advance_with_distance_not_time_and_plant_walk1_at_the_contact', async () => {
-  const S = await mapSetup({ marrow: actor('hero', HERO_FR) }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
-  const { st, ids } = S; st.walk = { cells: ids, i: 0, a: 0, stop: ids.length - 1, t: 0, done: null, wait: false };
-  let checked = 0;
-  for (let i = 0; i < 160; i++) { frames(S.app, 1); const h = hero(); if (!h.used) continue; const want = ISO_walkIdx(h.stride); assert.equal(h.used, `marrow_walk${want + 1}`, 'the frame is a function of the stride phase ' + h.stride.toFixed(2)); checked++; if (h.stride - Math.floor(h.stride) < 0.02 && Math.floor(h.stride) % 2 === 0) assert.equal(h.used, 'marrow_walk1', 'contact of the first foot'); }
-  assert.ok(checked > 20);
-});
-function ISO_walkIdx(ph) { return walkIndex(ph, 4); }
-await t('map_all_frames_are_drawn_on_the_same_feet_so_the_figure_never_slides', async () => {
-  const S = await mapSetup({ marrow: actor('hero', HERO_FR) }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
-  const { rec } = await runWalk(S, 100); const sp = rec.filter((r) => r.tag === 'stand:marrow' || r.tag.startsWith('marrow_walk'));
-  assert.ok(sp.some((r) => r.tag.startsWith('marrow_walk')) && sp.some((r) => r.tag === 'stand:marrow'));
-  const rel = (r) => `${(r.a[1] / r.a[3]).toFixed(4)}|${(r.a[2] / r.a[3]).toFixed(4)}`; // offset of the feet in sprite units
-  assert.equal(new Set(sp.map(rel)).size, 1, 'every frame sits on the standing frame feet point: ' + [...new Set(sp.map(rel))]);
-});
-await t('map_falls_back_to_the_old_step_frame_when_frames_are_missing_or_still_decoding', async () => {
-  for (const [label, actors, dec] of [['no frames key', { marrow: actor('hero') }, 'all'], ['frames still decoding', { marrow: actor('hero', HERO_FR) }, ['marrow_walk1', 'marrow_walk2']], ['walk missing', { marrow: actor('hero', { atk: ['marrow_atk2'], hit: 'marrow_hit' }) }, 'all'], ['only two walk frames, one lost', { marrow: actor('hero', { walk: ['marrow_walk1', 'marrow_walk2'] }) }, ['marrow_walk1']]]) {
-    const A = { ...actors }; A.marrow = { ...A.marrow, walk1x: 'b1.webp', walk2x: 'b2.webp' };
-    const S = await mapSetup(A, { decoded: dec }); const b = img('step:marrow'); assets.imgs.set('b1.webp', { img: b, ok: true }); assets.imgs.set('b2.webp', { img: b, ok: true });
-    S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
-    const { used, rec } = await runWalk(S, 100);
-    assert.ok(used.every((u) => !u), label + ': no frame stem used'); assert.ok(!rec.some((r) => r.tag.startsWith('marrow_')), label + ': no frame image drawn');
-    assert.ok(rec.some((r) => r.tag === 'step:marrow') && rec.some((r) => r.tag === 'stand:marrow'), label + ': the old two frame walk is intact');
+// A canvas whose pixels can be read: a mannequin with two legs, so the puppet has something to cut (node has no pixels otherwise)
+function mannequin(w, h) {
+  const d = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const u = (x + 0.5) / w, v = (y + 0.5) / h;
+    if (Math.hypot((u - 0.5) * w / h, v - 0.14) < 0.09 || (v >= 0.22 && v < 0.6 && u >= 0.34 && u < 0.66) || (v >= 0.6 && v < 0.94 && ((u >= 0.36 && u < 0.47) || (u >= 0.53 && u < 0.64)))) d[(y * w + x) * 4 + 3] = 255;
   }
+  return d;
+}
+async function withPixels(fn) {
+  const oc = document.createElement;
+  document.createElement = () => { const c = { width: 0, height: 0, style: {} }, g = fakeCtx(); g.getImageData = (x, y, w, h) => ({ width: w, height: h, data: mannequin(w, h) }); g.createImageData = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) }); c.getContext = () => g; return c; };
+  try { return await fn(); } finally { document.createElement = oc; }
+}
+const OLD_ACTOR = () => ({ ...actor('hero', { ...HERO_FR, ...OLD_WALK }), walk1x: 'b1.webp', walk2x: 'b2.webp' }); // an old cached manifest: step files and a walk list
+
+await t('map_walk_without_a_puppet_is_the_hop_on_the_one_standing_image_and_asks_for_no_file', async () => {
+  const S = await mapSetup({ marrow: OLD_ACTOR() }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
+  const idle = tape(S.app.ctx); frames(S.app, 3); idle.stop();
+  assert.ok(idle.rec.length && idle.rec.every((r) => r.tag === 'stand:marrow'), 'at rest: the standing image');
+  const files0 = [...assets.imgs.keys()].sort(), { rows, rec } = await runWalk(S), mv = rows.filter((r) => r.cycle);
+  assert.ok(mv.length > 20, 'the hero walked: ' + mv.length + ' frames');
+  assert.ok(rec.length > 100 && rec.every((r) => r.tag === 'stand:marrow'), 'walking draws the standing image and nothing else: ' + [...new Set(rec.map((r) => r.tag))]);
+  assert.deepEqual([...assets.imgs.keys()].sort(), files0, 'and asks the loader for no other file (no step frame, no walk frame)');
+  assert.ok(mv.every((r) => r.pp === null), 'node cannot read the sprite: no puppet'); assert.ok(mv.some((r) => r.bob > 0.5), 'so the walk is the hop: the body leaves the floor between plants');
+  assert.ok(new Set(mv.map((r) => Math.floor(r.stride))).size >= 3, 'plant after plant'); assert.equal(hero().frame, undefined); assert.equal(hero().used, undefined);
+  const rel = (r) => `${(r.a[1] / r.a[3]).toFixed(4)}|${(r.a[2] / r.a[3]).toFixed(4)}`; // offset of the feet in sprite units
+  assert.equal(new Set(rec.map(rel)).size, 1, 'the image is always drawn from the same feet point (the hop is a transform): ' + [...new Set(rec.map(rel))]);
+});
+await t('map_walk_is_the_puppet_when_the_sprite_can_be_read: legs cut from the standing image, one foot then the other', async () => {
+  await withPixels(async () => {
+    const S = await mapSetup({ marrow: OLD_ACTOR() }, { seed: 'animp' }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
+    const files0 = [...assets.imgs.keys()].sort(), { rows } = await runWalk(S), mv = rows.filter((r) => r.cycle);
+    assert.ok(mv.length > 20 && mv.every((r) => r.pp), 'every walking frame has a puppet pose');
+    assert.ok(mv.every((r) => !r.tags.includes('stand:marrow')), 'the whole image is not drawn while the puppet walks: its three parts are');
+    assert.ok(mv.every((r) => r.bob === 0), 'a legged puppet does not hop: its feet carry it');
+    const plants = []; for (const r of mv) { const p = r.pp.plantL && !r.pp.plantR ? 'L' : r.pp.plantR && !r.pp.plantL ? 'R' : ''; if (p && plants[plants.length - 1] !== p) plants.push(p); }
+    assert.ok(plants.length >= 4, 'single support alternates: ' + plants.join('')); for (let i = 1; i < plants.length; i++) assert.notEqual(plants[i], plants[i - 1]);
+    assert.deepEqual([...assets.imgs.keys()].sort(), files0, 'the puppet needs no file');
+    frames(S.app, 90); const rest = tape(S.app.ctx); frames(S.app, 2); rest.stop(); assert.ok(rest.rec.some((r) => r.tag === 'stand:marrow') && hero().pp === null, 'at rest the standing image is back');
+  });
 });
 await t('map_reduced_motion_and_a_missing_manifest_keep_the_figure_standing_or_procedural', async () => {
-  const R = await mapSetup({ marrow: actor('hero', HERO_FR) }, { reduced: true }); const { used, rec } = await runWalk(R, 60);
-  assert.ok(used.every((u) => !u) && !rec.some((r) => r.tag.startsWith('marrow_')), 'reduced motion: no cycle');
+  await withPixels(async () => {
+    const R = await mapSetup({ marrow: OLD_ACTOR() }, { reduced: true }); const { rows, rec } = await runWalk(R, 60);
+    assert.ok(rows.every((r) => !r.cycle && !r.pp && r.bob === 0) && rec.every((r) => r.tag === 'stand:marrow'), 'reduced motion: no walk of any kind');
+  });
   assets.reset(); const bare = await mapSetup({}, {}); assets.reset(); frames(bare.app, 20); assert.ok(hero(), 'no art at all: the procedural hero is still drawn');
-});
-await t('map_pose_hit_and_die_use_their_frames_when_a_map_event_sets_them_and_ignore_them_otherwise', async () => {
-  const S = await mapSetup({ marrow: actor('hero', HERO_FR) });
-  const h = hero(); assert.equal(typeof ISO.frameStemFor, 'function');
-  const F = assets.frames('marrow');
-  assert.equal(ISO.frameStemFor(F, { pose: 'hit', cycle: true, stride: 1 }), 'marrow_hit', 'a hit pose beats the walk'); assert.equal(ISO.frameStemFor(F, { pose: 'die', cycle: false, stride: 0 }), 'marrow_die');
-  assert.equal(ISO.frameStemFor(normalizeFrames({ walk: W4.map((w) => 'x_' + w) }), { pose: 'hit', cycle: false, stride: 0 }), null, 'no hit frame: nothing, the caller draws the standing figure');
-  assert.equal(ISO.frameStemFor(null, { pose: 'die' }), null); assert.equal(ISO.frameStemFor(F, { pose: '', cycle: false, stride: 0 }), null);
-  h.pose = 'die'; const T = tape(S.app.ctx); const rr = ISO.lastActors(); void rr; T.stop();
 });
 
 // ---------------- battle ----------------
@@ -180,7 +161,7 @@ await t('hero_hit_flinch_and_death_use_hit_then_die_frames_at_the_end_of_the_col
   const rotsPlain = []; ctx.rotate = (a) => { rotsPlain.push(a); }; drawnHero(spriteWith('marrow', undefined), { dying: 0.9 }); assert.ok(rotsPlain.some((r) => Math.abs(r) > 0.5), 'without a die frame the procedural topple still runs'); ctx.rotate = o;
 });
 await t('hero_missing_frames_fall_back_to_the_standing_figure_for_every_combination', () => {
-  const cases = { 'no frames': undefined, 'only walk': { walk: stems('marrow', ...W4) }, 'only hit': { hit: 'marrow_hit' }, 'only die': { die: 'marrow_die' }, 'only atk2': { atk: ['marrow_atk2'] } };
+  const cases = { 'no frames': undefined, 'only an old walk list': OLD_WALK, 'only hit': { hit: 'marrow_hit' }, 'only die': { die: 'marrow_die' }, 'only atk2': { atk: ['marrow_atk2'] } };
   for (const [label, fr] of Object.entries(cases)) {
     const sp = spriteWith('marrow', fr);
     for (const hs of [{ attack: 0.2 }, { attack: 0.6 }, { attack: 1.4 }, { hit: 1 }, { dying: 0.15 }, { dying: 0.9 }, {}]) {
@@ -192,7 +173,7 @@ await t('hero_missing_frames_fall_back_to_the_standing_figure_for_every_combinat
   const sp = spriteWith('marrow', HERO_FR, 'hero', ['marrow_atk1']); assert.deepEqual(drawnHero(sp, { attack: 0.6 }), ['stand:marrow'], 'listed but not decoded yet: standing');
   assert.deepEqual(drawnHero(sp, { attack: 0.2 }), ['marrow_atk1'], 'the decoded one is used');
 });
-const ENEMY_FR = { atk: ['orderly_atk2'], hit: 'orderly_hit', die: 'orderly_die', walk: stems('orderly', ...W4) };
+const ENEMY_FR = { atk: ['orderly_atk2'], hit: 'orderly_hit', die: 'orderly_die' };
 const edOf = (o = {}) => ({ anim: { sq: 0 }, phase: 0, scale: 1, w: 150, h: 200, atk: { phase: 'idle', k: 0 }, atkT: -1, ...o });
 const drawnEnemy = (sp, ed) => { const T = tape(ctx); CA.drawEnemySprite(ctx, sp, ENEMIES.orderly, ed, 900, 356, 1, { reduced: false }); T.stop(); return T.rec.filter((r) => r.tag.startsWith('orderly') || r.tag.startsWith('stand')).map((r) => r.tag); };
 await t('monster_with_only_atk2_hit_die_uses_what_it_has_and_stands_otherwise', () => {

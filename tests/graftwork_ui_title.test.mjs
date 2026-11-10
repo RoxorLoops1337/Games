@@ -1,6 +1,6 @@
 // Title, end-of-run and settings screens: headless smoke + behaviour.
 import assert from 'node:assert/strict';
-import { makeApp, frames, click, key } from './graftwork_lib.mjs';
+import { makeApp, frames, click, key, fakeCtx } from './graftwork_lib.mjs';
 import fs from 'node:fs';
 import title, { SCENE, LOGO, resetTitleIntro } from '../graftwork/ui/title.js';
 import { TAGLINES, TAGLINE_S, INTRO_S, WORD, taglineAt } from '../graftwork/ui/title_logo.js';
@@ -213,7 +213,7 @@ function installKit() { // the kit manifest and every image "loaded" (stubs), pl
   for (const g of ['floors', 'walls', 'pieces', 'props']) for (const d of Object.values(KIT[g])) for (const f of [d.file1x, d.file2x, d.file]) if (f) assets.imgs.set('kit:' + f, { ok: true, bad: false, img: { width: 512, height: 512 } });
   const def = { file1x: 'a.webp', file2x: 'a.webp', w: 256, h: 256, anchorX: 128, anchorY: 243, kind: 'normal', scale: 1 };
   const actors = {}; for (const a of CAST) actors[a.id] = { ...def, kind: a.kind === 'hero' ? 'hero' : a.kind === 'npc' ? 'npc' : 'normal' };
-  assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: {}, actors, icons: {}, cards: {}, cardsById: {}, title: {} }; assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, bad: false, img: STUB });
+  assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: {}, actors, icons: {}, cards: {}, title: {} }; assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, bad: false, img: STUB });
 }
 const removeKit = () => { assets.reset(); SCENE.reset(); SCENE.keyart = null; SCENE.keyartState = 'idle'; SCENE.lite = false; };
 const settle = (app, n = 6) => frames(app, n);
@@ -268,6 +268,58 @@ const settle = (app, n = 6) => frames(app, n);
   assert.deepEqual(SCENE.cast.map((a) => [a.gu, a.gv]), snap, 'reduced motion: nobody wanders'); assert.equal(SCENE.t, t0, 'reduced motion: the scene clock stands still (no drift, flicker or motes)');
   assert.equal(taglineAt(title.clock, true).i, 0, 'and the tagline does not rotate');
   removeKit();
+}
+
+// ---- the wandering monsters are Ward figures: they walk with the puppet (ui/puppet.js), else with the Ward's hop. Never a glide, never a second image ----
+{
+  // one image per actor (the puppet analysis is cached per image), every walking frame of every monster sampled over half a minute
+  const ownImages = () => { for (const a of CAST) { const d = assets.manifest.actors[a.id]; d.file1x = d.file2x = a.id + '.webp'; assets.imgs.set(a.id + '.webp', { ok: true, bad: false, img: { width: 256, height: 256 } }); } };
+  const watch = (app, secs = 30) => {
+    const mons = SCENE.cast.filter((a) => a.kind === 'monster'), by = Object.fromEntries(mons.map((a) => [a.id, { walk: 0, cycle: 0, puppet: 0, hop: 0, plants: [], strides: new Set(), still: 0, stillFlat: 0 }]));
+    for (let f = 0; f < 60 * secs; f++) {
+      frames(app, 1);
+      for (const a of mons) {
+        const s = by[a.id];
+        if (a.vk > 0.9) { // walking at full pace
+          s.walk++; if (a.cycle) s.cycle++; s.strides.add(Math.floor(a.stride));
+          if (a.pp) { s.puppet++; const p = a.pp.plantL && !a.pp.plantR ? 'L' : a.pp.plantR && !a.pp.plantL ? 'R' : ''; if (p && s.plants[s.plants.length - 1] !== p) s.plants.push(p); } else if (a.bob > 0.3) s.hop++;
+        } else if (a.vk === 0) { s.still++; if (a.bob === 0 && !a.pp) s.stillFlat++; }
+      }
+    }
+    return by;
+  };
+  // 1) node cannot read a sprite: actors with a body gait in the gait table (data/gaits.js) are puppets all the same, the others hop
+  installKit(); ownImages();
+  const { app, meta } = await rig(); clearRun();
+  app.go('title'); settle(app, 12); assert.equal(SCENE.mode, 'kit');
+  const files0 = [...assets.imgs.keys()].sort(), A = watch(app);
+  const walked = Object.entries(A).filter(([, s]) => s.walk > 40);
+  assert.ok(walked.length >= 3, 'the monsters walked: ' + JSON.stringify(Object.fromEntries(Object.entries(A).map(([k, s]) => [k, s.walk]))));
+  for (const [id, s] of walked) {
+    assert.equal(s.cycle, s.walk, id + ': every frame of a walk is a frame of the walk cycle (no glide)'); assert.ok(s.strides.size >= 2, id + ': stride after stride');
+    if (id === 'bedpan_slime' || id === 'crutchling') assert.equal(s.puppet, s.walk, id + ': a body gait from the gait table, puppet on every walking frame');
+    else { assert.equal(s.puppet, 0, id + ': no pixels, no puppet'); assert.ok(s.hop > s.walk * 0.3, id + ': so it hops like a Ward monster without a puppet (' + s.hop + ' of ' + s.walk + ')'); }
+    assert.ok(s.still > 20 && s.stillFlat === s.still, id + ': at rest it stands on the floor, no pose');
+  }
+  assert.deepEqual([...assets.imgs.keys()].sort(), files0, 'walking asked the loader for nothing (no step frame, no walk frame)');
+  for (const a of SCENE.cast) assert.equal(a.frame, undefined, 'no step frame state on ' + a.id);
+  // the hero and the nurse are not Ward figures here: they keep their own idle and never walk
+  for (const a of SCENE.cast.filter((q) => q.kind !== 'monster')) { assert.equal(a.cycle, false); assert.equal(a.bob, 0); assert.equal(a.pp, undefined); }
+  // reduced motion: nobody walks, nobody hops
+  meta.settings.reducedMotion = true; app.go('title'); frames(app, 60); for (const a of SCENE.cast) { assert.equal(a.cycle, false, a.id); assert.equal(a.bob, 0); assert.equal(a.sq, 1); }
+  meta.settings.reducedMotion = false; removeKit();
+  // 2) a sprite that can be read (a mannequin with two legs): the legged monsters get legs, one foot then the other
+  const oc = document.createElement;
+  const mannequin = (w, h) => { const d = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const u = (x + 0.5) / w, v = (y + 0.5) / h; if (Math.hypot((u - 0.5) * w / h, v - 0.14) < 0.09 || (v >= 0.22 && v < 0.6 && u >= 0.34 && u < 0.66) || (v >= 0.6 && v < 0.94 && ((u >= 0.36 && u < 0.47) || (u >= 0.53 && u < 0.64)))) d[(y * w + x) * 4 + 3] = 255; } return d; };
+  document.createElement = () => { const c = { width: 0, height: 0, style: {} }, g = fakeCtx(); g.getImageData = (x, y, w, h) => ({ width: w, height: h, data: mannequin(w, h) }); g.createImageData = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) }); c.getContext = () => g; return c; };
+  try {
+    installKit(); ownImages();
+    const B0 = await rig(); B0.app.go('title'); settle(B0.app, 12); assert.equal(SCENE.mode, 'kit');
+    const B = watch(B0.app), legged = Object.entries(B).filter(([id, s]) => s.walk > 40 && id !== 'bedpan_slime' && id !== 'crutchling');
+    assert.ok(legged.length >= 1, 'a legged monster walked');
+    for (const [id, s] of legged) { assert.equal(s.puppet, s.walk, id + ': the puppet on every walking frame'); assert.ok(s.plants.length >= 3, id + ': single support alternates: ' + s.plants.join('')); for (let i = 1; i < s.plants.length; i++) assert.notEqual(s.plants[i], s.plants[i - 1]); }
+    for (const [id, s] of Object.entries(B)) if (s.walk > 40) assert.equal(s.cycle, s.walk, id);
+  } finally { document.createElement = oc; removeKit(); }
 }
 
 // ---- the key art hook: a `title.keyart` manifest entry becomes the backdrop; without it the live kit scene stays ----

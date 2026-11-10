@@ -112,7 +112,7 @@ await t('a fresh Ward asks for exactly what it draws: hero, monsters present, ic
   const n0 = REQ.length; frames(app, 120); assert.equal(REQ.length, n0, 'waiting asks for nothing more');
   assert.equal(settle(), n0 - 2, 'every image request was a real image'); frames(app, 200); assert.equal(REQ.length, n0, 'a loaded Ward asks for nothing more');
   for (const id of Object.keys(run.ward.rooms)) assert.ok(isKit(id), 'every built room is drawn from the kit: ' + run.ward.rooms[id].type);
-  for (const api of ['preload', 'progress', 'kitPreload', 'kitSettled', 'kitProgress']) assert.equal(assets[api], undefined, 'the loader has no ' + api);
+  for (const api of ['preload', 'progress', 'walkReady', 'kitPreload', 'kitSettled', 'kitProgress']) assert.equal(assets[api], undefined, 'the loader has no ' + api);
 });
 
 await t('a phone stage asks for the same set at @1x', async () => {

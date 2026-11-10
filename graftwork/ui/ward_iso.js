@@ -16,10 +16,9 @@ import { ENEMIES } from '../data/index.js';
 import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { drawHero } from '../art/heroes.js';
 import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
-import { assets, walkIndex } from './assets.js';
+import { assets } from './assets.js';
 import * as PUP from './puppet.js';
 import { deviceScale } from './smoothing.js';
-import { wantsPuppet, gaitEntry } from '../data/gaits.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
@@ -294,7 +293,7 @@ function drawBigBlock(g, w, r, lift, dark, theatre) {
 
 // ---------------- actors ----------------
 const MON_SLOTS = [[-0.26, -0.01], [0.26, -0.03], [-0.09, -0.1], [0.11, -0.11], [0.0, 0.07]];
-function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, frame: 0, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false, pose: '', used: '' }); }
+function poolRec(n) { return V.pool[n] || (V.pool[n] = { kind: '', id: '', x: 0, y: 0, d: 0, h: 0, flip: 0, bob: 0, sq: 1, ph: 0, lvl: 0, alpha: 1, tilt: 0, dark: 0, ring: 0, data: null, kitDrawn: false, room: null, shadow: null, stride: 0, cycle: false }); }
 function enemyCanvas(id, targetH) {
   const key = id + '|' + targetH, hit = V.mon.get(key);
   if (hit !== undefined) return hit;
@@ -322,19 +321,6 @@ function actorIdOf(kind, id, lvl) {
   if (assets.has('actors', own)) return own;
   const pool = assets.kindIds(kind === 'elite' ? 'elite' : 'normal'); if (!pool.length) return null;
   return pool[Math.floor(hash(id) * pool.length)];
-}
-function actorSprite(app, kind, id, run, lvl, alt) {
-  const aid = actorIdOf(kind, id, lvl);
-  return aid ? assets.actor(aid, app, alt) : null;
-}
-// Animation frames (assets.js, WARD.md 12c): the stem to draw instead of the standing / _b image, or null. A pose ('hit' | 'die') set by a map event wins over the walk;
-// the walk cycle runs only while the figure is really moving and only once every walk frame has decoded. Frames share the standing canvas and feet, so they use its contact.
-export function frameStemFor(F, rec, noWalk) {
-  if (!F) return null;
-  if (rec.pose === 'die' && F.die) return F.die;
-  if (rec.pose === 'hit' && F.hit) return F.hit;
-  if (!noWalk && rec.cycle && F.walk.length >= 2) return F.walk[walkIndex(rec.stride, F.walk.length)];
-  return null;
 }
 // ---- grounding: where a sprite really touches the floor, and the soft contact shadow under it ----
 // The manifest anchor is a hand-set point; the real contact is measured once per image from its alpha: the lowest opaque row, and the centre
@@ -383,33 +369,31 @@ function groundShadow(g, x, y, rx, a) {
   else { g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); }
 }
 export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
-// PUPPET WALK (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Wanted unless the owner approved the
-// painted cycle (data/gaits.js PUPPET_PREF false) or the caller forces it off (r.pm = 'off', the animation lab). Returns the prepared info or null.
+// THE WALK is the puppet (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Returns the prepared
+// info, or null when the sprite cannot be read (no pixels: headless) or the caller wants to see the hop under it (r.pm = 'off', the animation lab): then the
+// hop that gait() worked out is the walk.
 function puppetInfo(g, r, aid, spr, s) {
-  const pm = r.pm; if (pm === 'off' || !(pm === 'on' || wantsPuppet(aid))) return null;
+  if (r.pm === 'off') return null;
   const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g), dev = (dsc === dsc ? dsc : 1) * s * d.w / iw;
   const e = PUP.prepare(spr.img, aid, dev, PUP.tuneFor(aid)); return e && e.kind ? e : null;
 }
 const tuneOf = PUP.tuneFor; // per actor tune (data/gaits.js) over the global puppet tune
 function drawActor(app, g, r, run) {
   const sz = r.h, lvl = r.lvl, aid = actorIdOf(r.kind, r.id, lvl);
-  let spr = aid ? assets.actor(aid, app, false) : null, img = null, pe = null, parts = null;
-  r.used = ''; r.pp = r.pp || null;
+  const spr = aid ? assets.actor(aid, app) : null; let pe = null, parts = null;
+  r.pp = r.pp || null;
   let fx = 0, fy = 0, s = 1, fwW = sz * 0.5;
   if (spr) {
     const d = spr.def, c = contactOf(spr); s = sz * (d.scale || 1) / (d.h || 1);
     fx = c ? c.fx : (d.anchorX === undefined ? d.w / 2 : d.anchorX); fy = c ? c.fy : (d.anchorY === undefined ? d.h : d.anchorY); fwW = (c ? c.fw : d.w * 0.45) * s;
     pe = r.kind === 'token' ? null : puppetInfo(g, r, aid, spr, s);
     const gg = r.gk && V.gt.get(r.gk); if (gg) gg.sl = pe ? (pe.kind === 'legged' ? PUP.strideOf(PUP.geomFor(pe, tuneOf(aid)), tuneOf(aid)) : PUP.STRIDE_OF[pe.kind]) * (pe.geom.H * d.h * s) / sz : 0;
-    const F = assets.frames(aid), stem = frameStemFor(F, r, !!pe);
-    if (stem && (r.pose || assets.walkReady(aid, app))) { const fr = assets.frame(aid, stem, app); if (fr) { img = fr.img; r.used = stem; } }
-    if (!img && r.frame === 1 && !pe) { const alt = assets.actor(aid, app, true); if (alt) { spr = alt; } }
   }
-  // the puppet pose of this frame (only while really walking; at rest and in poses the standing / painted image is drawn as before)
+  // the puppet pose of this frame (only while really walking; at rest the standing image is drawn)
   let pose = null, Hw = 0;
-  if (pe && r.cycle && !r.pose && !img) {
+  if (pe && r.cycle) {
     pose = r.pp || (r.pp = PUP.newPose()); Hw = pe.geom.H * spr.def.h * s;
-    PUP.walkPuppet(r.pph === undefined ? r.stride : r.pph, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, PUP.geomFor(pe, tuneOf(aid)));
+    PUP.walkPuppet(r.stride, r.vk === undefined ? 1 : r.vk, pe.kind, tuneOf(aid), pose, PUP.geomFor(pe, tuneOf(aid)));
     if (pe.kind === 'legged') { parts = PUP.partsOf(pe, 0, tuneOf(aid)); if (!parts) { const d = spr.def, iw = spr.img.naturalWidth || spr.img.width || d.w, dsc = deviceScale(g); parts = PUP.partsOf(pe, (dsc === dsc ? dsc : 1) * s * d.w / iw, tuneOf(aid)); } if (!parts) pose = null; }
     if (pose) { if (pe.kind === 'legged') { r.bob = 0; r.tilt = 0; r.sq = pose.sq; } else { r.bob = pose.hop * Hw; r.sq = pose.sq; r.tilt = pose.lean + pose.rock; } }
   } else r.pp = null;
@@ -431,8 +415,8 @@ function drawActor(app, g, r, run) {
   if (spr) {
     const d = spr.def;
     if (pose && parts) PUP.drawLegged(g, parts, pose, s, fx, fy, d.w, d.h, pe.geom.H * d.h);
-    else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
-    else g.drawImage(img || spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
+    else if (pose) { g.translate(pose.sway * Hw, pose.down * Hw); g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s); }
+    else g.drawImage(spr.img, -fx * s, -fy * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
     if (o) g.drawImage(o.c, -o.fx, -o.fy, o.w, o.h);
@@ -450,17 +434,18 @@ function drawActor(app, g, r, run) {
 }
 
 // ---- gait: one place turns movement into the body language, for monsters, elites and the hero ----
-// The step cycle follows the DISTANCE moved (not time): every stride = 0.5 x the figure height, the two walk frames swap at each plant, the body
-// hops a little between plants (the shadow stays flat), squashes when a foot lands and leans into the heading; at rest nothing leaves the
-// ground: a slow breathing scale about the feet and a small weight shift. With reduced motion the figure just stands.
+// The step cycle follows the DISTANCE moved (not time): every stride = 0.5 x the figure height (the puppet's own stride when it has one, g.sl).
+// This is also THE HOP, the walk of a figure without a puppet: the body hops a little between plants (the shadow stays flat), squashes when a
+// foot lands and leans into the heading; at rest nothing leaves the ground: a slow breathing scale about the feet and a small weight shift.
+// With reduced motion the figure just stands.
 const HOP = 2.2, STRIDE = 0.5;
-export { gait, drawActor, groundShadow, HOP, STRIDE }; // additive: lab/anim.html drives the real gait and the real actor draw
+export { gait, drawActor, groundShadow, HOP, STRIDE }; // the title scene's monsters and lab/anim.html use the real gait and the real actor draw
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
   const d = Math.hypot(nx - g.px, ny - g.py); g.px = nx; g.py = ny;
   rec.gk = key; rec.dist = g.dist;
-  if (calm) { g.vk = 0; rec.vk = 0; rec.frame = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
+  if (calm) { g.vk = 0; rec.vk = 0; rec.bob = 0; rec.sq = 1; rec.tilt = 0; rec.stride = 0; rec.cycle = false; return g; }
   if (d < 40) g.dist += d; // a jump (a rebuilt room, a new walk) is not a stride
   const sp = dt > 0 ? d / dt : 0, target = sp > 2.5 ? 1 : 0;
   g.vk += (target - g.vk) * Math.min(1, dt * (target ? 9 : 12)); if (g.vk < 0.01) g.vk = 0;
@@ -471,8 +456,7 @@ function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   }
   const since = S.t - g.plantT, plant = since >= 0 ? Math.exp(-since * 13) * w : 0; // a plant stamped ahead of the clock (an earlier visit) is over
   rec.stride = ph; // tests: the stride phase follows the distance moved
-  rec.frame = w > 0.25 ? (step & 1) : 0;
-  rec.cycle = w > 0.25; // the animation frames (walk cycle) run on rec.stride while this is true
+  rec.cycle = w > 0.25; // walking: the puppet pose runs on rec.stride while this is true
   rec.bob = Math.sin(Math.PI * frac) * HOP * (sz / 36 + 0.4) * w; // hop height in world px, 0 at rest
   const breathe = 1 + 0.02 * Math.sin(S.t * 2.2 + g.ph), shift = 0.012 * Math.sin(S.t * 0.9 + g.ph);
   rec.sq = (1 - w) * breathe + w * (1 - 0.07 * plant + 0.025 * Math.sin(Math.PI * frac));
@@ -629,7 +613,7 @@ export function drawRooms(host, inter) {
         if (rc) items.push({ y: rec.y, rec });
       } else { // event / shop / forge / rest: a floating token over the floor
         const rec = poolRec(n++); V.list.push(rec);
-        rec.kind = 'token'; rec.id = k0; rec.x = cc.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = cc.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
+        rec.kind = 'token'; rec.id = k0; rec.x = cc.x + (k0 === 'event' ? 0 : TW * 0.2); rec.y = cc.y - TH * 0.02; rec.h = 22; rec.ph = hash(id) * TAU; rec.bob = calm ? 0 : Math.sin(S.t * 2 + rec.ph) * 2.5; rec.alpha = 1; rec.flip = 1; rec.sq = 1; rec.lvl = 0; rec.tilt = 0; rec.ring = 0; rec.data = r.contents.length; rec.kitDrawn = false; rec.room = null;
       }
       V.cnt[id] = r.contents.length;
     };
@@ -738,7 +722,6 @@ function heroRec(host, n, rcOf, dt) {
 }
 // a hero on the move is drawn in the final pass (over every wall): a room in front walls him off in its doorway otherwise; at rest he is sorted with the props
 const heroAtEdge = (w, rec, id) => !!rec.moving;
-const hxy = (w, rid) => { const r = w.rooms[rid]; return r ? [r.x, r.y] : [0, 0]; };
 
 // ---------------- lighting over the whole map ----------------
 const motes = V.motes;

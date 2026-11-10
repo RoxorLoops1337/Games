@@ -363,9 +363,7 @@
   "graftwork/ui/reward.js:wrapLimitK",
   "graftwork/ui/seam_ui.js:SCHOOL_NAME",
   "graftwork/ui/shop.js:clampN",
-  "graftwork/ui/ward.js:PH_TINT",
-  "graftwork/ui/ward_iso.js:actorSprite",
-  "graftwork/ui/ward_iso.js:hxy"
+  "graftwork/ui/ward.js:PH_TINT"
  ],
  "duplicateHelpers": [
   "BUILDS_PER_FRAME@graftwork/art/face_lod.js",

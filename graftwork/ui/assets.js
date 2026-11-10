@@ -1,12 +1,13 @@
 // Image assets for the Ward (design/WARD.md "Isometric view and art pipeline"): a lazy loader and cache for assets/ward/manifest.json.
 // NOTHING is loaded ahead: an image is asked for by the code that is about to draw it, and that request starts its download.
 //
-//   manifest: { version, tile:{w,h}, rooms:{id:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}},
-//               actors:{id:{file1x,file2x,w,h,anchorX,anchorY,kind,scale,walk1x,walk2x}}, icons:{id:{file1x,file2x,w,h}}, cards:{artId:{...}}, cardsById:{b_x:{room}} }
-//   Optional animation frames (design/WARD.md 12c): actors[id].frames = { walk:[stem...], atk:[stem...], hit:stem, die:stem, hi3x?:bool }. A stem is the file name
-//   without size tag, e.g. 'marrow_walk1' -> actors/marrow_walk1@1x|@2x.webp (and @3x for combat frames when hi3x). Every frame shares the standing frame's canvas, w x h and
+//   manifest: { version, tile:{w,h}, rooms:{plot_empty:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}},
+//               actors:{id:{file1x,file2x,w,h,anchorX,anchorY,kind,scale}}, icons:{id:{file1x,file2x,w,h}}, cards:{artId:{file1x,file2x,w,h,fromRoom?}} }
+//   Rooms are drawn from the kit (below); the one painting drawn on the map is the plot tile. Room paintings live on as card illustrations (cards[art].fromRoom).
+//   Optional battle frames (design/WARD.md 12c): actors[id].frames = { atk:[stem...], hit:stem, die:stem, hi3x?:bool }. A stem is the file name
+//   without size tag, e.g. 'orderly_atk2' -> actors/orderly_atk2@1x|@2x.webp (and @3x when hi3x). Every frame shares the standing frame's canvas, w x h and
 //   feet anchor, so it is drawn with the STANDING def. assets.frames(id) normalises the entry, assets.frame(id, stem, app) answers { img, def } or null.
-//   Actor ids are hero ids (marrow), enemy ids (bedpan_slime, the_resident, the_resident_l2) and npc_*; walk1x / walk2x is the second step frame.
+//   Actor ids are hero ids (marrow), enemy ids (bedpan_slime, the_resident, the_resident_l2) and npc_*. Walking is the puppet (ui/puppet.js): it needs no file.
 //   All numbers are in sprite pixels (w x h is the frame both files are drawn into, so @1x and @2x are interchangeable).
 //
 //   assets.ensure(app)          starts the manifest load once (no-op in node / headless, or when fetch or Image is missing)
@@ -18,20 +19,17 @@
 const BASE_DEFAULT = 'assets/ward/';
 const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
 
-// ---- animation frames: pure helpers (no DOM), shared by the map and the battle ----
+// ---- battle frames: pure helpers (no DOM) ----
 const stemList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 const stemOf = (v) => (typeof v === 'string' && v ? v : null);
-// a manifest `frames` entry (`walkOk: false` = the painted walk cycle does not read as steps: the walk list is ignored and the procedural walk stays) -> { walk:[stems], atk:[stems], atkBy:{1,2,3}, hit, die, hi3x } or null when it holds nothing usable
+// a manifest `frames` entry -> { atk:[stems], atkBy:{1,2,3}, hit, die, hi3x } or null when it holds nothing usable
 export function normalizeFrames(f) {
   if (!f || typeof f !== 'object') return null;
-  const walkOk = f.walkOk !== false, walk = walkOk ? stemList(f.walk) : [], atk = stemList(f.atk), hit = stemOf(f.hit), die = stemOf(f.die), atkBy = {};
+  const atk = stemList(f.atk), hit = stemOf(f.hit), die = stemOf(f.die), atkBy = {};
   for (const st of atk) { const m = /atk([123])$/.exec(st); if (m) atkBy[m[1]] = st; }
-  if (!walk.length && !atk.length && !hit && !die) return null;
-  return { walk, walkOk, atk, atkBy, hit, die, hi3x: !!f.hi3x };
+  if (!atk.length && !hit && !die) return null;
+  return { atk, atkBy, hit, die, hi3x: !!f.hi3x };
 }
-// walk frame for a stride phase ph (counted in steps, a plant at every integer): with n frames the cycle is two steps, a frame per half step, frame 0 at contact.
-// n = 4: walk1 (contact), walk2 (passing), walk3 (contact, other foot), walk4 (passing). n = 2 behaves like the old step swap.
-export function walkIndex(ph, n) { if (!(n >= 2)) return 0; const i = Math.floor(Math.max(0, ph) * n / 2); return i % n; }
 // attack frame for a phase: tell (anticipation, atk1), act and hold (strike, atk2), rec (recovery, atk3; k 0..1 through the recovery). null = no frame, draw the standing pose.
 // Missing frames degrade: a strike falls back to atk3 then atk1; a recovery without atk3 holds the strike for its first third.
 export function pickAtkFrame(by, phase, k = 0) {
@@ -112,11 +110,10 @@ export function createAssets(opts = {}) {
     try { begin(e, A.base + file); } catch (err) { e.bad = true; A.failed++; }
     return e;
   }
-  function get(group, id, app, alt) {
+  function get(group, id, app) {
     if (!A.ready()) return null;
     const d = defOf(group, id); if (!d) return null;
-    const f1 = alt ? (d.walk1x || d.file1x) : d.file1x, fx = alt ? (d.walk2x || d.file2x) : d.file2x;
-    const want = A.use2x(app) ? [fx, f1] : [f1, fx];
+    const want = A.use2x(app) ? [d.file2x, d.file1x] : [d.file1x, d.file2x];
     for (const f of want) {
       if (!f) continue;
       const e = load(f);
@@ -186,9 +183,7 @@ export function createAssets(opts = {}) {
     for (const f of want) { const e = load(f); if (e.ok) { e.used = A.clock; return { img: e.img, def: d, stem }; } if (!e.bad) return null; }
     return null;
   };
-  // true once every walk frame of an actor has decoded (a cycle never starts half loaded)
-  A.walkReady = (id, app) => { const F = A.frames(id); if (!F || F.walk.length < 2) return false; let ok = true; for (const st of F.walk) if (!A.frame(id, st, app)) ok = false; return ok; };
-  A.actor = (id, app, alt) => get('actors', id, app, alt); // alt: the second walk frame (falls back to the first)
+  A.actor = (id, app) => get('actors', id, app);
   A.icon = (id, app) => get('icons', id, app);
   A.card = (id, app) => get('cards', id, app);
   // the first of several candidate ids that the manifest knows (actor id guessing: 'hero_marrow' then 'hero')
