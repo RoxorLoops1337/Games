@@ -550,6 +550,28 @@ export function deserializeRun(json) {
   rng.state = o.rngState;
   const run = { ...o, rng };
   delete run.rngState;
+  return repairRun(run);
+}
+// A save may name content that no longer exists (a removed card, graft, relic or potion). Drop those entries so the run keeps
+// loading. A save without such ids is returned untouched (same bytes when saved again).
+const keepKnown = (list, known) => (Array.isArray(list) && list.some((x) => !known(x)) ? list.filter(known) : list);
+export function repairRun(run) {
+  if (!Array.isArray(run.deck)) return run;
+  run.deck = keepKnown(run.deck, (i) => !!(i && CARDS[i.id]));
+  for (const i of run.deck) for (const k of ['grafts', 'fused', 'waived']) if (i[k]) i[k] = keepKnown(i[k], (g) => !!GRAFTS[g]);
+  run.relics = keepKnown(run.relics, (r) => !!RELICS[r]);
+  run.potions = keepKnown(run.potions, (p) => !!POTIONS[p]);
+  const p = run.pending;
+  if (p && p.kind === 'shop') {
+    for (const [k, reg] of [['cards', CARDS], ['grafts', GRAFTS], ['relics', RELICS], ['potions', POTIONS]]) p[k] = keepKnown(p[k], (it) => !!(it && reg[it.id]));
+  } else if (p && p.kind === 'graft' && p.offer) {
+    const cards = keepKnown(p.offer.cards, (u) => run.deck.some((i) => i.uid === u)), grafts = keepKnown(p.offer.grafts, (g) => !!GRAFTS[g]);
+    if (cards !== p.offer.cards || grafts !== p.offer.grafts) p.offer = makeGraftOffer(run, { rerolled: p.offer.rerolled || 0 }); // deal a fresh offer from what is left
+  } else if (p && p.gold !== undefined && 'graft' in p) { // a reward screen
+    if (p.relic && !RELICS[p.relic]) p.relic = null;
+    if (p.potion && !POTIONS[p.potion]) p.potion = null;
+    if (p.relicChoices) p.relicChoices = keepKnown(p.relicChoices, (r) => !!RELICS[r]);
+  }
   return run;
 }
 export { strainInfo, budgetOf };
