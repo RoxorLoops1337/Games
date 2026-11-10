@@ -136,14 +136,14 @@ const V = {
   ground: null, groundKey: '', dark: new WeakMap(), glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
   gt: new Map(), kw: [], rcm: new Map(), items: [], pg: [], gp: [], kitOK: false, kitInfo: null, fvHero: 1, rcOf: null,
-  lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
+  plan: null, planKey: '', lamp: { k: 0 }, order: [], rl: [], tk: Object.create(null), act: new Map(), cnt: Object.create(null), born: Object.create(null), keep: Object.create(null), lowK: Object.create(null), paint: Object.create(null), fadeA: Object.create(null), hf: 0, moteT: 0, rum: 0,
 };
 // The screen clock (S.t) restarts at 0 every time the Ward is entered, so no value of it may outlive a visit: a monster that checked in at t = 95 s
 // was drawn with alpha 0 for the first 95 s after the next fight. ui/ward.js calls this from enter (like its own MEM.stamps reset).
 export function newVisit() { V.born = Object.create(null); for (const g of V.gt.values()) g.plantT = -9; }
 // 0..1 fade-in of a monster that checked in while the Ward was on screen. A stamp ahead of the clock counts as finished (like buildAge in ui/ward.js).
 export function bornAlpha(stamp, t) { return stamp === undefined || !(stamp <= t) ? 1 : clamp((t - stamp) / 0.35, 0, 1); }
-export function resetIso() { V.born = Object.create(null); V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
+export function resetIso() { V.born = Object.create(null); V.plan = null; V.planKey = ''; V.gt.clear(); V.kitOK = false; V.kitInfo = null; V.fvHero = 1; KR.resetKit(); V.ground = null; V.groundKey = ''; V.mon.clear(); V.hero.clear(); V.lift = Object.create(null); V.lowK = Object.create(null); V.paint = Object.create(null); V.landed = Object.create(null); V.lastT = 0; V.motesInit = false; V.faceHero = 1; V.heroPrev = null; }
 function glowSprite() {
   if (V.glow || V.glowTried) return V.glow;
   V.glowTried = true;
@@ -559,6 +559,15 @@ export const setWallMode = (m) => { KR.KITS.mode = m; };
 export const cycleWallMode = () => KR.cycleWallMode();
 export const wallMode = () => KR.KITS.mode;
 
+// The wall plan (doors, shared walls, open edges) changes only when a room is built, grown or removed, so it is kept on a key of the footprints and the
+// grid it is computed from. It used to be rebuilt every frame: per room a Set, six arrays and the engine's neighbour scan. Nobody writes into a plan.
+function planFor(run, w, roomList) {
+  let k = '';
+  for (const r of roomList) k += r.id + ':' + r.x + ',' + r.y + ',' + (r.w || 1) + ',' + (r.h || 1) + ';';
+  for (const row of w.grid) { for (const c of row) k += c ? c + ',' : ','; k += '/'; }
+  if (V.planKey !== k || !V.plan) { V.plan = wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)); V.planKey = k; }
+  return V.plan;
+}
 export const lastActors = () => V.list; // tests: what stood where in the last frame
 export function drawRooms(host, inter) {
   const { app, run, S, MEM } = host, g = app.ctx, w = run.ward, calm = host.reduced, dt = clamp(S.t - V.lastT, 0, 0.1); V.lastT = S.t;
@@ -581,7 +590,7 @@ export function drawRooms(host, inter) {
   const rcOf = (r) => { if (!kitOn) return null; const o = typeof r === 'string' ? { type: r } : r, big = (o.w || 1) * (o.h || 1) > 1, k = o.type + (big ? '@' + (o.w || 1) + 'x' + (o.h || 1) : ''); let v = V.rcm.get(k); if (v === undefined) { v = KR.recipeFor(o.type, app, o.w || 1, o.h || 1); V.rcm.set(k, v); } return v; };
   V.rcOf = rcOf;
   const anyKit = kitOn && roomList.some((r) => rcOf(r));
-  const plan = anyKit ? wallPlan(roomList, (id) => WD.neighbors(run, id), (x, y) => roomIdAt(w, x, y)) : null;
+  const plan = anyKit ? planFor(run, w, roomList) : null;
   const mode = KR.wallModeFor(roomList.filter((r) => r.type !== 'rm_theatre').length); // the Theatre sits far away: it does not make the floor dense
   V.kitInfo = { mode, rooms: new Map() };
   const hero = heroRec(host, n++, rcOf, dt); V.list.push(hero);

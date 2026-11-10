@@ -2,12 +2,12 @@
 // and every gateable item as an unlocked tile or a locked silhouette (hover or tap for the plain hint). Model: engine/unlock.js; drawing: ui/archive_kit.js.
 import { tscale } from './graft_parts.js';
 import { COL, W, H, rgba } from './core.js';
-import { unlockState, lockedHint, isFresh } from '../engine/unlock.js';
+import { lockedHint, isFresh } from '../engine/unlock.js';
 import { cardSpec } from '../engine/cards.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from '../data/index.js';
 import { glossTip, cardGlossTip } from './tooltips.js';
 import { scrollArea, inView } from './deckview.js';
-import { KINDS, KIND_LABEL, KIND_ONE, GOLD, itemViews, categoryCounts, drawMini, drawSilhouette, shortHint, padlock } from './archive_kit.js';
+import { KINDS, KIND_LABEL, KIND_ONE, GOLD, itemViews, categoryCounts, drawMini, drawSilhouette, shortHint, padlock, unlockOnce } from './archive_kit.js';
 import { lnw } from '../art/linework.js';
 
 export const EXPLAIN = 'Each run earns Archive points. Better runs earn more, up to a cap.';
@@ -24,7 +24,7 @@ function bar(app, x, y, w, h, f, col) {
 export default {
   calm() { return true; }, // only ambient motion: the frame governor may idle it at 30 fps after 4 s without input (ui/quality.js)
   enter(app) {
-    this.tab = 0; this.hero = 'all'; this.sts = {}; this.anim = (app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0; this.pending = null;
+    this._unl = null; this.tab = 0; this.hero = 'all'; this.sts = {}; this.anim = (app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0; this.pending = null;
   },
   setTab(i) { this.tab = ((i % KINDS.length) + KINDS.length) % KINDS.length; this.hero = 'all'; },
   state(k) { return this.sts[k] || (this.sts[k] = { scroll: 0, target: 0, focus: -1 }); },
@@ -39,7 +39,7 @@ export default {
     try { this.drawArchive(app); } finally { app.textScale = ts; }
   },
   drawArchive(app) {
-    const g = app.ctx, meta = app.shared.meta, st = unlockState(meta);
+    const g = app.ctx, meta = app.shared.meta, st = unlockOnce(this, app); // the model is read once per visit: this view never changes it
     this.pending = null;
     if (this.anim < 1) this.anim = Math.min(1, this.anim + app.dt / 0.16);
     const k = 1 - Math.pow(1 - this.anim, 3);

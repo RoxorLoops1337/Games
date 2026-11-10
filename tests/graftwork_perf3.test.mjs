@@ -239,5 +239,97 @@ await t('templates: no request is made while TEMPLATE_ART is off (no manifest, n
   assert.ok(/TEMPLATE_ART/.test(doc) && /assets\/ui\/manifest\.json/.test(doc), 'design/ART_MODULAR.md names the switch');
 });
 
+// ------------------------------------------------------------------ small ones
+await t('kit textures: mip level 0 is the decoded image itself (no full-size canvas copy), the half-size level is made straight from it', async () => {
+  installKit();
+  try {
+    const { app, run } = await setup({ seed: 'perf3mip' });
+    layout(run, [['rm_entrance', 2, 2], ['rm_ward', 3, 2], ['rm_corridor', 2, 3]]);
+    REC.draws.length = 0; REC.pats.length = 0;
+    app.go('ward', { run }); frames(app, 6);
+    assert.ok(ISO.lastKit() && ISO.lastKit().rooms.size >= 3, 'the rooms are drawn from the kit');
+    const tex = (d) => d.a[0] && (d.a[0].kitImg === 'floors' || d.a[0].kitImg === 'walls');
+    const copies = REC.draws.filter((d) => tex(d) && d.a.length === 3 && d.on.width === 512 && d.on.height === 512);
+    assert.equal(copies.length, 0, 'no texture is copied 1:1 into a 512 px canvas');
+    const halves = REC.draws.filter((d) => tex(d) && d.a.length === 5 && d.a[3] === 256 && d.a[4] === 256 && d.on.width === 256);
+    assert.ok(halves.length >= 2, 'the 256 px level is drawn from the image (floor and wall): ' + halves.length);
+    assert.ok(REC.pats.length >= 2, 'the floors and walls are pattern fills');
+    for (const p of REC.pats) assert.ok(p && (p.kitImg || (p.width >= 32 && p.width <= 256)), 'a pattern source is the image or one of its smaller levels');
+  } finally { removeKit(); }
+});
+await t('wall plan: kept while the rooms stay, rebuilt when one is added', async () => {
+  installKit();
+  try {
+    const { app, run } = await setup({ seed: 'perf3plan' });
+    const ids = layout(run, [['rm_entrance', 2, 2], ['rm_ward', 3, 2], ['rm_corridor', 2, 3]]);
+    app.go('ward', { run }); frames(app, 4);
+    const doors = (id) => ISO.lastKit().rooms.get(id).dL; // the plan's own door array for the left wall
+    const a = doors(ids[1]); frames(app, 1); const b = doors(ids[1]); frames(app, 30);
+    assert.ok(Array.isArray(a) && a.length === 1); assert.equal(b, a, 'the same plan object on the next frame'); assert.equal(doors(ids[1]), a, 'and thirty frames later');
+    assert.deepEqual(a, [true], 'the Ward has a door to the Entrance on its left wall');
+    // a new room next to the corridor: the plan follows on the very next frame
+    const w = run.ward, id = 'r' + w.nextRoom++; w.rooms[id] = { id, type: 'rm_ward', x: 3, y: 3, on: true, level: 1, timers: { spawn: 3 }, contents: [], upgrades: [] }; w.grid[3][3] = id; WD.wardPower(run);
+    frames(app, 2);
+    assert.notEqual(doors(ids[1]), a, 'rebuilt'); assert.deepEqual(ISO.lastKit().rooms.get(id).dL, [true], 'the new room has its door to the corridor');
+    const c = doors(id); frames(app, 5); assert.equal(doors(id), c, 'and is kept again');
+    // a room that moves (same ids, other cells) also invalidates
+    w.grid[3][3] = null; w.rooms[id].x = 4; w.rooms[id].y = 2; w.grid[2][4] = id; frames(app, 2);
+    assert.notEqual(doors(id), c);
+  } finally { removeKit(); }
+});
+await t('title and Archive: the unlock model is read once per visit, again when a modal over the title closes, never every frame', async () => {
+  const M = await import('../graftwork/engine/meta.js'), UN = await import('../graftwork/engine/unlock.js');
+  const title = (await import('../graftwork/ui/title.js')).default, archive = (await import('../graftwork/ui/archive.js')).default;
+  const o = {}; M.setStorage({ getItem: (k) => (k in o ? o[k] : null), setItem: (k, v) => { o[k] = v; } });
+  const meta = M.defaultMeta(); meta.settings = { tips: false, reducedMotion: true };
+  UN.unlockState(meta); // repairs the block in place
+  // unlockState is the only reader of `lifetime` on these screens: count its reads
+  let reads = 0, life = meta.unlocked.lifetime;
+  Object.defineProperty(meta.unlocked, 'lifetime', { configurable: true, enumerable: true, get() { reads++; return life; }, set(v) { life = v; } });
+  const app = await makeApp({ run: null, meta });
+  const texts = []; const raw = app.text; app.text = (s, ...a) => { texts.push(String(s)); return raw(s, ...a); };
+  app.shared.flow = { app, RUN, META: M, route() {}, toTitle() {}, openCodex() {}, openArchive() { app.push('archive', {}); }, openSettings() {}, saveMeta() {}, hasSave: () => false, start() {}, openDeck() {} };
+  app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
+  app.register('title', title); app.register('archive', archive);
+  app.go('title', {}); frames(app, 2);
+  const label = () => `Archive ${UN.unlockState(meta).percent} percent`;
+  const want0 = label(); reads = 0; texts.length = 0;
+  frames(app, 60);
+  assert.equal(reads, 0, 'sixty title frames never walk the unlock table'); assert.ok(texts.includes(want0) || texts.includes('Archive'), 'the Archive slab still shows its label');
+  // the Archive (a modal over the title) reads the model on its first frame only
+  app.push('archive', {}); frames(app, 1); assert.ok(reads > 0, 'read on entering the Archive'); reads = 0; texts.length = 0;
+  frames(app, 60); assert.equal(reads, 0, 'sixty Archive frames: no further read'); assert.ok(texts.includes(want0), 'and the percent is on screen: ' + want0);
+  // the profile changes while a modal is open (a run's award, an erase in Settings): the title shows it as soon as the stack returns to it
+  const { LOCKED_IDS } = await import('../graftwork/data/unlocks.js');
+  for (const k of LOCKED_IDS.slice(0, Math.ceil(LOCKED_IDS.length / 2))) meta.unlocked.ids[k] = 1;
+  const want1 = label(); assert.notEqual(want1, want0);
+  app.pop(); reads = 0; texts.length = 0; frames(app, 1);
+  assert.ok(reads > 0, 'read again on the first frame back on the title'); reads = 0; frames(app, 30); assert.equal(reads, 0);
+  if (texts.some((s) => /^Archive \d+ percent$/.test(s))) assert.ok(texts.includes(want1), 'the label is the new percent: ' + want1);
+  // re-entering the title reads again
+  app.go('title', {}); reads = 0; frames(app, 1); assert.ok(reads > 0);
+});
+await t('install: the three display-mode queries are made once per window and stay live (they ran every frame on the title and in Settings)', async () => {
+  const INST = await import('../graftwork/ui/install.js');
+  const made = [], host = () => { const L = {}; return { window: { addEventListener(nm, f) { (L[nm] = L[nm] || []).push(f); }, matchMedia: (q) => { const m = { q, matches: false }; made.push(m); return m; } }, navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile Safari/537.36', platform: '', maxTouchPoints: 0 }, fire(nm, ev) { for (const f of L[nm] || []) f(ev); } }; };
+  try {
+    const h = host(); INST.initInstall(h);
+    for (let i = 0; i < 200; i++) { assert.equal(INST.isInstalled(), false); assert.equal(INST.installAvailable(), false); assert.equal(INST.installMode(), 'none'); }
+    assert.equal(made.length, 3, 'three queries for 600 questions (it was three per question)');
+    assert.deepEqual(made.map((m) => m.q), ['(display-mode: fullscreen)', '(display-mode: standalone)', '(display-mode: minimal-ui)']);
+    // live: the browser's install offer and a display-mode change are seen at once
+    h.fire('beforeinstallprompt', { preventDefault() {} }); assert.equal(INST.installAvailable(), true);
+    made[1].matches = true; assert.equal(INST.isInstalled(), true); assert.equal(INST.installAvailable(), false); made[1].matches = false; assert.equal(INST.installAvailable(), true);
+    // the Settings screen with its App row: sixty frames, no new query
+    const settings = (await import('../graftwork/ui/settings.js')).default;
+    const app = await makeApp({ run: null, meta: { settings: { tips: false } } });
+    app.shared.flow = { saveMeta() {}, openDeck() {}, META: {} }; app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
+    app.register('settings', settings); app.push('settings', {}); frames(app, 60);
+    assert.equal(made.length, 3, 'Settings open for sixty frames: still three');
+    // another window gets its own three
+    INST.initInstall(host()); INST.isInstalled(); INST.isInstalled(); assert.equal(made.length, 6);
+  } finally { INST.resetInstall(); }
+});
+
 console.log(`graftwork perf3: ${n} checks passed`);
 if (process.exitCode) process.exit(process.exitCode);
