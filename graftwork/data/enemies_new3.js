@@ -101,7 +101,7 @@ const locksmith = {
       fray(A, e);
     },
     afterMove(A, e) { fray(A, e); },
-    seamCut(A, e, p) { if (p && p.school && p.school === e.data.seal) A.block(e, 4); },
+    seamCash(A, e, p) { if (p && p.school && p.school === e.data.seal) A.block(e, 4); }, // a cut or the turn-end cash: the Sealed status says so
   },
   art: { body: 'torch', color: '#9aa0a8', notes: 'narrow keyhole-shaped figure with a heavy iron key for one arm; a ring of keys hangs at the hip' },
 };

@@ -1,7 +1,7 @@
 {
- "version": "85880c82c5deee87",
- "bytes": 8960379,
- "count": 497,
+ "version": "e9f4d30ea38bb294",
+ "bytes": 9216280,
+ "count": 518,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -42,6 +42,82 @@
   "art/plates.js": {
    "h": "d6cce7a66d1e3d7a",
    "s": 23191
+  },
+  "assets/rigs/candy_striper@1x.webp": {
+   "h": "7a948cc6621359de",
+   "s": 5410
+  },
+  "assets/rigs/candy_striper@2x.webp": {
+   "h": "24a02ad97bcf981d",
+   "s": 13260
+  },
+  "assets/rigs/knitter@1x.webp": {
+   "h": "ea17623494910f4d",
+   "s": 7132
+  },
+  "assets/rigs/knitter@2x.webp": {
+   "h": "1e2aec5c2b50cfb8",
+   "s": 17512
+  },
+  "assets/rigs/manifest.json": {
+   "h": "bd710e14a2d5aaca",
+   "s": 32537
+  },
+  "assets/rigs/marrow@1x.webp": {
+   "h": "4e4a866ee15506a3",
+   "s": 6474
+  },
+  "assets/rigs/marrow@2x.webp": {
+   "h": "ae58c75b8e0dc9f1",
+   "s": 16250
+  },
+  "assets/rigs/night_nurse@1x.webp": {
+   "h": "80f48159601b1a5c",
+   "s": 5610
+  },
+  "assets/rigs/night_nurse@2x.webp": {
+   "h": "6c4d11f9409dc53c",
+   "s": 13668
+  },
+  "assets/rigs/npc_nurse@1x.webp": {
+   "h": "b9d8047b08f1d090",
+   "s": 6044
+  },
+  "assets/rigs/npc_nurse@2x.webp": {
+   "h": "86907be2a9930efc",
+   "s": 14532
+  },
+  "assets/rigs/npc_patient@1x.webp": {
+   "h": "191ae7b464c06031",
+   "s": 6056
+  },
+  "assets/rigs/npc_patient@2x.webp": {
+   "h": "c027e4af9e7ceb70",
+   "s": 15562
+  },
+  "assets/rigs/npc_porter@1x.webp": {
+   "h": "fda50ecf471dc58b",
+   "s": 6792
+  },
+  "assets/rigs/npc_porter@2x.webp": {
+   "h": "b4b84c394dd2b225",
+   "s": 17372
+  },
+  "assets/rigs/odile@1x.webp": {
+   "h": "3ded9458a04d30af",
+   "s": 5618
+  },
+  "assets/rigs/odile@2x.webp": {
+   "h": "a2703bb6e8f79434",
+   "s": 14316
+  },
+  "assets/rigs/wick@1x.webp": {
+   "h": "8fc7de61b323d5d2",
+   "s": 6056
+  },
+  "assets/rigs/wick@2x.webp": {
+   "h": "4bc28517bfd0db0d",
+   "s": 15650
   },
   "assets/ward/actors/bedpan_slime@1x.webp": {
    "h": "3a16446d2ce1b529",
@@ -1564,24 +1640,24 @@
    "s": 23815
   },
   "data/enemies_new1.js": {
-   "h": "17df4a98b9f5b2ff",
-   "s": 4844
+   "h": "d5069e839d320a7e",
+   "s": 4974
   },
   "data/enemies_new2.js": {
-   "h": "f38dcbe9ddb41de5",
-   "s": 6051
+   "h": "ba25dd65c8ead77e",
+   "s": 6262
   },
   "data/enemies_new3.js": {
-   "h": "1bfe72f1369ee162",
-   "s": 5834
+   "h": "0024865a177b6595",
+   "s": 5892
   },
   "data/events.js": {
    "h": "c0508db1fce52e37",
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "a00cb98133bee50a",
-   "s": 2920
+   "h": "4e0ab04510fc8a8c",
+   "s": 3992
   },
   "data/grafts_extra.js": {
    "h": "00f2b29e703d69d3",
@@ -1596,16 +1672,16 @@
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "2ad16927a6b650ea",
-   "s": 10599
+   "h": "4e2920fd04f45ae4",
+   "s": 10524
   },
   "data/grafts_weird.js": {
    "h": "e4bd9e9db3c1b70e",
    "s": 16252
   },
   "data/heroes.js": {
-   "h": "23e350f2bfe441b7",
-   "s": 2917
+   "h": "20564a010420945c",
+   "s": 3017
   },
   "data/index.js": {
    "h": "1d0fb3deb429c453",
@@ -1620,12 +1696,12 @@
    "s": 18136
   },
   "data/relics_more.js": {
-   "h": "cefb29e4391cdcd4",
-   "s": 5969
+   "h": "05b12efd037d813a",
+   "s": 5922
   },
   "data/relics_thread.js": {
-   "h": "9443f6289c1d8936",
-   "s": 3622
+   "h": "d846bcbb56d83542",
+   "s": 3767
   },
   "data/relics_ward.js": {
    "h": "19be3e66ab9a9d0b",
@@ -1652,8 +1728,8 @@
    "s": 4179
   },
   "data/statuses_e3.js": {
-   "h": "0ec213683f9311ee",
-   "s": 3509
+   "h": "f191c3c631138349",
+   "s": 3567
   },
   "data/statuses_marrow.js": {
    "h": "3ac81936dc6a2975",
@@ -1684,16 +1760,16 @@
    "s": 5178
   },
   "engine/afflictions.js": {
-   "h": "5d92f7a5878ff9eb",
-   "s": 8289
+   "h": "0e1ad3437afa4779",
+   "s": 8298
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
    "s": 2535
   },
   "engine/cards.js": {
-   "h": "93355e305cc35c1e",
-   "s": 13553
+   "h": "4f8805d6bf1c2c80",
+   "s": 15255
   },
   "engine/combat.js": {
    "h": "4659b15f21e1cab4",
@@ -1720,16 +1796,16 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "b0de2b5c9fa6c828",
-   "s": 28419
+   "h": "06028d190c8eabad",
+   "s": 28503
   },
   "engine/save.js": {
    "h": "c6149ebc081318fa",
    "s": 1743
   },
   "engine/seam.js": {
-   "h": "5d8535a7658b59ac",
-   "s": 17089
+   "h": "c7c4d7d41c5a8e7e",
+   "s": 17680
   },
   "engine/text.js": {
    "h": "0bb8d256312b987f",
@@ -1804,8 +1880,8 @@
    "s": 16443
   },
   "ui/codex.js": {
-   "h": "585102f2756b3a70",
-   "s": 40870
+   "h": "5aa358f8a74f9822",
+   "s": 40880
   },
   "ui/combat.js": {
    "h": "2858183ed9e4ecda",
@@ -1828,8 +1904,8 @@
    "s": 41593
   },
   "ui/deckview.js": {
-   "h": "a0511e05ebbef376",
-   "s": 36203
+   "h": "c46eb622c1d4da2c",
+   "s": 36356
   },
   "ui/end.js": {
    "h": "ed8a0b0082a9eefd",
@@ -1840,8 +1916,8 @@
    "s": 27992
   },
   "ui/forge.js": {
-   "h": "07cc8ce97c5d1e91",
-   "s": 26950
+   "h": "3794fc3d1e56e016",
+   "s": 26821
   },
   "ui/frame_state.js": {
    "h": "4ee183083fbc16d0",
@@ -1903,6 +1979,10 @@
    "h": "b868f4fb7841b817",
    "s": 5000
   },
+  "ui/preview.js": {
+   "h": "bc4f4194e6537095",
+   "s": 1034
+  },
   "ui/puppet.js": {
    "h": "a0d7bfae1e1c1f58",
    "s": 34193
@@ -1916,8 +1996,12 @@
    "s": 17989
   },
   "ui/rig.js": {
-   "h": "47eb1353afdc836e",
-   "s": 6824
+   "h": "4ebb555aecc4f5e4",
+   "s": 25768
+  },
+  "ui/rigs.js": {
+   "h": "3972650d1d124331",
+   "s": 4260
   },
   "ui/seam_ui.js": {
    "h": "2263d7fa77934da3",
@@ -1928,8 +2012,8 @@
    "s": 16705
   },
   "ui/shop.js": {
-   "h": "b9f286066520e1e9",
-   "s": 55188
+   "h": "e054f81c6714f0b8",
+   "s": 55067
   },
   "ui/smoothing.js": {
    "h": "7566a23ce539df44",
@@ -1972,8 +2056,8 @@
    "s": 83905
   },
   "ui/ward_iso.js": {
-   "h": "b98f98da5ea7c9cd",
-   "s": 70991
+   "h": "eb3acb7f5a505f8a",
+   "s": 72852
   },
   "ui/ward_kit.js": {
    "h": "08b14b7b4c136db2",

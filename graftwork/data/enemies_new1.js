@@ -1,6 +1,7 @@
 // Brand-new Act 1 enemies from the depth pass (design/ENEMY_DEPTH.md and design/THREAD.md). Same schema as enemies_1.js.
-// Seam hooks (engine/seam.js): on.seamExtend(A, e, { len, school, card, spec }), on.seamCut(A, e, { len, school, stitches, kind: 'cut'|'end', card, cancel, paid }),
-// on.seamPay(A, e, { school, stitches, kind, amount }). paid is false (and stitches 0) for a cut past the turn's 3 paying cuts.
+// Seam hooks (engine/seam.js): on.seamExtend(A, e, { len, school, card, spec }), on.seamCut(A, e, { len, school, stitches, pays, kind: 'cut', card, cancel, paid }) when the Line is cut,
+// on.seamCash(A, e, { ...same, kind: 'cut'|'end' }) for every cash including the turn end (may set cancel), on.seamPay(A, e, { school, stitches, kind, amount }).
+// paid is false (and stitches 0) for a cut past the turn's 3 paying cuts.
 const dmg = (n, extra = {}) => ({ op: 'dmg', n, ...extra });
 const blk = (n) => ({ op: 'block', n, to: 'self' });
 const debuff = (s, n) => ({ op: 'status', s, n, to: 'player' });

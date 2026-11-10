@@ -1,6 +1,7 @@
 // Brand-new Act 2 enemies from the depth pass (design/ENEMY_DEPTH.md and design/THREAD.md). Same schema as enemies_2.js.
-// `tip` on a move lists its conditional bonuses (shown in the intent tooltip). Seam hooks: on.seamExtend/seamCut/seamPay(A, e, info),
-// info as emitted by engine/seam.js (seamCut info has `len`, `school`, `stitches`, `cancel`; set cancel = true to void the payout).
+// `tip` on a move lists its conditional bonuses (shown in the intent tooltip). Seam hooks: on.seamExtend/seamCut/seamCash/seamPay(A, e, info),
+// info as emitted by engine/seam.js (seamCash and seamCut info have `len`, `school`, `stitches`, `kind`, `cancel`; seamCash fires for a cut and for the
+// turn-end cash, before anything is paid, and may set cancel = true to void the payout; seamCut only for a cut).
 
 const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
@@ -53,8 +54,8 @@ export const ENEMIES_NEW2 = [
       clip: { name: 'Clip', fx: [{ op: 'dmg', n: 16 }] },
     },
     on: {
-      // Every cut that cashes gives her 2 Block; a Line of 4 or more is snipped to nothing.
-      seamCut: (A, e, info) => {
+      // Every Line that cashes (a cut or the end of your turn) gives her 2 Block; a Line of 4 or more is snipped to nothing.
+      seamCash: (A, e, info) => {
         if (info.len >= 4) { info.cancel = true; A.ev({ t: 'snipped', e: e.uid }); }
         A.block(e, 2, { raw: true });
       },
@@ -74,7 +75,7 @@ export const ENEMIES_NEW2 = [
       seamExtend: (A, e, info) => {
         if (info.school && info.school === e.data.allergy && A.c.seam.len > 0) A.c.seam.len = Math.max(0, A.c.seam.len - 1);
       },
-      seamCut: (A, e, info) => { if (info.school && info.school === e.data.allergy) info.cancel = true; },
+      seamCash: (A, e, info) => { if (info.school && info.school === e.data.allergy) info.cancel = true; },
     },
     art: { body: 'cone', color: '#9aa7b4', notes: 'Iron-filings cone with a heavy riveted visor and a magnet horseshoe lantern hung at the waist, glyph chalked on the chest.' } },
 
@@ -82,7 +83,7 @@ export const ENEMIES_NEW2 = [
     moves: {
       levy: { name: 'Levy', fx: [{ op: 'dmg', n: 12 }] },
       audit: { name: 'Audit Trail', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }] },
-      seize: { name: 'Seize', tip: 'Also takes 5 gold whenever a Gilded cut pays you. Kill it to get the gold back.', fx: [{ op: 'dmg', n: 16 }] },
+      seize: { name: 'Seize', tip: 'Also takes 5 gold whenever a Gilded Line pays you gold, cut or cashed at turn end. Kill it to get the gold back.', fx: [{ op: 'dmg', n: 16 }] },
     },
     on: {
       seamPay: (A, e, info) => {

@@ -7,7 +7,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin, drawForgeIcon } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
-import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUSE_CAP } from '../engine/cards.js';
+import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, deckMoved, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
 import { withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
@@ -162,13 +162,6 @@ function pickStrip(app) {
     }),
   });
 }
-function moveDeck(run, from, gid, to) {
-  return run.deck.map((i) => {
-    if (i.uid === from.uid) { const k = i.grafts.indexOf(gid); return { ...i, grafts: i.grafts.filter((_, n) => n !== k) }; }
-    if (i.uid === to.uid) return { ...i, grafts: [...i.grafts, gid] };
-    return i;
-  });
-}
 function pickReforge(app) {
   const run = app.shared.run;
   openCards(S.modal, {
@@ -181,9 +174,9 @@ function pickReforge(app) {
       info: (gid) => infoFromDeck(run, stripDeck(run, src.uid, gid), [{ t: 'Step 2 of 3. Next you choose where it goes.', c: COL.vellum }]),
       onPick: (gid) => openCards(S.modal, {
         title: `Where does ${GRAFTS[gid].name} go?`, sub: 'Step 3 of 3. Only cards that can take it are shown.', cards: run.deck.filter((d) => d !== src && canGraft(d, gid)),
-        info: (dst) => infoFromDeck(run, moveDeck(run, src, gid, dst), dst.grafts.length >= 2 ? [{ t: 'Overload: weighs +1, numbers x1.5, 25% Shatter on first play.', c: COL.lamp }] : []),
+        info: (dst) => infoFromDeck(run, deckMoved(run.deck, src.uid, gid, dst.uid), [...(dst.grafts.length >= 2 ? [{ t: 'Overload: weighs +1, numbers x1.5, 25% Shatter on first play.', c: COL.lamp }] : []), ...(src.waived && src.waived.includes(gid) ? [{ t: 'Its Price was waived and stays waived.', c: COL.good }] : [])]),
         onPick: (dst) => {
-          const sb = cardSpec(src), db = cardSpec(dst), info = infoFromDeck(run, moveDeck(run, src, gid, dst));
+          const sb = cardSpec(src), db = cardSpec(dst), info = infoFromDeck(run, deckMoved(run.deck, src.uid, gid, dst.uid));
           const r = RUN.forgeAct(run, 'reforge', src.uid, gid, dst.uid); if (!r.ok) return fail(app);
           S.anim = makeAnim('move', { gid, from: { x: 360, y: 330 }, to: { x: 920, y: 330 }, fromBefore: sb, fromAfter: cardSpec(src), toBefore: db, toAfter: cardSpec(dst), overload: dst.grafts.length > 2, tithe: info.after.strain > 0, lines: info.lines });
           S.log.push(`Reforged ${GRAFTS[gid].name} from ${sb.name} to ${db.name}.`);

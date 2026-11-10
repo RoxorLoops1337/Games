@@ -89,7 +89,7 @@ function mutedId(gid) {
   const id = '~numb:' + gid;
   if (!GRAFTS[id] && GRAFTS[gid]) {
     const g = GRAFTS[gid];
-    Object.defineProperty(GRAFTS, id, { value: { ...g, id, mods: (g.mods || []).filter(isPriceMod) }, enumerable: false, configurable: true });
+    Object.defineProperty(GRAFTS, id, { value: { ...g, id, of: gid, mods: (g.mods || []).filter(isPriceMod) }, enumerable: false, configurable: true });
   }
   return id;
 }
