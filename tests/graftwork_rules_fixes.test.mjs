@@ -479,5 +479,64 @@ await ta('the 14 resonance texts equal what the engine does (numbers measured, w
   assert.equal(ch.handSize - plain.handSize, M.hoard[6].size);
 });
 
+// ---------------------------------------------------------------- 6. Free Sample waives the whole Price, whatever kind it is
+await ta('Free Sample: "The first graft Price you accept each act is waived" holds for every graft and every price kind', async () => {
+  const CARDSJS = await import('../graftwork/engine/cards.js');
+  const { afflStartTurn } = await import('../graftwork/engine/afflictions.js');
+  assert.equal(typeof CARDSJS.isPriceMod, 'function', 'one exported definition of a Price');
+  // every graft charges something the table knows: nothing hides its price where the waiver cannot reach
+  for (const g of Object.values(GRAFTS)) assert.ok(g.mods.some(CARDSJS.isPriceMod), `${g.id} ("${g.price}") has no price mod the waiver can see`);
+  for (const g of Object.values(GRAFTS)) assert.ok(g.mods.some((m) => !CARDSJS.isPriceMod(m)), g.id + ' keeps a boon');
+  // a waived graft never leaves a price on the card: cost, Exhaust, Ethereal, lower numbers, play conditions, and the classic kinds
+  CARDS.t_big = { id: 't_big', name: 'big', type: 'attack', cost: 2, rarity: 'common', school: 'blood', target: 'enemy', fx: [{ op: 'dmg', n: 10 }, { op: 'block', n: 5 }], flavor: 'x', flags: {} };
+  const bare = cardSpec({ uid: 1, id: 't_big', grafts: [], up: 0 });
+  for (const g of Object.values(GRAFTS)) {
+    const paid = cardSpec({ uid: 1, id: 't_big', grafts: [g.id], up: 0 }), free = cardSpec({ uid: 1, id: 't_big', grafts: [g.id], up: 0, waived: [g.id] });
+    const P = free.price;
+    assert.deepEqual([P.selfHurt, P.jam, P.junk.length, P.selfStatus.length, P.drawdown, P.gold, P.maxHp], [0, 0, 0, 0, 0, 0, 0], g.id + ' price left: ' + JSON.stringify(P));
+    assert.ok(free.cost <= bare.cost, g.id + ' still costs more'); assert.ok(free.pct >= 0, g.id + ' still lowers the numbers');
+    for (const f of ['exhaust', 'ethereal', 'needsAttackPlayed']) assert.ok(!free.flags[f], `${g.id} still has ${f}`);
+    assert.ok(free.custom.length <= paid.custom.length);
+  }
+  // prices that live in a hook: played once waived and once not
+  const once = (gid, waived, prep) => {
+    const c = fight({ seed: 'fs' + gid }); c.player.hp = 200; c.run.gold = 60; c.strain = { ...c.strain, strain: 3 };
+    const card = mk(c, 't_big', { grafts: [gid] }); if (waived) card.inst.waived = [gid];
+    c.hand.pop(); c.drawPile.push(card); c.A.draw(1); // drawn for real: Slow Tumor and Debt Note act on the draw
+    if (prep) prep(c);
+    const cost = c.hand.includes(card) ? (() => { const hi = c.hand.indexOf(card); return hi; })() : -1; assert.ok(cost >= 0);
+    const en = c.energy; play(c, card);
+    return { hp: 200 - c.player.hp, gold: 60 - c.run.gold, burn: c.player.st.burn || 0, spent: en - c.energy };
+  };
+  assert.deepEqual([once('g_ash_pact', false).burn, once('g_ash_pact', true).burn], [2, 0], 'Ash Pact: "Also gain 2 Burn yourself"');
+  assert.deepEqual([once('g_vampire_teeth', false).hp, once('g_vampire_teeth', true).hp], [2, 0], 'Vampire Teeth: "Otherwise lose 2 HP"');
+  assert.deepEqual([once('g_gold_lever', false).gold, once('g_gold_lever', true).gold], [5, 0], 'Gold Lever: "Spends 5 gold on play"');
+  assert.deepEqual([once('g_slow_tumor', false).spent, once('g_slow_tumor', true).spent], [3, 2], 'Slow Tumor: "costs 1 more" each draw');
+  assert.deepEqual([once('g_debt_note', false).hp, once('g_debt_note', true).hp], [2, 0], 'Debt Note: lose 1 HP per energy it would have cost');
+  assert.deepEqual([once('g_fever_wick', false).hp, once('g_fever_wick', true).hp], [3, 0], 'Fever Wick: lose 1 HP per Strain (max 3)');
+  assert.deepEqual([once('g_feverish_vein', false).hp, once('g_feverish_vein', true).hp], [3, 0], 'Feverish Vein: lose HP equal to your Strain');
+  { const c = fight(); const card = mk(c, 't_big', { grafts: ['g_fuse_wire'] }); assert.equal(playCard(c, c.hand.indexOf(card), 0).why, 'needsAttack');
+    card.inst.waived = ['g_fuse_wire']; assert.ok(playCard(c, c.hand.indexOf(card), 0).ok, 'Fuse Wire: the play condition is its Price'); }
+  // the waived boons are all still there (Gold Lever: 60 gold is +10; Slow Tumor +8)
+  { const dmgOf = (gid, waived) => { const c = fight({ seed: 'fsb' }); c.run.gold = 60; const card = mk(c, 't_big', { grafts: [gid] }); if (waived) card.inst.waived = [gid]; c.hand.pop(); c.drawPile.push(card); c.A.draw(1); const hp = c.enemies[0].hp; play(c, card); return hp - c.enemies[0].hp; };
+    assert.equal(dmgOf('g_gold_lever', true), dmgOf('g_gold_lever', false)); assert.equal(dmgOf('g_gold_lever', true), 20); assert.equal(dmgOf('g_slow_tumor', true), 18); }
+  // the run: the first graft of each act is free, max HP included; the second one pays
+  const run = RUN.newRun({ hero: 'marrow', seed: 'sample' }); RUN.addRelic(run, 'r_free_sample');
+  const atk = run.deck.filter((i) => CARDS[i.id].type === 'attack');
+  const hp0 = run.maxHp, pv = RUN.previewPick(run, atk[0].uid, 'g_hoard_cache');
+  assert.ok(pv.waived, 'the offer screen knows the Price will be waived'); assert.equal(pv.spec.cost, CARDS[atk[0].id].cost, 'and previews the card without it');
+  assert.ok(RUN.applyGraft(run, atk[0].uid, 'g_hoard_cache', { keepPhase: true }).ok);
+  assert.equal(run.maxHp, hp0, '"Lose 4 max HP when grafted" is waived (it was charged before the waiver was recorded)');
+  assert.equal(cardSpec(atk[0]).cost, CARDS[atk[0].id].cost, '"Costs 1 more" is waived');
+  assert.ok(!RUN.previewPick(run, atk[1].uid, 'g_hoard_cache').waived);
+  RUN.applyGraft(run, atk[1].uid, 'g_hoard_cache', { keepPhase: true });
+  assert.equal(run.maxHp, hp0 - 4); assert.equal(cardSpec(atk[1]).cost, CARDS[atk[1].id].cost + 1, 'the second graft of the act pays in full');
+  run.act = 2; RUN.applyGraft(run, atk[2].uid, 'g_hoard_cache', { keepPhase: true }); assert.equal(run.maxHp, hp0 - 4, 'a new act, a new sample');
+  // Numb is the mirror image and uses the same table: the boon goes, the whole Price stays (a hook price too)
+  { const c = fight(); const card = mk(c, 't_big', { grafts: ['g_ash_pact'] }); c.player.st.numb = 1; afflStartTurn(c); play(c, card);
+    assert.equal(c.player.st.burn, 2, 'Numb: "Their prices still bite"'); assert.equal(c.enemies[0].st.burn || 0, 0, 'and the boon is silent'); }
+  delete CARDS.t_big;
+});
+
 console.log(`${n} rules-fix checks done${bad ? ', ' + bad + ' FAILED' : ''}`);
 if (bad) process.exit(1);

@@ -6,7 +6,7 @@ import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { runAllows, snapshotFor } from './unlock.js';
 import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
-import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
+import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
 export const POTION_SLOTS = 3;
@@ -300,17 +300,21 @@ export function previewPick(run, uid, gid) {
   const p = previewGraft(run, uid, gid);
   const inst = findInst(run, uid);
   const after = { ...inst, grafts: [...inst.grafts, gid] };
+  p.waived = sampleReady(run) && GRAFTS[gid].mods.some(isPriceMod); // Free Sample would waive this graft's Price
+  if (p.waived) after.waived = [...(inst.waived || []), gid];
   p.spec = cardSpec(after);
   p.overload = after.grafts.length > 2;
   return p;
 }
+// Free Sample (perk freeFirstGraft): the first graft Price accepted each act is waived, every kind of it (engine/cards.js isPriceMod).
+export function sampleReady(run) { return perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]; }
 export function applyGraft(run, uid, gid, o = {}) {
   const inst = findInst(run, uid);
   if (!inst || !canGraft(inst, gid)) return { ok: false };
   inst.grafts.push(gid);
   const g = GRAFTS[gid];
+  if (!o.free && sampleReady(run)) { run.flags['pf' + run.act] = 1; (inst.waived = inst.waived || []).push(gid); } // decided first: a waived Price costs no max HP either
   if (!(inst.waived && inst.waived.includes(gid))) for (const m of g.mods) if (m.k === 'maxHp') { run.maxHp = Math.max(10, run.maxHp + m.n); run.hp = Math.min(run.hp, run.maxHp); }
-  if (!o.free && perk(run, 'freeFirstGraft') && !run.flags['pf' + run.act]) { run.flags['pf' + run.act] = 1; (inst.waived = inst.waived || []).push(gid); }
   const bounty = perkN(run, 'graftBounty'); if (bounty) { run.gold += bounty; run.stats.goldEarned += bounty; }
   run.stats.grafts++;
   if (!o.keepPhase) { run.pending = null; }

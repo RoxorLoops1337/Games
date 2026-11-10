@@ -5,7 +5,14 @@
 import { CARDS, GRAFTS, RELICS, HEROES } from '../data/index.js';
 
 export const BASE_BUDGET = 6;
-const PRICE_KINDS = new Set(['selfHurt', 'jam', 'junk', 'selfStatus', 'drawdown', 'goldCost', 'maxHp']);
+// What a Price is: ONE table for every reader. Free Sample waives exactly these mods (cardSpec, run.js applyGraft), Numb keeps
+// exactly these (afflictions.js). A price written inside a hook is its own custom mod marked price: true.
+const PRICE_FLAGS = new Set(['exhaust', 'ethereal', 'needsAttackPlayed']);
+const PRICE_MODS = {
+  selfHurt: () => true, jam: () => true, junk: () => true, selfStatus: () => true, drawdown: () => true, goldCost: () => true,
+  maxHp: (m) => m.n < 0, cost: (m) => m.d > 0, pct: (m) => m.pct < 0, flag: (m) => PRICE_FLAGS.has(m.f), custom: (m) => !!m.price,
+};
+export const isPriceMod = (m) => { const f = PRICE_MODS[m.k]; return !!f && f(m); };
 export const MAX_GRAFTS_NORMAL = 2; // the 3rd graft is an Overload
 export const MAX_GRAFTS = 3;
 export const FUSE_CAP = 4; // tempered (permanent) grafts one card can hold
@@ -86,7 +93,7 @@ export function cardSpec(inst) {
     const g = GRAFTS[gid];
     if (!g) throw new Error('unknown graft ' + gid);
     const waived = inst.waived && inst.waived.includes(gid);
-    for (const m of g.mods || []) { if (waived && PRICE_KINDS.has(m.k)) continue; applyMod(s, m, g); }
+    for (const m of g.mods || []) { if (waived && isPriceMod(m)) continue; applyMod(s, m, g); }
   }
   if (s.flags.unplayable) s.unplayable = true;
   return s;

@@ -1,6 +1,6 @@
 {
- "version": "448ad84e3afd82a6",
- "bytes": 11586186,
+ "version": "1401cc2d1f9547f8",
+ "bytes": 11587510,
  "count": 655,
  "files": {
   "art/attacks.js": {
@@ -2212,8 +2212,8 @@
    "s": 3655
   },
   "data/grafts_extra.js": {
-   "h": "4cbecbb513a1756a",
-   "s": 15292
+   "h": "00f2b29e703d69d3",
+   "s": 15508
   },
   "data/grafts_greedy.js": {
    "h": "6a7d98c0b861ab39",
@@ -2228,8 +2228,8 @@
    "s": 10361
   },
   "data/grafts_weird.js": {
-   "h": "2c11aed6b9fd5af3",
-   "s": 16063
+   "h": "e4bd9e9db3c1b70e",
+   "s": 16252
   },
   "data/heroes.js": {
    "h": "c1a8438759b3933c",
@@ -2312,16 +2312,16 @@
    "s": 5178
   },
   "engine/afflictions.js": {
-   "h": "a0c5c404e6098693",
-   "s": 8547
+   "h": "5d92f7a5878ff9eb",
+   "s": 8289
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
    "s": 2535
   },
   "engine/cards.js": {
-   "h": "60572d19ddb30027",
-   "s": 12818
+   "h": "369224a1e09c7f9c",
+   "s": 13383
   },
   "engine/combat.js": {
    "h": "7ae667b5496adec9",
@@ -2348,8 +2348,8 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "91eb9cd7821a7853",
-   "s": 32197
+   "h": "68c1b13d903c603d",
+   "s": 32639
   },
   "engine/save.js": {
    "h": "75f3d164193012a7",
@@ -2484,8 +2484,8 @@
    "s": 32802
   },
   "ui/graft.js": {
-   "h": "f8b087eaa01f4939",
-   "s": 49725
+   "h": "5d82e0fe08bf9a38",
+   "s": 49895
   },
   "ui/graft_parts.js": {
    "h": "48587179176397ba",
