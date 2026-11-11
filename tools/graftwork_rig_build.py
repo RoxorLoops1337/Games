@@ -11,15 +11,18 @@ which box (or which loose piece inside a box, or which side of a cut line) is wh
 where that joint sits over the standing sprite, the draw order, the garment, the prop and its hand, the side mapping.
 
 Run:   python3 -I tools/graftwork_rig_build.py --raw <dir> [--only marrow,wick] [--out <dir>] [--preview <dir>] [--list <id>] [--fit [--scratch <dir>]]
-  --raw      the folder that holds batch1/ and batch2/ (read only; -I keeps Python from loading code out of it)
+  --raw      the folder that holds batch1/ and batch2/ (read only; -I keeps Python from loading code out of it), and assembled figures
+  --meta     another meta file (a test's); default tools/graftwork_rig_meta.json
   --out      where the atlases and manifest.json go (default graftwork/assets/rigs; with --only the other rigs of the manifest are kept)
   --preview  writes <id>_rest.png (standing sprite, rig at rest, both overlaid, joints) and <id>_parts.png (every part with its pivot)
              into a folder OUTSIDE the repo: the pictures the meta file is tuned against
+  --export   writes each rig (--only) as a parts sheet of spec v2 (rig.<id>.png, .parts.json, meta.json) into a folder OUTSIDE the repo: every
+             part its own piece, limbs as built (healed and long); a fit run on it chooses no extension
   --list     prints the loose pieces (connected components) of every box of one sheet, in reading order: the numbers `comp` takes
   --fit      the auto-fit of the long hidden limbs: prints a table per limb (rise floor, needed, chosen, margin, how the painted end does), writes
              `fit` into the meta file, then builds (needs node: the poses come from ui/rig.js); --scratch takes its pose files, outside the repo
 
-Meta (per rig): sheet, ship (false = lab only, the game keeps the puppet) and why, side (how the sheet's L and R map to the screen),
+Meta (per rig): sheet (or "source": "assembled" with assembled {under, over, joints} file names and garment {part, hem}: see the slicer below), ship (false = lab only, the game keeps the puppet) and why, side (how the sheet's L and R map to the screen),
 shift [dx, dy] (the whole figure nudged on the canvas),
 joints {bone: [x, y]} for bones that carry no part (deliberately empty), feet, arms, rigid, and parts, listed BACK TO FRONT. A part:
   part   its name (a bone name makes it the main part of that bone)      bone   the bone it hangs on (default: its own name)
@@ -41,7 +44,7 @@ joints {bone: [x, y]} for bones that carry no part (deliberately empty), feet, a
 Long hidden limbs (per rig): extend {limb: units | "auto"} for legL_up, legR_up (and armL_up, armR_up by hand): the piece's painted top end is cut
   off and the tube regrown that many units higher from its own pixels (extend_top: plain cloth from its mean shading, stripes tiled by their
   period, edges extrapolated, no wider than half the cloth over it, leaning in to stay under it), so the limb begins INSIDE the body. The joint
-  stays where it was; a thigh records `top` (where its new top end rests) and ui/rig.js pins it there in the hips. fit {limb: units} is written by
+  stays where it was. Every thigh records `top` (where its top end rests, painted or grown) and ui/rig.js pins it there in the hips. fit {limb: units} is written by
   --fit for every "auto": the least extension that (1) reaches RISE of the thigh's length above the hip joint (RISE_ONE of a leg painted in one
   piece) and (2) keeps the END band of the limb under the parts drawn after it in every pose of the envelope (tools/graftwork_rig_pose.mjs),
   plus EXT_SLACK. A limb that no extension can hide stops the fit with what to do (cut the garment layer higher, or ask the artist).
@@ -341,9 +344,9 @@ def extend_top(im, ext_px, wmax_px=None, room=None):
         die('a limb piece with no clean rows to extend')
     refw = _median([sp[y][1] - sp[y][0] for y in ref])
     rp = [prof(y) for y in ref]
-    mp_ = [sum(q[i] for q in rp) / len(rp) for i in range(NB)]
-    dist = lambda q: sum(abs(a - b) for a, b in zip(q, mp_)) / NB
-    tol = max(16, 2.5 * _median([dist(q) for q in rp]))
+    d2 = lambda q, r: sum(abs(a - b) for a, b in zip(q, r)) / NB
+    dist = lambda q, skip=-1: min(d2(q, r) for i, r in enumerate(rp) if i != skip)  # to the nearest clean row: a stripe matches a stripe
+    tol = max(16, 2.5 * _median([dist(q, i) for i, q in enumerate(rp)]))
     good = lambda y: sp[y] and sp[y][1] - sp[y][0] >= 0.9 * refw and dist(prof(y)) <= tol
     yc = int(0.4 * H)
     for y in range(0, int(0.4 * H)):
@@ -498,13 +501,18 @@ def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers):
         piv = [piv[0] + ox, piv[1] + oy]
         t = bake_point((tx, 0), piv, s, rot, mirror, sy)
         top = [round(at[0] + t[0], 2), round(at[1] + t[1], 2)]
+    if top is None and name in ('legL_up', 'legR_up'):  # where the painted top end rests: ui/rig.js pins every thigh there (thighM)
+        sp = _spans(im.load(), im.width, min(im.height, 8))
+        row = next((q for q in sp if q), (0, im.width))
+        t = bake_point(((row[0] + row[1]) / 2, 0), piv, s, rot, mirror, sy)
+        top = [round(at[0] + t[0], 2), round(at[1] + t[1], 2)]
     master, mp = bake(im, piv, s, rot, mirror, sy)
     bone = p.get('bone', name)
     if bone not in BONES and bone != 'root':
         die('%s: part %s hangs on no bone (%s)' % (rid, name, bone))
-    rec = {'n': name, 'bone': bone, 'z': z, 'at': at, 'master': master, 'mp': mp, 'src': im, 'piv': piv}
+    rec = {'n': name, 'bone': bone, 'z': z, 'at': at, 'master': master, 'mp': mp, 'src': im, 'piv': piv, 'p': p, 's': s, 'top': top}
     if E:
-        rec['ext'], rec['top'], rec['info'] = E, top, info
+        rec['ext'], rec['info'] = E, info
     for k in ('hem', 'lag', 'upright'):
         if k in p:
             rec[k] = p[k]
@@ -533,12 +541,16 @@ _SHEETS, _EXTRACT = {}, {}
 
 
 def build_rig(rid, m, raw, ward, fitting=None):
-    sheet_path = os.path.join(raw, m['sheet'] + '.png')
-    if not os.path.exists(sheet_path):
-        die('missing raw sheet ' + sheet_path)
-    if sheet_path not in _SHEETS:
-        _SHEETS[sheet_path] = (Image.open(sheet_path).convert('RGBA'), json.load(open(os.path.join(raw, m['sheet'] + '.parts.json'))))
-    sheet, boxes = _SHEETS[sheet_path]
+    m = expand(rid, m, raw)
+    if isinstance(m['sheet'], tuple):  # an assembled figure, sliced into a virtual sheet
+        sheet, boxes = _SHEETS[m['sheet']][:2]
+    else:
+        sheet_path = os.path.join(raw, m['sheet'] + '.png')
+        if not os.path.exists(sheet_path):
+            die('missing raw sheet ' + sheet_path)
+        if sheet_path not in _SHEETS:
+            _SHEETS[sheet_path] = (Image.open(sheet_path).convert('RGBA'), json.load(open(os.path.join(raw, m['sheet'] + '.parts.json'))))
+        sheet, boxes = _SHEETS[sheet_path]
     joints = dict(m.get('joints', {}))
     parts, names, borrowed = [], set(), []
     dx, dy = m.get('shift', [0, 0])  # the whole figure nudged on the canvas (after a look at the overlay)
@@ -587,9 +599,7 @@ def build_rig(rid, m, raw, ward, fitting=None):
     bb, (fx, fy, fw) = contact(rest)
     bbox = [round(v / M, 1) for v in bb]
     act = ward['actors'].get(rid)
-    if not act:
-        die('%s is not an actor of assets/ward/manifest.json' % rid)
-    sb = act['bbox']
+    sb = act['bbox'] if act else bbox  # a figure with no standing sprite yet (an assembled doll, a test): nothing to compare with
     drift = (bbox[1] - sb[1], bbox[3] - sb[3])
     entry = {
         'file1x': rid + '@1x.webp', 'file2x': rid + '@2x.webp', 'w': W, 'h': H,
@@ -624,10 +634,10 @@ def build_rig(rid, m, raw, ward, fitting=None):
         for k in ('hem', 'lag', 'upright'):
             if k in p:
                 e[k] = p[k]
-        if p.get('ext'):  # a long hidden limb: how far it was extended, and (a thigh) where its top end rests (ui/rig.js thighM pins it there)
+        if p.get('ext'):  # a long hidden limb: how far it was extended
             e['ext'] = int(p['ext']) if p['ext'] == int(p['ext']) else p['ext']
-            if p['n'].startswith('leg'):
-                e['top'] = p['top']
+        if p.get('top'):  # a thigh: where its top end rests (ui/rig.js thighM pins it there)
+            e['top'] = p['top']
         if 'hem' in p:
             garment.append(p['n'])
         entry['parts'].append(e)
@@ -635,6 +645,280 @@ def build_rig(rid, m, raw, ward, fitting=None):
     if borrowed:
         entry['borrowed'] = borrowed
     return entry, atlas, rest, parts, drift
+
+
+# ---------------------------------------------------------------- the assembled A-pose slicer (meta "source": "assembled")
+# A character can come as ONE assembled figure instead of a parts sheet: UNDER (the doll, full arms and legs, front view, A-pose: arms about 20
+# degrees out, legs about 25 degrees apart, nothing overlapping), OVER (only the garment that hangs over hips and legs, same canvas, registers on
+# UNDER) and <id>.joints.json (pixel coordinates of hipL hipR kneeL kneeR ankleL ankleR shoulderL shoulderR elbowL elbowR wristL wristR, L = the
+# SCREEN left). The slicer cuts UNDER into the bone parts with straight cuts perpendicular to each bone at its joints (thigh and upper arm start
+# with a hard straight edge AT the hip and the shoulder; lower pieces carry a round end about their top joint, upper pieces one about their bottom
+# joint, so a bent joint never opens), turns every limb piece upright, keeps OVER as the garment part, lays the pieces out as a virtual sheet with
+# 16 px gaps and writes the parts list the sheet path would have written: at rest the legs hang straight, the arms ARM_REST degrees out, the figure
+# 225 units tall on the feet anchor (128, 243). Healing the hard top ends is the long hidden limb code (extend, --fit), as for any sheet.
+ARM_REST = 8.0
+CUT = ('thigh', 'shin', 'boot', 'upper', 'fore', 'hand')
+
+
+def _upright(src, mask, top, axis):
+    """The masked pixels of src turned about `top` so that `axis` points straight down. -> (RGBA image, top joint in it, rotation in degrees)"""
+    ang = math.atan2(axis[0], axis[1])  # clockwise turn that brings the axis onto +y
+    cs, sn = math.cos(ang), math.sin(ang)
+    im = src.copy()
+    im.putalpha(Image.composite(src.getchannel('A'), Image.new('L', src.size, 0), mask))
+    bb = mask.getbbox()
+    if not bb:
+        die('assembled: a part has no pixels')
+    pts = []
+    for x, y in ((bb[0], bb[1]), (bb[2], bb[1]), (bb[2], bb[3]), (bb[0], bb[3])):
+        dx, dy = x - top[0], y - top[1]
+        pts.append((dx * cs - dy * sn, dx * sn + dy * cs))
+    x0, y0 = math.floor(min(p[0] for p in pts)) - 2, math.floor(min(p[1] for p in pts)) - 2
+    x1, y1 = math.ceil(max(p[0] for p in pts)) + 2, math.ceil(max(p[1] for p in pts)) + 2
+    # output (X, Y) -> offset (X + x0, Y + y0) -> turned back -> source
+    a, b, d, e = cs, sn, -sn, cs
+    out = im.convert('RGBa').transform((x1 - x0, y1 - y0), Image.AFFINE, (a, b, a * x0 + b * y0 + top[0], d, e, d * x0 + e * y0 + top[1]), resample=Image.BICUBIC).convert('RGBA')
+    return out, (-x0, -y0)
+
+
+def only_piece(mk, seed):
+    """The connected piece of a mask that holds (or is nearest to) the seed point: a hand or boot never takes a stray bit of a neighbour."""
+    px = mk.load()
+    W, H = mk.size
+    sx, sy = int(seed[0]), int(seed[1])
+    best = None
+    for r in range(0, 40):
+        for y in range(max(0, sy - r), min(H, sy + r + 1)):
+            for x in range(max(0, sx - r), min(W, sx + r + 1)):
+                if px[x, y] == 255:
+                    best = (x, y)
+                    break
+            if best:
+                break
+        if best:
+            break
+    if not best:
+        return mk
+    out = mk.copy()
+    ImageDraw.floodfill(out, best, 128)
+    return out.point(lambda v: 255 if v == 128 else 0)
+
+
+def slice_assembled(rid, m, raw):
+    """UNDER + OVER + joints -> (virtual sheet, boxes, parts list, joints for empty bones)."""
+    a = m['assembled']
+    under = Image.open(os.path.join(raw, a['under'])).convert('RGBA')
+    over = Image.open(os.path.join(raw, a['over'])).convert('RGBA')
+    if over.size != under.size:
+        die('%s: OVER is %s, UNDER is %s: they must share one canvas' % (rid, over.size, under.size))
+    J = json.load(open(os.path.join(raw, a['joints'])))
+    need = [k + s for k in ('hip', 'knee', 'ankle', 'shoulder', 'elbow', 'wrist') for s in 'LR']
+    miss = [k for k in need if k not in J]
+    if miss:
+        die('%s: the joints file lacks %s' % (rid, ', '.join(miss)))
+    W, H = under.size
+    ua = under.getchannel('A').load()
+    sub = lambda p, q: (p[0] - q[0], p[1] - q[1])
+    norm = lambda v: (v[0] / (math.hypot(*v) or 1), v[1] / (math.hypot(*v) or 1))
+    def half_width(A, B):  # the tube's half width: the nearer edge across it at a third, half and two thirds down (the far side may touch the body)
+        u = norm(sub(B, A))
+        n = (-u[1], u[0])
+        out_ = []
+        for f in (1 / 3, 1 / 2, 2 / 3):
+            mx, my = A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f
+            side = []
+            for sgn in (1, -1):
+                k = 0
+                while k < max(W, H):
+                    x, y = int(round(mx + sgn * n[0] * k)), int(round(my + sgn * n[1] * k))
+                    if not (0 <= x < W and 0 <= y < H) or ua[x, y] < 40:
+                        break
+                    k += 1
+                side.append(k)
+            out_.append(min(side))
+        return max(3, sorted(out_)[1])
+    segs = {}
+    for s in 'LR':
+        for nm, A, B in (('thigh', 'hip', 'knee'), ('shin', 'knee', 'ankle'), ('upper', 'shoulder', 'elbow'), ('fore', 'elbow', 'wrist')):
+            P, Q = tuple(J[A + s]), tuple(J[B + s])
+            segs[nm + s] = (P, Q, half_width(P, Q))
+    hips = ((J['hipL'][0] + J['hipR'][0]) / 2, (J['hipL'][1] + J['hipR'][1]) / 2)
+    sh_y = (J['shoulderL'][1] + J['shoulderR'][1]) / 2
+    top0 = under.getchannel('A').point(lambda v: 255 if v >= 40 else 0).getbbox()[1]
+    def width_at(y):
+        xs = [x for x in range(W) if ua[x, y] >= 40]
+        return xs[-1] - xs[0] if xs else 0
+    span = [y for y in range(int(top0 + 0.3 * (sh_y - top0)), int(sh_y))]
+    neck_y = min(span, key=lambda y: (width_at(y), -y)) if span else sh_y - 0.2 * (hips[1] - sh_y)  # the neck: the narrowest row above the shoulders
+    masks = {}
+    def blank():
+        return Image.new('L', (W, H), 0)
+    for key, (P, Q, hw) in segs.items():
+        u = norm(sub(Q, P))
+        L = math.hypot(*sub(Q, P))
+        r = hw * 1.3
+        top_round = key[:-1] in ('shin', 'fore')
+        mk = blank()
+        px = mk.load()
+        x0, x1 = int(max(0, min(P[0], Q[0]) - r - 2)), int(min(W, max(P[0], Q[0]) + r + 3))
+        y0, y1 = int(max(0, min(P[1], Q[1]) - r - 2)), int(min(H, max(P[1], Q[1]) + r + 3))
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                if ua[x, y] < 8:
+                    continue
+                dx, dy = x + 0.5 - P[0], y + 0.5 - P[1]
+                t, d = dx * u[0] + dy * u[1], abs(-dx * u[1] + dy * u[0])
+                if (0 <= t <= L and d <= r) or math.hypot(x + 0.5 - Q[0], y + 0.5 - Q[1]) <= hw or (top_round and math.hypot(dx, dy) <= hw):
+                    px[x, y] = 255
+        masks[key] = mk
+    for s, (nm, joint, prev) in ((s, e) for s in 'LR' for e in (('boot', 'ankle', 'knee'), ('hand', 'wrist', 'elbow'))):
+        P, Q = tuple(J[joint + s]), tuple(J[joint + ('R' if s == 'L' else 'L')])
+        u = norm(sub(P, tuple(J[prev + s])))
+        hw = segs[('shin' if nm == 'boot' else 'fore') + s][2]
+        reach = 1.2 * math.hypot(*sub(P, tuple(J[prev + s])))
+        mk = blank()
+        px = mk.load()
+        for y in range(max(0, int(P[1] - reach)), min(H, int(P[1] + reach) + 1)):
+            for x in range(max(0, int(P[0] - reach)), min(W, int(P[0] + reach) + 1)):
+                if ua[x, y] < 8:
+                    continue
+                dx, dy = x + 0.5 - P[0], y + 0.5 - P[1]
+                dd = math.hypot(dx, dy)
+                if dd <= reach and dx * u[0] + dy * u[1] >= -hw and dd <= math.hypot(x + 0.5 - Q[0], y + 0.5 - Q[1]):
+                    px[x, y] = 255
+        for key in [k for k in masks if k.endswith(s) and k[:-1] in ('thigh', 'shin', 'upper', 'fore')]:  # what the tubes already hold is not the hand's or boot's
+            mk.paste(0, (0, 0), masks[key].point(lambda v: 255 if v else 0))
+        masks[nm + s] = only_piece(mk, P)
+    limbs = blank()
+    for k, mk in masks.items():
+        limbs.paste(255, (0, 0), mk)
+    alpha = under.getchannel('A').point(lambda v: 255 if v >= 8 else 0)
+    rest = Image.composite(alpha, blank(), limbs.point(lambda v: 0 if v else 255))
+    hm = blank()
+    ImageDraw.Draw(hm).rectangle([0, 0, W, int(neck_y)], fill=255)
+    masks['head'] = Image.composite(rest, blank(), hm)
+    tm = blank()
+    ImageDraw.Draw(tm).rectangle([0, int(neck_y) + 1, W, H], fill=255)
+    masks['torso'] = only_piece(Image.composite(rest, blank(), tm), hips)
+    # the rest pose (UNDER px): legs straight down from the hips, arms ARM_REST degrees out
+    restj = {}
+    for s in 'LR':
+        out_ = 1 if s == 'L' else -1  # rot sign that swings a hanging arm outward (bake turns clockwise)
+        hp = tuple(J['hip' + s])
+        l1, l2 = math.hypot(*sub(J['knee' + s], J['hip' + s])), math.hypot(*sub(J['ankle' + s], J['knee' + s]))
+        restj['hip' + s], restj['knee' + s], restj['ankle' + s] = hp, (hp[0], hp[1] + l1), (hp[0], hp[1] + l1 + l2)
+        th = math.radians(ARM_REST * out_)
+        dvec = (-math.sin(th), math.cos(th))
+        sp = tuple(J['shoulder' + s])
+        lu, lf = math.hypot(*sub(J['elbow' + s], J['shoulder' + s])), math.hypot(*sub(J['wrist' + s], J['elbow' + s]))
+        restj['shoulder' + s], restj['elbow' + s] = sp, (sp[0] + dvec[0] * lu, sp[1] + dvec[1] * lu)
+        restj['wrist' + s] = (restj['elbow' + s][0] + dvec[0] * lf, restj['elbow' + s][1] + dvec[1] * lf)
+        restj['rot' + s] = ARM_REST * out_
+    pieces = {}
+    for s in 'LR':
+        for nm, A, B in (('thigh', 'hip', 'knee'), ('shin', 'knee', 'ankle'), ('boot', 'ankle', None), ('upper', 'shoulder', 'elbow'), ('fore', 'elbow', 'wrist'), ('hand', 'wrist', None)):
+            prev = {'boot': 'knee', 'hand': 'elbow'}.get(nm)
+            axis = sub(J[B + s], J[A + s]) if B else sub(J[A + s], J[prev + s])
+            pieces[nm + s] = _upright(under, masks[nm + s], tuple(J[A + s]), axis) + (A,)
+    bottom = max(restj['ankle' + s][1] + (pieces['boot' + s][0].getchannel('A').point(lambda v: 255 if v > 40 else 0).getbbox()[3] - pieces['boot' + s][1][1]) for s in 'LR')
+    top = alpha.getbbox()[1]
+    k = 225.0 / (bottom - top)
+    to_canvas = lambda p: [round(128 + (p[0] - hips[0]) * k, 2), round(243 - (bottom - p[1]) * k, 2)]
+    # the virtual sheet: every piece in its own box, 16 px apart
+    items = [(n, im, piv) for n, (im, piv, _) in pieces.items()]
+    for n, mk, piv in (('head', masks['head'], (hips[0], neck_y)), ('torso', masks['torso'], hips)):
+        im = under.copy()
+        im.putalpha(Image.composite(under.getchannel('A'), Image.new('L', (W, H), 0), mk))
+        bb = mk.getbbox() or (0, 0, 1, 1)
+        items.append((n, im.crop(bb), (piv[0] - bb[0], piv[1] - bb[1])))
+    obb = over.getchannel('A').point(lambda v: 255 if v > 8 else 0).getbbox()
+    if not obb:
+        die('%s: OVER is empty' % rid)
+    items.append(('garment', over.crop(obb), (hips[0] - obb[0], hips[1] - obb[1])))
+    G = 16
+    SW = max(im.width for _, im, _ in items) * 4 + G * 5
+    x = y = row = G
+    pos = {}
+    for n, im, piv in items:
+        if x + im.width + G > SW:
+            x, y, row = G, y + row + G, G
+        pos[n] = (x, y)
+        x += im.width + G
+        row = max(row, im.height)
+    sheet = Image.new('RGBA', (SW, y + row + G), (0, 0, 0, 0))
+    boxes = []
+    for i, (n, im, piv) in enumerate(items):
+        sheet.alpha_composite(im, pos[n])
+        boxes.append({'i': i + 1, 'name': n, 'x': pos[n][0], 'y': pos[n][1], 'w': im.width, 'h': im.height})
+    piv_of = {n: piv for n, _, piv in items}
+    size_of = {n: im.size for n, im, _ in items}
+    anchor = lambda n: [round(piv_of[n][0] / size_of[n][0], 5), round(piv_of[n][1] / size_of[n][1], 5)]
+    g = m.get('garment', {})
+    gname = g.get('part', 'garment')
+    rec = lambda part, n, at, rot=0, **kw: dict({'part': part, 'box': n, 'anchor': anchor(n), 's': round(k, 6), 'at': to_canvas(at)}, **({'rot': rot} if rot else {}), **kw)
+    parts = []
+    for s in ('R', 'L'):  # back to front: far arm, far leg, torso, near leg, the garment, head, near arm
+        arm = [rec('hand' + s, 'hand' + s, restj['wrist' + s], restj['rot' + s]), rec('arm' + s + '_lo', 'fore' + s, restj['elbow' + s], restj['rot' + s]), rec('arm' + s + '_up', 'upper' + s, restj['shoulder' + s], restj['rot' + s])]
+        legs = [rec('leg' + s + '_up', 'thigh' + s, restj['hip' + s]), rec('leg' + s + '_lo', 'shin' + s, restj['knee' + s]), rec('foot' + s, 'boot' + s, restj['ankle' + s])]
+        if s == 'R':
+            parts += arm + legs + [rec('torso', 'torso', hips)]
+        else:
+            parts += legs + [dict(rec(gname, 'garment', hips), bone='torso', hem=g.get('hem', 0.3))] + [rec('head', 'head', (hips[0], neck_y))] + arm
+    return sheet, boxes, parts, {'hips': to_canvas(hips)}
+
+
+def expand(rid, m, raw):
+    """A rig as the build reads it: an assembled figure becomes a virtual sheet and a generated parts list (cached), a sheet stays as it is."""
+    if m.get('source') != 'assembled':
+        return m
+    key = ('assembled', rid, raw, json.dumps(m.get('assembled')), json.dumps(m.get('garment')))
+    if key not in _SHEETS:
+        sheet, boxes, parts, joints = slice_assembled(rid, m, raw)
+        _SHEETS[key] = (sheet, boxes, parts, joints)
+    sheet, boxes, parts, joints = _SHEETS[key]
+    return dict(m, sheet=key, parts=parts, joints=dict(joints, **m.get('joints', {})))
+
+
+def export_sheet(rid, m, raw, ward, out):
+    """--export: the rig as a parts sheet of spec v2 (every part its own piece in its own named box, 16 px apart, limbs as built: healed and
+    long), with its parts.json and a meta file that builds it. What an artist's sheet should look like; a fit run on it chooses no extension."""
+    entry, _, _, parts, _ = build_rig(rid, m, raw, ward)
+    G = 16
+    SW = max(2048, max(p['src'].width for p in parts) + 2 * G)
+    x = y = G
+    row = 0
+    pos = {}
+    for p in parts:
+        if x + p['src'].width + G > SW:
+            x, y, row = G, y + row + G, 0
+        pos[p['n']] = (x, y)
+        x += p['src'].width + G
+        row = max(row, p['src'].height)
+    sheet = Image.new('RGBA', (SW, max(SW, y + row + G)), (0, 0, 0, 0))
+    boxes, mparts = [], []
+    for i, p in enumerate(parts):
+        sheet.alpha_composite(p['src'], pos[p['n']])
+        w, h = p['src'].size
+        boxes.append({'i': i + 1, 'name': p['n'], 'x': pos[p['n']][0], 'y': pos[p['n']][1], 'w': w, 'h': h})
+        q = {'part': p['n'], 'box': p['n'], 'anchor': [round(p['piv'][0] / w, 6), round(p['piv'][1] / h, 6)], 's': round(p['s'], 6), 'at': p['at']}
+        if p['bone'] != p['n']:
+            q['bone'] = p['bone']
+        for k in ('rot', 'mirror', 'sy', 'hem', 'lag', 'upright'):
+            if k in p['p']:
+                q[k] = p['p'][k]
+        mparts.append(q)
+    os.makedirs(out, exist_ok=True)
+    if os.path.abspath(out).startswith(REPO + os.sep):
+        die('--export must point outside the repo')
+    sheet.save(os.path.join(out, 'rig.%s.png' % rid))
+    json.dump(boxes, open(os.path.join(out, 'rig.%s.parts.json' % rid), 'w'))
+    me = {k: v for k, v in expand(rid, m, raw).items() if k not in ('source', 'assembled', 'garment', 'parts', 'fit', 'sheet')}
+    me['sheet'] = 'rig.' + rid
+    me['joints'] = {b['n']: [b['x'], b['y']] for b in entry['bones'] if b.get('empty')}
+    me['extend'] = {k: 'auto' for k in m.get('extend', {})}
+    me['parts'] = mparts
+    open(os.path.join(out, 'meta.json'), 'w').write(dump_meta({'about': 'exported by tools/graftwork_rig_build.py --export', 'rigs': {rid: me}}))
+    print('exported %s: %s (%d parts)' % (rid, os.path.join(out, 'rig.%s.png' % rid), len(parts)))
 
 
 # ---------------------------------------------------------------- the auto-fit (--fit)
@@ -687,7 +971,7 @@ def fit_rig(rid, m, raw, ward, scratch):
     """The least extension of every "auto" limb of one rig for which no pixel of its END band is left uncovered by the parts drawn after it (the
     torso, the cloth, a near arm or prop; not its own shin and boot) in any pose of the envelope (tools/graftwork_rig_pose.mjs, posed by ui/rig.js). -> {limb: units}, and prints the table."""
     auto = [k for k, v in m.get('extend', {}).items() if v == 'auto']
-    order = [q['part'] for q in m['parts']]
+    order = [q['part'] for q in expand(rid, m, raw)['parts']]
     cand = {}
     for E in range(0, EXT_MAX + 1):
         entry, _, _, parts, _ = build_rig(rid, m, raw, ward, {k: E for k in auto})
@@ -828,10 +1112,12 @@ def dump_meta(meta):
     for i, rid in enumerate(ids):
         e = meta['rigs'][rid]
         out.append('  %s: {' % js(rid))
-        out += ['   %s: %s,' % (js(k), js(e[k])) for k in e if k != 'parts']
-        out.append('   "parts": [')
-        out += ['    ' + js(v) + (',' if j < len(e['parts']) - 1 else '') for j, v in enumerate(e['parts'])]
-        out.append('   ]')
+        keys = [k for k in e if k != 'parts']
+        out += ['   %s: %s%s' % (js(k), js(e[k]), ',' if 'parts' in e or j < len(keys) - 1 else '') for j, k in enumerate(keys)]
+        if 'parts' in e:  # an assembled figure has none: the slicer makes them
+            out.append('   "parts": [')
+            out += ['    ' + js(v) + (',' if j < len(e['parts']) - 1 else '') for j, v in enumerate(e['parts'])]
+            out.append('   ]')
         out.append('  }' + (',' if i < len(ids) - 1 else ''))
     out += [' }', '}']
     return '\n'.join(out) + '\n'
@@ -862,12 +1148,14 @@ def main():
     ap.add_argument('--only', default='')
     ap.add_argument('--preview', default='')
     ap.add_argument('--list', default='')
+    ap.add_argument('--meta', default=META, help='the meta file (default tools/graftwork_rig_meta.json; --fit writes its `fit` into it)')
+    ap.add_argument('--export', default='', help='write each rig built (--only) as a parts sheet of spec v2 with its parts.json and meta, into this folder OUTSIDE the repo')
     ap.add_argument('--fit', action='store_true', help='find the least hidden extension of every "auto" limb (extend in the meta), write it to the meta file as `fit`, then build')
     ap.add_argument('--scratch', default='', help='with --fit: a folder OUTSIDE the repo for the pose files (default: the system temp folder)')
     a = ap.parse_args()
     if not a.raw:
         die('give --raw <the folder that holds batch1/ and batch2/>')
-    meta = json.load(open(META))
+    meta = json.load(open(a.meta))
     ward = json.load(open(os.path.join(WARD, 'manifest.json')))
     if a.list:
         m = meta['rigs'][a.list]
@@ -879,6 +1167,11 @@ def main():
                 print('   comp', i, 'area', area * 4, 'x %d..%d y %d..%d' % (bb[0], bb[2], bb[1], bb[3]), ' fractions x %.2f..%.2f y %.2f..%.2f' % (bb[0] / o['w'], bb[2] / o['w'], bb[1] / o['h'], bb[3] / o['h']))
         return
     only = [s for s in a.only.split(',') if s]
+    if a.export:
+        for rid in meta['rigs']:
+            if not only or rid in only:
+                export_sheet(rid, meta['rigs'][rid], a.raw, ward, a.export)
+        return
     if a.fit:
         import tempfile
         scratch = a.scratch or tempfile.mkdtemp(prefix='gw_rigfit_')
@@ -891,14 +1184,14 @@ def main():
                 continue
             m.pop('fit', None)
             fit = fit_rig(rid, m, a.raw, ward, scratch)
-            keys = list(m)
             m2 = {}
-            for k in keys:
+            for k in m:
                 if k == 'parts':
                     m2['fit'] = fit
                 m2[k] = m[k]
-            meta['rigs'][rid] = m2
-        with open(META, 'w') as fh:
+            m2['fit'] = fit
+            meta['rigs'][rid] = {k: m2[k] for k in [q for q in m if q != 'parts'] + ['fit'] + (['parts'] if 'parts' in m else [])}
+        with open(a.meta, 'w') as fh:
             fh.write(dump_meta(meta))
     if a.preview:
         if os.path.abspath(a.preview).startswith(REPO + os.sep):
@@ -919,10 +1212,10 @@ def main():
             reduce_to(atlas, g).save(f, 'WEBP', quality=Q, method=4, exact=True)
             total += os.path.getsize(f)
         man['rigs'][rid] = entry
-        if a.preview:
+        if a.preview and rid in ward['actors']:
             preview(rid, entry, rest, parts, ward, a.preview)
         print('%-14s atlas %3d x %3d  parts %2d  height %.1f (standing %d)  top %+.1f bottom %+.1f  %s' % (
-            rid, entry['w'], entry['h'], len(entry['parts']), entry['height'], ward['actors'][rid]['bbox'][3] - ward['actors'][rid]['bbox'][1], drift[0], drift[1], 'ships' if entry['ship'] else 'lab only'))
+            rid, entry['w'], entry['h'], len(entry['parts']), entry['height'], (lambda b: b[3] - b[1])(ward['actors'][rid]['bbox'] if rid in ward['actors'] else entry['bbox']), drift[0], drift[1], 'ships' if entry['ship'] else 'lab only'))
     man['rigs'] = {k: man['rigs'][k] for k in meta['rigs'] if k in man['rigs']}
     with open(man_path, 'w') as f:
         f.write(dump_manifest(man))

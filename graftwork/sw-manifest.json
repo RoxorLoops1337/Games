@@ -1,6 +1,6 @@
 {
- "version": "d634930f18a6c1bc",
- "bytes": 10412105,
+ "version": "8b975e8726478dae",
+ "bytes": 10412172,
  "count": 549,
  "files": {
   "art/attacks.js": {
@@ -52,24 +52,24 @@
    "s": 13260
   },
   "assets/rigs/knitter@1x.webp": {
-   "h": "0f571d14a693398f",
-   "s": 7192
+   "h": "cd419e1a072322c0",
+   "s": 7180
   },
   "assets/rigs/knitter@2x.webp": {
-   "h": "9950608ed0ad6100",
+   "h": "7774768a2cc82a35",
    "s": 17686
   },
   "assets/rigs/manifest.json": {
-   "h": "c6b64f805d4c67a6",
-   "s": 33049
+   "h": "8e7645f574e6d27b",
+   "s": 33146
   },
   "assets/rigs/marrow@1x.webp": {
-   "h": "335eabb6b2026687",
-   "s": 6624
+   "h": "3e97fd1c41a3114e",
+   "s": 6620
   },
   "assets/rigs/marrow@2x.webp": {
-   "h": "09bf2a319778f3b5",
-   "s": 16742
+   "h": "5c278f4dd0a89f4a",
+   "s": 16752
   },
   "assets/rigs/night_nurse@1x.webp": {
    "h": "639834c3e46f2051",
@@ -80,20 +80,20 @@
    "s": 14054
   },
   "assets/rigs/npc_nurse@1x.webp": {
-   "h": "468b9cc2612f5f95",
-   "s": 6116
+   "h": "599609cb6035faf8",
+   "s": 6130
   },
   "assets/rigs/npc_nurse@2x.webp": {
-   "h": "0303ae247c019429",
-   "s": 14728
+   "h": "98639bf7924c8014",
+   "s": 14716
   },
   "assets/rigs/npc_patient@1x.webp": {
-   "h": "5454a8807e55cee5",
-   "s": 6108
+   "h": "2902974f95e1c663",
+   "s": 6118
   },
   "assets/rigs/npc_patient@2x.webp": {
-   "h": "ed1ca5c53703f49d",
-   "s": 15698
+   "h": "7c410c93e49979c6",
+   "s": 15668
   },
   "assets/rigs/npc_porter@1x.webp": {
    "h": "2f305403bee54a57",
@@ -112,12 +112,12 @@
    "s": 14968
   },
   "assets/rigs/wick@1x.webp": {
-   "h": "14c6b0267caa6837",
-   "s": 6202
+   "h": "8fb0634c7572faee",
+   "s": 6200
   },
   "assets/rigs/wick@2x.webp": {
-   "h": "ac187ab987a2951a",
-   "s": 15738
+   "h": "b645edbdfc02fd7b",
+   "s": 15734
   },
   "assets/ui/atlas/chrome@1x.webp": {
    "h": "4a0e598262e359e6",
