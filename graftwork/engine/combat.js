@@ -671,7 +671,7 @@ function enemyAct(c, e) {
 }
 
 // ---------- turn flow ----------
-export function startPlayerTurn(c) {
+function startPlayerTurn(c) {
   if (c.over) return;
   c.turn++;
   c.playsTurn = 0; c.cardsThisTurn = []; c.killsThisTurn = 0;

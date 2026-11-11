@@ -8,7 +8,7 @@ import * as METAX from '../graftwork/engine/meta.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
 import { TIP_TIMING } from '../graftwork/ui/tooltips.js';
 TIP_TIMING.SHOW_DELAY = 0.1; // a hover here rests 6 or 7 frames (0.1 s) before it is looked at: the real 0.25 s delay is covered by graftwork_tip_lifecycle
-import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES, ENEMIES, STATUSES } from '../graftwork/data/index.js';
+import { CARDS, GRAFT_LIST, RELICS, POTIONS, EVENTS, ENEMIES, STATUSES } from '../graftwork/data/index.js';
 
 const SCREENS = {};
 for (const n of ['ward', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'archive', 'end', 'wardrobe', 'title', 'settings', 'pause']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
