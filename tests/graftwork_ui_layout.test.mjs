@@ -10,6 +10,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import * as METAX from '../graftwork/engine/meta.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
 import { TIP_TIMING } from '../graftwork/ui/tooltips.js';
+import { openPause } from '../graftwork/ui/pause.js';
 TIP_TIMING.SHOW_DELAY = 0.1; // a hover here rests 6 or 7 frames (0.1 s) before it is looked at: the real 0.25 s delay is covered by graftwork_tip_lifecycle
 import { CARDS, RELICS, POTIONS, EVENTS, ENEMIES } from '../graftwork/data/index.js';
 
@@ -238,7 +239,7 @@ for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 
   const T = (n) => `${n}/` + (pscale > 1 ? 'phone' : pscale ? 'p' + pscale : 's' + scale);
   const o = { scale, seed: 'ttl', meta: richMeta() }; if (pscale > 1) o.phone = true; else if (pscale) o.pscale = pscale;
   const h = await make(o); const f = flowFor(h); h.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; h.meta.bestAsc = { marrow: 3 };
-  f.hasSave = () => false; f.start = () => {}; f.openSettings = () => h.app.push('settings', {}); f.openPause = () => h.app.push('pause', {});
+  f.hasSave = () => false; f.start = () => {}; f.openSettings = () => h.app.push('settings', {}); f.openPause = () => openPause(h.app);
   h.app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
   h.app.go('title'); look(h, 80, T('title') + '/menu');
   { // Install app available (Chrome fired beforeinstallprompt): the Install slab shares the Credits row, with and without a saved run, plus the Settings row
