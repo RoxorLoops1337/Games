@@ -1,11 +1,12 @@
 // Hygiene gate for the Graftwork cleanup (graftwork/design/CLEANUP_PLAN.md, phase 0; the audit is tools/graftwork_hygiene.mjs).
-// Outright (must be empty): files nothing reaches, manifest entries without a file, em dashes, imports that do not resolve.
+// Outright (must be empty): files nothing reaches, manifest entries without a file, em dashes, imports that do not resolve, and
+// source files the module map of graftwork/CLAUDE.md does not name (or paths it names that are gone).
 // Against tests/graftwork_hygiene_allow.json (today's known junk): unused exports, exports only tests keep alive, `export` on
 // names used only in their own file, top level names nothing references, duplicate small helpers, orphan asset files, tools no
 // doc names. A NEW finding fails, and so does a listed finding that is gone from the code: the list can only shrink
 // (`node tools/graftwork_hygiene.mjs --prune-allow` drops what was cleaned up). An entry kept on purpose carries a written reason in the
 // file's `reasons` map; a reason whose entry is gone fails too.
-// The first half proves on a throwaway repo (in the system temp folder) that each check really fires.
+// The first half proves on throwaway repos (in the system temp folder) that each check really fires, the module map check included.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -134,6 +135,32 @@ try {
     assert.ok(cmp.unusedExports.fresh.includes('graftwork/lib.js:usesIt') && !cmp.unusedExports.fresh.includes('graftwork/lib.js:neverImported'));
   });
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+
+// ---------------------------------------------------------------- the module map of graftwork/CLAUDE.md, on a second throwaway repo
+const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'graftwork-hygiene-map-'));
+const put2 = (rel, text) => { const f = path.join(tmp2, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); };
+try {
+  put2('graftwork/index.html', '<script type="module" src="main.js"></script>');
+  put2('graftwork/main.js', "import './ui/a.js'; import './ui/b.js'; import './engine/x.js';");
+  put2('graftwork/ui/a.js', 'export {};'); put2('graftwork/ui/b.js', 'export {};'); put2('graftwork/engine/x.js', 'export {};');
+  put2('graftwork/lab/view.html', '<p>a lab page</p>');
+  put2('graftwork/assets/ward/manifest.json', '{}'); put2('graftwork/design/notes.js', '// not a source folder');
+  put2('tools/graftwork_t.mjs', 'console.log(1);');
+  const doc = (mapLines) => ['# GAME', '', '## Module map', ...mapLines, '', '## Later', '- `ui/b.js` named outside the map does not count'].join('\n');
+  put2('graftwork/CLAUDE.md', doc(['- Top level: `index.html` + `main.js`', '- `ui/a.js` and `ui/gone.js`', '- `graftwork/engine/x.js`, `lab/view.html`, `tools/graftwork_t.mjs`, `assets/ward/manifest.json`']));
+  t('module map: a source file it does not name and a path it names that is gone both fire, with the file and what is missing', () => {
+    assert.deepEqual(audit(tmp2).moduleMap, [
+      'graftwork/CLAUDE.md: the module map names `ui/gone.js`, but graftwork/ui/gone.js does not exist',
+      'graftwork/ui/b.js: not named in the module map of graftwork/CLAUDE.md (add a line with `ui/b.js`)',
+    ]);
+  });
+  t('module map: complete and true is clean; no map section is one finding', () => {
+    put2('graftwork/CLAUDE.md', doc(['- `index.html` `main.js` `ui/a.js` `ui/b.js` `graftwork/engine/x.js` `lab/view.html` `tools/graftwork_t.mjs`']));
+    assert.deepEqual(audit(tmp2).moduleMap, []);
+    put2('graftwork/CLAUDE.md', '# GAME\n\n## Files\n- `ui/a.js`\n');
+    assert.deepEqual(audit(tmp2).moduleMap, ['graftwork/CLAUDE.md: no "## Module map" section']);
+  });
+} finally { fs.rmSync(tmp2, { recursive: true, force: true }); }
 
 // ---------------------------------------------------------------- the real code base
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
