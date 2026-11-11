@@ -25,6 +25,15 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
+// --help prints the header of this file and stops, an option that does not exist stops with a message: neither starts a server or a browser, and
+// neither writes the result file (a profile run takes minutes and writes graftwork/design/PERF_RESULT.json, or the file --out names).
+const OPTIONS = ['root', 'quick', 'throttle', 'out', 'label', 'graphics', 'dpr', 'scenarios', 'soak', 'list', 'cpu', 'dump', 'flags', 'init', 'merge', 'noload', 'notrace', 'serve', 'settle', 'timeout', 'verbose'];
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1).filter((l, i, all) => all.slice(0, i + 1).every((q) => q.startsWith('//'))).map((l) => l.slice(3)).join('\n'));
+  process.exit(0);
+}
+const unknown = args.find((a) => a.startsWith('-') && !OPTIONS.includes(a.replace(/^--/, '')));
+if (unknown !== undefined) { console.error(`graftwork_profile.mjs: unknown option ${unknown} (nothing was started or written; see --help)`); process.exit(2); }
 let ROOT = REPO;
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i < 0 ? d : (args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : true); };
 if (args.includes('--root')) ROOT = path.resolve(args[args.indexOf('--root') + 1]); // serve another copy of the repo (a baseline snapshot)

@@ -9,6 +9,9 @@
 //                     hand and in front, the hem over the hip joints in every frame
 //   the game          preview off: nothing under assets/rigs is ever asked for and the actor is drawn as before; preview on: the manifest, then
 //                     one atlas of the character on screen, the puppet until it is decoded, then the rig on the same feet and the same height
+//   the lab           (Chromium, skipped when missing) the Rig lab page offers every rig of the manifest, shows the one chosen beside the puppet and the
+//                     standing sprite, and runs at the game's pace table
+//   battles           a fight with the preview on never asks for a rig
 //   real pixels       (Chromium, skipped when missing) every shipped rig is ONE connected figure at every frame of the walk and of the idle
 //   the build tool    byte-identical twice and equal to the committed files (skipped without Pillow or without the raw sheets)
 import assert from 'node:assert/strict';
@@ -16,7 +19,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { fakeCtx } from './graftwork_lib.mjs';
+import { fakeCtx, makeApp, frames } from './graftwork_lib.mjs';
+import { withChromium, labVisit } from './graftwork_browser_lib.mjs';
 const R = await import('../graftwork/ui/rig.js');
 const { createRigs, rigs } = await import('../graftwork/ui/rigs.js');
 const { previewOn, PREVIEW_DEFAULT } = await import('../graftwork/ui/preview.js');
@@ -389,27 +393,70 @@ await t('a_rig_that_does_not_ship_is_never_asked_for_by_the_game_and_the_loader_
   const dead = createRigs({ fetchJson: async () => { throw new Error('404'); } }); dead.get('marrow', {}); await tick(); assert.equal(dead.state, 'none'); assert.equal(dead.get('marrow', {}), null, 'no manifest: the puppet for good');
   assert.equal(createRigs().get('marrow', {}), null, 'headless: no fetch, no Image, no request');
 });
-await t('lab_shows_all_rigs_beside_the_puppet_and_the_standing_sprite', () => {
-  const js = fs.readFileSync(path.join(root, 'lab/anim.js'), 'utf8');
-  for (const w of ["'../ui/rigs.js'", "rigs.setBase('../assets/rigs/')", 'rigs.get(R.who, APP, true)', 'RIG.poseRig(', 'RIG.drawRigged(', 'RIG.footContact(', 'RIG.rigPlace(', "rec.pm = 'puppet'", 'ISO.drawActor(APP, g, rec', 'PUPPET (the game today)', 'STANDING sprite'])
-    assert.ok(js.includes(w), 'lab: ' + w);
-  for (const w of ['Painted rigs', 'Walk speed', "'slow', 'game', 'fast'", 'Heading on the floor', 'Bones', 'Floor marks', 'Onion skin', 'Flip', 'Idle', 'Walk', 'sole slide', 'lab only']) assert.ok(js.includes(w), 'lab control: ' + w);
-  assert.ok(js.includes('PACE.normal.step') && js.includes('PACE.fast.step'), 'the lab speeds are the game\'s pace table');
-  const iso = fs.readFileSync(path.join(root, 'ui/ward_iso.js'), 'utf8');
-  assert.ok(/previewOn\('rig', app\.settings\)/.test(iso) && /!r\.pm && rigOn\(app\) \? rigs\.get\(aid, app\) : null/.test(iso), 'the Ward asks for a rig only behind the switch');
-  assert.ok(!/rigs?\.js|preview\.js/.test(fs.readFileSync(path.join(root, 'ui/combat_art.js'), 'utf8')), 'battles are not touched in this branch');
+await t('with_the_preview_on_the_labs_pm_switch_still_shows_the_puppet_and_the_hop_and_asks_for_no_rig', async () => {
+  hook();
+  try {
+    const { g, draws } = recCtx(), app = { frame: 1, px: 1, scale: 1, ctx: g, text() {}, settings: { previewArt: true } };
+    assets.ensure(app); await tick(); const run = { hero: 'marrow' };
+    for (const pm of ['puppet', 'off']) {
+      const rec = newRec('hero', 'marrow', 44); rec.pm = pm;
+      for (let i = 0; i < 5; i++) { app.frame++; ISO.drawActor(app, g, rec, run); settle(); await tick(); }
+      assert.deepEqual(rigReq(), [], `pm ${pm}: the preview is on and the rig is still not asked for`); assert.equal(rigs.state, 'idle');
+      draws.length = 0; app.frame++; ISO.drawActor(app, g, rec, run);
+      assert.equal(draws.filter((d) => d.img.src && d.img.src.includes('actors/marrow')).length, 1, `pm ${pm}: the standing sprite is what is drawn`); assert.equal(draws.filter((d) => d.img.src && d.img.src.includes('rigs')).length, 0);
+    }
+  } finally { unhook(); }
+});
+await t('a_fight_with_the_preview_on_never_asks_for_a_rig_and_still_paints_the_heroes_and_the_enemy', async () => {
+  hook();
+  try {
+    const RUN = await import('../graftwork/engine/run.js'), combat = (await import('../graftwork/ui/combat.js')).default, audio = await import('../graftwork/ui/audio.js');
+    const run = RUN.newRun({ hero: 'marrow', seed: 'rigfight' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['night_nurse'] }; // marrow and night_nurse both have a rig
+    const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } }); app.settings = { previewArt: true };
+    app.register('combat', combat); app.go('combat', { run });
+    for (let i = 0; i < 6; i++) { frames(app, 20); settle(); await tick(); }
+    assert.ok(REQ.some((u) => u.includes('actors/marrow')) && REQ.some((u) => u.includes('actors/night_nurse')), 'the painted hero and enemy are asked for: the fight draws them');
+    assert.deepEqual(rigReq(), [], 'and no rig is'); assert.equal(rigs.state, 'idle', 'the rig loader was never touched');
+  } finally { unhook(); }
+});
+
+// ---------------------------------------------------------------- the lab (a real page in Chromium; skipped when it is missing)
+await t('the_rig_lab_offers_every_rig_shows_it_beside_the_puppet_and_the_standing_sprite_and_runs_at_the_games_pace', async () => {
+  await withChromium(async ({ br, base }) => {
+    const v = await labVisit(br, base, '?scene=rig&who=marrow&anim=walk', `window.__drawn.has('STANDING sprite')`);
+    try {
+      let S = await v.read();
+      assert.deepEqual(v.errors, [], 'the page raised nothing'); assert.equal(S.banner, '', 'and shows no error');
+      assert.ok(v.requests.some((q) => q.url === '/graftwork/assets/rigs/manifest.json' && q.status === 200) && v.requests.some((q) => /^\/graftwork\/assets\/rigs\/marrow@[12]x\.webp$/.test(q.url) && q.status === 200), 'it loads the rig manifest and the atlas of the character');
+      // every rig of the manifest is offered; the ones that do not ship say so
+      assert.deepEqual(S.groups, ['Painted rigs', 'No art']);
+      const offered = new Map(S.options.flat().map(([val, text]) => [val, text]));
+      for (const id of IDS) { assert.ok(offered.has(id), id + ' is offered'); assert.equal(/\(lab only\)/.test(offered.get(id)), !MAN.rigs[id].ship, id + (MAN.rigs[id].ship ? ' ships, so it is not marked' : ' stays in the lab, so it says so')); }
+      assert.ok(offered.has('placeholder'), 'and the capsule placeholder');
+      for (const w of ['Walk speed', 'Slow', 'Game', 'Fast', 'Heading on the floor', 'Bones', 'Floor marks', 'Onion skin', 'Flip', 'Idle', 'Walk']) assert.ok(S.ctl.includes(w), 'lab control: ' + w);
+      // the three figures of the comparison, on one canvas, and the readout of the rig from the manifest
+      for (const w of ['RIG: Marrow (ships in the preview)', 'PUPPET (the game today)', 'STANDING sprite']) assert.ok(S.drawn.includes(w), 'drawn: ' + w);
+      const e = MAN.rigs.marrow; assert.match(S.readout, new RegExp(`^rig Marrow: ${e.parts.length} parts, atlas ${e.w} x ${e.h}`), 'the readout is the manifest\'s');
+      assert.match(S.plant, /sole slide/, 'the sole slide is measured');
+      // the pace: the lab's speeds are the game's pace table
+      const hyp = Math.hypot(ISO.TW / 2, ISO.TH / 2);
+      assert.match(S.readout, new RegExp(`pace game: ${Math.round(hyp / PACE.normal.step)} world px/s`), 'Game = the hero at the Normal pace'); assert.ok(S.titles.Game.includes(PACE.normal.step + ' s'), S.titles.Game);
+      await v.page.click('button:text-is("Fast")'); await v.until(`document.getElementById('read').innerText.includes('pace fast')`); S = await v.read();
+      assert.match(S.readout, new RegExp(`pace fast: ${Math.round(hyp / PACE.fast.step)} world px/s`), 'Fast = the Fast walk setting');
+    } finally { await v.close(); }
+    const lab = await labVisit(br, base, '?scene=rig&who=candy_striper&anim=walk', `window.__drawn.has('STANDING sprite')`);
+    try {
+      const S = await lab.read(), e = MAN.rigs.candy_striper; assert.equal(e.ship, false);
+      assert.ok(S.drawn.includes('RIG: Candy Striper (lab only, the game keeps the puppet)'), 'a rig that does not ship is drawn by the lab'); assert.ok(S.readout.includes('ships no: ' + e.note), 'with the reason from the manifest');
+      assert.ok(lab.requests.some((q) => /\/candy_striper@[12]x\.webp$/.test(q.url) && q.status === 200), 'the lab may ask for it, the game never does'); assert.deepEqual(lab.errors, []);
+    } finally { await lab.close(); }
+  });
 });
 
 // ---------------------------------------------------------------- real pixels (needs Chromium; skipped when it is missing)
 await t('every_shipped_rig_is_one_connected_figure_at_every_frame', async () => {
-  let chromium = null; const { createRequire } = await import('node:module'), req = createRequire(import.meta.url); for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright']) { try { chromium = req(m).chromium; break; } catch (e) { /* try the next */ } }
-  if (!chromium) { console.log('skip: playwright missing'); return; }
-  const http = await import('node:http');
-  const srv = http.createServer((q, r) => { const f = path.join(repo, decodeURIComponent(q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { r.writeHead(404); r.end(); } else { r.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : f.endsWith('.webp') ? 'image/webp' : 'text/html' }); r.end(d); } }); });
-  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok)); const port = srv.address().port; let br = null;
-  try {
-    try { br = await chromium.launch(); } catch (e) { console.log('skip: no chromium'); return; }
-    const pg = await br.newPage(); await pg.goto(`http://127.0.0.1:${port}/graftwork/design/README.md`);
+  await withChromium(async ({ br, base }) => {
+    const pg = await br.newPage(); await pg.goto(`${base}/graftwork/design/README.md`);
     const res = await pg.evaluate(async (heads) => {
       const RIG = await import('/graftwork/ui/rig.js'), man = await (await fetch('/graftwork/assets/rigs/manifest.json')).json(), out = {};
       for (const id of Object.keys(man.rigs)) {
@@ -434,7 +481,7 @@ await t('every_shipped_rig_is_one_connected_figure_at_every_frame', async () => 
     const ids = Object.keys(res); assert.ok(ids.length >= 5 && ids.includes('marrow'), 'shipped rigs were drawn');
     for (const id of ids) assert.equal(res[id].pieces, 1, `${id}: the figure falls apart into ${res[id].pieces} pieces at ${res[id].at} (a limb or a prop floats)`);
     console.log('   one piece at 104 poses each: ' + ids.join(', '));
-  } finally { if (br) await br.close(); srv.close(); }
+  });
 });
 
 // ---------------------------------------------------------------- the build tool (needs Pillow and the raw sheets, which are not in the repo)

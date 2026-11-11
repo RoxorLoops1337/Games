@@ -1,5 +1,16 @@
 """Graftwork PWA icons: a brass 'G' seal on the dark slab, ringed by a vellum running stitch with a black thread line.
 Procedural (PIL), no Ward art. Run: python3 tools/graftwork_icons.py  -> graftwork/icons/*.png (palette from graftwork/ui/core.js COL)."""
+import sys
+
+# The tool takes no arguments: --help prints this page and stops, anything else stops with a message. Nothing is written in either case (an argument
+# used to start the build, which rewrites the four committed icons).
+if len(sys.argv) > 1:
+    if sys.argv[1] in ('-h', '--help'):
+        print(__doc__)
+        sys.exit(0)
+    print(f'graftwork_icons.py: takes no arguments, got {sys.argv[1]!r} (nothing was written; see --help)', file=sys.stderr)
+    sys.exit(2)
+
 import math, os, glob
 from PIL import Image, ImageDraw, ImageFont
 

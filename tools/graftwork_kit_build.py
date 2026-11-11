@@ -6,7 +6,7 @@ Raw files (NOT in the repo) live in RAW (default /tmp/claude-0/art/kit/raw). Nam
   wall_<id>.png    1024 px opaque, flat front-on wall texture
   piece_<id>.png   1920 px RGBA, flat front-on wall piece (door, window, banner, sconce)
   prop_<id>.png    1920 px RGBA, isometric 3/4 single object
-Run:  python3 tools/graftwork_kit_build.py [RAW_DIR]
+Run:  python3 tools/graftwork_kit_build.py [RAW_DIR]      (python3 tools/graftwork_kit_build.py --help prints this page and writes nothing)
 Steps: (1) textures are made seamless (the image is rolled by half, the original is kept in the middle and the rolled copy is
 cross-blended in only inside a narrow band at the borders, so the pattern keeps its crisp detail), then downscaled to 512
 with a wrap-aware resize (3x3 tiling, centre crop) so the result still tiles; (2) pieces and props are matte-cleaned, trimmed to
@@ -16,11 +16,31 @@ Units: the lab renderer uses the Ward projection (TW 92 x TH 48); a room is a 4 
 Sprite sizes in the manifest are in sprite px (the @2x file); `sw` is the on-screen width in world units, so draw width = sw and
 draw scale = sw / w. anchorX/anchorY is the floor contact point (props) or the wall mount point (pieces) in sprite px.
 """
-import json, os, sys, glob
+import sys
+
+# The command line is checked before anything is imported, read or written: --help prints this page and stops, an option (there are none) or a second
+# argument stops with a message instead of becoming the raw folder, and a build with no raw PNGs to build from stops too: it used to write an empty
+# manifest over the committed one. Nothing is touched in any of these cases.
+def refuse(msg):
+    print(f'graftwork_kit_build.py: {msg} (nothing was read or written; see --help)', file=sys.stderr)
+    sys.exit(2)
+
+if any(a in ('-h', '--help') for a in sys.argv[1:]):
+    print(__doc__)
+    sys.exit(0)
+for _a in sys.argv[1:]:
+    if _a.startswith('-'):
+        refuse(f'unknown option {_a}')
+if len(sys.argv) > 2:
+    refuse('one argument at most, the folder of the raw PNGs')
+
+import json, os, glob
 from PIL import Image
 import numpy as np
 
 RAW = sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/art/kit/raw'
+if not glob.glob(os.path.join(RAW, '*.png')):
+    refuse(f'no raw PNGs in {RAW}: give the folder that holds them as RAW_DIR')
 OUT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'graftwork', 'assets', 'ward_kit'))
 Q = 82
 TEX = 512
