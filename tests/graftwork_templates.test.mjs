@@ -36,12 +36,6 @@ await t('nine_slice_keeps_margins_and_covers_the_target', () => {
   for (const q of tiny) assert.ok(q[6] >= 0 && q[7] >= 0);
   assert.equal(tiny.reduce((a, q) => a + q[6] * q[7], 0), 64);
 });
-await t('content_rect_keeps_native_insets', () => {
-  const def = { w: 64, h: 64, slice: [8, 8, 8, 8], content: { x: 10, y: 12, w: 40, h: 36 } };
-  assert.deepEqual(T.contentRect(def, 100, 100, 200, 100), { x: 110, y: 112, w: 200 - 10 - 14, h: 100 - 12 - 16 });
-  assert.deepEqual(T.contentRect({ w: 64, h: 64, slice: [8, 6, 8, 6] }, 0, 0, 100, 100), { x: 8, y: 6, w: 84, h: 88 });
-  assert.deepEqual(T.contentRect({ w: 10, h: 10 }, 5, 5, 20, 20), { x: 5, y: 5, w: 20, h: 20 });
-});
 await t('slots_anchor_pivot_and_repeat', () => {
   const a = T.resolveSlot({ anchor: [1, 0], pivot: [1, 0], dx: -4, dy: 6, w: 40, h: 20 }, 220, 310);
   assert.deepEqual([a.x, a.y, a.w, a.h], [110 - 40 - 4, -155 + 6, 40, 20]);
@@ -66,12 +60,6 @@ await t('merge_overrides_slots_without_mutating', () => {
   const m = T.mergeTemplate(T.CARD_TEMPLATE, { slots: { window: { y: -100 } } }, { slots: { namePlate: { x: -50 } } });
   assert.equal(m.slots.window.y, -100); assert.equal(m.slots.window.h, 90); assert.equal(m.slots.namePlate.x, -50);
   assert.equal(T.CARD_TEMPLATE.slots.window.y, -112);
-});
-await t('fit_font_size_shrinks_to_width', () => {
-  const meas = (s, str) => str.length * s * 0.5;
-  assert.equal(T.fitFontSize(meas, 'abcd', 100, 17, 9), 17);
-  const s = T.fitFontSize(meas, 'a'.repeat(30), 100, 17, 9); assert.ok(s < 17 && s >= 9 && meas(s, 'a'.repeat(30)) <= 100 + 1e-9 || s === 9);
-  assert.equal(T.fitFontSize(meas, 'a'.repeat(200), 100, 17, 9.5), 9.5);
 });
 await t('frame_id_candidates_run_specific_to_generic', () => {
   assert.deepEqual(T.cardFrameIds({ type: 'attack', school: 'ember' }, 'rare'), ['card_front.attack.rare.ember', 'card_front.attack.rare', 'card_front.attack', 'card_front.rare', 'card_front']);

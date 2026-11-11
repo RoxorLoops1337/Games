@@ -1,6 +1,6 @@
 // Combat screen drawing helpers: bars, status rows, intent bubbles, card keyword panel.
 import { COL, W, clamp, rgba } from './core.js';
-import { STATUSES, GRAFTS, SCHOOLS, CARDS, RELICS } from '../data/index.js';
+import { STATUSES, GRAFTS, SCHOOLS, RELICS } from '../data/index.js';
 import { statusText, priceOnCard } from '../engine/text.js';
 import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
 import * as L from './combat_layout.js';

@@ -1,5 +1,5 @@
 // Small drawing + rules helpers for the graft table and reward screens (pure canvas, no state).
-import { COL, EASE, clamp, rgba } from './core.js';
+import { COL, clamp, rgba } from './core.js';
 import { SCHOOLS } from '../data/index.js';
 import * as ICONS from '../art/icons.js';
 import { cantGraftWhy } from '../engine/cards.js';

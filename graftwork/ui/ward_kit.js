@@ -9,7 +9,7 @@
 //   plansModal(app, run, st)                     the building deck viewer (st.plans = true opens it); returns true while open
 //   buildPickRow(app, run, rw, x, y, w, h, st)   reward screen: pick 1 of 3 building cards or skip (engine takeBuildChoice)
 //   dispensary(app, run, shop, st)               shop screen: building cards for sale and the remove-a-plan service
-import { COL, clamp, rgba, EASE } from './core.js';
+import { COL, clamp, rgba } from './core.js';
 import { lnw } from '../art/linework.js';
 import { drawCoin } from '../art/icons.js';
 import { WARD_GLOSSARY } from './tooltips.js';

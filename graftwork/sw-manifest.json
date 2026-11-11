@@ -1,6 +1,6 @@
 {
- "version": "e0041a927270cb5b",
- "bytes": 10413794,
+ "version": "d54c117d16123784",
+ "bytes": 10408597,
  "count": 547,
  "files": {
   "art/attacks.js": {
@@ -8,8 +8,8 @@
    "s": 22522
   },
   "art/backgrounds.js": {
-   "h": "3f544f050664afb7",
-   "s": 64085
+   "h": "b69313bd520da853",
+   "s": 63731
   },
   "art/cards.js": {
    "h": "eb938b585a9f88a7",
@@ -32,8 +32,8 @@
    "s": 31393
   },
   "art/icons.js": {
-   "h": "0d2893d13432332d",
-   "s": 105012
+   "h": "9ca0b293a67f7737",
+   "s": 102311
   },
   "art/linework.js": {
    "h": "c056aea41d4794de",
@@ -2008,8 +2008,8 @@
    "s": 31786
   },
   "ui/combat_hud.js": {
-   "h": "3eb79894e5620fd9",
-   "s": 30487
+   "h": "8d51ebc4e4216774",
+   "s": 30480
   },
   "ui/combat_layout.js": {
    "h": "88945011bab141db",
@@ -2052,8 +2052,8 @@
    "s": 49983
   },
   "ui/graft_parts.js": {
-   "h": "3ff6bfaa35c85e1b",
-   "s": 9653
+   "h": "0e342d43a62490e0",
+   "s": 9647
   },
   "ui/install.js": {
    "h": "5f24328ccefc8ae8",
@@ -2136,8 +2136,8 @@
    "s": 3452
   },
   "ui/templates.js": {
-   "h": "5fc050083324b752",
-   "s": 24717
+   "h": "468508987730c01d",
+   "s": 24049
   },
   "ui/text_metrics.js": {
    "h": "65041609a8c1c5dd",
@@ -2156,8 +2156,8 @@
    "s": 26476
   },
   "ui/tooltips.js": {
-   "h": "593510528f34e419",
-   "s": 54539
+   "h": "fc9a9da8e3aab90c",
+   "s": 53084
   },
   "ui/transitions.js": {
    "h": "ed70448bfcd877f4",
@@ -2176,8 +2176,8 @@
    "s": 72458
   },
   "ui/ward_kit.js": {
-   "h": "58fe74c3a799e54f",
-   "s": 34898
+   "h": "852acc04ace19bd6",
+   "s": 34892
   },
   "ui/ward_kit_iso.js": {
    "h": "7bb8698177e1c607",

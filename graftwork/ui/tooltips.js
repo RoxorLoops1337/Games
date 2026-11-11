@@ -245,37 +245,6 @@ function drawGlyph(ctx, kind, x, y, s, color) {
   ctx.fill(); ctx.stroke(); ctx.restore();
 }
 
-// ---- card text with keyword underlines ----
-const tokens = (line) => {
-  const out = []; let last = 0;
-  for (const h of scan(line)) { if (h.i > last) out.push({ t: line.slice(last, h.i) }); out.push({ t: line.slice(h.i, h.i + h.len), kw: h.name }); last = h.i + h.len; }
-  if (last < line.length) out.push({ t: line.slice(last) });
-  return out;
-};
-export function drawCardText(app, ctx, lines, x, y, w, size = 15, o = {}) {
-  const lh = Math.round(size * 1.25), sz = Math.round(size * (o.fixed ? 1 : app.textScale || 1));
-  let yy = y;
-  for (const ln of lines) {
-    let cx = x;
-    const words = [];
-    for (const tk of tokens(ln)) for (const part of tk.t.split(/(\s+)/)) if (part) words.push({ t: part, kw: tk.kw });
-    for (const wd of words) {
-      const ww = app.measure(wd.t, sz, { ui: true, bold: !!wd.kw });
-      if (cx + ww > x + w && cx > x && wd.t.trim()) { cx = x; yy += lh; }
-      if (!wd.t.trim() && cx === x) continue;
-      const col = wd.kw ? KEYWORDS[wd.kw].color : (o.color || COL.vellum);
-      app.text(wd.t, cx, yy, { size, ui: true, bold: !!wd.kw, color: col, fixed: o.fixed, stroke: o.stroke, strokeW: o.strokeW });
-      if (wd.kw) {
-        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = lnw(1.5); ctx.setLineDash([2, 3]);
-        ctx.beginPath(); ctx.moveTo(cx, yy + sz * 1.12); ctx.lineTo(cx + ww, yy + sz * 1.12); ctx.stroke(); ctx.restore();
-      }
-      cx += ww;
-    }
-    yy += lh;
-  }
-  return yy - y;
-}
-
 // ---- 'why' lines: every number explained from the real modifiers ----
 const fmt = (v) => (Math.round(v * 100) / 100).toString();
 function playerMods(ent, kind) {

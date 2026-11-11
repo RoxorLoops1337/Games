@@ -490,9 +490,6 @@ export function keyLamp(t = 0) {
   return LAMP;
 }
 
-const ACT_AMBIENT = { ward: '#2e2a24', market: '#1f2e30', theatre: '#2a1c36', title: '#241c18', table: '#262022', shop: '#2a2016', forge: '#2e1a12', event: '#1c2230', win: '#3a3220', lose: '#1a1214' };
-// ambient colour per theme for the lightmap pass (what unlit areas fade to)
-export function ambient(theme) { return ACT_AMBIENT[theme] || '#241c18'; }
 
 // ---- soft sprites ----
 function shaftSprite(color) {

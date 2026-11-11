@@ -663,29 +663,6 @@ export function drawBudgetGauge(ctx, x, y, w, weight = 0, budget = 6, previewWei
   ctx.restore();
   return h;
 }
-export function drawStrainMeter(ctx, x, y, w, strain = 0, max = 6) {
-  const h = 14; const n = Math.max(max, strain, 1); const gap = 3; const cw = (w - gap * (n - 1)) / n; const t = now();
-  ctx.save();
-  for (let i = 0; i < n; i++) {
-    const cx = x + i * (cw + gap); const on = i < strain;
-    ctx.beginPath(); ctx.moveTo(cx, y + h); ctx.lineTo(cx + cw * 0.5, y + (on ? 0 : h * 0.35) - (on ? Math.sin(t * 8 + i) * 0.8 : 0)); ctx.lineTo(cx + cw, y + h); ctx.closePath();
-    ctx.fillStyle = on ? (i >= max - 1 ? '#ff4a5e' : '#B3263A') : 'rgba(179,38,58,.15)'; ctx.fill(); ctx.lineWidth = lnw(1); ctx.strokeStyle = on ? '#ffb0b8' : 'rgba(179,38,58,.4)'; ctx.stroke();
-  }
-  ctx.beginPath(); ctx.moveTo(x, y + h + 2); ctx.lineTo(x + w, y + h + 2); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = strain > 0 ? '#B3263A' : 'rgba(232,220,196,.25)'; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
-  ctx.restore();
-  return h + 4;
-}
-export function drawDeckIcon(ctx, x, y, size) {
-  const r = size / 2; ctx.save(); ctx.translate(x, y);
-  for (let i = 2; i >= 0; i--) {
-    ctx.save(); ctx.rotate((i - 1) * 0.2); ctx.translate((i - 1) * r * 0.22, (2 - i) * -r * 0.02);
-    const w = r * 1.0, h = r * 1.4; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, r * 0.1) : ctx.rect(-w / 2, -h / 2, w, h);
-    ctx.fillStyle = i === 0 ? '#e8dcc4' : i === 1 ? '#d6c7a6' : '#3a2f29'; ctx.fill(); ctx.lineWidth = lnw(Math.max(1, r * 0.07)); ctx.strokeStyle = D; ctx.stroke();
-    if (i === 0) { ctx.beginPath(); ctx.moveTo(-w * 0.3, h * 0.28); ctx.lineTo(-w * 0.1, h * 0.05); ctx.lineTo(w * 0.1, h * 0.12); ctx.lineTo(w * 0.3, -h * 0.15); ctx.lineWidth = lnw(Math.max(1, r * 0.1)); ctx.strokeStyle = '#B3263A'; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
-    ctx.restore();
-  }
-  ctx.restore();
-}
 export function drawPileIcon(ctx, x, y, size, kind = 'draw', pile) {
   const k = ['draw', 'discard', 'exhaust'].includes(kind) ? kind : ['draw', 'discard', 'exhaust'].includes(pile) ? pile : 'draw';
   if (SK.icon(ctx, 'rules.' + k, x, y, size)) return; // painted medallion
@@ -699,14 +676,6 @@ export function drawPileIcon(ctx, x, y, size, kind = 'draw', pile) {
   ctx.restore();
 }
 
-// ======================================================================================
-// THREAD LANGUAGE (for the UI): all centred, size = diameter
-// ======================================================================================
-export function drawNeedle(ctx, x, y, size, color = '#dfe3ea') { withGlyph(ctx, x, y, size, color, '#B3263A', 'needlet', 1.4); }
-export function drawScissors(ctx, x, y, size, color = '#cfd6dc') { withGlyph(ctx, x, y, size, color, '#C9A227', 'scissors', 1.4); }
-export function drawKnot(ctx, x, y, size, color = '#E8DCC4') { withGlyph(ctx, x, y, size, color, D, 'knot', 1.4); }
-export function drawLooseThread(ctx, x, y, size, color = '#E8DCC4') { withGlyph(ctx, x, y, size, color, D, 'loosethread', 1.4); }
-export function drawClasp(ctx, x, y, size, color = '#C9A227') { withGlyph(ctx, x, y, size, color, '#7A5F12', 'clasp', 1.4); }
 // Revised school colours from the art bible (lead: sync COL.* to these).
 export const SCHOOL_GLYPH_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };
 
