@@ -1,6 +1,6 @@
 {
- "version": "918194fb7ec7925e",
- "bytes": 10407910,
+ "version": "f4af71d98ac84c87",
+ "bytes": 10407954,
  "count": 548,
  "files": {
   "art/attacks.js": {
@@ -2108,8 +2108,8 @@
    "s": 17790
   },
   "ui/rig.js": {
-   "h": "753d5aa2d055a430",
-   "s": 25724
+   "h": "4ebb555aecc4f5e4",
+   "s": 25768
   },
   "ui/rigs.js": {
    "h": "3972650d1d124331",

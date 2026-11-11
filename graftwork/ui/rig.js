@@ -11,6 +11,7 @@
 // Positions are in rig units (about 64 tall); o.scale maps them to pixels. x,y is the point between the feet on the ground.
 // The PAINTED rigs (real parts from assets/rigs, the walk the Ward previews) are the second half of this file.
 import { clamp, EASE } from './core.js';
+import { rigGait } from '../data/gaits.js';
 export const HUMANOID = {
   id: 'humanoid', height: 64,
   // name, parent, local offset from the parent's origin (pivot), length used by the placeholder, draw order z (low = behind)
