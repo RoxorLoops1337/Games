@@ -10,7 +10,7 @@
 //  clean stretch, after a lock that doubles with every drop that follows a rise, and never again once a rise was punished twice.
 export const TIERS = ['full', 'lite', 'minimal'];
 export const GRAPHICS = ['auto', 'high', 'low'];
-export const DEFAULT_GRAPHICS = 'auto';
+const DEFAULT_GRAPHICS = 'auto';
 export const TIER_SPEC = {
   full: { dprCap: 3, post: true, motes: true, sceneEvery: 1 },
   lite: { dprCap: 1.5, post: false, motes: false, sceneEvery: 3 },
@@ -95,9 +95,9 @@ export function createQuality(o = {}) {
 // ---- frame governor: which rAF callbacks actually run a tick ----
 // Idle screens (the title) drop to 30 fps after IDLE_AFTER_MS without input or a screen change, and stay at 30 fps in the minimal tier.
 // A hidden tab runs nothing. Interactive screens (map, combat, ...) always run every callback.
-export const IDLE_SCREENS = ['title'];
+const IDLE_SCREENS = ['title'];
 export const IDLE_AFTER_MS = 4000;
-export const IDLE_INTERVAL_MS = 1000 / 30;
+const IDLE_INTERVAL_MS = 1000 / 30;
 export function createGovernor(o = {}) {
   const g = { idleAfter: o.idleAfter ?? IDLE_AFTER_MS, interval: o.interval ?? IDLE_INTERVAL_MS, lastInput: 0, enteredAt: 0, screens: o.screens || IDLE_SCREENS, capped: false, skipped: 0, ran: 0 };
   g.input = (now) => { g.lastInput = now; };

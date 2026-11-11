@@ -4,7 +4,7 @@
 // Also exports reusable helpers: scrollArea, cardGrid, gaugeCells, resonanceStrip, pill.
 import { tscale } from './graft_parts.js';
 import { cardGlossTip } from './tooltips.js';
-import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
+import { COL, W, H, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { resonanceText } from '../data/schools.js';
@@ -31,13 +31,6 @@ export function pill(app, text, cx, cy, color, o = {}) {
 }
 
 // Cut text to at most `n` lines (adds an ellipsis). Returns the string.
-export function clampText(app, str, maxW, size, n, o = {}) {
-  const lines = app.wrap(str, maxW, size, o);
-  if (lines.length <= n) return str;
-  let last = lines[n - 1];
-  while (last.length > 1 && app.measure(last + '...', size, o) > maxW) last = last.slice(0, -1);
-  return lines.slice(0, n - 1).concat(last.trimEnd() + '...').join('\n');
-}
 
 // ---------------------------------------------------------------- scroll area
 // st: caller-owned { scroll, target }. draw(top) receives the y of the content origin (view top minus scroll).
@@ -215,7 +208,7 @@ export function gaugeCells(app, x, y, info, o = {}) {
 }
 
 // ---------------------------------------------------------------- school resonance strip
-export function resonanceStrip(app, run, x, y, w, h) {
+function resonanceStrip(app, run, x, y, w, h) {
   // opened in a fight, the strip shows the tiers that fight uses (Resonance Lens lifts a school at 3 in Elite and Boss fights);
   // plain = what the grafts alone wake, so the tooltip can say when the fight counts a school higher
   const kind = run.phase === 'combat' && run.pending ? run.pending.fightKind : undefined;

@@ -8,10 +8,10 @@ import { drawCard, drawGraftPatch, CARD_W, CARD_H } from '../art/cards.js';
 import { drawRelic, drawPotion, drawCoin, paintedGauge } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, deckStripped, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
-import { cardLines, priceLines, priceOnCard } from '../engine/text.js';
+import { cardLines, priceOnCard } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
 import { tscale, hpPerPlay } from './graft_parts.js';
-import { specGloss, cardGlossTip, glossTip, withGloss } from './tooltips.js';
+import { specGloss, cardGlossTip, withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 import { dispensary } from './ward_kit.js';
@@ -23,11 +23,8 @@ const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a 
 // SHARED KIT (named exports; the Forge imports these)
 // =====================================================================================================================
 
-export const typeLabel = (spec) => ({ attack: 'Attack', skill: 'Skill', power: 'Power', junk: 'Junk' }[spec.type] || spec.type);
-export function graftLines(g) {
-  return [`Weight ${g.weight}  (${g.tier})`, `Boon: ${g.boon}`, `Price: ${g.price}`];
-}
-export function tithedUids(run) { return new Set(strainInfo(run).tithed); }
+const typeLabel = (spec) => ({ attack: 'Attack', skill: 'Skill', power: 'Power', junk: 'Junk' }[spec.type] || spec.type);
+function tithedUids(run) { return new Set(strainInfo(run).tithed); }
 export function cardName(run, uid) { const i = RUN.findInst(run, uid); return i ? CARDS[i.id].name : '?'; }
 
 // Budget gauge: brass cells up to the Budget, red cells for Strain. o.slide = {i, k} animates one cell sliding in.
@@ -63,7 +60,7 @@ export function infoFromDeck(run, deck2, extraLines = []) {
   const names = after.tithed.map((u) => { const i = deck2.find((d) => d.uid === u); return i ? CARDS[i.id].name : '?'; });
   return { before, after, names, lines: [...tithLines(before, after, names), ...extraLines] };
 }
-export function tithLines(before, after, names) {
+function tithLines(before, after, names) {
   const L = [];
   if (after.strain > 0) L.push({ t: `Strain ${after.strain}: Tithe on ${names.length ? names.join(', ') : 'no Bare card'} (-25% numbers that combat).`, c: COL.bad });
   else L.push({ t: 'Within Budget: no Tithe.', c: COL.good });
@@ -72,7 +69,7 @@ export function tithLines(before, after, names) {
   if (d !== 0) L.push({ t: d > 0 ? `Strain +${d} compared to now.` : `Strain ${d} compared to now.`, c: d > 0 ? COL.bad : COL.good });
   return L;
 }
-export function graftPreview(run, uid, gid) {
+function graftPreview(run, uid, gid) {
   const p = previewGraft(run, uid, gid);
   const inst = RUN.findInst(run, uid);
   const lines = tithLines(p.before, p.after, p.tithedNames);
@@ -362,7 +359,7 @@ export function drawAnim(app, a, fx) {
 }
 
 // ---- small drawing helpers -------------------------------------------------------------------------------------------
-export function stamp(app, cx, cy, text, color, rot) {
+function stamp(app, cx, cy, text, color, rot) {
   const g = app.ctx; g.save(); g.translate(cx, cy); g.rotate(rot === undefined ? -0.2 : rot);
   const w = app.measure(text, 30, { bold: true }) + 28;
   app.rr(-w / 2, -24, w, 48, 6); g.fillStyle = 'rgba(10,6,4,.55)'; g.fill(); g.lineWidth = lnw(4); g.strokeStyle = color || '#c4223c'; g.stroke();

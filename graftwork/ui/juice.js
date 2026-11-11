@@ -100,7 +100,7 @@ export function spring(obj, key, target, dt, k = 380, c = 18) {
   if (Math.abs(x - target) < 0.0005 && Math.abs(v) < 0.01) { x = target; v = 0; }
   obj[key] = x; obj[vk] = v;
 }
-export function noise1(x) { // smooth value noise in 0..1
+function noise1(x) { // smooth value noise in 0..1
   const i = Math.floor(x), f = x - i, h = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
   const u = f * f * (3 - 2 * f);
   return h(i) * (1 - u) + h(i + 1) * u;
@@ -133,7 +133,7 @@ export function danger(frac, alive = true) {
   const bpm = frac < 0.15 ? 110 : Math.round(60 + (0.3 - frac) / 0.15 * 50);
   return { on: true, bpm, lowpass: 800, level: frac < 0.15 ? 1 : 0.6 };
 }
-export const COMBO_STEPS = [{ at: 0, col: '#e8dcc4' }, { at: 20, col: '#F2C14E' }, { at: 40, col: '#E8571F' }, { at: 80, col: '#ff3a3a' }];
+const COMBO_STEPS = [{ at: 0, col: '#e8dcc4' }, { at: 20, col: '#F2C14E' }, { at: 40, col: '#E8571F' }, { at: 80, col: '#ff3a3a' }];
 export function comboLevel(total) { let l = 0; for (let i = 0; i < COMBO_STEPS.length; i++) if (total >= COMBO_STEPS[i].at) l = i; return l; }
 const PENT = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
 export const pent = (i) => PENT[i % 5] * Math.pow(2, Math.floor(i / 5));

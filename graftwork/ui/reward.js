@@ -1,7 +1,7 @@
 // SPOILS: what the fight left on the table. Gold, a potion, an elite relic or a boss relic choice, then on to the graft table.
 // Everything is claimed through engine/run.js; whatever is not claimed is forfeited on Continue.
 import { newRibbon } from './archive_kit.js';
-import { COL, EASE, clamp, lerp, rgba } from './core.js';
+import { COL, EASE, clamp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import * as RUN from '../engine/run.js';
 import { RELICS, POTIONS } from '../data/index.js';

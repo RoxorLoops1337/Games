@@ -158,7 +158,7 @@ function drawWipe(app, w) {
 
 // ---------------------------------------------------------------- intro plate
 // name plate slam + swinging lamp. 1.3 s (elite 1.1 s): it is gone by the time the combat queue releases, so the first telegraph is never under the dim. A click skips to the exit.
-export const INTRO_LIFE = 1.3;
+const INTRO_LIFE = 1.3;
 export function introCard(app, o) {
   const T = state(app); if (!T.on) return null;
   const name = String((o && o.name) || '???'), kind = (o && o.kind) || 'boss';

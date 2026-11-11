@@ -1,11 +1,11 @@
 {
- "version": "24d66291654c484f",
- "bytes": 10420732,
+ "version": "e0041a927270cb5b",
+ "bytes": 10413794,
  "count": 547,
  "files": {
   "art/attacks.js": {
-   "h": "478e918a765cbf0d",
-   "s": 22563
+   "h": "da3526aa09ce2455",
+   "s": 22522
   },
   "art/backgrounds.js": {
    "h": "3f544f050664afb7",
@@ -16,12 +16,12 @@
    "s": 143897
   },
   "art/enemies.js": {
-   "h": "9ec87433dc279c7d",
-   "s": 143397
+   "h": "de8864dd0439904f",
+   "s": 143229
   },
   "art/face_lod.js": {
-   "h": "e5ddcd70295310f3",
-   "s": 4071
+   "h": "95c92353a13a5f4c",
+   "s": 4057
   },
   "art/grade.js": {
    "h": "abe44834e5aa3bea",
@@ -36,12 +36,12 @@
    "s": 105012
   },
   "art/linework.js": {
-   "h": "7e1322768a8cdbf9",
-   "s": 2434
+   "h": "c056aea41d4794de",
+   "s": 2382
   },
   "art/plates.js": {
-   "h": "d6cce7a66d1e3d7a",
-   "s": 23191
+   "h": "69b25617d462672a",
+   "s": 23123
   },
   "assets/rigs/candy_striper@1x.webp": {
    "h": "7a948cc6621359de",
@@ -1956,92 +1956,92 @@
    "s": 1962
   },
   "main.js": {
-   "h": "cb6da533b6bad365",
-   "s": 8338
+   "h": "4808297caab6301e",
+   "s": 8331
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
    "s": 798
   },
   "ui/a11y.js": {
-   "h": "6fe8d5c9d5e471e4",
-   "s": 9052
+   "h": "0c9b0bbfdc01d9d1",
+   "s": 9010
   },
   "ui/app_panel.js": {
    "h": "48f3925a539a663a",
    "s": 6160
   },
   "ui/archive.js": {
-   "h": "779e0928e40ffbd6",
-   "s": 12871
+   "h": "4f2005ec2306f6ec",
+   "s": 12847
   },
   "ui/archive_kit.js": {
-   "h": "257251f9c364aafe",
-   "s": 8750
+   "h": "7f6130d3a2c96176",
+   "s": 8457
   },
   "ui/assets.js": {
-   "h": "50eba9e6a438f139",
-   "s": 14887
+   "h": "a26ae11b746f6994",
+   "s": 14814
   },
   "ui/audio.js": {
    "h": "ef368225df7d30da",
    "s": 36582
   },
   "ui/card_zoom.js": {
-   "h": "4756ca417065e2d6",
-   "s": 4419
+   "h": "7a9afca6b10d483a",
+   "s": 4405
   },
   "ui/chrome.js": {
-   "h": "028ea44f3597cf8e",
-   "s": 19973
+   "h": "598b99df1d2b883e",
+   "s": 17693
   },
   "ui/codex.js": {
    "h": "5aa358f8a74f9822",
    "s": 40880
   },
   "ui/combat.js": {
-   "h": "6da5c1cd2af64785",
-   "s": 121694
+   "h": "12b6a74a86040ceb",
+   "s": 121586
   },
   "ui/combat_art.js": {
-   "h": "4a911bb17ed8e49e",
-   "s": 31807
+   "h": "b7d2543c491cbc05",
+   "s": 31786
   },
   "ui/combat_hud.js": {
-   "h": "6ef95b6987ebb495",
-   "s": 31006
+   "h": "3eb79894e5620fd9",
+   "s": 30487
   },
   "ui/combat_layout.js": {
-   "h": "ed89fe130fa80493",
-   "s": 6047
+   "h": "88945011bab141db",
+   "s": 6039
   },
   "ui/core.js": {
-   "h": "8056a4845b931525",
-   "s": 41906
+   "h": "72f17a6159ff8f53",
+   "s": 41885
   },
   "ui/deckview.js": {
-   "h": "c46eb622c1d4da2c",
-   "s": 36356
+   "h": "c8f3bf62e9d9414f",
+   "s": 35999
   },
   "ui/end.js": {
    "h": "ed8a0b0082a9eefd",
    "s": 31614
   },
   "ui/event.js": {
-   "h": "0a96a2b7824bf356",
-   "s": 24871
+   "h": "9926b5675173528b",
+   "s": 24844
   },
   "ui/forge.js": {
-   "h": "3794fc3d1e56e016",
-   "s": 26821
+   "h": "94702467f658661f",
+   "s": 26808
   },
   "ui/frame_state.js": {
    "h": "4ee183083fbc16d0",
    "s": 3250
   },
   "ui/fullscreen.js": {
-   "h": "1228bc5230f6cda1",
-   "s": 5452
+   "h": "ffc40784f2bf8ed4",
+   "s": 5445
   },
   "ui/fx.js": {
    "h": "56828ce5c4d156fc",
@@ -2052,32 +2052,32 @@
    "s": 49983
   },
   "ui/graft_parts.js": {
-   "h": "e85604bc61b31819",
-   "s": 9773
+   "h": "3ff6bfaa35c85e1b",
+   "s": 9653
   },
   "ui/install.js": {
-   "h": "c2b56d8ceef5ffd7",
-   "s": 6285
+   "h": "5f24328ccefc8ae8",
+   "s": 6271
   },
   "ui/juice.js": {
-   "h": "7205aa148988e5a0",
-   "s": 16011
+   "h": "6402c58738b328f3",
+   "s": 15997
   },
   "ui/layer_cache.js": {
-   "h": "1fa79e8c7b2bed12",
-   "s": 2650
+   "h": "27d2860de3a2e1b3",
+   "s": 2622
   },
   "ui/layout_registry.js": {
    "h": "8cfc343ec198c99c",
    "s": 1465
   },
   "ui/offline.js": {
-   "h": "f89e70c889951ebf",
-   "s": 4454
+   "h": "5766769017729897",
+   "s": 4426
   },
   "ui/pause.js": {
-   "h": "dd1bd6c07058f395",
-   "s": 18447
+   "h": "0915d2e9adde1f16",
+   "s": 18426
   },
   "ui/perf_flags.js": {
    "h": "f69ba3cd7e27ce97",
@@ -2096,100 +2096,100 @@
    "s": 1034
   },
   "ui/puppet.js": {
-   "h": "a0d7bfae1e1c1f58",
-   "s": 34193
+   "h": "19ab07f90e7d912a",
+   "s": 34123
   },
   "ui/quality.js": {
-   "h": "f3b8b275f71785cf",
-   "s": 8443
+   "h": "f80e90934ec03832",
+   "s": 8422
   },
   "ui/reward.js": {
-   "h": "ef53e380894ea2ad",
-   "s": 17796
+   "h": "8be723d30416e469",
+   "s": 17790
   },
   "ui/rig.js": {
-   "h": "4ebb555aecc4f5e4",
-   "s": 25768
+   "h": "753d5aa2d055a430",
+   "s": 25724
   },
   "ui/rigs.js": {
    "h": "3972650d1d124331",
    "s": 4260
   },
   "ui/seam_ui.js": {
-   "h": "2263d7fa77934da3",
-   "s": 35885
+   "h": "9b9e27bd02355b35",
+   "s": 35878
   },
   "ui/settings.js": {
-   "h": "d905abee17682012",
-   "s": 17362
+   "h": "7be9fdfdd564a5f2",
+   "s": 17340
   },
   "ui/shop.js": {
-   "h": "be5f851c49a474cd",
-   "s": 55157
+   "h": "9739f428c9d09102",
+   "s": 54980
   },
   "ui/skin.js": {
    "h": "b35fd03732a07593",
    "s": 9866
   },
   "ui/smoothing.js": {
-   "h": "7566a23ce539df44",
-   "s": 4205
+   "h": "165fde9b8d9cc40f",
+   "s": 3452
   },
   "ui/templates.js": {
-   "h": "fe8be9093502c882",
-   "s": 24731
+   "h": "5fc050083324b752",
+   "s": 24717
   },
   "ui/text_metrics.js": {
-   "h": "8ee7c64a202f7bd4",
-   "s": 2446
+   "h": "65041609a8c1c5dd",
+   "s": 2439
   },
   "ui/title.js": {
-   "h": "794fc3cc3cb83521",
-   "s": 50317
+   "h": "fb3c7de6dd5d5598",
+   "s": 50295
   },
   "ui/title_logo.js": {
    "h": "33ab328c6f4610c7",
    "s": 17047
   },
   "ui/title_scene.js": {
-   "h": "68074b837fa5e759",
-   "s": 26558
+   "h": "be60173037caacc8",
+   "s": 26476
   },
   "ui/tooltips.js": {
-   "h": "ed519eb8183e8d7f",
-   "s": 54887
+   "h": "593510528f34e419",
+   "s": 54539
   },
   "ui/transitions.js": {
-   "h": "215e7ba98b336c31",
-   "s": 26104
+   "h": "ed70448bfcd877f4",
+   "s": 26097
   },
   "ui/tutorial.js": {
-   "h": "db273d0727ca8c5a",
-   "s": 9872
+   "h": "7f8beb74f4ff6aee",
+   "s": 9865
   },
   "ui/ward.js": {
-   "h": "131bcb43cd04fdcb",
-   "s": 83752
+   "h": "1743d242e07685ab",
+   "s": 83564
   },
   "ui/ward_iso.js": {
-   "h": "eb3acb7f5a505f8a",
-   "s": 72852
+   "h": "51c344eba469bce2",
+   "s": 72458
   },
   "ui/ward_kit.js": {
-   "h": "08b14b7b4c136db2",
-   "s": 35003
+   "h": "58fe74c3a799e54f",
+   "s": 34898
   },
   "ui/ward_kit_iso.js": {
-   "h": "644cab85d55cb403",
-   "s": 28361
+   "h": "7bb8698177e1c607",
+   "s": 28136
   },
   "ui/wardrobe.js": {
-   "h": "9d06431f2fe168c7",
-   "s": 10775
+   "h": "3b30e4c6e2a79e80",
+   "s": 10725
   },
   "ui/wings.js": {
-   "h": "7d1d6d20cc5807da",
-   "s": 3029
+   "h": "3c4ac951e801c6b4",
+   "s": 3022
   }
  }
 }

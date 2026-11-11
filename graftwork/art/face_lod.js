@@ -6,8 +6,8 @@
 //   bucket = one of BUCKETS, the render scale of the cached canvas
 export const BUCKETS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 export const LEGACY = 1.5; // the one size every card used before (also what a context without getTransform gets)
-export const SLACK = 0.92; // a bucket up to 8 percent below the need still counts (an upscale that small is invisible and saves a size step)
-export const REUSE = 1.45; // a cached bucket up to 1.45x the need is reused instead of building the ideal one (downscale stays mild)
+const SLACK = 0.92; // a bucket up to 8 percent below the need still counts (an upscale that small is invisible and saves a size step)
+const REUSE = 1.45; // a cached bucket up to 1.45x the need is reused instead of building the ideal one (downscale stays mild)
 export const BIG_FROM = 2; // buckets from here up are the "zoom" sizes: few, big, kept in their own small LRU
 export const BIG_MAX = 6;
 export const BUILDS_PER_FRAME = 2;

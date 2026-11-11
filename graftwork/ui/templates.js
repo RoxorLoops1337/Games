@@ -82,7 +82,7 @@ export function parseManifest(m) {
 
 // ---------------------------------------------------------------- 9-slice (pure)
 // natural logical size of a part and the source rectangle (in image pixels) it occupies, given the decoded image
-export function partSource(def, atlasDef, img) {
+function partSource(def, atlasDef, img) {
   const iw = img.naturalWidth || img.width || 0, ih = img.naturalHeight || img.height || 0;
   if (def.atlas && atlasDef) {
     const k = iw / (atlasDef.w || iw || 1), r = def.rect;
@@ -171,7 +171,7 @@ export const CARD_TEMPLATE = {
 export const CARD_BACK_TEMPLATE = { id: 'card_back', w: 220, h: 310, slots: { title: { x: -80, y: 114, w: 160, h: 20 } } };
 
 // slot name for a variant: compact cards read '<name>Compact' (and window '...CompactGrafts' when grafts ride in the card)
-export function slotName(name, compact, grafts) {
+function slotName(name, compact, grafts) {
   if (!compact) return name;
   return name === 'window' && grafts ? 'windowCompactGrafts' : name + 'Compact';
 }

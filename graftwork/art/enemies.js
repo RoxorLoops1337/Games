@@ -8,7 +8,7 @@ import { lnw } from './linework.js';
 import { gc, gradeKey, setGrade, gradePixels } from './grade.js';
 
 const TAU = Math.PI * 2;
-export const INK = '#16110f';
+const INK = '#16110f';
 const G = { flash: 0, tension: 0, lean: 0, gut: 0, brine: 0 };
 let TCOL = null;
 function tensionCol(T) { const i = Math.round(T * 8); if (!TCOL) TCOL = []; if (TCOL[i]) return TCOL[i]; const a = rgbOf(INK), b = [196, 40, 60], f = i / 8; return (TCOL[i] = `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`); }
@@ -28,7 +28,7 @@ function rgbOf(h) {
 }
 const colCache = new Map();
 // C(hex, k, a): k < 1 darkens, k > 1 lightens toward white, a = alpha. White flash from G.flash.
-export function C(hex, k = 1, a = 1) {
+function C(hex, k = 1, a = 1) {
   const fq = Math.round(G.flash * 8), kq = Math.round(k * 50), aq = Math.round(a * 20);
   const key = (kq * 9 + fq) * 21 + aq;
   let m = colCache.get(hex);
@@ -55,22 +55,22 @@ function fs(ctx, fill, lw) {
   if (fill) { ctx.fillStyle = gc(fill); ctx.fill(); }
   if (lw > 0) { ctx.lineWidth = lnw(lw); ctx.strokeStyle = gc(ink()); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(); }
 }
-export function poly(ctx, pts, fill, lw = 2.5) { path(ctx, pts, true); fs(ctx, fill, lw); }
-export function line(ctx, pts, col, lw = 2) { path(ctx, pts, false); ctx.strokeStyle = gc(col); ctx.lineWidth = lnw(lw); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
+function poly(ctx, pts, fill, lw = 2.5) { path(ctx, pts, true); fs(ctx, fill, lw); }
+function line(ctx, pts, col, lw = 2) { path(ctx, pts, false); ctx.strokeStyle = gc(col); ctx.lineWidth = lnw(lw); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
 // outlined polyline (a limb, a hose): ink underlay then colour
-export function limb(ctx, pts, col, lw = 6) { line(ctx, pts, ink(), lw + 3); line(ctx, pts, col, lw); }
-export function smooth(ctx, pts, col, lw = 2) {
+function limb(ctx, pts, col, lw = 6) { line(ctx, pts, ink(), lw + 3); line(ctx, pts, col, lw); }
+function smooth(ctx, pts, col, lw = 2) {
   const n = pts.length / 2;
   ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
   for (let i = 1; i < n - 1; i++) { const mx = (pts[i * 2] + pts[i * 2 + 2]) / 2, my = (pts[i * 2 + 1] + pts[i * 2 + 3]) / 2; ctx.quadraticCurveTo(pts[i * 2], pts[i * 2 + 1], mx, my); }
   ctx.lineTo(pts[n * 2 - 2], pts[n * 2 - 1]);
   ctx.strokeStyle = gc(col); ctx.lineWidth = lnw(lw); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
 }
-export function ell(ctx, x, y, rx, ry, fill, lw = 2.5, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, Math.abs(rx)), Math.max(0.1, Math.abs(ry)), rot, 0, TAU); fs(ctx, fill, lw); }
-export function circ(ctx, x, y, r, fill, lw = 2.5) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, TAU); fs(ctx, fill, lw); }
-export function rect(ctx, x, y, w, h, fill, r = 0, lw = 2.5) { ctx.beginPath(); if (r && ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); fs(ctx, fill, lw); }
+function ell(ctx, x, y, rx, ry, fill, lw = 2.5, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, Math.abs(rx)), Math.max(0.1, Math.abs(ry)), rot, 0, TAU); fs(ctx, fill, lw); }
+function circ(ctx, x, y, r, fill, lw = 2.5) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, TAU); fs(ctx, fill, lw); }
+function rect(ctx, x, y, w, h, fill, r = 0, lw = 2.5) { ctx.beginPath(); if (r && ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); fs(ctx, fill, lw); }
 // stitched seam along a polyline: thread plus cross ticks
-export function seam(ctx, pts, step = 7, len = 4.5, col = null, lw = 1.6) {
+function seam(ctx, pts, step = 7, len = 4.5, col = null, lw = 1.6) {
   const T = G.tension;
   if (T > 0.04 && (!col || col === ink())) col = tensionCol(T);
   if (T > 0.04) { lw *= 1 - 0.4 * T; len *= 1 + 0.25 * T; }
@@ -88,7 +88,7 @@ export function seam(ctx, pts, step = 7, len = 4.5, col = null, lw = 1.6) {
   }
   ctx.stroke();
 }
-export function staple(ctx, x, y, ang = 0, s = 1) {
+function staple(ctx, x, y, ang = 0, s = 1) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(s, s);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(-5, -2.5); ctx.lineTo(-5, 1.5); ctx.lineTo(5, 1.5); ctx.lineTo(5, -2.5);
@@ -96,7 +96,7 @@ export function staple(ctx, x, y, ang = 0, s = 1) {
   ctx.strokeStyle = gc(C('#d6dbdc')); ctx.lineWidth = lnw(2.2); ctx.stroke();
   ctx.restore();
 }
-export function bandage(ctx, x, y, w, h, ang = 0, col = '#e9e0c9') {
+function bandage(ctx, x, y, w, h, ang = 0, col = '#e9e0c9') {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
   rect(ctx, -w / 2, -h / 2, w, h, C(col), 1.5, 2);
   ctx.strokeStyle = gc(C(col, 0.6)); ctx.lineWidth = lnw(1); ctx.beginPath();
@@ -105,7 +105,7 @@ export function bandage(ctx, x, y, w, h, ang = 0, col = '#e9e0c9') {
   ctx.restore();
 }
 // a bandage wrapped around a limb/body between two points: stripes across with slight diagonal
-export function wrap(ctx, x0, y0, x1, y1, w, col = '#e9e0c9', n = 5) {
+function wrap(ctx, x0, y0, x1, y1, w, col = '#e9e0c9', n = 5) {
   const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
   for (let i = 0; i < n; i++) {
     const f = (i + 0.5) / n, cx = x0 + dx * f, cy = y0 + dy * f;
@@ -113,8 +113,8 @@ export function wrap(ctx, x0, y0, x1, y1, w, col = '#e9e0c9', n = 5) {
     line(ctx, [cx - nx * w / 2 - dx / n * 0.2, cy - ny * w / 2 - dy / n * 0.2, cx + nx * w / 2 + dx / n * 0.2, cy + ny * w / 2 + dy / n * 0.2], C(col, i % 2 ? 0.88 : 1), L / n * 0.9);
   }
 }
-export function glow(ctx, x, y, r, col, a = 0.5) { for (let i = 0; i < 4; i++) { ctx.fillStyle = gc(C(col, 1, a * (0.1 + i * 0.07))); ctx.beginPath(); ctx.arc(x, y, r * (1 - i * 0.23), 0, TAU); ctx.fill(); } }
-export function flame(ctx, x, y, s, t, seed = 0, big = false) {
+function glow(ctx, x, y, r, col, a = 0.5) { for (let i = 0; i < 4; i++) { ctx.fillStyle = gc(C(col, 1, a * (0.1 + i * 0.07))); ctx.beginPath(); ctx.arc(x, y, r * (1 - i * 0.23), 0, TAU); ctx.fill(); } }
+function flame(ctx, x, y, s, t, seed = 0, big = false) {
   s *= 1 - G.gut * 0.6;
   const fl = 1 + Math.sin(t * 14 + seed * 3.1) * 0.13 + Math.sin(t * 23 + seed) * 0.07, sw = Math.sin(t * 8.5 + seed * 2) * 0.22 + G.lean;
   const draw = (k, col, lw) => {
@@ -127,35 +127,35 @@ export function flame(ctx, x, y, s, t, seed = 0, big = false) {
   if (big) glow(ctx, x, y - s * 12, s * 26, '#ffb347', 0.45);
   draw(1, C('#ff7a2b'), 1.4); draw(0.62, C('#ffc247'), 0); draw(0.3, C('#fff3b0'), 0);
 }
-export function eye(ctx, x, y, r, lx = 0, ly = 0, blink = 0, pupil = INK, sclera = '#f3ecd8') {
+function eye(ctx, x, y, r, lx = 0, ly = 0, blink = 0, pupil = INK, sclera = '#f3ecd8') {
   ell(ctx, x, y, r, Math.max(0.6, r * (1 - 0.92 * blink)), C(sclera), 1.8);
   if (blink < 0.7) { circ(ctx, x + lx * r * 0.45, y + ly * r * 0.4, r * 0.52, C(pupil), 0); ctx.fillStyle = gc(C('#fff')); ctx.beginPath(); ctx.arc(x + lx * r * 0.45 - r * 0.15, y + ly * r * 0.4 - r * 0.18, r * 0.16, 0, TAU); ctx.fill(); }
 }
-export function dots(ctx, x, y, r, blink, col = INK) { if (blink > 0.6) { line(ctx, [x - r, y, x + r, y], C(col), 1.8); } else circ(ctx, x, y, r, C(col), 0); }
-export function mouthStitch(ctx, x, y, w, curve = 4, col = INK, ticks = 4) {
+function dots(ctx, x, y, r, blink, col = INK) { if (blink > 0.6) { line(ctx, [x - r, y, x + r, y], C(col), 1.8); } else circ(ctx, x, y, r, C(col), 0); }
+function mouthStitch(ctx, x, y, w, curve = 4, col = INK, ticks = 4) {
   ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.quadraticCurveTo(x, y + curve * 2, x + w / 2, y);
   ctx.strokeStyle = gc(C(col)); ctx.lineWidth = lnw(2); ctx.lineCap = 'round'; ctx.stroke();
   ctx.beginPath();
   for (let i = 0; i <= ticks; i++) { const f = i / ticks, px = x - w / 2 + w * f, py = y + curve * 2 * f * (1 - f) * 2; ctx.moveTo(px, py - 2.4); ctx.lineTo(px, py + 2.4); }
   ctx.lineWidth = lnw(1.4); ctx.stroke();
 }
-export function thread(ctx, x0, y0, x1, y1, col = '#cdbfa0', lw = 1.2, sag = 0) {
+function thread(ctx, x0, y0, x1, y1, col = '#cdbfa0', lw = 1.2, sag = 0) {
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 + sag, x1, y1);
   ctx.strokeStyle = gc(col); ctx.lineWidth = lnw(lw); ctx.lineCap = 'round'; ctx.stroke();
 }
-export function coin(ctx, x, y, r, rot = 0, col = '#d9b43c') {
+function coin(ctx, x, y, r, rot = 0, col = '#d9b43c') {
   const rx = Math.max(r * 0.14, r * Math.abs(Math.cos(rot)));
   ell(ctx, x, y, rx, r, C(col), 2);
   if (rx > r * 0.4) { ell(ctx, x, y, rx * 0.68, r * 0.68, null, 1.2); ell(ctx, x - rx * 0.12, y - r * 0.18, rx * 0.22, r * 0.18, C(col, 1.5), 0); line(ctx, [x - rx * 0.2, y + r * 0.1, x + rx * 0.25, y + r * 0.1], ink(), 1.4); }
 }
-export function gear(ctx, x, y, r, teeth, rot, col = '#a89a6a') {
+function gear(ctx, x, y, r, teeth, rot, col = '#a89a6a') {
   ctx.beginPath();
   for (let i = 0; i < teeth * 2; i++) { const a = rot + i * Math.PI / teeth, rr = (i % 2 ? 0.76 : 1) * r, a2 = a + (i % 2 ? 0 : 0.0); const px = x + Math.cos(a2) * rr, py = y + Math.sin(a2) * rr; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
   ctx.closePath(); fs(ctx, C(col), 2);
   circ(ctx, x, y, r * 0.3, C(INK, 1), 0);
 }
 // a mask: kind grin | weep | blank | sneer | gold | wail
-export function mask(ctx, x, y, w, h, col, kind, tilt = 0, A = null) {
+function mask(ctx, x, y, w, h, col, kind, tilt = 0, A = null) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
   ell(ctx, 0, 0, w / 2, h / 2, C(col), 2.4);
   ell(ctx, -w * 0.12, -h * 0.2, w * 0.2, h * 0.12, C(col, 1.3, 0.55), 0);
@@ -188,7 +188,7 @@ export function mask(ctx, x, y, w, h, col, kind, tilt = 0, A = null) {
   }
   ctx.restore();
 }
-export function jar(ctx, x, y, w, h, liquid, level, t, o = {}) {
+function jar(ctx, x, y, w, h, liquid, level, t, o = {}) {
   const x0 = x - w / 2, top = y - h, rad = o.r === undefined ? Math.min(14, w * 0.2) : o.r;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, top, w, h, rad) : ctx.rect(x0, top, w, h);
   ctx.fillStyle = gc(C(o.glass || '#cfe4e0', 1, 0.28)); ctx.fill();
@@ -1338,7 +1338,7 @@ const ALIAS = { slime: 'dome', gurney: 'box', stand: 'podium', coin: 'disc', hou
 
 // ------------------------------------------------------------------ stage (shared with heroes)
 // facing: -1 art faces left (enemies), +1 art faces right (heroes). mirrorX flips the art.
-export function stage(ctx, paint, A, bw, bh, x, y, o, facing, kScale) {
+function stage(ctx, paint, A, bw, bh, x, y, o, facing, kScale) {
   const s = o.scale || 1, hurt = Math.max(0, Math.min(1, o.hurt || 0)), d = Math.max(0, Math.min(1, o.dying || 0)), att = Math.max(-1, Math.min(1, o.attack || 0));
   const m = o.flip ? -1 : 1, fx = facing * m; // fx > 0: faces screen right
   G.flash = hurt > 0 ? Math.min(0.9, hurt * 1.25) : 0;

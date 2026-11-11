@@ -2,7 +2,7 @@
 // Left: a framed mood scene (procedural). Right: a parchment panel with the scene text (typewriter), choices, then the result.
 import { glossTip, cardGlossTip } from './tooltips.js';
 import { tscale, wrapLimit } from './graft_parts.js';
-import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
+import { COL, W, H, clamp, rgba } from './core.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec } from '../engine/cards.js';
 import { EVENTS, RELICS } from '../data/index.js';

@@ -58,7 +58,7 @@ function fitText(app, str, x, y, size, o = {}) {
 }
 
 // ---------------------------------------------------------------- preview / badge logic (the engine's seamPreview is the only source)
-export function seamBadgeInfo(c, card) {
+function seamBadgeInfo(c, card) {
   if (!c || !c.seam || !card) return null;
   let pv = null;
   try { pv = SEAM.seamPreview(c, card); } catch (e) { return null; }

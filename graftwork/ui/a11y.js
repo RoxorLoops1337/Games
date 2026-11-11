@@ -22,10 +22,10 @@ const M = {
   deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
   tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]],
 };
-export const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const lin = (v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
 const gam = (v) => { v = Math.max(0, Math.min(1, v)); return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; };
-export function simulate(hex, mode) {
+function simulate(hex, mode) {
   const m = M[mode], c = hexRgb(hex).map(lin);
   return m ? m.map((r) => gam(r[0] * c[0] + r[1] * c[1] + r[2] * c[2])) : hexRgb(hex);
 }
@@ -35,7 +35,7 @@ function lab(rgb) {
   const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
   x = f(x); y = f(y); z = f(z); return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
-export function deltaE(a, b) { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); }
+function deltaE(a, b) { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); }
 // smallest perceived distance between any two school colours as seen through `mode`
 export function minSeparation(pal, mode) {
   let best = 1e9;
@@ -44,7 +44,7 @@ export function minSeparation(pal, mode) {
 }
 
 // ---- settings ----
-export function a11yOf(app) {
+function a11yOf(app) {
   const meta = app.shared && app.shared.meta; if (!meta) return { ...A11Y_DEFAULTS, colorblind: false };
   const s = meta.settings || (meta.settings = {});
   for (const k of Object.keys(A11Y_DEFAULTS)) if (s[k] === undefined) s[k] = A11Y_DEFAULTS[k];
@@ -114,7 +114,7 @@ export function padKeys(pad, held) {
   Object.assign(held, now);
   return out;
 }
-export function injectKey(app, key, extra) {
+function injectKey(app, key, extra) {
   const e = { key, gamepad: true, shiftKey: false, preventDefault() {}, ...extra };
   app.pressedKeys.push(e); return e;
 }
@@ -131,7 +131,7 @@ function pollPad(app) {
 }
 
 // ---- combat watcher: announce turn start, damage taken, enemy intents, victory and defeat ----
-export function intentWords(c, intentOf) {
+function intentWords(c, intentOf) {
   const parts = [];
   for (const e of c.enemies) {
     if (e.dead) continue;

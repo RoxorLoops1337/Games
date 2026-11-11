@@ -10,7 +10,7 @@ import { CARDS, GRAFTS, RELICS, STATUSES, ENEMIES } from '../graftwork/data/inde
 import { cardLines } from '../graftwork/engine/text.js';
 import { onSeamEvent, seamTip } from '../graftwork/ui/seam_ui.js';
 import { TIP_TEXTS, threadLesson, tipSeen, maybeTip } from '../graftwork/ui/tutorial.js';
-import { KEYWORDS, THREAD_TERMS, glossaryEntry, keywordsIn, keywordSection, statusSection } from '../graftwork/ui/tooltips.js';
+import { KEYWORDS, THREAD_TERMS, glossaryEntry, keywordsIn, statusSection } from '../graftwork/ui/tooltips.js';
 import * as L from '../graftwork/ui/combat_layout.js';
 import codex from '../graftwork/ui/codex.js';
 
@@ -83,7 +83,6 @@ await t('every Thread term has a glossary entry', () => {
   for (const w of ['Line', 'Stitch', 'Cut', 'Slack', 'Tied', 'Frayed', 'Knot', 'Thread']) {
     assert.ok(THREAD_TERMS.includes(w), w);
     const g = glossaryEntry(w); assert.ok(g && g.text.length > 10 && g.text.length <= 160, w);
-    assert.ok(keywordSection(w).text, w);
     assert.deepEqual(keywordsIn(['The ' + w + ' here']).includes(w), true, w + ' underlines in card text');
   }
 });

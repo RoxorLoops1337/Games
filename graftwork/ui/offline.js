@@ -8,8 +8,8 @@ const nav = () => (host ? host.navigator : globalThis.navigator) || null;
 
 export const S = { state: 'none', pct: 0, bytes: 0, latestBytes: 0, version: null, message: '', started: false, offer: false, listening: null };
 
-export function formatBytes(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
-export function saveData() { const n = nav(), c = n && (n.connection || n.mozConnection); return !!(c && c.saveData); }
+function formatBytes(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function saveData() { const n = nav(), c = n && (n.connection || n.mozConnection); return !!(c && c.saveData); }
 export function offlineSupported() {
   const n = nav(), w = win(); if (!n || !w || !n.serviceWorker) return false;
   return !!(w.isSecureContext || (w.location && /^(localhost|127\.0\.0\.1)$/.test(w.location.hostname)));
@@ -57,8 +57,8 @@ export function initOffline(h) {
 
 // ---- the one-time "Download for offline play?" offer after a successful install ----
 const store = () => { try { return win() && win().localStorage; } catch { return null; } };
-export function asked() { const s = store(); try { return !!(s && s.getItem(ASKED_KEY)); } catch { return false; } }
-export function markAsked() { const s = store(); try { if (s) s.setItem(ASKED_KEY, '1'); } catch { /* private mode */ } }
+function asked() { const s = store(); try { return !!(s && s.getItem(ASKED_KEY)); } catch { return false; } }
+function markAsked() { const s = store(); try { if (s) s.setItem(ASKED_KEY, '1'); } catch { /* private mode */ } }
 export function requestOffer() { if (offlineSupported() && !asked() && !saveData()) S.offer = true; }
 export function offerDue() { return S.offer && S.state === 'none' && !asked(); }
 export function clearOffer() { S.offer = false; markAsked(); }

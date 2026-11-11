@@ -13,7 +13,7 @@ import { FLAGS } from './perf_flags.js';
 import { createFrameState } from './frame_state.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
-export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 export const COL = {
   slab: '#1A1614', slab2: '#26201c', vellum: '#E8DCC4', vellum2: '#d6c7a6', ink: '#2B1E1A', suture: '#0E0E0E', lamp: '#F2C14E', scar: '#B3263A',
   attack: '#8C2F2F', skill: '#3E5C6B', power: '#5B3F7A', junk: '#6E6A5E', good: '#7fcf8a', bad: '#ff7a7a', gold: '#F2C14E', energy: '#7fd1e0',
@@ -26,8 +26,8 @@ export const EASE = {
 // Small-screen policy (phones). app.scale is CSS px per logical px; on a 844x390 phone it is ~0.58, so a 16 px label is 9 CSS px.
 // The floor only engages below SMALL.floorBelow scale, so desktop and every layout test (scale 1) are untouched.
 // fitMinPx: the smallest on-screen size (CSS px) a FITTED label may shrink to when the boosted size would not fit its box (app.text option fit).
-export const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
-export const MAX_BACKING_PX = 9.5e6; // canvas backing store budget in device pixels (about a 4K screen)
+const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
+const MAX_BACKING_PX = 9.5e6; // canvas backing store budget in device pixels (about a 4K screen)
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }

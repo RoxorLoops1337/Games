@@ -2,7 +2,7 @@
 // measureText twice per character per frame, and `app.measure` once per call; a width never changes for a given font + letter spacing + string.
 // Keys are the CSS font string (what ctx.font reads back as) plus the letter spacing, so a different size, face or spacing never shares a width.
 // Bounded: when a table passes its cap it is cleared (the text of a screen refills it in a frame or two).
-export const MAX_STR = 1500, MAX_FONTS = 40, MAX_CHARS = 220;
+const MAX_STR = 1500, MAX_FONTS = 40, MAX_CHARS = 220;
 export function createTextMetrics(measure) {
   const fonts = new Map(); // fontKey -> { cell, chars: Map(char -> width), strs: Map(string -> width), tabs: Map(string -> width) }
   const stats = { hits: 0, misses: 0 };

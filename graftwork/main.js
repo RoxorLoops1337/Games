@@ -38,7 +38,7 @@ import { installWings } from './ui/wings.js';
 const PHASE_SCREEN = { ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 
-export function applyLoadout(m) { try { setCardBack(m.loadout.back); setHeroTint(META.tintColor(m)); } catch (e) { /* cosmetics are optional */ } }
+function applyLoadout(m) { try { setCardBack(m.loadout.back); setHeroTint(META.tintColor(m)); } catch (e) { /* cosmetics are optional */ } }
 
 export function boot(canvas) {
   const meta = META.loadMeta();

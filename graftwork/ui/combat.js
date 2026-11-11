@@ -1,14 +1,14 @@
 // COMBAT SCREEN. The engine is synchronous: after every action `c` is final and c.ev holds the events in order.
 // This screen keeps DISPLAY state (hp, block, statuses, hand positions, pile zones) and replays c.ev through a timed
 // queue, updating the display as each event plays. Input is locked while the queue is busy (click / Space = speed up).
-import { COL, EASE, FONT, W, H, rgba, clamp, lerp } from './core.js';
+import { COL, EASE, W, H, rgba, clamp, lerp } from './core.js';
 import { Fx, FX_OPTS } from './fx.js';
 import * as J from './juice.js';
-import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, lethalIncoming, resolvePending, usePotion, finishCombat, HAND_CAP } from '../engine/combat.js';
+import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, lethalIncoming, resolvePending, usePotion, finishCombat } from '../engine/combat.js';
 import * as RUN from '../engine/run.js';
-import { CARDS, STATUSES, RELICS, POTIONS, HEROES } from '../data/index.js';
+import { CARDS, STATUSES, POTIONS, HEROES } from '../data/index.js';
 import { drawCard, drawCardBack, CARD_W, CARD_H } from '../art/cards.js';
-import { drawRelic, drawPotion, drawEnergyOrb, drawCoin, drawHeart, drawShield } from '../art/icons.js';
+import { drawPotion, drawEnergyOrb, drawCoin, drawHeart } from '../art/icons.js';
 import { drawEnemy } from '../art/enemies.js';
 import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -16,7 +16,7 @@ import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
 import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip, drawSeamDeclare, declareShown } from './seam_ui.js';
-import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
+import { intentText, cardSections, drawSections, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers } from './combat_hud.js';
 import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import * as SK from './skin.js';
 import { drawCardZoom } from './card_zoom.js';

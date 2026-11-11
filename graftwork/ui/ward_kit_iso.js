@@ -74,7 +74,7 @@ export const subPt = (gu, gv) => ({ x: (gu - gv) * HW / SUB, y: (gu + gv) * HH /
 // a room covers fw x fh cells: the L wall (u = 0) is fh cells long, the R wall (v = 0) fw cells; n = cells along the wall. s runs 0 to 1 over the whole wall.
 const wallPt = (side, s, n = 1) => (side === 'L' ? { x: -n * HW + s * n * HW, y: n * HH - s * n * HH } : { x: s * n * HW, y: s * n * HH });
 const wallN = (rc, side) => (side === 'L' ? rc.fh || 1 : rc.fw || 1);
-export function corners(rc) { const fw = rc.fw || 1, fh = rc.fh || 1; return { T: [0, 0], R: [fw * HW, fw * HH], B: [(fw - fh) * HW, (fw + fh) * HH], L: [-fh * HW, fh * HH], fw, fh }; }
+function corners(rc) { const fw = rc.fw || 1, fh = rc.fh || 1; return { T: [0, 0], R: [fw * HW, fw * HH], B: [(fw - fh) * HW, (fw + fh) * HH], L: [-fh * HW, fh * HH], fw, fh }; }
 const asDoors = (d, n) => (Array.isArray(d) ? d : Array(n).fill(!!d));
 // the extent of a room's static layer (room-local, top vertex = origin)
 export const extentOf = (rc) => { const fw = rc.fw || 1, fh = rc.fh || 1; return { x0: -fh * HW - 5, y0: -(WALL_FULL + 16), x1: fw * HW + 5, y1: (fw + fh) * HH + 12 }; };
@@ -240,7 +240,6 @@ function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
   g.save(); g.translate(tx, ty); paintStatic(g, rc, p, app, zoomPx || 1); g.restore();
   return false;
 }
-export const dropLayer = (id) => Q.layers.delete(id);
 
 // ---------------- wall heights: eased per room and side ----------------
 export function wallHeights(id, plan, mode, tk, dt, calm) {
@@ -254,7 +253,6 @@ export function wallHeights(id, plan, mode, tk, dt, calm) {
   }
   return out;
 }
-export const currentWallH = (id) => ({ HL: Q.wallH[id + 'L'], HR: Q.wallH[id + 'R'] });
 
 // ---------------- props, animated overlays and the depth pass ----------------
 function darkImg(img) {
@@ -263,7 +261,7 @@ function darkImg(img) {
   if (o) { o.x.drawImage(img, 0, 0, o.c.width, o.c.height); o.x.globalCompositeOperation = 'source-atop'; o.x.fillStyle = 'rgba(88,96,128,.5)'; o.x.fillRect(0, 0, o.c.width, o.c.height); o.x.fillStyle = 'rgba(8,8,16,.45)'; o.x.fillRect(0, 0, o.c.width, o.c.height); }
   v = o ? o.c : null; Q.dark.set(img, v); return v;
 }
-export function propWorldY(rc, ty, pr) { return ty + propPos(pr).y; }
+function propWorldY(rc, ty, pr) { return ty + propPos(pr).y; }
 function drawProp(app, g, pr, tx, ty, dark, part) {
   const d = assets.kitImg('props', pr.id, app), P = propPos(pr);
   if (!d && part) return d; // still on its way (a room that grew): nothing yet, not the placeholder of a failed image
@@ -345,7 +343,6 @@ export function monsterAt(key, i, rc, calm, dt, speed = 0.9) {
   st.fv += (st.face - st.fv) * Math.min(1, dt * 10); if (Math.abs(st.fv - st.face) < 0.02) st.fv = st.face;
   return st;
 }
-export const dropMonsters = () => Q.mons.clear();
 // world length of a straight move of (dgu, dgv) sub-tiles
 export const worldLen = (dgu, dgv) => Math.hypot((dgu - dgv) * HW / SUB, (dgu + dgv) * HH / SUB);
 
@@ -366,4 +363,3 @@ export function alongPolyline(poly, k) {
   const a = poly[i], b = poly[i + 1] || poly[i], f = segs[i] ? clamp(d / segs[i], 0, 1) : 0;
   return { gu: a[0] + (b[0] - a[0]) * f, gv: a[1] + (b[1] - a[1]) * f, du: b[0] - a[0], dv: b[1] - a[1], length: L };
 }
-export { propAt };

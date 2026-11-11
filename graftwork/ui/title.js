@@ -1,6 +1,6 @@
 // Title screen: logo, menu, hero select (New Run), Daily Run, Credits. Owner: title/end/settings.
 // States: 'menu' | 'select' | 'credits'. Keys come from app.pressedKeys (works in the browser and in headless tests).
-import { COL, FONT, FONT_UI, EASE, W, H, rgba, clamp } from './core.js';
+import { COL, EASE, W, H, rgba, clamp } from './core.js';
 import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
@@ -24,7 +24,7 @@ export const GOAL_TEXT = 'Goal: build your ward, sew your own cards, beat each A
 export const NOTICES = { classic_retired: 'The old map has been retired. Your run on it was closed and its progress counted.' };
 const compact = (app) => app.scale < 0.95; // phone stage: a menu column on the left, the two cards on the right, the scene in the middle
 
-export const VERSION = 'v1.0';
+const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
 const TYPE_NAMES = { attack: 'Attack', skill: 'Skill', power: 'Power' };
 

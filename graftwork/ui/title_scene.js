@@ -76,7 +76,6 @@ function gradeSprite() {
   g.fillStyle = bot; g.fillRect(0, 180 * 0.72, 320, 180 * 0.28);
   return (GRADE = o.c);
 }
-export function resetTitleSprites() { GLOW = null; SHADOW = null; GRADE = null; }
 
 // ---- the key art hook ----
 // assets/ward/manifest.json may carry  "title": { "keyart": { "file1x": "title/keyart@1x.webp", "file2x": "title/keyart@2x.webp", "w": 2560, "h": 1440,

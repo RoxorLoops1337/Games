@@ -12,12 +12,11 @@
 export const LINE_SCALE = 0.6; // main outlines come out ~40 percent thinner (3 -> 1.8, 2 -> 1.2)
 export const LW = { hatch: 0.7, hair: 1, fine: 1.2, ink: 1.8, bold: 2.6 }; // hatch / hairline rules / inner detail / main contour / heavy contour
 export const CAP = 8; // widest stroke a baked outline may use (ropes, chains and arches are bodies, not outlines)
-export const SNAP_BELOW = 0.8;
+const SNAP_BELOW = 0.8;
 
 const dev = { px: 1, scale: 1, line: LINE_SCALE };
 export function setLineDevice(px, scale) { dev.px = px > 0 ? px : 1; dev.scale = scale > 0 ? scale : 1; }
 export function setLineScale(s) { dev.line = s > 0 ? s : LINE_SCALE; } // tests only (1 = the legacy look)
-export function lineDevice() { return dev; }
 
 // legacy width -> new width. <= 1 stays (hatch and hairlines are already fine), 1..2 eases down to 2 -> 1.2, >= 2 is scaled.
 export function thin(w) {

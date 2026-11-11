@@ -276,4 +276,3 @@ function build(r, phase, k) {
   return { dx, dy, sx: 1 / sy, sy, rot, glow: clamp(glow, 0, 1), extra };
 }
 
-export { STYLES, ID_STYLE, BODY_STYLE };

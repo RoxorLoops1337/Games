@@ -11,7 +11,7 @@ import * as WD from '../engine/ward.js';
 import { ROOMS, BUILD_CARDS, PHASES, PHASE_ORDER, FLOOR, WARD_TUNE as T } from '../data/ward.js';
 import { HEROES, RELICS, ENEMIES } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
-import { drawNodeIcon, drawRelic, drawHeart, drawCoin } from '../art/icons.js';
+import { drawNodeIcon, drawRelic } from '../art/icons.js';
 import { drawPortrait } from '../art/heroes.js';
 import { Fx, FX_OPTS } from './fx.js';
 import { maybeTip } from './tutorial.js';
@@ -23,7 +23,6 @@ import { assets } from './assets.js';
 
 // ---------------- geometry (logical 1280 x 720) ----------------
 // The map is an isometric diamond grid (ui/ward_iso.js): a cell is a 2:1 diamond TW x TH, cellCenter is the middle of its floor.
-export const CELL = ISO.TW;
 const SHEET = ISO.MAPR;
 const LEFT = { x: 12, y: 64, w: 260, h: 648 };
 const RIGHT = { x: 1008, y: 64, w: 260, h: 484 };
@@ -45,7 +44,6 @@ const TRIG_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Event', shop: 'Shop
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
 
 const WDIM = () => (S && S.run && S.run.ward) || { w: 9, h: 6 };
-export const cellXY = (x, y) => { const b = ISO.cellBox(WDIM(), x, y); return { x: b.x, y: b.y }; }; // top left of the cell's diamond box
 export const cellCenter = (x, y) => ISO.cellC(WDIM(), x, y);
 export function handRects(n) {
   const gap = 14, tw = n * CW + Math.max(0, n - 1) * gap, x0 = HAND.x + (HAND.w - tw) / 2, out = [];

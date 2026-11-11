@@ -4,10 +4,10 @@ import { tscale } from './graft_parts.js';
 import { COL, W, H, rgba } from './core.js';
 import { lockedHint, isFresh } from '../engine/unlock.js';
 import { cardSpec } from '../engine/cards.js';
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from '../data/index.js';
+import { GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../data/index.js';
 import { glossTip, cardGlossTip } from './tooltips.js';
 import { scrollArea, inView } from './deckview.js';
-import { KINDS, KIND_LABEL, KIND_ONE, GOLD, itemViews, categoryCounts, drawMini, drawSilhouette, shortHint, padlock, unlockOnce } from './archive_kit.js';
+import { KINDS, KIND_LABEL, KIND_ONE, GOLD, itemViews, categoryCounts, drawMini, drawSilhouette, shortHint, unlockOnce } from './archive_kit.js';
 import { lnw } from '../art/linework.js';
 
 export const EXPLAIN = 'Each run earns Archive points. Better runs earn more, up to a cap.';

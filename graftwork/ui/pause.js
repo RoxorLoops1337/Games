@@ -21,7 +21,7 @@ const sc = (app) => Math.min(1.2, app.textScale || 1);
 // text that scales with the user's text size but stays inside the fixed panels
 const T = (app, str, x, y, o = {}) => app.text(str, x, y, { ...o, size: Math.round((o.size || 16) * sc(app)), fixed: true });
 
-export const CONTROLS = [
+const CONTROLS = [
   ['MOUSE', [
     'Click a card to select it. Click it again, or click an enemy, to play it.',
     'Drag a card up past the play line and release to play it. Drop it low to cancel.',
@@ -39,7 +39,7 @@ export const CONTROLS = [
     'Drag a card up to play it. Tap icons and statuses to read their tips.',
     'Tap the pause button, top right, for this menu.']],
 ];
-export const GLOSSARY = [
+const GLOSSARY = [
   ['Block', 'Absorbs damage this turn, then disappears.'],
   ['Weight / Budget', 'Each graft has Weight 1 to 3. Your deck Budget is 6 plus bonuses.'],
   ['Strain', 'Total Weight over Budget. Each point Tithes a plain card.'],
@@ -250,7 +250,7 @@ export default {
 };
 
 // ---------------------------------------------------------------- global overlay
-export function pauseIcon(g, x, y, w, h) {
+function pauseIcon(g, x, y, w, h) {
   g.save(); g.fillStyle = COL.vellum;
   app_rr(g, x + w / 2 - 9, y + h / 2 - 9, 6, 18); app_rr(g, x + w / 2 + 3, y + h / 2 - 9, 6, 18);
   g.restore();

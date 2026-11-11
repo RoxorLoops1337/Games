@@ -2,13 +2,12 @@ import { lnw } from '../art/linework.js';
 import { templates } from './templates.js';
 import * as SK from './skin.js';
 // Physical UI chrome (design/ART_BIBLE.md "UI chrome"): brass-framed slab panels with rivets, inset shadow and a lit top edge,
-// buttons with 2 px press travel, plus plate / rivet / vial / dial / badge helpers.
+// buttons with 2 px press travel, plus plate / rivet / vial helpers.
 // Textures are baked ONCE into offscreen canvases (keyed by size and colours, numeric keys so a hit allocates nothing);
 // per frame a panel or a button is one drawImage. When no canvas can be created (headless) or the per-frame bake budget is
 // spent, a cheap vector version is drawn instead.
 // Light: ONE key lamp from the upper left; baked bevels use that fixed rest direction (top and left lit, bottom and right dark).
-export const BRASS = '#C9A227', BRASS_DARK = '#7A5F12', BRASS_LIGHT = '#FFF1B0', LAMP = '#F2C14E';
-export const KEY_LIGHT = { x: -0.5, y: -0.86 }; // rest direction FROM which the lamp shines (upper left); screens may read it
+const BRASS = '#C9A227', BRASS_DARK = '#7A5F12', BRASS_LIGHT = '#FFF1B0', LAMP = '#F2C14E';
 
 const MAX_BAKES_PER_FRAME = 10, MAX_PIXELS = 48e6, MAX_ENTRIES = 400;
 const cache = { px: 0, panels: new Map(), buttons: new Map(), entries: 0, pixels: 0, bakes: 0, frameBakes: 0, hits: 0, vector: 0 };
@@ -247,25 +246,3 @@ export function vial(app, x, y, w, h, frac, o = {}) {
   ctx.fillStyle = BRASS; ctx.fillRect(x + 2, y - 2, w - 4, 4); ctx.fillRect(x + 2, y + h - 2, w - 4, 4); // brass caps
   ctx.fillStyle = BRASS_LIGHT; ctx.fillRect(x + 2, y - 2, w - 4, 1);
 }
-// Energy dial: brass bezel, 270 degree sweep, needle. value/max.
-export function dial(app, cx, cy, rad, value, max, o = {}) {
-  const ctx = app.ctx, k = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0, a0 = Math.PI * 0.75, a = a0 + k * Math.PI * 1.5;
-  ctx.save();
-  ctx.fillStyle = 'rgba(8,6,6,.85)'; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 6.2832); ctx.fill();
-  ctx.lineWidth = lnw(Math.max(2, rad * 0.14)); ctx.strokeStyle = BRASS; ctx.stroke();
-  ctx.lineWidth = lnw(1); ctx.strokeStyle = BRASS_LIGHT; ctx.beginPath(); ctx.arc(cx, cy, rad - 1, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
-  const n = Math.max(1, Math.min(10, max | 0)); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.lineWidth = lnw(1.2); ctx.beginPath();
-  for (let i = 0; i <= n; i++) { const an = a0 + (i / n) * Math.PI * 1.5, c = Math.cos(an), s = Math.sin(an); ctx.moveTo(cx + c * rad * 0.62, cy + s * rad * 0.62); ctx.lineTo(cx + c * rad * 0.8, cy + s * rad * 0.8); }
-  ctx.stroke();
-  ctx.strokeStyle = o.color || '#7fd1e0'; ctx.lineWidth = lnw(2.4); ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * rad * 0.15, cy - Math.sin(a) * rad * 0.15); ctx.lineTo(cx + Math.cos(a) * rad * 0.72, cy + Math.sin(a) * rad * 0.72); ctx.stroke();
-  ctx.fillStyle = BRASS; ctx.beginPath(); ctx.arc(cx, cy, rad * 0.14, 0, 6.2832); ctx.fill();
-  ctx.restore();
-}
-// Counter badge: small riveted brass pill with a tabular number.
-export function badge(app, cx, cy, text, o = {}) {
-  const size = o.size || 13, s = String(text), w = Math.max(o.minW || 22, Math.round(app.measure(s, size, { bold: true, ui: true, tab: true, fixed: o.fixed }) + 12)), h = Math.round(size * (o.fixed ? 1 : 1) + 8);
-  panel(app, cx - w / 2, cy - h / 2, w, h, { fill: o.fill || '#2b2110', stroke: o.stroke || 'brass', r: h / 2, lw: 1.5, rivets: false });
-  app.text(s, cx, cy - size * 0.58, { size, align: 'center', bold: true, ui: true, tab: true, color: o.color || BRASS_LIGHT, fixed: o.fixed });
-}
-export const chrome = { panel, button, plate, rivet, vial, dial, badge, press, focusRing, stats, frameStart, drawRipples, KEY_LIGHT, BRASS, BRASS_DARK, BRASS_LIGHT };
-export default chrome;

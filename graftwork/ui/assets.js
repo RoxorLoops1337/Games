@@ -17,7 +17,6 @@
 //                               loaded one recipe at a time (data/ward_kit.js, ui/ward_kit_iso.js recipeFor)
 // @2x is used unless the backing store is under 0.8 device px per logical px (app.px), then @1x. Every failure is swallowed: callers draw their procedural fallback on null.
 const BASE_DEFAULT = 'assets/ward/';
-const GROUPS = ['rooms', 'actors', 'icons', 'cards'];
 
 // ---- battle frames: pure helpers (no DOM) ----
 const stemList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
@@ -197,4 +196,3 @@ export function createAssets(opts = {}) {
 }
 
 export const assets = createAssets();
-export { GROUPS };

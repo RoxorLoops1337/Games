@@ -20,7 +20,6 @@ function baked(key, w, h, fn) {
   } else { cache.delete(key); cache.set(key, c); }
   return c;
 }
-export const plateStats = { get entries() { return cache.size; } };
 
 // ---- engraving helpers (plate space 520 x 560, light from the upper left) ----
 const W0 = 520, H0 = 560, FY = 466;

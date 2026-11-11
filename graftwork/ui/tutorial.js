@@ -27,7 +27,7 @@ export function tipsActive(meta) {
   return !(meta && meta.settings && meta.settings.tips === false);
 }
 export function tipSeen(meta, key) { return !!(meta && meta.tips && meta.tips[key]); }
-export function dismissTip(app, key) {
+function dismissTip(app, key) {
   const meta = app.shared.meta; if (!meta) return;
   (meta.tips = meta.tips || {})[key] = 1;
   const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();

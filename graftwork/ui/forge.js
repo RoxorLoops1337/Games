@@ -7,7 +7,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin, drawForgeIcon } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
-import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, deckMoved, FUSE_CAP } from '../engine/cards.js';
+import { cardSpec, canGraft, strainInfo, canTemper, instWeight, deckMoved, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
 import { withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';

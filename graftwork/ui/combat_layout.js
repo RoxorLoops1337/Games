@@ -20,8 +20,9 @@ export const ENEMY_FOOT = 356, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LA
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
 export const SEAM = { x: 380, y: 468, w: 696, h: 50 }; // the thread rail (ui/seam_ui.js): right of the hero plate, above the hand, left of End Turn
 export const DECLARE_BTN = { x: 380, y: 430, w: 86, h: 36 }; // Odile's declaration: a tab on the rail's top left edge, between the hero (x < 370) and the enemy lane (x >= 470)
-export const HAND_CX = 600, HAND_Y = 642, HAND_SPREAD = 900; // spec 622/940 widened away from END TURN (x1086); y keeps resting tops under the Thread rail (y518)
-export const HAND_GAP = 20;                       // extra air between small-hand cards (n <= 6)
+export const HAND_CX = 600, HAND_Y = 642; // spec 622/940 widened away from END TURN (x1086); y keeps resting tops under the Thread rail (y518)
+const HAND_SPREAD = 900;
+const HAND_GAP = 20;                       // extra air between small-hand cards (n <= 6)
 export const HOVER_S = 0.92;                      // desktop hover: lifted full face, sized so the lifted card stays below the enemy lane (top >= HOVER_TOP)
 export const HOVER_TOP = 420;                     // the lifted card never reaches above this y (enemy hp bars end ~ y400)
 export const HOVER_Y = H - (CARD_H * HOVER_S) / 2 - 6;
@@ -39,7 +40,7 @@ export const RELIC0 = { x: 530, y: 28, x1: 930, size: 28, show: 9, step: 38 };
 export const TURN_POS = { x: 975, y: 15 };
 
 // UX_SPEC 1: n<=4 .72, 5-6 .66, 7-8 .60, 9-10 .54. Spread 940 centred on 622, step = min(cw, (940 - cw) / (n - 1)).
-export function handScale(n) { return n <= 4 ? 0.72 : n <= 6 ? 0.66 : n <= 8 ? 0.6 : 0.54; }
+function handScale(n) { return n <= 4 ? 0.72 : n <= 6 ? 0.66 : n <= 8 ? 0.6 : 0.54; }
 
 // Resting fan slot of card i out of n.
 export function handSlot(i, n) {
