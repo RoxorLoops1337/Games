@@ -130,7 +130,8 @@ export function makeRig(id, e) {
   const leg = (s) => {
     const hip = B['leg' + s + '_up'], kn = B['leg' + s + '_lo'], an = B['foot' + s], f = e.feet[s], one = rigid.includes('leg' + s);
     const d1 = Math.hypot(kn.x - hip.x, kn.y - hip.y), d2 = Math.hypot(an.x - kn.x, an.y - kn.y), d0 = Math.hypot(an.x - hip.x, an.y - hip.y);
-    return { s, hip, kn, an, one, l1: one ? d0 : d1, l2: one ? 0 : d2, len: one ? d0 : d1 + d2, r1: Math.atan2(one ? an.y - hip.y : kn.y - hip.y, one ? an.x - hip.x : kn.x - hip.x), r2: Math.atan2(an.y - kn.y, an.x - kn.x),
+    const tp = e.parts.find((p) => p.n === hip.n && p.top), top = tp && !one ? tp.top : null, rt = top ? Math.atan2(kn.y - top[1], kn.x - top[0]) : 0; // a long hidden thigh (thighM)
+    return { s, hip, kn, an, one, top, rt, lt: top ? Math.hypot(kn.x - top[0], kn.y - top[1]) : 0, l1: one ? d0 : d1, l2: one ? 0 : d2, len: one ? d0 : d1 + d2, r1: Math.atan2(one ? an.y - hip.y : kn.y - hip.y, one ? an.x - hip.x : kn.x - hip.x), r2: Math.atan2(an.y - kn.y, an.x - kn.x),
       heel: f.heel, toe: f.toe, sole: f.sole, k1max: (e.garment || []).length ? RIG_TUNE.thigh : RIG_TUNE.bare, k2max: an.empty ? 1 : RIG_TUNE.shin, dz: an.empty ? 0 : RIG_TUNE.flat, sb: one ? hip : an.empty ? kn : an, phi: 0, k1: 1, k2: 1, slip: 0, lift: 0, off: 0, plant: true, cx: 0, cy: 0 };
   };
   const legs = { L: leg('L'), R: leg('R') }, T = RIG_TUNE, stiff = {}; for (const n of rigid) stiff[n] = true;
@@ -169,7 +170,7 @@ function solveLeg(rig, L, hx, hy, bx, by, lift) {
     const wy = L.an.y - L.kn.y + L.sole, fy = by - lift + L.sole, rH = ik2(L, hx, hy, bx + L.heel, fy, Math.hypot(L.an.x - L.kn.x + L.heel, wy), IKH), rT = ik2(L, hx, hy, bx + L.toe, fy, Math.hypot(L.an.x - L.kn.x + L.toe, wy), IKT);
     const tH = rH.a2 - Math.atan2(wy, L.an.x - L.kn.x + L.heel), tT = rT.a2 - Math.atan2(wy, L.an.x - L.kn.x + L.toe), toe = tH + tT > 0, r = toe ? rT : rH;
     th2 = toe ? tT : tH; L.phi = toe ? Math.max(th2, 1e-9) : Math.min(th2, 0); L.k1 = r.k1; L.k2 = 1; L.slip = r.slip;
-    mStretch(L.hip.m, mAt(L.hip.m, r.px, r.py, r.a1 - L.r1), Math.cos(L.r1), Math.sin(L.r1), r.k1);
+    thighM(L, hx, hy, r);
     mAt(L.kn.m, r.kx, r.ky, th2); mT(L.an.m, L.kn.m, L.an.x - L.kn.x, L.an.y - L.kn.y);
     return;
   }
@@ -182,8 +183,18 @@ function solveLeg(rig, L, hx, hy, bx, by, lift) {
     if (it < 2) phi = clamp(th2 - clamp(th2, -dz, dz), -T.roll, T.roll); // the ankle keeps the boot flat for small tilts, then it rolls with the shin (never past `roll`)
   }
   L.phi = phi; L.k1 = r.k1; L.k2 = r.k2; L.slip = r.slip;
-  mStretch(L.hip.m, mAt(L.hip.m, r.px, r.py, r.a1 - L.r1), Math.cos(L.r1), Math.sin(L.r1), r.k1);
+  thighM(L, hx, hy, r);
   mStretch(L.kn.m, mAt(L.kn.m, r.kx, r.ky, th2), Math.cos(L.r2), Math.sin(L.r2), r.k2); mAt(L.an.m, ax, ay, phi);
+}
+// The thigh's matrix. Painted as it came, the thigh turns about the hip the reach solved (after any slip). A LONG HIDDEN THIGH (its top extended up
+// into the pelvis by tools/graftwork_rig_build.py, manifest `top`: where that top end rests) is drawn from its top, pinned in the hips, to the solved
+// knee: knee, shin, boot and sole are exactly where the reach puts them (the reach itself, the stride and the planted soles do not change), the hip
+// slip only stretches the hidden length, and the top end never leaves the body. ANIMATOR_GUIDE.md section 6.
+function thighM(L, hx, hy, r) {
+  const t = L.top; if (!t) { mStretch(L.hip.m, mAt(L.hip.m, r.px, r.py, r.a1 - L.r1), Math.cos(L.r1), Math.sin(L.r1), r.k1); return; }
+  const px = hx + t[0] - L.hip.x, py = hy + t[1] - L.hip.y, vx = r.kx - px, vy = r.ky - py;
+  mStretch(L.hip.m, mAt(L.hip.m, px, py, Math.atan2(vy, vx) - L.rt), Math.cos(L.rt), Math.sin(L.rt), Math.hypot(vx, vy) / L.lt);
+  mT(L.hip.m, L.hip.m, L.hip.x - t[0], L.hip.y - t[1]);
 }
 // two-bone reach from the hip (hx, hy) to a target with lower length l2: stretch (thigh first, then shin), what is left moves the hidden hip; the knee points forward.
 // -> o { px, py (the hip used), kx, ky (knee), a1, a2 (the directions of thigh and shin), k1, k2, slip }
@@ -256,6 +267,7 @@ export function footContact(rig, side, out = { x: 0, y: 0, bx: 0, by: 0 }) {
 // stand the figure on a floor point: figure space -> the caller's space. flip mirrors x and nothing else.
 export function rigPlace(rig, x, y, s = 1, flip = false, out = M6()) { const f = flip ? -1 : 1; out[0] = s * f; out[1] = 0; out[2] = 0; out[3] = s; out[4] = x - f * s * rig.foot[0]; out[5] = y - s * rig.foot[1]; return out; }
 // Draw the posed rig in figure space. img: the decoded atlas (@1x or @2x; rects are in @2x px). o.contact === false leaves the foot shadows out.
+// o.alpha(part) -> 0..1 (optional): how opaque each part is drawn, 0 leaves it out (the lab's X-ray, the tests that draw some parts alone).
 export function drawRigged(g, rig, img, o = {}) {
   const k = (img.naturalWidth || img.width || rig.w) / rig.w;
   if (o.contact !== false) for (const s of ['R', 'L']) { // a small dark pool under each sole that fades as the foot leaves the floor: what glues a foot to the ground
@@ -264,7 +276,8 @@ export function drawRigged(g, rig, img, o = {}) {
     g.fillStyle = `rgba(0,0,0,${al.toFixed(3)})`; g.beginPath(); g.ellipse(cx, cy, rx, rx * 0.38, 0, 0, PI2); g.fill();
   }
   for (const p of rig.parts) {
-    const m = p.m; g.save(); g.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
+    const al = o.alpha ? o.alpha(p) : 1; if (!(al > 0)) continue;
+    const m = p.m; g.save(); g.transform(m[0], m[1], m[2], m[3], m[4], m[5]); if (al < 1) g.globalAlpha *= al;
     if (p.hem === undefined) g.drawImage(img, p.sx * k, p.sy * k, p.w * k, p.h * k, -p.px, -p.py, p.w, p.h);
     else { // cloth: rigid down to the hem line, below it a shear and a small lift hanging from that line, so no seam can open
       const y0 = Math.round(p.hem * p.h);
