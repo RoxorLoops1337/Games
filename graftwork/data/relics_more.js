@@ -1,11 +1,7 @@
 // Deck-building relics (H3). They reward a SHAPE of deck: one school, two schools bridged, Overload, Tempered cards, unused Budget.
 // Hooks: seamExtend {len, school, card, spec}, seamCut {paid, school, len, stitches} (a cut only), seamPay {school, stitches, amount}; cardPlayed {card, spec}.
 // Per-combat scratch lives in A.c.rx. c.res = resonance tiers keyed by every school that owns at least one graft (engine/resonance.js).
-const rx = (A) => A.c.rx || (A.c.rx = {});
-const first = (A, key) => { const r = rx(A); if (r[key] === A.c.turn) return false; r[key] = A.c.turn; return true; };
-const seam = (A) => A.c.seam || { len: 0, set: [], counts: {} };
-const nSchools = (A) => Object.keys(seam(A).counts || {}).filter((k) => seam(A).counts[k] > 0).length;
-const randFoe = (A) => { const a = A.alive(); return a.length ? a[A.rng.int(a.length)] : null; };
+import { rx, first, seam, nSchools, randFoe } from './relics_thread.js';
 const deckSchools = (A) => Object.keys((A.c && A.c.res) || {}).length;
 const tempered = (p) => !!(p && p.spec && p.spec.fused && p.spec.fused.length);
 

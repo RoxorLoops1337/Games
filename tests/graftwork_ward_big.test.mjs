@@ -41,7 +41,7 @@ t('data model: 1 x 1 rooms carry no w or h (byte identical to old saves), the Th
     for (const r of Object.values(w.rooms)) if (r.type !== 'rm_theatre') assert.ok(!('w' in r) && !('h' in r), r.type + ' has no size fields');
     const th = W.theatreOf(run); assert.deepEqual([th.w, th.h], [2, 2]); assert.equal(th.x, 7); assert.ok(th.y >= 0 && th.y <= 4);
     assert.equal(W.cellsOf(th).length, 4); consistent(run); assert.ok(W.theatreReachable(run));
-    assert.deepEqual(W.sizeOf(W.entranceOf(run)), [1, 1]); assert.equal(W.sizeKey(th), '2x2');
+    assert.equal(W.sizeKey(W.entranceOf(run)), '1x1'); assert.equal(W.sizeKey(th), '2x2');
   }
 });
 

@@ -5,13 +5,13 @@
 import { ENEMIES, RELICS, CARDS, GRAFTS } from '../data/index.js';
 import * as RUN from './run.js';
 
-export const REV = 2;
+const REV = 2;
 export const CREDIT_RUN_CAP = 60;   // gate knob: max Credit one run can pay
 export const FIRST_BONUS = 2;       // curve knob: lifetime-first milestone pays x2
 export const WIN_CREDIT = 10;       // flat Credit for a win
 export const ASC_CREDIT = 2;        // extra Credit per ascension level on a win
-export const WELCOME_CAP = 80;      // retro grant for old saves
-export const PRACTICE_MAX = 8;
+const WELCOME_CAP = 80;      // retro grant for old saves
+const PRACTICE_MAX = 8;
 
 // ---- catalog (data-driven; ids are append-only because they are saved) ----
 // cost null = earned by achievement only
@@ -30,7 +30,7 @@ export const TINTS = [{ id: 'none', name: 'Standard issue', color: null }, { id:
 
 // ---- case file milestones ----
 // check(run, x) where x = { overloaded, tempered, ... } from caseStats(). tiers pay once each per run.
-export const MILESTONES = [
+const MILESTONES = [
   { id: 'overload', name: 'First Overload', text: 'A card carried a 3rd graft.', credit: 4, check: (s) => s.overloaded > 0 || s.shatters > 0 },
   { id: 'shatter', name: 'First Shatter', text: 'An Overloaded card broke on play.', credit: 4, check: (s) => s.shatters >= 1 },
   { id: 'line', name: 'Longest Line', text: 'A Line of 4 knots or more.', credit: 5, value: (s) => s.maxLine, check: (s) => s.maxLine >= 4 },
@@ -44,7 +44,7 @@ export const MILESTONES = [
   { id: 'boss3', name: 'The Full Set', text: 'Defeated 3 bosses.', credit: 10, check: (s) => s.bosses >= 3 },
 ];
 
-export function caseStats(run) {
+function caseStats(run) {
   const st = (run && run.stats) || {};
   let overloaded = 0, tempered = 0;
   for (const i of (run && run.deck) || []) { if ((i.grafts || []).length > 2) overloaded++; if ((i.fused || []).length) tempered++; }

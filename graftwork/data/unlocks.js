@@ -19,11 +19,11 @@ export const UP = {
   ASSIST_MULT: 0.5,    // Assist runs pay half (the floor still applies)
   ABANDON_MIN_FLOORS: 3,
 };
-export const TARGET_TOTAL = 930;    // total UP that opens every locked item (cost curve is normalised to this)
-export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
-export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
-export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
-export const STEP_SIZE = { card: 3, graft: 3, relic: 3, potion: 2, event: 2, build: 2 }; // items per queue step (a "drop")
+const TARGET_TOTAL = 930;    // total UP that opens every locked item (cost curve is normalised to this)
+const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
+const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
+const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
+const STEP_SIZE = { card: 3, graft: 3, relic: 3, potion: 2, event: 2, build: 2 }; // items per queue step (a "drop")
 export const AFFINITY_WINDOW = 6;   // the next step is picked from the first N open steps; the most played hero's step wins
 export const AFFINITY_MIN_RUNS = 2; // runs with a hero before its cards are pulled forward
 export const WELCOME_UP_PER_RUN = 5, WELCOME_UP_CAP = 160; // old saves: one-time UP for runs already played

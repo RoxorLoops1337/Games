@@ -8,14 +8,14 @@
 // of the afflictions already active instead), and whose delete trap keeps Infection through card/relic cleanses.
 import { STATUSES, GRAFTS } from '../data/index.js';
 import { instWeight, isPriceMod } from './cards.js';
-import { refreshStrain, specOf } from './combat.js';
+import { refreshStrain, rawCost } from './combat.js';
 
 const AFF = new Set(['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden']);
 const ENEMY_CAP = new Set(['weightofdebt', 'stitchedup']);
 const MAX_TYPES = 3, MAX_PER_MOVE = 2;
 const TYPES = ['attack', 'skill', 'power'];
 
-export function affl(c) {
+function affl(c) {
   if (!c.affl) c.affl = {};
   const a = c.affl;
   if (!a.views) { a.views = new Map(); a.poisonSrc = {}; a.stage = 0; a.inMove = false; a.moveTypes = new Set(); a.last = ''; }
@@ -122,14 +122,7 @@ export function afflCost(c, card, k) {
   }
   return best === card ? k + 1 : k;
 }
-function baseCost(c, h) {
-  const spec = specCost(c, h);
-  if (spec === 'X') return null;
-  let k = spec + h.costMod + (h.jam ? 1 : 0) + (c.player.st.costup || 0);
-  if (h.costSet !== undefined) k = h.costSet;
-  return Math.max(0, k);
-}
-function specCost(c, h) { return specOf(c, h).cost; }
+function baseCost(c, h) { const k = rawCost(c, h); return k === 'X' ? null : Math.max(0, k); }
 
 // ---------- turn hooks ----------
 const movePicks = (mv, s) => {

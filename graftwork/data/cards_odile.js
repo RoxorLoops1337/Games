@@ -1,12 +1,10 @@
+import { OVL, TEMP, LINE2 } from './helpers.js';
 // Odile: the polite collector. Schools: hoard, gilded, echo. Gold in the pocket becomes damage and block.
 const G = (base, mul, max) => ({ base, per: 'gold', mul, max });
 const fxOn = (s, n) => ({ op: 'status', s, n, to: 'self' });
-const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
 // gold per Tithed card in the deck
 const titheGold = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const n = Math.min(max, per * A.c.strain.tithed.length); if (n > 0 && !ctx.replay) A.gold(n); }, text: `Gain ${per} gold per Tithed card in your deck (max ${max}).` });
 
-const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
-const LINE2 = (c) => !!c.seam && Object.keys(c.seam.counts || {}).filter((k) => c.seam.counts[k] > 0).length >= 2; // the Line bridges 2+ schools
 const addKnot = (A) => {
   const s = A.c.seam; if (!s || s.len < 1 || s.len >= 5) return;
   const top = Object.keys(s.counts || {}).sort((a, b) => (s.counts[b] || 0) - (s.counts[a] || 0))[0];

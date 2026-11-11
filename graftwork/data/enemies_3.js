@@ -3,6 +3,7 @@
 // live bindings that are only read inside functions, at combat time, long after both modules have loaded (never at module scope).
 import { CARDS, GRAFTS } from './index.js';
 import { schoolsOf } from '../engine/cards.js';
+import { ST, CUSTOM, SCHOOL_ORDER } from './helpers.js';
 
 const cardDef = (id) => CARDS[id];
 const graftDef = (id) => GRAFTS[id];
@@ -42,11 +43,9 @@ function cutDraw(A, n) {
   const c = A.c;
   for (let i = 0; i < n && c.drawPile.length; i++) { const k = c.drawPile.pop(); c.discard.push(k); A.ev({ t: 'discard', card: k.uid, why: 'effect' }); }
 }
-export { cardDef, graftDef, costOf, nextCards, jamBest };
+export { cardDef, graftDef, costOf, nextCards };
 const D = (n, extra) => ({ op: 'dmg', n, ...extra });
-const ST = (s, n, to) => ({ op: 'status', s, n, to: to || 'player' });
 const SELF = (s, n) => ({ op: 'status', s, n, to: 'self' });
-const CUSTOM = (intent, text, fn) => ({ op: 'custom', intent, text, fn });
 const stepAfter = (A, e) => { e.data.step = (e.data.step || 0) + 1; };
 
 // ---------- NORMALS ----------
@@ -324,7 +323,6 @@ const impresario = {
 };
 
 // ---------- FINAL BOSS: THE GRAFTER ----------
-const SCHOOL_ORDER = ['ember', 'blood', 'echo', 'hoard', 'rust', 'static', 'gilded'];
 function tallyDeck(run) {
   const schools = {}, weights = {}; let count = 0, weight = 0, best = 0, bestName = '';
   for (const inst of run.deck || []) {

@@ -6,15 +6,25 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
 import { ASCENSION_TEXT } from './run.js';
 import { defaults2, migrate2, awardCaseFile, recordBosses, grantReward } from './meta2.js';
-import { unlockDefaults, migrateUnlock, awardRun, trackRun, heroGate } from './unlock.js';
+import { unlockDefaults, migrateUnlock, awardRun, trackRun, heroGate, isObj } from './unlock.js';
 export * from './meta2.js';
 export * from './unlock.js';
 
 export const KEY = 'graftwork_meta_v1';
-export const HISTORY_MAX = 20;
-export const MAX_ASC = 10;
-export const SEEN_KINDS = ['cards', 'grafts', 'enemies', 'relics', 'potions', 'statuses', 'events'];
-export const DEFAULT_SETTINGS = { master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, flashes: true, highContrast: false, colorblindMode: "deuteranopia", largeText: false, tips: true, muted: false, assist: { on: false, sturdy: true, gentle: true, kind: true, mercy: true } };
+const HISTORY_MAX = 20;
+const MAX_ASC = 10;
+const SEEN_KINDS = ['cards', 'grafts', 'enemies', 'relics', 'potions', 'statuses', 'events'];
+// Settings (meta.settings): THE table of defaults, every key. The display keys at the end are not written into a new meta: the UI fills
+// them when it first reads them (ui/settings.js, ui/a11y.js), which keeps the shape of a new save (and the golden master's meta hash) as it was.
+export const SETTING_DEFAULTS = {
+  master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, flashes: true, highContrast: false,
+  colorblindMode: 'deuteranopia', largeText: false, tips: true, muted: false, assist: { on: false, sturdy: true, gentle: true, kind: true, mercy: true },
+  // display keys, filled by the UI
+  textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false, previewArt: false, announce: true,
+};
+const DISPLAY_KEYS = ['textSize', 'textScale', 'quality', 'graphics', 'fullscreen', 'previewArt', 'announce'];
+// what a new meta holds (defaultMeta)
+export const DEFAULT_SETTINGS = Object.fromEntries(Object.entries(SETTING_DEFAULTS).filter(([k]) => !DISPLAY_KEYS.includes(k)));
 export { ACHIEVEMENTS };
 
 // ---------- storage (injectable) ----------
@@ -39,7 +49,6 @@ export function defaultMeta() {
     ...defaults2(), // rev 2: credit, cosmetics, loadout, practice (engine/meta2.js)
   };
 }
-const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
 // Fill missing or wrong-typed fields from the defaults, keep everything else (additive migration).
 function fill(t, d) {
   for (const k of Object.keys(d)) {
@@ -87,12 +96,6 @@ export function retireClassicRun(m) {
   return info;
 }
 
-// ---------- settings / tips ----------
-export function setting(m, key) { const s = m && m.settings; return s && s[key] !== undefined ? s[key] : DEFAULT_SETTINGS[key]; }
-export function setSetting(m, key, value, save = true) { m.settings[key] = value; if (save) saveMeta(m); }
-export function tipSeen(m, id) { return !!m.tips[id]; }
-export function markTip(m, id) { if (!m.tips[id]) { m.tips[id] = 1; saveMeta(m); } }
-
 // ---------- codex ----------
 export function markSeen(m, kind, id) {
   if (!m || !id || !SEEN_KINDS.includes(kind)) return false;
@@ -101,9 +104,8 @@ export function markSeen(m, kind, id) {
   if (m.seen[kind][id]) return false;
   m.seen[kind][id] = 1; return true;
 }
-export function isSeen(m, kind, id) { return !!(m && m.seen && m.seen[kind] && m.seen[kind][id]); }
 export function codexCount(m) { let n = 0; for (const k of SEEN_KINDS) n += Object.keys((m.seen && m.seen[k]) || {}).length; return n; }
-export function seenFromRun(m, run) {
+function seenFromRun(m, run) {
   if (!m || !run) return;
   for (const i of run.deck || []) { markSeen(m, 'cards', i.id); for (const g of i.grafts || []) markSeen(m, 'grafts', g); }
   for (const r of run.relics || []) markSeen(m, 'relics', r);

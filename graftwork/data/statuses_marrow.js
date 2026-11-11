@@ -1,6 +1,6 @@
 // Extra statuses owned by Marrow's cards (same schema as statuses.js).
 // Combat state reads used: A.c.hand, A.c.enemies, A.c.damageTakenThisCombat.
-const isJunk = (k) => String(k.inst.id).startsWith('j_');
+import { isJunk } from './helpers.js';
 
 export const STATUS_MARROW = [
   // Heal when a card costs you HP (own card cost or graft price) or when you take a hit.

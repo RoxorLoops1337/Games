@@ -1,11 +1,8 @@
 import { instWeight, schoolsOf } from '../engine/cards.js';
+import { dmg, blk, debuff, buff } from './helpers.js';
 // ACT I: THE WARD. Enemies for act 1: 11 normals, 3 elites, 1 boss, plus summon-only helpers.
 // Summon-only helpers carry `summonOnly: true` (kind 'normal' so the content gate accepts them): the run owner must skip them when drawing encounters.
 // Enemy ops default to hitting the player; use to:'self'|'allies' for buffs. Every enemy has art:{ body, color, notes }.
-const dmg = (n, extra = {}) => ({ op: 'dmg', n, ...extra });
-const blk = (n) => ({ op: 'block', n, to: 'self' });
-const debuff = (s, n) => ({ op: 'status', s, n, to: 'player' });
-const buff = (s, n) => ({ op: 'status', s, n, to: 'self' });
 const paperwork = (n) => ({ op: 'addCard', card: 'j_paperwork', n, to: 'discard' });
 
 // ---- Bedpan Slime: splits when hit past half HP or on death (no overkill trick, AoE and burst get punished) ----

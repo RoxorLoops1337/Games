@@ -12,7 +12,7 @@
 //   - props stay inside the grid and never overlap each other,
 //   - the four LANE cells (0,1) (3,1) (1,0) (1,3) stay free: they are where a door leads out of the room (rows 1 to 2 of a wall are the door),
 //   - every free sub-tile is reachable from every other, so monsters and the hero can always walk.
-import { BIG_RECIPES, hasBigRecipe } from './ward_kit_big.js';
+import { BIG_RECIPES, hasBigRecipe, Wp } from './ward_kit_big.js';
 export { hasBigRecipe };
 export const SUB = 4;
 export const WALL_FULL = 46, WALL_LOW = 15;
@@ -23,10 +23,9 @@ export const LANES = [[0, 1], [3, 1], [1, 0], [1, 3]];
 // prop reaches the manifest. The manifest's own footprint wins once it exists.
 export const PLANNED = { floors: [], walls: [], pieces: [], props: {} };
 // animated props: an overlay the renderer draws over the sprite (never with reduced motion)
-export const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
+const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
 
 const P = (id, u, v, flip = 0) => ({ id, u, v, flip });
-const Wp = (id, wall, s) => ({ id, wall, s });
 
 // How the rooms are laid out (u runs along the right-down edge = the back-right wall, v along the left-down edge = the back-left wall):
 //   - the L wall is the column u = 0, the R wall the row v = 0; the lanes (0,1) (3,1) (1,0) (1,3) stay free (doors), so a 2 x 1 prop on a wall edge sits in the
@@ -153,10 +152,10 @@ export const RECIPES = {
   ],
 };
 // a room type may also borrow the recipe of another (the same kit room, different plan)
-export const ROOM_ALIAS = {};
+const ROOM_ALIAS = {};
 
 // ---------------- helpers ----------------
-export const hasId = (kit, group, id) => !!(kit && kit[group] && kit[group][id]);
+const hasId = (kit, group, id) => !!(kit && kit[group] && kit[group][id]);
 export function footprintOf(kit, id, flip) {
   const d = kit && kit.props && kit.props[id];
   const f = d && Array.isArray(d.footprint) ? d.footprint : PLANNED.props[id] || [1, 1];
@@ -170,7 +169,7 @@ export function lanesFor(w = 1, h = 1) {
   for (let i = 0; i < w; i++) { out.push([i * SUB + 1, 0], [i * SUB + 1, h * SUB - 1]); if (h > 1) for (let j = 1; j < h; j++) out.push([i * SUB + 1, j * SUB - 1], [i * SUB + 1, j * SUB]); }
   return out;
 }
-export function doorPieceId(kit, want) { for (const id of [want, 'door', 'archdoor']) if (id && hasId(kit, 'pieces', id)) return id; return null; }
+function doorPieceId(kit, want) { for (const id of [want, 'door', 'archdoor']) if (id && hasId(kit, 'pieces', id)) return id; return null; }
 
 const CACHE = new WeakMap();
 // the usable recipe of a room type for this kit manifest: { type, variant, key, floor, wall, pieces, props, occ, free, stand, doorPiece } or null (paint it)
@@ -239,12 +238,6 @@ export function wallPlan(rooms, nbrs, roomAtXY) {
     out.set(r.id, { L: any(Ls), R: any(Rs), sharedL: any(sharedLs), sharedR: any(sharedRs), slabL: any(slabLs), slabR: any(slabRs), Ls, Rs, sharedLs, sharedRs, slabLs, slabRs, w, h });
   }
   return out;
-}
-// the unique wall segments of a floor: one per (room, side); `shared` marks an edge two rooms meet at
-export function wallSegments(rooms, plan) {
-  const segs = [];
-  for (const r of rooms) { const p = plan.get(r.id); segs.push({ room: r.id, side: 'L', door: p.L, shared: p.sharedL }, { room: r.id, side: 'R', door: p.R, shared: p.sharedR }); }
-  return segs;
 }
 
 // ---------------- walking on the sub-tile grid ----------------

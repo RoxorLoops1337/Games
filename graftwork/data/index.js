@@ -52,7 +52,6 @@ export const HEROES = byId('hero', HERO_LIST);
 export const SCHOOLS = byId('school', SCHOOL_LIST);
 export const CARD_LIST = Object.values(CARDS);
 export const GRAFT_LIST = Object.values(GRAFTS);
-export const ENEMY_LIST = Object.values(ENEMIES);
 // The Ward (design/WARD.md): rooms rm_* and building cards b_*. Keys must equal ids (saves and unlocks reference them).
 import { ROOMS as ROOMS_W, BUILD_CARDS as BUILD_W } from './ward.js';
 for (const [t, name] of [[ROOMS_W, 'room'], [BUILD_W, 'build']]) for (const [k, v] of Object.entries(t)) if (k !== v.id) throw new Error(`${name} key ${k} does not match id ${v.id}`);
