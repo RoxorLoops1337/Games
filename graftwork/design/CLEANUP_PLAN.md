@@ -236,6 +236,27 @@ Found on the way, still open (owner decisions):
 - **Knitter and Scissor Nurse passives have no player text** (the Knitter heals 3 per extend and takes 50 percent more from a cut; the Nurse takes 2 Block per cashed Line and snips a Line of 4 or more).
 - A payout an enemy voids still counts as a cut for Bobbin and Pin Cushion. The `capped` flag of `seamCut` is read by tests only.
 
+### Long hidden limbs (rig preview)
+
+The owner: "the legs have to be longer even behind the apron; every humanoid character should have arms and legs that fit the rig, and then something like an apron is layered over it." Branch `rig-longlimbs`.
+
+- **What exists**: the build grows limb tubes into the body (`extend`, `extend_top` in tools/graftwork_rig_build.py) and chooses the length per limb with `--fit` from the pose envelope of ui/rig.js (`node tools/graftwork_rig_pose.mjs`), written into the meta as `fit`; the runtime pins every thigh's top in the hips (`thighM`); garment layers of Marrow (tunic), Odile (coat) and the Night Nurse (skirt) are cut higher so the cloth covers the pelvis; Odile's thighs are the upper parts of her leg pieces, grown; the sheet linter `tools/graftwork_rig_check.py`; the assembled A-pose slicer (`"source": "assembled"`) and `--export`; X-ray in the Rig lab. Spec: ART_MODULAR.md section 7 "Rig sheet spec v2: layers"; how it moves: ANIMATOR_GUIDE.md section 6.
+- **Default look unchanged**: golden master `--only ui,assets` against the base (dcddd93f), 0 differences on 7,689 keys. With the preview off nothing under `assets/rigs/` is requested.
+- **Feet unchanged**: bones, feet, contact point, bbox and height of all nine rigs are identical to the base; the ground contact tests pass unchanged.
+- **The new checks on the base build**: leg ends uncovered: marrow near thigh 72 px in 15 of 104 poses, night_nurse near leg 426 px in 47; every other shipped leg end was already under the cloth. Thighs reaching 35 percent of hip to knee above the hip: none on the base (2 to 5 units of 8 to 12 needed); all fourteen after. Upper arms: their painted caps are the shoulders and sit beside the torso, measured, not asserted.
+
+| character | thigh extension near / far (units) | verdict |
+|---|---|---|
+| marrow | 10 / 6 | ships |
+| wick | 8 / 7 | ships |
+| odile | 8 / 8 (thighs grown from the leg pieces) | ships |
+| knitter | 3 / 9 | ships |
+| night_nurse | 3 / 2 (one-piece legs; the near leg's wide top trimmed under the dress) | ships |
+| npc_nurse | 9 / 8 | ships |
+| npc_patient | 8 / 7 | ships |
+
+- **What still needs the artist** (the linter's sentences): plain long thigh tubes with straight tops for every sheet; Odile's thighs as their own pieces; the garments as pieces of their own (tunic, coat, the nurses' skirts are cut out of the torso); loose pieces in their own boxes (candy_striper, npc_patient, npc_porter, npc_nurse, knitter groups); one scale per sheet (upper arms and boots differ by 10 to 26 percent between the sides). Best: the assembled two-layer figure. Not solved by long thighs: at the deepest knee bends the knee ends themselves show (Wick's short shin folding level under the hem at 1.06 and 1.25 on the down-right heading, Marrow's trouser hem behind the knee at 0.25): that needs round knee ends or longer shins in the art.
+
 ### Painted UI parts (preview)
 
 The artist's UI art (ten card frames, the back, a cost gem, three panels, five buttons, HP tube, energy dial, block plate, two chips, the Budget gauge, two icon sheets, the title key art) is built into `assets/ui/` and drawn only as a PREVIEW (`?art=1`, `?preview=1`, or Settings > "Painted art (preview)"). Rebuild: `python3 -I tools/graftwork_ui_build.py --raw <raw dir>`, then `node tools/graftwork_sw_build.mjs`; details in ART_MODULAR.md "What is built"; look in `lab/art.html`.
