@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fakeCtx, installDom, canvasCalls } from './graftwork_lib.mjs';
 globalThis.__GW_ART_THROW = 1;
 installDom();
-const { ENEMY_LIST } = await import('../graftwork/data/index.js');
+const ENEMY_LIST = Object.values((await import('../graftwork/data/index.js')).ENEMIES);
 const { drawEnemy, enemyBounds } = await import('../graftwork/art/enemies.js');
 const { drawHero, drawPortrait } = await import('../graftwork/art/heroes.js');
 const ctx = fakeCtx();

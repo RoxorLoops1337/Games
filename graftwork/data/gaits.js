@@ -42,5 +42,5 @@ export const RIG_GAITS = {
 };
 export const rigGait = (id) => RIG_GAITS[gaitKey(id)] || null;
 // the id an actor goes by in this table: Level 2 elites share the Level 1 entry
-export const gaitKey = (id) => String(id || '').replace(/_l2$/, '');
+const gaitKey = (id) => String(id || '').replace(/_l2$/, '');
 export const gaitEntry = (id) => GAITS[gaitKey(id)] || null;

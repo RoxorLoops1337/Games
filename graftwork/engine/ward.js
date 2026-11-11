@@ -15,7 +15,7 @@ import { hasBigRecipe } from '../data/ward_kit.js';
 import { runAllows } from './unlock.js';
 import { makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct, perkN, rollPotion as RUN_rollPotion, potionSlots as potionCap } from './run.js';
 
-export { ROOMS, BUILD_CARDS, PHASES, FLOOR, T as WARD_TUNE };
+export { ROOMS, BUILD_CARDS, T as WARD_TUNE };
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 // ---------------- helpers ----------------
@@ -27,7 +27,6 @@ const inside = (w, x, y) => x >= 0 && y >= 0 && x < w.w && y < w.h;
 // A room is a rectangle of w x h cells (both absent = 1). (x, y) is its top-left (smallest x, smallest y) cell and w.grid holds its id in EVERY cell it covers.
 // Old saves only have 1 x 1 rooms and carry no w / h: nothing to migrate.
 export const cellsOf = (r) => { const out = []; for (let j = 0; j < (r.h || 1); j++) for (let i = 0; i < (r.w || 1); i++) out.push([r.x + i, r.y + j]); return out; };
-export const sizeOf = (r) => [r.w || 1, r.h || 1];
 export const cellCount = (r) => (r.w || 1) * (r.h || 1);
 export const isBig = (r) => cellCount(r) > 1;
 export const sizeKey = (r) => (r.w || 1) + 'x' + (r.h || 1);
@@ -45,7 +44,7 @@ const effect = (run, id) => W(run).effects.filter((e) => e.id === id);
 const effectN = (run, id) => effect(run, id).reduce((a, e) => a + (e.n || 1), 0);
 const isDark = (room) => !room.on && def(room).power > 0;
 export function everyOf(room) { const s = def(room).spawn; return s && s.every ? (bigOf(room).every || s.every) : 0; }
-export function spawnN(room) { return room.upgrades.includes('b_reinforced_beds') ? 2 : 1; } // monsters per tick
+function spawnN(room) { return room.upgrades.includes('b_reinforced_beds') ? 2 : 1; } // monsters per tick
 export function capOf(room, run) {
   const s = def(room).spawn; if (!s) return 0;
   let cap = room.upgrades.includes('b_sterile_field') ? 2 : (bigOf(room).cap || s.cap || 1);
@@ -129,9 +128,9 @@ export function buildCells(run) {
 }
 // ---- placing and expanding (footprints) ----
 // dir names: 'e' (+x) 's' (+y) 'w' (-x) 'n' (-y). A 2 cell footprint grows from a cell toward dir.
-export const DIR_NAMES = ['e', 's', 'w', 'n'];
+const DIR_NAMES = ['e', 's', 'w', 'n'];
 const DIRV = { e: [1, 0], s: [0, 1], w: [-1, 0], n: [0, -1] };
-export function footprint(x, y, size, dir) { // the rectangle a [fw, fh] room covers when its first cell is (x, y) and it grows toward dir
+function footprint(x, y, size, dir) { // the rectangle a [fw, fh] room covers when its first cell is (x, y) and it grows toward dir
   const [fw, fh] = size || [1, 1];
   if (fw * fh === 1) return { x, y, w: 1, h: 1 };
   if (fw * fh === 4) return { x, y, w: 2, h: 2 };
@@ -183,7 +182,7 @@ export function expandOptions(run, rid) {
   if (!dirs.length) { const any = DIR_NAMES.some((dir) => hasBigRecipe(room.type, dir === 'e' || dir === 'w' ? 2 : 1, dir === 'e' || dir === 'w' ? 1 : 2)); return no(any ? 'space' : 'norecipe'); }
   return { ok: true, why: null, dirs, to: [dirs[0].f.w, dirs[0].f.h], cost: expandCostOf(room, run) };
 }
-export function expandCostOf(room, run) { // the room's Expand cost; the Surveyor's Tape takes 1 wood and 1 stone off
+function expandCostOf(room, run) { // the room's Expand cost; the Surveyor's Tape takes 1 wood and 1 stone off
   const c = { ...((ROOMS[room.type].expand || {}).cost || {}) }, k = run ? perkN(run, 'expandCost') : 0;
   if (k) for (const r of ['wood', 'stone']) if (c[r]) c[r] = Math.max(0, c[r] - k);
   return c;
@@ -231,7 +230,7 @@ function spawnInto(run, room) {
   else room.contents.push({ kind: s.kind });
 }
 // one timer tick of one room (morning, or Double Shift)
-export function tickRoom(run, room) {
+function tickRoom(run, room) {
   const s = def(room).spawn;
   if (!s || !s.every) return false;
   room.timers.spawn--;
@@ -282,7 +281,7 @@ function autoRoom(run, room) {
     if (i >= 0) { run.deck.splice(i, 1); log(run, 'The Laundry washes out a junk card.'); }
   }
 }
-export function drawHand(run, n) {
+function drawHand(run, n) {
   const d = W(run).deck;
   for (let i = 0; i < n; i++) {
     if (!d.draw.length) { if (!d.discard.length) break; d.draw = run.rng.shuffle(d.discard.splice(0)); }
@@ -298,7 +297,7 @@ export function endMorning(run) {
 }
 
 // ---------------- building ----------------
-export function costOf(run, card) {
+function costOf(run, card) {
   const w = W(run);
   if (card.kind === 'room' && !w.freeUsed && perkN(run, 'firstFree') > 0) return {};
   return card.cost;
@@ -517,7 +516,7 @@ function finishWalk(run) {
   advancePhase(run);
   return null;
 }
-export function advancePhase(run) {
+function advancePhase(run) {
   const w = W(run);
   const i = PHASE_ORDER.indexOf(w.phase);
   if (w.phase === 'night') { w.day++; log(run, `Day ${w.day} of ${w.dayLimit}.`); morningStart(run); }

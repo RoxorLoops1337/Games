@@ -15,7 +15,7 @@ const ENEMY_CAP = new Set(['weightofdebt', 'stitchedup']);
 const MAX_TYPES = 3, MAX_PER_MOVE = 2;
 const TYPES = ['attack', 'skill', 'power'];
 
-export function affl(c) {
+function affl(c) {
   if (!c.affl) c.affl = {};
   const a = c.affl;
   if (!a.views) { a.views = new Map(); a.poisonSrc = {}; a.stage = 0; a.inMove = false; a.moveTypes = new Set(); a.last = ''; }

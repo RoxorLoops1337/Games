@@ -93,7 +93,7 @@ await ta('meta with unknown ids in seen lists, history and a practice deck loads
   m0.practice.the_resident = { boss: 'the_resident', kind: 'boss', enemies: ['the_resident'], act: 1, hero: 'marrow', asc: 0, deck: [{ id: 'm_cut', grafts: [], up: 0 }, { id: GONE[0], grafts: [], up: 0 }, { id: GONE[1], grafts: ['g_not_a_graft'], up: 0 }, { id: 'm_dress', grafts: ['g_not_a_graft'], up: 0 }], relics: ['r_not_a_relic'], maxHp: 80, win: true, ts: 1 };
   store[META.KEY] = JSON.stringify(m0);
   const m = META.loadMeta();
-  assert.equal(m.history.length, 1); assert.ok(META.isSeen(m, 'cards', GONE[1]), 'the save is not rewritten');
+  assert.equal(m.history.length, 1); assert.ok(m.seen.cards[GONE[1]], 'the save is not rewritten');
   assert.ok(META.codexCount(m) >= 0); META.saveMeta(m);
   const list = META.practiceList(m); assert.equal(list.length, 1);
   const pr = META.newPracticeRun(list[0], m);

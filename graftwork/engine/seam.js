@@ -16,7 +16,8 @@ import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
 import { RELICS, HEROES } from '../data/index.js';
 
-export const SEAM_LEN_CAP = 5, SEAM_CUTS_TURN = 3, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 6, SEAM_GOLD_COMBAT = 20;
+export const SEAM_CUTS_TURN = 3;
+const SEAM_LEN_CAP = 5, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 6, SEAM_GOLD_COMBAT = 20;
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
 
 export function seamInit(c) {
