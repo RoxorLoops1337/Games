@@ -3,7 +3,7 @@
 // left the game, and has no em dashes. Headless safe: static checks plus a node import of the game modules it drives (no DOM needed).
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 const root = new URL('../graftwork/', import.meta.url).pathname;
 const html = readFileSync(join(root, 'lab/anim.html'), 'utf8'), js = readFileSync(join(root, 'lab/anim.js'), 'utf8');
 const man = JSON.parse(readFileSync(join(root, 'assets/ward/manifest.json'), 'utf8'));
