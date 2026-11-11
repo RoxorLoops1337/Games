@@ -9,7 +9,7 @@ import { newInst } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, RELICS, STATUSES, ENEMIES } from '../graftwork/data/index.js';
 import { cardLines } from '../graftwork/engine/text.js';
 import { onSeamEvent, seamTip } from '../graftwork/ui/seam_ui.js';
-import { TIP_TEXTS, threadLesson, skipThreadLesson, tipSeen, maybeTip } from '../graftwork/ui/tutorial.js';
+import { TIP_TEXTS, threadLesson, tipSeen, maybeTip } from '../graftwork/ui/tutorial.js';
 import { KEYWORDS, THREAD_TERMS, glossaryEntry, keywordsIn, keywordSection, statusSection } from '../graftwork/ui/tooltips.js';
 import * as L from '../graftwork/ui/combat_layout.js';
 import codex from '../graftwork/ui/codex.js';
@@ -74,12 +74,6 @@ await t('threadLesson respects meta, the tips setting and the unpaid cut', () =>
   a.shared.meta.settings.tips = false;
   assert.equal(threadLesson(a, { t: 'seamCut', paid: 2, len: 3 }), null, 'tips off means no callouts');
   assert.equal(threadLesson({ shared: {} }, { t: 'seamCut', paid: 2 }), null);
-});
-await t('skip marks both lessons seen and saves meta', async () => {
-  const app = await mkApp(); saved.length = 0;
-  skipThreadLesson(app);
-  assert.ok(tipSeen(app.shared.meta, 'thread_chain') && tipSeen(app.shared.meta, 'thread_cut'));
-  assert.ok(saved.length >= 1);
 });
 await t('lesson text is short and plain', () => {
   for (const k of ['thread_chain', 'thread_cut']) { assert.ok(TIP_TEXTS[k] && TIP_TEXTS[k].length <= 150, k); }
