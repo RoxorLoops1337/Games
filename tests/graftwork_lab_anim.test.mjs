@@ -1,9 +1,12 @@
 // GRAFTWORK animation lab (graftwork/lab/anim.html + anim.js): the page references files that exist, imports only real modules and exports, has the five
 // scenes, reads its URL params, lists actors from the manifest (no hard coded roster), offers the game's two walks (the puppet and the hop) and nothing that
-// left the game, and has no em dashes. Headless safe: static checks plus a node import of the game modules it drives (no DOM needed).
+// left the game. Headless safe: static checks plus a node import of the game modules it drives (no DOM needed). That the lab runs as a page, in Chromium, with
+// the controls of its puppet and rig scenes is tests/graftwork_puppet.test.mjs and tests/graftwork_rig.test.mjs; the dash rule is hygiene's.
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fakeCtx, canvasCalls } from './graftwork_lib.mjs';
+import { withChromium, labVisit } from './graftwork_browser_lib.mjs';
 const root = new URL('../graftwork/', import.meta.url).pathname;
 const html = readFileSync(join(root, 'lab/anim.html'), 'utf8'), js = readFileSync(join(root, 'lab/anim.js'), 'utf8');
 const man = JSON.parse(readFileSync(join(root, 'assets/ward/manifest.json'), 'utf8'));
@@ -31,7 +34,16 @@ await t('the_modules_export_what_the_lab_calls', async () => {
   assert.equal(typeof A.pickAtkFrame, 'function'); assert.equal(typeof A.assets.frames, 'function'); assert.equal(typeof A.assets.frame, 'function');
   for (const f of ['recipeFor', 'drawStatic', 'drawItems', 'heroPolyline', 'alongPolyline', 'wallHeights', 'extentOf', 'worldLen']) assert.equal(typeof KR[f], 'function', 'ward_kit_iso ' + f);
   for (const f of ['atkTiming', 'atkTotal', 'atkPhase', 'isMelee', 'reachK']) assert.equal(typeof J[f], 'function', 'juice ' + f);
-  assert.ok(/o\.aura !== false/.test(readFileSync(join(root, 'ui/combat_art.js'), 'utf8')), 'the aura switch is additive in combat_art');
+});
+await t('the_aura_switch_is_additive: an elite or a boss has its aura unless the lab says aura false, and nobody else has one', async () => {
+  const CA = await import('../graftwork/ui/combat_art.js'), { ENEMIES } = await import('../graftwork/data/index.js');
+  const sp = { img: { width: 256, height: 256, tag: 'stand' }, def: { w: 256, h: 256 }, bbox: [40, 18, 216, 243] }, ed = { anim: { sq: 0 }, phase: 0, scale: 1, w: 150, h: 200, atk: { phase: 'idle', k: 0 }, atkT: -1 };
+  const calls = (kind, o) => { const def = Object.values(ENEMIES).find((e) => e.kind === kind), g = fakeCtx(), c0 = canvasCalls(); CA.drawEnemySprite(g, sp, def, ed, 900, 356, 1, { reduced: false, ...o }); return canvasCalls() - c0; };
+  for (const kind of ['elite', 'boss']) {
+    const plain = calls(kind, {}), on = calls(kind, { aura: true }), off = calls(kind, { aura: false });
+    assert.equal(plain, on, kind + ': no switch means the aura is drawn'); assert.ok(off < plain, `${kind}: aura false draws less (${off} calls against ${plain})`);
+  }
+  assert.equal(calls('normal', {}), calls('normal', { aura: false }), 'a normal enemy has no aura to switch');
 });
 await t('five_scenes_and_url_params', () => {
   for (const s of ['viewer', 'map', 'battle', 'rig', 'compare']) assert.ok(js.includes(`SC.${s} = {`) && js.includes(`'${s}'`), 'scene ' + s);
@@ -62,9 +74,24 @@ await t('the_walk_has_the_two_sources_of_the_game_and_compare_is_puppet_versus_h
   assert.ok(/rec\.pm = walkSrc\([^)]*\) === 'puppet' \? '' : 'off'/.test(js), 'the hop is the game\'s own actor draw with the puppet switched off');
   for (const gone of ['step swap', 'painted walk', 'Source: painted', "'swap'", "'frames'", "'_b'", 'walkIndex', 'walkReady', 'wantsPuppet', 'walkOk', 'walk1x']) assert.ok(!js.includes(gone), 'left the game, so it left the lab: ' + gone);
 });
-await t('the_room_lab_is_gone_and_no_em_dashes', () => {
+await t('the_room_lab_is_gone', () => {
   assert.ok(!existsSync(join(root, 'lab/rooms.html')) && !existsSync(join(root, 'lab/rooms.js')), 'the room lab page was removed');
   assert.ok(!html.includes('rooms.html'), 'no link to it');
-  for (const [name, s] of [['anim.html', html], ['anim.js', js]]) assert.ok(!/[\u2014\u2013]/.test(s), 'em or en dash in ' + name);
+});
+await t('every_scene_runs_as_a_page: it builds its controls, answers every request, draws and raises nothing (Chromium; skipped when it is missing)', async () => {
+  await withChromium(async ({ br, base }) => {
+    const scenes = { viewer: 'Actor viewer', map: 'Map walk', battle: 'Battle', rig: 'Rig lab', compare: 'Compare' };
+    const visits = await Promise.all(Object.keys(scenes).map((sc) => labVisit(br, base, `?scene=${sc}`, `document.getElementById('read').innerText.length > 0`)));
+    try {
+      const asked = new Set();
+      for (const [i, sc] of Object.keys(scenes).entries()) {
+        const v = visits[i], S = await v.read();
+        assert.deepEqual(v.errors, [], sc + ': nothing raised'); assert.equal(S.banner, '', sc + ': no error banner');
+        assert.ok(S.ctl.includes(scenes[sc]), sc + ': the page opens on its own scene'); assert.deepEqual(v.requests.filter((q) => q.status !== 200), [], sc + ': every request is answered');
+        for (const q of v.requests) asked.add(q.url);
+      }
+      for (const f of ['/graftwork/lab/anim.js', '/graftwork/assets/ward/manifest.json', '/tools/graftwork_art_meta.json', ...['assets', 'combat_art', 'ward_iso', 'ward_kit_iso', 'rig', 'rigs', 'puppet', 'juice', 'combat_layout'].map((m) => `/graftwork/ui/${m}.js`)]) assert.ok(asked.has(f), 'the lab loads ' + f);
+    } finally { for (const v of visits) await v.close(); }
+  });
 });
 console.log(n + ' animation lab checks passed');
