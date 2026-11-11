@@ -113,8 +113,8 @@ export function drawRig(ctx, rig, P, x, y, o = {}) {
 // is how much of the floor's screen-y travel the feet follow: 1 = exact on every heading (the solver is exact, the test proves it), 0 = level feet like the
 // puppet. Along the screen x a planted foot is always exact.
 // LAYERS: parts are drawn in manifest order: far arm, far leg, torso, near leg, the garment over both thighs, head, prop, near arm.
-export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6, depth: 0.5 };
-const FEEL = { strideK: 1, duty: 0, lift: 1, bob: 1, sway: 1, lean: 1, arms: 1, hem: 1, head: 1 }; // per character multipliers (data/gaits.js RIG_GAITS)
+export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6, depth: 0.5, knee: 1.2 };
+const FEEL = { strideK: 1, duty: 0, lift: 1, bob: 1, sway: 1, lean: 1, arms: 1, hem: 1, head: 1, knee: 1 }; // per character multipliers (data/gaits.js RIG_GAITS)
 const PI2 = Math.PI * 2, frac = (v) => v - Math.floor(v);
 const M6 = () => { const m = new Float64Array(6); m[0] = m[3] = 1; return m; };
 const mT = (o, m, x, y) => { o[4] = m[0] * x + m[2] * y + m[4]; o[5] = m[1] * x + m[3] * y + m[5]; o[0] = m[0]; o[1] = m[1]; o[2] = m[2]; o[3] = m[3]; return o; }; // o = m . translate
@@ -131,7 +131,7 @@ export function makeRig(id, e) {
     const hip = B['leg' + s + '_up'], kn = B['leg' + s + '_lo'], an = B['foot' + s], f = e.feet[s], one = rigid.includes('leg' + s);
     const d1 = Math.hypot(kn.x - hip.x, kn.y - hip.y), d2 = Math.hypot(an.x - kn.x, an.y - kn.y), d0 = Math.hypot(an.x - hip.x, an.y - hip.y);
     const tp = e.parts.find((p) => p.n === hip.n && p.top), top = tp && !one ? tp.top : null, rt = top ? Math.atan2(kn.y - top[1], kn.x - top[0]) : 0; // a long hidden thigh (thighM)
-    return { s, hip, kn, an, one, top, rt, lt: top ? Math.hypot(kn.x - top[0], kn.y - top[1]) : 0, l1: one ? d0 : d1, l2: one ? 0 : d2, len: one ? d0 : d1 + d2, r1: Math.atan2(one ? an.y - hip.y : kn.y - hip.y, one ? an.x - hip.x : kn.x - hip.x), r2: Math.atan2(an.y - kn.y, an.x - kn.x),
+    return { s, hip, kn, an, one, top, rt, kr: clamp(d2 / (d1 || 1), 0.75, 1), lt: top ? Math.hypot(kn.x - top[0], kn.y - top[1]) : 0, l1: one ? d0 : d1, l2: one ? 0 : d2, len: one ? d0 : d1 + d2, r1: Math.atan2(one ? an.y - hip.y : kn.y - hip.y, one ? an.x - hip.x : kn.x - hip.x), r2: Math.atan2(an.y - kn.y, an.x - kn.x),
       heel: f.heel, toe: f.toe, sole: f.sole, k1max: (e.garment || []).length ? RIG_TUNE.thigh : RIG_TUNE.bare, k2max: an.empty ? 1 : RIG_TUNE.shin, dz: an.empty ? 0 : RIG_TUNE.flat, sb: one ? hip : an.empty ? kn : an, phi: 0, k1: 1, k2: 1, slip: 0, lift: 0, off: 0, plant: true, cx: 0, cy: 0 };
   };
   const legs = { L: leg('L'), R: leg('R') }, T = RIG_TUNE, stiff = {}; for (const n of rigid) stiff[n] = true;
@@ -167,7 +167,8 @@ function solveLeg(rig, L, hx, hy, bx, by, lift) {
     return;
   }
   if (!dz) { // the boot is painted on the shin: knee to sole edge is one rigid piece, so the floor point itself is the target (toe edge while it leans back, else heel)
-    const wy = L.an.y - L.kn.y + L.sole, fy = by - lift + L.sole, rH = ik2(L, hx, hy, bx + L.heel, fy, Math.hypot(L.an.x - L.kn.x + L.heel, wy), IKH), rT = ik2(L, hx, hy, bx + L.toe, fy, Math.hypot(L.an.x - L.kn.x + L.toe, wy), IKT);
+    const wy = L.an.y - L.kn.y + L.sole, fy = by - lift + L.sole, lH = Math.hypot(L.an.x - L.kn.x + L.heel, wy), lT = Math.hypot(L.an.x - L.kn.x + L.toe, wy);
+    const rH = kneeCap(rig, L, hx, hy, bx + L.heel, fy, lH, ik2(L, hx, hy, bx + L.heel, fy, lH, IKH)), rT = kneeCap(rig, L, hx, hy, bx + L.toe, fy, lT, ik2(L, hx, hy, bx + L.toe, fy, lT, IKT));
     const tH = rH.a2 - Math.atan2(wy, L.an.x - L.kn.x + L.heel), tT = rT.a2 - Math.atan2(wy, L.an.x - L.kn.x + L.toe), toe = tH + tT > 0, r = toe ? rT : rH;
     th2 = toe ? tT : tH; L.phi = toe ? Math.max(th2, 1e-9) : Math.min(th2, 0); L.k1 = r.k1; L.k2 = 1; L.slip = r.slip;
     thighM(L, hx, hy, r);
@@ -179,7 +180,7 @@ function solveLeg(rig, L, hx, hy, bx, by, lift) {
     // the boot turned by phi about the edge that stays on the floor: toe when the heel is up (phi > 0), heel when the toes are up
     const px = phi > 0 ? L.toe : L.heel, c = Math.cos(phi), s = Math.sin(phi);
     ax = bx + px - (px * c - L.sole * s); ay = by - lift + L.sole - (px * s + L.sole * c);
-    r = ik2(L, hx, hy, ax, ay, L.l2, IKH); th2 = r.a2 - L.r2;
+    r = kneeCap(rig, L, hx, hy, ax, ay, L.l2, ik2(L, hx, hy, ax, ay, L.l2, IKH)); th2 = r.a2 - L.r2;
     if (it < 2) phi = clamp(th2 - clamp(th2, -dz, dz), -T.roll, T.roll); // the ankle keeps the boot flat for small tilts, then it rolls with the shin (never past `roll`)
   }
   L.phi = phi; L.k1 = r.k1; L.k2 = r.k2; L.slip = r.slip;
@@ -195,6 +196,22 @@ function thighM(L, hx, hy, r) {
   const px = hx + t[0] - L.hip.x, py = hy + t[1] - L.hip.y, vx = r.kx - px, vy = r.ky - py;
   mStretch(L.hip.m, mAt(L.hip.m, px, py, Math.atan2(vy, vx) - L.rt), Math.cos(L.rt), Math.sin(L.rt), Math.hypot(vx, vy) / L.lt);
   mT(L.hip.m, L.hip.m, L.hip.x - t[0], L.hip.y - t[1]);
+}
+// THE KNEE. A foot close to its hip (lifted in the swing, or planted behind the body on a floor diagonal, where the reach is short) would fold the knee
+// until the shin lies flat under the hem: a pale stub beside the skirt, a trouser hem sticking out behind the knee. The thigh is drawn from its top,
+// pinned in the hips, to the knee (thighM) and its length under the cloth is free, so the knee may sit anywhere on the circle the shin sweeps about
+// the ankle target: when the drawn thigh and the shin meet at more than RIG_TUNE.knee (x the character's `knee`, x the shin's share of the thigh, from
+// three quarters: a short shin folds less), the knee swings about the ankle toward the line from the ankle to the thigh's top, just far enough.
+// No foot moves: planted soles, lift and clearance are what they were. A thigh without a pinned top (none ships) keeps its fold.
+const foldAt = (px, py, kx, ky, tx, ty) => { const a = Math.atan2(ky - py, kx - px), b = Math.atan2(ty - ky, tx - kx); let f = b - a; while (f > Math.PI) f -= PI2; while (f < -Math.PI) f += PI2; return Math.abs(f); };
+function kneeCap(rig, L, hx, hy, tx, ty, l2, r) {
+  const t = L.top; if (!t) return r;
+  const px = hx + t[0] - L.hip.x, py = hy + t[1] - L.hip.y, km = RIG_TUNE.knee * rig.feel.knee * L.kr;
+  if (foldAt(px, py, r.kx, r.ky, tx, ty) <= km) return r;
+  const b0 = Math.atan2(r.ky - ty, r.kx - tx); let d = Math.atan2(py - ty, px - tx) - b0; while (d > Math.PI) d -= PI2; while (d < -Math.PI) d += PI2;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2, b = b0 + d * m; if (foldAt(px, py, tx + l2 * Math.cos(b), ty + l2 * Math.sin(b), tx, ty) > km) lo = m; else hi = m; }
+  const b = b0 + d * hi; r.kx = tx + l2 * Math.cos(b); r.ky = ty + l2 * Math.sin(b); r.a2 = Math.atan2(ty - r.ky, tx - r.kx); return r;
 }
 // two-bone reach from the hip (hx, hy) to a target with lower length l2: stretch (thigh first, then shin), what is left moves the hidden hip; the knee points forward.
 // -> o { px, py (the hip used), kx, ky (knee), a1, a2 (the directions of thigh and shin), k1, k2, slip }

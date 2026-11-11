@@ -1,6 +1,6 @@
 {
- "version": "8b975e8726478dae",
- "bytes": 10412172,
+ "version": "7b85613ebd1901ab",
+ "bytes": 10414023,
  "count": 549,
  "files": {
   "art/attacks.js": {
@@ -52,24 +52,24 @@
    "s": 13260
   },
   "assets/rigs/knitter@1x.webp": {
-   "h": "cd419e1a072322c0",
+   "h": "24ba3f54e3d9c59b",
    "s": 7180
   },
   "assets/rigs/knitter@2x.webp": {
-   "h": "7774768a2cc82a35",
-   "s": 17686
+   "h": "736e19cbf899ea9b",
+   "s": 17688
   },
   "assets/rigs/manifest.json": {
    "h": "8e7645f574e6d27b",
    "s": 33146
   },
   "assets/rigs/marrow@1x.webp": {
-   "h": "3e97fd1c41a3114e",
-   "s": 6620
+   "h": "c8f7e52817910d3b",
+   "s": 6540
   },
   "assets/rigs/marrow@2x.webp": {
-   "h": "5c278f4dd0a89f4a",
-   "s": 16752
+   "h": "5cf978b5ef829b4d",
+   "s": 16532
   },
   "assets/rigs/night_nurse@1x.webp": {
    "h": "639834c3e46f2051",
@@ -88,20 +88,20 @@
    "s": 14716
   },
   "assets/rigs/npc_patient@1x.webp": {
-   "h": "2902974f95e1c663",
-   "s": 6118
+   "h": "751a466ac1cd696b",
+   "s": 6130
   },
   "assets/rigs/npc_patient@2x.webp": {
-   "h": "7c410c93e49979c6",
-   "s": 15668
+   "h": "8475c474b18bbe50",
+   "s": 15678
   },
   "assets/rigs/npc_porter@1x.webp": {
-   "h": "2f305403bee54a57",
-   "s": 6816
+   "h": "4843b78836bf6628",
+   "s": 6804
   },
   "assets/rigs/npc_porter@2x.webp": {
-   "h": "642b6464d35b9375",
-   "s": 17430
+   "h": "90bfa343e49567e9",
+   "s": 17424
   },
   "assets/rigs/odile@1x.webp": {
    "h": "3ccbc301e5ab07a9",
@@ -116,7 +116,7 @@
    "s": 6200
   },
   "assets/rigs/wick@2x.webp": {
-   "h": "b645edbdfc02fd7b",
+   "h": "0a93669203c35610",
    "s": 15734
   },
   "assets/ui/atlas/chrome@1x.webp": {
@@ -1772,8 +1772,8 @@
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "faacb82c82ca153b",
-   "s": 3985
+   "h": "551c1f18fc3b3958",
+   "s": 4084
   },
   "data/grafts_extra.js": {
    "h": "6e197d30ac500f9e",
@@ -2112,8 +2112,8 @@
    "s": 17790
   },
   "ui/rig.js": {
-   "h": "6a6ecb88775787ef",
-   "s": 27354
+   "h": "40632849e3b437c1",
+   "s": 29400
   },
   "ui/rigs.js": {
    "h": "3972650d1d124331",

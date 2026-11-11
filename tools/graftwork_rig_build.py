@@ -462,8 +462,42 @@ def bake_point(pt, pivot, s, rot, mirror, sy=1.0):
 
 
 # ---------------------------------------------------------------- one rig
-def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers):
-    """One part: cut, cleaned, (a long hidden limb: extended E units up, no wider than half the cloth and torso at its new top), baked."""
+def round_end(im, c, below):
+    """A round joint: the part of the piece beyond the joint c (below it, or above it) is trimmed to a half disc about the joint, as wide as the
+    tube there, so a bent knee or a rolling boot shows no corner and no painted cuff behind it (a soft one px edge)."""
+    im = im.copy()
+    px = im.load()
+    W, H = im.size
+    cy = int(round(c[1]))
+    if not 0 <= cy < H:
+        return im
+    xs = [x for x in range(W) if px[x, cy][3] > 128]
+    if not xs:
+        return im
+    r = (xs[-1] - xs[0] + 1) / 2
+    cx = (xs[-1] + xs[0] + 1) / 2
+    for y in (range(cy + 1, H) if below else range(0, cy)):
+        for x in range(W):
+            q = px[x, y]
+            if not q[3]:
+                continue
+            k = max(0.0, min(1.0, r + 0.5 - math.hypot(x + 0.5 - cx, y + 0.5 - c[1])))
+            if k < 1:
+                px[x, y] = q[:3] + (int(q[3] * k),)
+    return im
+
+
+def to_src(pt, at, piv, s, rot, mirror, sy):
+    """A point of the canvas back to px of the source piece (the inverse of bake_point)."""
+    th = math.radians(rot)
+    ux, uy = pt[0] - at[0], pt[1] - at[1]
+    vx, vy = ux * math.cos(th) + uy * math.sin(th), -ux * math.sin(th) + uy * math.cos(th)
+    return piv[0] + vx / s * (-1 if mirror else 1), piv[1] + vy / (s * sy)
+
+
+def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers, knee=None):
+    """One part: cut, cleaned, (a thigh or shin of a two-bone leg: round ends about the joints in `knee`), (a long hidden limb: extended E units up, no
+    wider than half the cloth and torso at its new top), baked."""
     name = p['part']
     borrow = p['box'] == 'standing'
     src = sheet
@@ -478,6 +512,7 @@ def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers):
     s = p['s'] if 's' in p else (p['h'] / im.height if 'h' in p else p['w'] / im.width)
     sy, rot, mirror = p.get('sy', 1.0), p.get('rot', 0), p.get('mirror', False)
     at = p['at'] if borrow else [p['at'][0] + dx, p['at'][1] + dy]
+    joints_src = [(to_src(jt, at, piv, s, rot, mirror, sy), below) for jt, below in (knee or ())]
     top, info = None, None
     if E:
         ext_px = max(1, round(E / (s * sy)))
@@ -499,6 +534,7 @@ def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers):
                     room = ((min(xs) / M + 3 - at[0]) / s + piv[0], (max(xs) / M - 3 - at[0]) / s + piv[0])
         im, (ox, oy), tx, info = extend_top(im, ext_px, wmax, room)
         piv = [piv[0] + ox, piv[1] + oy]
+        joints_src = [((c[0] + ox, c[1] + oy), below) for c, below in joints_src]
         t = bake_point((tx, 0), piv, s, rot, mirror, sy)
         top = [round(at[0] + t[0], 2), round(at[1] + t[1], 2)]
     if top is None and name in ('legL_up', 'legR_up'):  # where the painted top end rests: ui/rig.js pins every thigh there (thighM)
@@ -506,11 +542,16 @@ def make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, E, covers):
         row = next((q for q in sp if q), (0, im.width))
         t = bake_point(((row[0] + row[1]) / 2, 0), piv, s, rot, mirror, sy)
         top = [round(at[0] + t[0], 2), round(at[1] + t[1], 2)]
+    plain = None
+    if joints_src:  # the round joints; the figure's contact with the floor is still measured on the piece as painted (it must not move)
+        plain = bake(im, piv, s, rot, mirror, sy)[0]
+        for c, below in joints_src:
+            im = round_end(im, c, below)
     master, mp = bake(im, piv, s, rot, mirror, sy)
     bone = p.get('bone', name)
     if bone not in BONES and bone != 'root':
         die('%s: part %s hangs on no bone (%s)' % (rid, name, bone))
-    rec = {'n': name, 'bone': bone, 'z': z, 'at': at, 'master': master, 'mp': mp, 'src': im, 'piv': piv, 'p': p, 's': s, 'top': top}
+    rec = {'n': name, 'bone': bone, 'z': z, 'at': at, 'master': master, 'mp': mp, 'src': im, 'piv': piv, 'p': p, 's': s, 'top': top, 'plain': plain}
     if E:
         rec['ext'], rec['info'] = E, info
     for k in ('hem', 'lag', 'upright'):
@@ -557,6 +598,15 @@ def build_rig(rid, m, raw, ward, fitting=None):
     joints = {k: [v[0] + dx, v[1] + dy] for k, v in joints.items()}
     ext = extensions(rid, m, fitting)
     covers = [q['part'] for q in m['parts'] if q['part'] == 'torso' or 'hem' in q]
+    # round joints: the thigh and the shin of every two-bone leg end in a half disc about the knee, and a shin that stands in a boot of its own ends in
+    # one about the ankle (the boot rolls over its toe: a square cuff would stick out behind it). [(joint, the part lies above it)] per part
+    knee = {}
+    for sd in 'LR':
+        lo, ft = ([q for q in m['parts'] if q['part'] == n % sd] for n in ('leg%s_lo', 'foot%s'))
+        if lo and 'leg' + sd not in m.get('rigid', []):
+            kj = [lo[0]['at'][0] + dx, lo[0]['at'][1] + dy]
+            knee['leg%s_up' % sd] = [(kj, True)]
+            knee['leg%s_lo' % sd] = [(kj, False)] + ([([ft[0]['at'][0] + dx, ft[0]['at'][1] + dy], True)] if ft and ft[0].get('bone', ft[0]['part']) == 'foot' + sd else [])
     later = []
     for z, p in enumerate(m['parts']):
         name = p['part']
@@ -566,12 +616,12 @@ def build_rig(rid, m, raw, ward, fitting=None):
         if ext.get(name):  # a long hidden limb: baked after the cloth and torso, whose width it may not exceed
             later.append((z, p))
             continue
-        parts.append(make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, 0, None))
+        parts.append(make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, 0, None, knee.get(name)))
     for z, p in later:
         name = p['part']
         if not [c for c in covers if [q['part'] for q in m['parts']].index(c) > z]:
             die('%s: %s is extended but nothing is drawn over it to hide it (a torso or a garment part after it)' % (rid, name))
-        parts.append(make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, ext[name], [q for q in parts if q['n'] in covers and q['z'] > z]))
+        parts.append(make_part(rid, z, p, sheet, boxes, dx, dy, borrowed, ext[name], [q for q in parts if q['n'] in covers and q['z'] > z], knee.get(name)))
     parts.sort(key=lambda q: q['z'])
     main = {p['n']: p for p in parts if p['n'] in BONES and p['bone'] == p['n']}
     bones = []
@@ -594,7 +644,7 @@ def build_rig(rid, m, raw, ward, fitting=None):
     rest = Image.new('RGBA', (CANVAS * M, CANVAS * M), (0, 0, 0, 0))
     for p in parts:
         lay = Image.new('RGBa', rest.size, (0, 0, 0, 0))
-        lay.paste(p['master'], (round(p['at'][0] * M - p['mp'][0]), round(p['at'][1] * M - p['mp'][1])))
+        lay.paste(p['plain'] or p['master'], (round(p['at'][0] * M - p['mp'][0]), round(p['at'][1] * M - p['mp'][1])))
         rest.alpha_composite(lay.convert('RGBA'))
     bb, (fx, fy, fw) = contact(rest)
     bbox = [round(v / M, 1) for v in bb]

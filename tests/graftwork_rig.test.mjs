@@ -275,6 +275,27 @@ await t('a_limb_painted_in_one_piece_is_one_bone', () => {
   }
   assert.ok(legs > 0 && arms > 0, 'the sheets have one-piece legs and arms');
 });
+await t('the_knee_never_folds_past_its_limit_and_the_swing_foot_still_clears_the_floor', () => {
+  // the drawn thigh (from its pinned top) and the shin meet at no more than RIG_TUNE.knee x the shin's share of the thigh (rig.js THE KNEE; the boot's
+  // roll adds a little on top), on all three headings: a short shin never folds flat under the hem. The feet are where they were, so a swinging foot
+  // is as high above the floor as its lift says.
+  const ax = (m, x, y) => Math.atan2(m[1] * x + m[3] * y, m[0] * x + m[2] * y), c = { x: 0, y: 0, bx: 0, by: 0 };
+  let seen = 0;
+  for (const id of IDS.filter((q) => MAN.rigs[q].ship)) {
+    const rig = RIGS[id];
+    for (const s of ['L', 'R']) {
+      const L = rig.legs[s]; if (L.one) continue; const km = T.knee * rig.feel.knee * L.kr; let worst = 0, at = '';
+      for (const [ux, uy] of HEADINGS) for (let i = 0; i < 96; i++) {
+        const ph = i / 48; R.poseRig(rig, { ph, w: 1, t: 0, ux, uy });
+        let f = ax(L.kn.m, L.an.x - L.kn.x, L.an.y - L.kn.y) - ax(L.hip.m, L.kn.x - L.hip.x, L.kn.y - L.hip.y); f = Math.abs(Math.atan2(Math.sin(f), Math.cos(f)));
+        if (f > worst) { worst = f; at = ph.toFixed(2) + ' heading ' + ux + ',' + uy; }
+        if (!L.plant && L.lift > 0.5 * T.lift * rig.feel.lift * rig.H) { R.footContact(rig, s, c); assert.ok(c.y < L.cy + L.sole - 0.3 * L.lift, `${id}.${s}: the swinging foot clears the floor`); seen++; }
+      }
+      assert.ok(worst <= km + 0.25, `${id} leg ${s}: the knee folds ${(worst * 57.3).toFixed(0)} degrees at ${at}, limit ${(km * 57.3).toFixed(0)}`);
+    }
+  }
+  assert.ok(seen > 100, 'swinging feet were checked');
+});
 await t('mirroring_flips_x_only', () => {
   const rig = RIGS.marrow; R.poseRig(rig, { ph: 0.3, w: 1, t: 0 });
   const a = R.rigPlace(rig, 300, 200, 0.5, false), b = R.rigPlace(rig, 300, 200, 0.5, true);
@@ -492,7 +513,6 @@ await t('no_leg_shows_its_cut_end_in_any_pose_what_is_drawn_over_it_covers_it', 
     const arms = [];
     for (const id of ship) for (const L of res[id]) if (L.fails) (L.n.startsWith('leg') ? bad : arms).push(`${id}.${L.n}: ${L.px} end px outside in ${L.fails} of 104 poses (worst ${L.worst} px at ${L.at})`);
     console.log('   shoulder caps beside the body (not asserted): ' + (arms.length ? arms.length + ' arms' : 'none'));
-    if (process.env.GW_LIMB_REPORT) console.log(JSON.stringify(res));
     assert.deepEqual(bad, [], 'a leg shows its cut end where nothing covers it');
     // a full tube that begins inside the body: at rest each thigh reaches RISE of its own length above the hip joint (a leg painted in one piece
     // RISE_ONE of the whole leg), the floor the build tool's fit starts from (tools/graftwork_rig_build.py RISE, RISE_ONE)
