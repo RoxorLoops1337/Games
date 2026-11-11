@@ -2,6 +2,7 @@
 // The service worker (graftwork/sw.js) reads it to download, verify and update the offline copy. Run after ANY change under graftwork/:
 //   node tools/graftwork_sw_build.mjs        (tests/graftwork_sw.test.mjs fails while the committed file is stale)
 //   node tools/graftwork_sw_build.mjs --check   (exit 1 when stale, writes nothing)
+//   node tools/graftwork_sw_build.mjs --help    (usage; any other argument stops with a message and writes nothing)
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, extname, relative, sep } from 'node:path';
@@ -34,7 +35,16 @@ export function buildManifest(root = ROOT) {
 export const serialize = (m) => JSON.stringify(m, null, 1) + '\n';
 export const MANIFEST_PATH = join(ROOT, 'sw-manifest.json');
 
+const USAGE = `usage: node tools/graftwork_sw_build.mjs [--check]
+  (no option)  rewrite graftwork/sw-manifest.json: run it after ANY change under graftwork/
+  --check      exit 1 when the committed file is stale, write nothing
+  --help, -h   this page, write nothing
+Any other argument stops with a message and writes nothing.`;
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const args = process.argv.slice(2);
+  if (args.includes('--help') || args.includes('-h')) { console.log(USAGE); process.exit(0); }
+  const unknown = args.find((a) => a !== '--check');
+  if (unknown !== undefined) { console.error(`graftwork_sw_build.mjs: unknown argument ${unknown} (nothing was written; see --help)`); process.exit(2); }
   const text = serialize(buildManifest()), cur = existsSync(MANIFEST_PATH) ? readFileSync(MANIFEST_PATH, 'utf8') : '';
   if (process.argv.includes('--check')) { if (cur !== text) { console.error('graftwork/sw-manifest.json is stale: run node tools/graftwork_sw_build.mjs'); process.exit(1); } console.log('sw-manifest.json is current'); }
   else { writeFileSync(MANIFEST_PATH, text); const m = JSON.parse(text); console.log(`sw-manifest.json: ${m.count} files, ${(m.bytes / 1048576).toFixed(1)} MB, version ${m.version}`); }
