@@ -1010,7 +1010,7 @@ def covered(c, fx, fy, mtx):
         v = (qy + c['py'] - c['y0']) / mtx[7]
         if v >= 0:
             kn = mtx[8:]
-            if kn:  # the cloth strips: a chain of knots (ui/rig.js clothAt)
+            if kn:  # the cloth strips: a chain of knots read linearly (ui/rig.js CLOTH STRIPS)
                 hh = (c['H'] // M - c['y0']) / (len(kn) - 1)
                 i = max(0, min(len(kn) - 2, int(v // hh)))
                 dxv = kn[i] + (kn[i + 1] - kn[i]) * (v / hh - i)

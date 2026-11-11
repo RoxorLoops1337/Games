@@ -279,7 +279,8 @@ export function poseRig(rig, st = ST0) {
 // first one on the rigid hem line and always 0): the hem sway of before (the shear hx), plus the cloth billowing back while walking (more toward
 // the hem), hanging against the body's lean, and the swing knee pushing the hem forward where it presses into it (its penetration past the cloth's
 // front edge, spread over the strips around the knee's height). Each strip is sheared from its upper knot to its lower one, so neighbours share
-// their edge and no seam can open; they overlap by one unit as well.
+// their edge and no seam can open; they overlap by one unit as well. The offset at v units below the hem line is the knots read linearly (the strip
+// i = floor(v / hh)), what tools/graftwork_rig_build.py and the rig suite read back.
 const CLOTH_K = 8;
 function clothKnots(rig, p, on, walk, lean, ux) {
   const kn = p.kn, y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / CLOTH_K, T = RIG_TUNE, H = rig.H, F = rig.feel, dir = ux >= 0 ? 1 : -1;
@@ -296,12 +297,6 @@ function clothKnots(rig, p, on, walk, lean, ux) {
     for (const [X, KY] of knees) { const pen = clamp(X + r - front, 0, 1.5 * r), g = Math.exp(-(((Y - KY) / (1.2 * hh + r)) ** 2)); if (pen * g > push) push = pen * g; }
     kn[j] = j === 0 ? 0 : on * (p.hx * (Y - y0) - T.billow * H * F.hem * walk * Math.pow(f, 1.5) * dir + T.hang * tl * (Y - p.py) * f + push * walk * f);
   }
-}
-// the x offset of a garment's cloth at v units below its hem line (the shear, or the cloth strips' knots), in its own frame before the lift
-export function clothAt(p, v) {
-  if (!p.cloth) return p.hx * v;
-  const y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / CLOTH_K, i = clamp(Math.floor(v / hh), 0, CLOTH_K - 1), f = v / hh - i;
-  return p.kn[i] + (p.kn[i + 1] - p.kn[i]) * f;
 }
 // where a sole meets the floor, read back from the matrix of the bone that carries the sole (the boot, or the shin or the whole leg when the boot is
 // painted on it): the toe edge while the heel is up, else the heel edge. During a stance this point stands still in the world; (bx, by) is the floor

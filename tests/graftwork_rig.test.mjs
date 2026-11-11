@@ -275,6 +275,8 @@ await t('a_limb_painted_in_one_piece_is_one_bone', () => {
   }
   assert.ok(legs > 0 && arms > 0, 'the sheets have one-piece legs and arms');
 });
+// the x offset of a garment's cloth v units below its hem line, as drawRigged draws it: the shear, or the knots of the cloth strips read linearly
+const clothAt = (p, v) => { if (!p.cloth) return p.hx * v; const K = p.kn.length - 1, hh = (p.h - Math.round(p.hem * p.h)) / K, i = Math.min(K - 1, Math.max(0, Math.floor(v / hh))); return p.kn[i] + (p.kn[i + 1] - p.kn[i]) * (v / hh - i); };
 await t('the_knee_never_folds_past_its_limit_and_the_swing_foot_still_clears_the_floor', () => {
   // the drawn thigh (from its pinned top) and the shin meet at no more than RIG_TUNE.knee x the shin's share of the thigh (rig.js THE KNEE; the boot's
   // roll adds a little on top), on all three headings: a short shin never folds flat under the hem. The feet are where they were, so a swinging foot
@@ -307,7 +309,7 @@ await t('cloth_strips_follow_the_walk_without_a_seam_and_reduced_motion_keeps_th
       for (const p of cloth) {
         assert.ok(p.cloth && p.kn[0] === 0, id + ': the strips hang from the rigid hem line');
         const y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / (p.kn.length - 1);
-        for (let j = 0; j < p.kn.length; j++) { most = Math.max(most, Math.abs(p.kn[j] - p.hx * j * hh)); assert.ok(Math.abs(R.clothAt(p, j * hh) - p.kn[j]) < 1e-9, 'neighbouring strips share their edge'); }
+        for (let j = 0; j < p.kn.length; j++) { most = Math.max(most, Math.abs(p.kn[j] - p.hx * j * hh)); assert.ok(Math.abs(clothAt(p, j * hh) - p.kn[j]) < 1e-9, 'neighbouring strips share their edge'); }
       }
     }
     assert.ok(most > 0.5 && most < 0.06 * rig.H, `${id}: the cloth moves on its own, a little (${most.toFixed(2)} units)`);
@@ -328,7 +330,7 @@ await t('mirroring_flips_x_only', () => {
 // is (x, y) of figure space on a cloth part (its drawn quad, the hem shear included)?
 function onCloth(p, x, y, margin) {
   const m = p.m, det = m[0] * m[3] - m[1] * m[2], dx = x - m[4], dy = y - m[5]; let lx = (m[3] * dx - m[2] * dy) / det + p.px, ly = (m[0] * dy - m[1] * dx) / det + p.py;
-  const y0 = Math.round(p.hem * p.h); if (ly > y0) { const v = (ly - y0) / p.hs; lx -= R.clothAt(p, v); ly = y0 + v; }
+  const y0 = Math.round(p.hem * p.h); if (ly > y0) { const v = (ly - y0) / p.hs; lx -= clothAt(p, v); ly = y0 + v; }
   return lx >= margin && lx <= p.w - margin && ly >= 0 && ly <= p.h - margin;
 }
 await t('the_hem_covers_the_hip_joints_in_every_frame_of_the_cycle', () => {
