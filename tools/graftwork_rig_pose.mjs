@@ -3,8 +3,8 @@
 //
 //   node tools/graftwork_rig_pose.mjs --in <entries.json> --out <poses.json>
 //     in    { "<key>": { "id": "<character>", "entry": <a manifest rig entry>, "parts": ["legL_up", "torso", ...] } }
-//     out   { "<key>": [ { "pose": "<label>", "m": { "<part>": [a, b, c, d, e, f, hx, hs] } } ] }: every part's figure-space matrix (and the hem
-//           shear and lift of a cloth part) in every pose of the envelope
+//     out   { "<key>": [ { "pose": "<label>", "m": { "<part>": [a, b, c, d, e, f, hx, hs, knots...] } } ] }: every part's figure-space matrix
+//           (and of a cloth part the hem shear and lift, and the knots of its cloth strips while they are on) in every pose of the envelope
 // The envelope: the walk on the three floor headings (level and both diagonals the Ward walks), 64 phases of the two-step cycle, at full walk weight
 // and at 0.6 (starting and stopping), the idle at eight moments, and the rest pose. The walk pace does not enter a pose (poseRig takes the phase, the
 // walk weight and the heading; the pace only changes how fast the phase runs) and mirroring is a negative x scale of the whole figure, so neither
@@ -34,7 +34,7 @@ for (const [key, q] of Object.entries(job)) {
   const rig = makeRig(q.id, q.entry), want = rig.parts.filter((p) => q.parts.includes(p.n));
   res[key] = env.map(([pose, st]) => {
     poseRig(rig, st); const m = {};
-    for (const p of want) m[p.n] = [...p.m].map(r4).concat(p.hem === undefined ? [] : [r4(p.hx), r4(p.hs)]);
+    for (const p of want) m[p.n] = [...p.m].map(r4).concat(p.hem === undefined ? [] : [r4(p.hx), r4(p.hs)], p.hem !== undefined && p.cloth ? [...p.kn].map(r4) : []);
     return { pose, m };
   });
 }

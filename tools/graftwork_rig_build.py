@@ -1009,7 +1009,14 @@ def covered(c, fx, fy, mtx):
     if c['hem'] is not None and len(mtx) > 6:
         v = (qy + c['py'] - c['y0']) / mtx[7]
         if v >= 0:
-            tries.append((qx + c['px'] - mtx[6] * v, c['y0'] + v))
+            kn = mtx[8:]
+            if kn:  # the cloth strips: a chain of knots (ui/rig.js clothAt)
+                hh = (c['H'] // M - c['y0']) / (len(kn) - 1)
+                i = max(0, min(len(kn) - 2, int(v // hh)))
+                dxv = kn[i] + (kn[i + 1] - kn[i]) * (v / hh - i)
+            else:
+                dxv = mtx[6] * v
+            tries.append((qx + c['px'] - dxv, c['y0'] + v))
     for X, Y in tries:
         i, j = int(X * M), int(Y * M)
         if 0 <= i < c['W'] and 0 <= j < c['H'] and c['a'][i, j] > 100:

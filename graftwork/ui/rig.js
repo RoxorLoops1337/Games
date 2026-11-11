@@ -113,7 +113,7 @@ export function drawRig(ctx, rig, P, x, y, o = {}) {
 // is how much of the floor's screen-y travel the feet follow: 1 = exact on every heading (the solver is exact, the test proves it), 0 = level feet like the
 // puppet. Along the screen x a planted foot is always exact.
 // LAYERS: parts are drawn in manifest order: far arm, far leg, torso, near leg, the garment over both thighs, head, prop, near arm.
-export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6, depth: 0.5, knee: 1.2 };
+export const RIG_TUNE = { stride: 0.4, swing: 0.62, duty: 0.58, lift: 0.06, bob: 0.02, sway: 0.008, lean: 0.04, twist: 2.2, arms: 0.4, hem: 1, hemLag: 0.16, thigh: 1.5, bare: 1.12, shin: 1.06, flat: 0.14, roll: 0.6, depth: 0.5, knee: 1.2, cloth: 1, billow: 0.012, kneePush: 0.035, hang: 0.6 };
 const FEEL = { strideK: 1, duty: 0, lift: 1, bob: 1, sway: 1, lean: 1, arms: 1, hem: 1, head: 1, knee: 1 }; // per character multipliers (data/gaits.js RIG_GAITS)
 const PI2 = Math.PI * 2, frac = (v) => v - Math.floor(v);
 const M6 = () => { const m = new Float64Array(6); m[0] = m[3] = 1; return m; };
@@ -139,7 +139,7 @@ export function makeRig(id, e) {
   // the step the legs can take: a swing of about 38 degrees of the shorter leg (hip to sole), never more than the tune asks (figure heights)
   const stride = clamp(Math.min(T.stride * feel.strideK, T.swing * Math.min(legs.L.len + legs.L.sole, legs.R.len + legs.R.sole) / (duty * H)), 0.2, 0.5);
   const arms = e.arms || {}, prop = e.prop || null;
-  const parts = e.parts.map((p) => { const b = B[p.bone] || null; return { n: p.n, bone: b, sx: p.rect[0], sy: p.rect[1], w: p.rect[2], h: p.rect[3], px: p.px, py: p.py, ox: p.x - (b ? b.x : 0), oy: p.y - (b ? b.y : 0), hem: p.hem, lag: p.lag || 0, upright: !!p.upright, hx: 0, hs: 1, m: M6() }; });
+  const parts = e.parts.map((p) => { const b = B[p.bone] || null; return { n: p.n, bone: b, sx: p.rect[0], sy: p.rect[1], w: p.rect[2], h: p.rect[3], px: p.px, py: p.py, ox: p.x - (b ? b.x : 0), oy: p.y - (b ? b.y : 0), hem: p.hem, lag: p.lag || 0, upright: !!p.upright, hx: 0, hs: 1, kn: p.hem === undefined ? null : new Float64Array(CLOTH_K + 1), cloth: false, m: M6() }; });
   return { id, H, w: e.w, foot: e.foot, bones, B, parts, legs, stiff, feel, duty, stride, arms: { L: arms.L === undefined ? 1 : arms.L, R: arms.R === undefined ? 1 : arms.R }, prop,
     root: M6(), info: { plantL: true, plantR: true, plant: 'LR', lead: 'L', down: 0, sway: 0, lean: 0, stretch: 1, thigh: 1, slip: 0 } };
 }
@@ -269,10 +269,39 @@ export function poseRig(rig, st = ST0) {
     const b = p.bone, m = b ? b.m : rig.root, oy = b === to ? p.oy * by : p.oy;
     if (p.upright) mAt(p.m, m[0] * p.ox + m[2] * oy + m[4], m[1] * p.ox + m[3] * oy + m[5], p.lag * (0.05 * bounce + 0.02 * air)); // a flame, a tray: carried level
     else { mT(p.m, m, p.ox, oy); if (b === to) mMul(p.m, p.m, 1, 0, 0, by); }
-    if (p.hem !== undefined) { p.hx = hemX; p.hs = hemS; }
+    if (p.hem !== undefined) { p.hx = hemX; p.hs = hemS; clothKnots(rig, p, st.calm ? 0 : T.cloth, w * spread, lean, ux); }
     else if (p.lag && !p.upright) mR(p.m, p.m, p.lag * (rig.prop && rig.prop.part === p.n ? 0.5 * pA * w * late + 0.02 * air : 0.045 * bounce + 0.012 * air));
   }
   return rig;
+}
+// CLOTH STRIPS (RIG_TUNE.cloth, on in the preview, off with reduced motion: then the hem is one shear as before). Below its hem line a garment is
+// drawn as CLOTH_K horizontal strips whose left edges follow a chain of knots p.kn (x offsets in the part's own units at the strip boundaries, the
+// first one on the rigid hem line and always 0): the hem sway of before (the shear hx), plus the cloth billowing back while walking (more toward
+// the hem), hanging against the body's lean, and the swing knee pushing the hem forward where it presses into it (its penetration past the cloth's
+// front edge, spread over the strips around the knee's height). Each strip is sheared from its upper knot to its lower one, so neighbours share
+// their edge and no seam can open; they overlap by one unit as well.
+const CLOTH_K = 8;
+function clothKnots(rig, p, on, walk, lean, ux) {
+  const kn = p.kn, y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / CLOTH_K, T = RIG_TUNE, H = rig.H, F = rig.feel, dir = ux >= 0 ? 1 : -1;
+  p.cloth = on > 0 && hh > 0.5; if (!p.cloth) return;
+  const m = p.m, det = m[0] * m[3] - m[1] * m[2], knees = [];
+  for (const s of ['L', 'R']) { // the knees in the cloth's own frame (rect units)
+    const k = rig.legs[s].kn.m, dx = k[4] - m[4], dy = k[5] - m[5];
+    knees.push([(m[3] * dx - m[2] * dy) / det + p.px, (m[0] * dy - m[1] * dx) / det + p.py]);
+  }
+  const r = T.kneePush * H, front = 0.85 * p.w, tl = Math.tan(lean);
+  for (let j = 0; j <= CLOTH_K; j++) {
+    const Y = y0 + j * hh, f = j / CLOTH_K;
+    let push = 0;
+    for (const [X, KY] of knees) { const pen = clamp(X + r - front, 0, 1.5 * r), g = Math.exp(-(((Y - KY) / (1.2 * hh + r)) ** 2)); if (pen * g > push) push = pen * g; }
+    kn[j] = j === 0 ? 0 : on * (p.hx * (Y - y0) - T.billow * H * F.hem * walk * Math.pow(f, 1.5) * dir + T.hang * tl * (Y - p.py) * f + push * walk * f);
+  }
+}
+// the x offset of a garment's cloth at v units below its hem line (the shear, or the cloth strips' knots), in its own frame before the lift
+export function clothAt(p, v) {
+  if (!p.cloth) return p.hx * v;
+  const y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / CLOTH_K, i = clamp(Math.floor(v / hh), 0, CLOTH_K - 1), f = v / hh - i;
+  return p.kn[i] + (p.kn[i + 1] - p.kn[i]) * f;
 }
 // where a sole meets the floor, read back from the matrix of the bone that carries the sole (the boot, or the shin or the whole leg when the boot is
 // painted on it): the toe edge while the heel is up, else the heel edge. During a stance this point stands still in the world; (bx, by) is the floor
@@ -300,7 +329,14 @@ export function drawRigged(g, rig, img, o = {}) {
     else { // cloth: rigid down to the hem line, below it a shear and a small lift hanging from that line, so no seam can open
       const y0 = Math.round(p.hem * p.h);
       g.drawImage(img, p.sx * k, p.sy * k, p.w * k, (y0 + 1) * k, -p.px, -p.py, p.w, y0 + 1);
-      g.transform(1, 0, p.hx, p.hs, -p.px, -p.py + y0); g.drawImage(img, p.sx * k, (p.sy + y0) * k, p.w * k, (p.h - y0) * k, 0, 0, p.w, p.h - y0);
+      if (!p.cloth) { g.transform(1, 0, p.hx, p.hs, -p.px, -p.py + y0); g.drawImage(img, p.sx * k, (p.sy + y0) * k, p.w * k, (p.h - y0) * k, 0, 0, p.w, p.h - y0); }
+      else { // the cloth strips: each one sheared from its upper knot to its lower one, one unit longer than its share
+        const hh = (p.h - y0) / CLOTH_K, kn = p.kn;
+        for (let i = 0; i < CLOTH_K; i++) {
+          const ov = i < CLOTH_K - 1 ? 1 : 0; g.save(); g.transform(1, 0, (kn[i + 1] - kn[i]) / hh, p.hs, -p.px + kn[i], -p.py + y0 + p.hs * i * hh);
+          g.drawImage(img, p.sx * k, (p.sy + y0 + i * hh) * k, p.w * k, (hh + ov) * k, 0, 0, p.w, hh + ov); g.restore();
+        }
+      }
     }
     g.restore();
   }
