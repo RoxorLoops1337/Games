@@ -16,7 +16,7 @@
 // takes what it reads under that alias (`RUN.newRun`) or destructures; a namespace handed on as a value (`flow = { RUN }`) is
 // reached by any property access of that name in any file. A bare identifier with the name of an export is never a use.
 //
-// Checks (tests/graftwork_hygiene.test.mjs enforces 1, 6 "entries exist", 8 and 9 "imports exist" outright; the lists marked * are
+// Checks (tests/graftwork_hygiene.test.mjs enforces 1, 6 "entries exist", 8, 9 "imports exist" and 10 outright; the lists marked * are
 // held against tests/graftwork_hygiene_allow.json, which may only shrink):
 //   1 unreachable        every .js / .mjs under graftwork/ is reachable from index.html, sw.js or a lab page
 //   2 unusedExports*     exported, imported by nothing (game, lab, tests, tools), not used in its own file: dead
@@ -29,6 +29,8 @@
 //                        only check of the rule, no suite repeats it (a test may name the character to look
 //                        for it, in a regex literal or a string of dashes: counted apart as emDashDetectors)
 //   9 brokenImports      an import whose file or exported name does not exist;  unmentionedTools*: a tool no doc or script names
+//  10 moduleMap          a source file (graftwork/*.js|html, engine/ data/ ui/ art/ lab/) the module map of graftwork/CLAUDE.md does not name, or a
+//                        path the map names that does not exist (mapFindings below)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +46,7 @@ export const reasonsOf = (allow) => (allow && allow.reasons && typeof allow.reas
 export function staleReasons(allow) { const listed = new Set(ALLOW_LISTS.flatMap((k) => (allow && allow[k]) || [])); return Object.keys(reasonsOf(allow)).filter((e) => !listed.has(e)).sort(); }
 export function unexplained(allow) { const r = reasonsOf(allow); return ALLOW_LISTS.flatMap((k) => ((allow && allow[k]) || []).filter((e) => !r[e])); }
 // the lists that must be empty
-export const STRICT_LISTS = ['unreachable', 'missingAssets', 'emDashes', 'brokenImports'];
+export const STRICT_LISTS = ['unreachable', 'missingAssets', 'emDashes', 'brokenImports', 'moduleMap'];
 const EM_DASH = '\u2014', EN_DASH = '\u2013';
 // a dash written as an escape in game code cannot be seen as the character: \u2014, \u{2014}, &mdash;, &#8212;, String.fromCharCode(0x2014) (and the en dash)
 const ESCAPED_DASH = /\\u(?:2014|2013)|\\u\{0*(?:2014|2013)\}|&[mn]dash;|&#(?:x0*(?:2014|2013)|0*(?:8212|8211));|fromCharCode\(\s*(?:0x2014|0x2013|8212|8211)\s*\)/gi;
@@ -483,6 +485,8 @@ export function audit(root = REPO, opts = {}) { // opts.ignore: repo-relative fi
     const inCode = sourceText(t).includes(base);
     if (inCode) toolNotes[t] = 'named by code only (no doc, no npm script)'; else unmentionedTools.push(t);
   }
+  // ---- 10: the module map of graftwork/CLAUDE.md names every source file, and every file it names exists
+  const moduleMap = mapFindings(root, gameFiles.concat(walk(G).filter((f) => f.endsWith('.html')).map(rel)));
   const lexWarnings = [...files.values()].filter((F) => !F.lexOk).map((F) => F.rel);
   const sort = (a) => [...new Set(a)].sort();
   return {
@@ -493,7 +497,29 @@ export function audit(root = REPO, opts = {}) { // opts.ignore: repo-relative fi
     missingAssets: sort(missingAssets), orphanAssets: sort(orphanAssets),
     duplicateHelpers: sort(duplicateHelpers), duplicateDetail,
     emDashes: sort(emDashes), emDashDetectors, brokenImports: sort(brokenImports), unmentionedTools: sort(unmentionedTools), toolNotes, lexWarnings,
+    moduleMap,
   };
+}
+// The module map: the section of graftwork/CLAUDE.md from its `## Module map` heading to the next `## ` heading. A file is named there by a
+// backticked path: `ui/ward.js` (relative to graftwork/), `main.js` for a top-level file, or `tests/...`, `tools/...`, `graftwork/...` from the
+// repo root. Source files: every .js and .html directly in graftwork/ and anywhere under engine/, data/, ui/, art/, lab/.
+export const MAP_DOC = 'graftwork/CLAUDE.md', MAP_DIRS = ['engine', 'data', 'ui', 'art', 'lab'];
+export function mapFindings(root, candidates) {
+  const docPath = path.join(root, MAP_DOC);
+  const sources = [...new Set(candidates)].filter((r) => { const p = r.split('/'); return p[0] === 'graftwork' && /\.(m?js|html)$/.test(r) && (p.length === 2 || MAP_DIRS.includes(p[1])); }).sort();
+  if (!fs.existsSync(docPath)) return [`${MAP_DOC}: missing, so no file is mapped`];
+  const lines = fs.readFileSync(docPath, 'utf8').split('\n'), start = lines.findIndex((l) => /^## Module map\b/.test(l));
+  if (start < 0) return [`${MAP_DOC}: no "## Module map" section`];
+  let end = lines.findIndex((l, i) => i > start && /^## /.test(l)); if (end < 0) end = lines.length;
+  const named = new Map(); // repo path -> the token as written
+  for (const m of lines.slice(start, end).join('\n').matchAll(/`([\w./-]+\.(?:m?js|html|json|py|md|webmanifest))`/g)) {
+    const t = m[1], r = /^(tests|tools|graftwork)\//.test(t) ? t : 'graftwork/' + t;
+    named.set(posix(path.normalize(r)), t);
+  }
+  const out = [];
+  for (const r of sources) if (!named.has(r)) out.push(`${r}: not named in the module map of ${MAP_DOC} (add a line with \`${r.slice('graftwork/'.length)}\`)`);
+  for (const [r, t] of named) if (!fs.existsSync(path.join(root, r))) out.push(`${MAP_DOC}: the module map names \`${t}\`, but ${r} does not exist`);
+  return out.sort();
 }
 // findings against the allowlist: what is new, what is stale
 export function againstAllow(found, allow) {
@@ -539,6 +565,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   head(`8  em and en dashes: ${found.emDashes.length}   (${found.emDashDetectors} more are tests naming the character to look for it, in a regex or a string of dashes)`); few(found.emDashes);
   head(`9  broken imports: ${found.brokenImports.length}; tools no doc or script names: ${found.unmentionedTools.length}`); few(found.brokenImports); few(found.unmentionedTools);
   for (const [t, note] of Object.entries(found.toolNotes)) console.log(`  (${t}: ${note})`);
+  head(`10 module map (${MAP_DOC}): ${found.moduleMap.length} files missing from it or named there but gone`); few(found.moduleMap, 30);
   if (found.lexWarnings.length) { head(`lexer warnings (unbalanced brackets after stripping, findings in these files may be off): ${found.lexWarnings.length}`); few(found.lexWarnings); }
   if (allow) {
     const cmp = againstAllow(found, allow); let bad = 0;
