@@ -268,6 +268,7 @@ export function footContact(rig, side, out = { x: 0, y: 0, bx: 0, by: 0 }) {
 export function rigPlace(rig, x, y, s = 1, flip = false, out = M6()) { const f = flip ? -1 : 1; out[0] = s * f; out[1] = 0; out[2] = 0; out[3] = s; out[4] = x - f * s * rig.foot[0]; out[5] = y - s * rig.foot[1]; return out; }
 // Draw the posed rig in figure space. img: the decoded atlas (@1x or @2x; rects are in @2x px). o.contact === false leaves the foot shadows out.
 // o.alpha(part) -> 0..1 (optional): how opaque each part is drawn, 0 leaves it out (the lab's X-ray, the tests that draw some parts alone).
+// o.over(part) -> an image the size of the part's rect, or null (optional): drawn over that part in its own frame (the lab marks limb ends with it).
 export function drawRigged(g, rig, img, o = {}) {
   const k = (img.naturalWidth || img.width || rig.w) / rig.w;
   if (o.contact !== false) for (const s of ['R', 'L']) { // a small dark pool under each sole that fades as the foot leaves the floor: what glues a foot to the ground
@@ -278,7 +279,7 @@ export function drawRigged(g, rig, img, o = {}) {
   for (const p of rig.parts) {
     const al = o.alpha ? o.alpha(p) : 1; if (!(al > 0)) continue;
     const m = p.m; g.save(); g.transform(m[0], m[1], m[2], m[3], m[4], m[5]); if (al < 1) g.globalAlpha *= al;
-    if (p.hem === undefined) g.drawImage(img, p.sx * k, p.sy * k, p.w * k, p.h * k, -p.px, -p.py, p.w, p.h);
+    if (p.hem === undefined) { g.drawImage(img, p.sx * k, p.sy * k, p.w * k, p.h * k, -p.px, -p.py, p.w, p.h); const ov = o.over ? o.over(p) : null; if (ov) g.drawImage(ov, -p.px, -p.py, p.w, p.h); }
     else { // cloth: rigid down to the hem line, below it a shear and a small lift hanging from that line, so no seam can open
       const y0 = Math.round(p.hem * p.h);
       g.drawImage(img, p.sx * k, p.sy * k, p.w * k, (y0 + 1) * k, -p.px, -p.py, p.w, y0 + 1);
