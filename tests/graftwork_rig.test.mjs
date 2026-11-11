@@ -412,7 +412,7 @@ await t('a_fight_with_the_preview_on_never_asks_for_a_rig_and_still_paints_the_h
   try {
     const RUN = await import('../graftwork/engine/run.js'), combat = (await import('../graftwork/ui/combat.js')).default, audio = await import('../graftwork/ui/audio.js');
     const run = RUN.newRun({ hero: 'marrow', seed: 'rigfight' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['night_nurse'] }; // marrow and night_nurse both have a rig
-    const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } }); app.settings = { previewArt: true };
+    const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } }); Object.defineProperty(app, 'settings', { value: { previewArt: true }, configurable: true }); // app.settings is a getter over meta.settings since the painted UI work
     app.register('combat', combat); app.go('combat', { run });
     for (let i = 0; i < 6; i++) { frames(app, 20); settle(); await tick(); }
     assert.ok(REQ.some((u) => u.includes('actors/marrow')) && REQ.some((u) => u.includes('actors/night_nurse')), 'the painted hero and enemy are asked for: the fight draws them');
