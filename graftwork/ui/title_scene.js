@@ -8,7 +8,7 @@
 // Cost: the room layers are cached by the kit renderer, the grade is one cached low-res canvas, so a frame is a few dozen drawImage calls. `lite`
 // (slow device) halves the scene's update rate through an offscreen copy and drops the motes. Reduced motion: no drift, no wander, no breathing,
 // no flicker, no motes. Tests: tests/graftwork_ui_title.test.mjs.
-import { W, H, COL, clamp } from './core.js';
+import { W, H, clamp } from './core.js';
 import { assets } from './assets.js';
 import * as KR from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
@@ -17,13 +17,8 @@ import { drawHero } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { lnw } from '../art/linework.js';
 import { templates } from './templates.js';
+import { TAU, hash01 as hash, offscreen as mkCanvas } from './util.js';
 
-const TAU = Math.PI * 2;
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
-const mkCanvas = (w, h) => {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-};
 
 // ---- the cluster: grid cells, connections, who stands where ----
 export const CLUSTER = [
@@ -76,7 +71,6 @@ function gradeSprite() {
   g.fillStyle = bot; g.fillRect(0, 180 * 0.72, 320, 180 * 0.28);
   return (GRADE = o.c);
 }
-export function resetTitleSprites() { GLOW = null; SHADOW = null; GRADE = null; }
 
 // ---- the key art hook ----
 // assets/ward/manifest.json may carry  "title": { "keyart": { "file1x": "title/keyart@1x.webp", "file2x": "title/keyart@2x.webp", "w": 2560, "h": 1440,
@@ -125,7 +119,7 @@ export function createScene(opts = {}) {
     for (const r of CLUSTER) { const rc = KR.recipeFor(r.type, app); if (rc) { rcs[r.id] = rc; n++; } }
     if (n < 3) return false;
     S.rcs = rcs;
-    const byId = new Map(CLUSTER.map((r) => [r.id, r])), have = (x, y) => { const f = CLUSTER.find((r) => r.x === x && r.y === y); return f && rcs[f.id] ? f.id : null; };
+    const have = (x, y) => { const f = CLUSTER.find((r) => r.x === x && r.y === y); return f && rcs[f.id] ? f.id : null; };
     const list = CLUSTER.filter((r) => rcs[r.id]);
     S.plan = wallPlan(list, (id) => (NB[id] || []).filter((i) => rcs[i]), have);
     S.cast = CAST.filter((a) => rcs[a.room]).map((a, i) => {
@@ -133,7 +127,7 @@ export function createScene(opts = {}) {
       if (a.at) for (const f of rc.free) { const d = Math.hypot(f[0] + 0.5 - a.at[0], f[1] + 0.5 - a.at[1]); if (d < bd) { bd = d; cell = f; } }
       // lvl ... cycle: what the Ward's gait and actor draw keep on a figure (monsters only)
       const rec = { ...a, key: 'title:' + a.id, gu: cell ? cell[0] + 0.5 : 2, gv: cell ? cell[1] + 0.5 : 2, x: 0, y: 0, flip: a.face || (i % 2 ? -1 : 1), ph: hash(a.id) * TAU, mv: false, alpha: 0, lvl: 0, ring: 0, bob: 0, sq: 1, tilt: 0, stride: 0, cycle: false };
-      void byId; return rec;
+      return rec;
     });
     return true;
   }
@@ -354,4 +348,3 @@ export function createScene(opts = {}) {
   }
   return S;
 }
-void COL;

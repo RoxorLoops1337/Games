@@ -19,10 +19,9 @@ Owner direction: make EVERYTHING modular like the Ward room kit. The Ward kit (W
 | loader | `ui/templates.js` | `templates` singleton (follows the preview switch, `sync(app)`, `ver` counts every change): lazy manifest + image cache, `frameImg(id)`, `pickFrame(ids)`, `iconImg`, `drawIcon`, `preload`, `force(v)` for labs, headless no-op, injectable `fetchJson`/`makeImage` for tests; @2x on a dense screen on the full tier, @1x otherwise |
 | skin | `ui/skin.js` | the painted parts as drawn: `nine` (a sliced frame BAKED once per size and device scale, edges that repeat whole, pills whose caps follow the height, optional tone / wash / rim), `part`, `icon`, `hpBar`, `gauge` |
 | parse | `parseManifest` | validates every entry, drops bad ones (absolute or `..` paths, bad slices, missing atlas) and keeps the rest |
-| 9-slice | `sliceRects`, `drawNineSlice`, `contentRect` | slice margins in logical px, shrink together when the target is smaller, no-centre option, content rect keeps native insets |
+| 9-slice | `sliceRects`, `drawNineSlice` | slice margins in logical px, shrink together when the target is smaller, no-centre option |
 | slots | `resolveSlot(s)`, `CARD_TEMPLATE`, `mergeTemplate` | anchor/pivot/offset or absolute rects, repeat with `step` and `n`; default template = the procedural layout |
 | composer | `composeCardFront`, `FRONT_ORDER` | paints the slots a frame lists as `under` (its transparent windows), then the frame, then every other slot; `baked` slots skip their own plate |
-| fit | `fitFontSize` | pure largest-font-that-fits; slots carry `fit:{max,min,lines}` |
 | cards | `art/cards.js` | `drawCard` / `drawCardBack` use a template face when a frame decoded, else the old code (`renderFace`, `renderBack` untouched in behaviour) |
 | chrome | `ui/chrome.js` | `app.button` draws the leather pill in its state (or `button.small` under 35 px high) unless `o.frame === false`; a caller's fill tints the leather, its stroke becomes the rim. `app.panel` is painted only where the call passes `frame: 'modal' \| 'panel' \| 'panel.parchment'` (most panels are rows whose fill and stroke carry a state); a framed panel stands AROUND the rectangle it replaces |
 | rig | `ui/rig.js` | skeletal runtime for layered characters (section 7) |

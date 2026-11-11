@@ -7,15 +7,16 @@
 import { defaultQuality } from './fx.js';
 import { cleanGraphics } from './quality.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
-import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
+import { A11Y_DEFAULTS, CB_MODES } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
 import { installAvailable } from './install.js';
 import { offlineSupported } from './offline.js';
 const appRow = () => installAvailable() || offlineSupported(); // the App and offline row: Install, the offline copy, updates
 import { lnw } from '../art/linework.js';
+import { SETTING_DEFAULTS } from '../engine/meta.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false, previewArt: false };
+export const DEFAULTS = Object.fromEntries(['master', 'sfx', 'music', 'muted', 'screenShake', 'reducedMotion', 'fastWalk', 'colorblind', 'textSize', 'textScale', 'quality', 'graphics', 'fullscreen', 'previewArt'].map((k) => [k, SETTING_DEFAULTS[k]]));
 export const TEXT_STEPS = [100, 125, 150, 175];
 export const QUALITY = ['off', 'low', 'high'];
 

@@ -12,14 +12,13 @@ import { FLAGS } from './perf_flags.js';
 import { bucketOf as bucketOfZ, pickLayer, evictFor, isMoving } from './layer_cache.js';
 import { SUB, WALL_FULL, WALL_LOW, resolveRecipe, wallHeight, defaultWallMode, pathInRoom, pathOnGrid, propAt } from '../data/ward_kit.js';
 import { assets } from './assets.js';
+import { clamp, hash01 as hash, offscreen as mk, TAU } from './util.js';
 
 export const TW = 92, TH = 48, HW = TW / 2, HH = TH / 2;
-const DOOR_H = 36, DOOR_S0 = 0.2, DOOR_S1 = 0.8, TAU = Math.PI * 2;
+const DOOR_H = 36, DOOR_S0 = 0.2, DOOR_S1 = 0.8;
 const COPE = { wood: '#7a5a3c', stone: '#9b968c', brick: '#8a5a48', plaster: '#d8ccb4', tile: '#cfd6d2', velvet: '#6a1c28', slab: '#8d8a84' };
 const FLOORC = { wood: '#5a3a22', stone: '#6b665e', tile: '#9aa09a', darkstone: '#3b3835', carpet: '#6a2a30', brick: '#7a4a3a', slab: '#7d7b78', stage: '#4a2428' };
 const WALLC = { wood: '#4a3424', stone: '#5e5a52', tile: '#aab0aa', brick: '#74463a', plaster: '#b9ae98', velvet: '#5a1a26', slab: '#6d6b66' };
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // wall mode setting: 'auto' follows the density (defaultWallMode), or 'full' | 'low' | 'cutaway'
 export const KITS = { mode: 'auto', log: null }; // log: tests set an array to record the draw order of props and actors
@@ -29,10 +28,6 @@ export function cycleWallMode() { const L = ['auto', 'full', 'low', 'cutaway']; 
 const Q = { mips: new Map(), pats: new Map(), layers: new Map(), dark: new WeakMap(), wallH: Object.create(null), mons: new Map(), hpaths: new Map(), shadow: null, stats: { layers: 0, hits: 0, msStatic: 0, msItems: 0 } };
 export const kitStats = Q.stats;
 export function resetKit() { Q.mips.clear(); Q.pats.clear(); Q.layers.clear(); Q.wallH = Object.create(null); Q.mons.clear(); Q.hpaths.clear(); Q.stats.layers = 0; Q.stats.hits = 0; }
-function mk(w, h) {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-}
 
 // ---------------- which rooms are modular ----------------
 // The recipe of a room type, or null (draw the block): needs the kit manifest, the images of THIS recipe settled, and its floor and wall textures.
@@ -74,7 +69,7 @@ export const subPt = (gu, gv) => ({ x: (gu - gv) * HW / SUB, y: (gu + gv) * HH /
 // a room covers fw x fh cells: the L wall (u = 0) is fh cells long, the R wall (v = 0) fw cells; n = cells along the wall. s runs 0 to 1 over the whole wall.
 const wallPt = (side, s, n = 1) => (side === 'L' ? { x: -n * HW + s * n * HW, y: n * HH - s * n * HH } : { x: s * n * HW, y: s * n * HH });
 const wallN = (rc, side) => (side === 'L' ? rc.fh || 1 : rc.fw || 1);
-export function corners(rc) { const fw = rc.fw || 1, fh = rc.fh || 1; return { T: [0, 0], R: [fw * HW, fw * HH], B: [(fw - fh) * HW, (fw + fh) * HH], L: [-fh * HW, fh * HH], fw, fh }; }
+function corners(rc) { const fw = rc.fw || 1, fh = rc.fh || 1; return { T: [0, 0], R: [fw * HW, fw * HH], B: [(fw - fh) * HW, (fw + fh) * HH], L: [-fh * HW, fh * HH], fw, fh }; }
 const asDoors = (d, n) => (Array.isArray(d) ? d : Array(n).fill(!!d));
 // the extent of a room's static layer (room-local, top vertex = origin)
 export const extentOf = (rc) => { const fw = rc.fw || 1, fh = rc.fh || 1; return { x0: -fh * HW - 5, y0: -(WALL_FULL + 16), x1: fw * HW + 5, y1: (fw + fh) * HH + 12 }; };
@@ -240,7 +235,6 @@ function drawStatic0(app, g, id, rc, tx, ty, p, zoomPx) {
   g.save(); g.translate(tx, ty); paintStatic(g, rc, p, app, zoomPx || 1); g.restore();
   return false;
 }
-export const dropLayer = (id) => Q.layers.delete(id);
 
 // ---------------- wall heights: eased per room and side ----------------
 export function wallHeights(id, plan, mode, tk, dt, calm) {
@@ -254,7 +248,6 @@ export function wallHeights(id, plan, mode, tk, dt, calm) {
   }
   return out;
 }
-export const currentWallH = (id) => ({ HL: Q.wallH[id + 'L'], HR: Q.wallH[id + 'R'] });
 
 // ---------------- props, animated overlays and the depth pass ----------------
 function darkImg(img) {
@@ -263,7 +256,7 @@ function darkImg(img) {
   if (o) { o.x.drawImage(img, 0, 0, o.c.width, o.c.height); o.x.globalCompositeOperation = 'source-atop'; o.x.fillStyle = 'rgba(88,96,128,.5)'; o.x.fillRect(0, 0, o.c.width, o.c.height); o.x.fillStyle = 'rgba(8,8,16,.45)'; o.x.fillRect(0, 0, o.c.width, o.c.height); }
   v = o ? o.c : null; Q.dark.set(img, v); return v;
 }
-export function propWorldY(rc, ty, pr) { return ty + propPos(pr).y; }
+function propWorldY(rc, ty, pr) { return ty + propPos(pr).y; }
 function drawProp(app, g, pr, tx, ty, dark, part) {
   const d = assets.kitImg('props', pr.id, app), P = propPos(pr);
   if (!d && part) return d; // still on its way (a room that grew): nothing yet, not the placeholder of a failed image
@@ -345,7 +338,6 @@ export function monsterAt(key, i, rc, calm, dt, speed = 0.9) {
   st.fv += (st.face - st.fv) * Math.min(1, dt * 10); if (Math.abs(st.fv - st.face) < 0.02) st.fv = st.face;
   return st;
 }
-export const dropMonsters = () => Q.mons.clear();
 // world length of a straight move of (dgu, dgv) sub-tiles
 export const worldLen = (dgu, dgv) => Math.hypot((dgu - dgv) * HW / SUB, (dgu + dgv) * HH / SUB);
 
@@ -366,4 +358,3 @@ export function alongPolyline(poly, k) {
   const a = poly[i], b = poly[i + 1] || poly[i], f = segs[i] ? clamp(d / segs[i], 0, 1) : 0;
   return { gu: a[0] + (b[0] - a[0]) * f, gv: a[1] + (b[1] - a[1]) * f, du: b[0] - a[0], dv: b[1] - a[1], length: L };
 }
-export { propAt };

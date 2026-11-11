@@ -1,8 +1,8 @@
 // Small drawing + rules helpers for the graft table and reward screens (pure canvas, no state).
-import { COL, EASE, clamp, rgba } from './core.js';
-import { SCHOOLS, GRAFTS, CARDS } from '../data/index.js';
+import { COL, clamp, rgba } from './core.js';
+import { SCHOOLS } from '../data/index.js';
 import * as ICONS from '../art/icons.js';
-import { cardSpec, cantGraftWhy } from '../engine/cards.js';
+import { cantGraftWhy } from '../engine/cards.js';
 import { OVERLOAD_SHATTER, relicMod } from '../engine/cards.js';
 import { lnw } from '../art/linework.js';
 
@@ -193,5 +193,3 @@ export function drawLamp(ctx, x, swing, a = 1) {
   ctx.restore();
 }
 
-export const names = (ids) => ids.map((u) => (CARDS[u] ? CARDS[u].name : u));
-export { EASE };

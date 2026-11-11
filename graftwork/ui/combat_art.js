@@ -11,18 +11,16 @@
 import { assets, pickAtkFrame } from './assets.js';
 import { pose as atkPose } from '../art/attacks.js';
 import { setGrade } from '../art/grade.js';
+import { clampOrdered as clamp, lerp, TAU } from './util.js';
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const easeIn = (t) => { const k = clamp(t, 0, 1); return k * k; };
-const TAU = Math.PI * 2;
 
 // 1 layout px = U sprite px of the 2x frame (256 wide): a lone normal enemy then stands ~200 px tall in the 212 px lane
 export const U = 0.8;
-export const KIND_K = { normal: 1, elite: 1.12, boss: 1.22 };
+const KIND_K = { normal: 1, elite: 1.12, boss: 1.22 };
 export const HERO_S = 1.2; // the hero, in 2x sprite px per logical px: 225 px of art becomes ~270
-export const FACING = { hero: 1, enemy: -1 };
+const FACING = { hero: 1, enemy: -1 };
 
 // ------------------------------------------------------------------ sprites
 const HI = new Map(); // combat (@3x, 512 px) images: { img, ok, bad }, keyed by file
@@ -48,7 +46,7 @@ export function __resetHi() { HI.clear(); }
 // The painted figure of an actor id (hero id or enemy id). Prefers the 512 px combat file (file3x) and shows the 2x / 1x one while it decodes.
 // The 512 px combat files only pay when the sprite is drawn bigger than the 256 px ones can carry: device px per 2x sprite px above 1.3.
 // Enemies (U 0.8) on a 2x phone draw at about 1.0, so they keep the @2x file (a quarter of the decoded memory); the hero (1.2) and bosses use @3x. The lite and minimal quality tiers never load them.
-export function wantHi(d) {
+function wantHi(d) {
   const a = assets.app; if (!a || !(a.px > 0)) return true;
   if (a.perf && a.perf.q.tier !== 'full') return false;
   return a.px * (d && d.kind === 'hero' ? HERO_S : U * (KIND_K[d && d.kind] || 1)) > 1.3;

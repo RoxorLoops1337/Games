@@ -9,7 +9,6 @@
 //   drawGround / drawRooms / drawLight / drawThread / drawOverlay   the draw passes, called in this order by ward.js
 // Depth: back to front by x + y (rooms), then every actor (monsters, hero) in one pass sorted by screen y, so nobody is hidden behind a wall.
 import { COL, EASE, clamp, lerp, rgba } from './core.js';
-import { lnw } from '../art/linework.js';
 import * as WD from '../engine/ward.js';
 import { ROOMS, BUILD_CARDS } from '../data/ward.js';
 import { ENEMIES } from '../data/index.js';
@@ -24,16 +23,16 @@ import { previewOn } from './preview.js';
 import { deviceScale } from './smoothing.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
+import { TW, TH } from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
+import { TAU, hash01 as hash, offscreen as mk } from './util.js';
 
-export const TW = 92, TH = 48; // floor tile of the 2:1 projection (world px; the camera scales them on screen)
+export { TW, TH }; // floor tile of the 2:1 projection (world px; the camera scales them on screen), one definition in ward_kit_iso.js
 export const MAPR = { x: 284, y: 64, w: 712, h: 484 }; // the map panel (same rectangle as the old sheet)
 const FILL = 1; // a room's measured floor diamond is scaled to exactly the cell diamond
 const UP = 70; // how far a diorama rises above its floor centre (layout and camera fit; the real sprite decides what is drawn)
 const SLAB = 14; // thickness of the stone plinth
 const WALL = 48; // wall height of the procedural block and of the pick volume
-const TAU = Math.PI * 2;
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
 // ---------------- projection, camera and picking ----------------
 // World space is the fixed iso layout (cellW). The camera maps world to the map panel: screen = (world - focus) * z + panel centre.
@@ -49,13 +48,13 @@ function geo(w) {
 }
 export function cellW(w, x, y) { const g = geo(w); return { x: g.ox + (x - y) * TW / 2, y: g.oy + (x + y) * TH / 2 }; }
 export const CAM = { z: 1, x: 640, y: 300, tz: 1, tx: 640, ty: 300, manual: false, init: false, lastT: 0 };
-export const ZMIN = 0.55, ZMAX_AUTO = 2.4, ZMAX = 3.4;
+const ZMIN = 0.55, ZMAX_AUTO = 2.4, ZMAX = 3.4;
 const MCX = MAPR.x + MAPR.w / 2, MCY = MAPR.y + MAPR.h / 2;
 export const toScreen = (wx, wy) => ({ x: (wx - CAM.x) * CAM.z + MCX, y: (wy - CAM.y) * CAM.z + MCY });
-export const toWorld = (sx, sy) => ({ x: (sx - MCX) / CAM.z + CAM.x, y: (sy - MCY) / CAM.z + CAM.y });
+const toWorld = (sx, sy) => ({ x: (sx - MCX) / CAM.z + CAM.x, y: (sy - MCY) / CAM.z + CAM.y });
 // ---- footprints: a room covers fw x fh cells with its anchor (x, y) at the top. roomCW is the world centre of its floor, rectDiam traces the diamond of any rectangle of cells ----
-export const fpOf = (r) => [r.w || 1, r.h || 1];
-export function roomCW(w, r) { const [fw, fh] = fpOf(r); return cellW(w, r.x + (fw - 1) / 2, r.y + (fh - 1) / 2); }
+const fpOf = (r) => [r.w || 1, r.h || 1];
+function roomCW(w, r) { const [fw, fh] = fpOf(r); return cellW(w, r.x + (fw - 1) / 2, r.y + (fh - 1) / 2); }
 export function roomCS(w, r) { const c = roomCW(w, r); return toScreen(c.x, c.y); }
 function rectDiam(g, w, x, y, fw, fh, lift = 0, inset = 0) {
   const a = cellW(w, x, y), b = cellW(w, x + fw - 1, y), d = cellW(w, x + fw - 1, y + fh - 1), l = cellW(w, x, y + fh - 1);
@@ -95,7 +94,6 @@ export function roomBox(w, x, y, fw = 1, fh = 1) {
   const a = cellW(w, x, y), b = cellW(w, x + fw - 1, y), d = cellW(w, x + fw - 1, y + fh - 1), l = cellW(w, x, y + fh - 1), s = toScreen(l.x - TW / 2, a.y - UP);
   return { x: s.x, y: s.y, w: (b.x - l.x + TW) * CAM.z, h: (d.y + TH / 2 + 4 - (a.y - UP)) * CAM.z };
 }
-export const cellBox = (w, x, y) => { const c = cellW(w, x, y), s = toScreen(c.x - TW / 2, c.y - TH / 2); return { x: s.x, y: s.y, w: TW * CAM.z, h: TH * CAM.z }; };
 const diamond = (g, cx, cy, hw, hh) => { g.beginPath(); g.moveTo(cx, cy - hh); g.lineTo(cx + hw, cy); g.lineTo(cx, cy + hh); g.lineTo(cx - hw, cy); g.closePath(); };
 
 // what the camera frames: rooms (not a far Theatre), the hero, the cells that can be built on in the morning; with margin
@@ -126,14 +124,10 @@ export function camZoomBy(f, sx, sy) { // zoom about a screen point (wheel, pinc
 export function camPanBy(dx, dy) { CAM.manual = true; CAM.tx -= dx / CAM.tz; CAM.ty -= dy / CAM.tz; CAM.x = CAM.tx; CAM.y = CAM.ty; } // follows the finger at once
 export function camRecenter() { CAM.manual = false; }
 export function camReset() { CAM.manual = false; CAM.init = false; }
-export function camBegin(app) { const g = app.ctx; g.save(); g.beginPath(); g.rect(MAPR.x, MAPR.y, MAPR.w, MAPR.h); g.clip(); g.translate(MCX, MCY); g.scale(CAM.z, CAM.z); g.translate(-CAM.x, -CAM.y); }
-export function camEnd(app) { app.ctx.restore(); }
+function camBegin(app) { const g = app.ctx; g.save(); g.beginPath(); g.rect(MAPR.x, MAPR.y, MAPR.w, MAPR.h); g.clip(); g.translate(MCX, MCY); g.scale(CAM.z, CAM.z); g.translate(-CAM.x, -CAM.y); }
+function camEnd(app) { app.ctx.restore(); }
 
 // ---------------- offscreen helpers (all optional: with no DOM everything is drawn straight) ----------------
-function mk(w, h) {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-}
 const V = {
   ground: null, groundKey: '', glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',
@@ -232,7 +226,7 @@ function drawPlot(app, g, c, alpha) {
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) { const sx = c.x + dx * (TW / 2 - 7), sy = c.y + dy * (TH / 2 - 4); g.fillStyle = '#6a4a2a'; g.fillRect(sx - 1.5, sy - 5, 3, 6); g.fillStyle = '#e8d6b0'; g.fillRect(sx - 1.5, sy - 5, 3, 1.5); }
   g.restore();
 }
-export function drawGround(host, inter) {
+function drawGround(host, inter) {
   const { app, run, S } = host, g = app.ctx, w = run.ward;
   const pulse = 0.5 + 0.5 * Math.sin(S.t * 5), lc = inter && inter.legal ? inter.legal.cells : null;
   g.save();
@@ -371,7 +365,6 @@ function groundShadow(g, x, y, rx, a) {
   if (s) { g.save(); g.globalAlpha *= a; g.drawImage(s, x - rx, y - rx * 0.5, rx * 2, rx); g.restore(); }
   else { g.fillStyle = `rgba(0,0,0,${(a * 0.8).toFixed(3)})`; g.beginPath(); g.ellipse(x, y, rx, rx * 0.5, 0, 0, TAU); g.fill(); }
 }
-export const shadowOf = (r) => { const hopK = clamp(r.bob / 3, 0, 1); return { a: 0.46 * (1 - 0.3 * hopK), hopK }; };
 // THE WALK is the puppet (ui/puppet.js): the standing sprite cut into two legs and an upper body, or a body gait for actors without legs. Returns the prepared
 // info, or null when the sprite cannot be read (no pixels: headless) or the caller wants to see the hop under it (r.pm = 'off', the animation lab): then the
 // hop that gait() worked out is the walk.
@@ -454,7 +447,7 @@ function drawActor(app, g, r, run) {
 // foot lands and leans into the heading; at rest nothing leaves the ground: a slow breathing scale about the feet and a small weight shift.
 // With reduced motion the figure just stands.
 const HOP = 2.2, STRIDE = 0.5;
-export { gait, drawActor, groundShadow, HOP, STRIDE }; // the title scene's monsters and lab/anim.html use the real gait and the real actor draw
+export { gait, drawActor, groundShadow, STRIDE }; // the title scene's monsters and lab/anim.html use the real gait and the real actor draw
 function gait(key, rec, nx, ny, dt, calm, sz, S, dustN) {
   let g = V.gt.get(key);
   if (!g) { g = { px: nx, py: ny, dist: 0, vk: 0, step: 0, plantT: -9, ph: hash(key) * TAU, ps: 0, ux: 1, uy: 0 }; V.gt.set(key, g); if (V.gt.size > 400) V.gt.clear(); }
@@ -551,7 +544,7 @@ function planFor(run, w, roomList) {
   return V.plan;
 }
 export const lastActors = () => V.list; // tests: what stood where in the last frame
-export function drawRooms(host, inter) {
+function drawRooms(host, inter) {
   const { app, run, S, MEM } = host, g = app.ctx, w = run.ward, calm = host.reduced, dt = clamp(S.t - V.lastT, 0, 0.1); V.lastT = S.t;
   const light = lightState(w.phase, S.trans);
   const legalRooms = new Set(inter && inter.legal ? inter.legal.rooms : []), pulse = 0.5 + 0.5 * Math.sin(S.t * 5);
@@ -808,7 +801,7 @@ export function drawThread(host, path, dest, curP) {
 }
 
 // ---------------- overlays: the ghost of the room being dragged, the keyboard focus ring ----------------
-export function drawGhost(host, inter) {
+function drawGhost(host, inter) {
   const { app, run, S } = host, g = app.ctx, w = run.ward, uid = S.drag ? S.drag.uid : S.sel;
   if (uid === null || uid === undefined) return;
   const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === uid) || {}).id];

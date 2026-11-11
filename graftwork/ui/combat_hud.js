@@ -1,18 +1,17 @@
 // Combat screen drawing helpers: bars, status rows, intent bubbles, card keyword panel.
-import { COL, EASE, W, clamp, rgba } from './core.js';
-import { STATUSES, GRAFTS, SCHOOLS, CARDS, RELICS } from '../data/index.js';
+import { COL, W, clamp, rgba } from './core.js';
+import { STATUSES, GRAFTS, SCHOOLS, RELICS } from '../data/index.js';
 import { statusText, priceOnCard } from '../engine/text.js';
 import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
 import * as L from './combat_layout.js';
-import { queueTip, statusSection, keywordSection, explainIntent } from './tooltips.js';
-import { opText } from '../engine/text.js';
+import { queueTip, statusSection, explainIntent } from './tooltips.js';
 import { lnw } from '../art/linework.js';
 import * as SK from './skin.js';
 
-export const STATUS_COL = { burn: COL.ember, bleed: '#d12a44', poison: '#8fd14f', vulnerable: '#e0a050', weak: '#9aa8b0', strength: '#ff9a6a', dexterity: '#7fd1e0' };
+const STATUS_COL = { burn: COL.ember, bleed: '#d12a44', poison: '#8fd14f', vulnerable: '#e0a050', weak: '#9aa8b0', strength: '#ff9a6a', dexterity: '#7fd1e0' };
 export const stCol = (id) => STATUS_COL[id] || (STATUSES[id] && STATUSES[id].good ? COL.good : COL.bad);
 export const stName = (id) => (STATUSES[id] ? STATUSES[id].name : id);
-export const stGood = (id) => !(STATUSES[id] && STATUSES[id].good === false);
+const stGood = (id) => !(STATUSES[id] && STATUSES[id].good === false);
 
 // cached 6px diagonal ink hatch tile for the bars (one pattern per context; null when no canvas exists, e.g. headless)
 const BAR_HATCH = new WeakMap(); let BAR_TILE = null;
@@ -58,13 +57,13 @@ export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
 export const shortMove = (n) => { const t = String(n || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); return t || String(n || ''); };
 // Fits one label into maxW on a single line: shrinks from the (floor-boosted) size down to a legible minimum, ellipsizes only as a last resort.
 // Returns { str, size (FINAL px: pass it back to app.text with exact:true), w, trunc }. minSize is accepted for old callers and ignored (the core knows the legible minimum).
-export function fitText(app, str, maxW, size, minSize, o = {}) {
+function fitText(app, str, maxW, size, minSize, o = {}) {
   const L = app.layoutText(String(str), { ...o, size, fit: { w: maxW, lines: 1 } });
   return { str: L.lines[0], size: L.size, w: L.w, trunc: L.trunc };
 }
 
 // ---- HUD popovers (relic '+N', status '+N'): one open at a time, drawn last by drawPopovers ----
-export const hudState = { open: null, chip: null };
+const hudState = { open: null, chip: null };
 const cb = (app) => !!(app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.colorblind);
 
 function cornerShape(ctx, good, x, y) {
@@ -95,7 +94,7 @@ export const statusSizes = {};
 // `size` down to o.minSize (default 26; enemy rows 22 when 4 enemies crowd the lane) before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
 // With 3 or fewer statuses (all on one row) the status NAME shows under each icon when it fits (o.labels); with more, the glyph and number only.
 // ent: {st, pop}. o: { id, rows, group, minSize, labels, band }. Returns the height used.
-export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
+function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   const ids = Object.keys(ent.st).filter((s) => ent.st[s]);
   const rows = o.rows || 2, key = o.id || 'ent';
   if (!ids.length) { if (hudState.open === 'st:' + key) hudState.open = null; return 0; }
@@ -398,12 +397,4 @@ export function drawSections(app, sections, x, y, w, maxH) {
   return h;
 }
 
-export function gearIcon(ctx, x, y, w, h) {
-  const cx = x + w / 2, cy = y + h / 2;
-  ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = COL.vellum;
-  for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-2.5, -12, 5, 6); }
-  ctx.beginPath(); ctx.arc(0, 0, 8, 0, 6.283); ctx.fill();
-  ctx.fillStyle = COL.slab2; ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, 6.283); ctx.fill();
-  ctx.restore();
-}
-export { drawShield, rgba, CARDS };
+export { drawShield };

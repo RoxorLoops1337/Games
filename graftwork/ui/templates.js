@@ -16,17 +16,17 @@
 //   templates.frameImg(id, app?)    { img, def, id, ... } once decoded, else null (starts loading it)
 //   templates.pickFrame(ids, app?)  first id of the list whose image is decoded
 //   templates.iconImg / drawIcon    icons from the same manifest
-//   drawNineSlice(ctx, fr, x, y, w, h)   slot-based 9-slice draw;  contentRect(def, x, y, w, h)
+//   drawNineSlice(ctx, fr, x, y, w, h)   slot-based 9-slice draw
 //   CARD_TEMPLATE / CARD_BACK_TEMPLATE   the data-driven slot definitions; resolveSlots(); composeCardFront(); cardFrameIds(); cardBackIds()
 //   templates.sync(app)             follow the preview switch (ui/preview.js); templates.ver counts every change of what can be drawn
 import { previewOn } from './preview.js';
+import { isObj } from '../engine/unlock.js';
 const BASE_DEFAULT = 'assets/ui/';
 // THE SWITCH for the painted art is the 'art' preview (ui/preview.js: PREVIEW_DEFAULT.art, the page URL ?art=1, the Settings toggle "Painted art (preview)").
 // While it is off the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look; on the minimal graphics tier
 // (ui/quality.js) it stays off whatever the setting says. Tests and tools that feed the loader themselves pass { art: true } and are not asked.
 const previewSettings = (app) => (app && (app.settings || (app.shared && app.shared.meta && app.shared.meta.settings))) || null;
 const tierOf = (app) => (app && app.perf && app.perf.q && app.perf.q.tier) || 'full';
-const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
 // ---------------------------------------------------------------- manifest parsing
@@ -82,7 +82,7 @@ export function parseManifest(m) {
 
 // ---------------------------------------------------------------- 9-slice (pure)
 // natural logical size of a part and the source rectangle (in image pixels) it occupies, given the decoded image
-export function partSource(def, atlasDef, img) {
+function partSource(def, atlasDef, img) {
   const iw = img.naturalWidth || img.width || 0, ih = img.naturalHeight || img.height || 0;
   if (def.atlas && atlasDef) {
     const k = iw / (atlasDef.w || iw || 1), r = def.rect;
@@ -110,12 +110,6 @@ export function sliceRects(src, slice, x, y, w, h, centre = true) {
   return out;
 }
 // where children go inside a frame drawn into (x,y,w,h): the native insets (frame size minus content rect) are kept, the middle stretches
-export function contentRect(def, x, y, w, h) {
-  const nw = def.w || w, nh = def.h || h;
-  const c = def.content || (def.slice ? { x: def.slice[0], y: def.slice[1], w: nw - def.slice[0] - def.slice[2], h: nh - def.slice[1] - def.slice[3] } : { x: 0, y: 0, w: nw, h: nh });
-  const il = c.x, it = c.y, ir = Math.max(0, nw - c.x - c.w), ib = Math.max(0, nh - c.y - c.h);
-  return { x: x + il, y: y + it, w: Math.max(0, w - il - ir), h: Math.max(0, h - it - ib) };
-}
 // draw a decoded part (from frameImg) into (x,y,w,h): 9-slice when it has a slice, one stretched drawImage otherwise
 export function drawNineSlice(ctx, fr, x, y, w, h) {
   const { img, def, src } = fr;
@@ -171,7 +165,7 @@ export const CARD_TEMPLATE = {
 export const CARD_BACK_TEMPLATE = { id: 'card_back', w: 220, h: 310, slots: { title: { x: -80, y: 114, w: 160, h: 20 } } };
 
 // slot name for a variant: compact cards read '<name>Compact' (and window '...CompactGrafts' when grafts ride in the card)
-export function slotName(name, compact, grafts) {
+function slotName(name, compact, grafts) {
   if (!compact) return name;
   return name === 'window' && grafts ? 'windowCompactGrafts' : name + 'Compact';
 }
@@ -202,11 +196,6 @@ export function resolveSlots(tpl, { compact = false, grafts = false } = {}) {
 
 // ---------------------------------------------------------------- fit (pure)
 // largest font size in [min,max] (step 0.5) for which `text` measures within maxW; measure(sizePx, text) -> width. Returns min when none fits.
-export function fitFontSize(measure, text, maxW, max, min, step = 0.5) {
-  let s = max;
-  while (s > min && measure(s, text) > maxW) s -= step;
-  return Math.max(min, s);
-}
 
 // ---------------------------------------------------------------- card frame ids
 // candidate frame ids, most specific first: card_front.<type>.<rarity>.<school> ... card_front

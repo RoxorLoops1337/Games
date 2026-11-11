@@ -1,14 +1,14 @@
 // COMBAT SCREEN. The engine is synchronous: after every action `c` is final and c.ev holds the events in order.
 // This screen keeps DISPLAY state (hp, block, statuses, hand positions, pile zones) and replays c.ev through a timed
 // queue, updating the display as each event plays. Input is locked while the queue is busy (click / Space = speed up).
-import { COL, EASE, FONT, W, H, rgba, clamp, lerp } from './core.js';
+import { COL, EASE, W, H, rgba, clamp, lerp } from './core.js';
 import { Fx, FX_OPTS } from './fx.js';
 import * as J from './juice.js';
-import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, lethalIncoming, resolvePending, usePotion, finishCombat, HAND_CAP } from '../engine/combat.js';
+import { newCombat, playCard, endTurn, canPlay, needsTarget, effCost, specOf, intentOf, lethalIncoming, resolvePending, usePotion, finishCombat } from '../engine/combat.js';
 import * as RUN from '../engine/run.js';
-import { CARDS, STATUSES, RELICS, POTIONS, HEROES } from '../data/index.js';
+import { CARDS, STATUSES, POTIONS, HEROES } from '../data/index.js';
 import { drawCard, drawCardBack, CARD_W, CARD_H } from '../art/cards.js';
-import { drawRelic, drawPotion, drawEnergyOrb, drawCoin, drawHeart, drawShield } from '../art/icons.js';
+import { drawPotion, drawEnergyOrb, drawCoin, drawHeart } from '../art/icons.js';
 import { drawEnemy } from '../art/enemies.js';
 import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -16,18 +16,18 @@ import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
 import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip, drawSeamDeclare, declareShown } from './seam_ui.js';
-import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
+import { intentText, cardSections, drawSections, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers } from './combat_hud.js';
 import { queueTip, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import * as SK from './skin.js';
 import { drawCardZoom } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 import * as CA from './combat_art.js';
+import { randRange as rnd } from './util.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const WHY = { energy: 'Not enough energy', unplayable: 'Unplayable', gold: 'Not enough gold', limit: 'Play limit reached', needsAttack: 'Play an Attack first', target: 'Pick a target', blocked: 'Not now' };
-const rnd = (a, b) => a + Math.random() * (b - a);
 
 let S = null; // the live screen state (one combat at a time)
 let APP = null;
@@ -1644,8 +1644,6 @@ function drawKbRing(app) {
   ctx.save(); app.rr(x, y, w, h, 12); ctx.lineWidth = lnw(6); ctx.strokeStyle = '#000'; ctx.stroke(); ctx.lineWidth = lnw(3); ctx.strokeStyle = '#ffe9a8'; ctx.setLineDash([10, 6]); ctx.lineDashOffset = FX_OPTS.reduced ? 0 : -app.t * 20; ctx.stroke(); ctx.restore();
   app.text('TARGET', ed.x, y - 22, { size: 15, bold: true, ui: true, align: 'center', color: '#ffe9a8', stroke: '#000', strokeW: 4 });
 }
-
-const col2 = (def) => (def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum);
 
 function drawCoins(app) {
   const ctx = app.ctx;

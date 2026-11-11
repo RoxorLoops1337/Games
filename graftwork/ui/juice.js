@@ -100,7 +100,7 @@ export function spring(obj, key, target, dt, k = 380, c = 18) {
   if (Math.abs(x - target) < 0.0005 && Math.abs(v) < 0.01) { x = target; v = 0; }
   obj[key] = x; obj[vk] = v;
 }
-export function noise1(x) { // smooth value noise in 0..1
+function noise1(x) { // smooth value noise in 0..1
   const i = Math.floor(x), f = x - i, h = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
   const u = f * f * (3 - 2 * f);
   return h(i) * (1 - u) + h(i + 1) * u;
@@ -133,19 +133,19 @@ export function danger(frac, alive = true) {
   const bpm = frac < 0.15 ? 110 : Math.round(60 + (0.3 - frac) / 0.15 * 50);
   return { on: true, bpm, lowpass: 800, level: frac < 0.15 ? 1 : 0.6 };
 }
-export const COMBO_STEPS = [{ at: 0, col: '#e8dcc4' }, { at: 20, col: '#F2C14E' }, { at: 40, col: '#E8571F' }, { at: 80, col: '#ff3a3a' }];
+const COMBO_STEPS = [{ at: 0, col: '#e8dcc4' }, { at: 20, col: '#F2C14E' }, { at: 40, col: '#E8571F' }, { at: 80, col: '#ff3a3a' }];
 export function comboLevel(total) { let l = 0; for (let i = 0; i < COMBO_STEPS.length; i++) if (total >= COMBO_STEPS[i].at) l = i; return l; }
 const PENT = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
 export const pent = (i) => PENT[i % 5] * Math.pow(2, Math.floor(i / 5));
 export function causeOfDeath(moveName, n) { return moveName ? `Killed by ${moveName}${n > 0 ? ` (${n})` : ''}` : n > 0 ? `Killed by the ward (${n})` : 'Killed by the ward'; }
 // timings of a played card in seconds (JUICE.md card choreography)
-export const CARD = { lift: 0.09, wind: 0.07, flight: 0.11, impact: 0.04, fold: 0.15, burn: 0.45, crack: 0.12, hold: 0.08, rest: 0.12 };
+export const CARD = { lift: 0.09, wind: 0.07, flight: 0.11, impact: 0.04, burn: 0.45, crack: 0.12, hold: 0.08, rest: 0.12 };
 // easing curves (t in 0..1). easeOutBack overshoots then settles, easeInQuad is a quick accelerate for strikes, easeInOutCubic for glides.
 export const easeOutBack = (t, c = 1.70158) => { const k = Math.max(0, Math.min(1, t)) - 1; return 1 + (c + 1) * k * k * k + c * k * k; };
 export const easeInQuad = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k; };
 export const easeInOutCubic = (t) => { const k = Math.max(0, Math.min(1, t)); return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
 // motion budgets in ms from design/JUICE.md; tests/graftwork_motion.test.mjs holds the code to them
-export const BUDGET = { cardToImpact: 310, cardRest: 160, light: { tell: 120, act: 60, hold: 40, rec: 180 }, heavy: { tell: 280, act: 70, hold: 90, rec: 320 }, boss: { tell: 450, act: 90, hold: 140, rec: 400 }, victory: 1800, death: 2800, stillMax: 200,
+export const BUDGET = { cardToImpact: 310, cardRest: 160, light: { tell: 120, act: 60, hold: 40, rec: 180 }, heavy: { tell: 280, act: 70, hold: 90, rec: 320 }, boss: { tell: 450, act: 90, hold: 140, rec: 400 }, stillMax: 200,
   seam: { snipClose: 80, extend: 150, cut: 320, pay: 300, cutToFree: 1400 }, shatter: { crack: 130, hold: 90, toBurst: 560 } };
 export const FINAL = { hold: 0.42, seams: 6, perSeam: 0.06 };
 

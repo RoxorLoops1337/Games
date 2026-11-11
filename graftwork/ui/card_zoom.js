@@ -4,8 +4,8 @@ import { W, H } from './core.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { lnw } from '../art/linework.js';
 
-export const ZOOM_FRAC = 0.7;
-export const zoomScale = () => (H * ZOOM_FRAC) / CARD_H;
+const ZOOM_FRAC = 0.7;
+const zoomScale = () => (H * ZOOM_FRAC) / CARD_H;
 // o: { cost, tithed, jam, mark, hint }
 export function drawCardZoom(app, spec, o = {}) {
   const ctx = app.ctx, s = zoomScale(), a = Math.min(1, (app.t - (o.t0 || 0)) * 8);

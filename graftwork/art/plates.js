@@ -1,13 +1,12 @@
 import { lnw } from './linework.js';
+import { TAU, hash32, mulberry32 as rng } from '../ui/util.js';
 // GRAFTWORK plates: baked, cached engraved surfaces. Nothing here costs more than one drawImage per frame once warm.
 //  drawEventPlate(ctx, id, act, x, y, w, h)  the event illustration: sepia wash, light pool, floor, a procedural motif keyed by the event id
 //                                            (EVENT_MOTIFS, generic fallback), hatch veil, vignette, deckled paper edge. Static: no animation to freeze.
 //  drawVellum(ctx, x, y, w, h, o)             dark vellum behind the codex and deck view: fibre, foxing, edge darkening. o: { r (corner radius), alpha, seed }
 //  drawEmptyMark(ctx, x, y, w)                small engraved ornament (rule, diamond, stitch) above an empty-state message
 // Without a document (headless) the same drawing runs straight onto the given context.
-const TAU = Math.PI * 2, INK = '#2b1e1a';
-function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const INK = '#2b1e1a';
 
 const cache = new Map(); let bytes = 0; const MAX_BYTES = 40 * 1024 * 1024;
 function baked(key, w, h, fn) {
@@ -20,7 +19,6 @@ function baked(key, w, h, fn) {
   } else { cache.delete(key); cache.set(key, c); }
   return c;
 }
-export const plateStats = { get entries() { return cache.size; } };
 
 // ---- engraving helpers (plate space 520 x 560, light from the upper left) ----
 const W0 = 520, H0 = 560, FY = 466;
@@ -162,7 +160,7 @@ export const eventMotif = (id) => MOTIF_OF[id] || 'generic';
 
 const ACT_TONE = { 1: ['#1c2b24', '#bfe3c8'], 2: ['#2b1d12', '#ffd596'], 3: ['#1c1230', '#f5e6a8'] };
 function bakePlate(g, id, act) {
-  const h = hash(id), [dark, light] = ACT_TONE[act] || ACT_TONE[1];
+  const h = hash32(String(id)), [dark, light] = ACT_TONE[act] || ACT_TONE[1];
   // sepia ink wash: warm paper-black with only a hint of the act hue
   g.fillStyle = 'rgba(40,30,20,.72)'; g.fillRect(0, 0, W0, H0);
   g.globalAlpha = 0.18; g.fillStyle = dark; g.fillRect(0, 0, W0, H0); g.globalAlpha = 1;

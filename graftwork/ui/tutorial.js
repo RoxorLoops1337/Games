@@ -16,8 +16,6 @@ export const TIP_TEXTS = {
   strain: 'Weight over Budget is Strain. Each point Tithes one ungrafted (Bare) card: it fights at 75 percent this fight. The deck view shows which.',
   overload: 'A third graft is an Overload: numbers x1.5, +1 Weight, and a 25 percent chance to Shatter the card for good.',
   skipping: 'You may skip the graft: heal 8, gain 1 Budget for good, or take 10 gold.',
-  forge: 'The Forge heals, strips a graft, upgrades a card or Expands your Budget. One service per visit.',
-  shop: 'Cards, grafts, relics and potions for gold. Removing a card is the cheapest upgrade.',
   thread_chain: 'Two cards of one school tie a knot. Keep sharing a school to grow the Line, up to 5 knots.',
   thread_cut: 'A card of another school Cuts the Line and cashes it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
   claim: 'Claim: the Matron takes your most grafted card for the fight, at -25% like a Tithe. Tempering a card makes it immune.',
@@ -29,7 +27,7 @@ export function tipsActive(meta) {
   return !(meta && meta.settings && meta.settings.tips === false);
 }
 export function tipSeen(meta, key) { return !!(meta && meta.tips && meta.tips[key]); }
-export function dismissTip(app, key) {
+function dismissTip(app, key) {
   const meta = app.shared.meta; if (!meta) return;
   (meta.tips = meta.tips || {})[key] = 1;
   const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();
@@ -124,7 +122,6 @@ export function maybeTip(app, key, x, y, text, o = {}) {
 // 'thread_chain' waits for the first extend that makes a Line of 2+; 'thread_cut' for the first cut that pays.
 // Both are stored in meta.tips like every other tip, so they show once, and a click skips them for good.
 // A player who already dismissed the old single 'thread' tip is treated as having seen the chain lesson.
-export const THREAD_LESSONS = ['thread_chain', 'thread_cut'];
 export function threadLesson(app, ev) {
   const meta = app.shared && app.shared.meta;
   if (!meta || !tipsActive(meta)) return null;
@@ -135,4 +132,3 @@ export function threadLesson(app, ev) {
   if (key === 'thread_chain' && tipSeen(meta, 'thread')) return null;
   return key;
 }
-export function skipThreadLesson(app) { for (const k of THREAD_LESSONS) dismissTip(app, k); }

@@ -13,10 +13,9 @@
 //   TEMPER, temperUpdate, hammerPose, temperTint, temperRivets        Forge hammer sequence.
 // Everything is a no-op without a DOM / post / audio, and short under reduced motion (a 160 ms cross-fade, no shake).
 import { FX_OPTS } from './fx.js';
+import { clampOrdered as clamp, lerp } from './util.js';
 
 const W = 1280, H = 720;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
 const eOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const eIn = (t) => { t = clamp(t, 0, 1); return t * t * t; };
 const eInOut = (t) => { t = clamp(t, 0, 1); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
@@ -158,14 +157,14 @@ function drawWipe(app, w) {
 
 // ---------------------------------------------------------------- intro plate
 // name plate slam + swinging lamp. 1.3 s (elite 1.1 s): it is gone by the time the combat queue releases, so the first telegraph is never under the dim. A click skips to the exit.
-export const INTRO_LIFE = 1.3;
+const INTRO_LIFE = 1.3;
 export function introCard(app, o) {
   const T = state(app); if (!T.on) return null;
   const name = String((o && o.name) || '???'), kind = (o && o.kind) || 'boss';
   const rd = reduced();
   const au = audioCall(app, 'audioState');
   const prev = au && typeof au.intensity === 'number' ? au.intensity : 0;
-  const it = { name, sub: String((o && o.sub) || (kind === 'elite' ? 'ELITE' : 'BOSS')), kind, t: 0, life: rd ? 1.0 : kind === 'elite' ? INTRO_LIFE - 0.2 : INTRO_LIFE, slammed: false, sparks: [], lampId: -1, prev, rd };
+  const it = { name, sub: String((o && o.sub) || (kind === 'elite' ? 'ELITE' : 'BOSS')), kind, t: 0, life: rd ? 1.0 : kind === 'elite' ? INTRO_LIFE - 0.2 : INTRO_LIFE, slammed: false, sparks: [], prev, rd };
   T.intro = it; T.intros++;
   audioCall(app, 'setIntensity', kind === 'boss' ? 0.95 : 0.75);
   if (app.after) app.after(it.life * 1000 + 300, () => { if (T.intro === it || !T.intro) audioCall(app, 'setIntensity', it.prev); });
@@ -188,13 +187,9 @@ function stepIntro(app, T, dt) {
       for (let i = 0; i < 26; i++) { const a = Math.random() * 6.283, s = 160 + Math.random() * 420; it.sparks.push({ x: 640 + (Math.random() - 0.5) * 520, y: 330, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.6 - 120, life: 0.5 + Math.random() * 0.5, age: 0 }); }
       sfx(app, 'bossIntro'); sfx(app, 'hitHeavy', { pitch: 0.7 });
     }
-    // a lamp light that swings with the pendulum (renders wherever the screen uses the light registry)
-    try { if (!it.rd && app.lightsApi && app.lightsApi.add) it.lampId = app.lightsApi.add({ x: 640, y: 170, r: 380, color: '#ffcf80', intensity: 1.1, flicker: 0.3 }); } catch (e) { it.lampId = -1; }
   }
-  try { if (it.lampId >= 0 && app.lightsApi) { const p = lampPos(it); app.lightsApi.set(it.lampId, { x: p.x, y: p.y + 20 }); } } catch (e) { /* lights are optional */ }
   for (const s of it.sparks) { s.age += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 900 * dt; }
   if (it.t >= it.life) {
-    try { if (it.lampId >= 0 && app.lightsApi) app.lightsApi.remove(it.lampId); } catch (e) { /* ignore */ }
     T.intro = null; T.finished++;
   }
 }

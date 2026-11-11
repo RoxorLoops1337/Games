@@ -11,10 +11,9 @@
 //   splat, droplets, clipboard, stamp, blot, inhale, blow, push, hose, orbit, peel, peelK, hit, thread, ghost, dim, flatline, sparks, flash,
 //   stiffen, bell, flames, glint, embedded, limb, strain, snap, spit, beam, reach, gaze, spin, guard, flex, cast, call, heal.
 import { ENEMIES } from '../data/index.js';
+import { clampOrdered as clamp, lerp, TAU } from '../ui/util.js';
 
-const PI = Math.PI, TAU = PI * 2;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
+const PI = Math.PI;
 const smooth = (t) => t * t * (3 - 2 * t);
 const backIn = (t, s = 1.7) => t * t * ((s + 1) * t - s);
 const expoOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : (1 - Math.pow(2, -10 * t)) / (1 - Math.pow(2, -10)));
@@ -35,7 +34,6 @@ const maxDef = (bk) => (SOFT.has(bk) ? 1.3 : HARD.has(bk) ? 1.08 : 1.18);
 // ---------------------------------------------------------------- styles
 // T = pose at the end of the tell, I = pose at impact. sq in -1..1: +1 = max stretch along y (tall/narrow), -1 = max squash (flat/wide).
 // arc: extra lift (px) during act. hold(k) additive wobble that is zero at both ends. x(phase,k,c) extra cues.
-const ev = (v, t) => v * t; // readability helper
 const STYLES = {
   lunge: { T: { dx: 12, dy: 0, rot: 0.08, sq: 0.5, glow: 0.2 }, I: { dx: -62, dy: 2, rot: -0.1, sq: -0.6, glow: 0.5 }, sd: PI },
   pounce: { T: { dx: 10, dy: 6, rot: 0.1, sq: -0.6, glow: 0.1 }, I: { dx: -70, dy: 0, rot: -0.25, sq: -0.5, glow: 0.4 }, arc: 34, sd: PI },
@@ -219,7 +217,6 @@ export function timing(id, body, moveId) {
 }
 
 const AMP = { light: 1, heavy: 1.2, boss: 1.4 };
-const NEUTRAL = { dx: 0, dy: 0, rot: 0, sq: 0, glow: 0 };
 
 // ---------------------------------------------------------------- pose
 export function pose(id, body, phase, k, moveId) {
@@ -278,4 +275,3 @@ function build(r, phase, k) {
   return { dx, dy, sx: 1 / sy, sy, rot, glow: clamp(glow, 0, 1), extra };
 }
 
-export { STYLES, ID_STYLE, BODY_STYLE };
