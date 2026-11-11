@@ -236,6 +236,29 @@ Found on the way, still open (owner decisions):
 - **Knitter and Scissor Nurse passives have no player text** (the Knitter heals 3 per extend and takes 50 percent more from a cut; the Nurse takes 2 Block per cashed Line and snips a Line of 4 or more).
 - A payout an enemy voids still counts as a cut for Bobbin and Pin Cushion. The `capped` flag of `seamCut` is read by tests only.
 
+### Long hidden limbs (rig preview)
+
+The owner: "the legs have to be longer even behind the apron; every humanoid character should have arms and legs that fit the rig, and then something like an apron is layered over it." Branch `rig-longlimbs`.
+
+- **What exists**: the build grows limb tubes into the body (`extend`, `extend_top` in tools/graftwork_rig_build.py) and chooses the length per limb with `--fit` from the pose envelope of ui/rig.js (`node tools/graftwork_rig_pose.mjs`), written into the meta as `fit`; the runtime pins every thigh's top in the hips (`thighM`); garment layers of Marrow (tunic), Odile (coat) and the Night Nurse (skirt) are cut higher so the cloth covers the pelvis; Odile's thighs are the upper parts of her leg pieces, grown; the sheet linter `tools/graftwork_rig_check.py`; the assembled A-pose slicer (`"source": "assembled"`) and `--export`; X-ray in the Rig lab. Spec: ART_MODULAR.md section 7 "Rig sheet spec v2: layers"; how it moves: ANIMATOR_GUIDE.md section 6.
+- **Default look unchanged**: golden master `--only ui,assets` against the base (dcddd93f), 0 differences on 7,689 keys. With the preview off nothing under `assets/rigs/` is requested.
+- **Feet unchanged**: bones, feet, contact point, bbox and height of all nine rigs are identical to the base; the ground contact tests pass unchanged.
+- **The new checks on the base build**: leg ends uncovered: marrow near thigh 72 px in 15 of 104 poses, night_nurse near leg 426 px in 47; every other shipped leg end was already under the cloth. Thighs reaching 35 percent of hip to knee above the hip: none on the base (2 to 5 units of 8 to 12 needed); all fourteen after. Upper arms: their painted caps are the shoulders and sit beside the torso, measured, not asserted.
+
+| character | thigh extension near / far (units) | verdict |
+|---|---|---|
+| marrow | 10 / 6 | ships |
+| wick | 8 / 7 | ships |
+| odile | 8 / 8 (thighs grown from the leg pieces) | ships |
+| knitter | 3 / 9 | ships |
+| night_nurse | 3 / 2 (one-piece legs; the near leg's wide top trimmed under the dress) | ships |
+| npc_nurse | 9 / 8 | ships |
+| npc_patient | 8 / 7 | ships |
+
+- **The knee, then** (second pass): the knee folded up to 133 degrees on the floor diagonals (base: marrow 87 / 112, wick 112 / 133, odile 79 / 93, knitter 113, npc_nurse 107 / 118, npc_patient 92 / 116, near / far); now the drawn thigh and the shin meet at no more than `RIG_TUNE.knee` (69 degrees) scaled by the shin (Wick 0.75 of it): marrow 67 / 76, wick 71 / 61, odile 70 / 68, knitter 67, npc_nurse 67 / 71, npc_patient within its limit (the check reads the knee to sole edge, the table the bone). Round knee and ankle ends. Wick's pale stub at 0.56, 1.06 and 1.25 down-right and Marrow's cuff behind the boot at 0.00 to 0.50 are gone in the 4x strips; no foot moves, the ground contact tests are unchanged, the swing foot still clears the floor.
+- **Cloth strips** (`RIG_TUNE.cloth`, on in the preview, off with reduced motion): 8 strips per garment on a chain of knots (billow, lean, knee push), seamless by construction. In the 4x strips it reads a little better than the single shear (the hem curves back and makes room for the knee; no seam, no tear), and it is subtle. Cost per frame: marrow 70 to 130 canvas calls, wick 69 to 99, odile 72 to 102.
+- **What still needs the artist** (the linter's sentences): plain long thigh tubes with straight tops for every sheet; Odile's thighs as their own pieces; the garments as pieces of their own (tunic, coat, the nurses' skirts are cut out of the torso); loose pieces in their own boxes (candy_striper, npc_patient, npc_porter, npc_nurse, knitter groups); one scale per sheet (upper arms and boots differ by 10 to 26 percent between the sides). Best: the assembled two-layer figure. Wick's shins are short for her boots: longer shins in the art would let her knee fold less still.
+
 ### Painted UI parts (preview)
 
 The artist's UI art (ten card frames, the back, a cost gem, three panels, five buttons, HP tube, energy dial, block plate, two chips, the Budget gauge, two icon sheets, the title key art) is built into `assets/ui/` and drawn only as a PREVIEW (`?art=1`, `?preview=1`, or Settings > "Painted art (preview)"). Rebuild: `python3 -I tools/graftwork_ui_build.py --raw <raw dir>`, then `node tools/graftwork_sw_build.mjs`; details in ART_MODULAR.md "What is built"; look in `lab/art.html`.
