@@ -10,10 +10,10 @@
 //   startWalk(run, roomId, alt?) -> the first trigger's pending (run.phase set) | null (walk ended, next phase) | false (illegal, run.ward.why)
 //   afterTrigger(run)                         continue the walk (RUN.advance and RUN.afterEvent call it)
 import { ROOMS, BUILD_CARDS, BUILD_LIST, STARTER_BUILD_DECK, PHASES, PHASE_ORDER, FLOOR, START_RES, PREBUILT, WARD_TUNE as T } from '../data/ward.js';
-import { ENEMIES, EVENTS, CARDS } from '../data/index.js';
+import { EVENTS, CARDS } from '../data/index.js';
 import { hasBigRecipe } from '../data/ward_kit.js';
 import { runAllows } from './unlock.js';
-import { makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct, perkN, rollPotion as RUN_rollPotion, potionSlots as potionCap } from './run.js';
+import { actEnemies, makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct, perkN, rollPotion as RUN_rollPotion, potionSlots as potionCap } from './run.js';
 
 export { ROOMS, BUILD_CARDS, T as WARD_TUNE };
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -215,14 +215,8 @@ export function connectedRooms(run, without = null) {
 }
 
 // ---------------- morning ----------------
-function pickMonster(run) {
-  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'normal' && !e.minion && !e.summonOnly);
-  return run.rng.pick(pool).id;
-}
-function pickElite(run) {
-  const pool = Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === 'elite' && !e.minion && !e.summonOnly);
-  return run.rng.pick(pool).id;
-}
+const pickMonster = (run) => run.rng.pick(actEnemies(run, 'normal')).id;
+const pickElite = (run) => run.rng.pick(actEnemies(run, 'elite')).id;
 function spawnInto(run, room) {
   const s = def(room).spawn;
   if (s.kind === 'fight') room.contents.push({ kind: 'monster', id: pickMonster(run) });

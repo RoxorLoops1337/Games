@@ -110,7 +110,8 @@ export function rollPotion(run) {
 export function startAct(run, act) { run.act = act; wardInit(run, act); }
 
 // ---------- encounters ----------
-function actEnemies(run, kind) {
+// the enemies an encounter of this act draws from, in registry order (the order is part of every rng.pick on it)
+export function actEnemies(run, kind) {
   return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.summonOnly);
 }
 export function makeEncounter(run, kind) {

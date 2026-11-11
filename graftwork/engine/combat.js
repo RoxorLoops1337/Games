@@ -86,13 +86,17 @@ export function mult(spec, tithed) {
 }
 export function scaleNum(n, m) { return n > 0 ? Math.max(1, Math.round(n * m)) : n; }
 
-export function effCost(c, card) {
+// the cost of a card before Leaden and before the floor at 0: its spec, +costMod, +1 jammed, +Cost Up, or the cost a card set ('X' stays 'X')
+export function rawCost(c, card) {
   const sp = specOf(c, card);
   if (sp.cost === 'X') return 'X';
   let k = sp.cost + card.costMod + (card.jam ? 1 : 0) + (c.player.st.costup || 0);
   if (card.costSet !== undefined) k = card.costSet;
-  k = afflCost(c, card, k);
-  return Math.max(0, k);
+  return k;
+}
+export function effCost(c, card) {
+  const k = rawCost(c, card);
+  return k === 'X' ? 'X' : Math.max(0, afflCost(c, card, k));
 }
 
 // ---------- API handed to every hook ----------
