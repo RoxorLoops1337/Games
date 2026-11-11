@@ -2,7 +2,7 @@
 // renderer (ui/ward_kit_iso.js, called only), the painted Ward actors idling and wandering in it (grounded with the same contact shadow as the Ward;
 // the monsters ARE Ward figures: ui/ward_iso.js gait and drawActor, so they walk with the puppet, or the hop when a sprite cannot be read),
 // candle and window light, dust, and a slow camera drift. Three modes, chosen every frame by what is loaded:
-//   'keyart'   graftwork/assets/title/manifest.json has a `keyart` entry whose image decoded: it is the backdrop (parallax, light, motes on top)
+//   'keyart'   graftwork/assets/ward/manifest.json has a `title.keyart` entry whose image decoded: it is the backdrop (parallax, light, motes on top)
 //   'kit'      the kit manifest and its images settled: the live cluster
 //   'fallback' anything else (headless tests, a failed download): the old procedural lamp room, a procedural hero standing in its light pool
 // Cost: the room layers are cached by the kit renderer, the grade is one cached low-res canvas, so a frame is a few dozen drawImage calls. `lite`

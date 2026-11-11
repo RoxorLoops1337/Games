@@ -33,3 +33,6 @@ Combo meter: damage dealt this turn builds a counter beside the hero, changing c
 
 ## Top 20 by impact vs effort
 1 attack rigs with damage synced to contact; 2 relative hit tiers; 3 multi-hit counter; 4 directional shake with smoothed noise; 5 finishing-blow kill cam; 6 fair defeat sequence; 7 low-HP heartbeat and vignette; 8 victim squash springs; 9 play choreography with arc and trail and faster cleanup; 10 distinct burn and poison ticks; 11 combo meter; 12 face-down reward flips; 13 exhaust burn dissolve; 14 frame-rate independent floats; 15 overkill flourish; 16 seam pop at 50% HP; 17 boss silence beat; 18 temper hammer; 19 rope and slosh secondary motion; 20 chromatic aberration in the WebGL pass.
+
+## The creative director's juice rules (moved here from CLAUDE.md)
+Graft attach: the patch slides on, the needle zigzags 6 stitches (one tick each), a staple clunk, a 40 ms freeze. Tithe: a red seam draws across the card with a dry snap. Overload shatter: gold-edged shards and slow-mo. Big hits: 80 ms hit-stop and a decaying shake. Damage numbers: inked serif that pops to 1.4x. Draw: the whoosh pitch rises. Block: plates rivet on. Enemy death: the silhouette unstitches along its seams.

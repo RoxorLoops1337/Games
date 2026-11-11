@@ -229,7 +229,7 @@
   "num@graftwork/data/grafts_safe.js": "typeof cost is number (grafts_extra.js) against cost is not X (grafts_safe.js): they differ for a spec without a cost; art/attacks.js num is unrelated",
   "phaseOf@graftwork/data/events.js": "a different helper that shares the short name with art/enemies.js",
   "pick@graftwork/data/grafts_extra.js": "a different helper that shares the short name with art/heroes.js",
-  "plural@graftwork/engine/text.js": "ui/deckview.js has an identical copy: the UI side drops it and imports this one (follow-up in CLEANUP_PLAN.md)",
+  "plural@graftwork/engine/text.js": "shares the short name with a different helper in ui/ward.js (ui/deckview.js now imports this one)",
   "seam@graftwork/data/grafts_thread.js": "the thread grafts default to a Line with cuts: 0, the relics to one without; they read different fields",
   "seam@graftwork/data/relics_thread.js": "the thread grafts default to a Line with cuts: 0, the relics to one without; they read different fields",
   "store@graftwork/engine/save.js": "a different helper that shares the short name with ui/offline.js",
