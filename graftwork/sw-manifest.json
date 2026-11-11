@@ -1,23 +1,23 @@
 {
- "version": "0dcec19c6e920292",
- "bytes": 10435770,
- "count": 548,
+ "version": "24d66291654c484f",
+ "bytes": 10420732,
+ "count": 547,
  "files": {
   "art/attacks.js": {
-   "h": "7072ac5313e54661",
-   "s": 22671
+   "h": "478e918a765cbf0d",
+   "s": 22563
   },
   "art/backgrounds.js": {
-   "h": "7d1c3c11a4b0e858",
-   "s": 66762
+   "h": "3f544f050664afb7",
+   "s": 64085
   },
   "art/cards.js": {
    "h": "eb938b585a9f88a7",
    "s": 143897
   },
   "art/enemies.js": {
-   "h": "42ea984f687ee13a",
-   "s": 143489
+   "h": "9ec87433dc279c7d",
+   "s": 143397
   },
   "art/face_lod.js": {
    "h": "e5ddcd70295310f3",
@@ -28,8 +28,8 @@
    "s": 5793
   },
   "art/heroes.js": {
-   "h": "8d7ad3243779484f",
-   "s": 31433
+   "h": "47cc3815dc0358d0",
+   "s": 31393
   },
   "art/icons.js": {
    "h": "0d2893d13432332d",
@@ -1956,8 +1956,8 @@
    "s": 1962
   },
   "main.js": {
-   "h": "bc497dc6b0bd6466",
-   "s": 8455
+   "h": "cb6da533b6bad365",
+   "s": 8338
   },
   "manifest.webmanifest": {
    "h": "b7e6f04a6d829ee0",
@@ -1992,16 +1992,16 @@
    "s": 4419
   },
   "ui/chrome.js": {
-   "h": "b49110d15c345216",
-   "s": 20030
+   "h": "028ea44f3597cf8e",
+   "s": 19973
   },
   "ui/codex.js": {
    "h": "5aa358f8a74f9822",
    "s": 40880
   },
   "ui/combat.js": {
-   "h": "7954cde855c6facc",
-   "s": 121798
+   "h": "6da5c1cd2af64785",
+   "s": 121694
   },
   "ui/combat_art.js": {
    "h": "4a911bb17ed8e49e",
@@ -2028,8 +2028,8 @@
    "s": 31614
   },
   "ui/event.js": {
-   "h": "7a9f2de42e9c3843",
-   "s": 28162
+   "h": "0a96a2b7824bf356",
+   "s": 24871
   },
   "ui/forge.js": {
    "h": "3794fc3d1e56e016",
@@ -2060,8 +2060,8 @@
    "s": 6285
   },
   "ui/juice.js": {
-   "h": "961af54dab9bfe33",
-   "s": 16051
+   "h": "7205aa148988e5a0",
+   "s": 16011
   },
   "ui/layer_cache.js": {
    "h": "1fa79e8c7b2bed12",
@@ -2070,10 +2070,6 @@
   "ui/layout_registry.js": {
    "h": "8cfc343ec198c99c",
    "s": 1465
-  },
-  "ui/lights.js": {
-   "h": "b0b6a34d9712e486",
-   "s": 7037
   },
   "ui/offline.js": {
    "h": "f89e70c889951ebf",
@@ -2108,8 +2104,8 @@
    "s": 8443
   },
   "ui/reward.js": {
-   "h": "cf6d5758a3ffdce6",
-   "s": 17989
+   "h": "ef53e380894ea2ad",
+   "s": 17796
   },
   "ui/rig.js": {
    "h": "4ebb555aecc4f5e4",
@@ -2128,8 +2124,8 @@
    "s": 17362
   },
   "ui/shop.js": {
-   "h": "1ab54c26c1416789",
-   "s": 55260
+   "h": "be5f851c49a474cd",
+   "s": 55157
   },
   "ui/skin.js": {
    "h": "b35fd03732a07593",
@@ -2156,24 +2152,24 @@
    "s": 17047
   },
   "ui/title_scene.js": {
-   "h": "8daf534d7552d35b",
-   "s": 26631
+   "h": "68074b837fa5e759",
+   "s": 26558
   },
   "ui/tooltips.js": {
    "h": "ed519eb8183e8d7f",
    "s": 54887
   },
   "ui/transitions.js": {
-   "h": "9e5b59cd73808e7c",
-   "s": 26697
+   "h": "215e7ba98b336c31",
+   "s": 26104
   },
   "ui/tutorial.js": {
-   "h": "4e843e79f523ca9f",
-   "s": 10232
+   "h": "db273d0727ca8c5a",
+   "s": 9872
   },
   "ui/ward.js": {
-   "h": "e22f005626c5e8d7",
-   "s": 83905
+   "h": "131bcb43cd04fdcb",
+   "s": 83752
   },
   "ui/ward_iso.js": {
    "h": "eb3acb7f5a505f8a",

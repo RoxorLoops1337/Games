@@ -8,7 +8,6 @@ import { cleanGraphics } from './ui/quality.js';
 import { assets } from './ui/assets.js';
 import { templates } from './ui/templates.js';
 import * as TRANS from './ui/transitions.js';
-import { lights } from './ui/lights.js';
 import * as RUN from './engine/run.js';
 import * as META from './engine/meta.js';
 import { saveRun, loadRun, hasRun } from './engine/save.js';
@@ -30,7 +29,6 @@ import { setCardBack, cardFrame } from './art/cards.js';
 import { setHeroTint } from './art/heroes.js';
 import settings from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
-import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
 import { initInstall, installHelp, drawInstallToast } from './ui/install.js';
 import { initOffline } from './ui/offline.js';
@@ -87,8 +85,8 @@ export function boot(canvas) {
   if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
   installWings(app); // wide phones: the picture runs on into the side bars (ui/wings.js)
-  installTransitions(app);
-  app.lightsApi = lights; app.shared.transitions = TRANS;
+  TRANS.installTransitions(app);
+  app.shared.transitions = TRANS;
   installPause(app);
   installFullscreen(app);
   initInstall();

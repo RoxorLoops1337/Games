@@ -27,7 +27,7 @@ graftwork/
   data/     content, one author per file (table below); ward_kit.js = the modular room recipes (rm_* -> kit floor, wall, pieces, props) + pure grid geometry; data/index.js builds the id maps (CARDS, GRAFTS, ENEMIES, STATUSES...) and throws on duplicate ids
   ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), one file per screen
             (title ward combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
-            seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), lights.js, audio.js,
+            seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), audio.js,
             a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js,
             perf round 2 (design/PERF.md): text_metrics.js (text width cache), smoothing.js (imageSmoothingQuality policy + the instance drawImage), frame_state.js (frozen screens under a modal: who is on top, clocks, tween owners, when the snapshot is stale), layer_cache.js (Ward room layer buckets), perf_flags.js (A/B switches), art/face_lod.js (card face buckets, LRU, lamp sprites),
             preview.js (the preview switches: painted art 'art', character rigs 'rig'), templates.js (lazy loader of assets/ui/manifest.json: frames, icons, atlases, card template slots, 9-slice), skin.js (the painted parts as drawn: sliced frames baked per size, HP tube, Budget gauge, icons),

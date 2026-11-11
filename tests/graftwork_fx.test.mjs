@@ -1,9 +1,8 @@
-// Fx + lights: API compatibility, pool caps, allocation stability, counter merge, determinism, light render.
+// Fx: API compatibility, pool caps, allocation stability, counter merge, determinism.
 import assert from 'node:assert/strict';
 import { installDom, fakeCtx } from './graftwork_lib.mjs';
 installDom();
 const { Fx, FX_OPTS, CAP_DESKTOP, CAP_MOBILE, CAP_ADD, CAP_TRAIL } = await import('../graftwork/ui/fx.js');
-const { Lights, lights, MAX_LIGHTS } = await import('../graftwork/ui/lights.js');
 
 // 1. old API still works
 const fx = new Fx(); const ctx = fakeCtx();
@@ -88,14 +87,4 @@ assert.equal(fx.zoomScale(), 1);
   assert.ok(sx > sy * 1.5, `horizontal dominance ${sx} ${sy}`);
 }
 
-// 7. lights
-{
-  const L = new Lights(); const c = fakeCtx();
-  const ids = []; for (let i = 0; i < MAX_LIGHTS + 4; i++) ids.push(L.add({ x: i * 50, y: 200, r: 150, color: i % 2 ? '#ffb36b' : '#6CC6D6', intensity: 1, flicker: 0.5, cone: i % 3 === 0 ? { angle: 0.5, spread: 1 } : undefined }));
-  assert.equal(L.count, MAX_LIGHTS); assert.equal(ids[MAX_LIGHTS], -1);
-  L.render(c, '#3a3550'); L.render(c, '#222', { t: 3.3, w: 1280, h: 720 }); L.shadow(c, 100, 100, 120, 30, 0.4);
-  assert.ok(L.flickerAt({ flicker: 0.5, id: 2 }, 1.2) > 0.9);
-  assert.ok(L.remove(ids[0])); assert.equal(L.count, MAX_LIGHTS - 1); L.clear(); assert.equal(L.count, 0); L.render(c);
-  lights.clear(); const id = lights.add({ x: 1, y: 1 }); assert.ok(id > 0); lights.clear();
-}
 console.log('graftwork_fx: ok');
