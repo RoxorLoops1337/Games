@@ -11,12 +11,12 @@ const nav = () => (host ? host.navigator : globalThis.navigator) || null;
 
 const S = { deferred: null, installed: false, toast: null, listening: null };
 
-export function isIOS() {
+function isIOS() {
   const n = nav(); if (!n) return false;
   return /iPhone|iPad|iPod/.test(n.userAgent || '') || (n.platform === 'MacIntel' && (n.maxTouchPoints || 0) > 1);
 }
 // Facebook, Instagram, Line, TikTok, Android WebView and friends cannot install or add to the home screen from the page.
-export function inAppBrowser() {
+function inAppBrowser() {
   const n = nav(); if (!n) return false;
   return /FBAN|FBAV|Instagram|Line\/|Twitter|MicroMessenger|TikTok|BytedanceWebview|Snapchat|; wv\)/i.test(n.userAgent || '');
 }

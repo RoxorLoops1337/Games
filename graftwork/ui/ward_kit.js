@@ -9,7 +9,7 @@
 //   plansModal(app, run, st)                     the building deck viewer (st.plans = true opens it); returns true while open
 //   buildPickRow(app, run, rw, x, y, w, h, st)   reward screen: pick 1 of 3 building cards or skip (engine takeBuildChoice)
 //   dispensary(app, run, shop, st)               shop screen: building cards for sale and the remove-a-plan service
-import { COL, clamp, rgba, EASE } from './core.js';
+import { COL, clamp, rgba } from './core.js';
 import { lnw } from '../art/linework.js';
 import { drawCoin } from '../art/icons.js';
 import { WARD_GLOSSARY } from './tooltips.js';
@@ -17,8 +17,9 @@ import { BUILD_CARDS, ROOMS, PHASES, WARD_TUNE } from '../data/ward.js';
 import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
 import { assets } from './assets.js';
+import { TAU } from './util.js';
 
-export const INK = '#2B1E1A', VELLUM = '#E8DCC4', BRASS = '#C9A227';
+export const INK = '#2B1E1A';
 
 export const ROOM_TINT = {
   rm_entrance: '#7a6a4a', rm_theatre: '#8e1f2c', rm_corridor: '#8a7a5c', rm_ward: '#B3263A', rm_isolation: '#C9A227', rm_chapel: '#3E7C74',
@@ -26,7 +27,7 @@ export const ROOM_TINT = {
 };
 const SHORT = { rm_entrance: 'Entrance', rm_theatre: 'Theatre', rm_counting: 'Counting', rm_dispensary: 'Dispensary' };
 export const roomShort = (type) => SHORT[type] || (ROOMS[type] ? ROOMS[type].name : type);
-export const KIND_INFO = {
+const KIND_INFO = {
   room: { label: 'ROOM', color: '#8e1f2c' },
   upgrade: { label: 'UPGRADE', color: '#7A5F12' },
   effect: { label: 'EFFECT', color: '#2f5f6b' },
@@ -35,7 +36,6 @@ export const KIND_INFO = {
 const RARE = { common: '#8a7a5c', uncommon: '#3E7C74', rare: '#C9A227' };
 
 // ---------------- glyphs (engraved: ink contour, spot tint fill, hatch on the shadow side) ----------------
-const TAU = Math.PI * 2;
 function hatch(g, x, y, w, h, a = 0.35, step = 3) {
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   g.strokeStyle = rgba(INK, a); g.lineWidth = lnw('hatch'); g.beginPath();
@@ -109,7 +109,7 @@ GL.ward_hammer = (g) => { g.beginPath(); g.rect(-0.36, -0.4, 0.5, 0.2); return (
 GL.ward_moonsun = GL.ward_sun;
 GL.ward_highsun = (g) => { g.beginPath(); g.arc(0, 0, 0.26, 0, TAU); return () => { g.beginPath(); for (let i = 0; i < 12; i++) { const a = (i / 12) * TAU, r1 = 0.32, r2 = i % 2 ? 0.42 : 0.5; g.moveTo(Math.cos(a) * r1, Math.sin(a) * r1); g.lineTo(Math.cos(a) * r2, Math.sin(a) * r2); } g.stroke(); }; };
 const ROOM_ART = { rm_entrance: 'ward_entrance', rm_theatre: 'ward_theatre', rm_corridor: 'ward_corridor', rm_ward: 'ward_beds', rm_isolation: 'ward_isolation', rm_chapel: 'ward_chapel', rm_dispensary: 'ward_dispensary', rm_workshop: 'ward_workshop', rm_sawmill: 'ward_sawmill', rm_quarry: 'ward_quarry', rm_counting: 'ward_counting', rm_generator: 'ward_generator', rm_linen: 'ward_linen' };
-export const artOfRoom = (type) => ROOM_ART[type] || (ROOMS[type] && ROOMS[type].art) || 'ward_corridor';
+const artOfRoom = (type) => ROOM_ART[type] || (ROOMS[type] && ROOMS[type].art) || 'ward_corridor';
 
 // roomGlyph(g, art, x, y, s, ink, spot): art is a room type (rm_*) or an art key (ward_*)
 export function roomGlyph(g, art, x, y, s, ink = INK, spot) {
@@ -164,16 +164,16 @@ export function drawRes(g, kind, x, y, s, on = true) {
 }
 
 // ---------------- building cards ----------------
-export function costParts(card) {
+function costParts(card) {
   const c = card.cost || {}, out = [];
   for (const k of ['wood', 'stone', 'gold']) if (c[k]) out.push([k, c[k]]);
   return out;
 }
-export function affords(run, card) {
+function affords(run, card) {
   const c = card.cost || {}, w = run.ward;
   return { wood: !c.wood || (w && w.res.wood >= c.wood), stone: !c.stone || (w && w.res.stone >= c.stone), gold: !c.gold || run.gold >= c.gold };
 }
-export function cardTip(card) {
+function cardTip(card) {
   const k = KIND_INFO[card.kind];
   const cost = costParts(card).map(([r, n]) => `${n} ${r}`).join(', ') || 'free';
   const room = card.kind === 'room' ? ROOMS[card.room] : null;
@@ -309,7 +309,7 @@ export function plansModal(app, run, st) {
   if (app.button('Close', X + PW / 2 - 90, Y + PH - 62, 180, 48, { size: 20 }) || app.pressedKeys.some((e) => e.key === 'Escape')) { st.plans = false; app.escBusy = true; }
   return true;
 }
-export function termsForCard(card) {
+function termsForCard(card) {
   const t = [];
   if (card.kind === 'room') { const r = ROOMS[card.room]; if (r && GLOSS_ROOM[card.room]) t.push(GLOSS_ROOM[card.room]); if (r && (r.power || r.powerAdd)) t.push('Power'); }
   if (card.id === 'b_reinforced_beds' || card.id === 'b_night_shift') t.push('Ward');
@@ -320,7 +320,7 @@ export function termsForCard(card) {
   for (const n of Object.keys(WARD_GLOSSARY)) if (!t.includes(n) && new RegExp('\\b' + n + '\\b').test(card.text || '')) t.push(n); // every Ward word the card's own text names
   return t;
 }
-export const GLOSS_ROOM = { rm_ward: 'Ward', rm_isolation: 'Isolation', rm_chapel: 'Chapel', rm_dispensary: 'Dispensary', rm_workshop: 'Workshop', rm_linen: 'Linen Room', rm_sawmill: 'Sawmill', rm_quarry: 'Quarry', rm_counting: 'Counting House', rm_generator: 'Generator', rm_corridor: 'Corridor' };
+const GLOSS_ROOM = { rm_ward: 'Ward', rm_isolation: 'Isolation', rm_chapel: 'Chapel', rm_dispensary: 'Dispensary', rm_workshop: 'Workshop', rm_linen: 'Linen Room', rm_sawmill: 'Sawmill', rm_quarry: 'Quarry', rm_counting: 'Counting House', rm_generator: 'Generator', rm_corridor: 'Corridor' };
 
 // ---------------- reward: pick 1 of 3 building cards ----------------
 // st: the reward screen's state (st.build: chosen id | 'skip'). Returns the row height used.
@@ -407,4 +407,3 @@ export function dispensary(app, run, shop, st) {
   return true;
 }
 
-export { EASE };

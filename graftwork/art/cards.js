@@ -22,6 +22,8 @@ import { createFaceLru, chooseBucket, idealBucket, LEGACY, PIXEL_BUDGET, BIG_MAX
 import { deviceScale } from '../ui/smoothing.js';
 import { FLAGS } from '../ui/perf_flags.js';
 import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf, CARD_BACK_TEMPLATE } from '../ui/templates.js';
+import { hash32 as hash } from '../ui/util.js';
+import { SCHOOL_LIST } from '../data/schools.js';
 
 export const CARD_W = 220, CARD_H = 310;
 const HW = CARD_W / 2, HH = CARD_H / 2;
@@ -30,7 +32,7 @@ export const SCHOOL_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922
 export const CB = { on: false }; // colourblind pattern chips on cards (set by ui/a11y.js)
 export const COLX = Object.assign({}, COL, SCHOOL_COLORS);
 const INK = COL.ink, SEPIA = '#4a3022', BRASS = '#c9a227', BRASS_D = '#7a5f12', BRASS_L = '#fff1b0', STEEL = '#b9b4a8', STEEL_D = '#6c675e', SCAR_BRIGHT = '#e5546a';
-const SCHOOL_ORDER = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+const SCHOOL_ORDER = SCHOOL_LIST.map((s) => s.id);
 export const SCHOOL_SHAPES = { ember: 'flame', echo: 'arcs', hoard: 'pouch', blood: 'drop', rust: 'cog', static: 'bolt', gilded: 'diamond' };
 const TIER_COL = { safe: '#4f9a5d', greedy: '#d9a82c', weird: '#8a52c8' };
 const HERO_SCHOOL = { marrow: 'blood', wick: 'ember', odile: 'hoard' };
@@ -48,7 +50,6 @@ const nowT = () => (typeof performance !== 'undefined' && performance.now ? perf
 
 // ---------- small utilities ----------
 // ---------- small utilities ----------
-function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rngOf(seed) { let a = (typeof seed === 'string' ? hash(seed) : seed) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function rgb(hex) { if (hex[0] !== '#') { const m = hex.match(/\d+/g) || [0, 0, 0]; return [+m[0], +m[1], +m[2]]; } const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
 function toHex(r, g, b) { const f = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'); return '#' + f(r) + f(g) + f(b); }

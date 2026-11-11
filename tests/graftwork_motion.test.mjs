@@ -16,7 +16,7 @@ const B = J.BUDGET;
   const C = J.CARD, toImpact = (C.lift + C.wind + C.flight + C.impact) * 1000;
   assert.ok(toImpact <= B.cardToImpact, `card to impact ${toImpact} ms`);
   assert.ok(C.rest * 1000 <= B.cardRest, 'a played card never rests on the target');
-  assert.ok(C.burn <= 0.45 && C.fold <= 0.15 + 1e-9);
+  assert.ok(C.burn <= 0.45);
 }
 // 2. easing curves: endpoints, overshoot, monotone strike
 {

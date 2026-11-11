@@ -21,20 +21,8 @@ export function deviceScale(ctx) {
   if (!ctx || typeof ctx.getTransform !== 'function') return NaN;
   const m = ctx.getTransform(); if (!m || typeof m.a !== 'number') return NaN; return Math.hypot(m.a, m.b) || 1; // NaN: a fake context, callers fall back to their default
 }
-// Sets ctx.imageSmoothingQuality only when it differs. It reads the live value instead of remembering one: ctx.save()/restore() also restore it.
-export function setSmoothing(ctx, q) {
-  try { if (ctx.imageSmoothingQuality !== q) ctx.imageSmoothingQuality = q; } catch (e) { /* fake ctx */ }
-}
-// drawImage with the policy applied: dx/dy/dw/dh in the CURRENT transform's units, src size from the image. Returns the quality used.
-export function drawImageSmart(ctx, img, dx, dy, dw, dh, sw, sh) {
-  if (sw === undefined) { sw = img.naturalWidth || img.width || 0; sh = img.naturalHeight || img.height || 0; }
-  const k = deviceScale(ctx), q = smoothingFor(sw, sh, dw * k, dh * k);
-  setSmoothing(ctx, q);
-  ctx.drawImage(img, dx, dy, dw, dh);
-  return q;
-}
-// the per-frame default: the frame loop resets to 'low'; code that needs 'high' goes through drawImageSmart
-export const DEFAULT_QUALITY = 'low';
+// the per-frame default: the frame loop resets to 'low'; installSmartDraw below asks for 'high' where a draw needs it
+const DEFAULT_QUALITY = 'low';
 export function resetSmoothing(ctx) { try { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = DEFAULT_QUALITY; } catch (e) { /* fake ctx */ } }
 
 // Instance-level drawImage: the quality is chosen per call from the real source and device sizes, so no screen needs to know about it.

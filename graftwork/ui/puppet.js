@@ -13,23 +13,23 @@
 // Units: x is forward (+) and y is up (+) for feet, `down` is the body drop, everything in FIGURE HEIGHTS (H = the opaque height of the sprite). Angles in radians,
 // canvas sign (+ = clockwise); a forward swing of a hanging leg therefore uses a NEGATIVE angle. No allocation per frame: walkPuppet fills the `out` it is given.
 import { gaitEntry } from '../data/gaits.js';
+import { clampOrdered as clamp, TAU, offscreen as mkc } from './util.js';
 
 // tuck: leg part runs this far (figure heights) up under the garment; garment: secondary sway of the hem band (0 = rigid cloth); hemLag: how many steps the cloth lags
 // the legs; strideMax: the longest step (figure heights) the stride may reach (the Ward pace is tuned against it, see ui/ward.js PACE)
 export const TUNE = { swing: 32, lift: 0.085, bob: 0.024, sway: 0.014, lean: 0.045, twist: 0.04, squash: 0.05, duty: 0.58, strideK: 1, tuck: 0.18, garment: 1, hemLag: 0.16, strideMax: 0.44 };
 export const TUNE_DEFAULT = { ...TUNE };
-const TAU = Math.PI * 2, DEG = Math.PI / 180;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-export const CLIP_MARGIN = 0.04; // legs are clipped above the hip row minus this (figure heights)
-export const BOOT = 0.14; // the lowest part of the visible leg (fraction of it) is drawn unscaled, so a stretch never distorts the boot
-export const HEM_BAND = 0.2; // the garment band: this much of the figure height above the hip swings as cloth
+const DEG = Math.PI / 180;
+const CLIP_MARGIN = 0.04; // legs are clipped above the hip row minus this (figure heights)
+const BOOT = 0.14; // the lowest part of the visible leg (fraction of it) is drawn unscaled, so a stretch never distorts the boot
+const HEM_BAND = 0.2; // the garment band: this much of the figure height above the hip swings as cloth
 export const DEBUG = { outlines: false }; // the lab draws the leg slices and the pivots
 export const SWAY_MAX = 0.17, HEM_DY_MAX = 0.02; // bounds of the garment sway the tests check (skew per unit height, figure heights)
 const sstep = (u) => u * u * (3 - 2 * u);
 
 // ---------------------------------------------------------------- analysis (pure)
 // alpha: Uint8 values 0..255 (w x h). Returns fractions of the image so the result is the same for @1x, @2x and @3x files.
-export function alphaOfRGBA(px, w, h) { const a = new Uint8Array(w * h); for (let i = 0; i < a.length; i++) a[i] = px[i * 4 + 3]; return a; }
+function alphaOfRGBA(px, w, h) { const a = new Uint8Array(w * h); for (let i = 0; i < a.length; i++) a[i] = px[i * 4 + 3]; return a; }
 export function analyseAlpha(a, w, h, o = {}) {
   const T = o.thr === undefined ? 40 : o.thr;
   let top = -1, bot = -1, left = w, right = -1;
@@ -113,7 +113,7 @@ export function strideOf(geom, tune = TUNE) {
   return clamp(1.1 * (D0 - 0.5 * liftOf(geom, tune)) * Math.tan(tune.swing * DEG) / tune.duty, 0.2, tune.strideMax || 0.44) * (tune.strideK || 1);
 }
 // the foot lift in figure heights: at most 40 percent of the visible leg, so a short leg is never lifted out of its garment
-export const liftOf = (geom, tune = TUNE) => (geom && geom.legH ? Math.min(tune.lift, 0.4 * geom.legH) : tune.lift);
+const liftOf = (geom, tune = TUNE) => (geom && geom.legH ? Math.min(tune.lift, 0.4 * geom.legH) : tune.lift);
 export const STRIDE_OF = { legged: 0.3, hop: 0.55, waddle: 0.3, roll: 0.36, flap: 0.42 };
 
 // ---------------------------------------------------------------- the pose (pure)
@@ -197,10 +197,9 @@ export function footPoint(pose, side, geom, out = { x: 0, y: 0 }) {
 
 // ---------------------------------------------------------------- prepare (offscreen parts, cached per image and size bucket)
 const CACHE = new WeakMap(); // img -> { an, kind, parts: Map(bucket -> parts) }
-const mkc = (w, h) => { if (typeof document === 'undefined' || !document.createElement) return null; try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; } };
-export const BUCKETS = [0.25, 0.375, 0.5, 0.75, 1];
-export const bucketFor = (r) => { for (const b of BUCKETS) if (r <= b * 1.04) return b; return 1; };
-export function analyseImage(img, o) {
+const BUCKETS = [0.25, 0.375, 0.5, 0.75, 1];
+const bucketFor = (r) => { for (const b of BUCKETS) if (r <= b * 1.04) return b; return 1; };
+function analyseImage(img, o) {
   const iw = img.naturalWidth || img.width || 0, ih = img.naturalHeight || img.height || 0; if (!iw || !ih) return null;
   const opt = o || {}, k = Math.min(1, 160 / Math.max(iw, ih)); o = mkc(iw * k, ih * k); if (!o || !o.x.getImageData) return null;
   try { o.x.drawImage(img, 0, 0, o.c.width, o.c.height); const d = o.x.getImageData(0, 0, o.c.width, o.c.height).data; if (!d || d.length < o.c.width * o.c.height * 4) return null; const r = analyseAlpha(alphaOfRGBA(d, o.c.width, o.c.height), o.c.width, o.c.height, opt); return r; } catch (e) { return null; }
@@ -230,11 +229,11 @@ export function prepare(img, id, devPerImg, tune) {
   return e;
 }
 // does a garment hang over the leg tops (an apron, skirt, coat)? the silhouette just above the hip is clearly wider than the two legs just below it
-export function hangOf(a, w, h, an, thr = 40) {
+function hangOf(a, w, h, an, thr = 40) {
   const Hb = Math.round((an.bot - an.top) * h), hip = Math.round(an.hip * h), n = Math.max(3, Math.round(0.05 * Hb)), count = (ya, yb) => { let c = 0, r = 0; for (let y = ya; y <= yb; y++) { if (y < 0 || y >= h) continue; r++; for (let x = 0; x < w; x++) if (a[y * w + x] > thr) c++; } return r ? c / r : 0; };
   const above = count(hip - n, hip - 1), below = count(hip + 1, hip + n); return below > 0 ? above / below : 1;
 }
-export const HANG_MIN = 1.2;
+const HANG_MIN = 1.2;
 // the leg part with its TUCK: Ne rows above the hip filled from the leg's own top rows (each column continues up, a little darker as it goes under the cloth)
 function tuckedLeg(Lg, ih, iw, Ne, res) {
   const nv = Lg.y1 - Lg.y0 + 1, cw = Lg.x1 - Lg.x0 + 1, o = mkc(cw, Ne + nv); if (!o) return null;

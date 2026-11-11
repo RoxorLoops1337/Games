@@ -220,7 +220,7 @@ export function glossaryFor(input, o = {}) {
 // text + the definitions of its rules words, for the phone info card ("Gilt 4: Gain 4 gold at the end of combat.")
 export function withGloss(text, o = {}) { const g = glossaryText([text, o.gloss || []], o); return g ? `${text}\n\n${g}` : text; }
 // Plain-text form for the touch info card: "Gilt 4: Gain 4 gold at the end of combat."
-export function glossaryText(input, o = {}) { return glossaryFor(input, { max: GLOSS_MAX, ...o }).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
+function glossaryText(input, o = {}) { return glossaryFor(input, { max: GLOSS_MAX, ...o }).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
 // Everything a card face says in rules words: its lines, the Boon and Price of every graft on it, X cost, Overload.
 export function specGloss(spec) {
   if (!spec) return [];
@@ -232,7 +232,7 @@ export function cardGlossTip(app, spec, anchor, o = {}) { if (spec) glossTip(app
 // A hover target that has no tip of its own: a tip made only of definitions. anchor may carry a band.
 export function glossTip(app, title, texts, anchor, o = {}) { app.tooltip(title || '', '', { glossOnly: true, gloss: texts, anchor, color: o.color, school: o.school, types: o.types, ids: o.ids }); }
 
-export function drawGlyph(ctx, kind, x, y, s, color) {
+function drawGlyph(ctx, kind, x, y, s, color) {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = lnw(1); ctx.beginPath();
   const r = s / 2;
   if (kind === 'square') ctx.rect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
@@ -243,37 +243,6 @@ export function drawGlyph(ctx, kind, x, y, s, color) {
   else if (kind === 'hex') { for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }
   else ctx.arc(0, 0, r * 0.85, 0, 6.283);
   ctx.fill(); ctx.stroke(); ctx.restore();
-}
-
-// ---- card text with keyword underlines ----
-const tokens = (line) => {
-  const out = []; let last = 0;
-  for (const h of scan(line)) { if (h.i > last) out.push({ t: line.slice(last, h.i) }); out.push({ t: line.slice(h.i, h.i + h.len), kw: h.name }); last = h.i + h.len; }
-  if (last < line.length) out.push({ t: line.slice(last) });
-  return out;
-};
-export function drawCardText(app, ctx, lines, x, y, w, size = 15, o = {}) {
-  const lh = Math.round(size * 1.25), sz = Math.round(size * (o.fixed ? 1 : app.textScale || 1));
-  let yy = y;
-  for (const ln of lines) {
-    let cx = x;
-    const words = [];
-    for (const tk of tokens(ln)) for (const part of tk.t.split(/(\s+)/)) if (part) words.push({ t: part, kw: tk.kw });
-    for (const wd of words) {
-      const ww = app.measure(wd.t, sz, { ui: true, bold: !!wd.kw });
-      if (cx + ww > x + w && cx > x && wd.t.trim()) { cx = x; yy += lh; }
-      if (!wd.t.trim() && cx === x) continue;
-      const col = wd.kw ? KEYWORDS[wd.kw].color : (o.color || COL.vellum);
-      app.text(wd.t, cx, yy, { size, ui: true, bold: !!wd.kw, color: col, fixed: o.fixed, stroke: o.stroke, strokeW: o.strokeW });
-      if (wd.kw) {
-        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = lnw(1.5); ctx.setLineDash([2, 3]);
-        ctx.beginPath(); ctx.moveTo(cx, yy + sz * 1.12); ctx.lineTo(cx + ww, yy + sz * 1.12); ctx.stroke(); ctx.restore();
-      }
-      cx += ww;
-    }
-    yy += lh;
-  }
-  return yy - y;
 }
 
 // ---- 'why' lines: every number explained from the real modifiers ----
@@ -349,7 +318,6 @@ export function explainIntent(c, e, info) {
 }
 
 // ---- section builders ----
-export function keywordSection(name) { const k = KEYWORDS[name]; return k ? { title: name, text: k.text, color: k.color, glyph: k.glyph } : null; }
 export function statusSection(id, n, ent) {
   const d = STATUSES[id]; if (!d) return { title: id, text: '' };
   const col = d.good === false ? '#ff9a8a' : COL.good;
@@ -467,12 +435,10 @@ let SEQ = 0;
 // resetTips(app): drop every tip, queued, fading or suppressed (core's app.go and app.blur call it).
 export function resetTips(app) { if (!app) return; app._queued = null; app._ts = null; app.tipLayout = null; }
 export function unqueueTips(app) { app._queued = null; } // core.js: a frozen screen painted under a modal never raises a tip
-export function dismissTips(app) { const S = TS(app); S.shown = false; S.ghost = null; S.last = null; S.alpha = 0; S.key = ''; S.cache = null; }
+function dismissTips(app) { const S = TS(app); S.shown = false; S.ghost = null; S.last = null; S.alpha = 0; S.key = ''; S.cache = null; }
 export function nextTipSeq() { return ++SEQ; }
 // queueTip(app, key, stack, anchor, o): HUD tips from anywhere in a frame; core draws the newest tip last. o: { gloss: false } for tips that carry their own definitions.
 export function queueTip(app, key, stack, anchor, o) { app._queued = { key, stack, anchor, o: o || {}, frame: app.frame, seq: ++SEQ }; }
-export function flushTips() { return false; } // kept for old callers: core.js draws every tip now
-export function drawPinnedTip() { /* tips are never pinned any more */ }
 // the tip candidate of this frame: the newest of app.tip and the queued one
 function candidate(app) {
   const q = app._queued && app._queued.frame === app.frame ? app._queued : null, t = app.tip;
@@ -574,7 +540,7 @@ function fit(app, M, availW, availH, hold) {
   R.big = true; return R;
 }
 const ovl = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-export function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
+function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
 // what a tip should stay off: the HUD widgets of this frame (hand cards, the Thread rail, intents, buttons...), not the containers and not other tips
 function avoidList(app, anchor) {
   const m = app.mouse, anchors = [anchor], avoid = [];

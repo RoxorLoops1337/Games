@@ -4,9 +4,9 @@
 // o: { dim: 0..1 extra darkening, still: true to freeze animation }
 import { COL, rgba } from '../ui/core.js';
 import { lnw } from './linework.js';
+import { TAU, mulberry32 as rng } from '../ui/util.js';
 
-const W = 1280, H = 720, TAU = Math.PI * 2;
-function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const W = 1280, H = 720;
 
 // ---- offscreen cache ----
 const cache = new Map();
@@ -21,7 +21,6 @@ function layer(key, fn, w = W, h = H) {
   } else { cache.delete(key); cache.set(key, c); }
   return c;
 }
-function stat(ctx, key, fn, x = 0, y = 0) { const c = layer(key, fn); if (c) ctx.drawImage(c, x, y); else fn(ctx); }
 // small radial sprite for additive glows (cheap to blit)
 function glowSprite(key, color, size = 128) {
   const c = layer('glow_' + key, (g) => { const r = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); r.addColorStop(0, rgba(color, 1)); r.addColorStop(0.35, rgba(color, 0.4)); r.addColorStop(1, rgba(color, 0)); g.fillStyle = r; g.fillRect(0, 0, size, size); }, size, size);
@@ -156,12 +155,6 @@ function marketMid(g) {
   // ceiling beams
   rect(g, 0, 0, W, 36, '#0b0705'); for (let x = 60; x < W; x += 240) rect(g, x, 0, 26, 56, '#150e09');
 }
-function marketNear(g) {
-  // foreground pillars + crates
-  for (const [x, w] of [[-30, 120], [1190, 120]]) { vgrad(g, 0, H, [[0, '#0a0604'], [1, '#1a110b']], x, w); rect(g, x + w - 6, 0, 6, H, 'rgba(255,200,120,.06)'); }
-  g.fillStyle = '#120b07'; g.fillRect(40, 640, 150, 90); g.fillRect(1070, 650, 160, 80); g.strokeStyle = '#2a1c12'; g.lineWidth = lnw(3); g.strokeRect(40, 640, 150, 90); g.strokeRect(1070, 650, 160, 80);
-  noise(g, 4, 500, '#000', 0.14, 2); drawVignetteTo(g, 0.6);
-}
 const LANTERNS = [[330, 40, 130], [640, 30, 90], [960, 40, 140], [120, 30, 110], [1170, 30, 120]];
 function lantern(ctx, x, y, len, ang, f) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
@@ -176,12 +169,6 @@ function marketDyn(ctx, t, o) {
     glow(ctx, 'mkg', '#ffb450', lx, ly, 150, 0.6 * f);
   });
   drawMotes(ctx, t, 31, 30, '#ffd9a0', 0.55);
-}
-function marketDraw(ctx, t, o) {
-  const dx = Math.round(Math.sin(t * 0.12) * 6);
-  ctx.save(); ctx.translate(dx, 0); stat(ctx, 'mk_far', marketFar); ctx.restore();
-  stat(ctx, 'mk_mid', marketMid); marketDyn(ctx, t, o);
-  ctx.save(); ctx.translate(Math.round(-dx * 1.5), 0); stat(ctx, "mk_near", marketNear); ctx.restore();
 }
 
 // ======================================================================================
@@ -265,7 +252,6 @@ function titleDyn(ctx, t, o) {
   drawMotes(ctx, t, 61, 70, '#fff0c8', 0.9, (x, y) => { const d = Math.abs(x - (lx + (x - lx) * 0)) ; const w = 30 + (y / 520) * 250; const k = 1 - Math.abs(x - (lx - Math.sin(dir * 0.5) * y)) / w; return y < 560 ? Math.max(0, k) : 0; });
   darkenOverlay(ctx, o);
 }
-function titleDraw(ctx, t, o) { stat(ctx, 'title', titleStatic); titleDyn(ctx, t, o); drawVignette(ctx, 0.75); }
 
 // ======================================================================================
 // TABLE (graft pick)
@@ -298,12 +284,10 @@ function tableDyn(ctx, t, o) {
   drawLampCone(ctx, 640, -20, 420, 300, 0.12 * f, '#ffe3a0');
   drawMotes(ctx, t, 71, 36, '#fff0c8', 0.7, (x, y) => Math.max(0, 1 - Math.hypot(x - 640, (y - 360) * 1.3) / 520));
 }
-function tableDraw(ctx, t, o) { stat(ctx, 'table', tableStatic); tableDyn(ctx, t, o); drawVignette(ctx, 0.7); }
 
 // ======================================================================================
 // SHOP
 // ======================================================================================
-const ORGANS = ['heart', 'lung', 'eye', 'tooth', 'brain'];
 function organ(ctx, kind, x, y, s) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
   if (kind === 'heart') { ctx.beginPath(); ctx.moveTo(0, 14); ctx.bezierCurveTo(-24, -2, -14, -20, 0, -8); ctx.bezierCurveTo(14, -20, 24, -2, 0, 14); ctx.fillStyle = '#8a1f33'; ctx.fill(); }
@@ -346,7 +330,6 @@ function shopDyn(ctx, t, o) {
   [[150, 96, 90], [1130, 96, 100], [420, 96, 60]].forEach(([x, y, len], i) => { const ang = Math.sin(t * 1.0 + i * 2) * 0.08; const f = 0.8 + 0.2 * Math.sin(t * 8 + i * 3); const [lx, ly] = lantern(ctx, x, y, len, ang, f); glow(ctx, 'mkg', '#ffa840', lx, ly, 160, 0.6 * f); });
   drawMotes(ctx, t, 81, 40, '#ffd9a0', 0.5);
 }
-function shopDraw(ctx, t, o) { stat(ctx, 'shop', shopStatic); shopDyn(ctx, t, o); }
 
 // ======================================================================================
 // FORGE
@@ -387,7 +370,6 @@ function forgeDyn(ctx, t, o) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const s of SPARKS) { const k = ((t * s.sp / 300 + s.ph) % 1); const x = s.x + Math.sin(t * 1.6 + s.w) * 24 + k * 40, y = 510 - k * 440; ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = k < 0.4 ? '#ffd86b' : '#ff7a2a'; ctx.fillRect(x, y, 2.2, 2.2); } ctx.restore();
   drawMotes(ctx, t, 91, 24, '#ffb070', 0.5, null, true);
 }
-function forgeDraw(ctx, t, o) { stat(ctx, 'forge', forgeStatic); forgeDyn(ctx, t, o); }
 
 // ======================================================================================
 // EVENT: alley with fog
@@ -419,7 +401,6 @@ function eventDyn(ctx, t, o) {
   fogBand(ctx, t, 330, 260, 14, 0.5, 0); fogBand(ctx, t, 470, 250, -22, 0.4, 400); fogBand(ctx, t, 180, 200, 9, 0.25, 800);
   drawMotes(ctx, t, 95, 20, '#bcd0e8', 0.3);
 }
-function eventDraw(ctx, t, o) { stat(ctx, 'event', eventStatic); eventDyn(ctx, t, o); }
 
 // ======================================================================================
 // WIN: golden dawn through hospital windows
@@ -451,7 +432,6 @@ function winDyn(ctx, t, o) {
   glow(ctx, 'win', '#ffe9a8', 640, 330, 700, 0.15 * f);
   drawMotes(ctx, t, 99, 70, '#ffe6a0', 0.8, null, true);
 }
-function winDraw(ctx, t, o) { stat(ctx, 'win', winStatic); winDyn(ctx, t, o); }
 
 // ======================================================================================
 // LOSE: cold white fade, sheet, flatline
@@ -486,7 +466,6 @@ function loseDyn(ctx, t, o) {
   const k = Math.max(0, 1 - t / 2.6); if (k > 0) { ctx.fillStyle = `rgba(240,248,255,${0.85 * k * k})`; ctx.fillRect(0, 0, W, H); }
   drawMotes(ctx, t, 103, 20, '#ffffff', 0.5);
 }
-function loseDraw(ctx, t, o) { stat(ctx, 'lose', loseStatic); loseDyn(ctx, t, o); }
 
 // ======================================================================================
 // ROUND 4: FOUR PARALLAX LAYERS + KEY LAMP + SHAFTS + REFLECTIONS + PRACTICAL LIGHTS
@@ -495,8 +474,6 @@ function loseDraw(ctx, t, o) { stat(ctx, 'lose', loseStatic); loseDyn(ctx, t, o)
 // ---- the shared key lamp: feature-detects lightDir(t) from art/cards.js, else a local pendulum (+/-12 deg, 6 s) ----
 let cardsLight = null;
 try { import('./cards.js').then((m) => { if (typeof m.lightDir === 'function') cardsLight = m.lightDir; }).catch(() => {}); } catch (e) { /* ignore */ }
-let LIGHTS = null;
-try { import('../ui/lights.js').then((m) => { LIGHTS = m.lights || m.default || m; }).catch(() => {}); } catch (e) { /* ignore */ }
 const LAMP = { x: -0.6, y: -0.8, swing: 0 };
 // returns { x, y } unit vector pointing TOWARD the lamp (upper left), plus swing (radians off rest)
 export function keyLamp(t = 0) {
@@ -513,9 +490,6 @@ export function keyLamp(t = 0) {
   return LAMP;
 }
 
-const ACT_AMBIENT = { ward: '#2e2a24', market: '#1f2e30', theatre: '#2a1c36', title: '#241c18', table: '#262022', shop: '#2a2016', forge: '#2e1a12', event: '#1c2230', win: '#3a3220', lose: '#1a1214' };
-// ambient colour per theme for the lightmap pass (what unlit areas fade to)
-export function ambient(theme) { return ACT_AMBIENT[theme] || '#241c18'; }
 
 // ---- soft sprites ----
 function shaftSprite(color) {
@@ -556,12 +530,9 @@ function midProps(key, kind, col, floorY) {
 // st: static layer producers [far] and optional opaque mid; dyn: existing animated practicals; tint: palette wash.
 const CFG = {};
 function cfg(theme, c) { CFG[theme] = c; }
-cfg('ward', { far: wardStatic, dyn: wardDyn, floorY: 506, tint: ['#E8DCC4', 0.07], shaft: ['#fff1c8', 0.1, 4, 140], mid: ['iv', 'rgba(8,16,12,.55)'], fg: ['drape', 'rgba(10,22,16,.85)'], part: ['#dff5e6', 0.35, false], fog: ['#9fc2b0', 0.16], reflect: true, vig: 0,
-  lights: [[320, 72, 260, '#cfffe0', 0.9, 0.12], [640, 72, 260, '#cfffe0', 0.9, 0.12], [960, 72, 260, '#cfffe0', 0.9, 0.12]] });
-cfg('market', { far: marketFar, farKey: 'mk_far', mid: 'mk_mid', midFn: marketMid, floorFrom: 'mid', dyn: marketDyn, floorY: 540, tint: ['#D4C9A8', 0.05], shaft: ['#7FD1E0', 0.08, 4, 120], fg: ['pillar', 'rgba(6,4,3,.9)'], part: ['#ffd9a0', 0.4, true], fog: ['#6fa8a4', 0.15], reflect: true, vig: 0,
-  lights: [[330, 190, 240, '#ffb450', 0.8, 0.2], [640, 130, 220, '#ffb450', 0.8, 0.2], [960, 190, 240, '#ffb450', 0.8, 0.2], [120, 150, 200, '#ffb450', 0.7, 0.2], [1170, 150, 200, '#ffb450', 0.7, 0.2]] });
-cfg('theatre', { far: theatreStatic, dyn: theatreDyn, floorY: 520, tint: ['#BFB3A4', 0.05], shaft: ['#F5E6A8', 0.12, 4, 170], mid: ['stage', 'rgba(8,4,16,.6)'], fg: ['curtain', 'rgba(60,8,20,.9)'], part: ['#e8d0ff', 0.4, true], fog: ['#7a5a9a', 0.17], reflect: true, vig: 0,
-  lights: [[330, 20, 420, '#F5E6A8', 0.9, 0.06], [950, 20, 420, '#ffd9a0', 0.9, 0.06]] });
+cfg('ward', { far: wardStatic, dyn: wardDyn, floorY: 506, tint: ['#E8DCC4', 0.07], shaft: ['#fff1c8', 0.1, 4, 140], mid: ['iv', 'rgba(8,16,12,.55)'], fg: ['drape', 'rgba(10,22,16,.85)'], part: ['#dff5e6', 0.35, false], fog: ['#9fc2b0', 0.16], reflect: true, vig: 0 });
+cfg('market', { far: marketFar, farKey: 'mk_far', mid: 'mk_mid', midFn: marketMid, floorFrom: 'mid', dyn: marketDyn, floorY: 540, tint: ['#D4C9A8', 0.05], shaft: ['#7FD1E0', 0.08, 4, 120], fg: ['pillar', 'rgba(6,4,3,.9)'], part: ['#ffd9a0', 0.4, true], fog: ['#6fa8a4', 0.15], reflect: true, vig: 0 });
+cfg('theatre', { far: theatreStatic, dyn: theatreDyn, floorY: 520, tint: ['#BFB3A4', 0.05], shaft: ['#F5E6A8', 0.12, 4, 170], mid: ['stage', 'rgba(8,4,16,.6)'], fg: ['curtain', 'rgba(60,8,20,.9)'], part: ['#e8d0ff', 0.4, true], fog: ['#7a5a9a', 0.17], reflect: true, vig: 0 });
 cfg('title', { far: titleStatic, dyn: titleDyn, floorY: 580, tint: ['#E8DCC4', 0.04], shaft: ['#F2C14E', 0.09, 3, 120], mid: ['hang', 'rgba(10,8,6,.5)'], fg: ['blob', 'rgba(6,4,3,.85)'], part: ['#F2C14E', 0.35, true], fog: ['#a89878', 0.12], vig: 0.75 });
 cfg('table', { far: tableStatic, dyn: tableDyn, floorY: 600, tint: ['#E8DCC4', 0.04], shaft: ['#e8f4ff', 0.09, 3, 130], mid: ['crates', 'rgba(8,8,10,.45)'], fg: ['blob', 'rgba(6,6,8,.8)'], part: ['#dfe8f0', 0.3, false], fog: ['#8896a0', 0.1], vig: 0.7 });
 cfg('shop', { far: shopStatic, dyn: shopDyn, floorY: 580, tint: ['#D4C9A8', 0.04], shaft: ['#ffd9a0', 0.09, 3, 130], mid: ['hang', 'rgba(10,8,6,.45)'], fg: ['blob', 'rgba(6,4,3,.8)'], part: ['#ffd9a0', 0.35, true], fog: ['#a89070', 0.1], vig: 0.45 });
@@ -570,19 +541,10 @@ cfg('event', { far: eventStatic, dyn: eventDyn, floorY: 580, tint: ['#8896b0', 0
 cfg('win', { far: winStatic, dyn: winDyn, floorY: 580, tint: ['#F2C14E', 0.06], shaft: ['#F5E6A8', 0.14, 5, 150], mid: ['hang', 'rgba(20,14,4,.35)'], fg: ['blob', 'rgba(16,10,2,.7)'], part: ['#F5E6A8', 0.5, true], fog: ['#c8b078', 0.1], vig: 0.4 });
 cfg('lose', { far: loseStatic, dyn: loseDyn, floorY: 580, tint: ['#2a1a22', 0.12], shaft: ['#8a7a9a', 0.06, 3, 120], mid: ['crates', 'rgba(4,2,4,.55)'], fg: ['blob', 'rgba(2,0,2,.9)'], part: ['#a090b0', 0.25, false], fog: ['#5a4a60', 0.18], vig: 0.6 });
 
-let regTheme = null, regIds = [];
-function registerLights(theme, c) {
-  if (regTheme === theme) return;
-  if (LIGHTS) {
-    try { for (const id of regIds) LIGHTS.remove && LIGHTS.remove(id); regIds = []; if (c.lights && LIGHTS.add) for (const [x, y, r, color, intensity, flicker] of c.lights) regIds.push(LIGHTS.add({ x, y, r, color, intensity, flicker, cone: theme === 'theatre' })); } catch (e) { regIds = []; }
-  }
-  regTheme = theme;
-}
 function clampP(v) { return v > 1 ? 1 : v < -1 ? -1 : (v || 0); }
 
 function drawThemed(ctx, theme, c, t, o) {
   const par = clampP(o.parallax), Lm = keyLamp(t), fy = c.floorY;
-  registerLights(theme, c);
   o.parallax = par; // exposed so combat can read back / shift on hits
   // The static parallax layers (far wall, mid props, floor), their reflection and the static front (foreground blur, tint, vignette)
   // only move when the parallax moves. Once it has held still for a frame they are baked into one canvas each, so a still frame

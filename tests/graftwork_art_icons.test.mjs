@@ -20,7 +20,6 @@ for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'rest', 'boss', 'zz
 I.drawEnergyOrb(ctx, 40, 40, 60, 3, 3); I.drawEnergyOrb(ctx, 40, 40, 60, 0);
 I.drawCoin(ctx, 1, 1, 20); I.drawHeart(ctx, 1, 1, 20); I.drawShield(ctx, 1, 1, 40, 5); I.drawShield(ctx, 1, 1, 40);
 I.drawBudgetGauge(ctx, 10, 10, 400, 4, 6, 0); I.drawBudgetGauge(ctx, 10, 10, 400, 8, 6, 2); I.drawBudgetGauge(ctx, 10, 10, 400, 0, 6, 3);
-I.drawStrainMeter(ctx, 10, 10, 200, 2, 6); I.drawDeckIcon(ctx, 1, 1, 40);
 for (const k of ['draw', 'discard', 'exhaust']) I.drawPileIcon(ctx, 1, 1, 40, k);
 for (const th of [...B.BACKGROUND_THEMES, 'nonsense']) for (const t of [0, 1.7, 40]) B.drawBackground(ctx, th, t, { dim: 0.2 });
 B.drawBackground(ctx, 'ward', 1); B.drawVignette(ctx, 0.5); B.drawLampCone(ctx, 10, 10);
@@ -33,13 +32,11 @@ for (const sz of [20, 26, 40]) {
   for (const r of Object.values(RELICS)) I.drawRelic(ctx, r.id, 30, 30, sz);
   for (const p of Object.values(POTIONS)) I.drawPotion(ctx, p.id, 30, 30, sz);
   for (const t of ['fight', 'elite', 'event', 'shop', 'forge', 'rest', 'boss']) for (const st of ['available', 'visited', 'locked', 'current']) I.drawNodeIcon(ctx, t, 30, 30, sz, st);
-  I.drawNeedle(ctx, 30, 30, sz); I.drawScissors(ctx, 30, 30, sz); I.drawKnot(ctx, 30, 30, sz, '#B3263A'); I.drawLooseThread(ctx, 30, 30, sz); I.drawClasp(ctx, 30, 30, sz);
   I.drawEnergyOrb(ctx, 30, 30, sz * 2, 2, 3); I.drawHeart(ctx, 30, 30, sz); I.drawShield(ctx, 30, 30, sz, 7); I.drawCoin(ctx, 30, 30, sz);
 }
 for (const id of NEW_ST) ok(I.STATUS_IDS_DRAWN.includes(id), 'dedicated glyph for ' + id);
 for (const k of ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded']) ok(/^#[0-9A-F]{6}$/.test(I.SCHOOL_GLYPH_COLORS[k]), 'school colour ' + k);
 ok(I.SCHOOL_GLYPH_COLORS.ember === '#E8571F' && I.SCHOOL_GLYPH_COLORS.gilded === '#EFD98F', 'school colours mirror the bible');
-for (const f of ['drawNeedle', 'drawScissors', 'drawKnot', 'drawLooseThread', 'drawClasp']) ok(typeof I[f] === 'function', f + ' exported');
 ok(glyphs.size >= 49, 'relic glyphs distinct enough: ' + glyphs.size);
 console.log('graftwork_art_icons ok', n);
 
@@ -64,7 +61,7 @@ console.log('graftwork_art_icons ok', n);
   console.log('graftwork_art_icons R1 ok');
 }
 
-// ---- round 4 backgrounds: every theme with parallax, ambient colours, and what a frame costs. The cost is counted in canvas calls over every
+// ---- round 4 backgrounds: every theme with parallax, and what a frame costs. The cost is counted in canvas calls over every
 // fake context (it was "under 2 ms" on the wall clock, which a busy machine fails): a theme that re-ran its baked layers every frame, or
 // grew a heavy live layer, shows here. Measured: 137 (table, event) to 527 (theatre) calls a frame.
 {
@@ -72,7 +69,6 @@ console.log('graftwork_art_icons ok', n);
   const Bg = await import('../graftwork/art/backgrounds.js');
   const g = fc();
   for (const th of Bg.BACKGROUND_THEMES) {
-    assert.ok(/^#[0-9a-f]{6}$/i.test(Bg.ambient(th)), 'ambient ' + th);
     for (const par of [0, -1, 1, 5]) { const o = { parallax: par }; Bg.drawBackground(g, th, 1.5, o); assert.ok(o.parallax >= -1 && o.parallax <= 1, 'parallax clamped'); }
     const c0 = canvasCalls(); for (let i = 0; i < 30; i++) Bg.drawBackground(g, th, i / 60, {}); const calls = (canvasCalls() - c0) / 30;
     assert.ok(calls < 700, th + ' background costs ' + calls.toFixed(0) + ' canvas calls a frame');

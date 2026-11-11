@@ -3,7 +3,7 @@
 // shaded down to black at the screen edge, so the scene and its backdrop seem to run on while nothing interactive ever sits in the bars.
 // Two small canvases (one per bar) sit under the stage canvas; each frame (every second one) copies a 2 device pixel column of the stage into them.
 // No DOM, no wide screen or app.wing under WING_MIN logical px: nothing is created or drawn. app.wing is set by app.resize in core.js.
-export const WING_MIN = 6;
+const WING_MIN = 6;
 
 export function installWings(app) {
   const canvas = app.canvas;

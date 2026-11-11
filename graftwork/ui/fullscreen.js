@@ -68,7 +68,7 @@ export function installFullscreen(app) {
   app.fsSync = sync;
 }
 
-export function drawFsIcon(g, x, y, w, h, on) {
+function drawFsIcon(g, x, y, w, h, on) {
   const cx = x + w / 2, cy = y + h / 2, s = Math.min(w, h) * 0.26, a = s * 0.7;
   g.save(); g.strokeStyle = COL.vellum; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
   for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {

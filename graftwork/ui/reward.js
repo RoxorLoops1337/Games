@@ -1,13 +1,13 @@
 // SPOILS: what the fight left on the table. Gold, a potion, an elite relic or a boss relic choice, then on to the graft table.
 // Everything is claimed through engine/run.js; whatever is not claimed is forfeited on Continue.
 import { newRibbon } from './archive_kit.js';
-import { COL, EASE, clamp, lerp, rgba } from './core.js';
+import { COL, EASE, clamp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import * as RUN from '../engine/run.js';
 import { RELICS, POTIONS } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
-import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
+import { keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
 import { lnw } from '../art/linework.js';
 import { buildPickRow, goldNote } from './ward_kit.js';
@@ -183,8 +183,6 @@ function drawRow(app, r, i, y, compact, K) {
   }
   return y + h + (compact ? 6 : 12);
 }
-// wrapLimit at an exact (already capped) pixel size
-function wrapLimitK(app, str, maxW, px, maxLines) { return wrapLimit(app, str, maxW, px, maxLines, { ui: true, fixed: true }); }
 
 function drawChoices(app, y, K, bottom) {
   const ctx = app.ctx, rw = st.rw, init = st.init;

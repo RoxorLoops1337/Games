@@ -12,19 +12,11 @@
 //   hasPart(id)                          the part is decoded and may be drawn now
 import { templates, drawNineSlice } from './templates.js';
 import { deviceScale } from './smoothing.js';
+import { canvas2d as mk } from './util.js';
 
 const SKIN_PIXELS = 20e6, SKIN_ENTRIES = 300;
 const C = { map: new Map(), pixels: 0, ver: -1 };
 
-function mk(w, h) {
-  let c = null;
-  if (typeof document !== 'undefined' && document.createElement) c = document.createElement('canvas');
-  else if (typeof OffscreenCanvas !== 'undefined') c = new OffscreenCanvas(1, 1);
-  if (!c) return null;
-  c.width = w; c.height = h;
-  const g = c.getContext && c.getContext('2d');
-  return g ? { c, g } : null;
-}
 const frame = (id) => { templates.ensure(); return templates.ready() ? templates.frameImg(id) : null; };
 export const hasPart = (id) => !!frame(id);
 

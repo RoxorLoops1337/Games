@@ -23,6 +23,7 @@
 import { flashGate } from './fx.js';
 import { FLAGS } from './perf_flags.js';
 import { VS, FS_THRESH, FS_DOWN, FS_UP, FS_COMP, GRADES } from './post_shaders.js';
+import { clampOrdered as clamp } from './util.js';
 
 const W = 1280, H = 720;
 const EMPTY = Object.freeze({});
@@ -30,7 +31,6 @@ const TIERS = ['off', 'low', 'high'];
 const COMBAT_RECTS = [[0, 0, 1280, 56], [140, 540, 1000, 180]];
 const BOSS_KINDS = { boss: 1, final: 1 };
 const ACT_GRADE = { 1: 'ward', 2: 'market', 3: 'theatre' };
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 function parseColor(c, out) {
   if (Array.isArray(c)) { out[0] = +c[0] || 0; out[1] = +c[1] || 0; out[2] = +c[2] || 0; return; }

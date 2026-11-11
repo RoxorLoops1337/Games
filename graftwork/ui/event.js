@@ -2,7 +2,7 @@
 // Left: a framed mood scene (procedural). Right: a parchment panel with the scene text (typewriter), choices, then the result.
 import { glossTip, cardGlossTip } from './tooltips.js';
 import { tscale, wrapLimit } from './graft_parts.js';
-import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
+import { COL, W, H, clamp, rgba } from './core.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec } from '../engine/cards.js';
 import { EVENTS, RELICS } from '../data/index.js';
@@ -15,8 +15,8 @@ import { lnw } from '../art/linework.js';
 import { eventSource } from './ward_kit.js';
 import { drawCardZoom } from './card_zoom.js';
 import * as SK from './skin.js';
+import { hash32 as hash } from './util.js';
 
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
 const EV_BAND = { x: 576, y: 70, bottom: 700, dir: -1 }; // glossary tips open over the picture on the left, never over the choices
 const PANEL = { x: 584, y: 64, w: 664, h: 632 }; // starts under the global Pause / Fullscreen zone (y 0..56)
@@ -25,43 +25,6 @@ const CHOICE_GUARD = 0.15; // s after the text is fully shown before a choice ca
 const CPS = 62; // typewriter chars per second
 
 function reduced(app) { const s = app.shared.meta && app.shared.meta.settings; return !!(s && (s.reduceMotion || s.reducedMotion)); }
-
-// ---------- procedural silhouettes ----------
-const SIL = {
-  figure(g, x, y, s, c) { // hooded figure, feet at y
-    g.fillStyle = c; g.beginPath(); g.moveTo(x - 34 * s, y); g.quadraticCurveTo(x - 30 * s, y - 90 * s, x - 10 * s, y - 118 * s);
-    g.quadraticCurveTo(x, y - 140 * s, x + 10 * s, y - 118 * s); g.quadraticCurveTo(x + 30 * s, y - 90 * s, x + 34 * s, y); g.closePath(); g.fill();
-    g.beginPath(); g.arc(x, y - 124 * s, 13 * s, 0, 6.283); g.fill();
-  },
-  table(g, x, y, s, c) {
-    g.fillStyle = c; g.fillRect(x - 70 * s, y - 56 * s, 140 * s, 8 * s); g.fillRect(x - 62 * s, y - 48 * s, 8 * s, 48 * s); g.fillRect(x + 54 * s, y - 48 * s, 8 * s, 48 * s);
-    g.fillRect(x - 40 * s, y - 80 * s, 14 * s, 24 * s); g.beginPath(); g.arc(x + 10 * s, y - 68 * s, 12 * s, 0, 6.283); g.fill(); g.fillRect(x + 32 * s, y - 70 * s, 22 * s, 14 * s);
-  },
-  door(g, x, y, s, c, glow) {
-    g.fillStyle = c; g.fillRect(x - 56 * s, y - 190 * s, 112 * s, 190 * s);
-    g.fillStyle = glow; g.beginPath(); g.moveTo(x - 38 * s, y); g.lineTo(x - 38 * s, y - 130 * s); g.quadraticCurveTo(x, y - 170 * s, x + 38 * s, y - 130 * s); g.lineTo(x + 38 * s, y); g.closePath(); g.fill();
-  },
-  crates(g, x, y, s, c) {
-    g.fillStyle = c; g.fillRect(x - 50 * s, y - 44 * s, 56 * s, 44 * s); g.fillRect(x + 10 * s, y - 34 * s, 44 * s, 34 * s); g.fillRect(x - 30 * s, y - 84 * s, 46 * s, 40 * s);
-    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw(2); g.strokeRect(x - 50 * s, y - 44 * s, 56 * s, 44 * s); g.strokeRect(x - 30 * s, y - 84 * s, 46 * s, 40 * s);
-  },
-  gurney(g, x, y, s, c) {
-    g.fillStyle = c; g.fillRect(x - 74 * s, y - 52 * s, 148 * s, 10 * s); g.fillRect(x - 66 * s, y - 42 * s, 6 * s, 28 * s); g.fillRect(x + 60 * s, y - 42 * s, 6 * s, 28 * s);
-    g.beginPath(); g.arc(x - 62 * s, y - 8 * s, 8 * s, 0, 6.283); g.arc(x + 62 * s, y - 8 * s, 8 * s, 0, 6.283); g.fill();
-    g.beginPath(); g.ellipse(x, y - 64 * s, 60 * s, 12 * s, 0, 0, 6.283); g.fill();
-  },
-  jars(g, x, y, s, c) {
-    for (let i = 0; i < 3; i++) { const jx = x + (i - 1) * 40 * s, jh = (62 + (i === 1 ? 20 : 0)) * s; g.fillStyle = c; g.beginPath(); g.roundRect ? g.roundRect(jx - 14 * s, y - jh, 28 * s, jh, 6 * s) : g.rect(jx - 14 * s, y - jh, 28 * s, jh); g.fill(); g.fillRect(jx - 9 * s, y - jh - 8 * s, 18 * s, 8 * s); }
-  },
-  chair(g, x, y, s, c) {
-    g.fillStyle = c; g.fillRect(x - 36 * s, y - 52 * s, 72 * s, 12 * s); g.fillRect(x - 36 * s, y - 120 * s, 14 * s, 80 * s); g.fillRect(x - 28 * s, y - 40 * s, 8 * s, 40 * s); g.fillRect(x + 20 * s, y - 40 * s, 8 * s, 40 * s);
-    g.fillRect(x + 36 * s, y - 100 * s, 30 * s, 6 * s); g.fillRect(x + 56 * s, y - 100 * s, 5 * s, 20 * s);
-  },
-  curtain(g, x, y, s, c) {
-    g.fillStyle = c; for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(x - 80 * s + i * 32 * s, y - 230 * s); g.quadraticCurveTo(x - 66 * s + i * 32 * s, y - 120 * s, x - 76 * s + i * 32 * s, y); g.lineTo(x - 50 * s + i * 32 * s, y); g.quadraticCurveTo(x - 40 * s + i * 32 * s, y - 120 * s, x - 48 * s + i * 32 * s, y - 230 * s); g.closePath(); g.fill(); }
-  },
-};
-const SETS = [['door', 'figure'], ['table', 'figure', 'crates'], ['gurney', 'figure'], ['jars', 'table'], ['chair', 'figure', 'crates'], ['curtain', 'figure', 'table'], ['figure', 'crates'], ['door', 'jars', 'figure']];
 
 function drawScene(g, ev, act, t, rm) {
   const [dark, mid, light] = ACT_TINT[act] || ACT_TINT[1];

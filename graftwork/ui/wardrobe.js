@@ -9,7 +9,6 @@ import { drawPortrait, setHeroTint } from '../art/heroes.js';
 import { drawRelic } from '../art/icons.js';
 import { RELICS, HEROES } from '../data/index.js';
 import * as M from '../engine/meta.js';
-import { clampText } from './deckview.js';
 import { lnw } from '../art/linework.js';
 
 const CATS = [
@@ -21,7 +20,7 @@ const CATS = [
 const LOADOUT = { back: 'back', tint: 'tint', title: 'title', relic: 'relic' };
 
 // What can be shown for a category: id, name, cost (null = earned), hint for earned-only items.
-export function wardrobeEntries(kind) {
+function wardrobeEntries(kind) {
   const earnedBy = (id) => M.ACHIEVEMENTS.find((a) => a.reward && a.reward.kind === kind && a.reward.id === id);
   const mk = (id, name, cost, extra = {}) => { const a = earnedBy(id); return { id, name, cost: cost === undefined ? null : cost, ach: a || null, ...extra }; };
   if (kind === 'back') return M.CARD_BACKS.map((b) => mk(b.id, b.name, b.cost));

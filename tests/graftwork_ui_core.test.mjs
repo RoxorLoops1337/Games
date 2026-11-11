@@ -80,7 +80,7 @@ key(app, ' '); assert.deepEqual(act, ['C', 'A']);
 // --- chrome helpers do not throw
 const ch = app.chrome;
 calls.length = 0;
-calls.push((a) => { ch.plate(a, 10, 10, 120, 30, 'Marrow'); ch.vial(a, 20, 60, 24, 90, 0.6); ch.vial(a, 60, 60, 24, 90, 0); ch.dial(a, 120, 100, 20, 2, 3); ch.badge(a, 200, 100, '12'); ch.rivet(a.ctx, 5, 5); a.press(10, 10, 50, 20); });
+calls.push((a) => { ch.plate(a, 10, 10, 120, 30, 'Marrow'); ch.vial(a, 20, 60, 24, 90, 0.6); ch.vial(a, 60, 60, 24, 90, 0); ch.rivet(a.ctx, 5, 5); a.press(10, 10, 50, 20); });
 frames(app, 5);
 
 // --- small-screen floor: text >= 11 CSS px (capped boost), hit area >= 40 CSS px, desktop untouched

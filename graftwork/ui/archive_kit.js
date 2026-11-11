@@ -1,7 +1,7 @@
 // Archive kit: shared drawing + data for the unlock progression UI (ui/archive.js, the end screen panel, the codex, the NEW ribbon).
 // Data comes from engine/unlock.js (unlockState, isItemUnlocked, lockedHint); nothing here changes the model.
 import { COL } from './core.js';
-import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
+import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_H } from '../art/cards.js';
 import { drawRelic, drawPotion, drawEventSeal } from '../art/icons.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../data/index.js';
 import { UNLOCKS, isUnlocked, isFresh, takeFresh, unlockState } from '../engine/unlock.js';
@@ -13,12 +13,11 @@ export const KINDS = ['card', 'graft', 'relic', 'potion', 'event', ...(Object.va
 export const KIND_LABEL = { card: 'Cards', graft: 'Grafts', relic: 'Relics', potion: 'Potions', event: 'Events', build: 'Building cards' };
 export const KIND_ONE = { card: 'card', graft: 'graft', relic: 'relic', potion: 'potion', event: 'event', build: 'building card' };
 const TABLE = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
-export const RARITY_COL = { common: '#b9ad92', uncommon: '#8fd0a0', rare: '#f2c14e', boss: '#c58bff', shop: '#7fd0e0', start: '#b9ad92' };
+const RARITY_COL = { common: '#b9ad92', uncommon: '#8fd0a0', rare: '#f2c14e', boss: '#c58bff', shop: '#7fd0e0', start: '#b9ad92' };
 export const GOLD = '#f2c14e';
-export const calm = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(s && (s.reducedMotion || s.reduceMotion)); };
 
 // ---------------------------------------------------------------- data
-export function itemName(kind, id) { const d = TABLE[kind] && TABLE[kind][id]; return d ? d.name : id; }
+function itemName(kind, id) { const d = TABLE[kind] && TABLE[kind][id]; return d ? d.name : id; }
 // every gateable item of a kind (start items included), with its state for this player
 export function itemViews(meta, kind) {
   const out = [];
@@ -36,7 +35,6 @@ export function categoryCounts(meta) {
   for (const e of Object.values(UNLOCKS)) { const c = out[e.kind]; if (!c) continue; c.total++; if (e.tier === 'start' || isUnlocked(meta, e.id)) c.got++; }
   return out;
 }
-export const archiveState = (meta) => unlockState(meta);
 export const percentLabelOf = (st) => (st.done ? 'Archive complete' : `Archive ${st.percent} percent`);
 export const percentLabel = (meta) => percentLabelOf(unlockState(meta));
 // unlockState walks every unlock, so a screen that only shows it asks once per visit instead of every frame: on its first frame after enter (the screen
@@ -92,7 +90,6 @@ export function drawMini(app, view, cx, cy, size, o = {}) {
 // A finished run opens items (meta.unlocked.fresh). The first time one is drawn in an offer the ribbon shows, the item leaves the fresh set (saved on the next
 // meta save) and stays 'live' while the same screen is open, so it does not blink out under the player's eyes.
 let live = new Set(), liveScreen = null, lastFrame = -9;
-export function resetRibbons() { live = new Set(); liveScreen = null; }
 export function newRibbon(app, itemId, x, y, w, o = {}) {
   const meta = app.shared.meta; if (!meta) return false;
   const scr = app.current || null; if (scr !== liveScreen || app.frame - lastFrame > 2) { live = new Set(); liveScreen = scr; }
