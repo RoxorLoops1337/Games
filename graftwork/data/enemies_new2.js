@@ -3,7 +3,8 @@
 // info as emitted by engine/seam.js (seamCash and seamCut info have `len`, `school`, `stitches`, `kind`, `cancel`; seamCash fires for a cut and for the
 // turn-end cash, before anything is paid, and may set cancel = true to void the payout; seamCut only for a cut).
 
-const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+import { SCHOOL_LIST } from './schools.js';
+const SCHOOLS = SCHOOL_LIST.map((s) => s.id);
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 // Ferric Warden: one Allergy move per school, so the glyph is always readable from the move name.

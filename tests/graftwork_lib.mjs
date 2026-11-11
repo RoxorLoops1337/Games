@@ -5,7 +5,6 @@ import * as RUN from '../graftwork/engine/run.js';
 import * as WD from '../graftwork/engine/ward.js';
 import * as CB from '../graftwork/engine/combat.js';
 import { canGraft } from '../graftwork/engine/cards.js';
-import { ENEMIES } from '../graftwork/data/index.js';
 import { BUILD_CARDS } from '../graftwork/data/ward.js';
 // Every call on every fake context made in this process (the app's canvas and each offscreen canvas). canvasCalls() is the load-independent
 // measure of what a frame costs, where a suite used to time it with the wall clock. It counts drawing, not arithmetic: time itself is
@@ -62,7 +61,7 @@ export function key(app, k) { app.pressedKeys.push({ key: k, preventDefault() {}
 
 export const WIN = () => ({ win: true, shattered: [], damageTaken: 0, turns: 3 });
 export const LOSS = () => ({ win: false, shattered: [], damageTaken: 0, turns: 3 });
-export const actEnemies = (act, kind) => Object.values(ENEMIES).filter((e) => e.act === act && e.kind === kind && !e.summonOnly && !e.minion && !e.noPick && !e.final).map((e) => e.id);
+export const actEnemies = (act, kind) => RUN.actEnemies({ act }, kind).filter((e) => !e.final).map((e) => e.id); // the engine's encounter pool, ids, The Grafter left out
 
 // wipe the floor and lay rooms by hand: spec rows are [type, x, y, contents?]; the first is where the hero stands. A Theatre goes in the far corner.
 export function wardLayout(run, spec) {

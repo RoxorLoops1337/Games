@@ -4,7 +4,7 @@
 // cardSpec(inst) folds the base card, its upgrade and every graft into one SPEC the combat engine plays.
 import { CARDS, GRAFTS, RELICS, HEROES } from '../data/index.js';
 
-export const BASE_BUDGET = 6;
+const BASE_BUDGET = 6;
 // What a Price is: ONE table for every reader. Free Sample waives exactly these mods (cardSpec, run.js applyGraft), Numb keeps
 // exactly these (afflictions.js). A price written inside a hook is its own custom mod marked price: true.
 const PRICE_FLAGS = new Set(['exhaust', 'ethereal', 'needsAttackPlayed']);
@@ -22,7 +22,7 @@ export const TITHE_MULT = 0.75;
 const LIFESTEAL_CAP = 6; // most HP one play of a lifesteal card heals
 
 // ops can hold functions (custom, cond.fn), so clone ops by hand-preserving functions
-export function cloneFx(fx) {
+function cloneFx(fx) {
   return fx.map((o) => {
     const c = {};
     for (const k of Object.keys(o)) {

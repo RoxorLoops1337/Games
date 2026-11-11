@@ -1,8 +1,7 @@
 // The layout gate's harness: drives a screen with the headless app and checks the analysed frame. Registered widgets never overlap (other
 // than within a group or flagged overlay) and stay inside 1280x720, nothing sits in the reserved Pause/Fullscreen zone, every app.text()
 // block fits the widget it is drawn in, and the tip drawn that frame is laid out cleanly (checkTip).
-// Used by tests/graftwork_tip_layout.test.mjs. tests/graftwork_ui_layout.test.mjs still carries its own copy of this harness: it was not to be
-// touched while other branches were open, and should import this file once they have landed.
+// Used by tests/graftwork_ui_layout.test.mjs (the screens in their states) and tests/graftwork_tip_layout.test.mjs (the tooltip sweep).
 import assert from 'node:assert/strict';
 import { makeApp, frames, wardOpen, WIN } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';

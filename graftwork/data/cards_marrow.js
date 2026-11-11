@@ -1,10 +1,8 @@
+import { OVL, TEMP, LINE2 } from './helpers.js';
 // Marrow cards. type: attack | skill | power. cost: number | 'X'. target: enemy | all | self | none.
 // fx ops: see engine/combat.js runOp. up = the upgrade (full replacement fx / cost).
 // Statuses used here (scar, rustplate, anticoag, bloodrite) live in statuses_marrow.js.
 const bleedOf = { per: 'st:bleed@target' };
-const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
-const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
-const LINE2 = (c) => !!c.seam && Object.keys(c.seam.counts || {}).filter((k) => c.seam.counts[k] > 0).length >= 2; // the Line bridges 2+ schools
 const CUT = { op: 'custom', fn: (A) => A.cutLine(), text: 'Cut the Line.', seam: 'cut' }; // engine/seam.js seamCutNow; seam: 'cut' tells the preview
 const temperedIn = (A) => A.c.run.deck.filter((i) => i.fused && i.fused.length).length;
 const plateTempered = (A) => A.status(A.player, 'plated', Math.min(6, 2 + temperedIn(A)));

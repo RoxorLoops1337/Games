@@ -351,7 +351,7 @@ Owner: "some rooms could be bigger". A room is no longer always one cell. Most s
 
 ### Data model
 - A room is a rectangle of `w x h` cells. `room.x, room.y` is its top-left cell (smallest x, smallest y). `room.w` and `room.h` are written ONLY when above 1, so a 1 x 1 room is byte identical to the old saves. `w.grid[y][x]` holds the room id in EVERY cell it covers (rubble is still `'rubble'`).
-- Helpers in engine/ward.js: `cellsOf(room)`, `sizeOf`, `cellCount`, `isBig`, `sizeKey` ('2x1'), `powerUse(room)`, `footprint(x, y, size, dir)`, `placement(run, size, x, y, dir)`, `expandOptions(run, roomId)`, `expandCostOf(room, run)`. Never use `room.x, room.y` as "the" cell of a room outside these.
+- Helpers in engine/ward.js: `cellsOf(room)`, `cellCount`, `isBig`, `sizeKey` ('2x1'), `powerUse(room)`, `footprint(x, y, size, dir)`, `placement(run, size, x, y, dir)`, `expandOptions(run, roomId)`, `expandCostOf(room, run)`. Never use `room.x, room.y` as "the" cell of a room outside these.
 - Sizes are domino shapes. `[2, 1]` means "two cells, along either axis": 2 x 1 (`w = 2`) or 1 x 2 (`h = 2`). The kit has a plan for each orientation (1 x 2 is the 2 x 1 plan mirrored across the diagonal, so both look alike). The Theatre is `[2, 2]`.
 - Directions are `'e'` (+x), `'s'` (+y), `'w'` (-x), `'n'` (-y); growing west or north moves the anchor.
 - Save format and migration: nothing to migrate. A save from before has only 1 x 1 rooms and a 1 x 1 Theatre in column 8, and keeps working (`tests/graftwork_ward_big.test.mjs`, "old saves"); the next floor builds a 2 x 2 Theatre. A new save with big rooms round trips through `serializeRun` as plain JSON.

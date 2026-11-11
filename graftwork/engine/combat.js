@@ -14,9 +14,9 @@ import { intentIcons } from './intent_icons.js';
 
 export const HAND_CAP = 10;
 export const MAX_PLAYS_TURN = 20;
-export const MAX_ENEMIES = 6;
-export const STATUS_CAP = 99;
-export const MAX_INNATE = 3;
+const MAX_ENEMIES = 6;
+const STATUS_CAP = 99;
+const MAX_INNATE = 3;
 const RESOURCE_OPS = new Set(['draw', 'energy', 'gold', 'addCard', 'heal']);
 
 // ---------- setup ----------
@@ -86,13 +86,17 @@ export function mult(spec, tithed) {
 }
 export function scaleNum(n, m) { return n > 0 ? Math.max(1, Math.round(n * m)) : n; }
 
-export function effCost(c, card) {
+// the cost of a card before Leaden and before the floor at 0: its spec, +costMod, +1 jammed, +Cost Up, or the cost a card set ('X' stays 'X')
+export function rawCost(c, card) {
   const sp = specOf(c, card);
   if (sp.cost === 'X') return 'X';
   let k = sp.cost + card.costMod + (card.jam ? 1 : 0) + (c.player.st.costup || 0);
   if (card.costSet !== undefined) k = card.costSet;
-  k = afflCost(c, card, k);
-  return Math.max(0, k);
+  return k;
+}
+export function effCost(c, card) {
+  const k = rawCost(c, card);
+  return k === 'X' ? 'X' : Math.max(0, afflCost(c, card, k));
 }
 
 // ---------- API handed to every hook ----------
@@ -120,7 +124,7 @@ function makeApi(c) {
 }
 
 // ---------- entities ----------
-export function spawn(c, id, o = {}) {
+function spawn(c, id, o = {}) {
   const d = ENEMIES[id];
   if (!d) throw new Error('unknown enemy ' + id);
   if (c.enemies.filter((e) => !e.dead).length >= MAX_ENEMIES) return null;
@@ -163,7 +167,7 @@ export function addStatus(c, tgt, s, n, o = {}) {
 }
 function eachStatus(ent, f) { for (const s of Object.keys(ent.st)) { const d = STATUSES[s]; if (d && ent.st[s]) f(d, ent.st[s], s); } }
 
-export function heal(c, tgt, n) {
+function heal(c, tgt, n) {
   if (n <= 0 || tgt.dead || (tgt.kind === 'player' && c.over === 'lose')) return 0; // no healing after death (regen at the turn start that a poison tick just ended)
   const h = Math.min(n, tgt.maxHp - tgt.hp);
   tgt.hp += h;
@@ -171,7 +175,7 @@ export function heal(c, tgt, n) {
   return h;
 }
 
-export function gainBlock(c, tgt, n, o = {}) {
+function gainBlock(c, tgt, n, o = {}) {
   if (tgt.dead) return 0;
   if (!o.raw) {
     eachStatus(tgt, (d, v) => { if (d.mod && d.mod.blockAdd) n += d.mod.blockAdd(v); });
@@ -186,7 +190,7 @@ export function gainBlock(c, tgt, n, o = {}) {
   return n;
 }
 
-export function loseHp(c, tgt, n, o = {}) {
+function loseHp(c, tgt, n, o = {}) {
   n = Math.max(0, Math.floor(n));
   if (n <= 0 || tgt.dead) return 0;
   if (o.floor1 && tgt.hp - n < 1) n = Math.max(0, tgt.hp - 1);
@@ -285,7 +289,7 @@ export function addCard(c, id, n = 1, to = 'discard', o = {}) {
   return out;
 }
 
-export function drawCards(c, n, o = {}) {
+function drawCards(c, n, o = {}) {
   let drawn = 0;
   for (let i = 0; i < n; i++) {
     if (c.hand.length >= HAND_CAP) { c.ev.push({ t: 'handFull' }); break; }
@@ -317,7 +321,7 @@ function discardCard(c, card, why = 'discard') {
   for (const h of sp.custom) if (h.onDiscard) h.onDiscard(c.A, { card, spec: sp });
 }
 
-export function exhaustCard(c, card) {
+function exhaustCard(c, card) {
   for (const z of [c.hand, c.drawPile, c.discard]) { const i = z.indexOf(card); if (i >= 0) z.splice(i, 1); }
   c.exhaust.push(card);
   card.jam = false; card.costMod = 0;
@@ -345,7 +349,7 @@ function entOf(c, ctx, w) {
   if (w === 'player') return c.player;
   return null;
 }
-export function readSrc(c, ctx, src) {
+function readSrc(c, ctx, src) {
   switch (src) {
     case 'x': return ctx.x || 0;
     case 'hand': return c.hand.length;
@@ -411,7 +415,7 @@ function targetsFor(c, ctx, to, dflt) {
   }
 }
 
-export function runFx(c, fx, ctx) {
+function runFx(c, fx, ctx) {
   for (const op of fx) {
     if (c.over && op.op !== 'custom') return;
     if (ctx.replay && RESOURCE_OPS.has(op.op)) continue;
@@ -585,7 +589,7 @@ export function playCard(c, hi, ti) {
 }
 
 // ---------- enemy moves ----------
-export function pickMove(c, e) {
+function pickMove(c, e) {
   const d = e.def;
   let id;
   if (d.pick) id = d.pick(c.A, e);
@@ -667,7 +671,7 @@ function enemyAct(c, e) {
 }
 
 // ---------- turn flow ----------
-export function startPlayerTurn(c) {
+function startPlayerTurn(c) {
   if (c.over) return;
   c.turn++;
   c.playsTurn = 0; c.cardsThisTurn = []; c.killsThisTurn = 0;

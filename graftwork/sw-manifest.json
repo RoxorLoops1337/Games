@@ -1,7 +1,7 @@
 {
- "version": "f4af71d98ac84c87",
- "bytes": 10407954,
- "count": 548,
+ "version": "ade638c77ba63b38",
+ "bytes": 10406819,
+ "count": 549,
  "files": {
   "art/attacks.js": {
    "h": "ddd2e0b20a5a14f8",
@@ -1724,100 +1724,104 @@
    "s": 1335
   },
   "data/cards_marrow.js": {
-   "h": "15b2ca9ad8be2ba5",
-   "s": 17137
+   "h": "06263147c1879891",
+   "s": 16831
   },
   "data/cards_odile.js": {
-   "h": "3edea24fa71450dc",
-   "s": 16240
+   "h": "049a39e91f4e8439",
+   "s": 15934
   },
   "data/cards_thread.js": {
    "h": "6742e69c0555971f",
    "s": 9072
   },
   "data/cards_wick.js": {
-   "h": "3aa5eee085244b1d",
-   "s": 15750
+   "h": "76c771571351f3c4",
+   "s": 15583
   },
   "data/dailymods.js": {
    "h": "b288d67afbafeed4",
    "s": 2682
   },
   "data/enemies_1.js": {
-   "h": "c0ddb9d6a1a4f732",
-   "s": 18105
+   "h": "dd8e772b53e3e052",
+   "s": 17920
   },
   "data/enemies_2.js": {
    "h": "04ed0fbc242783d7",
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "ed41d6eefb38f410",
-   "s": 23815
+   "h": "b9bb2b4066b2dae6",
+   "s": 23631
   },
   "data/enemies_new1.js": {
-   "h": "d5069e839d320a7e",
-   "s": 4974
+   "h": "0702c74db4e4e725",
+   "s": 4789
   },
   "data/enemies_new2.js": {
-   "h": "ba25dd65c8ead77e",
-   "s": 6262
+   "h": "3370cfe657216d18",
+   "s": 6271
   },
   "data/enemies_new3.js": {
-   "h": "0024865a177b6595",
-   "s": 5892
+   "h": "482876a549baf517",
+   "s": 5717
   },
   "data/events.js": {
    "h": "c0508db1fce52e37",
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "4e0ab04510fc8a8c",
-   "s": 3992
+   "h": "faacb82c82ca153b",
+   "s": 3985
   },
   "data/grafts_extra.js": {
-   "h": "00f2b29e703d69d3",
-   "s": 15508
+   "h": "6e197d30ac500f9e",
+   "s": 15407
   },
   "data/grafts_greedy.js": {
-   "h": "6a7d98c0b861ab39",
-   "s": 7589
+   "h": "0048cadb9d21f79a",
+   "s": 7538
   },
   "data/grafts_safe.js": {
    "h": "26c2f6ea1c59fbd2",
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "4e2920fd04f45ae4",
-   "s": 10524
+   "h": "510a4eb1c0896007",
+   "s": 10457
   },
   "data/grafts_weird.js": {
-   "h": "e4bd9e9db3c1b70e",
-   "s": 16252
+   "h": "477f1769e693bbba",
+   "s": 16101
+  },
+  "data/helpers.js": {
+   "h": "9ac1e90ed65beb7f",
+   "s": 2080
   },
   "data/heroes.js": {
    "h": "20564a010420945c",
    "s": 3017
   },
   "data/index.js": {
-   "h": "1d0fb3deb429c453",
-   "s": 3271
+   "h": "5ab210ca98185dcd",
+   "s": 3221
   },
   "data/potions.js": {
-   "h": "04fa30ed924bcc9e",
-   "s": 7797
+   "h": "4aa10980dd551be2",
+   "s": 7735
   },
   "data/relics.js": {
-   "h": "64314de09c2192f3",
-   "s": 18136
+   "h": "6ef1c761738ed5ac",
+   "s": 18032
   },
   "data/relics_more.js": {
-   "h": "05b12efd037d813a",
-   "s": 5922
+   "h": "55614141339ef760",
+   "s": 5567
   },
   "data/relics_thread.js": {
-   "h": "d846bcbb56d83542",
-   "s": 3767
+   "h": "0d2b301e4ef1cc7a",
+   "s": 3832
   },
   "data/relics_ward.js": {
    "h": "19be3e66ab9a9d0b",
@@ -1844,12 +1848,12 @@
    "s": 4179
   },
   "data/statuses_e3.js": {
-   "h": "f191c3c631138349",
-   "s": 3567
+   "h": "c908586d511f427b",
+   "s": 3542
   },
   "data/statuses_marrow.js": {
-   "h": "3ac81936dc6a2975",
-   "s": 1991
+   "h": "d0c1ef946a24d7a1",
+   "s": 1972
   },
   "data/statuses_odile.js": {
    "h": "38d8e40f4b7d10e8",
@@ -1860,48 +1864,48 @@
    "s": 1922
   },
   "data/unlocks.js": {
-   "h": "9c0e6a9da13a5e4c",
-   "s": 12417
+   "h": "6d672c96e3713a6b",
+   "s": 12382
   },
   "data/ward.js": {
    "h": "d1b1b201579a5bb7",
    "s": 18516
   },
   "data/ward_kit.js": {
-   "h": "2eb5242c69cfa505",
-   "s": 22398
+   "h": "7bb1082390671609",
+   "s": 21964
   },
   "data/ward_kit_big.js": {
-   "h": "665c92bfc16bf0eb",
-   "s": 5178
+   "h": "e09587ed5ecd0bb7",
+   "s": 5231
   },
   "engine/afflictions.js": {
-   "h": "0e1ad3437afa4779",
-   "s": 8298
+   "h": "2548d55650debba8",
+   "s": 8096
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
    "s": 2535
   },
   "engine/cards.js": {
-   "h": "4f8805d6bf1c2c80",
-   "s": 15255
+   "h": "58fd1220d4424f80",
+   "s": 15241
   },
   "engine/combat.js": {
-   "h": "4659b15f21e1cab4",
-   "s": 39249
+   "h": "f03e266f1de105fe",
+   "s": 39389
   },
   "engine/intent_icons.js": {
-   "h": "d9c814fa71665a0f",
-   "s": 3164
+   "h": "e8a57f8f84362fed",
+   "s": 3157
   },
   "engine/meta.js": {
-   "h": "058028e5dc50bfc2",
-   "s": 11819
+   "h": "3816a1c7d8a70b4d",
+   "s": 11938
   },
   "engine/meta2.js": {
-   "h": "f596d92def70e7ee",
-   "s": 13615
+   "h": "f68793cb03f3f559",
+   "s": 13580
   },
   "engine/resonance.js": {
    "h": "abf2ee13f665a977",
@@ -1912,28 +1916,28 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "06028d190c8eabad",
-   "s": 28503
+   "h": "e2a82b5462f0c30c",
+   "s": 28589
   },
   "engine/save.js": {
-   "h": "c6149ebc081318fa",
-   "s": 1743
+   "h": "4e7512d686845ee6",
+   "s": 1736
   },
   "engine/seam.js": {
-   "h": "c7c4d7d41c5a8e7e",
-   "s": 17680
+   "h": "9443ab7d729df991",
+   "s": 17581
   },
   "engine/text.js": {
    "h": "0bb8d256312b987f",
    "s": 8497
   },
   "engine/unlock.js": {
-   "h": "669f19021efcda9e",
-   "s": 11837
+   "h": "d1b33346d3241577",
+   "s": 11830
   },
   "engine/ward.js": {
-   "h": "8f2ee08b3a3d4dbb",
-   "s": 46182
+   "h": "b4bfab833c72c965",
+   "s": 45835
   },
   "icons/apple-touch-icon.png": {
    "h": "6a1af503636154d7",

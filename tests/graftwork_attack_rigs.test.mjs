@@ -17,7 +17,6 @@ for (const id of EXTRA_IDS) for (const b of BODY_KEYWORDS.concat(['nonsense', un
 for (const b of BODY_KEYWORDS) cases.push(['x_' + b, b, undefined]);
 const keys = ['dx', 'dy', 'sx', 'sy', 'rot', 'glow'];
 const ok = (v) => typeof v === 'number' && Number.isFinite(v);
-const EPS = 14; // px / rad-scaled tolerance for a 1-frame step of a fast strike is checked per channel below
 const TOL = { dx: 1e-6, dy: 1e-6, sx: 1e-6, sy: 1e-6, rot: 1e-6, glow: 1e-6 };
 
 for (const [id, body, mid] of cases) {
@@ -26,7 +25,6 @@ for (const [id, body, mid] of cases) {
   for (const f of ['tell', 'act', 'hold', 'rec', 'impactMs']) assert.ok(ok(t[f]) && t[f] > 0, `${tag} timing.${f}`);
   assert.equal(t.impactMs, t.tell + t.act, `${tag} impact`);
   assert.ok(Array.isArray(t.hits) && t.hits.length >= 1 && t.hits[t.hits.length - 1] === t.impactMs, `${tag} hits`);
-  const lim = (() => { const b = body; return null; })();
   for (const ph of PH) {
     for (let i = 0; i <= 200; i++) {
       const p = pose(id, body, ph, i / 200, mid);

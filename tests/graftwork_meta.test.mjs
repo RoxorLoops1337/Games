@@ -26,7 +26,7 @@ t('storage: corrupt json survives', () => {
 });
 t('storage: roundtrip', () => {
   const m = fresh(); m.stats.runs = 5; M.markSeen(m, 'cards', 'm_cut'); M.saveMeta(m);
-  const l = M.loadMeta(); assert.equal(l.stats.runs, 5); assert.ok(M.isSeen(l, 'cards', 'm_cut'));
+  const l = M.loadMeta(); assert.equal(l.stats.runs, 5); assert.ok(l.seen.cards.m_cut);
 });
 t('migration: old stub shape and wrong types', () => {
   const s = mem(); M.setStorage(s);
@@ -38,8 +38,17 @@ t('migration: old stub shape and wrong types', () => {
 });
 t('settings defaults', () => {
   const m = fresh(); for (const k of ['master', 'sfx', 'music', 'screenShake', 'reducedMotion', 'colorblind', 'largeText', 'tips', 'muted']) assert.notEqual(m.settings[k], undefined, k);
-  assert.equal(M.setting(m, 'tips'), true); M.setSetting(m, 'muted', true); assert.equal(M.loadMeta().settings.muted, true);
-  M.markTip(m, 'strain'); assert.ok(M.tipSeen(M.loadMeta(), 'strain'));
+  assert.equal(m.settings.tips, true); m.settings.muted = true; m.tips.strain = 1; M.saveMeta(m);
+  const l = M.loadMeta(); assert.equal(l.settings.muted, true); assert.equal(l.tips.strain, 1);
+});
+// engine/meta.js SETTING_DEFAULTS is the one table of setting defaults; a new meta holds all but the display keys (the UI fills those),
+// and every default the UI writes (ui/settings.js DEFAULTS, ui/a11y.js A11Y_DEFAULTS) is the table's value
+const UI_SETTINGS = await import('../graftwork/ui/settings.js'), UI_A11Y = await import('../graftwork/ui/a11y.js');
+t('settings: one table of defaults', () => {
+  const m = fresh();
+  for (const k of Object.keys(m.settings)) assert.deepEqual(m.settings[k], M.SETTING_DEFAULTS[k], k);
+  for (const k of ['textSize', 'textScale', 'quality', 'graphics', 'fullscreen', 'previewArt', 'announce']) assert.equal(m.settings[k], undefined, 'a display key is filled by the UI: ' + k);
+  for (const [k, v] of [...Object.entries(UI_SETTINGS.DEFAULTS), ...Object.entries(UI_A11Y.A11Y_DEFAULTS)]) assert.deepEqual(v, M.SETTING_DEFAULTS[k], 'ui default ' + k);
 });
 t('markSeen is call-safe', () => {
   const m = fresh(); assert.equal(M.markSeen(m, 'enemies', 'x'), true); assert.equal(M.markSeen(m, 'enemies', 'x'), false);
@@ -83,7 +92,7 @@ t('recordRunEnd is idempotent per run and updates stats', () => {
   const m = fresh(); const run = mk(); run.stats.floors = 12; run.stats.grafts = 4; run.stats.goldEarned = 50; run.stats.elites = 2;
   finish(run, 'dead', 1); M.recordRunEnd(m, run, 'dead'); M.recordRunEnd(m, run, 'dead');
   assert.equal(m.stats.deaths, 1); assert.equal(m.stats.floors, 12); assert.equal(m.stats.grafts, 4); assert.equal(m.stats.elites, 2); assert.equal(m.history.length, 1);
-  assert.ok(M.isSeen(m, 'cards', run.deck[0].id)); assert.ok(M.isSeen(m, 'relics', run.relics[0]));
+  assert.ok(m.seen.cards[run.deck[0].id]); assert.ok(m.seen.relics[run.relics[0]]);
   assert.ok(M.loadMeta().stats.deaths === 1, 'saved');
 });
 t('history cap 20, newest first', () => {

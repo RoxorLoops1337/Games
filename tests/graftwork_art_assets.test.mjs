@@ -1,13 +1,14 @@
-// GRAFTWORK Ward art: the manifest parses and names exactly the files on disk (nothing missing, nothing left over), it holds only what the game
-// draws (the plot tile, standing actors, battle frames, icons, card illustrations), files are real WebP with alpha, size budget, no em dashes;
-// and the build script: the battle frame pass and the prune pass, on synthetic folders.
+// GRAFTWORK art on disk. The Ward (assets/ward): the manifest parses and names exactly the files on disk (nothing missing, nothing left over), it holds
+// only what the game draws (the plot tile, standing actors, battle frames, icons, card illustrations), files are real WebP with alpha, size budget; and
+// the build script: the battle frame pass and the prune pass, on synthetic folders. The modular room kit (assets/ward_kit): the manifest is valid, every
+// file exists and is a WebP, sprites carry alpha and anchors, textures are 512 px tiles, the folder is under its budget.
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-const root = new URL('../graftwork/assets/ward/', import.meta.url).pathname;
+const root = new URL('../graftwork/assets/ward/', import.meta.url).pathname, kit = new URL('../graftwork/assets/ward_kit/', import.meta.url).pathname;
 const { ROOMS, BUILD_CARDS } = await import('../graftwork/data/ward.js');
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; console.log('ok', name); } catch (e) { console.error('FAIL', name, '\n', e.stack); process.exitCode = 1; } };
@@ -84,6 +85,52 @@ t('total_size_under_budget', () => {
   const walk = (d) => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = join(d, f.name); if (f.isDirectory()) walk(p); else total += statSync(p).size; } };
   walk(root); assert.ok(total < 12 * 1024 * 1024, 'size ' + total);
 });
+
+// ---- the modular room kit (assets/ward_kit)
+const kman = JSON.parse(readFileSync(join(kit, 'manifest.json'), 'utf8'));
+const kitFiles = (e) => [e.file, e.file1x, e.file2x].filter(Boolean);
+const kitWebp = (f) => { const b = readFileSync(join(kit, f)); assert.equal(b.toString('latin1', 0, 4), 'RIFF', f); assert.equal(b.toString('latin1', 8, 12), 'WEBP', f); return b; };
+const num = (v, name) => assert.ok(Number.isFinite(v) && v > 0, name);
+
+t('kit_manifest_schema', () => {
+  assert.ok(kman.version >= 1);
+  for (const k of ['floors', 'walls', 'pieces', 'props']) assert.equal(typeof kman[k], 'object', k);
+  assert.ok(Object.keys(kman.floors).length >= 2 && Object.keys(kman.walls).length >= 2, 'two themes');
+  assert.ok(Object.keys(kman.pieces).length >= 4 && Object.keys(kman.props).length >= 10, 'pilot asset list');
+  for (const id of ['window', 'door', 'banner', 'sconce']) assert.ok(kman.pieces[id], 'piece ' + id);
+  for (const id of ['sawbench', 'planks', 'toolrack', 'bed', 'stool', 'crate', 'bucket', 'shelf', 'rocks', 'generator']) assert.ok(kman.props[id], 'prop ' + id);
+});
+t('kit_files_exist_and_are_webp', () => {
+  for (const group of ['floors', 'walls', 'pieces', 'props']) for (const [id, e] of Object.entries(kman[group])) {
+    assert.ok(e.file && e.file1x && e.file2x, group + '.' + id + ' files');
+    for (const f of kitFiles(e)) { assert.ok(existsSync(join(kit, f)), f); kitWebp(f); }
+  }
+});
+t('every_kit_file_on_disk_is_named_by_the_manifest', () => {
+  const named = new Set(); for (const group of ['floors', 'walls', 'pieces', 'props']) for (const e of Object.values(kman[group])) for (const f of kitFiles(e)) named.add(f);
+  for (const group of ['floors', 'walls', 'pieces', 'props']) for (const f of readdirSync(join(kit, group))) assert.ok(named.has(group + '/' + f), 'a file nothing asks for: ' + group + '/' + f);
+});
+t('kit_sprites_have_alpha_and_anchors', () => {
+  for (const group of ['pieces', 'props']) for (const [id, e] of Object.entries(kman[group])) {
+    for (const f of [e.file1x, e.file2x]) { const b = kitWebp(f); const tag = b.toString('latin1', 12, 16); if (tag === 'VP8X') assert.ok(b[20] & 0x10, 'no alpha ' + f); else assert.equal(tag, 'VP8L', 'no alpha ' + f); }
+    for (const k of ['w', 'h', 'anchorX', 'anchorY']) num(e[k] + (k.startsWith('anchor') ? 1 : 0), id + '.' + k);
+    assert.ok(e.anchorX <= e.w && e.anchorY <= e.h, id + ' anchor inside the sprite');
+    assert.ok(e.w >= 64 && e.w <= 460 && e.h >= 64 && e.h <= 460, id + ' size ' + e.w + 'x' + e.h);
+  }
+  for (const [id, e] of Object.entries(kman.props)) {
+    assert.ok(Array.isArray(e.footprint) && e.footprint.length === 2 && e.footprint.every((v) => Number.isInteger(v) && v >= 1 && v <= 4), id + ' footprint');
+    num(e.sw, id + '.sw');
+  }
+  for (const [id, e] of Object.entries(kman.pieces)) assert.ok(['floor', 'mid'].includes(e.wallSlot), id + ' wallSlot');
+});
+t('kit_textures_are_512', () => {
+  for (const group of ['floors', 'walls']) for (const [id, e] of Object.entries(kman[group])) assert.equal(e.tile, 512, id);
+});
+t('kit_half_size_variants_are_smaller', () => {
+  for (const group of ['pieces', 'props']) for (const [id, e] of Object.entries(kman[group])) assert.ok(statSync(join(kit, e.file1x)).size < statSync(join(kit, e.file2x)).size, id);
+});
+const dirSize = (d) => readdirSync(d, { withFileTypes: true }).reduce((s, f) => s + (f.isDirectory() ? dirSize(join(d, f.name)) : statSync(join(d, f.name)).size), 0);
+t('kit_folder_under_budget', () => { assert.ok(dirSize(kit) < 4 * 1024 * 1024, 'kit folder is ' + dirSize(kit) + ' bytes'); });
 // the build script's --frames pass on synthetic rasters in a temp folder (needs python3 with PIL; skipped without)
 t('build_frames_pass_aligns_by_feet_warns_on_scale_and_ignores_walk_raws', () => {
   const py = spawnSync('python3', ['-c', 'import PIL, numpy'], { encoding: 'utf8' }); if (py.status !== 0) { console.log('skip build_frames_pass (no PIL)'); return; }

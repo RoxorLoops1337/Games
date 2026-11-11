@@ -1,16 +1,15 @@
+import { OVL, TEMP } from './helpers.js';
 const burnT = (n) => ({ op: 'status', s: 'burn', n });
 const burnAll = (n) => ({ op: 'status', s: 'burn', n, to: 'all' });
 const charge = (n) => ({ op: 'status', s: 'charge', n, to: 'self' });
 const spendCharge = { op: 'setStatus', s: 'charge', n: 0 };
 const chargeVal = (base, mul) => ({ base, per: 'st:charge@player', mul });
-const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
 const hurt = (A, ctx, n) => { const t = ctx.target && !ctx.target.dead ? ctx.target : A.alive()[0]; if (t && n > 0) A.dmg(A.player, t, Math.max(1, Math.round(n * (ctx.mult || 1))), { card: true }); };
 // extra damage per jammed card in your hand (the jam stays: it is the fuel)
 const jamHit = (per) => ({ op: 'custom', fn: (A, ctx) => hurt(A, ctx, per * A.c.hand.filter((k) => k.jam).length), text: `Deal ${per} extra damage per jammed card in your hand.` });
 // Burn per Tithed card in the deck
 const tithePyre = (per, max) => ({ op: 'custom', fn: (A, ctx) => { const t = ctx.target && !ctx.target.dead ? ctx.target : A.alive()[0]; const n = Math.min(max, per * A.c.strain.tithed.length); if (t && n > 0) A.status(t, 'burn', n); }, text: `Apply ${per} Burn per Tithed card in your deck (max ${max}).` });
 
-const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
 const KNW = (base, mul, max) => ({ base, per: 'knots', mul, max });
 const EMBER_STATIC = (c) => !!c.seam && (c.seam.counts.ember || 0) > 0 && (c.seam.counts.static || 0) > 0; // the Line holds both schools
 export const CARDS_WICK = [
