@@ -14,11 +14,10 @@
 // A hero with `declare: <school>` (Odile, 'gilded') may declare one card a turn: canDeclare / setDeclare below.
 import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
-import { RELICS, HEROES } from '../data/index.js';
+import { RELICS, HEROES, SCHOOLS } from '../data/index.js';
 
 export const SEAM_CUTS_TURN = 3;
 const SEAM_LEN_CAP = 5, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 6, SEAM_GOLD_COMBAT = 20;
-const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
 
 export function seamInit(c) {
   return { set: [], counts: {}, order: [], len: 0, cuts: 0, tied: false, last: null, used: {}, lockBroke: false, paidTurn: { draw: 0, charge: 0 }, gold: 0, retain: 0, declare: null, declared: false };
@@ -114,7 +113,7 @@ const fmt = (arr) => arr.map((x) => ({ school: x.school, stitches: x.stitches, t
 // What cutting the Line right now would pay (the rail's "Cut now" chip).
 export function seamWorth(c) { return fmt(worth(c, c.seam, c.seam.cuts)); }
 function payText(school, n) {
-  const nm = SCHOOL_NAME[school] || school;
+  const nm = (SCHOOLS[school] && SCHOOLS[school].name) || school;
   switch (school) {
     case 'ember': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${3 * n} Burn to all`;
     case 'echo': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${Math.ceil(n / 2)} Echo`;

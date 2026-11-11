@@ -1,6 +1,6 @@
 {
- "version": "6c6070d96262b11d",
- "bytes": 10433876,
+ "version": "9e5ecd470438752a",
+ "bytes": 10433912,
  "count": 549,
  "files": {
   "art/attacks.js": {
@@ -1752,20 +1752,20 @@
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "46d8648099d1429d",
-   "s": 23703
+   "h": "b9bb2b4066b2dae6",
+   "s": 23631
   },
   "data/enemies_new1.js": {
    "h": "0702c74db4e4e725",
    "s": 4789
   },
   "data/enemies_new2.js": {
-   "h": "ba25dd65c8ead77e",
-   "s": 6262
+   "h": "3370cfe657216d18",
+   "s": 6271
   },
   "data/enemies_new3.js": {
-   "h": "60e77cf2c848c20b",
-   "s": 5789
+   "h": "482876a549baf517",
+   "s": 5717
   },
   "data/events.js": {
    "h": "c0508db1fce52e37",
@@ -1796,8 +1796,8 @@
    "s": 16101
   },
   "data/helpers.js": {
-   "h": "87cb9eeb73760269",
-   "s": 1711
+   "h": "9ac1e90ed65beb7f",
+   "s": 2080
   },
   "data/heroes.js": {
    "h": "20564a010420945c",
@@ -1848,8 +1848,8 @@
    "s": 4179
   },
   "data/statuses_e3.js": {
-   "h": "f191c3c631138349",
-   "s": 3567
+   "h": "c908586d511f427b",
+   "s": 3542
   },
   "data/statuses_marrow.js": {
    "h": "d0c1ef946a24d7a1",
@@ -1880,8 +1880,8 @@
    "s": 5231
   },
   "engine/afflictions.js": {
-   "h": "ebc293a595d6f316",
-   "s": 8291
+   "h": "2548d55650debba8",
+   "s": 8096
   },
   "engine/assist.js": {
    "h": "e7b618edee48e631",
@@ -1892,8 +1892,8 @@
    "s": 15241
   },
   "engine/combat.js": {
-   "h": "caaf2d730db66586",
-   "s": 39165
+   "h": "fd64bb11ebc5a12a",
+   "s": 39396
   },
   "engine/intent_icons.js": {
    "h": "e8a57f8f84362fed",
@@ -1916,16 +1916,16 @@
    "s": 1312
   },
   "engine/run.js": {
-   "h": "66d74ed03c388675",
-   "s": 28468
+   "h": "e2a82b5462f0c30c",
+   "s": 28589
   },
   "engine/save.js": {
    "h": "4e7512d686845ee6",
    "s": 1736
   },
   "engine/seam.js": {
-   "h": "19cadc3d0dc12719",
-   "s": 17686
+   "h": "9443ab7d729df991",
+   "s": 17581
   },
   "engine/text.js": {
    "h": "0bb8d256312b987f",
@@ -1936,8 +1936,8 @@
    "s": 11830
   },
   "engine/ward.js": {
-   "h": "28e27a0254a3912b",
-   "s": 46060
+   "h": "b4bfab833c72c965",
+   "s": 45835
   },
   "icons/apple-touch-icon.png": {
    "h": "6a1af503636154d7",

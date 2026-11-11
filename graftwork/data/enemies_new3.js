@@ -1,9 +1,8 @@
 // Brand-new Act 3 enemies from the depth pass (design/ENEMY_DEPTH.md and design/THREAD.md). Same schema as enemies_3.js.
 import { cardDef, graftDef, nextCards, costOf } from './enemies_3.js';
-import { ST, CUSTOM } from './helpers.js';
+import { ST, CUSTOM, SCHOOL_ORDER } from './helpers.js';
 
 const D = (n, extra) => ({ op: 'dmg', n, ...extra });
-const SCHOOL_ORDER = ['ember', 'blood', 'echo', 'hoard', 'rust', 'static', 'gilded'];
 
 // every school a deck card belongs to: its own plus those of its grafts (live and fused)
 function schoolsOfInst(inst) {

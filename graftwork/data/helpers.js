@@ -9,6 +9,10 @@ export const buff = (s, n) => ({ op: 'status', s, n, to: 'self' });
 export const ST = (s, n, to) => ({ op: 'status', s, n, to: to || 'player' });
 export const CUSTOM = (intent, text, fn) => ({ op: 'custom', intent, text, fn });
 
+// The Act 3 school order (Blood second, unlike data/schools.js): the tie-break of The Grafter's deck tally (enemies_3.js), the Locksmith's
+// seal (enemies_new3.js), and the index n - 1 that the statuses Mirror and Sealed carry (statuses_e3.js). Changing it changes fights.
+export const SCHOOL_ORDER = ['ember', 'blood', 'echo', 'hoard', 'rust', 'static', 'gilded'];
+
 // ---- card conditions, cond(c, ctx) of an `if` op (cards_marrow.js, cards_wick.js, cards_odile.js) ----
 export const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
 export const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered

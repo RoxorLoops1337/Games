@@ -2,6 +2,7 @@
 //   Matron Claim, Broker Late Fee, Impresario Ensemble, Resident Mimic, Defibrillator Insulated, Pickled King Thirst,
 //   Stagehands Hoist the Heavy, Gold Leaf Golem Leaf Armor, Diva Applause.
 import assert from 'node:assert/strict';
+import { SCHOOL_LIST } from '../graftwork/data/schools.js';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, specOf } from '../graftwork/engine/combat.js';
 import { newInst } from '../graftwork/engine/cards.js';
@@ -9,7 +10,7 @@ import { CARDS, GRAFTS, ENEMIES } from '../graftwork/data/index.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
-const SCH = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+const SCH = SCHOOL_LIST.map((s) => s.id);
 for (const s of SCH) CARDS['t_' + s] = { id: 't_' + s, name: 'T ' + s, type: 'skill', cost: 0, rarity: 'common', school: s, target: 'none', fx: [], flavor: 'x', flags: {} };
 CARDS.t_plain = { id: 't_plain', name: 'plain', type: 'skill', cost: 0, rarity: 'common', target: 'none', fx: [], flavor: 'x', flags: {} };
 CARDS.t_big = { id: 't_big', name: 'big', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', fx: [{ op: 'dmg', n: 40 }], flavor: 'x', flags: {} };

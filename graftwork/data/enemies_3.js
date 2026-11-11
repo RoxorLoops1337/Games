@@ -3,7 +3,7 @@
 // live bindings that are only read inside functions, at combat time, long after both modules have loaded (never at module scope).
 import { CARDS, GRAFTS } from './index.js';
 import { schoolsOf } from '../engine/cards.js';
-import { ST, CUSTOM } from './helpers.js';
+import { ST, CUSTOM, SCHOOL_ORDER } from './helpers.js';
 
 const cardDef = (id) => CARDS[id];
 const graftDef = (id) => GRAFTS[id];
@@ -323,7 +323,6 @@ const impresario = {
 };
 
 // ---------- FINAL BOSS: THE GRAFTER ----------
-const SCHOOL_ORDER = ['ember', 'blood', 'echo', 'hoard', 'rust', 'static', 'gilded'];
 function tallyDeck(run) {
   const schools = {}, weights = {}; let count = 0, weight = 0, best = 0, bestName = '';
   for (const inst of run.deck || []) {

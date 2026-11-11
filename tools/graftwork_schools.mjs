@@ -6,9 +6,10 @@
 import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, RELICS } from '../graftwork/data/index.js';
+import { SCHOOL_LIST } from '../graftwork/data/schools.js';
 import { POLICIES, graftScore, playWardRun, strongFight } from './graftwork_driver.mjs';
 
-export const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+export const SCHOOLS = SCHOOL_LIST.map((s) => s.id);
 
 export function forcedPolicy(schools, relic) {
   const base = POLICIES.strong;
