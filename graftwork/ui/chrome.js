@@ -13,7 +13,6 @@ export const KEY_LIGHT = { x: -0.5, y: -0.86 }; // rest direction FROM which the
 const MAX_BAKES_PER_FRAME = 10, MAX_PIXELS = 48e6, MAX_ENTRIES = 400;
 const cache = { px: 0, panels: new Map(), buttons: new Map(), entries: 0, pixels: 0, bakes: 0, frameBakes: 0, hits: 0, vector: 0 };
 export const stats = cache;
-let rivetSprite = null, rivetPx = 0;
 
 function mk(w, h) {
   let c = null;
@@ -43,7 +42,7 @@ function level(root, a, b) {
 }
 function checkpx(app) {
   const px = app.px || 1;
-  if (cache.px !== px || cache.entries > MAX_ENTRIES || cache.pixels > MAX_PIXELS) { cache.panels.clear(); cache.buttons.clear(); cache.entries = 0; cache.pixels = 0; cache.px = px; rivetSprite = null; }
+  if (cache.px !== px || cache.entries > MAX_ENTRIES || cache.pixels > MAX_PIXELS) { cache.panels.clear(); cache.buttons.clear(); cache.entries = 0; cache.pixels = 0; cache.px = px; }
   return px;
 }
 export function frameStart(app) { cache.frameBakes = 0; checkpx(app); }

@@ -1645,8 +1645,6 @@ function drawKbRing(app) {
   app.text('TARGET', ed.x, y - 22, { size: 15, bold: true, ui: true, align: 'center', color: '#ffe9a8', stroke: '#000', strokeW: 4 });
 }
 
-const col2 = (def) => (def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum);
-
 function drawCoins(app) {
   const ctx = app.ctx;
   for (const co of S.coins) {

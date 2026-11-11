@@ -40,7 +40,6 @@ const STEP_S = PACE.normal.step;
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };
 const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
-const PH_TINT = { morning: ['#ffe2a8', 0.5], midday: ['#ffffff', 0], evening: ['#d89a5a', 0.75], night: ['#5a6aa8', 0.85] }; // multiplied over the plan
 const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event: ['event', 'Chapel event'], shop: ['shop', 'Dispensary'], forge: ['forge', 'Workshop'], rest: ['rest', 'Clean sheets'], boss: ['boss', 'The boss'] };
 const TRIG_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Event', shop: 'Shop', forge: 'Forge', boss: 'Boss' };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;

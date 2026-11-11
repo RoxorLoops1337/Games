@@ -15,7 +15,6 @@ import { specGloss, cardGlossTip, glossTip, withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 import { dispensary } from './ward_kit.js';
-const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const BRASS = '#C9A227';
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) a.sfx(name, o); };
@@ -711,7 +710,6 @@ export default {
     const stripDis = !grafted;
     if (app.button('Strip a graft', SX2, 614, SW, 66, { size: 20, fit: true, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
     if (app.inRect(SX2, 614, SW, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
-    const stripTitle = null; void stripTitle;
     {
       app.reg('shop-plans', 690, 614, 230, 66, { group: 'plans' });
       const left = builds.filter((b) => !b.sold).length;

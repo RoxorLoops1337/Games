@@ -35,7 +35,6 @@ const maxDef = (bk) => (SOFT.has(bk) ? 1.3 : HARD.has(bk) ? 1.08 : 1.18);
 // ---------------------------------------------------------------- styles
 // T = pose at the end of the tell, I = pose at impact. sq in -1..1: +1 = max stretch along y (tall/narrow), -1 = max squash (flat/wide).
 // arc: extra lift (px) during act. hold(k) additive wobble that is zero at both ends. x(phase,k,c) extra cues.
-const ev = (v, t) => v * t; // readability helper
 const STYLES = {
   lunge: { T: { dx: 12, dy: 0, rot: 0.08, sq: 0.5, glow: 0.2 }, I: { dx: -62, dy: 2, rot: -0.1, sq: -0.6, glow: 0.5 }, sd: PI },
   pounce: { T: { dx: 10, dy: 6, rot: 0.1, sq: -0.6, glow: 0.1 }, I: { dx: -70, dy: 0, rot: -0.25, sq: -0.5, glow: 0.4 }, arc: 34, sd: PI },
@@ -219,7 +218,6 @@ export function timing(id, body, moveId) {
 }
 
 const AMP = { light: 1, heavy: 1.2, boss: 1.4 };
-const NEUTRAL = { dx: 0, dy: 0, rot: 0, sq: 0, glow: 0 };
 
 // ---------------------------------------------------------------- pose
 export function pose(id, body, phase, k, moveId) {

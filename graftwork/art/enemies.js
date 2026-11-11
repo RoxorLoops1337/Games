@@ -312,7 +312,7 @@ function tells(ctx, A, bw, bh, k) {
 }
 
 // ------------------------------------------------------------------ bodies. Local coords: feet at (0,0), facing LEFT (-x), up is -y.
-const lt = (A, k = 1.3) => C(A.col, k), dkc = (A, k = 0.62) => C(A.col, k);
+const lt = (A, k = 1.3) => C(A.col, k);
 
 function dome(ctx, A) {
   const t = A.t, b = A.b, sq = 1 + b * 0.04, rx = 62 * (1 - b * 0.025), ry = 70 * sq, pan = A.id === 'bedpan_slime';
@@ -1556,7 +1556,6 @@ function popFx(g, A) {
 }
 
 // ---- accessories for the depth designers' new enemies (drawn with the body, so they get the outline, rim and hatch)
-const lim = (g, pts, col, lw) => limb(g, pts, col, lw);
 const ACC = {
   suture_wasp(g, A) {
     const t = A.t, bw = A.bw, bh = A.bh, fl = Math.sin(t * 38) * 0.28;

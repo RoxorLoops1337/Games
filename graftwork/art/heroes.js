@@ -4,7 +4,7 @@ import { K } from './enemies.js';
 import { keyLamp } from './backgrounds.js';
 import { lnw } from './linework.js';
 import { gc, gradeKey } from './grade.js';
-const { C, INK, poly, line, limb, ell, circ, rect, seam, staple, bandage, wrap, glow, flame, eye, dots, mouthStitch, thread, coin, stage, prepA, text0 } = K;
+const { C, INK, poly, line, limb, ell, circ, rect, seam, staple, bandage, glow, flame, eye, mouthStitch, prepA } = K;
 const TAU = Math.PI * 2;
 
 const HERO_SIZE = { marrow: [110, 180], wick: [100, 160], odile: [100, 185] };
