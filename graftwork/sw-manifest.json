@@ -1,6 +1,6 @@
 {
- "version": "c09b69fc3bb79d7a",
- "bytes": 10406863,
+ "version": "0e37f7011daf88db",
+ "bytes": 10416784,
  "count": 549,
  "files": {
   "art/attacks.js": {
@@ -52,72 +52,72 @@
    "s": 13260
   },
   "assets/rigs/knitter@1x.webp": {
-   "h": "ea17623494910f4d",
-   "s": 7132
+   "h": "24ba3f54e3d9c59b",
+   "s": 7180
   },
   "assets/rigs/knitter@2x.webp": {
-   "h": "1e2aec5c2b50cfb8",
-   "s": 17512
+   "h": "736e19cbf899ea9b",
+   "s": 17688
   },
   "assets/rigs/manifest.json": {
-   "h": "bd710e14a2d5aaca",
-   "s": 32537
+   "h": "8e7645f574e6d27b",
+   "s": 33146
   },
   "assets/rigs/marrow@1x.webp": {
-   "h": "4e4a866ee15506a3",
-   "s": 6474
+   "h": "c8f7e52817910d3b",
+   "s": 6540
   },
   "assets/rigs/marrow@2x.webp": {
-   "h": "ae58c75b8e0dc9f1",
-   "s": 16250
+   "h": "5cf978b5ef829b4d",
+   "s": 16532
   },
   "assets/rigs/night_nurse@1x.webp": {
-   "h": "80f48159601b1a5c",
-   "s": 5610
+   "h": "639834c3e46f2051",
+   "s": 5746
   },
   "assets/rigs/night_nurse@2x.webp": {
-   "h": "6c4d11f9409dc53c",
-   "s": 13668
+   "h": "f6671c16ddb6afec",
+   "s": 14054
   },
   "assets/rigs/npc_nurse@1x.webp": {
-   "h": "b9d8047b08f1d090",
-   "s": 6044
+   "h": "599609cb6035faf8",
+   "s": 6130
   },
   "assets/rigs/npc_nurse@2x.webp": {
-   "h": "86907be2a9930efc",
-   "s": 14532
+   "h": "98639bf7924c8014",
+   "s": 14716
   },
   "assets/rigs/npc_patient@1x.webp": {
-   "h": "191ae7b464c06031",
-   "s": 6056
+   "h": "751a466ac1cd696b",
+   "s": 6130
   },
   "assets/rigs/npc_patient@2x.webp": {
-   "h": "c027e4af9e7ceb70",
-   "s": 15562
+   "h": "8475c474b18bbe50",
+   "s": 15678
   },
   "assets/rigs/npc_porter@1x.webp": {
-   "h": "fda50ecf471dc58b",
-   "s": 6792
+   "h": "4843b78836bf6628",
+   "s": 6804
   },
   "assets/rigs/npc_porter@2x.webp": {
-   "h": "b4b84c394dd2b225",
-   "s": 17372
+   "h": "90bfa343e49567e9",
+   "s": 17424
   },
   "assets/rigs/odile@1x.webp": {
-   "h": "3ded9458a04d30af",
-   "s": 5618
+   "h": "3ccbc301e5ab07a9",
+   "s": 5940
   },
   "assets/rigs/odile@2x.webp": {
-   "h": "a2703bb6e8f79434",
-   "s": 14316
+   "h": "6a804e30afb8fec0",
+   "s": 14968
   },
   "assets/rigs/wick@1x.webp": {
-   "h": "8fc7de61b323d5d2",
-   "s": 6056
+   "h": "8fb0634c7572faee",
+   "s": 6200
   },
   "assets/rigs/wick@2x.webp": {
-   "h": "4bc28517bfd0db0d",
-   "s": 15650
+   "h": "0a93669203c35610",
+   "s": 15734
   },
   "assets/ui/atlas/chrome@1x.webp": {
    "h": "4a0e598262e359e6",
@@ -1772,8 +1772,8 @@
    "s": 79046
   },
   "data/gaits.js": {
-   "h": "faacb82c82ca153b",
-   "s": 3985
+   "h": "551c1f18fc3b3958",
+   "s": 4084
   },
   "data/grafts_extra.js": {
    "h": "6e197d30ac500f9e",
@@ -2112,8 +2112,8 @@
    "s": 17790
   },
   "ui/rig.js": {
-   "h": "4ebb555aecc4f5e4",
-   "s": 25768
+   "h": "e108d86fe658647c",
+   "s": 32161
   },
   "ui/rigs.js": {
    "h": "3972650d1d124331",

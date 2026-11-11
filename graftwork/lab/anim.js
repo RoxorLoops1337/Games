@@ -64,7 +64,7 @@ const ST = {
   map: { actor: Q.get('actor') || 'marrow', pace: Q.get('pace') || 'normal', tod: Q.get('tod') || 'midday', zoom: qn('zoom', 1), trail: true },
   battle: { hero: Q.get('hero') || 'marrow', enemies: (Q.get('enemies') || 'gauze_mummy,bedpan_slime').split(',').filter(Boolean).slice(0, 3), act: clamp(qn('act', 1), 1, 3), status: false, aura: true, frames: true, target: 'enemies' },
   rig: { stride: 26, cadence: 2.2, knee: 0.9, bob: 2, arms: 0.5, lean: 1, joints: true, trail: true, dirty: true,
-    who: Q.get('who') || 'marrow', anim: Q.get('anim') === 'idle' ? 'idle' : 'walk', pace: ['slow', 'game', 'fast'].includes(Q.get('pace')) ? Q.get('pace') : 'game', heading: ['flat', 'down', 'up'].includes(Q.get('heading')) ? Q.get('heading') : 'flat', bones: qb('bones', false), marks: qb('marks', true), cmp: qb('cmp', true) },
+    who: Q.get('who') || 'marrow', anim: Q.get('anim') === 'idle' ? 'idle' : 'walk', pace: ['slow', 'game', 'fast'].includes(Q.get('pace')) ? Q.get('pace') : 'game', heading: ['flat', 'down', 'up'].includes(Q.get('heading')) ? Q.get('heading') : 'flat', bones: qb('bones', false), marks: qb('marks', true), cmp: qb('cmp', true), xray: qb('xray', false) },
 };
 const CLK = { t: 0, abs: 0, playing: !((Q.has('t') || Q.has('frame')) && ['viewer', 'compare', 'rig'].includes(ST.scene)) && qb('play', true), speed: qn('speed', 1), loop: qb('loop', true) };
 if (Q.has('t')) CLK.t = qn('t', 0);
@@ -892,15 +892,38 @@ function rigBones(gg, rig, c) {
   for (const b of rig.bones) { gg.fillStyle = b.empty ? '#ff5ad0' : b.n.endsWith('L') || b.n.includes('L_') ? '#5aa0ff' : b.n.endsWith('R') || b.n.includes('R_') ? '#ff9a4a' : '#ffd24a'; gg.beginPath(); gg.arc(b.m[4], b.m[5], 2.2, 0, 7); gg.fill(); }
   for (const s of ['L', 'R']) { RIG.footContact(rig, s, c); gg.strokeStyle = s === 'L' ? '#5aa0ff' : '#ff9a4a'; gg.beginPath(); gg.moveTo(c.x - 5, c.y); gg.lineTo(c.x + 5, c.y); gg.stroke(); }
 }
+// X-RAY: the garment drawn at 35 percent so the limbs under it show, and the END of every limb top (thigh, a leg painted in one piece, upper arm)
+// painted magenta: the band of the piece within 4 units of its far end behind the joint, as tests/graftwork_rig.test.mjs measures it. A short
+// thigh shows its magenta end beside or below the hem; a long hidden one keeps it up in the body.
+const XRAY_END = 4, xrayEnds = new Map();
+function limbEnds(R) {
+  const key = R.rig.id + '|' + (R.img.src || ''); let ends = xrayEnds.get(key); if (ends) return ends;
+  ends = new Map(); xrayEnds.set(key, ends);
+  const rig = R.rig, k = (R.img.naturalWidth || R.img.width) / rig.w, rigid = (rigs.entry(rig.id) || {}).rigid || [];
+  for (const n of ['legL_up', 'legR_up', 'armL_up', 'armR_up']) {
+    const p = rig.parts.find((q) => q.n === n), b = rig.B[n]; if (!p || !b || b.empty) continue;
+    const one = rigid.includes(n.slice(0, 4)), ch = rig.B[n.startsWith('leg') ? (one ? 'foot' + n[3] : 'leg' + n[3] + '_lo') : 'arm' + n[3] + '_lo'];
+    const al = Math.hypot(ch.x - b.x, ch.y - b.y) || 1, ux = (ch.x - b.x) / al, uy = (ch.y - b.y) / al;
+    const W = Math.max(1, Math.round(p.w * k)), H = Math.max(1, Math.round(p.h * k)), c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(R.img, p.sx * k, p.sy * k, p.w * k, p.h * k, 0, 0, W, H);
+    const im = x.getImageData(0, 0, W, H), d = im.data, tt = new Float32Array(W * H); let tmin = 1e9;
+    for (let i = 0; i < W * H; i++) { const lx = (i % W + 0.5) / k - p.px, ly = (Math.floor(i / W) + 0.5) / k - p.py; tt[i] = lx * ux + ly * uy; if (d[i * 4 + 3] > 100 && tt[i] < tmin) tmin = tt[i]; }
+    for (let i = 0; i < W * H; i++) { const on = d[i * 4 + 3] > 100 && tt[i] <= tmin + XRAY_END; d[i * 4] = 255; d[i * 4 + 1] = 0; d[i * 4 + 2] = 255; d[i * 4 + 3] = on ? 235 : 0; }
+    x.putImageData(im, 0, 0); ends.set(p, c);
+  }
+  return ends;
+}
 // one posed rig at the origin (= the floor point), in world px; s0 = world px per rig unit
 function rigFigure(gg, R, s0, st, o = {}) {
   RIG.poseRig(R.rig, st);
   if (o.shadow !== false) ISO.groundShadow(gg, 0, 0, clamp(R.rig.foot[2] * s0 * 0.8, R.rig.H * s0 * 0.27, R.rig.H * s0 * 0.7), 0.5);
-  const m6 = RIG.rigPlace(R.rig, 0, 0, s0, false);
-  gg.save(); gg.transform(m6[0], m6[1], m6[2], m6[3], m6[4], m6[5]); RIG.drawRigged(gg, R.rig, R.img); if (o.bones) rigBones(gg, R.rig, { x: 0, y: 0, bx: 0, by: 0 }); gg.restore();
+  const m6 = RIG.rigPlace(R.rig, 0, 0, s0, false), xr = ST.rig.xray && o.xray !== false, ends = xr ? limbEnds(R) : null;
+  gg.save(); gg.transform(m6[0], m6[1], m6[2], m6[3], m6[4], m6[5]);
+  RIG.drawRigged(gg, R.rig, R.img, xr ? { alpha: (p) => (p.hem !== undefined ? 0.35 : 1), over: (p) => ends.get(p) || null } : {});
+  if (o.bones) rigBones(gg, R.rig, { x: 0, y: 0, bx: 0, by: 0 }); gg.restore();
 }
 function rigStripReal(R, s0world) {
-  const u = HEADINGS[ST.rig.heading], key = 'rigreal|' + R.rig.id + '|' + ST.rig.heading;
+  const u = HEADINGS[ST.rig.heading], key = 'rigreal|' + R.rig.id + '|' + ST.rig.heading + (ST.rig.xray ? '|xray' : '');
   const items = [];
   const thumb = (st) => (x, W, H) => { x.fillStyle = '#0d0907'; x.fillRect(0, 0, W, H); const k = (H - 26) / R.rig.H; x.strokeStyle = '#6a4a2a'; x.beginPath(); x.moveTo(0, H - 12 - (u[1] / u[0]) * W / 2); x.lineTo(W, H - 12 + (u[1] / u[0]) * W / 2); x.stroke(); x.save(); x.translate(W / 2, H - 12); rigFigure(x, R, k, st, { shadow: false }); x.restore(); };
   for (let i = 0; i < 8; i++) { const ph = i * 0.25; items.push({ key: 'w' + i, ph, name: ['contact', 'down', 'passing', 'up'][i % 4], sub: SN(RIG.leadFoot(ph)) + ' leads', draw: thumb({ ph, w: 1, t: 0, ux: u[0], uy: u[1], calm: false }) }); }
@@ -925,6 +948,7 @@ SC.rig = {
     UI.toggle(o, 'Bones', () => R.bones, (v) => { R.bones = v; }, 'Joints and bones; pink = a bone that is empty on purpose, the short bars = where each sole meets the floor'); UI.toggle(o, 'Floor marks', () => R.marks, (v) => { R.marks = v; }, 'Marks fixed to the floor: a planted foot must travel with them');
     UI.toggle(o, 'Onion skin', () => ST.onion, (v) => { ST.onion = v; }, 'Blue = a quarter step back, orange = a quarter step on'); UI.toggle(o, 'Flip', () => ST.flip, (v) => { ST.flip = v; }); UI.toggle(o, 'Puppet + sprite', () => R.cmp, (v) => { R.cmp = v; }, 'The same character as the game\'s puppet and as the standing sprite');
     UI.toggle(o, 'Reduced motion', () => ST.calm, (v) => { ST.calm = v; });
+    UI.toggle(o, 'X-ray', () => R.xray, (v) => { R.xray = v; }, 'The garment at 35 percent so the limbs under it show; magenta = the end of each thigh and upper arm, which must stay inside the body');
     UI.range(UI.group('Rig tune (ui/rig.js RIG_TUNE)'), 'Depth', 0, 1, 0.05, () => RIG.RIG_TUNE.depth, (v) => { RIG.RIG_TUNE.depth = v; }, (v) => (v * 100).toFixed(0) + '%'); // how much of the floor's screen-y travel the feet follow on a diagonal: 100% = no slide at all, but the legs grow and fold
     UI.range(UI.group(), 'Boot roll', 0, 1, 0.02, () => RIG.RIG_TUNE.roll, (v) => { RIG.RIG_TUNE.roll = v; }, (v) => (v * 57.3).toFixed(0) + '\u00b0');
     UI.range(UI.group(), 'Scale', 0.5, 2.5, 0.05, () => ST.scale, (v) => { ST.scale = v; }, (v) => v.toFixed(2) + 'x');
@@ -956,7 +980,7 @@ SC.rig = {
       g.fillStyle = 'rgba(234,223,198,.4)'; for (let x = -Math.ceil(pw / gap) * gap - off; x < pw * 0.46; x += gap) { if (x < -pw * 0.46) continue; g.fillRect(cx + x * fl - 1, gy + slope * x * fl, 2, 7); }
     }
     g.save(); g.beginPath(); g.rect(0, 0, pw, h - top); g.clip(); g.translate(cx, gy); g.scale(z * fl, z);
-    if (ST.onion && walk) { const q = { ...st }; q.ph = ph - 0.25; ghost(g, '#4aa0ff', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false })); q.ph = ph + 0.25; ghost(g, '#ff6a4a', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false })); }
+    if (ST.onion && walk) { const q = { ...st }; q.ph = ph - 0.25; ghost(g, '#4aa0ff', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false, xray: false })); q.ph = ph + 0.25; ghost(g, '#ff6a4a', 0.38, (x) => rigFigure(x, RG2, s0, q, { shadow: false, xray: false })); }
     rigFigure(g, RG2, s0, st, { bones: R.bones });
     g.restore();
     // where each sole meets the floor, and how still a planted sole stands in the world (units of the rig per second)

@@ -19,8 +19,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { fakeCtx, makeApp, frames } from './graftwork_lib.mjs';
-import { withChromium, labVisit } from './graftwork_browser_lib.mjs';
+import { fakeCtx, makeApp, frames, canvasCalls } from './graftwork_lib.mjs';
+import { withChromium, labVisit, rigLimbEnds } from './graftwork_browser_lib.mjs';
 const R = await import('../graftwork/ui/rig.js');
 const { createRigs, rigs } = await import('../graftwork/ui/rigs.js');
 const { previewOn, PREVIEW_DEFAULT } = await import('../graftwork/ui/preview.js');
@@ -275,6 +275,51 @@ await t('a_limb_painted_in_one_piece_is_one_bone', () => {
   }
   assert.ok(legs > 0 && arms > 0, 'the sheets have one-piece legs and arms');
 });
+// the x offset of a garment's cloth v units below its hem line, as drawRigged draws it: the shear, or the knots of the cloth strips read linearly
+const clothAt = (p, v) => { if (!p.cloth) return p.hx * v; const K = p.kn.length - 1, hh = (p.h - Math.round(p.hem * p.h)) / K, i = Math.min(K - 1, Math.max(0, Math.floor(v / hh))); return p.kn[i] + (p.kn[i + 1] - p.kn[i]) * (v / hh - i); };
+await t('the_knee_never_folds_past_its_limit_and_the_swing_foot_still_clears_the_floor', () => {
+  // the drawn thigh (from its pinned top) and the shin meet at no more than RIG_TUNE.knee x the shin's share of the thigh (rig.js THE KNEE; the boot's
+  // roll adds a little on top), on all three headings: a short shin never folds flat under the hem. The feet are where they were, so a swinging foot
+  // is as high above the floor as its lift says.
+  const ax = (m, x, y) => Math.atan2(m[1] * x + m[3] * y, m[0] * x + m[2] * y), c = { x: 0, y: 0, bx: 0, by: 0 };
+  let seen = 0;
+  for (const id of IDS.filter((q) => MAN.rigs[q].ship)) {
+    const rig = RIGS[id];
+    for (const s of ['L', 'R']) {
+      const L = rig.legs[s]; if (L.one) continue; const km = T.knee * rig.feel.knee * L.kr; let worst = 0, at = '';
+      for (const [ux, uy] of HEADINGS) for (let i = 0; i < 96; i++) {
+        const ph = i / 48; R.poseRig(rig, { ph, w: 1, t: 0, ux, uy });
+        let f = ax(L.kn.m, L.an.x - L.kn.x, L.an.y - L.kn.y) - ax(L.hip.m, L.kn.x - L.hip.x, L.kn.y - L.hip.y); f = Math.abs(Math.atan2(Math.sin(f), Math.cos(f)));
+        if (f > worst) { worst = f; at = ph.toFixed(2) + ' heading ' + ux + ',' + uy; }
+        if (!L.plant && L.lift > 0.5 * T.lift * rig.feel.lift * rig.H) { R.footContact(rig, s, c); assert.ok(c.y < L.cy + L.sole - 0.3 * L.lift, `${id}.${s}: the swinging foot clears the floor`); seen++; }
+      }
+      assert.ok(worst <= km + 0.25, `${id} leg ${s}: the knee folds ${(worst * 57.3).toFixed(0)} degrees at ${at}, limit ${(km * 57.3).toFixed(0)}`);
+    }
+  }
+  assert.ok(seen > 100, 'swinging feet were checked');
+});
+await t('cloth_strips_follow_the_walk_without_a_seam_and_reduced_motion_keeps_the_single_hem', () => {
+  // RIG_TUNE.cloth: below its hem line a garment is strips on a chain of knots (rig.js CLOTH STRIPS). The first knot sits on the rigid hem line, the
+  // cloth trails the walk and the knee by a few units at most, reduced motion (calm) draws the one shear of before, and the cost is counted.
+  const g = fakeCtx(), img = { width: 1, height: 1, naturalWidth: 1 }, cost = {};
+  for (const id of IDS.filter((q) => MAN.rigs[q].ship)) {
+    const rig = RIGS[id], cloth = rig.parts.filter((p) => p.hem !== undefined); let most = 0;
+    for (const [ux, uy] of HEADINGS) for (let i = 0; i < 48; i++) {
+      R.poseRig(rig, { ph: i / 24, w: 1, t: 0, ux, uy });
+      for (const p of cloth) {
+        assert.ok(p.cloth && p.kn[0] === 0, id + ': the strips hang from the rigid hem line');
+        const y0 = Math.round(p.hem * p.h), hh = (p.h - y0) / (p.kn.length - 1);
+        for (let j = 0; j < p.kn.length; j++) { most = Math.max(most, Math.abs(p.kn[j] - p.hx * j * hh)); assert.ok(Math.abs(clothAt(p, j * hh) - p.kn[j]) < 1e-9, 'neighbouring strips share their edge'); }
+      }
+    }
+    assert.ok(most > 0.5 && most < 0.06 * rig.H, `${id}: the cloth moves on its own, a little (${most.toFixed(2)} units)`);
+    R.poseRig(rig, { ph: 0.5, w: 1, t: 0, calm: true }); for (const p of cloth) assert.equal(p.cloth, false, id + ': reduced motion: the single shear');
+    const calls = (on) => { T.cloth = on; R.poseRig(rig, { ph: 0.5, w: 1, t: 0, ux: 1, uy: 0 }); const c0 = canvasCalls(); R.drawRigged(g, rig, img); return canvasCalls() - c0; };
+    try { cost[id] = [calls(0), calls(1)]; } finally { T.cloth = 1; }
+    assert.ok(cost[id][1] - cost[id][0] <= cloth.length * 8 * 4, id + ': the strips cost a few calls each');
+  }
+  console.log('   canvas calls per frame, static hem / cloth strips: ' + Object.entries(cost).map(([k, v]) => k + ' ' + v.join('/')).join(', '));
+});
 await t('mirroring_flips_x_only', () => {
   const rig = RIGS.marrow; R.poseRig(rig, { ph: 0.3, w: 1, t: 0 });
   const a = R.rigPlace(rig, 300, 200, 0.5, false), b = R.rigPlace(rig, 300, 200, 0.5, true);
@@ -285,7 +330,7 @@ await t('mirroring_flips_x_only', () => {
 // is (x, y) of figure space on a cloth part (its drawn quad, the hem shear included)?
 function onCloth(p, x, y, margin) {
   const m = p.m, det = m[0] * m[3] - m[1] * m[2], dx = x - m[4], dy = y - m[5]; let lx = (m[3] * dx - m[2] * dy) / det + p.px, ly = (m[0] * dy - m[1] * dx) / det + p.py;
-  const y0 = Math.round(p.hem * p.h); if (ly > y0) { const v = (ly - y0) / p.hs; lx -= p.hx * v; ly = y0 + v; }
+  const y0 = Math.round(p.hem * p.h); if (ly > y0) { const v = (ly - y0) / p.hs; lx -= clothAt(p, v); ly = y0 + v; }
   return lx >= margin && lx <= p.w - margin && ly >= 0 && ly <= p.h - margin;
 }
 await t('the_hem_covers_the_hip_joints_in_every_frame_of_the_cycle', () => {
@@ -481,6 +526,24 @@ await t('every_shipped_rig_is_one_connected_figure_at_every_frame', async () => 
     const ids = Object.keys(res); assert.ok(ids.length >= 5 && ids.includes('marrow'), 'shipped rigs were drawn');
     for (const id of ids) assert.equal(res[id].pieces, 1, `${id}: the figure falls apart into ${res[id].pieces} pieces at ${res[id].at} (a limb or a prop floats)`);
     console.log('   one piece at 104 poses each: ' + ids.join(', '));
+  });
+});
+
+// ---------------------------------------------------------------- long hidden limbs (needs Chromium; skipped when it is missing)
+await t('no_leg_shows_its_cut_end_in_any_pose_what_is_drawn_over_it_covers_it', async () => {
+  await withChromium(async ({ br, base }) => {
+    const pg = await br.newPage(); await pg.goto(`${base}/graftwork/design/README.md`);
+    const ship = IDS.filter((id) => MAN.rigs[id].ship), res = await rigLimbEnds(pg, { base: '/graftwork/assets/rigs/' }, ship, HEADINGS), bad = [];
+    const arms = [];
+    for (const id of ship) for (const L of res[id]) if (L.fails) (L.n.startsWith('leg') ? bad : arms).push(`${id}.${L.n}: ${L.px} end px outside in ${L.fails} of 104 poses (worst ${L.worst} px at ${L.at})`);
+    console.log('   shoulder caps beside the body (not asserted): ' + (arms.length ? arms.length + ' arms' : 'none'));
+    assert.deepEqual(bad, [], 'a leg shows its cut end where nothing covers it');
+    // a full tube that begins inside the body: at rest each thigh reaches RISE of its own length above the hip joint (a leg painted in one piece
+    // RISE_ONE of the whole leg), the floor the build tool's fit starts from (tools/graftwork_rig_build.py RISE, RISE_ONE)
+    const short = [];
+    for (const id of ship) for (const L of res[id]) if (L.n.startsWith('leg') && L.short) short.push(`${id}.${L.n}: ${L.above.toFixed(1)} units above the hip, needs ${L.rise.toFixed(1)}`);
+    assert.deepEqual(short, [], 'a thigh that stops at its hip joint (its tube must run on up into the pelvis)');
+    console.log('   leg ends hidden in 104 poses each: ' + ship.join(', '));
   });
 });
 

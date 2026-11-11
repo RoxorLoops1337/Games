@@ -33,11 +33,12 @@ export const GAITS = {
 };
 export const GAIT_KINDS = ['legged', 'hop', 'waddle', 'roll', 'flap'];
 // RIG FEEL: how a character with a painted rig carries itself (ui/rig.js, the preview). Multipliers on the rig tune (RIG_TUNE), in the puppet's own words:
-//   strideK step length, duty (added to the share of the cycle a foot stays planted), lift, bob, sway, lean, arms (arm swing), hem (cloth sway), head (nod).
+//   strideK step length, duty (added to the share of the cycle a foot stays planted), lift, bob, sway, lean, arms (arm swing), hem (cloth sway), head (nod),
+//   knee (how far a knee may fold: Wick's short shins under a short skirt fold less).
 // Stride and speed always agree (the step phase follows the distance walked), so a shorter step is a quicker step. The puppet never reads this table.
 export const RIG_GAITS = {
   marrow: { strideK: 1, duty: 0.04, lift: 0.85, bob: 1.5, sway: 1.4, lean: 1.5, arms: 0.8, head: 1.3 }, // heavy: a long stance, a deep drop on every plant, the weight forward
-  wick: { strideK: 0.88, duty: -0.03, lift: 1.2, bob: 0.9, sway: 0.8, lean: 0.7, arms: 1.1, hem: 1.2 }, // light and quick: short quick steps, feet picked up
+  wick: { strideK: 0.88, duty: -0.03, lift: 1.2, bob: 0.9, sway: 0.8, lean: 0.7, arms: 1.1, hem: 1.2, knee: 0.75 }, // light and quick: short quick steps, feet picked up
   odile: { strideK: 0.92, duty: 0.05, lift: 0.6, bob: 0.4, sway: 0.5, lean: 0.25, arms: 0.6, hem: 0.8, head: 0.4 }, // gliding and upright: low feet, hardly a bob, a straight back
 };
 export const rigGait = (id) => RIG_GAITS[gaitKey(id)] || null;

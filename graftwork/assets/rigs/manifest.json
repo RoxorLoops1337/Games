@@ -6,7 +6,7 @@
    "file1x": "marrow@1x.webp",
    "file2x": "marrow@2x.webp",
    "w": 256,
-   "h": 220,
+   "h": 226,
    "ship": true,
    "note": "",
    "side": "In this sheet L means SCREEN LEFT, which is Marrow's own RIGHT: armL_up carries the red cross armband that the standing sprite shows on the screen-left arm, the arm that holds the saw, and footL is the boot seen from the front (the near one). The fist forearm (armR_lo_with_hand in the sheet) is used on the near arm because it grips; the open-hand forearm goes on the far arm.",
@@ -35,21 +35,21 @@
     {"n": "footL", "p": "legL_lo", "x": 113, "y": 210}
    ],
    "parts": [
-    {"n": "armR_lo", "bone": "armR_lo", "rect": [98, 108, 52, 52], "px": 24.0, "py": 16.0, "x": 154, "y": 106},
-    {"n": "armR_up", "bone": "armR_up", "rect": [128, 174, 20, 40], "px": 10.0, "py": 4.0, "x": 153, "y": 89},
-    {"n": "legR_up", "bone": "legR_up", "rect": [150, 174, 20, 40], "px": 10.0, "py": 4.0, "x": 133, "y": 140},
-    {"n": "legR_lo", "bone": "legR_lo", "rect": [230, 108, 20, 50], "px": 10.0, "py": 2.0, "x": 140, "y": 167},
-    {"n": "footR", "bone": "footR", "rect": [26, 174, 34, 44], "px": 10.0, "py": 14.0, "x": 148, "y": 194},
+    {"n": "armR_lo", "bone": "armR_lo", "rect": [192, 108, 52, 52], "px": 24.0, "py": 16.0, "x": 154, "y": 106},
+    {"n": "armR_up", "bone": "armR_up", "rect": [160, 174, 20, 40], "px": 10.0, "py": 4.0, "x": 153, "y": 89},
+    {"n": "legR_up", "bone": "legR_up", "rect": [100, 174, 22, 46], "px": 10.0, "py": 10.0, "x": 133, "y": 140, "ext": 6, "top": [133.43, 130.15]},
+    {"n": "legR_lo", "bone": "legR_lo", "rect": [78, 174, 20, 50], "px": 10.0, "py": 2.0, "x": 140, "y": 167},
+    {"n": "footR", "bone": "footR", "rect": [124, 174, 34, 44], "px": 10.0, "py": 14.0, "x": 148, "y": 194},
     {"n": "torso", "bone": "torso", "rect": [54, 0, 58, 70], "px": 32.0, "py": 64.0, "x": 127, "y": 140},
-    {"n": "legL_up", "bone": "legL_up", "rect": [0, 174, 24, 46], "px": 12.0, "py": 6.0, "x": 118, "y": 144},
+    {"n": "legL_up", "bone": "legL_up", "rect": [164, 108, 26, 56], "px": 12.0, "py": 16.0, "x": 118, "y": 144, "ext": 10, "top": [119.75, 129.75]},
     {"n": "legL_lo", "bone": "legL_lo", "rect": [76, 108, 20, 60], "px": 10.0, "py": 4.0, "x": 117, "y": 178},
-    {"n": "footL", "bone": "footL", "rect": [202, 108, 26, 50], "px": 12.0, "py": 16.0, "x": 113, "y": 210},
-    {"n": "tunic", "bone": "torso", "rect": [62, 174, 64, 42], "px": 32.0, "py": 2.0, "x": 127, "y": 140, "hem": 0.25},
+    {"n": "footL", "bone": "footL", "rect": [50, 174, 26, 50], "px": 12.0, "py": 16.0, "x": 113, "y": 210},
+    {"n": "tunic", "bone": "torso", "rect": [98, 108, 64, 58], "px": 32.0, "py": 18.0, "x": 127, "y": 140, "hem": 0.4545},
     {"n": "apron", "bone": "torso", "rect": [0, 0, 52, 106], "px": 26.0, "py": 10.0, "x": 137, "y": 86, "hem": 0.5},
     {"n": "head", "bone": "head", "rect": [114, 0, 72, 68], "px": 36.0, "py": 64.0, "x": 132, "y": 81},
     {"n": "saw", "bone": "handL", "rect": [0, 108, 74, 64], "px": 8.0, "py": 8.0, "x": 103, "y": 133, "lag": 1},
-    {"n": "armL_lo", "bone": "armL_lo", "rect": [152, 108, 48, 52], "px": 22.0, "py": 6.0, "x": 101, "y": 106},
-    {"n": "armL_up", "bone": "armL_up", "rect": [172, 174, 26, 38], "px": 18.0, "py": 4.0, "x": 113, "y": 85}
+    {"n": "armL_lo", "bone": "armL_lo", "rect": [0, 174, 48, 52], "px": 22.0, "py": 6.0, "x": 101, "y": 106},
+    {"n": "armL_up", "bone": "armL_up", "rect": [182, 174, 26, 38], "px": 18.0, "py": 4.0, "x": 113, "y": 85}
    ]
   },
   "wick": {
@@ -86,29 +86,29 @@
     {"n": "footL", "p": "legL_lo", "x": 113, "y": 209}
    ],
    "parts": [
-    {"n": "armR_up", "bone": "armR_up", "rect": [140, 84, 32, 40], "px": 8.0, "py": 10.0, "x": 142, "y": 102},
-    {"n": "armR_lo", "bone": "armR_lo", "rect": [82, 138, 34, 32], "px": 6.0, "py": 12.0, "x": 150, "y": 118},
+    {"n": "armR_up", "bone": "armR_up", "rect": [0, 138, 32, 40], "px": 8.0, "py": 10.0, "x": 142, "y": 102},
+    {"n": "armR_lo", "bone": "armR_lo", "rect": [118, 138, 34, 32], "px": 6.0, "py": 12.0, "x": 150, "y": 118},
     {"n": "candle", "bone": "handR", "rect": [0, 84, 28, 52], "px": 14.0, "py": 44.0, "x": 164, "y": 133, "lag": 1, "upright": true},
     {"n": "handR", "bone": "handR", "rect": [0, 180, 30, 26], "px": 6.0, "py": 8.0, "x": 159, "y": 127},
-    {"n": "legR_up", "bone": "legR_up", "rect": [152, 138, 16, 32], "px": 8.0, "py": 4.0, "x": 136, "y": 146},
+    {"n": "legR_up", "bone": "legR_up", "rect": [62, 138, 18, 38], "px": 10.0, "py": 10.0, "x": 136, "y": 146, "ext": 7, "top": [134.63, 136.0]},
     {"n": "legR_lo", "bone": "legR_lo", "rect": [50, 180, 16, 24], "px": 8.0, "py": 2.0, "x": 139, "y": 171},
-    {"n": "footR", "bone": "footR", "rect": [100, 84, 38, 40], "px": 12.0, "py": 10.0, "x": 143, "y": 193},
+    {"n": "footR", "bone": "footR", "rect": [122, 84, 38, 40], "px": 12.0, "py": 10.0, "x": 143, "y": 193},
     {"n": "torso", "bone": "torso", "rect": [30, 84, 32, 48], "px": 16.0, "py": 44.0, "x": 127, "y": 130},
-    {"n": "legL_up", "bone": "legL_up", "rect": [28, 138, 16, 34], "px": 8.0, "py": 4.0, "x": 116, "y": 152},
+    {"n": "legL_up", "bone": "legL_up", "rect": [100, 84, 20, 42], "px": 10.0, "py": 12.0, "x": 116, "y": 152, "ext": 8, "top": [116.8, 140.76]},
     {"n": "legL_lo", "bone": "legL_lo", "rect": [32, 180, 16, 26], "px": 8.0, "py": 2.0, "x": 116, "y": 180},
     {"n": "footL", "bone": "footL", "rect": [64, 84, 34, 46], "px": 14.0, "py": 12.0, "x": 113, "y": 209},
     {"n": "skirt", "bone": "torso", "rect": [102, 0, 80, 54], "px": 40.0, "py": 2.0, "x": 120, "y": 131, "hem": 0.3},
     {"n": "head", "bone": "head", "rect": [0, 0, 100, 82], "px": 58.0, "py": 78.0, "x": 135.9872, "y": 94.0032},
-    {"n": "armL_lo", "bone": "armL_lo", "rect": [46, 138, 34, 32], "px": 8.0, "py": 8.0, "x": 105, "y": 124},
-    {"n": "handL", "bone": "handL", "rect": [118, 138, 32, 32], "px": 8.0, "py": 10.0, "x": 121, "y": 137},
-    {"n": "armL_up", "bone": "armL_up", "rect": [0, 138, 26, 40], "px": 18.0, "py": 6.0, "x": 111, "y": 100}
+    {"n": "armL_lo", "bone": "armL_lo", "rect": [82, 138, 34, 32], "px": 8.0, "py": 8.0, "x": 105, "y": 124},
+    {"n": "handL", "bone": "handL", "rect": [154, 138, 32, 32], "px": 8.0, "py": 10.0, "x": 121, "y": 137},
+    {"n": "armL_up", "bone": "armL_up", "rect": [34, 138, 26, 40], "px": 18.0, "py": 6.0, "x": 111, "y": 100}
    ]
   },
   "odile": {
    "file1x": "odile@1x.webp",
    "file2x": "odile@2x.webp",
-   "w": 192,
-   "h": 218,
+   "w": 224,
+   "h": 188,
    "ship": true,
    "note": "",
    "side": "The sheet has no names. By eye: the loose puffed sleeve and the forearm with the pointing glove (boxes 4, 7) make the SCREEN LEFT arm (Odile's own right, near side), which carries the book; the one-piece bent arm (box 6) is the SCREEN RIGHT arm (far side) and carries the purse. There are no thighs in the sheet: the one dark leg piece of each side is used twice, as the thigh (hidden by the coat, it bridges hip and knee when the leg reaches) and as the shin that runs down into the boot.",
@@ -139,28 +139,28 @@
    ],
    "parts": [
     {"n": "armR_up", "bone": "armR_up", "rect": [82, 0, 46, 62], "px": 6.0, "py": 12.0, "x": 144, "y": 102},
-    {"n": "purse", "bone": "handR", "rect": [36, 186, 28, 30], "px": 14.0, "py": 2.0, "x": 164, "y": 140, "lag": 1},
-    {"n": "legR_up", "bone": "legR_up", "rect": [18, 186, 16, 32], "px": 8.0, "py": 4.0, "x": 136, "y": 146},
-    {"n": "legR_lo", "bone": "legR_lo", "rect": [0, 186, 16, 32], "px": 8.0, "py": 4.0, "x": 138, "y": 170},
-    {"n": "footR", "bone": "footR", "rect": [68, 134, 28, 46], "px": 8.0, "py": 32.0, "x": 141, "y": 212},
-    {"n": "torso", "bone": "torso", "rect": [0, 134, 40, 50], "px": 16.0, "py": 46.0, "x": 134, "y": 130},
-    {"n": "legL_up", "bone": "legL_up", "rect": [146, 134, 16, 34], "px": 8.0, "py": 4.0, "x": 114, "y": 152},
-    {"n": "legL_lo", "bone": "legL_lo", "rect": [128, 134, 16, 34], "px": 8.0, "py": 4.0, "x": 113, "y": 178},
-    {"n": "footL", "bone": "footL", "rect": [42, 134, 24, 48], "px": 10.0, "py": 34.0, "x": 110, "y": 229},
-    {"n": "coat", "bone": "torso", "rect": [0, 0, 80, 70], "px": 40.0, "py": 6.0, "x": 134, "y": 130, "hem": 0.25},
-    {"n": "head", "bone": "head", "rect": [70, 72, 48, 60], "px": 22.0, "py": 56.0, "x": 133, "y": 94},
-    {"n": "hair", "bone": "head", "rect": [0, 72, 68, 60], "px": 34.0, "py": 30.0, "x": 122, "y": 70, "lag": 0.5},
-    {"n": "hat", "bone": "head", "rect": [120, 72, 66, 50], "px": 36.0, "py": 44.0, "x": 131, "y": 60, "lag": 0.4},
-    {"n": "book", "bone": "handL", "rect": [66, 186, 28, 24], "px": 14.0, "py": 12.0, "x": 120, "y": 141},
-    {"n": "armL_lo", "bone": "armL_lo", "rect": [98, 134, 28, 40], "px": 8.0, "py": 6.0, "x": 108, "y": 122},
-    {"n": "armL_up", "bone": "armL_up", "rect": [164, 134, 20, 32], "px": 12.0, "py": 4.0, "x": 110, "y": 102}
+    {"n": "purse", "bone": "handR", "rect": [138, 148, 28, 30], "px": 14.0, "py": 2.0, "x": 164, "y": 140, "lag": 1},
+    {"n": "legR_up", "bone": "legR_up", "rect": [60, 148, 18, 36], "px": 10.0, "py": 12.0, "x": 136, "y": 146, "ext": 8, "top": [134.53, 135.59]},
+    {"n": "legR_lo", "bone": "legR_lo", "rect": [120, 148, 16, 32], "px": 8.0, "py": 4.0, "x": 138, "y": 170},
+    {"n": "footR", "bone": "footR", "rect": [186, 86, 28, 46], "px": 8.0, "py": 32.0, "x": 141, "y": 212},
+    {"n": "torso", "bone": "torso", "rect": [118, 86, 40, 50], "px": 16.0, "py": 46.0, "x": 134, "y": 130},
+    {"n": "legL_up", "bone": "legL_up", "rect": [30, 148, 28, 38], "px": 10.0, "py": 12.0, "x": 114, "y": 152, "ext": 8, "top": [123.78, 141.46]},
+    {"n": "legL_lo", "bone": "legL_lo", "rect": [80, 148, 16, 34], "px": 8.0, "py": 4.0, "x": 113, "y": 178},
+    {"n": "footL", "bone": "footL", "rect": [160, 86, 24, 48], "px": 10.0, "py": 34.0, "x": 110, "y": 229},
+    {"n": "coat", "bone": "torso", "rect": [0, 0, 80, 84], "px": 40.0, "py": 20.0, "x": 134, "y": 130, "hem": 0.38},
+    {"n": "head", "bone": "head", "rect": [0, 86, 48, 60], "px": 22.0, "py": 56.0, "x": 133, "y": 94},
+    {"n": "hair", "bone": "head", "rect": [130, 0, 68, 60], "px": 34.0, "py": 30.0, "x": 122, "y": 70, "lag": 0.5},
+    {"n": "hat", "bone": "head", "rect": [50, 86, 66, 50], "px": 36.0, "py": 44.0, "x": 131, "y": 60, "lag": 0.4},
+    {"n": "book", "bone": "handL", "rect": [168, 148, 28, 24], "px": 14.0, "py": 12.0, "x": 120, "y": 141},
+    {"n": "armL_lo", "bone": "armL_lo", "rect": [0, 148, 28, 40], "px": 8.0, "py": 6.0, "x": 108, "y": 122},
+    {"n": "armL_up", "bone": "armL_up", "rect": [98, 148, 20, 32], "px": 12.0, "py": 4.0, "x": 110, "y": 102}
    ]
   },
   "night_nurse": {
    "file1x": "night_nurse@1x.webp",
    "file2x": "night_nurse@2x.webp",
    "w": 256,
-   "h": 240,
+   "h": 242,
    "ship": true,
    "note": "",
    "side": "The sheet's names disagree with the standing sprite, so they are read by eye: the straight arm (named armL_up_lo_hand) is the SCREEN LEFT arm (her own right, near side) and carries the syringe, as in the sprite; the arm with the level forearm (named armR, two loose pieces) is the SCREEN RIGHT arm (far side) and carries the lantern. Each leg is ONE painted piece (thigh, shin and boot joined at a bent knee): it is one bone, hidden to the boots by the dress.",
@@ -190,18 +190,18 @@
     {"n": "footL", "p": "legL_lo", "x": 116, "y": 232, "empty": true}
    ],
    "parts": [
-    {"n": "armR_up", "bone": "armR_up", "rect": [26, 194, 24, 18], "px": 4.0, "py": 4.0, "x": 138, "y": 96},
-    {"n": "lantern", "bone": "handR", "rect": [0, 194, 24, 46], "px": 4.0, "py": 34.0, "x": 163, "y": 110, "lag": 1, "upright": true},
-    {"n": "armR_lo", "bone": "armR_lo", "rect": [52, 194, 30, 12], "px": 2.0, "py": 6.0, "x": 146, "y": 105},
-    {"n": "legR_up", "bone": "legR_up", "rect": [34, 0, 30, 98], "px": 10.0, "py": 4.0, "x": 134, "y": 135},
-    {"n": "torso", "bone": "torso", "rect": [118, 116, 56, 58], "px": 34.0, "py": 54.0, "x": 128, "y": 126},
-    {"n": "legL_up", "bone": "legL_up", "rect": [0, 0, 32, 114], "px": 10.0, "py": 6.0, "x": 112, "y": 136},
-    {"n": "skirt", "bone": "torso", "rect": [66, 0, 84, 88], "px": 42.0, "py": 4.0, "x": 128, "y": 126, "hem": 0.3},
-    {"n": "apron", "bone": "torso", "rect": [0, 116, 44, 76], "px": 22.0, "py": 4.0, "x": 133, "y": 116, "hem": 0.3},
-    {"n": "head", "bone": "head", "rect": [46, 116, 52, 72], "px": 24.0, "py": 68.0, "x": 130, "y": 93},
-    {"n": "headscarf", "bone": "head", "rect": [176, 116, 56, 56], "px": 34.0, "py": 20.0, "x": 131, "y": 37},
+    {"n": "armR_up", "bone": "armR_up", "rect": [26, 196, 24, 18], "px": 4.0, "py": 4.0, "x": 138, "y": 96},
+    {"n": "lantern", "bone": "handR", "rect": [0, 196, 24, 46], "px": 4.0, "py": 34.0, "x": 163, "y": 110, "lag": 1, "upright": true},
+    {"n": "armR_lo", "bone": "armR_lo", "rect": [52, 196, 30, 12], "px": 2.0, "py": 6.0, "x": 146, "y": 105},
+    {"n": "legR_up", "bone": "legR_up", "rect": [120, 0, 30, 100], "px": 10.0, "py": 6.0, "x": 134, "y": 135, "ext": 2, "top": [133.09, 129.11]},
+    {"n": "torso", "bone": "torso", "rect": [118, 118, 56, 58], "px": 34.0, "py": 54.0, "x": 128, "y": 126},
+    {"n": "legL_up", "bone": "legL_up", "rect": [0, 0, 32, 116], "px": 10.0, "py": 8.0, "x": 112, "y": 136, "ext": 3, "top": [121.24, 129.36]},
+    {"n": "skirt", "bone": "torso", "rect": [34, 0, 84, 106], "px": 42.0, "py": 22.0, "x": 128, "y": 126, "hem": 0.44},
+    {"n": "apron", "bone": "torso", "rect": [0, 118, 44, 76], "px": 22.0, "py": 4.0, "x": 133, "y": 116, "hem": 0.3},
+    {"n": "head", "bone": "head", "rect": [46, 118, 52, 72], "px": 24.0, "py": 68.0, "x": 130, "y": 93},
+    {"n": "headscarf", "bone": "head", "rect": [176, 118, 56, 56], "px": 34.0, "py": 20.0, "x": 131, "y": 37},
     {"n": "syringe", "bone": "handL", "rect": [152, 0, 96, 86], "px": 32.0, "py": 10.0, "x": 108, "y": 136, "lag": 0.6},
-    {"n": "armL_up", "bone": "armL_up", "rect": [100, 116, 16, 60], "px": 8.0, "py": 4.0, "x": 104, "y": 86}
+    {"n": "armL_up", "bone": "armL_up", "rect": [100, 118, 16, 60], "px": 8.0, "py": 4.0, "x": 104, "y": 86}
    ]
   },
   "npc_nurse": {
@@ -237,13 +237,13 @@
     {"n": "footL", "p": "legL_lo", "x": 114, "y": 210}
    ],
    "parts": [
-    {"n": "armR_lo", "bone": "armR_lo", "rect": [76, 150, 24, 32], "px": 6.0, "py": 4.0, "x": 150, "y": 112},
+    {"n": "armR_lo", "bone": "armR_lo", "rect": [112, 150, 24, 32], "px": 6.0, "py": 4.0, "x": 150, "y": 112},
     {"n": "armR_up", "bone": "armR_up", "rect": [170, 150, 16, 26], "px": 8.0, "py": 4.0, "x": 147, "y": 98},
-    {"n": "legR_up", "bone": "legR_up", "rect": [138, 150, 16, 28], "px": 8.0, "py": 4.0, "x": 136, "y": 148},
+    {"n": "legR_up", "bone": "legR_up", "rect": [94, 150, 16, 36], "px": 8.0, "py": 12.0, "x": 136, "y": 148, "ext": 8, "top": [135.72, 137.95]},
     {"n": "legR_lo", "bone": "legR_lo", "rect": [188, 150, 10, 26], "px": 4.0, "py": 2.0, "x": 138, "y": 171},
-    {"n": "footR", "bone": "footR", "rect": [42, 150, 32, 36], "px": 10.0, "py": 8.0, "x": 140, "y": 198},
+    {"n": "footR", "bone": "footR", "rect": [60, 150, 32, 36], "px": 10.0, "py": 8.0, "x": 140, "y": 198},
     {"n": "torso", "bone": "torso", "rect": [70, 90, 40, 48], "px": 20.0, "py": 44.0, "x": 128, "y": 131},
-    {"n": "legL_up", "bone": "legL_up", "rect": [120, 150, 16, 30], "px": 8.0, "py": 4.0, "x": 118, "y": 154},
+    {"n": "legL_up", "bone": "legL_up", "rect": [42, 150, 16, 38], "px": 8.0, "py": 12.0, "x": 118, "y": 154, "ext": 9, "top": [117.27, 142.75]},
     {"n": "legL_lo", "bone": "legL_lo", "rect": [156, 150, 12, 28], "px": 4.0, "py": 2.0, "x": 117, "y": 180},
     {"n": "footL", "bone": "footL", "rect": [178, 90, 34, 46], "px": 14.0, "py": 12.0, "x": 114, "y": 210},
     {"n": "skirt", "bone": "torso", "rect": [0, 90, 68, 58], "px": 34.0, "py": 2.0, "x": 128, "y": 131, "hem": 0.3},
@@ -252,7 +252,7 @@
     {"n": "cap", "bone": "head", "rect": [140, 0, 68, 60], "px": 34.0, "py": 30.0, "x": 122, "y": 47},
     {"n": "tray", "bone": "handL", "rect": [112, 90, 64, 46], "px": 14.0, "py": 28.0, "x": 127, "y": 127, "lag": 0.5, "upright": true},
     {"n": "armL_lo", "bone": "armL_lo", "rect": [0, 150, 40, 42], "px": 6.0, "py": 14.0, "x": 105, "y": 117},
-    {"n": "armL_up", "bone": "armL_up", "rect": [102, 150, 16, 30], "px": 8.0, "py": 4.0, "x": 108, "y": 97}
+    {"n": "armL_up", "bone": "armL_up", "rect": [138, 150, 16, 30], "px": 8.0, "py": 4.0, "x": 108, "y": 97}
    ]
   },
   "npc_patient": {
@@ -289,10 +289,10 @@
    ],
    "parts": [
     {"n": "armR_up", "bone": "armR_up", "rect": [0, 192, 20, 28], "px": 10.0, "py": 4.0, "x": 146, "y": 98},
-    {"n": "legR_up", "bone": "legR_up", "rect": [138, 134, 20, 38], "px": 10.0, "py": 4.0, "x": 138, "y": 152},
+    {"n": "legR_up", "bone": "legR_up", "rect": [142, 134, 22, 44], "px": 12.0, "py": 10.0, "x": 138, "y": 152, "ext": 7, "top": [136.33, 142.21]},
     {"n": "legR_lo", "bone": "legR_lo", "rect": [82, 134, 32, 56], "px": 10.0, "py": 4.0, "x": 140, "y": 174},
     {"n": "torso", "bone": "torso", "rect": [66, 72, 40, 60], "px": 18.0, "py": 56.0, "x": 130, "y": 136},
-    {"n": "legL_up", "bone": "legL_up", "rect": [116, 134, 20, 40], "px": 10.0, "py": 4.0, "x": 120, "y": 160},
+    {"n": "legL_up", "bone": "legL_up", "rect": [116, 134, 24, 48], "px": 10.0, "py": 12.0, "x": 120, "y": 160, "ext": 8, "top": [123.04, 149.0]},
     {"n": "legL_lo", "bone": "legL_lo", "rect": [108, 72, 30, 60], "px": 14.0, "py": 4.0, "x": 122, "y": 187},
     {"n": "skirt", "bone": "torso", "rect": [0, 72, 64, 60], "px": 32.0, "py": 4.0, "x": 130, "y": 136, "hem": 0.3},
     {"n": "teddy", "bone": "torso", "rect": [132, 0, 48, 64], "px": 24.0, "py": 14.0, "x": 160, "y": 112, "lag": 0.3},
@@ -301,7 +301,7 @@
     {"n": "headscarf", "bone": "head", "rect": [0, 134, 80, 56], "px": 40.0, "py": 28.0, "x": 128, "y": 45},
     {"n": "armL_lo", "bone": "armL_lo", "rect": [22, 192, 12, 24], "px": 6.0, "py": 2.0, "x": 114, "y": 118},
     {"n": "handL", "bone": "handL", "rect": [36, 192, 12, 18], "px": 6.0, "py": 2.0, "x": 116, "y": 137},
-    {"n": "armL_up", "bone": "armL_up", "rect": [160, 134, 20, 28], "px": 8.0, "py": 4.0, "x": 112, "y": 98}
+    {"n": "armL_up", "bone": "armL_up", "rect": [166, 134, 20, 28], "px": 8.0, "py": 4.0, "x": 112, "y": 98}
    ]
   },
   "knitter": {
@@ -338,23 +338,23 @@
     {"n": "footL", "p": "legL_lo", "x": 126, "y": 221}
    ],
    "parts": [
-    {"n": "armR_up", "bone": "armR_up", "rect": [130, 220, 18, 30], "px": 6.0, "py": 4.0, "x": 150, "y": 100},
+    {"n": "armR_up", "bone": "armR_up", "rect": [150, 220, 18, 30], "px": 6.0, "py": 4.0, "x": 150, "y": 100},
     {"n": "armR_lo", "bone": "armR_lo", "rect": [68, 268, 18, 22], "px": 6.0, "py": 4.0, "x": 153, "y": 122},
-    {"n": "legR_up", "bone": "legR_up", "rect": [150, 220, 16, 30], "px": 8.0, "py": 2.0, "x": 146, "y": 150},
-    {"n": "legR_lo", "bone": "legR_lo", "rect": [200, 220, 12, 28], "px": 6.0, "py": 2.0, "x": 147, "y": 174},
-    {"n": "footR", "bone": "footR", "rect": [46, 220, 32, 34], "px": 10.0, "py": 10.0, "x": 146, "y": 204},
+    {"n": "legR_up", "bone": "legR_up", "rect": [46, 220, 18, 40], "px": 10.0, "py": 12.0, "x": 146, "y": 150, "ext": 9, "top": [144.39, 139.56]},
+    {"n": "legR_lo", "bone": "legR_lo", "rect": [202, 220, 12, 28], "px": 6.0, "py": 2.0, "x": 147, "y": 174},
+    {"n": "footR", "bone": "footR", "rect": [66, 220, 32, 34], "px": 10.0, "py": 10.0, "x": 146, "y": 204},
     {"n": "torso", "bone": "torso", "rect": [0, 220, 44, 46], "px": 22.0, "py": 42.0, "x": 135, "y": 125},
-    {"n": "legL_up", "bone": "legL_up", "rect": [86, 130, 16, 68], "px": 8.0, "py": 2.0, "x": 122, "y": 150},
-    {"n": "footL", "bone": "footL", "rect": [80, 220, 22, 32], "px": 10.0, "py": 10.0, "x": 126, "y": 221},
+    {"n": "legL_up", "bone": "legL_up", "rect": [86, 130, 16, 72], "px": 8.0, "py": 6.0, "x": 122, "y": 150, "ext": 3, "top": [121.83, 145.0]},
+    {"n": "footL", "bone": "footL", "rect": [100, 220, 22, 32], "px": 10.0, "py": 10.0, "x": 126, "y": 221},
     {"n": "skirt", "bone": "torso", "rect": [0, 130, 84, 88], "px": 42.0, "py": 4.0, "x": 135, "y": 125, "hem": 0.3},
     {"n": "apron", "bone": "torso", "rect": [176, 130, 52, 66], "px": 26.0, "py": 4.0, "x": 140, "y": 124, "hem": 0.3},
     {"n": "scarf", "bone": "torso", "rect": [0, 0, 104, 128], "px": 78.0, "py": 16.0, "x": 135, "y": 90, "lag": 0.6},
     {"n": "head", "bone": "head", "rect": [104, 130, 70, 66], "px": 38.0, "py": 62.0, "x": 137, "y": 84},
     {"n": "cap", "bone": "head", "rect": [0, 268, 44, 26], "px": 22.0, "py": 22.0, "x": 130, "y": 38},
     {"n": "needles", "bone": "handR", "rect": [106, 0, 108, 118], "px": 48.0, "py": 62.0, "x": 154, "y": 131, "lag": 0.3},
-    {"n": "armL_lo", "bone": "armL_lo", "rect": [168, 220, 30, 28], "px": 6.0, "py": 10.0, "x": 118, "y": 124},
+    {"n": "armL_lo", "bone": "armL_lo", "rect": [170, 220, 30, 28], "px": 6.0, "py": 10.0, "x": 118, "y": 124},
     {"n": "handL", "bone": "handL", "rect": [46, 268, 20, 22], "px": 6.0, "py": 6.0, "x": 136, "y": 140},
-    {"n": "armL_up", "bone": "armL_up", "rect": [104, 220, 24, 30], "px": 14.0, "py": 4.0, "x": 116, "y": 100}
+    {"n": "armL_up", "bone": "armL_up", "rect": [124, 220, 24, 30], "px": 14.0, "py": 4.0, "x": 116, "y": 100}
    ]
   },
   "candy_striper": {
@@ -393,9 +393,9 @@
    "parts": [
     {"n": "armR_up", "bone": "armR_up", "rect": [116, 106, 30, 48], "px": 6.0, "py": 4.0, "x": 126, "y": 100},
     {"n": "tray", "bone": "handR", "rect": [0, 174, 64, 44], "px": 14.0, "py": 26.0, "x": 146, "y": 122, "lag": 0.5, "upright": true},
-    {"n": "legR_up", "bone": "legR_up", "rect": [34, 0, 28, 90], "px": 14.0, "py": 4.0, "x": 130, "y": 136},
+    {"n": "legR_up", "bone": "legR_up", "rect": [34, 0, 28, 90], "px": 14.0, "py": 4.0, "x": 130, "y": 136, "top": [128.63, 133.36]},
     {"n": "torso", "bone": "torso", "rect": [66, 106, 48, 64], "px": 24.0, "py": 44.0, "x": 112, "y": 130},
-    {"n": "legL_up", "bone": "legL_up", "rect": [0, 0, 32, 104], "px": 14.0, "py": 4.0, "x": 108, "y": 144},
+    {"n": "legL_up", "bone": "legL_up", "rect": [0, 0, 32, 104], "px": 14.0, "py": 4.0, "x": 108, "y": 144, "top": [111.94, 140.92]},
     {"n": "apron", "bone": "torso", "rect": [0, 106, 64, 66], "px": 36.0, "py": 28.0, "x": 114, "y": 128, "hem": 0.6},
     {"n": "head", "bone": "head", "rect": [64, 0, 84, 70], "px": 32.0, "py": 64.0, "x": 112, "y": 91},
     {"n": "cap", "bone": "head", "rect": [66, 174, 56, 36], "px": 28.0, "py": 18.0, "x": 110, "y": 35},
@@ -439,11 +439,11 @@
     {"n": "armR_up", "bone": "armR_up", "rect": [72, 222, 32, 30], "px": 6.0, "py": 10.0, "x": 112, "y": 92},
     {"n": "armR_lo", "bone": "armR_lo", "rect": [164, 222, 26, 24], "px": 4.0, "py": 8.0, "x": 133, "y": 104},
     {"n": "handR", "bone": "handR", "rect": [192, 222, 22, 22], "px": 6.0, "py": 6.0, "x": 150, "y": 114},
-    {"n": "legR_up", "bone": "legR_up", "rect": [132, 176, 20, 38], "px": 10.0, "py": 4.0, "x": 98, "y": 146},
+    {"n": "legR_up", "bone": "legR_up", "rect": [132, 176, 20, 38], "px": 10.0, "py": 4.0, "x": 98, "y": 146, "top": [101.6, 143.21]},
     {"n": "legR_lo", "bone": "legR_lo", "rect": [52, 222, 18, 32], "px": 10.0, "py": 4.0, "x": 98, "y": 170},
     {"n": "footR", "bone": "footR", "rect": [26, 222, 24, 32], "px": 8.0, "py": 8.0, "x": 96, "y": 186},
-    {"n": "torso", "bone": "torso", "rect": [128, 110, 50, 52], "px": 24.0, "py": 46.0, "x": 97, "y": 120},
-    {"n": "legL_up", "bone": "legL_up", "rect": [70, 176, 32, 44], "px": 22.0, "py": 6.0, "x": 84, "y": 150},
+    {"n": "torso", "bone": "torso", "rect": [128, 110, 50, 56], "px": 24.0, "py": 50.0, "x": 97, "y": 120},
+    {"n": "legL_up", "bone": "legL_up", "rect": [70, 176, 32, 44], "px": 22.0, "py": 6.0, "x": 84, "y": 150, "top": [81.57, 145.84]},
     {"n": "legL_lo", "bone": "legL_lo", "rect": [104, 176, 26, 38], "px": 18.0, "py": 6.0, "x": 74, "y": 178},
     {"n": "footL", "bone": "footL", "rect": [0, 222, 24, 32], "px": 14.0, "py": 8.0, "x": 64, "y": 198},
     {"n": "coat", "bone": "torso", "rect": [62, 110, 64, 58], "px": 32.0, "py": 2.0, "x": 97, "y": 120, "hem": 0.3},
