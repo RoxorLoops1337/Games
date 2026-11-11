@@ -8,6 +8,7 @@ export const ASSIST_OPTIONS = [
   { id: 'mercy', name: 'Mercy', text: 'Overload never Shatters a card. The first time you would die in a run, you get back up at half HP, once.', shatter: 0, revive: 0.5 },
 ];
 export const ASSIST_NOTE = 'Assisted runs still count as played, but do not unlock ascensions, daily bests, first-time Credit bonuses or achievements.';
+export const ASSIST_DEFAULT = { on: false, sturdy: true, gentle: false, kind: true, mercy: true };
 
 // the plain flags to store on a run, or null when nothing is switched on. Accepts the settings object ({on, ...}) or a bare flag map.
 export function assistFlags(a) {
