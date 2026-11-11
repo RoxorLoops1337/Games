@@ -135,6 +135,15 @@ await t('map_walk_is_the_puppet_when_the_sprite_can_be_read: legs cut from the s
     frames(S.app, 90); const rest = tape(S.app.ctx); frames(S.app, 2); rest.stop(); assert.ok(rest.rec.some((r) => r.tag === 'stand:marrow') && hero().pp === null, 'at rest the standing image is back');
   });
 });
+await t('map_walk_shows_the_hop_where_the_sprite_can_be_cut_when_the_lab_switches_the_puppet_off', async () => {
+  await withPixels(async () => {
+    const S = await mapSetup({ marrow: OLD_ACTOR() }, { seed: 'animoff' }); S.app.shared.meta.settings.reduceMotion = S.app.shared.meta.settings.reducedMotion = false;
+    frames(S.app, 2); assert.ok(hero(), 'the hero is on the map'); hero().pm = 'off'; // r.pm, the animation lab's switch: the hop that the game falls back to, under a sprite the puppet could cut
+    const { rows, rec } = await runWalk(S), mv = rows.filter((r) => r.cycle);
+    assert.ok(mv.length > 20, 'the hero walked: ' + mv.length + ' frames'); assert.ok(mv.every((r) => r.pp === null), 'no puppet pose with the switch off');
+    assert.ok(rec.length > 100 && rec.every((r) => r.tag === 'stand:marrow'), 'the whole standing image is drawn, as the hop moves it'); assert.ok(mv.some((r) => r.bob > 0.5), 'and the body hops');
+  });
+});
 await t('map_reduced_motion_and_a_missing_manifest_keep_the_figure_standing_or_procedural', async () => {
   await withPixels(async () => {
     const R = await mapSetup({ marrow: OLD_ACTOR() }, { reduced: true }); const { rows, rec } = await runWalk(R, 60);
