@@ -2,7 +2,7 @@
 
 "Cut what you love. Stitch what you need." A roguelike deckbuilder in which you never add cards. After each fight you pick one of your own cards and sew one graft onto it. Every graft is a boon with a price. Play it at `https://games-71g.pages.dev/graftwork/`.
 
-Plain ES modules on one 1280x720 canvas. No build step, no art files (everything is drawn procedurally), audio is synthesized with WebAudio.
+Plain ES modules on one 1280x720 canvas, no build step. Every run is a Ward run: the hospital you build room by room is the map. Cards, icons and the interface are drawn procedurally and audio is synthesized with WebAudio; the Ward's rooms and characters are generated WebP art under `assets/`.
 
 ## Run it locally
 ```
@@ -14,7 +14,7 @@ python3 -m http.server 8123          # from the repo root
 ## Test it
 ```
 node tests/graftwork_data.test.mjs   # content gate, run after every data edit
-node tests/run_graftwork.mjs         # every suite, 4 workers, about 30 s (npm run test:graftwork)
+node tests/run_graftwork.mjs         # all 71 suites, 4 workers, a few minutes (npm run test:graftwork)
 node tests/run_graftwork.mjs --times # same, plus a per-suite timing table
 ```
 Never run other games' suites for a Graftwork change. Balance and audio tools are in `tools/graftwork_*.mjs`.
