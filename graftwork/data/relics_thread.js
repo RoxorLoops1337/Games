@@ -3,11 +3,12 @@
 // turn's 3 paying cuts, so no relic here fires on it. A "per stitch" relic counts p.stitches, what was paid (a Line cut by an enemy's
 // cancel paid none), not the length of the Line.
 // Per-combat scratch lives in A.c.rx. mod.seamCap raises the Line length cap (default 5), read by engine/seam.js through relicMod.
-const rx = (A) => A.c.rx || (A.c.rx = {});
-const first = (A, key) => { const r = rx(A); if (r[key] === A.c.turn) return false; r[key] = A.c.turn; return true; };
-const seam = (A) => A.c.seam || { len: 0, set: [], counts: {} };
-const nSchools = (A) => Object.keys(seam(A).counts || {}).filter((k) => seam(A).counts[k] > 0).length;
-const randFoe = (A) => { const a = A.alive(); return a.length ? a[A.rng.int(a.length)] : null; };
+// shared with relics_more.js
+export const rx = (A) => A.c.rx || (A.c.rx = {});
+export const first = (A, key) => { const r = rx(A); if (r[key] === A.c.turn) return false; r[key] = A.c.turn; return true; };
+export const seam = (A) => A.c.seam || { len: 0, set: [], counts: {} };
+export const nSchools = (A) => Object.keys(seam(A).counts || {}).filter((k) => seam(A).counts[k] > 0).length;
+export const randFoe = (A) => { const a = A.alive(); return a.length ? a[A.rng.int(a.length)] : null; };
 
 export const RELICS_THREAD = [
   { id: 'r_spool', name: 'Spool', rarity: 'uncommon', text: 'The Line can hold 6 knots instead of 5. Cutting a Line of 4 or more draws 1 card.', mod: { seamCap: 6 },

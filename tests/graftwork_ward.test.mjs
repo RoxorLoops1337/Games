@@ -50,7 +50,7 @@ t('floor generation: deterministic, 9 x 6, Entrance and Theatre far apart, pre-b
     assert.equal(a.phase, 'ward'); assert.equal(w.phase, 'morning'); assert.equal(w.day, 1); assert.equal(w.dayLimit, 8);
     assert.equal(w.grid.length, 6); assert.equal(w.grid[0].length, 9);
     const ent = W.entranceOf(a), th = W.theatreOf(a);
-    assert.ok(Math.abs(ent.x - th.x) + Math.abs(ent.y - th.y) >= 7, 'far apart'); assert.deepEqual(W.sizeOf(th), [2, 2], 'the Theatre is 2 x 2'); assert.ok(th.x === 7 && th.y >= 0 && th.y <= 4);
+    assert.ok(Math.abs(ent.x - th.x) + Math.abs(ent.y - th.y) >= 7, 'far apart'); assert.equal(W.sizeKey(th), '2x2', 'the Theatre is 2 x 2'); assert.ok(th.x === 7 && th.y >= 0 && th.y <= 4);
     for (const ty of ['rm_ward', 'rm_chapel', 'rm_sawmill']) assert.ok(Object.values(w.rooms).some((r) => r.type === ty), ty);
     const conn = W.connectedRooms(a);
     for (const r of Object.values(w.rooms)) if (r.type !== 'rm_theatre') assert.ok(conn.has(r.id), 'connected ' + r.type);

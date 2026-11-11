@@ -9,12 +9,12 @@ import { runAllows, snapshotFor } from './unlock.js';
 import { addBuildCard, wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper, isPriceMod, sewGraft, unsewGraft } from './cards.js';
 
-export const POTION_SLOTS = 3;
+const POTION_SLOTS = 3;
 export const SKIP_HEAL = 8;
-export const GOLD_FIGHT = { 1: 18, 2: 24, 3: 30 };
-export const GOLD_ELITE = { 1: 40, 2: 50, 3: 60 };
-export const GOLD_BOSS = { 1: 80, 2: 100, 3: 0 };
-export const PRICE_MULT = { 1: 1, 2: 1.2, 3: 1.4 };
+const GOLD_FIGHT = { 1: 18, 2: 24, 3: 30 };
+const GOLD_ELITE = { 1: 40, 2: 50, 3: 60 };
+const GOLD_BOSS = { 1: 80, 2: 100, 3: 0 };
+const PRICE_MULT = { 1: 1, 2: 1.2, 3: 1.4 };
 
 export const ASCENSION_TEXT = [
   'Base game.',
@@ -110,7 +110,8 @@ export function rollPotion(run) {
 export function startAct(run, act) { run.act = act; wardInit(run, act); }
 
 // ---------- encounters ----------
-function actEnemies(run, kind) {
+// the enemies an encounter of this act draws from, in registry order (the order is part of every rng.pick on it)
+export function actEnemies(run, kind) {
   return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.summonOnly);
 }
 export function makeEncounter(run, kind) {

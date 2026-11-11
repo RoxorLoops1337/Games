@@ -1,5 +1,5 @@
 // Potions. { id, name, rarity, target 'self'|'enemy'|'none', text, fx: [ops] }
-const allCards = (A) => [...A.c.hand, ...A.c.drawPile, ...A.c.discard, ...A.c.exhaust, ...A.c.powers];
+import { allCards } from './helpers.js';
 const unjam = { op: 'custom', text: 'Unjam every card in your hand.', fn: (A) => { for (const k of A.c.hand) k.jam = false; } };
 const untithe = { op: 'custom', text: 'No card is Tithed for the rest of this combat.', fn: (A) => { for (const k of allCards(A)) k.tithed = false; } };
 

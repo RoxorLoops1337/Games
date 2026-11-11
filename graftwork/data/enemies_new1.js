@@ -2,10 +2,7 @@
 // Seam hooks (engine/seam.js): on.seamExtend(A, e, { len, school, card, spec }), on.seamCut(A, e, { len, school, stitches, pays, kind: 'cut', card, cancel, paid }) when the Line is cut,
 // on.seamCash(A, e, { ...same, kind: 'cut'|'end' }) for every cash including the turn end (may set cancel), on.seamPay(A, e, { school, stitches, kind, amount }).
 // paid is false (and stitches 0) for a cut past the turn's 3 paying cuts.
-const dmg = (n, extra = {}) => ({ op: 'dmg', n, ...extra });
-const blk = (n) => ({ op: 'block', n, to: 'self' });
-const debuff = (s, n) => ({ op: 'status', s, n, to: 'player' });
-const buff = (s, n) => ({ op: 'status', s, n, to: 'self' });
+import { dmg, blk, debuff, buff } from './helpers.js';
 
 export const ENEMIES_NEW1 = [
   // Infection every third turn tithes a plain card for the rest of the fight. Kill it before the second sting.

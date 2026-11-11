@@ -1,7 +1,7 @@
 // Afflictions (design/ENEMY_DEPTH.md section 1): every new status lifecycle with exact numbers, caps, guards, interactions.
 import assert from 'node:assert/strict';
 import * as RUN from '../graftwork/engine/run.js';
-import { newCombat, playCard, endTurn, usePotion, addStatus, addCard, specOf, effCost, startPlayerTurn, dealDamage, setStatus } from '../graftwork/engine/combat.js';
+import { newCombat, playCard, endTurn, usePotion, addStatus, addCard, specOf, effCost, dealDamage, setStatus } from '../graftwork/engine/combat.js';
 import { afflStartTurn } from '../graftwork/engine/afflictions.js';
 import { ENEMIES, STATUSES, GRAFTS, CARDS } from '../graftwork/data/index.js';
 

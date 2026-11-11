@@ -1,6 +1,7 @@
 // Rules fixes (graftwork/design/CLEANUP_PLAN.md, "Rules fixes"): every card, graft, passive and relic does what its text says,
 // and saves keep loading when they name content that no longer exists. Each block failed on the code before the fix.
 import assert from 'node:assert/strict';
+import { SCHOOL_LIST } from '../graftwork/data/schools.js';
 import { makeApp, frames } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as META from '../graftwork/engine/meta.js';
@@ -93,7 +94,7 @@ await ta('meta with unknown ids in seen lists, history and a practice deck loads
   m0.practice.the_resident = { boss: 'the_resident', kind: 'boss', enemies: ['the_resident'], act: 1, hero: 'marrow', asc: 0, deck: [{ id: 'm_cut', grafts: [], up: 0 }, { id: GONE[0], grafts: [], up: 0 }, { id: GONE[1], grafts: ['g_not_a_graft'], up: 0 }, { id: 'm_dress', grafts: ['g_not_a_graft'], up: 0 }], relics: ['r_not_a_relic'], maxHp: 80, win: true, ts: 1 };
   store[META.KEY] = JSON.stringify(m0);
   const m = META.loadMeta();
-  assert.equal(m.history.length, 1); assert.ok(META.isSeen(m, 'cards', GONE[1]), 'the save is not rewritten');
+  assert.equal(m.history.length, 1); assert.ok(m.seen.cards[GONE[1]], 'the save is not rewritten');
   assert.ok(META.codexCount(m) >= 0); META.saveMeta(m);
   const list = META.practiceList(m); assert.equal(list.length, 1);
   const pr = META.newPracticeRun(list[0], m);
@@ -117,7 +118,7 @@ await ta('meta with unknown ids in seen lists, history and a practice deck loads
 // ---------------------------------------------------------------- Thread fixtures (as in graftwork_seam.test.mjs)
 const { seamPreview, seamWorth, SEAM_CUTS_TURN } = await import('../graftwork/engine/seam.js');
 const SEAM = await import('../graftwork/engine/seam.js');
-const SCH = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+const SCH = SCHOOL_LIST.map((s) => s.id);
 for (const s of SCH) {
   CARDS['t_' + s] = { id: 't_' + s, name: 'T ' + s, type: 'skill', cost: 0, rarity: 'common', school: s, target: 'none', fx: [], flavor: 'x', flags: {} };
   CARDS['ta_' + s] = { id: 'ta_' + s, name: 'TA ' + s, type: 'attack', cost: 0, rarity: 'common', school: s, target: 'enemy', fx: [{ op: 'dmg', n: 1 }], flavor: 'x', flags: {} };

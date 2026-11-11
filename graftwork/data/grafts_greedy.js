@@ -1,6 +1,5 @@
 // GREEDY grafts: weight 2 to 3, a big boon with a heavy price. Never common.
-const dmg = (s) => s.fx.some((o) => o.op === 'dmg');
-const blk = (s) => s.fx.some((o) => o.op === 'block');
+import { hasD as dmg, hasB as blk } from './helpers.js';
 const either = (s) => dmg(s) || blk(s);
 const A = ['attack'];
 const AS = ['attack', 'skill'];

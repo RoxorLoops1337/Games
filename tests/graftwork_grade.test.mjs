@@ -34,7 +34,7 @@ globalThis.__GW_ART_THROW = true; // a painter that throws fails the test instea
 const GR = await import('../graftwork/art/grade.js');
 const { drawEnemy } = await import('../graftwork/art/enemies.js');
 const { drawHero, setHeroTint } = await import('../graftwork/art/heroes.js');
-const { ENEMY_LIST } = await import('../graftwork/data/index.js');
+const ENEMY_LIST = Object.values((await import('../graftwork/data/index.js')).ENEMIES);
 
 // ---- the four CSS filter functions, written out from the Filter Effects spec (channels 0..1, clamped after each function)
 const AM = Object.fromEntries([...GR.GRADE_CSS.matchAll(/(\w+)\(([\d.]+)\)/g)].map((m) => [m[1], +m[2]]));

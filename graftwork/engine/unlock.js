@@ -4,10 +4,10 @@
 // Run gating: run.unlockedAtStart = undefined (everything open: tools and old runs) | array of unlocked ids (non start items) ; start items always open.
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, TOTAL_COST, LOCKED_IDS, UP, HERO_GATES, AFFINITY_WINDOW, AFFINITY_MIN_RUNS, WELCOME_UP_PER_RUN, WELCOME_UP_CAP, uid, inventory } from '../data/unlocks.js';
 import { HEROES, CARDS, GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../data/index.js';
-export { UP, TOTAL_COST, HERO_GATES, STEPS, UNLOCKS, inventory };
+export { UP, HERO_GATES, UNLOCKS, inventory };
 
 const NAMES = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
-const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+export const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x); // a plain object (meta.js uses it too)
 const SEEN_KEY = { card: 'cards', graft: 'grafts', relic: 'relics', potion: 'potions', event: 'events', build: 'builds' };
 
 export function unlockDefaults() { return { ids: {}, points: 0, lifetime: 0, played: {}, killed: {}, maxAct: 1, v: 1 }; }
@@ -18,7 +18,7 @@ function U(m) { // the unlock block, repaired in place
   return u;
 }
 // NEW ribbon set: unlock ids opened by a finished run and not yet seen in an offer. Additive, repaired in place.
-export function freshOf(m) { const u = U(m); if (!isObj(u.fresh)) u.fresh = {}; return u.fresh; }
+function freshOf(m) { const u = U(m); if (!isObj(u.fresh)) u.fresh = {}; return u.fresh; }
 export function isFresh(m, itemId) { const id = unlockIdOf(itemId); return !!(id && m && m.unlocked && isObj(m.unlocked.fresh) && m.unlocked.fresh[id]); }
 export function takeFresh(m, itemId) { const id = unlockIdOf(itemId); if (!id || !isFresh(m, itemId)) return false; delete m.unlocked.fresh[id]; return true; }
 const nz = (x) => (Number.isFinite(x) && x > 0 ? x : 0);
@@ -34,12 +34,12 @@ export function isUnlocked(m, unlockId) {
 export function isItemUnlocked(m, kind, itemId) { const e = UNLOCKS[uid(kind, itemId)]; return !e || isUnlocked(m, e.id); } // ungated items count as open
 export function unlockIdOf(itemId) { const e = UNLOCK_OF_ITEM[itemId]; return e ? e.id : null; }
 export function lockedHint(itemId) { const e = UNLOCK_OF_ITEM[itemId] || UNLOCKS[itemId]; return e ? e.hint : ''; }
-export function unlockedIds(m) { return Object.keys((m && m.unlocked && m.unlocked.ids) || {}).filter((k) => UNLOCKS[k] && UNLOCKS[k].tier === 'locked'); }
+function unlockedIds(m) { return Object.keys((m && m.unlocked && m.unlocked.ids) || {}).filter((k) => UNLOCKS[k] && UNLOCKS[k].tier === 'locked'); }
 function nameOf(e) { const d = NAMES[e.kind][e.itemId]; return d ? d.name : e.itemId; }
 function entryView(e, m) { return { unlockId: e.id, kind: e.kind, itemId: e.itemId, name: nameOf(e), rarity: e.rarity, hero: e.hero, hint: e.hint, cost: e.cost, step: e.step, unlocked: m ? isUnlocked(m, e.id) : false }; }
 
 function openItems(m, s) { return s.items.filter((e) => !isUnlocked(m, e.id)); }
-export function stepCost(m, s) { const open = openItems(m, s).length; return open === 0 ? 0 : open === s.items.length ? s.cost : Math.max(1, Math.ceil(s.cost * open / s.items.length)); }
+function stepCost(m, s) { const open = openItems(m, s).length; return open === 0 ? 0 : open === s.items.length ? s.cost : Math.max(1, Math.ceil(s.cost * open / s.items.length)); }
 // Open steps in the order they will unlock for this player: designed order, steps of heroes not yet unlocked wait,
 // and the most played hero's cards jump ahead inside a short window.
 function orderedOpen(m) {
@@ -71,7 +71,7 @@ export function unlockState(m) {
 }
 
 // ---------------- heroes ----------------
-export function finishedRuns(m) { return nz(m.stats && m.stats.wins) + nz(m.stats && m.stats.deaths); }
+function finishedRuns(m) { return nz(m.stats && m.stats.wins) + nz(m.stats && m.stats.deaths); }
 export function heroHint(m, id) { const g = HERO_GATES[id]; if (!g) return ''; return `${g.text} Runs finished: ${finishedRuns(m)}.`; }
 export function heroGate(m, id) { // true when the hero should open now
   const g = HERO_GATES[id]; if (!g) return false;
@@ -81,7 +81,7 @@ export function heroGate(m, id) { // true when the hero should open now
 }
 
 // ---------------- UP ----------------
-export function runDigest(run) {
+function runDigest(run) {
   const st = run.stats || {};
   return { floors: st.floors || 0, elites: st.elites || 0, bosses: st.bosses || 0, act: Math.max(1, Math.min(3, run.act || 1)), won: run.phase === 'won' || run.outcome === 'won', asc: run.ascension || 0, assist: !!run.assist, abandoned: !!run.abandoned };
 }

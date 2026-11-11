@@ -5,7 +5,7 @@
 //   heal  heals itself          summon  calls help          junk  clogs your deck       special  a custom effect with no clearer kind
 // `info` is the intentOf result (kinds, dmg, hits, per); a move with an explicit `intent` keeps those kinds, mapped one to one.
 const ORDER = ['attack', 'defend', 'debuff', 'buff', 'heal', 'summon', 'junk', 'special'];
-export const HEAVY_MIN = 15; // a single hit this big (or a fifth of max HP) gets the heavy sword
+const HEAVY_MIN = 15; // a single hit this big (or a fifth of max HP) gets the heavy sword
 
 export function intentIcons(mv, info, o = {}) {
   const maxHp = o.maxHp || 0;

@@ -1,5 +1,6 @@
 // The Thread engine (design/THREAD.md): extend / cut / slack, payouts, caps, Tied, Frayed, preview parity, determinism.
 import assert from 'node:assert/strict';
+import { SCHOOL_LIST } from '../graftwork/data/schools.js';
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, specOf } from '../graftwork/engine/combat.js';
 import { newInst, schoolsOf, cardSpec } from '../graftwork/engine/cards.js';
@@ -8,7 +9,7 @@ import { CARDS, GRAFTS, RELICS, ENEMIES } from '../graftwork/data/index.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
-const SCH = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+const SCH = SCHOOL_LIST.map((s) => s.id);
 // fixture cards: one per school, free, no effects. Types: 'skill' (extends/cuts) and 'power' (never eats Echo)
 for (const s of SCH) {
   CARDS['t_' + s] = { id: 't_' + s, name: 'T ' + s, type: 'skill', cost: 0, rarity: 'common', school: s, target: 'none', fx: [], flavor: 'x', flags: {} };

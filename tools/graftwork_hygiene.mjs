@@ -4,7 +4,8 @@
 //   node tools/graftwork_hygiene.mjs              the report
 //   node tools/graftwork_hygiene.mjs --json       every finding as JSON
 //   node tools/graftwork_hygiene.mjs --list unusedExports     one list, one finding per line (the names are the keys of the JSON)
-//   node tools/graftwork_hygiene.mjs --prune-allow            drop entries of tests/graftwork_hygiene_allow.json that no longer exist
+//   node tools/graftwork_hygiene.mjs --prune-allow            drop entries of tests/graftwork_hygiene_allow.json that no longer exist (and their reasons)
+//   node tools/graftwork_hygiene.mjs --unexplained            the allowlist entries that carry no written reason
 //   node tools/graftwork_hygiene.mjs --init-allow             write the allowlist from today's findings (only when the file is missing)
 //   node tools/graftwork_hygiene.mjs --root <repo dir>        audit another checkout
 //
@@ -36,6 +37,12 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const ALLOW_FILE = 'tests/graftwork_hygiene_allow.json';
 // the lists the allowlist covers (the test fails on a new entry and on a stale one)
 export const ALLOW_LISTS = ['unusedExports', 'testOnlyDead', 'exportOnlyOwnFile', 'unreferencedLocals', 'duplicateHelpers', 'orphanAssets', 'unmentionedTools'];
+// Reasons: the allowlist file may hold `reasons: { "<entry>": "why it stays" }` next to the lists, for an entry kept on purpose (a test seam,
+// a different helper that shares a short name, a copy the other side has to drop first). A reason must name an entry that is listed;
+// the test fails on a reason whose entry is gone. Every entry is meant to carry one: the report counts those that do not.
+export const reasonsOf = (allow) => (allow && allow.reasons && typeof allow.reasons === 'object' ? allow.reasons : {});
+export function staleReasons(allow) { const listed = new Set(ALLOW_LISTS.flatMap((k) => (allow && allow[k]) || [])); return Object.keys(reasonsOf(allow)).filter((e) => !listed.has(e)).sort(); }
+export function unexplained(allow) { const r = reasonsOf(allow); return ALLOW_LISTS.flatMap((k) => ((allow && allow[k]) || []).filter((e) => !r[e])); }
 // the lists that must be empty
 export const STRICT_LISTS = ['unreachable', 'missingAssets', 'emDashes', 'brokenImports'];
 const EM_DASH = '\u2014', EN_DASH = '\u2013';
@@ -512,9 +519,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (!allow) { console.error(`no ${ALLOW_FILE}`); process.exit(1); }
     const cmp = againstAllow(found, allow); let n = 0;
     for (const k of ALLOW_LISTS) { n += cmp[k].stale.length; allow[k] = (allow[k] || []).filter((x) => !cmp[k].stale.includes(x)); }
+    if (allow.reasons) for (const e of staleReasons(allow)) delete allow.reasons[e];
     fs.writeFileSync(allowPath, JSON.stringify(allow, null, 1) + '\n'); console.log(`pruned ${n} entries from ${ALLOW_FILE}`); process.exit(0);
   }
   if (args.includes('--json')) { console.log(JSON.stringify(found, null, 1)); process.exit(0); }
+  if (args.includes('--unexplained')) { for (const x of unexplained(allow)) console.log(x); process.exit(0); }
   if (val('--list')) { for (const x of found[val('--list')] || []) console.log(typeof x === 'string' ? x : JSON.stringify(x)); process.exit(0); }
   const c = found.counts, head = (t) => console.log('\n' + t), few = (list, n = 12) => { for (const x of list.slice(0, n)) console.log('  ' + x); if (list.length > n) console.log(`  ... ${list.length - n} more (--list <name> or --json)`); };
   console.log(`Graftwork hygiene: ${c.sourceFiles} source files, ${c.tests} test files, ${c.tools} tools, ${c.assetFiles} asset files in ${c.manifests} manifests (${root})`);
@@ -535,6 +544,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const cmp = againstAllow(found, allow); let bad = 0;
     head(`against ${ALLOW_FILE}:`);
     for (const k of ALLOW_LISTS) { const x = cmp[k]; bad += x.fresh.length + x.stale.length; console.log(`  ${k.padEnd(20)} ${String(x.n).padStart(4)} found, ${x.fresh.length} new, ${x.stale.length} gone from the code but still listed`); few(x.fresh.map((s) => 'NEW  ' + s), 8); few(x.stale.map((s) => 'GONE ' + s), 8); }
+    const sr = staleReasons(allow); bad += sr.length; few(sr.map((s) => 'REASON FOR NOTHING  ' + s), 8);
+    const total = ALLOW_LISTS.reduce((a, k) => a + ((allow[k] || []).length), 0), ux = unexplained(allow).length;
+    console.log(`  reasons: ${total - ux} of ${total} entries carry a written reason (--unexplained lists the others)`);
     const strict = STRICT_LISTS.reduce((a, k) => a + found[k].length, 0);
     console.log(strict || bad ? `\nNOT CLEAN: ${strict} strict findings, ${bad} allowlist mismatches` : '\nclean: the strict checks pass and the allowlist matches');
     process.exit(strict || bad ? 1 : 0);

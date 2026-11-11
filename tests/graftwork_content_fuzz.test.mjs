@@ -241,7 +241,7 @@ for (const e of Object.values(ENEMIES)) for (const [mid, mv] of Object.entries(e
   same(b.fused, a.fused, 'inst.fused'); same(b.grafts, a.grafts, 'inst.grafts'); same(back.flags.seam, run.flags.seam, 'c.seam');
   same(cardSpec(b).fx.length, cardSpec(a).fx.length, 'spec after reload'); if (back.rng.next() !== run.rng.next()) bug('SAVE rng state lost');
   const meta = (await import('../graftwork/engine/meta.js'));
-  const m = meta.defaultMeta(); meta.markTip(m, 'seam'); meta.markTip(m, 'poison');
+  const m = meta.defaultMeta(); m.tips.seam = 1; m.tips.poison = 1;
   const store = new Map(); meta.setStorage({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }); meta.saveMeta(m);
   const m2 = meta.loadMeta(); same(m2.tips, m.tips, 'meta.tips');
   store.set(meta.KEY, JSON.stringify({ v: 1, stats: {}, tips: undefined })); // older save without tips / seen
