@@ -577,3 +577,43 @@ Follow-ups for the UI side (one line each):
 Seen, not touched (a behaviour change):
 - `defaultMeta()` copies `DEFAULT_SETTINGS` shallowly, so a new meta's `settings.assist` IS the module's object: toggling Assist on a brand-new profile writes into the defaults, and every later `defaultMeta()` or `migrate({})` in that page starts with those Assist options. Nobody sees it today (Erase keeps the settings by design), but the fix is one line: `settings: { ...DEFAULT_SETTINGS, assist: { ...DEFAULT_SETTINGS.assist } }`.
 - The old Ward walk of review 7.3 (`shortestPaths`, `T.move`) is still kept alive by the sim and `graftwork_ward`.
+
+### Dead-code sweep (ui, art, lab) (branch `cleanup-sweep-ui`)
+
+Scope: `graftwork/ui/`, `graftwork/art/`, `graftwork/lab/`, `main.js`, `sw.js`. Start `526d7ff9`; merged with the engine sweep (main `90620240`) before the last round. Nothing a player can see changed.
+
+**Removed.**
+- `ui/lights.js` (117 lines): registered by three backdrop themes, the boss plate lamp and `main.js`, never rendered (no call of `render` or `shadow` outside its own test). The module, the registrations (`registerLights`, the `lights` tables, `app.lightsApi`, the plate's `lampId`), `ambient` / `ACT_AMBIENT` (the colour of the lightmap pass) and the fx test block.
+- `art/backgrounds.js`: the eight `*Draw` wrappers, `stat`, `marketNear`, `ORGANS`.
+- The 26 unreferenced locals of ui/ and art/ (the event screen's old silhouettes `SIL` / `SETS`, `PH_TINT`, `col2`, `wrapLimitK`, `clampN`, `NEUTRAL`, `ev`, `dkc`, `lim`, six names heroes.js destructured, `rivetPx` and the write-only `rivetSprite`), `void byId` / `void COL` in title_scene and shop's `stripTitle`.
+- The 20 unused exports (among them `drawImageSmart` and the `setSmoothing` only it used, `flushTips`, `drawPinnedTip`, `graftLines`, `resetTitleSprites`, `CELL`, `cellXY`, `shadowOf`, `currentWallH`, `dropLayer`, `dropMonsters`).
+- Unused imports in 23 files, and what they alone kept alive: `cellBox`, `gearIcon`, `clampText`, `keywordSection`, the chrome namespace object and default export, the two chrome widgets only that object reached (`dial`, `badge`), `KEY_LIGHT`, re-export imports (`CARDS`, `EASE`).
+- Code only tests reached, with the assertions that checked it: `drawStrainMeter`, `drawDeckIcon` and the five Thread pictogram wrappers of art/icons.js, `drawCardText` and its `tokens`, `contentRect` and `fitFontSize` of the template loader, `skipThreadLesson` and `THREAD_LESSONS`, the never shown `forge` and `shop` tip texts, `CARD.fold`, `BUDGET.victory` and `BUDGET.death`.
+- `export` dropped from the 137 names of ui/, art/ and main.js that only their own file uses.
+
+**One leaf module, `ui/util.js`** (no imports; core.js re-exports `clamp` and `lerp`). Only copies whose text was the same as the kept one: `TAU` (12 files), `lerp` (5), the Math.max / Math.min `clamp` (core, ward_kit_iso, the animation lab), the ternary clamp as `clampOrdered` (combat_art, post, puppet, transitions, attacks: it differs from `clamp` for inverted bounds and -0, so it is its own helper), FNV-1a as `hash01` (ward_iso, ward_kit_iso, title_scene) and `hash32` (cards, event; icons and plates coerced with `String(s)`, their calls are `hash32(String(x))`), the guarded offscreen canvas `{ c, x }` (ward_iso, ward_kit_iso, title_scene, puppet, title_logo), the `{ c, g }` canvas with the OffscreenCanvas fallback (chrome, skin), `mulberry32` (backgrounds, plates), the Math.random range (combat, seam_ui); `TW` / `TH` live in ward_kit_iso.js and ward_iso.js re-exports them.
+
+**Follow-ups of the engine sweep, done:** `ui/settings.js` `DEFAULTS` and `ui/a11y.js` `A11Y_DEFAULTS` pick their keys from `SETTING_DEFAULTS`; main.js reads the volumes from it and `TEXT_STEPS` / `QUALITY` from ui/settings.js; deckview imports `plural` from engine/text.js; a11y `SCHOOLS` and `BASE_SCHOOLS` and cards `SCHOOL_ORDER` come from `SCHOOL_LIST`, seam_ui reads the school name from data `SCHOOLS`, templates imports `isObj` from engine/unlock.js. **Not done:** title.js filling a missing `settings.assist` from `SETTING_DEFAULTS.assist`. It is not unreachable: `graftwork_assist` reaches it with a meta that has no assist block and expects Gentle foes off (`ASSIST_DEFAULT`), the table says on. `ASSIST_DEFAULT` stays in engine/assist.js; making the two agree is a behaviour decision.
+
+**Numbers.** Game source (ui/, art/, lab/, main.js) against main `90620240`: 57 files, 624 lines removed, 257 added (most added lines are rewritten `export` and import lines), one file deleted (`ui/lights.js`), one created (`ui/util.js`, 36 lines); bytes: ui 1,356,090 to 1,335,361, art 548,753 to 541,752, lab 110,138 to 110,084 (27.8 KB less). Tests: 8 files, 42 lines removed, 8 added. Allowlist (whole file, then the ui/art/lab/main share):
+
+| list | `526d7ff9` | main after the engine sweep | now |
+|---|---|---|---|
+| unusedExports | 20 (20) | 20 (20) | 0 |
+| testOnlyDead | 88 (76) | 80 (76) | 68 (64) |
+| exportOnlyOwnFile | 200 (137) | 137 (137) | 0 |
+| unreferencedLocals | 26 (26) | 26 (26) | 0 |
+| duplicateHelpers | 232 (160) | 181 (158) | 131 (109) |
+| orphanAssets, unmentionedTools | 0 | 0 | 0 |
+
+Every entry that stays carries a written reason (199 reasons, `--unexplained` lists none).
+
+**Kept on purpose.** The 64 test-only exports of ui/ and art/ are test seams (`reset*`, `__set*`, `lastActors`, `kitLog`, stats counters), tables a suite holds the data to (`BODY_KEYWORDS`, `SCHOOL_SHAPES`, `CODEX_RULES`, `BUDGET`, the grade tables), entry points to real behaviour (`defaultPose`, `footPoint`, `percentLabel`, `glossaryEntry`, `setLineScale` for the legacy-against-current line test) or names reached by string (`setIntensity`, `audioState`, `setLowpass` through `audioCall`). `ui/perf_flags.js` stays (the profiler's `--flags` A/B switches); `ui/frame_state.js` is the frozen-screen bookkeeping now, not the dead skip of the review; `ui/templates.js` and `ui/rig.js` are the live previews. Same text, not the same function: `win` / `nav` of fullscreen, install and offline (each closes over its own mockable host), the xorshift closures of ward_iso and ward_kit_iso. `ui/ward_kit_iso.js` keeps an unused import of `propAt`: it is the only user of data/ward_kit.js `propAt`, so deleting it makes an unused export on the engine side (follow-up there: delete `propAt` and this import together).
+
+**Efficiency (review 4.5), not done.** `percentLabel`, the App row and `wallPlan` were cached by the performance pass. A cache for `layoutText` with `fit` cannot keep the draw log: its search measures with `save`, `font`, `restore` on the main context, and those calls are what a cache would remove. Measured in the golden draw logs (desk, motion, whole scene): 7,810 such triplets in `title` (3.4 percent of the root context's calls), 23,307 in `combat` (2.1), 52,440 in `ward_built` (4.3), 152,481 in `shop` (11.6, about 250 triplets a frame). Pixels would not change; the proof rule of this pass would, so it is a proposal. The per-frame allocations in the Ward (room info objects, layer keys) do not show in `canvasCalls()` and were left.
+
+**File structure (review 5).** Nothing to merge or delete without a behaviour change beyond `ui/lights.js`. Proposal unchanged from the review: do not split `ui/combat.js`; the event picker and the two combat pile modals onto `cardGrid` (review 3.4) is a pixel change.
+
+**Proof.** Golden master `--only ui,assets` (7,689 keys): base `526d7ff9` against the branch after the exports commit and after `ui/util.js`, 0 differences each; main `90620240` against the final commit `ffe748c6`, 0 differences. With both previews on (`?preview=1`, Playwright, frozen clock, seeded random): the game (title, two Wards, two fights, shop, deck view, reward, Settings, desk and phone) 18 of 18 pictures identical to main; the lab pages (`lab/art.html` twice, `lab/anim.html` rig lab, viewer, compare, map, battle) equal to main within the spread of main against itself (art.html repaints as its images arrive: 0.03 to 0.26 percent of pixels between two captures of main; the anim lab 0 to 17 pixels at most 2 levels, the map scene 0 against main's second capture). `node tests/run_graftwork.mjs`: 71 of 71.
+
+**Found, not touched.** `void x;` silencers hide unused bindings in forge, shop, title_logo, tooltips, transitions, ward, attacks, cards and audio; some compute through calls with effects (`RUN.forgeHeal`), so each needs reading. `depthOrder`'s `focus` and the block painters' `dark` parameter are unused; the Ward suites pass `focus` positionally. The unused-import check of this pass first missed uses behind a spread (`...rigGait(id)`): fixed, every removed import was checked again.
