@@ -3,13 +3,14 @@
 // Against tests/graftwork_hygiene_allow.json (today's known junk): unused exports, exports only tests keep alive, `export` on
 // names used only in their own file, top level names nothing references, duplicate small helpers, orphan asset files, tools no
 // doc names. A NEW finding fails, and so does a listed finding that is gone from the code: the list can only shrink
-// (`node tools/graftwork_hygiene.mjs --prune-allow` drops what was cleaned up).
+// (`node tools/graftwork_hygiene.mjs --prune-allow` drops what was cleaned up). An entry kept on purpose carries a written reason in the
+// file's `reasons` map; a reason whose entry is gone fails too.
 // The first half proves on a throwaway repo (in the system temp folder) that each check really fires.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { audit, againstAllow, lex, ALLOW_LISTS, STRICT_LISTS, ALLOW_FILE } from '../tools/graftwork_hygiene.mjs';
+import { audit, againstAllow, lex, staleReasons, unexplained, ALLOW_LISTS, STRICT_LISTS, ALLOW_FILE } from '../tools/graftwork_hygiene.mjs';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -122,6 +123,10 @@ try {
     assert.equal(f.brokenImports.length, 2);
     assert.deepEqual(f.unmentionedTools, ['tools/graftwork_forgotten.mjs']);
   });
+  t('allowlist reasons: a reason must name a listed entry; an entry without one is counted', () => {
+    const allow = { unusedExports: ['a.js:x', 'a.js:y'], reasons: { 'a.js:x': 'kept on purpose', 'a.js:gone': 'left over' } };
+    assert.deepEqual(staleReasons(allow), ['a.js:gone']); assert.deepEqual(unexplained(allow), ['a.js:y']);
+  });
   t('allowlist: a new finding and a stale entry both show', () => {
     const cmp = againstAllow(f, { unusedExports: ['graftwork/lib.js:neverImported', 'graftwork/lib.js:cleanedUpLongAgo'] });
     assert.deepEqual(cmp.unusedExports.stale, ['graftwork/lib.js:cleanedUpLongAgo']);
@@ -142,7 +147,8 @@ for (const k of ALLOW_LISTS) {
   t(`allowlist: ${k} has no new finding (${cmp[k].n} known)`, () => assert.equal(cmp[k].fresh.length, 0, `new ${k} (fix them; the allowlist only shrinks):${show(cmp[k].fresh)}`));
   t(`allowlist: ${k} lists nothing that is gone`, () => assert.equal(cmp[k].stale.length, 0, `${k} entries that no longer exist (run: node tools/graftwork_hygiene.mjs --prune-allow):${show(cmp[k].stale)}`));
 }
+t('allowlist: every written reason names a listed entry', () => assert.deepEqual(staleReasons(allow), [], 'reasons for entries that are gone (node tools/graftwork_hygiene.mjs --prune-allow drops them)'));
 const c = found.counts;
 console.log(`counts: ${c.sourceFiles} source files, ${c.assetFiles} asset files; ` + STRICT_LISTS.map((k) => `${k} ${found[k].length}`).join(', ') + '; ' + ALLOW_LISTS.map((k) => `${k} ${found[k].length}`).join(', ')
-  + `; duplicate helper names ${found.duplicateDetail.length}; exports only tests import but their file uses ${found.testOnlyExports.length}; files reached only from a lab page ${found.labOnly.length}; em dash detectors in tests ${found.emDashDetectors}`);
+  + `; allowlist entries without a written reason ${unexplained(allow).length}; duplicate helper names ${found.duplicateDetail.length}; exports only tests import but their file uses ${found.testOnlyExports.length}; files reached only from a lab page ${found.labOnly.length}; em dash detectors in tests ${found.emDashDetectors}`);
 console.log(`graftwork hygiene: ${n} checks passed`);

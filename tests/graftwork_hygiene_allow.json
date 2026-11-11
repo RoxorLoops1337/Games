@@ -454,5 +454,34 @@
   "win@graftwork/ui/offline.js"
  ],
  "orphanAssets": [],
- "unmentionedTools": []
+ "unmentionedTools": [],
+ "reasons": {
+  "graftwork/data/gaits.js:GAIT_KINDS": "the gait kinds ui/puppet.js knows; graftwork_puppet checks every entry of GAITS and the stride table against it (a data rule, test-only entry point)",
+  "graftwork/data/ward_kit.js:freeConnected": "a recipe invariant (every free sub-tile reachable, so monsters and the hero can walk); graftwork_ward_big and graftwork_ui_ward_kit check every recipe with it",
+  "graftwork/engine/meta.js:setStorage": "the storage seam of the meta (node has no localStorage); the meta suites inject a store through it",
+  "graftwork/engine/ward.js:clearRoute": "used by the bots (tools/graftwork_driver.mjs), the golden master and the Ward suites; the screen edits the route through extendRoute and undoRoute",
+  "affords@graftwork/engine/ward.js": "a different helper that shares the short name with ui/ward_kit.js",
+  "cap@graftwork/data/enemies_new2.js": "a different helper that shares the short name with ui/codex.js",
+  "costOf@graftwork/data/enemies_3.js": "three different functions: the cost of a card id (enemies_3.js), of a combat card (statuses_odile.js), of a building plan (engine/ward.js)",
+  "costOf@graftwork/data/statuses_odile.js": "three different functions: the cost of a card id (enemies_3.js), of a combat card (statuses_odile.js), of a building plan (engine/ward.js)",
+  "costOf@graftwork/engine/ward.js": "three different functions: the cost of a card id (enemies_3.js), of a combat card (statuses_odile.js), of a building plan (engine/ward.js)",
+  "fmt@graftwork/engine/seam.js": "a different helper that shares the short name with ui/tooltips.js",
+  "grafted@graftwork/data/events.js": "a different helper that shares the short name with ui/forge.js",
+  "hits@graftwork/data/grafts_extra.js": "two graft filters with different bodies (hasD against hasOp); merging them is a rules question, not a cleanup",
+  "hits@graftwork/data/grafts_safe.js": "two graft filters with different bodies (hasD against hasOp); merging them is a rules question, not a cleanup",
+  "isBare@graftwork/data/relics.js": "relics.js asks it of a card spec in a fight (no grafts, attack or skill); engine/cards.js of a deck instance (fused grafts count): different rules",
+  "isBare@graftwork/engine/cards.js": "relics.js asks it of a card spec in a fight (no grafts, attack or skill); engine/cards.js of a deck instance (fused grafts count): different rules",
+  "isObj@graftwork/engine/unlock.js": "the engine copy (meta.js takes it from here); ui/templates.js has its own; the UI side may import this one",
+  "leave@graftwork/data/events.js": "a different helper that shares the short name with ui/combat.js",
+  "nameOf@graftwork/engine/unlock.js": "a different helper that shares the short name with lab/anim.js",
+  "num@graftwork/data/grafts_extra.js": "typeof cost is number (grafts_extra.js) against cost is not X (grafts_safe.js): they differ for a spec without a cost; art/attacks.js num is unrelated",
+  "num@graftwork/data/grafts_safe.js": "typeof cost is number (grafts_extra.js) against cost is not X (grafts_safe.js): they differ for a spec without a cost; art/attacks.js num is unrelated",
+  "phaseOf@graftwork/data/events.js": "a different helper that shares the short name with art/enemies.js",
+  "pick@graftwork/data/grafts_extra.js": "a different helper that shares the short name with art/heroes.js",
+  "plural@graftwork/engine/text.js": "ui/deckview.js has an identical copy: the UI side drops it and imports this one (follow-up in CLEANUP_PLAN.md)",
+  "seam@graftwork/data/grafts_thread.js": "the thread grafts default to a Line with cuts: 0, the relics to one without; they read different fields",
+  "seam@graftwork/data/relics_thread.js": "the thread grafts default to a Line with cuts: 0, the relics to one without; they read different fields",
+  "store@graftwork/engine/save.js": "a different helper that shares the short name with ui/offline.js",
+  "topOf@graftwork/engine/seam.js": "a different helper that shares the short name with ui/title_scene.js and lab/anim.js"
+ }
 }
