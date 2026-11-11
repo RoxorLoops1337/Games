@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { audit, againstAllow, lex, ALLOW_LISTS, STRICT_LISTS, ALLOW_FILE } from '../tools/graftwork_hygiene.mjs';
 
 let n = 0;
@@ -134,6 +135,47 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const found = audit(root);
 const allow = JSON.parse(fs.readFileSync(path.join(root, ALLOW_FILE), 'utf8'));
 const show = (list, k = 15) => list.slice(0, k).map((x) => '\n    ' + x).join('') + (list.length > k ? `\n    ... ${list.length - k} more` : '');
+
+// ---------------------------------------------------------------- the tools that write committed files
+// Art builds, the icons, the offline manifest and a profile run all write files that are committed. None of them may start work for an argument it does
+// not know: --help prints a page and touches nothing, an option that does not exist stops with a message (it once started a full art build that rewrote
+// the committed manifest), and a build with no raw folder to read stops too. Each tool is run that way and everything it could rewrite is compared before
+// and after: size and modification time of every file under its output folders, and `git status` when git is here.
+{
+  const run = (cmd, args, o = {}) => spawnSync(cmd, args, { cwd: root, encoding: 'utf8', timeout: 60000, ...o });
+  const python = run('python3', ['--version']).status === 0, pillow = python && run('python3', ['-c', 'import PIL']).status === 0;
+  const snapshot = (rels) => {
+    const out = [], walk = (f) => { const st = fs.statSync(f); if (st.isDirectory()) { for (const name of fs.readdirSync(f).sort()) walk(path.join(f, name)); } else out.push(`${path.relative(root, f)}:${st.size}:${st.mtimeMs}`); };
+    for (const r of rels) if (fs.existsSync(path.join(root, r))) walk(path.join(root, r));
+    return out.join('\n');
+  };
+  const gitStatus = () => { const r = run('git', ['status', '--porcelain', '--', 'graftwork', 'tools']); return r.status === 0 ? r.stdout : null; };
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'graftwork-noraw-'));
+  const TOOLS = [
+    { name: 'tools/graftwork_art_build.py', run: ['python3', ['tools/graftwork_art_build.py']], needs: python, out: ['graftwork/assets/ward'], more: [['--dry'], ['--combat', empty], [empty]] },
+    { name: 'tools/graftwork_kit_build.py', run: ['python3', ['tools/graftwork_kit_build.py']], needs: python, out: ['graftwork/assets/ward_kit'], more: [[empty], ['one', 'two']] },
+    { name: 'tools/graftwork_icons.py', run: ['python3', ['tools/graftwork_icons.py']], needs: python, out: ['graftwork/icons'], more: [['anything']] },
+    { name: 'tools/graftwork_rig_build.py', run: ['python3', ['-I', 'tools/graftwork_rig_build.py']], needs: pillow, out: ['graftwork/assets/rigs'], more: [] },
+    { name: 'tools/graftwork_sw_build.mjs', run: [process.execPath, ['tools/graftwork_sw_build.mjs']], needs: true, out: ['graftwork/sw-manifest.json'], more: [] },
+    { name: 'tools/graftwork_profile.mjs', run: [process.execPath, ['tools/graftwork_profile.mjs']], needs: true, out: ['graftwork/design'], more: [] },
+  ];
+  try {
+    for (const tool of TOOLS) {
+      t(`tools: ${tool.name} prints a page for --help and -h, refuses an unknown option, and writes nothing either way` + (tool.needs ? '' : ' (skipped: Python or Pillow is missing)'), () => {
+        if (!tool.needs) return;
+        const [cmd, base] = tool.run, before = snapshot(tool.out), gitBefore = gitStatus();
+        for (const flag of ['--help', '-h']) {
+          const r = run(cmd, [...base, flag]);
+          assert.equal(r.status, 0, `${tool.name} ${flag}: ${r.stderr}`); assert.match(r.stdout, /usage|Run:|Run\b|node tools|python3 tools/i, `${tool.name} ${flag} prints how to use it`);
+        }
+        const bad = run(cmd, [...base, '--no-such-option']);
+        assert.ok(bad.status !== 0 && bad.status !== null, `${tool.name} --no-such-option must fail (status ${bad.status})`); assert.match(bad.stdout + bad.stderr, /no-such-option/, `${tool.name} names the option it refuses`);
+        for (const args of tool.more) { const r = run(cmd, [...base, ...args]); assert.ok(r.status !== 0 && r.status !== null, `${tool.name} ${args.join(' ')} must stop before it writes (status ${r.status}): ${r.stdout}`); }
+        assert.equal(snapshot(tool.out), before, `${tool.name} touched ${tool.out.join(', ')}`); if (gitBefore !== null) assert.equal(gitStatus(), gitBefore, `${tool.name} changed git status`);
+      });
+    }
+  } finally { fs.rmSync(empty, { recursive: true, force: true }); }
+}
 
 t('the lexer kept every file balanced', () => assert.deepEqual(found.lexWarnings, []));
 for (const k of STRICT_LISTS) t(`strict: ${k} is empty`, () => assert.equal(found[k].length, 0, `${k}:${show(found[k])}`));

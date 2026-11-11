@@ -1,8 +1,10 @@
 // PUPPET WALK (graftwork/ui/puppet.js, data/gaits.js): the step cycle is checked NUMERICALLY, not by eye. Planted foot ground speed, strict L R L R,
 // swing clearance, double support, stride = speed x period, no vertical drift, the bob phases, and that the part transforms really put the sole where the step
-// cycle says. Plus the alpha analysis on synthetic silhouettes, the gait table and the lab wiring.
+// cycle says. Plus the alpha analysis on synthetic silhouettes, the gait table and the lab's puppet controls (a real page in Chromium). How the Ward
+// draws the puppet is tests/graftwork_anim_frames.test.mjs (walking is the puppet when the sprite can be read, else the hop, never a frame).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withChromium, labVisit } from './graftwork_browser_lib.mjs';
 import * as P from '../graftwork/ui/puppet.js';
 import * as GAITMOD from '../graftwork/data/gaits.js';
 const { GAITS, GAIT_KINDS, gaitEntry } = GAITMOD;
@@ -44,8 +46,6 @@ await t('side_names_follow_the_character_not_the_screen_and_the_weapon_is_in_the
   assert.ok(bone('handL').x <= 0 || bone('armL_up').x < 0, 'the L bones are on the screen-left side');
   assert.equal(bone('weapon').p, 'handL', 'the saw is in the character\'s right hand: the bone on the screen-left arm (named L by screen side)');
   assert.ok(bone('weapon').z > bone('armL_up').z, 'the weapon is drawn in front of its arm');
-  const lab = readFileSync(root + 'lab/anim.js', 'utf8');
-  assert.ok(/sideName/.test(lab) && /SN\(/.test(lab), 'the lab shows the character\'s own sides');
 });
 
 await t('planted_foot_ground_speed_is_zero', () => {
@@ -196,14 +196,8 @@ await t('cadence_is_about_3_steps_a_second_at_the_normal_ward_pace_and_the_fast_
 
 // ---- real pixels: legs run under the hem (needs Chromium; skipped when it is missing) ----
 await t('legs_run_under_a_skirt_hem_with_no_transparent_gap_at_any_swing', async () => {
-  let chromium = null; const { createRequire } = await import('node:module'), req = createRequire(import.meta.url); for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright']) { try { chromium = req(m).chromium; break; } catch (e) { /* try the next */ } }
-  if (!chromium) { console.log('skip: playwright missing'); return; }
-  const http = await import('node:http'), fs = await import('node:fs'), path = await import('node:path'), repo = path.resolve(root, '..');
-  const srv = http.createServer((q, r) => { const f = path.join(repo, decodeURIComponent(q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { r.writeHead(404); r.end(); } else { r.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : 'text/html' }); r.end(d); } }); });
-  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok)); const port = srv.address().port; let br = null;
-  try {
-    try { br = await chromium.launch(); } catch (e) { console.log('skip: no chromium'); return; }
-    const pg = await br.newPage(); await pg.goto(`http://127.0.0.1:${port}/graftwork/design/README.md`);
+  await withChromium(async ({ br, base }) => {
+    const pg = await br.newPage(); await pg.goto(`${base}/graftwork/design/README.md`);
     const res = await pg.evaluate(async () => {
       const PUP = await import('/graftwork/ui/puppet.js');
       // a synthetic skirted figure: head and torso, a wide skirt, then two thin legs under it (the legs are NARROWER than the hem, like the real sprites)
@@ -239,13 +233,56 @@ await t('legs_run_under_a_skirt_hem_with_no_transparent_gap_at_any_swing', async
     assert.ok(res.coverMin >= 2, 'at every swing the legs run up under the hem (the part above the hem is clipped away, only its margin shows): ' + res.coverMin);
     assert.ok(res.worst.cover <= 0.08 * 280, 'the hidden extension never shows above the hem (clipped away): ' + res.worst.cover + ' px');
     assert.ok(res.hung, 'the skirt is detected as a garment hanging over the legs'); assert.ok(res.ext > 20, 'the legs were extended upward: ' + res.ext + ' rows');
-  } finally { if (br) await br.close(); srv.close(); }
+  });
 });
-await t('lab_has_the_tuck_garment_and_outline_controls_and_the_hem_no_longer_fades_over_a_garment', () => {
-  const js = readFileSync(root + 'lab/anim.js', 'utf8'), pj = readFileSync(root + 'ui/puppet.js', 'utf8');
-  for (const w of ["'Tuck/overlap'", "'Garment sway'", "'Leg outlines'", "'Stride cap'", 'PUP.DEBUG.outlines']) assert.ok(js.includes(w), 'lab: ' + w);
-  assert.ok(/hung \? 0 : 0\.025/.test(pj) && /if \(!hung && upper\)/.test(pj), 'the feather is kept only where the legs are bare');
-  for (const f of ['ui/ward.js', 'data/gaits.js', 'lab/anim.js']) assert.ok(!/[—–]/.test(readFileSync(root + f, 'utf8')), 'dash in ' + f);
+// ---- real pixels: the hem of a garment that hangs over the legs is crisp, the overlap of bare legs is feathered (Chromium; skipped when it is missing) ----
+await t('the_hem_is_crisp_over_a_garment_and_the_overlap_is_feathered_only_where_the_legs_are_bare', async () => {
+  await withChromium(async ({ br, base }) => {
+    const pg = await br.newPage(); await pg.goto(`${base}/graftwork/design/README.md`);
+    const res = await pg.evaluate(async () => {
+      const PUP = await import('/graftwork/ui/puppet.js'), W = 200, Hh = 300;
+      // two synthetic figures: a skirt that hangs over two thinner legs, and trousers whose legs are as wide as the hips (red cloth, green legs)
+      const fig = (kind) => {
+        const c = document.createElement('canvas'); c.width = W; c.height = Hh; const x = c.getContext('2d'); x.fillStyle = '#c33'; x.fillRect(70, 10, 60, 60);
+        if (kind === 'skirt') { x.fillRect(60, 70, 80, 110); x.beginPath(); x.moveTo(60, 180); x.lineTo(30, 235); x.lineTo(170, 235); x.lineTo(140, 180); x.fill(); x.fillStyle = '#365'; x.fillRect(78, 236, 16, 54); x.fillRect(106, 236, 16, 54); }
+        else { x.fillRect(70, 70, 60, 100); x.fillStyle = '#365'; x.fillRect(66, 170, 28, 120); x.fillRect(106, 170, 28, 120); }
+        return c;
+      };
+      const alphaAt = (cv, fromBottom) => { const d = cv.getContext('2d').getImageData(0, cv.height - 1 - fromBottom, cv.width, 1).data; let m = 0; for (let i = 3; i < d.length; i += 4) m = Math.max(m, d[i]); return m; };
+      const legPixels = (cv) => { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && d[i + 1] > d[i] + 20) n++; return n; };
+      const out = {};
+      for (const kind of ['skirt', 'trousers']) {
+        const tune = Object.assign({}, PUP.TUNE, { swing: 40 }), e = PUP.prepare(fig(kind), 'synthetic_' + kind, 1, tune), parts = PUP.partsOf(e, 1, tune);
+        out[kind] = parts && { hung: parts.hung, last: alphaAt(parts.upper.c, 0), three: alphaAt(parts.upper.c, 3), twelve: alphaAt(parts.upper.c, 12), bandLegPixels: parts.band ? legPixels(parts.band.c) : -1, bandRows: parts.band ? parts.band.c.height : 0 };
+      }
+      return out;
+    });
+    const sk = res.skirt, tr = res.trousers; assert.ok(sk && tr, 'the parts of both synthetic figures were built');
+    assert.equal(sk.hung, true, 'the skirt hangs over the legs'); assert.ok(sk.bandRows > 0, 'and gets a hem band');
+    assert.ok(sk.last >= 250, 'its upper body is not faded where it is cut: ' + sk.last); assert.equal(sk.bandLegPixels, 0, 'the hem band ends above the first leg row: no leg pixel is copied under the hem');
+    assert.equal(tr.hung, false, 'trousers do not hang over anything');
+    assert.ok(tr.last <= 64, 'bare legs: the overlap fades to nothing at its lower edge: ' + tr.last); assert.ok(tr.three < 200, 'over several rows: ' + tr.three); assert.equal(tr.twelve, 255, 'and no further up');
+  });
+});
+// ---- the lab's puppet controls (a real page in Chromium; skipped when it is missing) ----
+await t('the_lab_drives_the_puppet_with_its_controls_and_the_source_switch_shows_the_hop', async () => {
+  await withChromium(async ({ br, base }) => {
+    const v = await labVisit(br, base, '?scene=viewer&actor=marrow&anim=walk', `document.getElementById('read').innerText.includes('gait')`);
+    try {
+      const S = await v.read();
+      assert.deepEqual(v.errors, [], 'the page raised nothing'); assert.equal(S.banner, '', 'and shows no error');
+      for (const w of ['Source: Puppet walk', 'Leg split', 'Leg swing', 'Lift', 'Bob', 'Sway', 'Lean', 'Tuck/overlap', 'Garment sway', 'Stride cap', 'Leg outlines']) assert.ok(S.ctl.includes(w), 'lab control: ' + w);
+      assert.match(S.readout, /source PUPPET walk \(the game\): legged, legs split at the hip/, 'with no ?source the lab shows the puppet the game draws, read by ui/puppet.js from the real sprite');
+      assert.match(S.readout, /gait legged/); assert.match(S.readout, /pose bob/); assert.match(S.plant, /foot slide/); assert.match(S.plant, /plant [LR]/);
+      assert.deepEqual(S.plant.split('\n').slice(0, 2), ['R', 'L'], 'the plant pads name the sides after the character: the pad on the screen-left is its RIGHT foot');
+      const outlines = () => v.page.evaluate(async () => (await import('/graftwork/ui/puppet.js')).DEBUG.outlines);
+      assert.equal(await outlines(), false);
+      await v.page.click('button:text-is("Leg outlines")'); assert.equal(await outlines(), true, 'the toggle switches the puppet\'s debug outlines on');
+      await v.page.click('button:text-is("Leg outlines")'); assert.equal(await outlines(), false);
+    } finally { await v.close(); }
+    const h = await labVisit(br, base, '?scene=viewer&actor=marrow&anim=walk&source=procedural', `document.getElementById('read').innerText.includes('source')`);
+    try { const S = await h.read(); assert.match(S.readout, /source procedural walk, the hop/, '?source=procedural shows the hop under the puppet'); assert.match(S.plant, /no puppet pose/); assert.deepEqual(h.errors, []); } finally { await h.close(); }
+  });
 });
 
 // ---- the alpha analysis on synthetic silhouettes (fractions of the image) ----
@@ -285,13 +322,5 @@ await t('gait_table_ids_exist_and_the_art_meta_carries_no_walk_switches', () => 
   const man = JSON.parse(readFileSync(root + 'assets/ward/manifest.json', 'utf8')), meta = JSON.parse(readFileSync(new URL('../tools/graftwork_art_meta.json', import.meta.url).pathname, 'utf8'));
   for (const id of Object.keys(GAITS)) assert.ok(man.actors[id], 'gait table id ' + id + ' is in the manifest');
   for (const [id, m] of Object.entries(meta)) for (const k of ['puppet', 'walkOk']) assert.equal(m[k], undefined, `tools/graftwork_art_meta.json ${id}.${k}: the painted walks are gone, nothing reads this`);
-});
-await t('lab_and_game_are_wired_to_the_puppet', () => {
-  const js = readFileSync(root + 'lab/anim.js', 'utf8'), iso = readFileSync(root + 'ui/ward_iso.js', 'utf8'), ca = readFileSync(root + 'ui/combat_art.js', 'utf8');
-  for (const w of ['Source: Puppet walk', 'Leg split', 'Leg swing', "'Lift'", "'Bob'", "'Sway'", "'Lean'", 'foot slide', 'plantL', "source: srcOf(Q.get('source'), 'puppet')", 'gaitRows', 'PUP.infoOf']) assert.ok(js.includes(w), 'lab: ' + w);
-  for (const w of ['PUP.walkPuppet(', 'PUP.drawLegged(', 'PUP.prepare(', "r.pm === 'off'"]) assert.ok(iso.includes(w), 'ward_iso: ' + w);
-  for (const gone of ['wantsPuppet', 'walkIndex', 'walkReady', 'frameStemFor', 'r.frame', 'rec.frame']) assert.ok(!iso.includes(gone), 'ward_iso still has the painted walk: ' + gone);
-  assert.ok(ca.length > 0);
-  for (const [name, s] of [['puppet.js', readFileSync(root + 'ui/puppet.js', 'utf8')], ['gaits.js', readFileSync(root + 'data/gaits.js', 'utf8')], ['anim.js', js]]) assert.ok(!/[—–]/.test(s), 'dash in ' + name);
 });
 console.log(n + ' puppet checks passed');

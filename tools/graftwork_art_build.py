@@ -47,7 +47,30 @@ tiles (room paintings as rooms, tall or `_low`, go); (2) cards loses every art i
 resolves a card by its own art id); (5) every file under the folder that the manifest no longer names is deleted. --dry only prints.
 Run it again and it changes nothing.
 """
-import json, os, re, sys, glob
+import sys
+
+# The command line is checked before anything is imported, read or written: --help prints this page and stops, an option that does not exist stops
+# with a message (a typo, or a flag of another tool, used to start a full build that rewrote the committed manifest from an empty raw folder), and a
+# build that has no raw PNGs to build from stops too. Nothing is touched in any of these cases.
+OPTIONS = ('--combat', '--frames', '--prune', '--dry')
+
+def refuse(msg):
+    print(f'graftwork_art_build.py: {msg} (nothing was read or written; see --help)', file=sys.stderr)
+    sys.exit(2)
+
+if any(a in ('-h', '--help') for a in sys.argv[1:]):
+    print(__doc__)
+    sys.exit(0)
+for _a in sys.argv[1:]:
+    if _a.startswith('--out='):
+        if not _a[6:]:
+            refuse('--out= needs a folder')
+    elif _a.startswith('-') and _a not in OPTIONS:
+        refuse(f'unknown option {_a}')
+if '--dry' in sys.argv[1:] and '--prune' not in sys.argv[1:]:
+    refuse('--dry belongs to --prune and nothing else')
+
+import json, os, re, glob
 from PIL import Image
 import numpy as np
 
@@ -314,6 +337,8 @@ def prune_pass():
 if PRUNE:
     prune_pass()
     sys.exit(0)
+if not glob.glob(os.path.join(RAW, '*.png')):
+    refuse(f'no raw PNGs in {RAW}: give the folder that holds them as RAW_DIR')
 if FRAMES:
     frames_pass()
     sys.exit(0)
