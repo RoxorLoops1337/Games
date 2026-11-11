@@ -20,13 +20,13 @@
 //   CARD_TEMPLATE / CARD_BACK_TEMPLATE   the data-driven slot definitions; resolveSlots(); composeCardFront(); cardFrameIds(); cardBackIds()
 //   templates.sync(app)             follow the preview switch (ui/preview.js); templates.ver counts every change of what can be drawn
 import { previewOn } from './preview.js';
+import { isObj } from '../engine/unlock.js';
 const BASE_DEFAULT = 'assets/ui/';
 // THE SWITCH for the painted art is the 'art' preview (ui/preview.js: PREVIEW_DEFAULT.art, the page URL ?art=1, the Settings toggle "Painted art (preview)").
 // While it is off the loader requests NOTHING, not the manifest and no image, and every caller keeps its procedural look; on the minimal graphics tier
 // (ui/quality.js) it stays off whatever the setting says. Tests and tools that feed the loader themselves pass { art: true } and are not asked.
 const previewSettings = (app) => (app && (app.settings || (app.shared && app.shared.meta && app.shared.meta.settings))) || null;
 const tierOf = (app) => (app && app.perf && app.perf.q && app.perf.q.tier) || 'full';
-const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
 // ---------------------------------------------------------------- manifest parsing

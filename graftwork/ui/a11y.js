@@ -3,12 +3,14 @@
 import { COL } from './core.js';
 import { FX_OPTS, flashGate } from './fx.js';
 import { SCHOOL_COLORS, COLX, CB, clearCardCache } from '../art/cards.js';
+import { SETTING_DEFAULTS } from '../engine/meta.js';
+import { SCHOOL_LIST } from '../data/schools.js';
 
-export const A11Y_DEFAULTS = { flashes: true, highContrast: false, colorblindMode: 'deuteranopia', announce: true };
+export const A11Y_DEFAULTS = Object.fromEntries(['flashes', 'highContrast', 'colorblindMode', 'announce'].map((k) => [k, SETTING_DEFAULTS[k]]));
 export const CB_MODES = ['deuteranopia', 'protanopia', 'tritanopia'];
-export const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+export const SCHOOLS = SCHOOL_LIST.map((s) => s.id);
 export const SCHOOL_PATTERNS = { ember: 'diag', echo: 'waves', hoard: 'dots', blood: 'drops', rust: 'cross', static: 'zig', gilded: 'check' };
-export const BASE_SCHOOLS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };
+export const BASE_SCHOOLS = Object.fromEntries(SCHOOL_LIST.map((s) => [s.id, s.color]));
 // Palettes found by searching for the best worst-case CIE76 distance between the seven schools under each simulated deficiency. Shapes and patterns carry the rest.
 export const PALETTES = {
   deuteranopia: { ember: '#791515', echo: '#3CA7DD', hoard: '#1FAD7E', blood: '#3C3CDD', rust: '#272768', static: '#3CDD3C', gilded: '#F4F4BE' },

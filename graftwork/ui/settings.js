@@ -14,10 +14,11 @@ import { installAvailable } from './install.js';
 import { offlineSupported } from './offline.js';
 const appRow = () => installAvailable() || offlineSupported(); // the App and offline row: Install, the offline copy, updates
 import { lnw } from '../art/linework.js';
+import { SETTING_DEFAULTS } from '../engine/meta.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, fastWalk: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', graphics: 'auto', fullscreen: false, previewArt: false };
-const TEXT_STEPS = [100, 125, 150, 175];
-const QUALITY = ['off', 'low', 'high'];
+export const DEFAULTS = Object.fromEntries(['master', 'sfx', 'music', 'muted', 'screenShake', 'reducedMotion', 'fastWalk', 'colorblind', 'textSize', 'textScale', 'quality', 'graphics', 'fullscreen', 'previewArt'].map((k) => [k, SETTING_DEFAULTS[k]]));
+export const TEXT_STEPS = [100, 125, 150, 175];
+export const QUALITY = ['off', 'low', 'high'];
 
 export function settingsOf(app) {
   const meta = app.shared.meta;

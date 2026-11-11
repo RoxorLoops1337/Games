@@ -30,7 +30,7 @@ function scaled(verb, v, noun, m, tail = '') {
 }
 const capFirst = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
 const sName = (s) => (STATUSES[s] ? STATUSES[s].name : s);
-const plural = (n, w) => (n === 1 ? w : w + 's');
+export const plural = (n, w) => (n === 1 ? w : w + 's');
 const toWord = { all: ' to ALL enemies', random: ' to a random enemy' };
 
 export function opText(op, m, seen) {

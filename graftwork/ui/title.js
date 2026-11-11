@@ -8,7 +8,8 @@ import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
 import { percentLabelOf, unlockOnce } from './archive_kit.js';
 import { heroHint } from '../engine/unlock.js';
 import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
-import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../engine/assist.js';
+import { ASSIST_OPTIONS, ASSIST_NOTE, assistFlags } from '../engine/assist.js';
+import { SETTING_DEFAULTS } from '../engine/meta.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
@@ -471,7 +472,7 @@ export default {
   // Assist mode: a toggle plus 4 independent options, remembered in meta.settings.assist (off by default)
   assistOf(app) {
     const st = app.shared.meta.settings;
-    if (!st.assist || typeof st.assist !== 'object') st.assist = { ...ASSIST_DEFAULT };
+    if (!st.assist || typeof st.assist !== 'object') st.assist = { ...SETTING_DEFAULTS.assist };
     return st.assist;
   },
   drawAssist(app, x, y) {

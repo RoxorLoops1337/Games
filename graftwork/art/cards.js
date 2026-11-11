@@ -23,6 +23,7 @@ import { deviceScale } from '../ui/smoothing.js';
 import { FLAGS } from '../ui/perf_flags.js';
 import { templates, composeCardFront, cardFrameIds, cardBackIds, resolveSlots, drawNineSlice, centerOf, CARD_BACK_TEMPLATE } from '../ui/templates.js';
 import { hash32 as hash } from '../ui/util.js';
+import { SCHOOL_LIST } from '../data/schools.js';
 
 export const CARD_W = 220, CARD_H = 310;
 const HW = CARD_W / 2, HH = CARD_H / 2;
@@ -31,7 +32,7 @@ export const SCHOOL_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922
 export const CB = { on: false }; // colourblind pattern chips on cards (set by ui/a11y.js)
 export const COLX = Object.assign({}, COL, SCHOOL_COLORS);
 const INK = COL.ink, SEPIA = '#4a3022', BRASS = '#c9a227', BRASS_D = '#7a5f12', BRASS_L = '#fff1b0', STEEL = '#b9b4a8', STEEL_D = '#6c675e', SCAR_BRIGHT = '#e5546a';
-const SCHOOL_ORDER = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
+const SCHOOL_ORDER = SCHOOL_LIST.map((s) => s.id);
 export const SCHOOL_SHAPES = { ember: 'flame', echo: 'arcs', hoard: 'pouch', blood: 'drop', rust: 'cog', static: 'bolt', gilded: 'diamond' };
 const TIER_COL = { safe: '#4f9a5d', greedy: '#d9a82c', weird: '#8a52c8' };
 const HERO_SCHOOL = { marrow: 'blood', wick: 'ember', odile: 'hoard' };

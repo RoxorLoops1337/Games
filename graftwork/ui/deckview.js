@@ -10,12 +10,11 @@ import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { resonanceText } from '../data/schools.js';
 import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
-import { priceOnCard } from '../engine/text.js';
+import { priceOnCard, plural } from '../engine/text.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
 import { lnw } from '../art/linework.js';
 
 const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
-const plural = (n, w) => (n === 1 ? w : w + 's');
 
 // ---------------------------------------------------------------- small widgets
 export function pill(app, text, cx, cy, color, o = {}) {

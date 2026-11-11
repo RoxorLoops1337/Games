@@ -27,7 +27,7 @@ import archive from './ui/archive.js';
 import wardrobe from './ui/wardrobe.js';
 import { setCardBack, cardFrame } from './art/cards.js';
 import { setHeroTint } from './art/heroes.js';
-import settings from './ui/settings.js';
+import settings, { TEXT_STEPS, QUALITY } from './ui/settings.js';
 import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installFullscreen } from './ui/fullscreen.js';
 import { initInstall, installHelp, drawInstallToast } from './ui/install.js';
@@ -82,7 +82,7 @@ export function boot(canvas) {
     // a setting or a cosmetic changed: it applies now, and the frozen picture under a modal is painted again with it
     saveMeta() { META.saveMeta(app.shared.meta); applyLoadout(app.shared.meta); applySettings(); app.refreshBelow('look'); },
   };
-  if (!['off', 'low', 'high'].includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
+  if (!QUALITY.includes(meta.settings && meta.settings.quality)) { meta.settings = meta.settings || {}; meta.settings.quality = defaultQuality(); }
   installPost(app);
   installWings(app); // wide phones: the picture runs on into the side bars (ui/wings.js)
   TRANS.installTransitions(app);
@@ -100,14 +100,14 @@ export function boot(canvas) {
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
   const st = meta.settings || {};
-  audio.setVolumes({ master: st.master ?? 0.8, sfx: st.sfx ?? 0.8, music: st.music ?? 0.35 });
+  audio.setVolumes({ master: st.master ?? META.SETTING_DEFAULTS.master, sfx: st.sfx ?? META.SETTING_DEFAULTS.sfx, music: st.music ?? META.SETTING_DEFAULTS.music });
   let artVer = assets.ver, uiVer = templates.ver;
   app.belowOverlay = () => TRANS.drawTransitions(app, true); // a wipe or a boss plate caught by a modal is part of the frozen picture
   // meta.settings into the switches the screens read (every frame, and at once when a setting is saved)
   function applySettings() {
     const st = app.shared.meta.settings || {};
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
-    const ts = [100, 125, 150, 175].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
+    const ts = TEXT_STEPS.includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
     app.textScale = ts / 100;
     const gm = cleanGraphics(st.graphics); if (app.perf.q.mode !== gm) app.perf.q.setMode(gm, performance.now()); // Settings > Graphics: Auto | High | Low
     app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
