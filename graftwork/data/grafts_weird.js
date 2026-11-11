@@ -1,8 +1,7 @@
 // WEIRD grafts: they change how the card works. Per-combat state lives on the wrapped combat card
 // (card.bonus, card.held, ...), never on shared data. Hooks only use the documented A API.
+import { hasD, hasB, dmgOrBlock, isJunk } from './helpers.js';
 
-const hasD = (s) => s.fx.some((o) => o.op === 'dmg');
-const hasB = (s) => s.fx.some((o) => o.op === 'block');
 const numeric = (s) => typeof s.cost === 'number';
 const tgt = (A, ctx) => (ctx.target && !ctx.target.dead ? ctx.target : (A.alive()[0] || null));
 
@@ -37,12 +36,10 @@ function exhaustFromHand(A, card) {
   c.ev.push({ t: 'exhaust', card: card.uid });
   return true;
 }
-const isJunk = (k) => String(k.inst.id).startsWith('j_');
 // damage taken since this card last left your hand (discarded or played)
 const owed = (A, card) => (card.mark === undefined ? 0 : Math.max(0, A.c.damageTakenThisCombat - card.mark));
 const stamp = (A, card) => { card.mark = A.c.damageTakenThisCombat; };
 const DEBUFFS = ['burn', 'bleed', 'vulnerable', 'weak', 'frail', 'marked'];
-const dmgOrBlock = (s) => hasD(s) || hasB(s);
 const single = (s) => s.target !== 'all' && dmgOrBlock(s);
 const AB = ['attack', 'skill'];
 

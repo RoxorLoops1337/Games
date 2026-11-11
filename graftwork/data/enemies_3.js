@@ -3,6 +3,7 @@
 // live bindings that are only read inside functions, at combat time, long after both modules have loaded (never at module scope).
 import { CARDS, GRAFTS } from './index.js';
 import { schoolsOf } from '../engine/cards.js';
+import { ST, CUSTOM } from './helpers.js';
 
 const cardDef = (id) => CARDS[id];
 const graftDef = (id) => GRAFTS[id];
@@ -44,9 +45,7 @@ function cutDraw(A, n) {
 }
 export { cardDef, graftDef, costOf, nextCards };
 const D = (n, extra) => ({ op: 'dmg', n, ...extra });
-const ST = (s, n, to) => ({ op: 'status', s, n, to: to || 'player' });
 const SELF = (s, n) => ({ op: 'status', s, n, to: 'self' });
-const CUSTOM = (intent, text, fn) => ({ op: 'custom', intent, text, fn });
 const stepAfter = (A, e) => { e.data.step = (e.data.step || 0) + 1; };
 
 // ---------- NORMALS ----------

@@ -1,7 +1,7 @@
 {
- "version": "017c093fca3185fc",
- "bytes": 10434371,
- "count": 548,
+ "version": "6c6070d96262b11d",
+ "bytes": 10433876,
+ "count": 549,
  "files": {
   "art/attacks.js": {
    "h": "7072ac5313e54661",
@@ -1724,48 +1724,48 @@
    "s": 1335
   },
   "data/cards_marrow.js": {
-   "h": "15b2ca9ad8be2ba5",
-   "s": 17137
+   "h": "06263147c1879891",
+   "s": 16831
   },
   "data/cards_odile.js": {
-   "h": "3edea24fa71450dc",
-   "s": 16240
+   "h": "049a39e91f4e8439",
+   "s": 15934
   },
   "data/cards_thread.js": {
    "h": "6742e69c0555971f",
    "s": 9072
   },
   "data/cards_wick.js": {
-   "h": "3aa5eee085244b1d",
-   "s": 15750
+   "h": "76c771571351f3c4",
+   "s": 15583
   },
   "data/dailymods.js": {
    "h": "b288d67afbafeed4",
    "s": 2682
   },
   "data/enemies_1.js": {
-   "h": "c0ddb9d6a1a4f732",
-   "s": 18105
+   "h": "dd8e772b53e3e052",
+   "s": 17920
   },
   "data/enemies_2.js": {
    "h": "04ed0fbc242783d7",
    "s": 19170
   },
   "data/enemies_3.js": {
-   "h": "c5e4e4c8d24269cc",
-   "s": 23806
+   "h": "46d8648099d1429d",
+   "s": 23703
   },
   "data/enemies_new1.js": {
-   "h": "d5069e839d320a7e",
-   "s": 4974
+   "h": "0702c74db4e4e725",
+   "s": 4789
   },
   "data/enemies_new2.js": {
    "h": "ba25dd65c8ead77e",
    "s": 6262
   },
   "data/enemies_new3.js": {
-   "h": "0024865a177b6595",
-   "s": 5892
+   "h": "60e77cf2c848c20b",
+   "s": 5789
   },
   "data/events.js": {
    "h": "c0508db1fce52e37",
@@ -1776,24 +1776,28 @@
    "s": 3985
   },
   "data/grafts_extra.js": {
-   "h": "00f2b29e703d69d3",
-   "s": 15508
+   "h": "6e197d30ac500f9e",
+   "s": 15407
   },
   "data/grafts_greedy.js": {
-   "h": "6a7d98c0b861ab39",
-   "s": 7589
+   "h": "0048cadb9d21f79a",
+   "s": 7538
   },
   "data/grafts_safe.js": {
    "h": "26c2f6ea1c59fbd2",
    "s": 9322
   },
   "data/grafts_thread.js": {
-   "h": "4e2920fd04f45ae4",
-   "s": 10524
+   "h": "510a4eb1c0896007",
+   "s": 10457
   },
   "data/grafts_weird.js": {
-   "h": "e4bd9e9db3c1b70e",
-   "s": 16252
+   "h": "477f1769e693bbba",
+   "s": 16101
+  },
+  "data/helpers.js": {
+   "h": "87cb9eeb73760269",
+   "s": 1711
   },
   "data/heroes.js": {
    "h": "20564a010420945c",
@@ -1804,20 +1808,20 @@
    "s": 3221
   },
   "data/potions.js": {
-   "h": "04fa30ed924bcc9e",
-   "s": 7797
+   "h": "4aa10980dd551be2",
+   "s": 7735
   },
   "data/relics.js": {
-   "h": "64314de09c2192f3",
-   "s": 18136
+   "h": "6ef1c761738ed5ac",
+   "s": 18032
   },
   "data/relics_more.js": {
-   "h": "05b12efd037d813a",
-   "s": 5922
+   "h": "55614141339ef760",
+   "s": 5567
   },
   "data/relics_thread.js": {
-   "h": "d846bcbb56d83542",
-   "s": 3767
+   "h": "0d2b301e4ef1cc7a",
+   "s": 3832
   },
   "data/relics_ward.js": {
    "h": "19be3e66ab9a9d0b",
@@ -1848,8 +1852,8 @@
    "s": 3567
   },
   "data/statuses_marrow.js": {
-   "h": "3ac81936dc6a2975",
-   "s": 1991
+   "h": "d0c1ef946a24d7a1",
+   "s": 1972
   },
   "data/statuses_odile.js": {
    "h": "38d8e40f4b7d10e8",
@@ -1868,12 +1872,12 @@
    "s": 18516
   },
   "data/ward_kit.js": {
-   "h": "281eb95fbf118b6d",
-   "s": 22007
+   "h": "7bb1082390671609",
+   "s": 21964
   },
   "data/ward_kit_big.js": {
-   "h": "665c92bfc16bf0eb",
-   "s": 5178
+   "h": "e09587ed5ecd0bb7",
+   "s": 5231
   },
   "engine/afflictions.js": {
    "h": "ebc293a595d6f316",
@@ -1896,8 +1900,8 @@
    "s": 3157
   },
   "engine/meta.js": {
-   "h": "62dfe45ab025f7f1",
-   "s": 11271
+   "h": "6cd53addd44c733e",
+   "s": 11208
   },
   "engine/meta2.js": {
    "h": "f68793cb03f3f559",
@@ -1928,8 +1932,8 @@
    "s": 8497
   },
   "engine/unlock.js": {
-   "h": "514ec209bd396a05",
-   "s": 11783
+   "h": "d1b33346d3241577",
+   "s": 11830
   },
   "engine/ward.js": {
    "h": "28e27a0254a3912b",

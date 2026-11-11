@@ -7,7 +7,7 @@ import { HEROES, CARDS, GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../
 export { UP, HERO_GATES, UNLOCKS, inventory };
 
 const NAMES = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
-const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+export const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x); // a plain object (meta.js uses it too)
 const SEEN_KEY = { card: 'cards', graft: 'grafts', relic: 'relics', potion: 'potions', event: 'events', build: 'builds' };
 
 export function unlockDefaults() { return { ids: {}, points: 0, lifetime: 0, played: {}, killed: {}, maxAct: 1, v: 1 }; }

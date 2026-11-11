@@ -7,7 +7,7 @@
 //   - props stay in the grid and never overlap, every free sub-tile is reachable from every other,
 //   - tall props hug a back wall (u = 0 or v = 0), nothing tall stands on the front edges.
 const P = (id, u, v, flip = 0) => ({ id, u, v, flip });
-const Wp = (id, wall, s) => ({ id, wall, s });
+export const Wp = (id, wall, s) => ({ id, wall, s }); // a wall piece; data/ward_kit.js uses it too
 
 // ---- 2 x 1 plans (u 0..7, v 0..3) ----
 const PLAN_2x1 = {

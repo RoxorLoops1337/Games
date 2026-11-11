@@ -1,9 +1,8 @@
 // Relics. { id, name, rarity 'start'|'common'|'uncommon'|'rare'|'boss'|'shop', text, mod?, on?, perk?, n? }
 // Hooks get (A, payload, run). Per-combat scratch state lives in A.c.rx.
 // perk names are read by engine/run.js (see the hand-off notes); `n` is the perk's number.
+import { isJunk, allCards } from './helpers.js';
 const S = (A) => A.c.rx || (A.c.rx = {});
-const isJunk = (k) => k.inst.id.startsWith('j_');
-const allCards = (A) => [...A.c.hand, ...A.c.drawPile, ...A.c.discard, ...A.c.exhaust, ...A.c.powers];
 const isBare = (spec) => spec.grafts.length === 0 && (spec.type === 'attack' || spec.type === 'skill');
 
 export const RELIC_LIST = [

@@ -2,10 +2,8 @@
 // (A.c.run.deck), the Strain (A.c.strain), the Tithed cards and the jammed cards in hand. Several mix two schools on purpose.
 // Hooks only use the documented A API; per-combat state is never kept on shared data.
 import { GRAFTS } from './index.js'; // read only inside hooks at runtime (circular import is safe)
+import { hasD, hasB, dmgOrBlock } from './helpers.js';
 
-const hasD = (s) => s.fx.some((o) => o.op === 'dmg');
-const hasB = (s) => s.fx.some((o) => o.op === 'block');
-const dmgOrBlock = (s) => hasD(s) || hasB(s);
 const hits = (s) => hasD(s) && (s.target === 'enemy' || s.target === 'all');
 const num = (s) => typeof s.cost === 'number';
 const AB = ['attack', 'skill'];

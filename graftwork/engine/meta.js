@@ -6,7 +6,7 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
 import { ASCENSION_TEXT } from './run.js';
 import { defaults2, migrate2, awardCaseFile, recordBosses, grantReward } from './meta2.js';
-import { unlockDefaults, migrateUnlock, awardRun, trackRun, heroGate } from './unlock.js';
+import { unlockDefaults, migrateUnlock, awardRun, trackRun, heroGate, isObj } from './unlock.js';
 export * from './meta2.js';
 export * from './unlock.js';
 
@@ -39,7 +39,6 @@ export function defaultMeta() {
     ...defaults2(), // rev 2: credit, cosmetics, loadout, practice (engine/meta2.js)
   };
 }
-const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
 // Fill missing or wrong-typed fields from the defaults, keep everything else (additive migration).
 function fill(t, d) {
   for (const k of Object.keys(d)) {

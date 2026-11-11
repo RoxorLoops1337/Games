@@ -12,7 +12,7 @@
 //   - props stay inside the grid and never overlap each other,
 //   - the four LANE cells (0,1) (3,1) (1,0) (1,3) stay free: they are where a door leads out of the room (rows 1 to 2 of a wall are the door),
 //   - every free sub-tile is reachable from every other, so monsters and the hero can always walk.
-import { BIG_RECIPES, hasBigRecipe } from './ward_kit_big.js';
+import { BIG_RECIPES, hasBigRecipe, Wp } from './ward_kit_big.js';
 export { hasBigRecipe };
 export const SUB = 4;
 export const WALL_FULL = 46, WALL_LOW = 15;
@@ -26,7 +26,6 @@ export const PLANNED = { floors: [], walls: [], pieces: [], props: {} };
 const PROP_ANIM = { generator: 'spark', sawbench: 'saw', candle_stand: 'flame', stove: 'flame', boiler_tank: 'spark', cauldron: 'flame', footlights: 'flame', work_lamp: 'flame' };
 
 const P = (id, u, v, flip = 0) => ({ id, u, v, flip });
-const Wp = (id, wall, s) => ({ id, wall, s });
 
 // How the rooms are laid out (u runs along the right-down edge = the back-right wall, v along the left-down edge = the back-left wall):
 //   - the L wall is the column u = 0, the R wall the row v = 0; the lanes (0,1) (3,1) (1,0) (1,3) stay free (doors), so a 2 x 1 prop on a wall edge sits in the
