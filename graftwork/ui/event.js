@@ -15,8 +15,8 @@ import { lnw } from '../art/linework.js';
 import { eventSource } from './ward_kit.js';
 import { drawCardZoom } from './card_zoom.js';
 import * as SK from './skin.js';
+import { hash32 as hash } from './util.js';
 
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
 const EV_BAND = { x: 576, y: 70, bottom: 700, dir: -1 }; // glossary tips open over the picture on the left, never over the choices
 const PANEL = { x: 584, y: 64, w: 664, h: 632 }; // starts under the global Pause / Fullscreen zone (y 0..56)

@@ -13,10 +13,9 @@
 //   TEMPER, temperUpdate, hammerPose, temperTint, temperRivets        Forge hammer sequence.
 // Everything is a no-op without a DOM / post / audio, and short under reduced motion (a 160 ms cross-fade, no shake).
 import { FX_OPTS } from './fx.js';
+import { clampOrdered as clamp, lerp } from './util.js';
 
 const W = 1280, H = 720;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
 const eOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const eIn = (t) => { t = clamp(t, 0, 1); return t * t * t; };
 const eInOut = (t) => { t = clamp(t, 0, 1); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };

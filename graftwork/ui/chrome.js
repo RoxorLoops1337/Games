@@ -1,6 +1,7 @@
 import { lnw } from '../art/linework.js';
 import { templates } from './templates.js';
 import * as SK from './skin.js';
+import { canvas2d as mk } from './util.js';
 // Physical UI chrome (design/ART_BIBLE.md "UI chrome"): brass-framed slab panels with rivets, inset shadow and a lit top edge,
 // buttons with 2 px press travel, plus plate / rivet / vial helpers.
 // Textures are baked ONCE into offscreen canvases (keyed by size and colours, numeric keys so a hit allocates nothing);
@@ -13,15 +14,6 @@ const MAX_BAKES_PER_FRAME = 10, MAX_PIXELS = 48e6, MAX_ENTRIES = 400;
 const cache = { px: 0, panels: new Map(), buttons: new Map(), entries: 0, pixels: 0, bakes: 0, frameBakes: 0, hits: 0, vector: 0 };
 export const stats = cache;
 
-function mk(w, h) {
-  let c = null;
-  if (typeof document !== 'undefined' && document.createElement) c = document.createElement('canvas');
-  else if (typeof OffscreenCanvas !== 'undefined') c = new OffscreenCanvas(1, 1);
-  if (!c) return null;
-  c.width = w; c.height = h;
-  const g = c.getContext && c.getContext('2d');
-  return g ? { c, g } : null;
-}
 function rrp(g, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
 function brassGrad(g, h, a) {
   const gr = g.createLinearGradient(0, 0, 0, h);

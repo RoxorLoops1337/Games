@@ -25,7 +25,7 @@ graftwork/
     ward.js         the Ward: floors, building, power, timers, the day's phases, dice routes, what a room opens (wardInit, playBuildCard, startRoute, afterTrigger)
     save.js meta.js meta2.js   persistence (see Save keys), meta progression, Credit, cosmetics, Daily Case, boss practice
   data/     content, one author per file (table below); ward_kit.js = the modular room recipes (rm_* -> kit floor, wall, pieces, props) + pure grid geometry; data/index.js builds the id maps (CARDS, GRAFTS, ENEMIES, STATUSES...) and throws on duplicate ids
-  ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), one file per screen
+  ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), util.js (leaf helpers with no imports: TAU, clamp, lerp, hash32 / hash01, seeded and plain random, offscreen canvases; art/ and lab/ use it too), one file per screen
             (title ward combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
             seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), audio.js,
             a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js,

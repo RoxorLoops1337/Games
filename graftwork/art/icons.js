@@ -10,8 +10,8 @@ import { COL, FONT, rgba, shade } from '../ui/core.js';
 import { RELICS, STATUSES } from '../data/index.js';
 import { lnw } from './linework.js';
 import * as SK from '../ui/skin.js';
+import { TAU, hash32 } from '../ui/util.js';
 
-const TAU = Math.PI * 2;
 const D = '#2B1E1A'; // sepia ink: the one outline colour
 const GW = (w) => lnw(w * PX, 1, PX); // glyph-space width (glyph units): thinned and floored in device pixels
 let PX = 12; // pixels per glyph unit (set by withGlyph / sub) so hatch and outline stay about 1 px
@@ -36,7 +36,6 @@ function hatchDisc(c, rad, a = 0.3) {
 const disc = (c, rad, k) => { c.beginPath(); c.arc(0, 0, rad, 0, TAU); c.fillStyle = k; c.fill(); };
 const LW = 0.11;
 const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
-function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 // ---- tiny path helpers (unit space) ----
 const path = (c, p, close = true) => { c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); if (close) c.closePath(); };
@@ -404,7 +403,7 @@ for (const sid of Object.keys(STATUSES)) {
   const text = (sid + ' ' + (STATUSES[sid].name || '')).toLowerCase();
   let g = null;
   for (const [kw, name] of STATUS_KEYWORDS) if (text.includes(kw) && G[name]) { g = name; break; }
-  if (!g) g = GLYPH_NAMES[hash(sid) % GLYPH_NAMES.length];
+  if (!g) g = GLYPH_NAMES[hash32(String(sid)) % GLYPH_NAMES.length];
   ST[sid] = [g, STATUSES[sid].good ? GR : RD, STATUSES[sid].good ? '#e8f6ea' : '#fff'];
   STATUS_IDS_DRAWN.push(sid);
 }
@@ -412,13 +411,13 @@ function relicGlyph(id, name) {
   if (RELIC_GLYPHS[id]) return RELIC_GLYPHS[id];
   const s = (String(id) + ' ' + String(name || '')).toLowerCase();
   for (const [kw, g] of KEYWORDS) if (s.includes(kw)) return g;
-  return GLYPH_NAMES[hash(id) % GLYPH_NAMES.length];
+  return GLYPH_NAMES[hash32(String(id)) % GLYPH_NAMES.length];
 }
 const RTINT = ['#e8dcc4', '#c9d6e0', '#e8c9a0', '#cfe6c4', '#e0c4d8', '#d8d0a0', '#bcd8d0', '#e8b8a8'];
 const RACC = ['#F2C14E', '#B3263A', '#5aa86a', '#7FD1E0', '#c9a8ff', '#ff8a3c', '#e8dcc4', '#8c6a3a'];
 const RSPEC = { r_marrow_kit: ['#cfd6dc', '#B3263A'], r_wick_kit: ['#c9a227', '#ff6a2b'], r_odile_kit: ['#b98a50', '#F2C14E'] };
 export function drawRelic(ctx, id, x, y, size, rarity) {
-  const h = hash(id); const r = size / 2;
+  const h = hash32(String(id)); const r = size / 2;
   const rar = rarity || (RELICS[id] && RELICS[id].rarity) || 'common';
   const rim = RIM[rar] || RIM.common;
   const k = (RSPEC[id] && RSPEC[id][0]) || RTINT[h % RTINT.length], a = (RSPEC[id] && RSPEC[id][1]) || RACC[(h >> 5) % RACC.length];
@@ -484,8 +483,8 @@ function bottle(c, shape, liquid, label, extra, t) {
   c.beginPath(); c.ellipse(-0.2, 0.15, 0.04, 0.2, 0.2, 0, TAU); c.fillStyle = 'rgba(255,255,255,.35)'; c.fill();
 }
 export function drawPotion(ctx, id, x, y, size) {
-  const e = PT[id] || [PSHAPES[hash(id) % PSHAPES.length], `hsl(${hash(id) % 360},60%,55%)`, GLYPH_NAMES[hash(id) % GLYPH_NAMES.length]];
-  let liquid = e[1]; if (liquid.startsWith('hsl')) { liquid = '#' + [(hash(id) >> 3) & 255, (hash(id) >> 11) & 255, (hash(id) >> 19) & 255].map((v) => (80 + (v % 150)).toString(16)).join(''); }
+  const e = PT[id] || [PSHAPES[hash32(String(id)) % PSHAPES.length], `hsl(${hash32(String(id)) % 360},60%,55%)`, GLYPH_NAMES[hash32(String(id)) % GLYPH_NAMES.length]];
+  let liquid = e[1]; if (liquid.startsWith('hsl')) { liquid = '#' + [(hash32(String(id)) >> 3) & 255, (hash32(String(id)) >> 11) & 255, (hash32(String(id)) >> 19) & 255].map((v) => (80 + (v % 150)).toString(16)).join(''); }
   ctx.save(); ctx.translate(x, y); const s = size / 2 / 0.78; ctx.scale(s, s); PX = s;
   ctx.beginPath(); ctx.ellipse(0, 0.74, 0.42, 0.08, 0, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';

@@ -6,8 +6,8 @@ import * as CARDS from './cards.js';
 import { pose as atkPose } from './attacks.js';
 import { lnw } from './linework.js';
 import { gc, gradeKey, setGrade, gradePixels } from './grade.js';
+import { TAU } from '../ui/util.js';
 
-const TAU = Math.PI * 2;
 const INK = '#16110f';
 const G = { flash: 0, tension: 0, lean: 0, gut: 0, brine: 0 };
 let TCOL = null;

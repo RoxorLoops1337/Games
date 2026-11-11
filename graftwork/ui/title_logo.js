@@ -7,18 +7,15 @@
 //   Reduced motion: no intro, no sway, no glint, no pulse: the finished wordmark, still.
 import { W, FONT, clamp } from './core.js';
 import { lnw } from '../art/linework.js';
+import { TAU, offscreen as mk } from './util.js';
 
 export const WORD = 'GRAFTWORK';
 export const INTRO_S = 3.6;
 // plain wording, no em dashes. The first one is the game's motto.
 export const TAGLINES = ['Cut what you love. Stitch what you need.', 'Sew yourself a better weapon.', 'Your own cards are the patient.'];
 export const TAGLINE_S = 6.5;
-const SIZE = 118, SPACE = 7, PAD = 26, TAU = Math.PI * 2;
+const SIZE = 118, SPACE = 7, PAD = 26;
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
-const mk = (w, h) => {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-};
 
 // one letter, origin = left of the glyph box, y = baseline
 function paintLetter(g, ch, x, base, w) {

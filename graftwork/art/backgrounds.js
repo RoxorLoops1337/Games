@@ -4,9 +4,9 @@
 // o: { dim: 0..1 extra darkening, still: true to freeze animation }
 import { COL, rgba } from '../ui/core.js';
 import { lnw } from './linework.js';
+import { TAU, mulberry32 as rng } from '../ui/util.js';
 
-const W = 1280, H = 720, TAU = Math.PI * 2;
-function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const W = 1280, H = 720;
 
 // ---- offscreen cache ----
 const cache = new Map();

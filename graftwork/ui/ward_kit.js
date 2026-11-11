@@ -17,6 +17,7 @@ import { BUILD_CARDS, ROOMS, PHASES, WARD_TUNE } from '../data/ward.js';
 import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
 import { assets } from './assets.js';
+import { TAU } from './util.js';
 
 export const INK = '#2B1E1A';
 
@@ -35,7 +36,6 @@ const KIND_INFO = {
 const RARE = { common: '#8a7a5c', uncommon: '#3E7C74', rare: '#C9A227' };
 
 // ---------------- glyphs (engraved: ink contour, spot tint fill, hatch on the shadow side) ----------------
-const TAU = Math.PI * 2;
 function hatch(g, x, y, w, h, a = 0.35, step = 3) {
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   g.strokeStyle = rgba(INK, a); g.lineWidth = lnw('hatch'); g.beginPath();

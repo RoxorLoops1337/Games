@@ -17,13 +17,8 @@ import { drawHero } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { lnw } from '../art/linework.js';
 import { templates } from './templates.js';
+import { TAU, hash01 as hash, offscreen as mkCanvas } from './util.js';
 
-const TAU = Math.PI * 2;
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
-const mkCanvas = (w, h) => {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-};
 
 // ---- the cluster: grid cells, connections, who stands where ----
 export const CLUSTER = [

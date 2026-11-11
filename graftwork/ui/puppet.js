@@ -13,13 +13,13 @@
 // Units: x is forward (+) and y is up (+) for feet, `down` is the body drop, everything in FIGURE HEIGHTS (H = the opaque height of the sprite). Angles in radians,
 // canvas sign (+ = clockwise); a forward swing of a hanging leg therefore uses a NEGATIVE angle. No allocation per frame: walkPuppet fills the `out` it is given.
 import { gaitEntry } from '../data/gaits.js';
+import { clampOrdered as clamp, TAU, offscreen as mkc } from './util.js';
 
 // tuck: leg part runs this far (figure heights) up under the garment; garment: secondary sway of the hem band (0 = rigid cloth); hemLag: how many steps the cloth lags
 // the legs; strideMax: the longest step (figure heights) the stride may reach (the Ward pace is tuned against it, see ui/ward.js PACE)
 export const TUNE = { swing: 32, lift: 0.085, bob: 0.024, sway: 0.014, lean: 0.045, twist: 0.04, squash: 0.05, duty: 0.58, strideK: 1, tuck: 0.18, garment: 1, hemLag: 0.16, strideMax: 0.44 };
 export const TUNE_DEFAULT = { ...TUNE };
-const TAU = Math.PI * 2, DEG = Math.PI / 180;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const DEG = Math.PI / 180;
 const CLIP_MARGIN = 0.04; // legs are clipped above the hip row minus this (figure heights)
 const BOOT = 0.14; // the lowest part of the visible leg (fraction of it) is drawn unscaled, so a stretch never distorts the boot
 const HEM_BAND = 0.2; // the garment band: this much of the figure height above the hip swings as cloth
@@ -197,7 +197,6 @@ export function footPoint(pose, side, geom, out = { x: 0, y: 0 }) {
 
 // ---------------------------------------------------------------- prepare (offscreen parts, cached per image and size bucket)
 const CACHE = new WeakMap(); // img -> { an, kind, parts: Map(bucket -> parts) }
-const mkc = (w, h) => { if (typeof document === 'undefined' || !document.createElement) return null; try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; } };
 const BUCKETS = [0.25, 0.375, 0.5, 0.75, 1];
 const bucketFor = (r) => { for (const b of BUCKETS) if (r <= b * 1.04) return b; return 1; };
 function analyseImage(img, o) {

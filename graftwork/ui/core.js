@@ -11,6 +11,7 @@ import { createTextMetrics } from './text_metrics.js';
 import { resetSmoothing, installSmartDraw } from './smoothing.js';
 import { FLAGS } from './perf_flags.js';
 import { createFrameState } from './frame_state.js';
+import { clamp, lerp } from './util.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -28,8 +29,7 @@ export const EASE = {
 // fitMinPx: the smallest on-screen size (CSS px) a FITTED label may shrink to when the boosted size would not fit its box (app.text option fit).
 const SMALL = { minTextPx: 11, minTouchPx: 40, floorBelow: 0.95, maxBoost: 1.5, maxHitGrow: 24, fitMinPx: 9 };
 const MAX_BACKING_PX = 9.5e6; // canvas backing store budget in device pixels (about a 4K screen)
-export const lerp = (a, b, t) => a + (b - a) * t;
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export { clamp, lerp };
 export function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 export function shade(hex, k) { const n = parseInt(hex.slice(1), 16); const f = (v) => clamp(Math.round(v * k), 0, 255); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
 

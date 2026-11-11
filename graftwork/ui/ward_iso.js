@@ -23,16 +23,16 @@ import { previewOn } from './preview.js';
 import { deviceScale } from './smoothing.js';
 import * as K from './ward_kit.js';
 import * as KR from './ward_kit_iso.js';
+import { TW, TH } from './ward_kit_iso.js';
 import { wallPlan } from '../data/ward_kit.js';
+import { TAU, hash01 as hash, offscreen as mk } from './util.js';
 
-export const TW = 92, TH = 48; // floor tile of the 2:1 projection (world px; the camera scales them on screen)
+export { TW, TH }; // floor tile of the 2:1 projection (world px; the camera scales them on screen), one definition in ward_kit_iso.js
 export const MAPR = { x: 284, y: 64, w: 712, h: 484 }; // the map panel (same rectangle as the old sheet)
 const FILL = 1; // a room's measured floor diamond is scaled to exactly the cell diamond
 const UP = 70; // how far a diorama rises above its floor centre (layout and camera fit; the real sprite decides what is drawn)
 const SLAB = 14; // thickness of the stone plinth
 const WALL = 48; // wall height of the procedural block and of the pick volume
-const TAU = Math.PI * 2;
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
 // ---------------- projection, camera and picking ----------------
 // World space is the fixed iso layout (cellW). The camera maps world to the map panel: screen = (world - focus) * z + panel centre.
@@ -128,10 +128,6 @@ function camBegin(app) { const g = app.ctx; g.save(); g.beginPath(); g.rect(MAPR
 function camEnd(app) { app.ctx.restore(); }
 
 // ---------------- offscreen helpers (all optional: with no DOM everything is drawn straight) ----------------
-function mk(w, h) {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-}
 const V = {
   ground: null, groundKey: '', glow: null, glowTried: false, mon: new Map(), hero: new Map(),
   lift: Object.create(null), landed: Object.create(null), lastT: 0, motes: new Float32Array(30 * 5), motesInit: false, list: [], pool: [], faceHero: 1, heroPrev: null, plots: [], plotsKey: '',

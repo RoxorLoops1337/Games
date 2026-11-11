@@ -11,12 +11,10 @@
 import { assets, pickAtkFrame } from './assets.js';
 import { pose as atkPose } from '../art/attacks.js';
 import { setGrade } from '../art/grade.js';
+import { clampOrdered as clamp, lerp, TAU } from './util.js';
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const easeIn = (t) => { const k = clamp(t, 0, 1); return k * k; };
-const TAU = Math.PI * 2;
 
 // 1 layout px = U sprite px of the 2x frame (256 wide): a lone normal enemy then stands ~200 px tall in the 212 px lane
 export const U = 0.8;

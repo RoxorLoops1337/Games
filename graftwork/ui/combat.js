@@ -22,12 +22,12 @@ import * as SK from './skin.js';
 import { drawCardZoom } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
 import * as CA from './combat_art.js';
+import { randRange as rnd } from './util.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const WHY = { energy: 'Not enough energy', unplayable: 'Unplayable', gold: 'Not enough gold', limit: 'Play limit reached', needsAttack: 'Play an Attack first', target: 'Pick a target', blocked: 'Not now' };
-const rnd = (a, b) => a + Math.random() * (b - a);
 
 let S = null; // the live screen state (one combat at a time)
 let APP = null;

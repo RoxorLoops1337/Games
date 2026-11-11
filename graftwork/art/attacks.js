@@ -11,10 +11,9 @@
 //   splat, droplets, clipboard, stamp, blot, inhale, blow, push, hose, orbit, peel, peelK, hit, thread, ghost, dim, flatline, sparks, flash,
 //   stiffen, bell, flames, glint, embedded, limb, strain, snap, spit, beam, reach, gaze, spin, guard, flex, cast, call, heal.
 import { ENEMIES } from '../data/index.js';
+import { clampOrdered as clamp, lerp, TAU } from '../ui/util.js';
 
-const PI = Math.PI, TAU = PI * 2;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
+const PI = Math.PI;
 const smooth = (t) => t * t * (3 - 2 * t);
 const backIn = (t, s = 1.7) => t * t * ((s + 1) * t - s);
 const expoOut = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : (1 - Math.pow(2, -10 * t)) / (1 - Math.pow(2, -10)));

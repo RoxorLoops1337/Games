@@ -28,10 +28,9 @@ import * as L from '../ui/combat_layout.js';
 import { Fx } from '../ui/fx.js';
 import { wallPlan } from '../data/ward_kit.js';
 import { ENEMIES, HEROES } from '../data/index.js';
+import { clamp, lerp } from '../ui/util.js';
 
 const $ = (id) => document.getElementById(id);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
 const DPR = Math.min(2, window.devicePixelRatio || 1);
 const Q = new URLSearchParams(location.search);
 const qn = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };

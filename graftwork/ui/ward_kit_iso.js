@@ -12,14 +12,13 @@ import { FLAGS } from './perf_flags.js';
 import { bucketOf as bucketOfZ, pickLayer, evictFor, isMoving } from './layer_cache.js';
 import { SUB, WALL_FULL, WALL_LOW, resolveRecipe, wallHeight, defaultWallMode, pathInRoom, pathOnGrid, propAt } from '../data/ward_kit.js';
 import { assets } from './assets.js';
+import { clamp, hash01 as hash, offscreen as mk, TAU } from './util.js';
 
 export const TW = 92, TH = 48, HW = TW / 2, HH = TH / 2;
-const DOOR_H = 36, DOOR_S0 = 0.2, DOOR_S1 = 0.8, TAU = Math.PI * 2;
+const DOOR_H = 36, DOOR_S0 = 0.2, DOOR_S1 = 0.8;
 const COPE = { wood: '#7a5a3c', stone: '#9b968c', brick: '#8a5a48', plaster: '#d8ccb4', tile: '#cfd6d2', velvet: '#6a1c28', slab: '#8d8a84' };
 const FLOORC = { wood: '#5a3a22', stone: '#6b665e', tile: '#9aa09a', darkstone: '#3b3835', carpet: '#6a2a30', brick: '#7a4a3a', slab: '#7d7b78', stage: '#4a2428' };
 const WALLC = { wood: '#4a3424', stone: '#5e5a52', tile: '#aab0aa', brick: '#74463a', plaster: '#b9ae98', velvet: '#5a1a26', slab: '#6d6b66' };
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // wall mode setting: 'auto' follows the density (defaultWallMode), or 'full' | 'low' | 'cutaway'
 export const KITS = { mode: 'auto', log: null }; // log: tests set an array to record the draw order of props and actors
@@ -29,10 +28,6 @@ export function cycleWallMode() { const L = ['auto', 'full', 'low', 'cutaway']; 
 const Q = { mips: new Map(), pats: new Map(), layers: new Map(), dark: new WeakMap(), wallH: Object.create(null), mons: new Map(), hpaths: new Map(), shadow: null, stats: { layers: 0, hits: 0, msStatic: 0, msItems: 0 } };
 export const kitStats = Q.stats;
 export function resetKit() { Q.mips.clear(); Q.pats.clear(); Q.layers.clear(); Q.wallH = Object.create(null); Q.mons.clear(); Q.hpaths.clear(); Q.stats.layers = 0; Q.stats.hits = 0; }
-function mk(w, h) {
-  if (typeof document === 'undefined' || !document.createElement) return null;
-  try { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext('2d'); return x ? { c, x } : null; } catch (e) { return null; }
-}
 
 // ---------------- which rooms are modular ----------------
 // The recipe of a room type, or null (draw the block): needs the kit manifest, the images of THIS recipe settled, and its floor and wall textures.

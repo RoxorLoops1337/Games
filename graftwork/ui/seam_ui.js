@@ -14,13 +14,13 @@ import * as SEAM from '../engine/seam.js';
 import { maybeTip, threadLesson, tipSeen, TIP_TEXTS } from './tutorial.js';
 import * as L from './combat_layout.js';
 import { lnw } from '../art/linework.js';
+import { randRange as rnd } from './util.js';
 
 const BRASS = '#C9A227', BRASS_D = '#7a5f16', BRASS_L = '#ecd27a', INK = '#0E0E0E', PAPER = '#f3ead4';
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
 export const SEAM_MS = { extendStart: 90, extend: 140, cut: 300, pay: 280, snipClose: 60, beadFlight: 240 }; // waits (ms) the combat queue honours for the Thread beats; tests/graftwork_motion.test.mjs budgets them
 const SNIP_CLOSE = 0.06; // s: the scissors close on the thread, then the snap releases the beads (anticipation before the cut)
 const SPACING = 52, BEAD_R = 15, LEFT_W = 112, CHIP_W = 216;
-const rnd = (a, b) => a + Math.random() * (b - a);
 const schoolCol = (s) => COL[s] || BRASS;
 
 // ---------------------------------------------------------------- shared text
