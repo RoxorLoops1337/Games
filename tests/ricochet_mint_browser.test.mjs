@@ -44,7 +44,7 @@ for (const [name, w, h, dpr] of [['phone', 390, 844, 3], ['wide viewport', 990, 
   await page.waitForTimeout(400);
   await page.tap('#playBtn'); await page.waitForTimeout(250);
   if (await page.isVisible('#infoGo')) await page.tap('#infoGo');
-  await page.evaluate(() => { const R = game.room(); R.coins = []; R.slots.forEach((s) => { s.open = true; }); game.cash = 1e6; game.life = 2e3; game.mile = 2; });
+  await page.evaluate(() => { const R = game.room(); R.coins = []; R.slots.forEach((s) => { s.open = true; }); game.cash = 1e6; game.life = 1e3; game.mile = 1; game.enemiesOn = false; });
 
   const geo = await page.evaluate(() => { const r = document.getElementById('cv').getBoundingClientRect(); return { r: { left: r.left, top: r.top, width: r.width, height: r.height }, view: { ...view }, dpr: devicePixelRatio, slots: game.room().slots.map((s) => [s.x, s.y]) }; });
   ok(geo.r.height > h * 0.5, name + ': the room takes up most of the screen');
