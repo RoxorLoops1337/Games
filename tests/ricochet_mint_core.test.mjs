@@ -1,6 +1,6 @@
 // Ricochet Mint: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
+import { LANE, HOLE_X, setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
@@ -106,7 +106,7 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
 // ---------------------------------------------------------------- save / load
 {
   const g = new Game(mulberry(9), true);
-  g.cash = 1e9; g.life = 2e9; g.perks = { lucky: 1 }; g.unlockRoom(1);
+  g.cash = BAL.room2; g.life = 2e9; g.perks = { lucky: 1 }; g.unlockRoom(1);
   const R = g.rooms[0]; R.slots[1].open = true; R.slots[1].item = R.mkItem('bucket'); R.slots[1].item.lv = 4; R.padLv = 3;
   const s = JSON.parse(JSON.stringify(g.save()));
   const h = new Game(mulberry(10), true); h.load(s);
@@ -117,6 +117,56 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
   eq(h.perks, { lucky: 1 }, 'perks survive a reload');
   eq(h.rooms[0].coins.length, R.coins.length, 'coins survive a reload');
   const old = new Game(mulberry(11), true); old.load({ v: 1, stage: 4 }); ok(old.rooms[0].open && old.cash === 0, 'an old-format save starts a fresh game instead of breaking');
+}
+
+// ---------------------------------------------------------------- pads along the walls
+{
+  const g = new Game(mulberry(20), true); const R = g.rooms[0];
+  eq(R.padN, 1, 'the Den starts with one small floor pad');
+  g.cash = 1e9; R.buy('pad');
+  eq(R.padN, 2, 'buying a pad places the next one along the walls');
+  while (!R.padFull()) R.buy('pad');
+  const lv = R.padLv; R.buy('pad'); eq(R.padLv, lv + 1, 'once every spot has a pad, the button levels pads up');
+  R.coins = []; const c = R.addCoin(0, 40, R.pads()[1].y, -400, 0); c.age = 1;
+  const before = g.life; for (let i = 0; i < 40; i++) R.step(1 / 240);
+  ok(g.life > before && c.vx > 0, 'a coin hitting a wall pad pays and bounces off');
+  const d = R.addCoin(0, 40, 60, -400, 0); d.age = 1; const b2 = g.life; for (let i = 0; i < 30; i++) R.step(1 / 240);
+  ok(g.life === b2, 'bare wall does not pay');
+}
+
+// ---------------------------------------------------------------- the Attic: hatch, plunger, flippers, drain
+{
+  const g = new Game(mulberry(21), true); const D = g.rooms[0], A = g.rooms[1];
+  D.coins = []; D.addCoin(0, HOLE_X, 60, 0, -800);
+  for (let i = 0; i < 60; i++) g.step(1 / 240);
+  eq(D.coins.length, 1, 'with the Attic locked the hatch stays shut');
+  g.cash = BAL.room2; g.unlockRoom(1); g.cur = 0;
+  D.coins = []; D.addCoin(0, HOLE_X, 60, 0, -800);
+  for (let i = 0; i < 60; i++) g.step(1 / 240);
+  ok(D.coins.length === 0 && A.queue.length + A.coins.length === 1, 'a coin flying up through the open hatch arrives in the Attic');
+  let atticPays = 0; const op = A.pay.bind(A); A.pay = (...a) => { atticPays++; op(...a); };
+  g.enemiesOn = false; run(g, 20);
+  ok(atticPays > 5, 'the plunger fires it into the pinball room, where hits pay (' + atticPays + ')');
+}
+for (const tier of [0, 5, 9, 11]) {
+  // every coin size gets out of the shooter lane (big ones used to bounce back down forever)
+  const g = new Game(mulberry(22 + tier), true); g.cash = BAL.room2; g.unlockRoom(1); g.enemiesOn = false;
+  const D = g.rooms[0], A = g.rooms[1]; D.coins = []; A.receive({ t: tier, combo: 0 });
+  let left = false; for (let i = 0; i < 240 * 8 && !left; i++) { g.step(1 / 240); if (A.coins.some((c) => c.x < LANE - c.r)) left = true; }
+  ok(left, 'a tier ' + (tier + 1) + ' coin leaves the shooter lane into the room');
+}
+{
+  // a crowd arriving at once is fed to the plunger one by one and keeps paying
+  const g = new Game(mulberry(30), true); g.cash = BAL.room2; g.unlockRoom(1); g.enemiesOn = false;
+  const D = g.rooms[0], A = g.rooms[1]; D.coins = [];
+  [0, 1, 3, 2, 6, 1, 4, 2, 5, 1, 3, 5].forEach((t) => A.receive({ t, combo: 0 }));
+  let pays = 0; const op = A.pay.bind(A); A.pay = (...a) => { pays++; op(...a); };
+  run(g, 60); const mid = pays; run(g, 60);
+  ok(A.queue.length === 0, 'the plunger queue empties');
+  ok(pays - mid > 20, 'coins keep paying in the Attic minute after minute (' + (pays - mid) + ')');
+  let drains = 0; const od = D.dropIn.bind(D); D.dropIn = (c) => { drains++; od(c); }; run(g, 240);
+  ok(drains > 0, 'coins that slip past the flippers fall back to the Den');
+  ok(D.real() === A.real(), 'Den and Attic share one wallet');
 }
 
 // ---------------------------------------------------------------- tall screens: the room grows, layouts follow the floor
