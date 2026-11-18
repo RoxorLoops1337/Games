@@ -99,6 +99,7 @@ const STATIC_PATHS = [
   'midnight_mog',
   'drop_the_bass',
   'groove_lock',
+  'ricochet_mint',
   'tools',
 ];
 

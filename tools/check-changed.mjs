@@ -86,6 +86,7 @@ const GAME_SUITES = {
   drop_the_bass: ['test:dropbass'],
   pitch_story: ['test:pitchstory'],
   groove_lock: ['test:groovelock'],
+  ricochet_mint: ['test:ricochet'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
