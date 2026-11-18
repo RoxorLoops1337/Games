@@ -142,13 +142,13 @@ h2{font-size:28px;font-weight:700;color:var(--gold);text-shadow:3px 3px 0 var(--
   </div>
   <footer>
     <button class="pbtn buy" data-k="mint"><img class="px" data-ic="coin"><b>Coin</b><span>0</span><small>0/6</small></button>
-    <button class="pbtn buy" data-k="pad"><img class="px" data-ic="cushion"><b>Bounce Pad</b><span>0</span><small>Lv 0</small></button>
+    <button class="pbtn buy" data-k="pad"><img class="px" data-ic="cushion"><b>Add Pad</b><span>0</span><small>Lv 0</small></button>
     <button class="pbtn buy" data-k="cap"><img class="px" data-ic="purse"><b>Wallet</b><span>0</span><small>6 coins</small></button>
   </footer>
 </div>
 
 <script type="module">
-import {setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
+import {HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
 
 // ---- fit to the screen: scale the menus on wide/zoomed-out viewports, then make the room as tall as the space allows
 {const vw=window.innerWidth,vh=window.innerHeight;const k=Math.max(1,Math.min(vw/400,vh/820,3));
@@ -349,7 +349,6 @@ function buildBg(i){
     [[180,40],[196,62],[214,46],[188,84],[222,74]].forEach(([a,b])=>{g.fillStyle='#fff6c8';g.fillRect(a,b,2,2)});
     for(let x=ax0+4;x<ax1-4;x++){const y=Math.round(150+Math.sin((x-ax0)/(ax1-ax0)*Math.PI)*30);g.fillStyle='#1a0f1c';g.fillRect(x,y,1,2);
       if(x%22===0){const col=[C.gold,C.pink,C.mint,C.sky][(x/22|0)%4];glow(x,y+9,16,col.replace(')','')&&'rgba(255,230,160,.12)',.6);g.drawImage(pix(8,12,(a,b)=>{const u=(a-3.5)/3.5,v=(b-6)/6;return u*u+v*v<=1?shade([u,v,.7],ramp(col),a,b,.12,.4):null},'#1a0f1c'),x-4,y+2)}}
-    g.drawImage(pix(70,46,(x,y)=>{const e=x<3||y<3||x>66||y>42;const slat=(y%11)<2;return shade([x<3?-1:x>66?1:0,y<3?-1:slat?.7:0,1],ramp('#8a5a3c'),x,y,0,e?.18:.32)},'#1a0f1c'),ax1-80,ay1-46);
   }else{
     // moon, clouds, stars, chimney and antenna
     for(let k=0;k<110;k++){const a=(k*97)%LW,b=(k*53+k*k)%420;g.fillStyle=k%7?'#8a86c8':'#fff6c8';g.fillRect(a,b,k%11?1:2,k%11?1:2)}
@@ -378,11 +377,13 @@ const Snd={ctx:null,master:null,muted:false,last:{},noise:null,
   hiss(fType,freq,v,dur){const c=this.ctx,t=c.currentTime,s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();s.buffer=this.noise;f.type=fType;f.frequency.value=freq;this.env(g,t,.002,v,dur);s.connect(f);f.connect(g);g.connect(this.master);s.start(t);s.stop(t+dur+.02)},
   play(k,tier){
     if(this.muted||!this.ctx||this.ctx.state!=='running')return;
-    const now=performance.now(),gap={pad:90,bump:55,spin:60,kick:40,mint:40,merge:40,ring:80,launch:80,buy:30,catch:60,release:60,zap:70,slot:60}[k];
+    const now=performance.now(),gap={thud:140,flip:60,pad:90,bump:55,spin:60,kick:40,mint:40,merge:40,ring:80,launch:80,buy:30,catch:60,release:60,zap:70,slot:60}[k];
     if(now-(this.last[k]||0)<(gap==null?0:gap))return;this.last[k]=now;
     const p=Math.pow(2,(tier||0)/7);
     switch(k){
       case 'pad':this.tone('sine',150,42,.5,.16);break;
+      case 'thud':this.tone('sine',110,55,.18,.09);break;
+      case 'flip':this.hiss('bandpass',2600,.16,.05);this.tone('square',320,160,.06,.06);break;
       case 'bump':this.hiss('highpass',7000,.16,.05);this.tone('square',520*p,0,.035,.05);break;
       case 'spin':this.hiss('bandpass',3500,.14,.06);break;
       case 'kick':this.hiss('bandpass',1800,.32,.13);this.tone('triangle',220,140,.18,.1);break;
@@ -428,19 +429,20 @@ cv.addEventListener('pointerdown',e=>{
   if(paused)return;Snd.init();
   const [x,y]=toWorld(e);if(x<0||x>W||y<0||y>H)return;
   const R=game.room();
-  const s=R.slotAt(x,y),onSlot=s&&Math.hypot(s.x-x,s.y-y)<26&&!R.enemies.some(e=>Math.hypot(e.x-x,e.y-y)<e.r+16);
+  const s=R.slotAt(x,y),onSlot=s&&Math.hypot(s.x-x,s.y-y)<40&&!R.enemies.some(e=>Math.hypot(e.x-x,e.y-y)<e.r+16);
   if(onSlot){openSlot(s);return}
   if(R.tapAt(x,y))return;
   if(s){openSlot(s);return}
   if(sheet){closeSheet();return}
+  if(game.cur===1){toast('Coins come up through the hatch in the Den ceiling');return}
   const res=R.mint(x);
   if(res==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');
   else if(res==='cash')toast('A coin costs '+fmt(R.cost('mint')));
 });
 document.querySelectorAll('.buy').forEach(btn=>btn.addEventListener('click',()=>{
   if(paused)return;Snd.init();const k=btn.dataset.k,R=game.room();
-  if(k==='mint'){const r=R.mint();if(r==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');else if(r==='cash')toast('Need '+fmt(R.cost('mint')));return}
-  if(!R.buy(k))toast('Need '+fmt(R.cost(k)));else if(k==='cap')toast('Wallet now holds '+R.cap()+' coins');
+  if(k==='mint'){if(game.cur===1)toast('Dropped into the Den');const r=R.mint();if(r==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');else if(r==='cash')toast('Need '+fmt(R.cost('mint')));return}
+  if(!R.buy(k))toast('Need '+fmt(R.cost(k)));else if(k==='cap')toast('Wallet now holds '+R.cap()+' coins');else if(k==='pad')toast(R.padFull()&&R.padLv?'Pads now pay '+fmt(R.padMult())+'x':'New pad placed!');
 }));
 
 // ----- sheets -----
@@ -573,7 +575,7 @@ function updateUI(){
     b.querySelector('span').textContent=full?'FULL':fmt(c);
     const sm=b.querySelector('small');
     if(k==='mint')sm.textContent=R.real()+'/'+R.cap()+' coins';
-    if(k==='pad')sm.textContent='Lv '+R.padLv+' · '+fmt(R.padMult())+'x';
+    if(k==='pad'){b.querySelector('b').textContent=R.padFull()?'Pad Power':'Add Pad';sm.textContent=R.padFull()?'Lv '+R.padLv+' · '+fmt(R.padMult())+'x':R.padN+'/'+R.padObjs.length+' pads'}
     if(k==='cap')sm.textContent=R.cap()+' → '+(R.cap()+2)});
   updateTabs();updateSheet();
 }
@@ -585,8 +587,7 @@ function draw(){
   x.drawImage(BG[game.cur],0,0);
   if(game.cur===2){for(let k=0;k<14;k++){const a=(k*131)%LW,b=(k*71)%300+10;if(((T*2+k*.37)%3)<.25){x.fillStyle='#ffffff';x.fillRect(a-1,b,3,1);x.fillRect(a,b-1,1,3)}}}
   // bounce pad: quilted cushion
-  const fy=FLOOR,pp=R.padPulse,padC=['#7cc4e8','#ff8fa3','#ffcc4d'][game.cur],lift=Math.round(pp*4);
-  x.drawImage(padSprite(game.cur,lift>1),8,fy-lift-2,LW-16,14+lift);
+  drawRoomParts(x,R,T);
   // slots
   const sel=sheet&&sheet.slot&&sheet.room===game.cur?sheet.slot:null;
   const blink=(T*2|0)%2;
@@ -615,7 +616,7 @@ function draw(){
   for(const e of R.enemies)drawEnemy(x,R,e,T);
   for(const b of R.bolts){let ax=P(b.x1),ay=P(b.y1);const n=7;for(let k=1;k<=n;k++){const f=k/n,bx=Math.round(b.x1+(b.x2-b.x1)*f+(k<n?(Math.random()-.5)*14:0)),by=Math.round(b.y1+(b.y2-b.y1)*f+(k<n?(Math.random()-.5)*14:0));line(x,ax,ay,bx,by,'#7a4fc0',5);line(x,ax,ay,bx,by,'#f2e6ff',2);ax=bx;ay=by}}
   for(const p of R.parts){if(p.life<.08)continue;x.fillStyle=p.col;const sz=p.sz>3?3:2;x.fillRect(P(p.x),P(p.y),sz,sz)}
-  for(const f of R.floats){if(f.life<.12&&(T*20|0)%2)continue;const big=f.big&&/[A-Z]/.test(f.txt);text(x,f.txt,P(f.x),P(f.y)-6,f.col,big?20:15,'#1a0f1c','c')}
+  for(const f of R.floats){if(f.life<.12&&(T*20|0)%2)continue;const big=f.big&&/[A-Z]/.test(f.txt);text(x,f.txt,P(f.x),P(f.y)-6,f.col,big?20:13,'#1a0f1c','c')}
   // blit
   ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#1f1521';ctx.fillRect(0,0,cv.width,cv.height);ctx.imageSmoothingEnabled=false;
   ctx.drawImage(lo,view.ox,view.oy,LW*view.s,LH*view.s);
@@ -623,6 +624,48 @@ function draw(){
 const PAD={};
 function padSprite(room,lit){const k=room+'_'+lit;if(PAD[k])return PAD[k];const base=['#7cc4e8','#ff8fa3','#ffcc4d'][room],R1=ramp(lit?lighten(base,.25):base),R2=ramp(lighten(base,.35));
   return PAD[k]=pix(LW-16,14,(i,y)=>{const v=(y-6.5)/6.5,qx=(i%24)/24;const tuft=Math.abs(qx-.5)<.04&&Math.abs(v)<.4;if(tuft)return '#fbe9c8';return shade([(qx-.5)*1.2,v,1],(Math.floor(i/24)%2)?R1:R2,i,y,.04,.3)},'#1a0f1c')}
+const PADS={};
+function padH(w,room,lit){const k='h'+w+room+lit;if(PADS[k])return PADS[k];const base=lighten(['#7cc4e8','#ff8fa3','#ffcc4d'][room],lit?.3:0);const R1=ramp(base),R2=ramp(lighten(base,.3));
+  return PADS[k]=pix(w,12,(i,y)=>{const v=(y-5.5)/5.5,u=(i-w/2+.5)/(w/2),qx=(i%16)/16;if(u*u*.15+v*v>1.02)return null;if(Math.abs(qx-.5)<.05&&Math.abs(v)<.4)return '#fbe9c8';return shade([u*.5+(qx-.5)*.9,v,1],(Math.floor(i/16)%2)?R1:R2,i,y,.05,.3)},'#1a0f1c')}
+function padV(room,lit){const k='v'+room+lit;if(PADS[k])return PADS[k];const base=lighten(['#7cc4e8','#ff8fa3','#ffcc4d'][room],lit?.3:0);const R1=ramp(base),R2=ramp(lighten(base,.3));
+  return PADS[k]=pix(12,PAD_LEN,(i,y)=>{const u=(i-5.5)/5.5,v=(y-PAD_LEN/2+.5)/(PAD_LEN/2),qy=(y%16)/16;if(v*v*.15+u*u>1.02)return null;if(Math.abs(qy-.5)<.05&&Math.abs(u)<.4)return '#fbe9c8';return shade([u,v*.5+(qy-.5)*.9,1],(Math.floor(y/16)%2)?R1:R2,i,y,.05,.3)},'#1a0f1c')}
+let FLIP=null;
+function flipperSprite(){if(FLIP)return FLIP;const L=80,Rr=ramp('#e5534b');return FLIP=pix(L,18,(i,y)=>{const t=i/(L-1),rad=8-t*4.5,v=(y-8.5)/rad;if(Math.abs(v)>1)return null;if(i<6&&Math.hypot(i-8,y-8.5)<3)return '#c9c6d6';return shade([i>L-5?1:0,v*.9,Math.sqrt(Math.max(0,1-v*v))],Rr,i,y,.06,.3)},'#3a0f16')}
+function drawRoomParts(x,R,T){
+  const room=game.cur;
+  if(room!==1){ // wooden floor under the bounce area
+    px(x,8,FLOOR,'#3a2420',LW-16,12);px(x,8,FLOOR,'#6e4a34',LW-16,2);for(let X=8;X<LW-8;X+=40)px(x,X,FLOOR+2,'#2a1818',2,10);
+  }
+  if(room===0){ // the hatch to the Attic
+    const hx=HOLE_X-HOLE_W/2,open=game.rooms[1].open;
+    if(open){px(x,hx,0,'#0d070f',HOLE_W,14);for(let k=0;k<3;k++){const q=((T*1.5+k/3)%1);x.globalAlpha=(1-q)*.8;const yy=Math.round(46-q*36);line(x,HOLE_X-10,yy+8,HOLE_X,yy,C.gold,3);line(x,HOLE_X,yy,HOLE_X+10,yy+8,C.gold,3)}x.globalAlpha=1;
+      px(x,hx-4,0,'#6e4a34',4,16);px(x,hx+HOLE_W,0,'#6e4a34',4,16)}
+    else{px(x,hx,6,'#1a0f1c',HOLE_W,10);for(let k=0;k<4;k++)px(x,hx+2+k*23,8,21,6,k%2?'#8a5a3c':'#9a6440');x.drawImage(S.lock,HOLE_X-11,16)}
+  }
+  if(room===1){ // pinball parts
+    const f0=R.flip[0],f1=R.flip[1];
+    const apron=(pts,col)=>{x.fillStyle=col;x.beginPath();x.moveTo(pts[0][0],pts[0][1]);for(const q of pts.slice(1))x.lineTo(q[0],q[1]);x.closePath();x.fill()};
+    apron([[8,FLOOR-170],[f0.px,f0.py],[f0.px,FLOOR+12],[8,FLOOR+12]],'#2a1830');apron([[LANE-3,FLOOR-170],[f1.px,f1.py],[f1.px,FLOOR+12],[LANE-3,FLOOR+12]],'#2a1830');
+    const t0x=f0.px+Math.cos(f0.rest)*f0.len,t1x=f1.px+Math.cos(f1.rest)*f1.len;px(x,f0.px,FLOOR-24,'#120a14',f1.px-f0.px,36);
+    text(x,'▼ DEN ▼',(t0x+t1x)/2,FLOOR-2,'rgba(255,204,77,.5)',11,null,'c');
+    line(x,8,FLOOR-170,f0.px,f0.py,'#1a0f1c',8);line(x,8,FLOOR-170,f0.px,f0.py,'#b07a4f',4);
+    line(x,LANE-3,FLOOR-170,f1.px,f1.py,'#1a0f1c',8);line(x,LANE-3,FLOOR-170,f1.px,f1.py,'#b07a4f',4);
+    // shooter lane
+    px(x,LANE+3,LANE_TOP,'rgba(10,6,14,.35)',W-8-LANE-3,FLOOR-LANE_TOP);
+    line(x,LANE,LANE_TOP,LANE,FLOOR+10,'#1a0f1c',8);line(x,LANE,LANE_TOP,LANE,FLOOR+10,'#b07a4f',4);disc(x,LANE,LANE_TOP,4,'#c9c6d6');
+    line(x,W-8,LANE_TOP-36,W-160,CEIL+2,'#1a0f1c',10);line(x,W-8,LANE_TOP-36,W-160,CEIL+2,'#d9a066',5);
+    // plunger spring
+    const k=R.plungeK||0,top=FLOOR-14+Math.round(k*10),bx=LANE+8,bw=W-8-LANE-13;
+    for(let yy=top;yy<FLOOR+8;yy+=4)px(x,bx+4,yy,'#9a96a8',bw-8,2);px(x,bx,top-4,'#1a0f1c',bw,5);px(x,bx+1,top-3,'#e5534b',bw-2,3);
+    if(R.queue.length)text(x,'+'+R.queue.length,W-36,FLOOR-70,C.gold,15,'#1a0f1c','c');
+    // flippers
+    const fs=flipperSprite();for(const f of R.flip){x.save();x.translate(Math.round(f.px),Math.round(f.py));x.rotate(f.ang);x.drawImage(fs,-8,-9);x.restore()}
+  }
+  // pads
+  for(const p of R.pads()){const lit=p.pulse>.15;
+    if(p.s==='F'){const sp=padH(p.w,room,lit);x.drawImage(sp,Math.round(p.x-p.w/2),FLOOR-6-(lit?2:0))}
+    else{const sp=padV(room,lit),o=lit?2:0;x.drawImage(sp,p.s==='L'?WALL-2+o:(room===1?LANE-3:W-WALL)-10-o,Math.round(p.y-PAD_LEN/2))}}
+}
 function badge(x,sx,sy,lv){const s=String(lv);x.font='700 12px '+FONT;const w=Math.ceil(x.measureText(s).width)+8;px(x,sx,sy,'#1a0f1c',w,16);px(x,sx+2,sy+2,'#4a3348',w-4,12);px(x,sx+2,sy+2,'#5e4560',w-4,2);text(x,s,sx+w/2,sy+8,C.cream,12,null,'c')}
 function drawItem(x,R,s,it,T){
   const sx=P(s.x),sy=P(s.y),p=it.pulse,hit=p>.15;
@@ -680,7 +723,7 @@ try{await Promise.race([document.fonts.load('700 20px "Pixelify Sans"'),new Prom
 buildSprites();for(let i=0;i<ROOMS.length;i++)BG[i]=buildBg(i);
 $('cashIcon').src=dataURL(S.coin[2]);$('cashIcon').style.width='26px';
 document.querySelectorAll('[data-ic]').forEach(im=>{const c={coin:S.coin[0],cushion:S.cushion,purse:S.purse}[im.dataset.ic];im.src=dataURL(c);im.style.height='22px';im.style.width='auto'});
-const HOW=[[S.coin[0],'Tap the room to drop a coin. Every bounce on the cushion pays.'],[S.coin[1],'Two matching coins that bump together merge into a better coin.'],[S.bucket,'Tap the glowing circles to unlock slots and build: bumpers, copy buckets and more.'],[slimeSprite(21,true,false),'Critters wander in. Bop them with coins, taps or zappers.'],[S.attic,'Save up a fortune to open the Attic, then the Rooftop.']];
+const HOW=[[S.coin[0],'Tap the room to drop a coin. Bumpers and the little cushion pads pay on every hit.'],[S.coin[1],'Two matching coins that bump together merge into a better coin.'],[S.bucket,'Tap the glowing circles to unlock slots and build: bumpers, copy buckets and more.'],[slimeSprite(21,true,false),'Critters wander in. Bop them with coins, taps or zappers.'],[S.attic,'Open the hatch to the Attic: a pinball room where coins that fly up get shot around by flippers.']];
 HOW.forEach(([c,t])=>{const li=document.createElement('li');const im=imgOf(c,2);im.style.width='34px';im.style.height='auto';li.appendChild(im);li.appendChild(document.createTextNode(t));$('howList').appendChild(li)});
 try{Snd.muted=localStorage.getItem(SAVE+'.mute')==='1';$('muteBtn').textContent='Sound: '+(Snd.muted?'off':'on')}catch(e){}
 const sv=readSave();
