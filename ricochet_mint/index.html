@@ -15,7 +15,7 @@ html,body{height:100%;background:var(--bg2);color:var(--cream);font-family:"Pixe
 button{font:inherit;color:inherit;cursor:pointer}
 img.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .tab img,#roomName img{height:22px;width:auto}
-#app{position:fixed;inset:0;display:flex;flex-direction:column;max-width:520px;margin:0 auto;background:var(--bg);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;margin:0 auto;background:var(--bg);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 header{padding:10px 12px 2px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 #roomName{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:6px}
@@ -148,8 +148,14 @@ h2{font-size:28px;font-weight:700;color:var(--gold);text-shadow:3px 3px 0 var(--
 </div>
 
 <script type="module">
-import {SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
+import {setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
 
+// ---- fit to the screen: scale the menus on wide/zoomed-out viewports, then make the room as tall as the space allows
+{const vw=window.innerWidth,vh=window.innerHeight;const k=Math.max(1,Math.min(vw/400,vh/820,3));
+ document.documentElement.style.setProperty('--z',k.toFixed(3));
+ for(const sel of ['header','#tabs','footer','.ov','.sheet','#toast'])document.querySelectorAll(sel).forEach(el=>el.style.zoom=k);
+ const r=document.getElementById('wrap').getBoundingClientRect();
+ if(r.width>0&&r.height>0)setRoomHeight(Math.min(900,W*r.height/r.width));}
 // =================== PIXEL KIT (16-bit style, 1 pixel = 1 world unit) ===================
 const LW=W,LH=H;
 const P=v=>Math.round(v);
@@ -299,12 +305,12 @@ function itemIcon(T){return {bumper:S.bumper[0],bucket:S.bucket,spinner:S.spinne
 // ---------- room backgrounds (painted once per room) ----------
 const BG=[];
 function buildBg(i){
-  const ax0=8,ay0=8,ax1=LW-8,ay1=FLOOR;
+  const ax0=8,ay0=8,ax1=LW-8,ay1=FLOOR,WY=FLOOR-222;
   let fn;
   if(i===0){ // the Den
     const wall=soft('#4a3446'),trim=ramp('#a56f4a'),low=soft('#3a2638');
-    fn=(x,y)=>{ if(y<ay1&&y>=300){if(y<308)return shade([0,y<303?-1:.6,1],trim,x,y,.03,.2,.6);const px=(x-ax0)%64;const inset=px>6&&px<58&&y>322&&y<ay1-10;const e=inset&&(px<9||px>55||y<325||y>ay1-13);
-        return low[e?(px<9||y<325?4:1):(y>ay1-40&&bay(x,y)<(y-ay1+40)/60?1:2)]}
+    fn=(x,y)=>{ if(y<ay1&&y>=WY){if(y<WY+8)return shade([0,y<WY+3?-1:.6,1],trim,x,y,.03,.2,.6);const px=(x-ax0)%64;const inset=px>6&&px<58&&y>WY+22&&y<ay1-10;const e=inset&&(px<9||px>55||y<WY+25||y>ay1-13);
+        return low[e?(px<9||y<WY+25?4:1):(y>ay1-40&&bay(x,y)<(y-ay1+40)/60?1:2)]}
       const pk=Math.floor((x-ax0)/28),pl=(x-ax0)%28,seam=pl<2;const streak=Math.sin(y*.07+pk*2.7+Math.sin(y*.013+pk)*4)>.94&&pl%9!==0;
       const idx=seam?0:2+((pk*5)%3===0?1:0)-(streak?1:0)-(y<70&&bay(x,y)<(70-y)/100?1:0);return wall[Math.max(0,idx)]};
   }else if(i===1){ // the Attic
@@ -350,8 +356,8 @@ function buildBg(i){
     glow(300,84,80,'rgba(255,240,200,.08)',.7);
     g.drawImage(pix(64,64,(x,y)=>{const dx=x-31.5,dy=y-31.5,q=Math.hypot(dx,dy)/31;if(q>1)return null;const cr=[[-8,-6,7],[9,8,5],[6,-12,4],[-10,12,4]].some(([a,b,r])=>Math.hypot(dx-a,dy-b)<r);return shade([dx/31,dy/31,Math.sqrt(1-q*q)],ramp(cr?'#d8c69a':'#f8ecc6'),x,y,0,.45)},'#3a3060'),268,52);
     const cl=ramp('#6e68b0');[[40,150,1],[220,230,.8],[120,320,.7]].forEach(([a,b,s])=>g.drawImage(pix(130*s,46*s,(x,y)=>{const bs=[[30,30,22],[62,22,26],[95,32,20],[50,36,18],[80,38,18]].map(([p,q,r])=>[p*s,q*s,r*s]);for(const [p,q,r] of bs){const d=Math.hypot(x-p,y-q);if(d<r)return shade([(x-p)/r,(y-q)/r,Math.sqrt(1-(d/r)**2)],cl,x,y,0,.3)}return null}),a,b));
-    g.drawImage(pix(40,ay1-380,(x,y)=>{if(y<10)return shade([x<3?-1:x>36?1:0,y<3?-1:y>7?1:0,1],ramp('#9a96a8'),x,y,.03,.3);if(x<3||x>36)return null;const row=Math.floor((y-10)/8),br=((x+(row%2)*8)%16)<1||(y-10)%8<1;return br?'#4a1a22':shade([0,0,1],ramp('#b0473f'),x,y,0,.32+((row*7+Math.floor(x/16))%3)*.04)},'#1a0f1c'),50,380);
-    g.fillStyle='#1a0f1c';g.fillRect(345,330,3,ay1-330);g.fillRect(330,340,34,3);g.fillRect(335,356,24,3);
+    g.drawImage(pix(40,142,(x,y)=>{if(y<10)return shade([x<3?-1:x>36?1:0,y<3?-1:y>7?1:0,1],ramp('#9a96a8'),x,y,.03,.3);if(x<3||x>36)return null;const row=Math.floor((y-10)/8),br=((x+(row%2)*8)%16)<1||(y-10)%8<1;return br?'#4a1a22':shade([0,0,1],ramp('#b0473f'),x,y,0,.32+((row*7+Math.floor(x/16))%3)*.04)},'#1a0f1c'),50,ay1-142);
+    g.fillStyle='#1a0f1c';g.fillRect(345,ay1-192,3,192);g.fillRect(330,ay1-182,34,3);g.fillRect(335,ay1-166,24,3);
   }
   return c;
 }

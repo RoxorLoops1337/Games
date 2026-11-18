@@ -1,5 +1,8 @@
 // Ricochet Mint: game rules and physics. No DOM, so the tests can run it headless.
-const W=400,H=540,WALL=8,CEIL=8,FLOOR=H-18,G=900;
+const W=400,WALL=8,CEIL=8,G=900,BASE_H=540;
+// the room can be taller than the 540 the layouts were drawn for (tall phones); everything is placed relative to the floor
+let H=BASE_H,FLOOR=H-18;
+function setRoomHeight(h){H=Math.max(BASE_H,Math.round(h));FLOOR=H-18}
 const BAL={val:2.1,mintBase:10,mintB:1.15,padBase:60,padG:2.4,capBase:150,capG:3.5,itemG:2.3,slotBase:80,slotG:6,room2:8e8,room3:1e12,lifeMile:1000,up:1.24,padUp:1.24};
 const TIERS=[
  {n:'Copper',c:'#d98a4a',d:'#7a3e16'},{n:'Silver',c:'#d6dee8',d:'#6d7a8a'},{n:'Gold',c:'#ffd23f',d:'#9a6a00'},
@@ -79,7 +82,7 @@ class Room{
     this.g=g;this.i=i;this.def=ROOMS[i];this.open=false;this.coins=[];this.enemies=[];this.parts=[];this.floats=[];this.bolts=[];
     this.mintN=0;this.padLv=0;this.capLv=0;this.kills=0;this.enemyT=25;this.padPulse=0;this.time=0;this.rescueT=0;
     const sl=this.def.slots.slice(1).sort((p,q)=>q[1]-p[1]);sl.unshift(this.def.slots[0]);
-    this.slots=sl.map(([x,y],k)=>({x,y,k,open:false,item:null}));
+    const off=H-BASE_H;this.slots=sl.map(([x,y],k)=>({x,y:y+off,k,open:false,item:null}));
   }
   get rng(){return this.g.rng}
   unit(){return this.def.mult*tierVal(this.def.tier)}
@@ -222,10 +225,10 @@ class Room{
         if(e.stuck){e.vx=0;e.vy=0;e.x=e.target.x;e.y=e.target.y}
         else if(!e.target){e.vx=e.vx||40;e.vy=e.vy||30}
       }else if(e.type==='thief'){
-        if(e.life>45){e.vy=-160;e.vx*=.98}else{e.vy=Math.sin(e.life*2.2+e.ph)*90;if(e.y<60)e.vy+=80}
+        if(e.life>45){e.vy=-160;e.vx*=.98}else{e.vy=Math.sin(e.life*2.2+e.ph)*90;if(e.y<Math.max(60,FLOOR-470))e.vy+=80}
       }else{
         if(this.rng()<dt*.4){const a=this.rng()*6.283;e.vx=Math.cos(a)*40;e.vy=Math.sin(a)*40}
-        if(e.y<50&&e.vy<0)e.vy=Math.abs(e.vy);
+        if(e.y<Math.max(50,FLOOR-480)&&e.vy<0)e.vy=Math.abs(e.vy);
       }
       if(e.type!=='thief'&&e.life>120&&!e.leaving){e.leaving=true;if(e.stuck&&e.target&&e.target.item)e.target.item.jam=false;e.stuck=false;e.target=null;this.float(e.x,e.y-26,'bye!','#9a93c9')}
       if(e.leaving){e.vx*=.95;e.vy=-140;if(e.y<-40){e.dead=true;e.gone=true}}
@@ -358,4 +361,4 @@ class Game{
   }
 }
 
-export {SZ,W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
+export {setRoomHeight,BASE_H,SZ,W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
