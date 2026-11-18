@@ -1,6 +1,6 @@
 // Ricochet Mint: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
+import { setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
@@ -117,6 +117,19 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
   eq(h.perks, { lucky: 1 }, 'perks survive a reload');
   eq(h.rooms[0].coins.length, R.coins.length, 'coins survive a reload');
   const old = new Game(mulberry(11), true); old.load({ v: 1, stage: 4 }); ok(old.rooms[0].open && old.cash === 0, 'an old-format save starts a fresh game instead of breaking');
+}
+
+// ---------------------------------------------------------------- tall screens: the room grows, layouts follow the floor
+{
+  const base = new Game(mulberry(12), true).rooms[0].slots.map((s) => s.y);
+  setRoomHeight(BASE_H + 160);
+  const g = new Game(mulberry(12), true); const R = g.rooms[0];
+  eq(R.slots.map((s) => s.y), base.map((y) => y + 160), 'on a tall screen every slot moves down with the floor');
+  let out = 0; const floor = BASE_H + 160 - 18;
+  for (let i = 0; i < 8; i++) R.addCoin(i % 3, 40 + i * 40, 60);
+  run(g, 60, () => { for (const c of R.coins) if (c.y > floor + 1 || c.y < CEIL - 1) out++; });
+  eq(out, 0, 'coins stay inside a taller room');
+  setRoomHeight(BASE_H);
 }
 
 console.log('ricochet_mint core: ' + passed + ' checks passed');
