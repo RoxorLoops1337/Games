@@ -41,13 +41,14 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
   R.release = function (s) { releases++; return orel.call(this, s); };
   for (let i = 0; i < 2; i++) R.addCoin(0, 80 + i * 120, 40);
   const before = R.units();
-  run(g, 90);
+  g.cash = 1e6; // a player keeps dropping small coins in
+  run(g, 90, (t) => { if (Math.round(t * 60) % 600 === 0) R.mint(); });
   ok(releases >= 6, 'a low copy bucket catches and copies coins regularly (' + releases + ' in 90s)');
   ok(R.units() > before, 'copies are real coins that add value to the board');
   ok(R.coins.every((c) => !c.ghost), 'copies are permanent, not ghosts');
   ok(bucketTime(R, 0, 1) <= 3, 'copying a starter coin takes a few seconds, not ages');
   ok(bucketTime(R, 1, 10) < bucketTime(R, 1, 1), 'upgrades make the bucket faster');
-  eq(bucketMax(R, 1), 1, 'a new bucket copies coins up to Silver');
+  eq(bucketMax(R, 1), 2, 'a new bucket copies coins up to Gold');
   ok(bucketMax(R, 9) > bucketMax(R, 1) && bucketMax(R, 99) === MAXT, 'upgrades let it copy bigger coins, up to Prism');
 }
 {

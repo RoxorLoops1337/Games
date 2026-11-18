@@ -1,13 +1,15 @@
 // Ricochet Mint: game rules and physics. No DOM, so the tests can run it headless.
 const W=400,H=540,WALL=8,CEIL=8,FLOOR=H-18,G=900;
-const BAL={val:2.1,mintBase:10,mintB:1.15,padBase:60,padG:2.4,capBase:150,capG:3.5,itemG:2.3,slotBase:80,slotG:6,room2:1.2e8,room3:1e11,lifeMile:1000,up:1.24,padUp:1.24};
+const BAL={val:2.1,mintBase:10,mintB:1.15,padBase:60,padG:2.4,capBase:150,capG:3.5,itemG:2.3,slotBase:80,slotG:6,room2:8e8,room3:1e12,lifeMile:1000,up:1.24,padUp:1.24};
 const TIERS=[
  {n:'Copper',c:'#d98a4a',d:'#7a3e16'},{n:'Silver',c:'#d6dee8',d:'#6d7a8a'},{n:'Gold',c:'#ffd23f',d:'#9a6a00'},
  {n:'Jade',c:'#3ddc84',d:'#11663a'},{n:'Ruby',c:'#ff4766',d:'#7f0f24'},{n:'Sapphire',c:'#4a8dff',d:'#13377f'},
  {n:'Amethyst',c:'#b766ff',d:'#4d1782'},{n:'Sunstone',c:'#ff8a1f',d:'#803a00'},{n:'Aqua',c:'#2ef0f0',d:'#06706f'},
  {n:'Blossom',c:'#ff7ad9',d:'#82206a'},{n:'Obsidian',c:'#8d8db8',d:'#24243d'},{n:'Prism',c:'#ffffff',d:'#444466'}];
 const MAXT=TIERS.length-1;
-function coinR(t){return 11+t*1.2}
+function coinR(t){return 14+t*1.4}
+// sizes of the builds (world units); the renderer draws the sprites to match
+const SZ={bumper:27,bucket:28,spinner:50,ring:30,launcher:22,small:17,jackpot:28};
 function tierVal(t){return Math.pow(BAL.val,t)}
 const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
 function fmt(n){
@@ -39,9 +41,9 @@ const ITEMS={
 };
 const ITEM_ORDER=['bumper','bucket','spinner','zapper','ring','magnet','launcher','jackpot'];
 const ENEMIES={
- muncher:{i:'👾',name:'Muncher',hp:30,r:17,col:'#5dff7a',intro:'A Muncher crawled in! When its mouth is open it eats any coin it touches. Bounce coins into it or tap it to pop it for a bounty.'},
- thief:{i:'🦇',name:'Pickpocket',hp:14,r:14,col:'#b766ff',intro:'A Pickpocket! It steals cash every time it brushes a coin. Pop it before it flies off and you get double back.'},
- jammer:{i:'🦠',name:'Jammer',hp:70,r:16,col:'#ff8a1f',intro:'A Jammer! It latches onto one of your builds and switches it off until you pop it.'}
+ muncher:{i:'👾',name:'Muncher',hp:30,r:21,col:'#5dff7a',intro:'A Muncher crawled in! When its mouth is open it eats any coin it touches. Bounce coins into it or tap it to pop it for a bounty.'},
+ thief:{i:'🦇',name:'Pickpocket',hp:14,r:18,col:'#b766ff',intro:'A Pickpocket! It steals cash every time it brushes a coin. Pop it before it flies off and you get double back.'},
+ jammer:{i:'🦠',name:'Jammer',hp:70,r:20,col:'#ff8a1f',intro:'A Jammer! It latches onto one of your builds and switches it off until you pop it.'}
 };
 const PERKS={
  tap:{i:'👆',name:'Power Tap',desc:'Taps pay 3x more and hit critters twice as hard.',max:5},
@@ -68,7 +70,7 @@ function itemStat(T,L,room){
   return '';
 }
 function bucketTime(room,t,L){const p=room.g?room.g.pk('copy'):0;return Math.max(1,2.5*Math.pow(1.5,Math.max(0,t-room.def.tier))*Math.pow(.92,L-1)*Math.pow(.85,p))}
-function bucketMax(room,L){return Math.min(MAXT,room.def.tier+1+Math.floor((L-1)/2))}
+function bucketMax(room,L){return Math.min(MAXT,room.def.tier+2+Math.floor((L-1)/2))}
 function ghostLife(L){return 12+1.5*(L-1)}
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
@@ -141,7 +143,7 @@ class Room{
   hitItem(c,s,it){
     const T=it.type,g=this.g,L=it.lv;
     if(T==='spinner'){
-      const len=40,ex=Math.cos(it.ang)*len,ey=Math.sin(it.ang)*len,ax=s.x-ex,ay=s.y-ey,abx=2*ex,aby=2*ey;
+      const len=SZ.spinner,ex=Math.cos(it.ang)*len,ey=Math.sin(it.ang)*len,ax=s.x-ex,ay=s.y-ey,abx=2*ex,aby=2*ey;
       let t=((c.x-ax)*abx+(c.y-ay)*aby)/(abx*abx+aby*aby);t=Math.max(0,Math.min(1,t));
       const px=ax+abx*t,py=ay+aby*t;let dx=c.x-px,dy=c.y-py,d=Math.hypot(dx,dy);const rr=c.r+6;
       if(d<rr){if(d<.01){dx=-aby;dy=abx;d=Math.hypot(dx,dy)}const nx=dx/d,ny=dy/d;c.x=px+nx*rr;c.y=py+ny*rr;
@@ -151,15 +153,15 @@ class Room{
           if(!it.jam){c.combo=Math.min(c.combo+1,50);this.pay(c,1.5*Math.pow(BAL.up,L-1)*g.bumpMult(),c.x,c.y);it.pulse=1;this.burst(c.x,c.y,'#22e6e6',3);g.sfx('spin',c.t)}}}
       return;
     }
-    if(T==='ring'){if(!it.jam&&c.ringCd<=0&&Math.hypot(c.x-s.x,c.y-s.y)<24){c.charge=3;c.chargeM=3+.5*(L-1);c.ringCd=1.2;it.pulse=1;this.burst(s.x,s.y,'#ffcf3f',10);g.sfx('ring',c.t);this.float(s.x,s.y-26,'x'+c.chargeM.toFixed(1).replace('.0',''),'#ffcf3f')}return}
-    if(T==='launcher'){if(!it.jam&&c.launchCd<=0&&Math.hypot(c.x-s.x,c.y-s.y)<18){c.x=s.x;c.y=s.y-c.r-6;c.vx=(this.rng()<.5?-1:1)*(140+this.rng()*120);c.vy=-1150;c.launchCd=2.5;c.combo=Math.min(c.combo+2+L,50);
+    if(T==='ring'){if(!it.jam&&c.ringCd<=0&&Math.hypot(c.x-s.x,c.y-s.y)<SZ.ring){c.charge=3;c.chargeM=3+.5*(L-1);c.ringCd=1.2;it.pulse=1;this.burst(s.x,s.y,'#ffcf3f',10);g.sfx('ring',c.t);this.float(s.x,s.y-26,'x'+c.chargeM.toFixed(1).replace('.0',''),'#ffcf3f')}return}
+    if(T==='launcher'){if(!it.jam&&c.launchCd<=0&&Math.hypot(c.x-s.x,c.y-s.y)<SZ.launcher){c.x=s.x;c.y=s.y-c.r-6;c.vx=(this.rng()<.5?-1:1)*(140+this.rng()*120);c.vy=-1150;c.launchCd=2.5;c.combo=Math.min(c.combo+2+L,50);
         this.pay(c,Math.pow(BAL.up,L-1),s.x,s.y);it.pulse=1;this.burst(s.x,s.y,'#7dff7a',12);g.sfx('launch',c.t)}return}
     if(T==='bucket'){
-      if(!it.jam&&!it.hold&&!c.ghost&&c.t<=bucketMax(this,L)&&c.bucketCd<=0&&c.y<s.y+4&&Math.abs(c.x-s.x)<24&&Math.hypot(c.x-s.x,c.y-s.y)<c.r+24){
+      if(!it.jam&&!it.hold&&!c.ghost&&c.t<=bucketMax(this,L)&&c.bucketCd<=0&&c.y<s.y+4&&Math.abs(c.x-s.x)<SZ.bucket&&Math.hypot(c.x-s.x,c.y-s.y)<c.r+SZ.bucket){
         it.hold={t:c.t,combo:c.combo};it.holdMax=it.holdT=bucketTime(this,c.t,L);c.dead=true;it.pulse=1;g.sfx('catch',c.t);return}
-      this.solid(c,s.x,s.y,22,0,0,250);return;
+      this.solid(c,s.x,s.y,SZ.bucket-2,0,0,250);return;
     }
-    const big=T==='bumper'||T==='jackpot',R=big?22:14;
+    const big=T==='bumper'||T==='jackpot',R=T==='bumper'?SZ.bumper:T==='jackpot'?SZ.jackpot:SZ.small;
     if(this.solid(c,s.x,s.y,R,0,0,big?380:280)&&!it.jam){
       if(T==='bumper'){c.combo=Math.min(c.combo+1,50);this.pay(c,2*Math.pow(BAL.up,L-1)*g.bumpMult(),c.x,c.y);it.pulse=1;this.burst(c.x,c.y,'#ff3b8d',4);g.sfx('bump',c.t)}
       if(T==='jackpot'){c.combo=Math.min(c.combo+1,50);
@@ -197,7 +199,7 @@ class Room{
     return null;
   }
   biteMax(){return Math.min(this.def.tier+4,this.def.tier+1+Math.floor(this.kills/10))}
-  slotAt(x,y){for(const s of this.slots)if(Math.hypot(s.x-x,s.y-y)<28)return s;return null}
+  slotAt(x,y){for(const s of this.slots)if(Math.hypot(s.x-x,s.y-y)<34)return s;return null}
   spawnEnemy(){
     const pool=['muncher'];if(this.g.kills>=2||this.i>0)pool.push('thief');if(this.g.kills>=6||this.i>0)pool.push('jammer');
     let type=pool[Math.floor(this.rng()*pool.length)];
@@ -244,7 +246,7 @@ class Room{
       if(it.type==='zapper'&&!it.jam&&it.cd<=0&&this.enemies.length){
         const R=100+10*it.lv;let tgt=null,bd=R;for(const e of this.enemies){if(e.leaving)continue;const d=Math.hypot(e.x-s.x,e.y-s.y);if(d<bd){bd=d;tgt=e}}
         if(tgt){it.cd=1.5*Math.pow(.92,it.lv-1);this.damage(tgt,(1+.7*(it.lv-1))*(this.def.tier+1));it.pulse=1;
-          if(!g.headless)this.bolts.push({x1:s.x,y1:s.y-14,x2:tgt.x,y2:tgt.y,life:.18});g.sfx('zap',0)}
+          if(!g.headless)this.bolts.push({x1:s.x,y1:s.y-22,x2:tgt.x,y2:tgt.y,life:.18});g.sfx('zap',0)}
       }
     }
     this.stepEnemies(dt);
@@ -261,7 +263,7 @@ class Room{
       for(const e of this.enemies){if(e.dead||e.leaving)continue;
         const er=e.stuck?e.r+12:e.r,dx=c.x-e.x,dy=c.y-e.y;if(dx*dx+dy*dy>=(c.r+er)*(c.r+er))continue;
         if(e.type==='muncher'&&e.bite<=0&&c.t<=this.biteMax()){
-          c.dead=true;e.bite=9;e.hp=Math.min(e.max,e.hp+e.max*.25);e.r=Math.min(28,e.r+1.5);this.float(e.x,e.y-28,'CHOMP!','#5dff7a');g.sfx('chomp',0);break}
+          c.dead=true;e.bite=9;e.hp=Math.min(e.max,e.hp+e.max*.25);e.r=Math.min(34,e.r+1.5);this.float(e.x,e.y-28,'CHOMP!','#5dff7a');g.sfx('chomp',0);break}
         if(e.type==='thief'&&e.steal<=0&&e.life<45){const st=Math.min(g.cash,this.value(c)*25);if(st>0){g.cash-=st;e.loot+=st;this.float(e.x,e.y-24,'-'+fmt(st),'#ff4766');g.sfx('steal',0)}e.steal=2.5}
         if(this.solid(c,e.x,e.y,e.stuck?e.r+12:e.r,e.vx,e.vy,260)&&c.ehit<=0){c.ehit=.2;this.damage(e,c.t-this.def.tier+1);this.burst(c.x,c.y,ENEMIES[e.type].col,4)}
       }
@@ -356,4 +358,4 @@ class Game{
   }
 }
 
-export {W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
+export {SZ,W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
