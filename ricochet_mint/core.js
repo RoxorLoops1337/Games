@@ -5,7 +5,7 @@ const HOLE_X=200,HOLE_W=96,LANE=W-72,LANE_TOP=190,PAD_LEN=64;
 // the room can be taller than the 540 the layouts were drawn for (tall phones); everything is placed relative to the floor
 let H=BASE_H,FLOOR=H-18;
 function setRoomHeight(h){H=Math.max(BASE_H,Math.round(h));FLOOR=H-18}
-const BAL={val:2.1,mintBase:10,mintB:1.15,padBase:60,padAddG:3.2,padG:2.4,capBase:150,capG:3.5,itemG:2.3,slotBase:80,slotG:6,room2:2e9,room3:1e12,lifeMile:1000,up:1.24,padUp:1.24};
+const BAL={val:2.1,mintBase:10,mintB:1.22,mintG:1.03,padBase:60,padAddG:3.2,padG:2.4,capBase:150,capG:3.5,itemG:2.3,slotBase:80,slotG:6,room2:4e9,room3:1e12,lifeMile:1000,up:1.24,padUp:1.24};
 const TIERS=[
  {n:'Copper',c:'#d98a4a',d:'#7a3e16'},{n:'Silver',c:'#d6dee8',d:'#6d7a8a'},{n:'Gold',c:'#ffd23f',d:'#9a6a00'},
  {n:'Jade',c:'#3ddc84',d:'#11663a'},{n:'Ruby',c:'#ff4766',d:'#7f0f24'},{n:'Sapphire',c:'#4a8dff',d:'#13377f'},
@@ -17,6 +17,7 @@ function coinR(t){return 14+t*1.4}
 const SZ={bumper:27,bucket:28,spinner:50,ring:30,launcher:22,small:17,jackpot:28};
 function tierVal(t){return Math.pow(BAL.val,t)}
 const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
+for(let a=0;a<26;a++)for(let b=0;b<26;b++)SUF.push(String.fromCharCode(97+a)+String.fromCharCode(97+b));
 function fmt(n){
   if(!isFinite(n))return '∞';
   if(n<1000)return n<10&&n%1?n.toFixed(1):String(Math.floor(n));
@@ -40,7 +41,7 @@ const ITEMS={
  spinner:{i:'🌀',name:'Spinner',cost:900,unlock:2500,desc:'A spinning bar that whacks coins around and pays on every hit.'},
  zapper:{i:'⚡',name:'Zapper',cost:1500,unlock:-1,desc:'Zaps critters in range all by itself.'},
  ring:{i:'💫',name:'Lucky Ring',cost:6000,unlock:20000,desc:'A coin that flies through pays extra on its next 3 hits.'},
- magnet:{i:'🧲',name:'Magnet',cost:40000,unlock:150000,desc:'Pulls coins in so they merge. Merges near it pay a bonus.'},
+ magnet:{i:'🧲',name:'Magnet',cost:40000,unlock:150000,desc:'Pulls coins in and merges matching coins near it on its own. Merges near it pay a bonus.'},
  launcher:{i:'🚀',name:'Launcher',cost:2500,unlock:8000,desc:'Catches coins and fires them all the way up to the ceiling. Once the Attic is open, that means up through the hatch.'},
  jackpot:{i:'🎰',name:'Jackpot Box',cost:3e6,unlock:2e7,desc:'Every hit spins the reels. Most pay a little, some pay 10x, a lucky few pay 100x.'}
 };
@@ -86,7 +87,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 
 class Room{
   constructor(g,i){
-    this.g=g;this.i=i;this.def=ROOMS[i];this.open=false;this.coins=[];this.enemies=[];this.parts=[];this.floats=[];this.bolts=[];
+    this.g=g;this.i=i;this.def=ROOMS[i];this.open=false;this.coins=[];this.enemies=[];this.parts=[];this.floats=[];this.bolts=[];this.beams=[];
     this.mintN=0;this.padLv=0;this.capLv=0;this.kills=0;this.enemyT=25;this.padPulse=0;this.time=0;this.rescueT=0;
     const sl=this.def.slots.slice(1).sort((p,q)=>q[1]-p[1]);sl.unshift(this.def.slots[0]);
     const off=H-BASE_H;this.slots=sl.map(([x,y],k)=>({x,y:y+off,k,open:false,item:null}));
@@ -104,7 +105,7 @@ class Room{
   padMult(){return Math.pow(BAL.padUp,this.padLv)*(1+.5*this.g.pk('floor'))}
   padLaunch(){return Math.min(560+18*this.padLv,760)}
   cost(k){if(this.i===1&&(k==='mint'||k==='cap'))return this.g.rooms[0].cost(k);const u=this.unit()*this.g.disc();
-    if(k==='mint')return BAL.mintBase*u*Math.pow(BAL.mintB,this.units());
+    if(k==='mint')return BAL.mintBase*u*Math.pow(BAL.mintB,this.real())*Math.pow(BAL.mintG,this.base().mintN);
     if(k==='pad')return this.padFull()?BAL.padBase*u*4*Math.pow(BAL.padG,this.padLv):BAL.padBase*u*Math.pow(BAL.padAddG,this.padN-1);
     if(k==='cap')return BAL.capBase*u*Math.pow(BAL.capG,this.capLv);}
   slotCost(){const n=this.slots.filter(s=>s.open).length;return BAL.slotBase*this.unit()*this.g.disc()*Math.pow(BAL.slotG,Math.max(0,n-1))}
@@ -124,7 +125,8 @@ class Room{
   earn(a,x,y,col,big){this.g.earn(a);if(this.floats.length<(big?80:60))this.floats.push({x,y,txt:'+'+fmt(a),life:1,col,big:!!big})}
   float(x,y,txt,col){if(this.floats.length<40)this.floats.push({x,y,txt,life:1.4,col,big:true})}
   pay(c,base,x,y){
-    let a=this.value(c)*base*(1+c.combo*this.g.comboStep());
+    let a=this.value(c)*base*(1+c.combo*this.g.comboStep())*(this.g.frenzy>0?3:1);c.sq=1;
+    if(c.combo>=10&&c.combo%10===0&&c.cpop!==c.combo){c.cpop=c.combo;this.float(c.x,c.y-34,'COMBO '+c.combo+'!','#ff8fa3');this.g.sfx('combo',c.combo)}
     if(c.charge>0){a*=c.chargeM;c.charge--}
     let lucky=false;const L=this.g.pk('lucky');
     if(L&&this.rng()<.03*L){a*=10;lucky=true;this.burst(x,y,'#7dff7a',10)}
@@ -308,7 +310,7 @@ class Room{
     for(let i=0;i<cs.length;i++){const a=cs[i];if(a.dead)continue;
       for(let j=i+1;j<cs.length;j++){const b=cs[j];if(b.dead)continue;
         const dx=b.x-a.x,dy=b.y-a.y,rr=a.r+b.r,d2=dx*dx+dy*dy;if(d2>=rr*rr)continue;
-        if(a.t===b.t&&a.age>.35&&b.age>.35&&!a.ghost&&!b.ghost){this.merge(a,b,mags);break}
+        if(a.t===b.t&&a.age>.35&&b.age>.35&&!a.ghost&&!b.ghost&&mags.some(m=>Math.hypot(m.x-(a.x+b.x)/2,m.y-(a.y+b.y)/2)<90+8*m.item.lv)){this.merge(a,b,mags);break}
         const d=Math.sqrt(d2)||.01,nx=dx/d,ny=dy/d,ov=rr-d,ma=a.r*a.r,mb=b.r*b.r,tot=ma+mb;
         a.x-=nx*ov*mb/tot;a.y-=ny*ov*mb/tot;b.x+=nx*ov*ma/tot;b.y+=ny*ov*ma/tot;
         const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
@@ -369,15 +371,22 @@ class Room{
     // drain between the flippers: back down to the Den
     if(c.x<LANE&&c.y-c.r>FLOOR-30){c.dead=true;g.rooms[0].dropIn(c)}
   }
-  merge(a,b,mags){
-    a.dead=b.dead=true;const x=(a.x+b.x)/2,y=(a.y+b.y)/2,g=this.g;
+  // the Merge button: merge the highest matching pair (this room first, then the linked room)
+  bestPair(){const rooms=[this].concat(this.pool().filter(r=>r!==this));
+    for(let t=MAXT;t>=0;t--)for(const r of rooms){const cs=r.coins.filter(c=>!c.dead&&!c.ghost&&!(c.plunge>0)&&c.t===t);if(cs.length>=2)return {room:r,a:cs[0],b:cs[1],t}}return null}
+  mergeBest(){const p=this.bestPair();if(!p)return null;const {room,a,b}=p;
+    const [hi,lo]=a.y<b.y?[a,b]:[b,a];room.beams.push({x1:lo.x,y1:lo.y,x2:hi.x,y2:hi.y,life:.35,t:a.t});
+    room.merge(a,b,[],hi);room.coins=room.coins.filter(c=>!c.dead);return p}
+  merge(a,b,mags,at){
+    a.dead=b.dead=true;const x=at?at.x:(a.x+b.x)/2,y=at?at.y:(a.y+b.y)/2,g=this.g;
     if(a.t===MAXT){const v=this.value(a)*200;this.earn(v,x,y,'#ffffff',true);this.burst(x,y,'#ffffff',60);g.sfx('jackpot',MAXT);this.float(x,y-30,'PRISM JACKPOT!','#ffcf3f');return}
     const n=this.addCoin(a.t+1,x,y,(a.vx+b.vx)/2,Math.min((a.vy+b.vy)/2,-160));n.combo=Math.max(a.combo,b.combo);n.flash=1;
     let bonus=.5+4*g.pk('merge');for(const m of mags){if(Math.hypot(m.x-x,m.y-y)<90+8*m.item.lv){bonus+=3+3*m.item.lv;m.item.pulse=1}}
     this.earn(this.value(n)*bonus,x,y,TIERS[a.t+1].c,true);this.burst(x,y,TIERS[a.t+1].c,18);g.sfx('merge',a.t+1);
   }
   fx(dt){
-    for(const c of this.coins)c.flash=Math.max(0,c.flash-dt*3);
+    for(const c of this.coins){c.flash=Math.max(0,c.flash-dt*3);c.sq=Math.max(0,(c.sq||0)-dt*6)}
+    for(const b of this.beams)b.life-=dt;if(this.beams.length)this.beams=this.beams.filter(b=>b.life>0);
     for(const p of this.parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=400*dt;p.life-=dt}
     if(this.parts.length)this.parts=this.parts.filter(p=>p.life>0);
     for(const f of this.floats){f.y-=40*dt;f.life-=dt*(f.big?.8:1.7)}
@@ -392,6 +401,7 @@ class Game{
     this.cash=0;this.life=0;this.perks={};this.mile=0;this.seen=0;this.enemiesOn=false;this.met={};this.kills=0;this.bestCombo=0;
     this.rate=0;this.rateBuf=[0];this.rateT=0;this.cur=0;this.notified=0;this.pending=null;this.time=0;
     this.rooms=ROOMS.map((_,i)=>new Room(this,i));this.rooms[0].init();
+    this.lucky=null;this.luckyT=60;this.frenzy=0;
   }
   pk(id){return this.perks[id]||0}
   disc(){return Math.pow(.9,this.pk('disc'))}
@@ -416,7 +426,16 @@ class Game{
   nextMile(){return BAL.lifeMile*Math.pow(10,this.mile)}
   offer(){const ids=Object.keys(PERKS).filter(k=>this.pk(k)<PERKS[k].max);for(let i=ids.length-1;i>0;i--){const j=Math.floor(this.rng()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}return ids.slice(0,3)}
   choose(id){this.perks[id]=this.pk(id)+1;this.pending=null}
-  step(dt){this.time+=dt;for(const r of this.rooms)if(r.open)r.step(dt)}
+  stepGlobal(dt){
+    if(this.frenzy>0)this.frenzy=Math.max(0,this.frenzy-dt);
+    if(this.lucky){const L=this.lucky;L.t+=dt;L.life-=dt;L.y+=L.vy*dt;L.x+=Math.sin(L.t*2)*30*dt;if(L.life<=0||L.y>FLOOR-20)this.lucky=null}
+    else{this.luckyT-=dt;if(this.luckyT<=0){this.luckyT=60+this.rng()*90;this.lucky={room:this.cur,x:60+this.rng()*280,y:-20,vy:Math.max(40,(FLOOR-40)/10),life:10,t:0};this.sfx('lucky',0)}}
+  }
+  // tap the Lucky Coin: a cash burst or a 3x Frenzy
+  tapLucky(x,y){const L=this.lucky;if(!L||L.room!==this.cur||Math.hypot(L.x-x,L.y-y)>40)return null;this.lucky=null;const R=this.room();
+    if(this.rng()<.5){this.frenzy=20;R.float(x,y-30,'FRENZY x3!','#ffcc4d');this.sfx('jackpot',0);return 'frenzy'}
+    const v=Math.max(this.rate*45,300*R.unit());this.cash+=v;this.life+=v;this.rateBuf[this.rateBuf.length-1]+=v;R.float(x,y-30,'+'+fmt(v)+'!','#ffcc4d');R.burst(x,y,'#ffcc4d',40);this.sfx('jackpot',0);return 'cash'}
+  step(dt){this.time+=dt;this.stepGlobal(dt);for(const r of this.rooms)if(r.open)r.step(dt)}
   tick(dt){this.rateT+=dt;if(this.rateT>=1){this.rateT-=1;this.rateBuf.push(0);if(this.rateBuf.length>16)this.rateBuf.shift()}
     const f=this.rateBuf.slice(0,-1);if(f.length)this.rate=f.reduce((a,b)=>a+b,0)/f.length;this.checkUnlocks()}
   offline(sec){if(sec<10)return 0;const g=Math.min(sec,8*3600)*this.rate*(.3+.2*this.pk('night'));if(g>0){this.cash+=g;this.life+=g}return g}

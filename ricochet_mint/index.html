@@ -38,7 +38,7 @@ header{padding:10px 12px 2px}
 .tab .dot{position:absolute;top:3px;right:4px;width:8px;height:8px;background:#e5534b;border:2px solid var(--ink)}
 #wrap{flex:1;position:relative;min-height:0;overflow:hidden;overflow:clip;background:var(--bg2)}
 canvas{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;image-rendering:pixelated}
-footer{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:7px 10px 10px}
+footer{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:7px 10px 10px}
 .buy{padding:6px 2px 5px;display:flex;flex-direction:column;align-items:center;gap:1px}
 .buy b{font-size:14px;font-weight:600}
 .buy span{font-size:15px;color:var(--gold);font-weight:700}
@@ -142,6 +142,7 @@ h2{font-size:28px;font-weight:700;color:var(--gold);text-shadow:3px 3px 0 var(--
   </div>
   <footer>
     <button class="pbtn buy" data-k="mint"><img class="px" data-ic="coin"><b>Coin</b><span>0</span><small>0/6</small></button>
+    <button class="pbtn buy" data-k="merge"><img class="px" data-ic="merge"><b>Merge</b><span>FREE</span><small>no pair</small></button>
     <button class="pbtn buy" data-k="pad"><img class="px" data-ic="cushion"><b>Add Pad</b><span>0</span><small>Lv 0</small></button>
     <button class="pbtn buy" data-k="cap"><img class="px" data-ic="purse"><b>Wallet</b><span>0</span><small>6 coins</small></button>
   </footer>
@@ -298,6 +299,7 @@ function gearSprite(f){const r=SZ.small+3,sz=r*2+10,cx=sz/2-.5,R=ramp('#d9823b')
   const tooth=((Math.floor((a+7)/(6.283/10)))%2)?r+4:r;if(q>tooth)return null;
   if(q<r*.42){const e=q/(r*.42);if(e<.45)return e<.2?'#ffffff':'#1d0f17';return shade([dx/q,dy/q,.5],ramp('#fbe9c8'),i,y)}
   const edge=q>tooth-2.5||q<r*.42+2.5;return shade(edge?[dx/q*(q>tooth-2.5?1:-1),dy/q*(q>tooth-2.5?1:-1),.5]:[dx/q*.15,dy/q*.15,1],R,i,y,.05,.28)},'#3a1806')}
+function mergeIcon(){const [c,x]=mk(44,30);x.drawImage(S.coin[1],0,2);x.drawImage(S.coin[1],18,2);x.fillStyle='#ffcc4d';x.font='700 16px '+FONT;x.fillText('+',13,20);return c}
 function dataURL(c){return c.toDataURL()}
 function imgOf(c,scale){const im=new Image();im.className='px';im.src=dataURL(c);const k=(scale||2)/2;im.width=Math.round(c.width*k);im.height=Math.round(c.height*k);return im}
 function itemIcon(T){return {bumper:S.bumper[0],bucket:S.bucket,spinner:S.spinnerIcon,zapper:S.zapper[1],ring:S.ring[0],magnet:S.magnet,launcher:S.launcher,jackpot:S.jackpot}[T]}
@@ -382,6 +384,8 @@ const Snd={ctx:null,master:null,muted:false,last:{},noise:null,
     const p=Math.pow(2,(tier||0)/7);
     switch(k){
       case 'pad':this.tone('sine',150,42,.5,.16);break;
+      case 'combo':{const q=Math.pow(2,Math.min(tier,50)/20);[0,4,7,12].forEach((s,i)=>this.tone('square',330*q*Math.pow(2,s/12),0,.07,.1,i*.04));break}
+      case 'lucky':[0,7,12,19,24].forEach((s,i)=>this.tone('sine',880*Math.pow(2,s/12),0,.1,.25,i*.06));break;
       case 'thud':this.tone('sine',110,55,.18,.09);break;
       case 'flip':this.hiss('bandpass',2600,.16,.05);this.tone('square',320,160,.06,.06);break;
       case 'bump':this.hiss('highpass',7000,.16,.05);this.tone('square',520*p,0,.035,.05);break;
@@ -406,8 +410,10 @@ const Snd={ctx:null,master:null,muted:false,last:{},noise:null,
       case 'clear':case 'jackpot':[0,4,7,12,16,19].forEach((s,i)=>this.tone('triangle',392*Math.pow(2,s/12),0,.17,.35,i*.08));this.tone('sine',150,40,.45,.3);break;
     }
   }};
-game.sfx=(k,t)=>Snd.play(k,t);
-game.step=function(dt){this.time+=dt;for(const r of this.rooms)if(r.open){const keep=this.sfx;if(r!==this.room())this.sfx=(k,t)=>{if(k==='new'||k==='clear')keep(k,t)};r.step(dt);this.sfx=keep}};
+let shake=0,shownCash=0;
+const SHAKE={jackpot:7,pop:4,chomp:3,combo:2,lucky:0,clear:6};
+game.sfx=(k,t)=>{Snd.play(k,t);const v=k==='merge'?Math.min(6,(t||0)*.6):SHAKE[k]||0;if(v)shake=Math.max(shake,v)};
+game.step=function(dt){this.time+=dt;this.stepGlobal(dt);for(const r of this.rooms)if(r.open){const keep=this.sfx;if(r!==this.room())this.sfx=(k,t)=>{if(k==='new'||k==='clear')keep(k,t)};r.step(dt);this.sfx=keep}};
 
 function persist(){try{localStorage.setItem(SAVE,JSON.stringify(game.save()))}catch(e){}}
 function readSave(){try{const s=localStorage.getItem(SAVE);return s?JSON.parse(s):null}catch(e){return null}}
@@ -429,6 +435,7 @@ cv.addEventListener('pointerdown',e=>{
   if(paused)return;Snd.init();
   const [x,y]=toWorld(e);if(x<0||x>W||y<0||y>H)return;
   const R=game.room();
+  if(game.tapLucky(x,y))return;
   const s=R.slotAt(x,y),onSlot=s&&Math.hypot(s.x-x,s.y-y)<40&&!R.enemies.some(e=>Math.hypot(e.x-x,e.y-y)<e.r+16);
   if(onSlot){openSlot(s);return}
   if(R.tapAt(x,y))return;
@@ -441,6 +448,7 @@ cv.addEventListener('pointerdown',e=>{
 });
 document.querySelectorAll('.buy').forEach(btn=>btn.addEventListener('click',()=>{
   if(paused)return;Snd.init();const k=btn.dataset.k,R=game.room();
+  if(k==='merge'){const m=R.mergeBest();if(!m)toast('No matching pair to merge yet');else if(m.room!==R)toast('Merged in '+m.room.def.name);return}
   if(k==='mint'){if(game.cur===1)toast('Dropped into the Den');const r=R.mint();if(r==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');else if(r==='cash')toast('Need '+fmt(R.cost('mint')));return}
   if(!R.buy(k))toast('Need '+fmt(R.cost(k)));else if(k==='cap')toast('Wallet now holds '+R.cap()+' coins');else if(k==='pad')toast(R.padFull()&&R.padLv?'Pads now pay '+fmt(R.padMult())+'x':'New pad placed!');
 }));
@@ -561,7 +569,7 @@ $('resetBtn').onclick=()=>{const b=$('resetBtn');if(!b.dataset.arm){b.dataset.ar
 function updateUI(){
   const R=game.room();
   const rn=$('roomName');if(rn.dataset.i!==String(game.cur)){rn.dataset.i=game.cur;rn.innerHTML='';rn.appendChild(imgOf([S.house,S.attic,S.moon][game.cur],2));rn.appendChild(document.createTextNode(R.def.name))}
-  $('cash').lastChild.textContent=fmt(game.cash);
+  shownCash+=(game.cash-shownCash)*.35;if(Math.abs(game.cash-shownCash)<game.cash*.001+1)shownCash=game.cash;$('cash').lastChild.textContent=fmt(shownCash);
   $('rate').textContent=fmt(game.rate)+' / sec';
   const g=game.nextMile(),p=g/10;
   $('barFill').style.width=Math.max(0,Math.min(100,(Math.log10(Math.max(game.life,1))-Math.log10(Math.max(p,1)))*100))+'%';
@@ -569,7 +577,9 @@ function updateUI(){
   let mc=0;for(const c of R.coins)if(c.combo>mc)mc=c.combo;
   $('comboTxt').textContent=mc>=3?'combo '+mc+' x'+(1+mc*game.comboStep()).toFixed(1):'';
   const tb=$('tiers');if(tb.dataset.s!==String(game.seen)){tb.dataset.s=game.seen;tb.innerHTML='';for(let i=0;i<TIERS.length;i++){const im=imgOf(i<game.seen?(i===MAXT?S.prism[0]:S.coin[i]):S.coin[0],1);im.style.width='10px';im.style.height='10px';if(i>=game.seen)im.style.filter='brightness(.25) grayscale(1)';tb.appendChild(im)}}
-  document.querySelectorAll('.buy').forEach(b=>{const k=b.dataset.k,c=R.cost(k);
+  {const mb=document.querySelector('.buy[data-k=merge]'),pr=R.bestPair();mb.classList.toggle('can',!!pr);mb.classList.toggle('no',!pr);
+    mb.querySelector('span').textContent=pr?(pr.t>=MAXT?'JACKPOT':TIERS[pr.t+1].n):'—';mb.querySelector('small').textContent=pr?'2× '+TIERS[pr.t].n:'no pair'}
+  document.querySelectorAll('.buy').forEach(b=>{const k=b.dataset.k;if(k==='merge')return;const c=R.cost(k);
     const full=k==='mint'&&R.real()>=R.cap(),can=!full&&game.cash>=c;
     b.classList.toggle('can',can);b.classList.toggle('no',!can);
     b.querySelector('span').textContent=full?'FULL':fmt(c);
@@ -611,15 +621,22 @@ function draw(){
     x.fillStyle='rgba(20,10,24,.25)';x.fillRect(cx-r+3,Math.min(FLOOR-3,cy+r-2),r*2-6,3);
     if(c.combo>=4){const a=Math.min(.45,c.combo*.035);for(let k=1;k<=3;k++){x.globalAlpha=a*(1-k/4);x.drawImage(sp,P(c.x-c.vx*.012*k)-r,P(c.y-c.vy*.012*k)-r)}x.globalAlpha=1}
     if(c.charge>0)ring(x,cx,cy,r+4,C.gold,4,T*14,2);
-    x.drawImage(sp,cx-r,cy-r);
+    if(c.sq>0){const q=c.sq*.2,w=Math.round(sp.width*(1+q)),h=Math.round(sp.height*(1-q));x.drawImage(sp,cx-(w>>1),cy-(h>>1),w,h)}else x.drawImage(sp,cx-r,cy-r);
     if(c.flash>0){x.globalAlpha=c.flash*.7;disc(x,cx,cy,r,'#ffffff');x.globalAlpha=1}}
   for(const e of R.enemies)drawEnemy(x,R,e,T);
   for(const b of R.bolts){let ax=P(b.x1),ay=P(b.y1);const n=7;for(let k=1;k<=n;k++){const f=k/n,bx=Math.round(b.x1+(b.x2-b.x1)*f+(k<n?(Math.random()-.5)*14:0)),by=Math.round(b.y1+(b.y2-b.y1)*f+(k<n?(Math.random()-.5)*14:0));line(x,ax,ay,bx,by,'#7a4fc0',5);line(x,ax,ay,bx,by,'#f2e6ff',2);ax=bx;ay=by}}
+  for(const b of R.beams){const col=TIERS[Math.min(MAXT,b.t+1)].c;x.globalAlpha=Math.min(1,b.life*4);line(x,P(b.x1),P(b.y1),P(b.x2),P(b.y2),col,7);line(x,P(b.x1),P(b.y1),P(b.x2),P(b.y2),'#ffffff',3);x.globalAlpha=1}
+  const L=game.lucky;if(L&&L.room===game.cur){const lx2=P(L.x),ly2=P(L.y),pu=1+Math.sin(T*10)*.12;x.globalAlpha=.35;disc(x,lx2,ly2,Math.round(30*pu),'#ffcc4d');x.globalAlpha=1;
+    for(let k=0;k<4;k++){const a=T*3+k*1.57;x.drawImage(S.sparkle,Math.round(lx2+Math.cos(a)*34)-2,Math.round(ly2+Math.sin(a)*34)-2)}
+    const sp=S.coin[2],w=Math.round(sp.width*1.3);x.drawImage(sp,lx2-(w>>1),ly2-(w>>1),w,w);text(x,'TAP!',lx2,ly2-36,(T*6|0)%2?'#ffffff':'#ffcc4d',16,'#1a0f1c','c')}
+  if(game.frenzy>0){const a=.25+.15*Math.sin(T*12);x.globalAlpha=a;x.fillStyle='#ffcc4d';x.fillRect(0,0,LW,6);x.fillRect(0,LH-6,LW,6);x.fillRect(0,0,6,LH);x.fillRect(LW-6,0,6,LH);x.globalAlpha=1;
+    text(x,'FRENZY x3  '+Math.ceil(game.frenzy)+'s',LW/2,30,'#ffcc4d',18,'#1a0f1c','c')}
   for(const p of R.parts){if(p.life<.08)continue;x.fillStyle=p.col;const sz=p.sz>3?3:2;x.fillRect(P(p.x),P(p.y),sz,sz)}
   for(const f of R.floats){if(f.life<.12&&(T*20|0)%2)continue;const big=f.big&&/[A-Z]/.test(f.txt);text(x,f.txt,P(f.x),P(f.y)-6,f.col,big?20:13,'#1a0f1c','c')}
   // blit
   ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#1f1521';ctx.fillRect(0,0,cv.width,cv.height);ctx.imageSmoothingEnabled=false;
-  ctx.drawImage(lo,view.ox,view.oy,LW*view.s,LH*view.s);
+  const sx=shake>0?Math.round((Math.random()-.5)*shake*view.s):0,sy=shake>0?Math.round((Math.random()-.5)*shake*view.s):0;shake=Math.max(0,shake*.86-.05);
+  ctx.drawImage(lo,view.ox+sx,view.oy+sy,LW*view.s,LH*view.s);
 }
 const PAD={};
 function padSprite(room,lit){const k=room+'_'+lit;if(PAD[k])return PAD[k];const base=['#7cc4e8','#ff8fa3','#ffcc4d'][room],R1=ramp(lit?lighten(base,.25):base),R2=ramp(lighten(base,.35));
@@ -722,8 +739,8 @@ Object.assign(window,{show,persist,view,toWorld});
 try{await Promise.race([document.fonts.load('700 20px "Pixelify Sans"'),new Promise(r=>setTimeout(r,2500))])}catch(e){}
 buildSprites();for(let i=0;i<ROOMS.length;i++)BG[i]=buildBg(i);
 $('cashIcon').src=dataURL(S.coin[2]);$('cashIcon').style.width='26px';
-document.querySelectorAll('[data-ic]').forEach(im=>{const c={coin:S.coin[0],cushion:S.cushion,purse:S.purse}[im.dataset.ic];im.src=dataURL(c);im.style.height='22px';im.style.width='auto'});
-const HOW=[[S.coin[0],'Tap the room to drop a coin. Bumpers and the little cushion pads pay on every hit.'],[S.coin[1],'Two matching coins that bump together merge into a better coin.'],[S.bucket,'Tap the glowing circles to unlock slots and build: bumpers, copy buckets and more.'],[slimeSprite(21,true,false),'Critters wander in. Bop them with coins, taps or zappers.'],[S.attic,'Open the hatch to the Attic: a pinball room where coins that fly up get shot around by flippers.']];
+document.querySelectorAll('[data-ic]').forEach(im=>{const c={coin:S.coin[0],cushion:S.cushion,purse:S.purse,merge:mergeIcon()}[im.dataset.ic];im.src=dataURL(c);im.style.height='22px';im.style.width='auto'});
+const HOW=[[S.coin[0],'Tap the room to drop a coin. Bumpers and the little cushion pads pay on every hit.'],[S.coin[1],'Hit Merge to combine your two best matching coins into a better one. Keep small ones around for the buckets to copy.'],[S.bucket,'Tap the glowing circles to unlock slots and build: bumpers, copy buckets and more.'],[slimeSprite(21,true,false),'Critters wander in. Bop them with coins, taps or zappers.'],[S.attic,'Open the hatch to the Attic: a pinball room where coins that fly up get shot around by flippers.']];
 HOW.forEach(([c,t])=>{const li=document.createElement('li');const im=imgOf(c,2);im.style.width='34px';im.style.height='auto';li.appendChild(im);li.appendChild(document.createTextNode(t));$('howList').appendChild(li)});
 try{Snd.muted=localStorage.getItem(SAVE+'.mute')==='1';$('muteBtn').textContent='Sound: '+(Snd.muted?'off':'on')}catch(e){}
 const sv=readSave();

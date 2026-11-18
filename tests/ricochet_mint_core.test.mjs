@@ -1,6 +1,6 @@
 // Ricochet Mint: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { LANE, HOLE_X, setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
+import { fmt, LANE, HOLE_X, setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
@@ -117,6 +117,35 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
   eq(h.perks, { lucky: 1 }, 'perks survive a reload');
   eq(h.rooms[0].coins.length, R.coins.length, 'coins survive a reload');
   const old = new Game(mulberry(11), true); old.load({ v: 1, stage: 4 }); ok(old.rooms[0].open && old.cash === 0, 'an old-format save starts a fresh game instead of breaking');
+}
+
+// ---------------------------------------------------------------- the Merge button and coin prices
+{
+  const g = new Game(mulberry(40), true); const R = g.rooms[0]; R.coins = []; g.cash = 1e9; R.capLv = 5;
+  const a1 = R.addCoin(2, 100, 200), a2 = R.addCoin(2, 300, 200), b1 = R.addCoin(4, 150, 300), b2 = R.addCoin(4, 250, 300); R.addCoin(0, 200, 100);
+  [a1, a2, b1, b2].forEach((c) => { c.age = 1; });
+  const b = R.addCoin(1, 200, 400, 0, 0); const c = R.addCoin(1, 200, 400 - 2 * b.r + 4, 0, 0); b.age = c.age = 1;
+  for (let i = 0; i < 20; i++) R.step(1 / 240);
+  ok(R.coins.filter((x) => x.t === 1).length === 2, 'matching coins that bump into each other no longer merge on their own');
+  const priceBefore = R.cost('mint');
+  const m = R.mergeBest();
+  ok(m && m.t === 4, 'Merge combines the highest matching pair first');
+  ok(R.coins.some((x) => x.t === 5) && R.coins.filter((x) => x.t === 4).length === 0, 'the pair becomes one coin a tier up');
+  ok(R.cost('mint') < priceBefore, 'merging frees a wallet spot and makes the next coin cheaper');
+  R.mergeBest(); R.mergeBest(); R.mergeBest(); const none = R.mergeBest();
+  eq(none, null, 'with no pair left, Merge does nothing');
+  // two coins of tier 10 on the board no longer push the coin price to absurd numbers
+  R.coins = []; R.addCoin(10, 100, 100); R.addCoin(10, 300, 100);
+  ok(R.cost('mint') < 1e4, 'big coins do not make small coins unaffordable (' + Math.round(R.cost('mint')) + ')');
+  ok(!/e\+/.test(fmt(1e120)) && !/e\+/.test(fmt(1e300)), 'huge amounts get short suffixes, never e+ notation');
+}
+{
+  // the Lucky Coin: tapping it pays a burst or starts a Frenzy
+  const g = new Game(mulberry(41), true); g.luckyT = 0; g.stepGlobal(1 / 60);
+  ok(g.lucky, 'a Lucky Coin shows up now and then');
+  const res = g.tapLucky(g.lucky.x, g.lucky.y);
+  ok(res === 'cash' || (res === 'frenzy' && g.frenzy > 0), 'tapping it gives a cash burst or a Frenzy');
+  ok(!g.lucky, 'it is gone once caught');
 }
 
 // ---------------------------------------------------------------- pads along the walls
