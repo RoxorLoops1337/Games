@@ -70,7 +70,7 @@
     "test:hocus_vocus": "node tests/hocus_vocus_all.mjs",
     "test:heroes": "node tests/beatbox_heroes_all.mjs",
     "test:groovelock": "node tests/groove_lock_core.test.mjs && node tests/groove_lock_browser.test.mjs",
-    "test:ricochet": "node tests/ricochet_mint_core.test.mjs",
+    "test:ricochet": "node tests/ricochet_mint_core.test.mjs && node tests/ricochet_mint_browser.test.mjs",
     "test:blockmates": "node tests/blockmates_physics.test.mjs && node tests/blockmates_world.test.mjs && node tests/blockmates_social.test.mjs && node tests/blockmates_net.test.mjs && node tests/blockmates_cf.test.mjs && node tests/blockmates_view3d.test.mjs",
     "test:sunbeam": "cd sunbeam_siege && for t in tests/run-tests.js tests/run-layer-tests.js tests/boss-test.js tests/pest-test.js tests/encounter-test.js tests/cards-alley-hearth-test.js tests/cards-moon-mischief-test.js tests/neutral-relics-test.js tests/champions-upgrades-test.js tests/new-flow-test.js tests/audio-test.js tests/coverage.js; do node $t || exit 1; done",
     "test:graftwork": "node tests/run_graftwork.mjs",

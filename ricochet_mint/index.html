@@ -422,14 +422,16 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 $('wrap').addEventListener('scroll',()=>{$('wrap').scrollTop=0});
-function toWorld(e){const r=cv.getBoundingClientRect();return [((e.clientX-r.left)*dpr-view.ox)/view.s*2,((e.clientY-r.top)*dpr-view.oy)/view.s*2]}
+function toWorld(e){const r=cv.getBoundingClientRect();return [((e.clientX-r.left)*dpr-view.ox)/view.s,((e.clientY-r.top)*dpr-view.oy)/view.s]}
 
 cv.addEventListener('pointerdown',e=>{
   if(paused)return;Snd.init();
   const [x,y]=toWorld(e);if(x<0||x>W||y<0||y>H)return;
   const R=game.room();
+  const s=R.slotAt(x,y),onSlot=s&&Math.hypot(s.x-x,s.y-y)<26&&!R.enemies.some(e=>Math.hypot(e.x-x,e.y-y)<e.r+16);
+  if(onSlot){openSlot(s);return}
   if(R.tapAt(x,y))return;
-  const s=R.slotAt(x,y);if(s){openSlot(s);return}
+  if(s){openSlot(s);return}
   if(sheet){closeSheet();return}
   const res=R.mint(x);
   if(res==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');
@@ -671,7 +673,7 @@ function frame(now){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&started)persist()});
 window.addEventListener('pagehide',()=>{if(started)persist()});
-Object.assign(window,{show,persist,view});
+Object.assign(window,{show,persist,view,toWorld});
 
 // boot
 try{await Promise.race([document.fonts.load('700 20px "Pixelify Sans"'),new Promise(r=>setTimeout(r,2500))])}catch(e){}
