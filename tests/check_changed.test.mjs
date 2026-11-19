@@ -61,6 +61,10 @@ try {
   /* the other shared files */
   edit(dir, 'build.js', (t) => t + '// changed\n'); o = plan(dir);
   ok(!FULL(o) && suitesOf(o).join() === 'test:aaa', 'build.js runs the suites whose tests mention build.js or dist/ (and nothing else): ' + o.trim().split('\n').pop()); reset(dir);
+  edit(dir, 'build.js', (t) => t + "  'new_game',\n"); o = plan(dir);
+  ok(!FULL(o) && suitesOf(o).length === 0, 'build.js that only lists a new folder runs no other suite: ' + o.trim().split('\n').pop()); reset(dir);
+  edit(dir, 'build.js', (t) => t + "  'new_game',\nconst x = 1;\n"); o = plan(dir);
+  ok(!FULL(o) && suitesOf(o).join() === 'test:aaa', 'a new folder plus real code in build.js still runs the build suites'); reset(dir);
   edit(dir, 'index.html', (t) => t + '<!-- x -->\n'); o = plan(dir); ok(!FULL(o) && suitesOf(o).join() === 'test:site', 'the home page runs test:site only'); reset(dir);
   edit(dir, '_headers', (t) => t + '/x\n'); o = plan(dir); ok(!FULL(o), '_headers does not run everything'); reset(dir);
   edit(dir, 'README.md', (t) => t + 'x\n'); o = plan(dir); ok(!FULL(o) && suitesOf(o).length === 0, 'a root note runs nothing'); reset(dir);

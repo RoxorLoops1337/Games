@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2a0a24">
+<title>Million To One</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1a0616;--ink:#2a0a24;--pink:#ff3d6e;--pink2:#ff8bb0;--gold:#ffd75c;--mint:#7dffb0;--sky:#5ce1ff;--cream:#fff4f8;--dim:#d7a9c2;--card:#3a1033}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--cream);font-family:"Baloo 2",system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+#app{position:fixed;inset:0;max-width:560px;margin:0 auto;overflow:hidden;background:#000}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.hide{display:none!important}
+/* ---------- HUD ---------- */
+#hud{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 8px) 12px 0;pointer-events:none}
+#rankRow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+#rankLbl{font-size:12px;letter-spacing:.14em;color:var(--dim);font-weight:700;line-height:1}
+#rank{font-size:40px;font-weight:800;line-height:.95;color:#fff;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,61,110,.6);transition:transform .08s}
+#rank.bump{transform:scale(1.12)}
+#dist{text-align:right;font-size:13px;color:var(--dim);font-weight:700;line-height:1.1}
+#dist b{display:block;font-size:22px;color:var(--gold);text-shadow:0 2px 0 var(--ink)}
+#prog{position:relative;height:10px;margin-top:6px;background:rgba(0,0,0,.45);border-radius:6px;border:2px solid rgba(255,255,255,.12)}
+#progFill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--pink),var(--gold));border-radius:4px}
+.tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:rgba(255,255,255,.35)}
+.rv{position:absolute;top:-5px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
+#me{position:absolute;top:-8px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#fff;border:3px solid var(--pink);box-shadow:0 0 8px #fff}
+#egg{position:absolute;right:-10px;top:-9px;font-size:16px}
+#energyRow{display:flex;align-items:center;gap:6px;margin-top:8px}
+#ebar{flex:1;height:12px;background:rgba(0,0,0,.45);border-radius:7px;overflow:hidden;border:2px solid rgba(255,255,255,.12)}
+#efill{height:100%;background:linear-gradient(90deg,#7dffb0,#c6ff5c);transition:width .1s}
+#efill.low{background:linear-gradient(90deg,#ff3d6e,#ff8b5c);animation:blink .4s infinite alternate}
+@keyframes blink{to{opacity:.45}}
+#shields{font-size:14px;min-width:20px}
+#alive{font-size:12px;color:var(--dim);margin-top:2px;font-weight:700}
+#zoneName{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.06em}
+#combo{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 150px);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
+#combo .n{font-size:48px;font-weight:800;line-height:.9;color:var(--gold);text-shadow:0 4px 0 var(--ink),0 0 24px rgba(255,215,92,.7)}
+#combo .w{font-size:18px;font-weight:800;letter-spacing:.12em;color:#fff;text-shadow:0 2px 0 var(--ink)}
+#combo .bar{width:110px;height:5px;margin:4px auto 0;background:rgba(0,0,0,.4);border-radius:3px;overflow:hidden}
+#combo .bar i{display:block;height:100%;background:var(--gold)}
+#combo.fz .n{color:#fff;animation:rainbow .5s linear infinite}
+@keyframes rainbow{0%{text-shadow:0 4px 0 var(--ink),0 0 28px #ff3d6e}33%{text-shadow:0 4px 0 var(--ink),0 0 28px #5ce1ff}66%{text-shadow:0 4px 0 var(--ink),0 0 28px #7dffb0}}
+#dashBtn{position:absolute;right:14px;bottom:calc(env(safe-area-inset-bottom) + 18px);width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8bb0,#ff3d6e 60%,#a3123c);box-shadow:0 5px 0 #6b0a28,0 0 20px rgba(255,61,110,.5);font-weight:800;font-size:16px;color:#fff;pointer-events:auto;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+#dashBtn.cd{filter:grayscale(.8) brightness(.6)}
+#dashBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #6b0a28}
+#pauseBtn{position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom) + 18px);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.4);font-size:18px;pointer-events:auto}
+#hint{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 110px);text-align:center;font-weight:700;font-size:15px;color:#fff;text-shadow:0 2px 0 var(--ink);pointer-events:none;transition:opacity .5s;padding:0 30px}
+#banner{position:absolute;left:0;right:0;top:44%;text-align:center;pointer-events:none;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+#banner.on{opacity:1;transform:scale(1)}
+#banner .z{font-size:13px;letter-spacing:.3em;color:var(--dim);font-weight:800}
+#banner .t{font-size:34px;font-weight:800;color:#fff;line-height:1;text-shadow:0 4px 0 var(--ink),0 0 24px var(--pink)}
+#banner .c{font-size:14px;color:var(--cream);max-width:330px;margin:8px auto 0;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:12px;font-weight:500}
+#drillUI{position:absolute;left:0;right:0;bottom:22%;text-align:center;pointer-events:none}
+#drillUI .t{font-size:34px;font-weight:800;color:var(--sky);text-shadow:0 3px 0 var(--ink);animation:pulse .25s infinite alternate}
+@keyframes pulse{to{transform:scale(1.08)}}
+/* ---------- overlays ---------- */
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top) + 16px) 18px calc(env(safe-area-inset-bottom) + 16px);background:rgba(20,2,18,.82);backdrop-filter:blur(3px);overflow-y:auto;touch-action:pan-y}
+.btn{display:block;width:100%;max-width:320px;margin:7px auto;padding:13px 16px;border-radius:16px;font-weight:800;font-size:20px;background:linear-gradient(#ff5c8a,#e02a5c);box-shadow:0 5px 0 #8a0f34;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8a0f34}
+.btn.alt{background:linear-gradient(#5a2a6b,#3d1a4c);box-shadow:0 5px 0 #1f0a28;font-size:17px}
+.btn.gold{background:linear-gradient(#ffe07a,#f0b02c);box-shadow:0 5px 0 #9a6410;color:#3a2000;text-shadow:none}
+.btn small{font-size:13px;opacity:.85;font-weight:700}
+#logo{font-size:52px;font-weight:800;line-height:.85;text-align:center;color:#fff;text-shadow:0 5px 0 var(--pink),0 10px 0 var(--ink),0 0 40px rgba(255,61,110,.7);transform:rotate(-4deg);margin-bottom:10px}
+#logo span{display:block;font-size:30px;color:var(--gold);text-shadow:0 4px 0 var(--ink)}
+.sub{text-align:center;color:var(--dim);font-size:16px;font-weight:600;max-width:330px;margin:0 auto 14px;line-height:1.25}
+.stats{display:flex;gap:8px;justify-content:center;margin:6px 0 12px;flex-wrap:wrap}
+.stat{background:rgba(255,255,255,.07);border-radius:12px;padding:5px 10px;text-align:center;font-size:12px;color:var(--dim);font-weight:700;line-height:1.1}
+.stat b{display:block;font-size:18px;color:#fff}
+#bankBox{background:rgba(125,255,176,.12);border:2px dashed var(--mint);border-radius:14px;padding:8px 12px;margin:4px auto 8px;max-width:320px;text-align:center;font-weight:700;font-size:14px}
+#swimmerDemo{width:120px;height:120px;margin:0 auto}
+.toggle{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;color:var(--dim);margin:4px 0}
+.toggle input{width:20px;height:20px;accent-color:var(--pink)}
+/* cards */
+#cards h2,.ov h2{font-size:32px;font-weight:800;text-align:center;line-height:1;color:var(--gold);text-shadow:0 3px 0 var(--ink)}
+.cardRow{display:flex;flex-direction:column;gap:10px;width:100%;max-width:360px;margin:14px auto 6px}
+.card{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 14px;border-radius:18px;background:var(--card);border:3px solid #6b2a5e;box-shadow:0 5px 0 #12030f;animation:deal .35s cubic-bezier(.2,1.5,.4,1) backwards}
+.card:nth-child(2){animation-delay:.07s}.card:nth-child(3){animation-delay:.14s}
+@keyframes deal{from{opacity:0;transform:translateY(40px) scale(.8)}}
+.card:active{transform:scale(.97)}
+.card .ic{font-size:36px;width:48px;text-align:center;flex:none}
+.card .nm{font-size:19px;font-weight:800;line-height:1.05}
+.card .ds{font-size:14px;color:var(--dim);line-height:1.2;font-weight:500}
+.card .lvl{font-size:11px;font-weight:800;letter-spacing:.1em}
+.card.r2{border-color:#5ce1ff;background:#0f2a3d}.card.r2 .lvl{color:var(--sky)}
+.card.r3{border-color:var(--gold);background:#3d2a08;box-shadow:0 5px 0 #12030f,0 0 22px rgba(255,215,92,.45)}.card.r3 .lvl{color:var(--gold)}
+.card.r1 .lvl{color:var(--pink2)}
+/* result */
+#resTitle{font-size:38px;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
+#resWhy{text-align:center;color:var(--dim);font-size:17px;font-weight:700;margin:4px 0 6px}
+#resRank{font-size:64px;font-weight:800;text-align:center;line-height:1;color:var(--gold);text-shadow:0 4px 0 var(--ink),0 0 30px rgba(255,215,92,.5)}
+#resRankLbl{text-align:center;font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:800}
+#resDna{text-align:center;font-size:24px;font-weight:800;color:var(--mint);margin:6px 0}
+.baby{background:linear-gradient(#fff4d6,#ffd9e6);color:#4a1030;border-radius:20px;padding:12px 16px;margin:8px auto;max-width:320px;text-align:center;box-shadow:0 6px 0 #9a3a60}
+.baby .face{font-size:54px;line-height:1}
+.baby .bn{font-size:24px;font-weight:800}
+.baby .tr{font-size:14px;font-weight:600;line-height:1.25}
+.mutList{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin:6px 0;max-width:340px}
+.mutList span{background:rgba(255,255,255,.08);border-radius:10px;padding:2px 7px;font-size:13px;font-weight:700}
+/* shop */
+#shopList,#albumList{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;margin:10px auto;flex:0 0 auto}
+.hab{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:8px 10px;border:2px solid #5a2050}
+.hab .ic{font-size:30px;width:40px;text-align:center;flex:none}
+.hab .nm{font-weight:800;font-size:16px;line-height:1.05}
+.hab .ds{font-size:13px;color:var(--dim);line-height:1.15}
+.hab .pips{font-size:10px;letter-spacing:1px;color:var(--pink2)}
+.hab button{margin-left:auto;flex:none;min-width:78px;padding:8px 8px;border-radius:12px;font-weight:800;background:linear-gradient(#7dffb0,#2fc472);color:#05301a;box-shadow:0 4px 0 #136b3a;font-size:15px;line-height:1}
+.hab button[disabled]{background:#4a3048;color:#a88;box-shadow:0 4px 0 #2a1528}
+.hab button small{display:block;font-size:10px}
+#dnaTop{font-size:22px;font-weight:800;color:var(--mint);text-align:center}
+#intro{background:#0d020b;cursor:pointer}
+#introTxt{font-size:26px;font-weight:800;text-align:center;max-width:340px;line-height:1.15;min-height:120px;display:flex;align-items:center;justify-content:center}
+#introTxt.big{font-size:56px;color:var(--pink);text-shadow:0 0 30px var(--pink)}
+#introSkip{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 20px);color:var(--dim);font-weight:700;font-size:14px}
+#ver{position:absolute;right:8px;bottom:calc(env(safe-area-inset-bottom) + 4px);font-size:11px;color:rgba(255,255,255,.35);pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <div id="hud" class="hide">
+    <div id="rankRow">
+      <div><div id="rankLbl">YOUR PLACE</div><div id="rank">#1,000,000</div><div id="alive">1,000,000 swimmers alive</div></div>
+      <div id="dist"><b id="cm">13.4 cm</b>to the egg 🥚<div id="zoneName">The Launch Tube</div></div>
+    </div>
+    <div id="prog"><div id="progFill"></div><div id="me"></div><div id="egg">🥚</div></div>
+    <div id="energyRow"><span>⚡</span><div id="ebar"><div id="efill"></div></div><span id="shields"></span></div>
+  </div>
+  <div id="combo"><div class="n">0</div><div class="w"></div><div class="bar"><i></i></div></div>
+  <div id="banner"><div class="z"></div><div class="t"></div><div class="c"></div></div>
+  <div id="hint"></div>
+  <div id="drillUI" class="hide"><div class="t">TAP TAP TAP!</div><div style="font-weight:700">Drill into the egg before the others do!</div></div>
+  <button id="dashBtn" class="hide">DASH</button>
+  <button id="pauseBtn" class="hide">⏸</button>
+
+  <div id="title" class="ov">
+    <div id="logo">MILLION<span>TO ONE</span></div>
+    <div class="sub">1,000,000 swimmers. 1 egg.<br>You start dead last.</div>
+    <div class="stats" id="titleStats"></div>
+    <div id="bankBox" class="hide"></div>
+    <button class="btn" id="playBtn">SWIM! 💦</button>
+    <button class="btn alt" id="shopBtn">Dad's Habits 🥦</button>
+    <button class="btn alt" id="albumBtn">Baby Album 👶</button>
+    <label class="toggle hide" id="autoWrap"><input type="checkbox" id="autoChk"> Autopilot (Dad's sat-nav)</label>
+    <label class="toggle"><input type="checkbox" id="muteChk"> Mute</label>
+  </div>
+
+  <div id="intro" class="ov hide"><div id="introTxt"></div><div id="introSkip">tap to continue</div></div>
+
+  <div id="cards" class="ov hide">
+    <div class="sub" id="cardsSub" style="margin:0">ZONE CLEARED</div>
+    <h2>MUTATE!</h2>
+    <div class="sub" style="margin:4px auto 0">Pick one. It lasts until this swim ends.</div>
+    <div class="cardRow" id="cardRow"></div>
+    <button class="btn alt" id="rerollBtn">🎲 Reroll</button>
+  </div>
+
+  <div id="result" class="ov hide">
+    <div id="resTitle"></div>
+    <div id="resWhy"></div>
+    <div id="resRankLbl">FINAL PLACE</div>
+    <div id="resRank"></div>
+    <div class="stats" id="resStats"></div>
+    <div id="resBaby"></div>
+    <div class="mutList" id="resMuts"></div>
+    <div id="resDna"></div>
+    <button class="btn" id="againBtn">SWIM AGAIN 💦</button>
+    <button class="btn alt" id="resShopBtn">Dad's Habits 🥦</button>
+    <button class="btn alt" id="resMenuBtn">Menu</button>
+  </div>
+
+  <div id="shop" class="ov hide" style="justify-content:flex-start">
+    <h2>Dad's Habits</h2>
+    <div class="sub" style="margin:4px auto">Healthy dad, faster swimmers. These last forever.</div>
+    <div id="dnaTop"></div>
+    <div id="shopList"></div>
+    <button class="btn" id="shopBack">Back</button>
+  </div>
+
+  <div id="album" class="ov hide" style="justify-content:flex-start">
+    <h2>Baby Album</h2>
+    <div class="sub" style="margin:4px auto">Every win becomes a person. Every person grows up and becomes the next dad.</div>
+    <div id="albumList"></div>
+    <button class="btn" id="albumBack">Back</button>
+  </div>
+
+  <div id="pause" class="ov hide">
+    <h2>Paused</h2>
+    <button class="btn" id="resumeBtn">Keep swimming</button>
+    <button class="btn alt" id="quitBtn">Give up</button>
+  </div>
+  <div id="ver">v0.1 prototype</div>
+</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
