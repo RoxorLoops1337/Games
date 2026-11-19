@@ -1,6 +1,7 @@
 // Million To One: race rules headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { Race, newMeta, loadMeta, buyHabit, lv, idleTick, collectBank, factoryRate, mulberry, channel, centre, FORK_Y0, FORK_END, DEAD_Y, N_AGENTS } from '../million_to_one/core.js';
+import { Race, newMeta, loadMeta, buyHabit, lv, idleTick, collectBank, factoryRate, mulberry, channel, centre, FORK_Y0, FORK_END, DEAD_Y, N_AGENTS,
+  SYNERGIES, synergiesFor, RACE_EVENTS, EVENT_ORDER, FRENZY_TIERS, comboMult, dailySeed, ZSTART } from '../million_to_one/core.js';
 import { ZONES, RACE_LEN, MUTATIONS, MUT_ORDER, HABITS, HABIT_ORDER, habitCost, RIVALS, TOTAL_SWIMMERS } from '../million_to_one/content.js';
 
 let passed = 0;
@@ -136,6 +137,236 @@ ok(RIVALS.length >= 3, 'named rivals exist');
   ok(Math.abs(im.bank - 2 * factoryRate(im)) < 0.01, 'the factory makes DNA while you are away');
   idleTick(im, 1000 + 100 * 3600000); ok(im.bank <= factoryRate(im) * 8 + 0.01, 'the factory caps at 8 hours');
   const got = collectBank(im); ok(got > 0 && im.dna === got, 'collecting moves it to your DNA');
+}
+
+// ================================================================ combos, synergies, events, daily
+// a quiet race: no rivals, no spawning, no events, so one system can be poked at a time
+function quiet(seed = 31, opts = {}) {
+  const r = new Race(newMeta(), mulberry(seed), { events: false, ...opts });
+  r.agents.forEach((a) => { a.alive = false; }); r.ents = []; r.genY = 1e9; r.p.e = 100;
+  return r;
+}
+const give = (r, ...ids) => { for (const id of ids) { r.pending = [id]; r.choose(id); } };
+const types = (r) => r.events.map((e) => e.type);
+const wbcAt = (x, y) => ({ t: 'wbc', x, y, r: 24, vx: 0, vy: 0, hunt: 0, eat: 0, ph: 0 });
+
+// ---------------------------------------------------------------- new mutations: data
+{
+  ok(['slick', 'lucky', 'echo', 'chain'].every((id) => MUTATIONS[id] && MUT_ORDER.includes(id)), 'new mutations are in the draft pool');
+  ok(MUTATIONS.chain.r === 3, 'Chain Reaction is legendary');
+}
+
+// ---------------------------------------------------------------- synergies: data and activation
+{
+  ok(SYNERGIES.length >= 6 && new Set(SYNERGIES.map((x) => x.id)).size === SYNERGIES.length, 'at least six synergies with unique ids');
+  ok(SYNERGIES.every((x) => x.name && x.desc && x.needs.length === 2 && x.needs.every((id) => MUTATIONS[id])), 'every synergy names two real mutations');
+  ok(SYNERGIES.every((x) => !/\u2014/.test(x.name + x.desc)), 'synergy text has no em dash');
+}
+{ // owning one half of a pair does nothing, the second half fires the synergy event once
+  const r = quiet();
+  give(r, 'ram');
+  ok(!types(r).includes('synergy') && !r.syn.bulldozer, 'Battering Ram alone is not Bulldozer');
+  give(r, 'rush');
+  const ev = r.events.filter((e) => e.type === 'synergy');
+  ok(ev.length === 1 && ev[0].id === 'bulldozer' && ev[0].name === 'Bulldozer' && r.syn.bulldozer, 'Ram + Overtake Rush emits the Bulldozer synergy');
+  ok(ev[0].fresh && r.meta.synergiesSeen.includes('bulldozer'), 'a first-ever synergy is marked fresh and remembered in the save');
+  r.events.length = 0; give(r, 'rush');
+  ok(!types(r).includes('synergy'), 'taking a second level does not fire the synergy again');
+  ok(r.s.ramW > 16, 'Bulldozer widens the bump');
+  ok(synergiesFor(r.muts).some((x) => x.id === 'bulldozer'), 'synergiesFor lists owned synergies');
+}
+{ // Supernova: a FRENZY start pops every Big Mac near you
+  const r = quiet(); give(r, 'hype', 'nitro');
+  const w = [wbcAt(r.p.x + 100, r.p.y + 80), wbcAt(r.p.x, r.p.y + 900)]; r.ents.push(...w);
+  r.p.combo = r.frenzyThreshold(0) - 1; r.events.length = 0;
+  r.addCombo('pass', r.p.x, r.p.y);
+  ok(w[0].dead && !w[1].dead, 'Supernova pops the near Big Mac and spares the far one');
+  ok(types(r).includes('blast') && r.p.combo > r.frenzyThreshold(0), 'the blast pops count as combo links');
+}
+{ // Sugar High: sugar is a combo link
+  const r = quiet(); give(r, 'magnet', 'sweet');
+  r.ents.push({ t: 'sugar', x: r.p.x, y: r.p.y, r: 9 });
+  r.stepEnts(1 / 60, false, false, 0);
+  ok(r.p.combo === 1, 'Sugar High turns a fruit sugar into +1 combo');
+}
+{ // Jetstream: dashing out of a draft is free
+  const free = quiet(); give(free, 'draft', 'whip');
+  const paid = quiet(); give(paid, 'draft');
+  for (const r of [free, paid]) { r.p.draft = 0.3; r.p.e = 50; r.input.dash = true; r.step(1 / 60); }
+  ok(free.p.dashT > 0.7 && paid.p.dashT > 0 && paid.p.dashT < 0.6, 'a Jetstream dash lasts longer');
+  ok(free.p.e - paid.p.e > paid.s.dashCost * 0.8, 'and costs no energy (' + free.p.e.toFixed(1) + ' vs ' + paid.p.e.toFixed(1) + ')');
+}
+{ // Porcupine: a spiky pop chains into the neighbours
+  const r = quiet(); give(r, 'spiky', 'helmet');
+  const w = [wbcAt(r.p.x, r.p.y), wbcAt(r.p.x + 90, r.p.y + 40), wbcAt(r.p.x, r.p.y + 600)]; r.ents.push(...w);
+  r.stepEnts(1 / 60, false, false, 0);
+  ok(w[0].dead && w[1].dead && !w[2].dead && !r.over, 'Porcupine chain-pops a neighbour but not a distant cell');
+  ok(r.p.combo >= 2, 'each pop is a combo link');
+}
+{ // Comeback Kid: Second Wind also starts FRENZY and speeds you up
+  const r = quiet(); give(r, 'second', 'bloom');
+  const sp = r.s.speed; r.p.e = 0.0001; r.events.length = 0;
+  r.step(1 / 60);
+  ok(!r.over && types(r).includes('second') && r.p.frenzyT > 0, 'Comeback Kid: Second Wind lights FRENZY');
+  ok(r.s.speed > sp * 1.09, 'and gives +10% speed');
+}
+{ // Hype Squad: a FRENZY brings the Wingman back
+  const r = quiet(); give(r, 'wingman', 'hype'); r.p.wing = 0;
+  r.p.combo = r.frenzyThreshold(0) - 1; r.addCombo('pass', 0, 0);
+  ok(r.p.wing === 1, 'Hype Squad respawns the Wingman on FRENZY');
+}
+{ // Echo Chamber keeps half a dropped combo, Elephant Brain keeps three quarters
+  const none = quiet(), echo = quiet(), ele = quiet();
+  give(echo, 'echo'); give(ele, 'echo', 'memory');
+  for (const r of [none, echo, ele]) { r.p.combo = 40; r.dropCombo(); }
+  ok(none.p.combo === 0, 'without Echo a dropped combo is gone');
+  ok(echo.p.combo === 20 && echo.p.comboT > 0, 'Echo Chamber keeps half and keeps it ticking');
+  ok(ele.p.combo === 30, 'Elephant Brain keeps three quarters');
+  ok(echo.p.tier === echo.tierOf(20), 'the kept combo keeps its FRENZY tier progress');
+}
+{ // Slick Moves and Greased Lightning: near misses
+  const r = quiet(); give(r, 'slick', 'goo');
+  r.p.dashCd = 2; r.p.e = 50;
+  r.nearMiss(r.p.x, r.p.y);
+  ok(r.p.combo === 2 && r.p.e === 52, 'Slick Moves: a near miss is +2 combo and +2 energy');
+  ok(Math.abs(r.p.dashCd - 1.4) < 1e-9, 'Greased Lightning: a near miss recharges the dash');
+}
+{ // Chain Reaction: double combo in FRENZY, overtakes stretch it
+  const r = quiet(); give(r, 'chain');
+  r.addCombo('pass', 0, 0); ok(r.p.combo === 1, 'outside FRENZY Chain Reaction does nothing');
+  r.p.frenzyT = 2; r.addCombo('pass', 0, 0);
+  ok(r.p.combo === 3 && Math.abs(r.p.frenzyT - 2.2) < 1e-9, 'in FRENZY a pass counts double and adds 0.2s of FRENZY');
+  r.p.frenzyT = 100; r.addCombo('pass', 0, 0); ok(r.p.frenzyT === 100, 'the extension is capped');
+}
+{ // Lucky Swimmer: bigger DNA blobs
+  const r = quiet(); give(r, 'lucky');
+  r.ents.push({ t: 'dna', x: r.p.x, y: r.p.y, r: 11 }); const d0 = r.dnaRun;
+  r.stepEnts(1 / 60, false, false, 0);
+  ok(Math.abs(r.dnaRun - d0 - 7) < 1e-9, 'a Lucky DNA blob is worth 7');
+}
+
+// ---------------------------------------------------------------- combo multiplier and FRENZY tiers
+{
+  ok(comboMult(0) === 1 && comboMult(25) > comboMult(10) && comboMult(500) === comboMult(50) && comboMult(50) <= 3.01, 'the combo multiplier grows with the chain and is capped');
+  const cold = quiet(), hot = quiet();
+  hot.p.combo = 50; hot.p.mult = comboMult(50);
+  for (const r of [cold, hot]) { r.ents.push({ t: 'dna', x: r.p.x, y: r.p.y, r: 11 }); r.stepEnts(1 / 60, false, false, 0); }
+  ok(hot.dnaRun > cold.dnaRun * 2.5, 'a long combo multiplies DNA pickups (' + hot.dnaRun.toFixed(1) + ' vs ' + cold.dnaRun.toFixed(1) + ')');
+  const a = quiet(), b = quiet(); a.p.combo = 2; b.p.combo = 40;
+  a.addCombo('pass', 0, 0); b.addCombo('pass', 0, 0);
+  ok(b.dnaRun > a.dnaRun * 2, 'combo links pay more deep into a chain');
+}
+{
+  ok(FRENZY_TIERS.length === 5 && FRENZY_TIERS.every((t, i) => t.name && (!i || t.at > FRENZY_TIERS[i - 1].at && t.speed > FRENZY_TIERS[i - 1].speed)), 'five FRENZY tiers with rising thresholds and speed');
+  const r = quiet();
+  r.p.combo = r.frenzyThreshold(0) - 1; r.addCombo('pass', 0, 0);
+  let fe = r.events.filter((e) => e.type === 'frenzy');
+  ok(r.p.tier === 1 && fe.length === 1 && fe[0].tier === 1 && fe[0].name === FRENZY_TIERS[0].name, 'combo 10 starts tier 1 FRENZY');
+  r.events.length = 0; r.p.combo = r.frenzyThreshold(4) - 1; r.addCombo('pass', 0, 0);
+  fe = r.events.filter((e) => e.type === 'frenzy');
+  ok(r.p.tier === 5 && fe[0].name === 'GOD MODE!', 'an 85 chain reaches GOD MODE');
+  r.p.combo = 400; r.addCombo('pass', 0, 0);
+  ok(r.p.tier === 5 && r.p.bestTier === 5, 'the tier never goes past GOD MODE');
+  r.dropCombo(); ok(r.p.tier === 0 && r.p.combo === 0, 'losing the combo drops the tier');
+}
+{ // GOD MODE: a Big Mac cannot eat you; without FRENZY it can
+  const god = quiet(), plain = quiet();
+  god.p.combo = god.frenzyThreshold(4) - 1; god.addCombo('pass', 0, 0);
+  for (const r of [god, plain]) { r.ents.push(wbcAt(r.p.x, r.p.y + 5)); r.step(1 / 60); }
+  ok(!god.over, 'GOD MODE shrugs off a Big Mac');
+  ok(plain.over && plain.over.reason === 'wbc', 'with no FRENZY the same Big Mac eats you');
+}
+{ // HYPER FRENZY: acid cannot burn you
+  const hyper = quiet(), plain = quiet();
+  hyper.p.combo = hyper.frenzyThreshold(3) - 1; hyper.addCombo('pass', 0, 0);
+  for (const r of [hyper, plain]) { r.ents.push({ t: 'acid', x: r.p.x, y: r.p.y + 5, r: 60, seed: 1 }); r.p.e = 80; r.step(1 / 30); }
+  ok(hyper.p.tier === 4 && hyper.p.acid === 0 && plain.p.acid === 1, 'HYPER FRENZY is acid proof');
+}
+
+// ---------------------------------------------------------------- random race events
+{
+  ok(EVENT_ORDER.length >= 4 && EVENT_ORDER.every((id) => RACE_EVENTS[id].name && RACE_EVENTS[id].text), 'every race event has a name and text');
+  let seen = new Set(), bad = 0;
+  for (let s = 1; s <= 30; s++) {
+    const r = new Race(newMeta(), mulberry(s));
+    if (r.schedule.length !== 3) bad++;
+    for (const e of r.schedule) {
+      seen.add(e.id);
+      const z = ZONES[e.zi];
+      if (!RACE_EVENTS[e.id].zones.includes(z.id) || e.y0 < ZSTART[e.zi] || e.y1 > ZSTART[e.zi] + z.len) bad++;
+    }
+    if (new Set(r.schedule.map((e) => e.id)).size !== r.schedule.length) bad++;
+  }
+  ok(bad === 0, 'each run schedules three different events inside zones that allow them');
+  ok(seen.size >= 5, 'runs differ: ' + seen.size + ' kinds of event across 30 runs');
+  ok(new Race(newMeta(), mulberry(1), { events: false }).schedule.length === 0, 'events can be switched off');
+}
+{ // entering and leaving an event window
+  const r = new Race(newMeta(), mulberry(12)); const e = r.schedule[0];
+  r.p.y = e.y0 + 10; r.stepEvent();
+  const st = r.events.find((x) => x.type === 'event');
+  ok(st && st.id === e.id && st.name === RACE_EVENTS[e.id].name && st.text, 'swimming into the window emits the event with a name and text');
+  r.events.length = 0; r.p.y = e.y1 + 10; r.stepEvent();
+  ok(types(r).includes('eventEnd') && r.ev === null, 'swimming out of it ends the event');
+}
+{ // event effects on the spawn layout: same seed, with and without the event
+  const count = (id, t) => {   // summed over ten daily seeds so the comparison is not luck
+    let n = 0;
+    for (let day = 770; day < 780; day++) {
+      const r = new Race(newMeta(), mulberry(1), { seed: day, events: false });
+      const y0 = ZSTART[3] + 2000;
+      if (id) r.schedule = [{ id, zi: 3, y0, y1: y0 + 3200 }];
+      r.genY = y0; r.p.y = y0 + 3200 - 2200; r.spawnAhead();
+      n += r.ents.filter((e) => e.t === t).length;
+    }
+    return n;
+  };
+  ok(count('sugarRush', 'sugar') > count(null, 'sugar') * 2, 'Sugar Rush fills the tube with fruit');
+  ok(count('stampede', 'wbc') > count(null, 'wbc') * 1.5, 'a Big Mac stampede brings more white blood cells');
+  ok(count('goldRush', 'dna') > count(null, 'dna') * 2, 'Golden Hour rains DNA');
+}
+{ // Dad sneezed: turbulence pushes you sideways even when you do not steer
+  const mk = (on) => { const r = quiet(); if (on) r.schedule = [{ id: 'sneeze', zi: 0, y0: 0, y1: 1e5 }]; r.p.y = 500; r.p.x = centre(500); return r; };
+  const calm = mk(false), sneeze = mk(true);
+  for (let i = 0; i < 30; i++) for (const r of [calm, sneeze]) { r.input.tx = null; r.step(1 / 60); }
+  ok(Math.abs(sneeze.p.x - centre(sneeze.p.y)) > Math.abs(calm.p.x - centre(calm.p.y)) + 5, 'a sneeze pushes the swimmer sideways');
+}
+{ // Slipstream Highway doubles drafting
+  const mk = (on) => { const r = new Race(newMeta(), mulberry(5), { events: false }); r.ents = []; r.genY = 1e9; if (on) r.schedule = [{ id: 'slipstream', zi: 0, y0: 0, y1: 1e5 }];
+    r.agents.forEach((a, i) => { a.alive = i === RIVALS.length; }); const a = r.agents[RIVALS.length]; a.y = r.p.y + 40; a.lane = 0; a.kx = 0; a.sp = 1e-6; r.p.x = r.agentX(a); return r; };
+  const off = mk(false), on = mk(true);
+  for (const r of [off, on]) for (let i = 0; i < 4; i++) { r.input.tx = r.p.x; r.step(1 / 60); }
+  ok(on.p.draft > off.p.draft * 1.6, 'Slipstream Highway doubles draft (' + on.p.draft.toFixed(3) + ' vs ' + off.p.draft.toFixed(3) + ')');
+}
+
+// ---------------------------------------------------------------- daily seed race
+{
+  ok(dailySeed(new Date(Date.UTC(2026, 0, 2, 23))) - dailySeed(new Date(Date.UTC(2026, 0, 1, 1))) === 1, 'the daily seed changes once per UTC day');
+  const day = 20411;
+  const a = new Race(newMeta(), mulberry(1), { seed: day }), b = new Race(maxed(), mulberry(999), { seed: day });
+  ok(a.eggSide === b.eggSide, 'the same day has the same egg side for everybody');
+  ok(a.agents.every((x, i) => x.y === b.agents[i].y && x.side === b.agents[i].side), 'the same day lines up the same field');
+  ok(JSON.stringify(a.schedule) === JSON.stringify(b.schedule), 'the same day has the same race events');
+  a.offer(); b.offer(); ok(a.pending.join() === b.pending.join(), 'the same day deals the same first cards');
+  for (const r of [a, b]) { r.p.y = 3000; r.spawnAhead(); }
+  const lay = (r) => r.ents.filter((e) => e.y >= 2700 && e.y < 5000).map((e) => e.t + Math.round(e.x) + ':' + Math.round(e.y)).join();
+  ok(lay(a).length > 0 && lay(a) === lay(b), 'the same day spawns the same layout, even with a head start from habits');
+  const c = new Race(newMeta(), mulberry(1), { seed: day + 1 }); c.p.y = 3000; c.spawnAhead();
+  ok(lay(c) !== lay(a), 'the next day has a different layout');
+  const sides = new Set(); for (let d = 0; d < 30; d++) sides.add(new Race(newMeta(), mulberry(1), { seed: d }).eggSide);
+  ok(sides.size === 2, 'over a month the egg shows up on both sides');
+  ok(new Race(newMeta(), mulberry(1)).daily === null, 'a normal race is not a daily');
+}
+{ // the daily best is remembered per day
+  const m = newMeta();
+  const r1 = new Race(m, mulberry(1), { seed: 500 }); r1.rank = 5000; r1.end('energy');
+  ok(m.dailyDay === 500 && m.dailyRuns === 1 && m.dailyBest === 5000 && r1.over.dailyBest, 'a daily run records the best rank of the day');
+  const r2 = new Race(m, mulberry(2), { seed: 500 }); r2.rank = 9000; r2.end('energy');
+  ok(m.dailyRuns === 2 && m.dailyBest === 5000 && !r2.over.dailyBest, 'a worse run the same day keeps the best');
+  const r3 = new Race(m, mulberry(3), { seed: 501 }); r3.rank = 80000; r3.end('energy');
+  ok(m.dailyDay === 501 && m.dailyRuns === 1 && m.dailyBest === 80000, 'a new day starts a fresh daily board');
+  const back = loadMeta(JSON.parse(JSON.stringify(m)));
+  ok(back.dailyDay === 501 && back.dailyBest === 80000 && Array.isArray(back.synergiesSeen), 'daily stats survive the save');
 }
 
 console.log(`million_to_one_core: ${passed} passed, 0 failed`);

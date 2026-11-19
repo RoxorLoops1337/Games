@@ -50,7 +50,7 @@ await shot('1_title');
 // Act: first swim shows the story, tapping through starts the race
 await page.tap('#playBtn'); await page.waitForTimeout(200);
 ok(await page.isVisible('#intro'), 'the first swim starts with the story');
-for (let i = 0; i < 8 && await page.isVisible('#intro'); i++) { await page.tap('#intro'); await page.waitForTimeout(80); }
+for (let i = 0; i < 20 && await page.isVisible('#intro'); i++) { await page.tap('#intro'); await page.waitForTimeout(80); }
 await page.waitForTimeout(1500);
 ok(await page.evaluate(() => !game.race.demo && document.getElementById('hud').offsetParent !== null), 'the race starts with the HUD showing');
 await shot('2_start');
