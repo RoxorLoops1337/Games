@@ -2,7 +2,7 @@
 // (it only keeps a few underscored display fields on agents: smoothed position, heading, timers).
 // Art direction: cartoon biology. Squishy, glossy, a bit silly. No image files: every
 // sprite, tile and glow is painted in code (much of it once, into cached offscreen canvases).
-import { VIEW_W, channel, centre, zoneIndex, ZSTART, FORK_Y0, FORK_END, DEAD_Y } from './core.js';
+import { VIEW_W, channel, centre, zoneIndex, ZSTART, FORK_Y0, FORK_END, DEAD_Y, playBand } from './core.js';
 import { ZONES, RACE_LEN } from './content.js';
 
 const TAU = Math.PI * 2;
@@ -36,9 +36,15 @@ const MUT_ACC = { helmet: 'cap', spiky: 'mohawk', mosh: 'mohawk', hype: 'band', 
   nitro: 'shades', slick: 'shades', wingman: 'shades', sweet: 'bow', second: 'bow', lucky: 'crown', chain: 'crown', draft: 'stache', rush: 'stache' };
 const FONT = '"Baloo 2", system-ui, sans-serif';
 const TS = 1.25, TW = 440, TH = 720;          // backdrop tile: logical size and pixel scale
-const MAXP = 420, MAXP_LITE = 250;            // particle ring buffer size (full / lite)
+const MAXP = 420, MAXP_LITE = 160;            // particle ring buffer size (full / lite)
 const SPR = 2.5;                              // pixel scale of baked crowd heads
 const TXT_MAX = 64;                           // baked text sprites kept (LRU)
+const BAKES_PER_FRAME = 2;                    // new text sprites a frame may paint (pops beyond that wait a frame)
+// precomputed rainbow strings (36 hues, 10 degrees apart) so hot loops never build colour strings
+const HSL65 = [], HSL75 = [], HSL82 = [];
+for (let i = 0; i < 36; i++) { HSL65.push(`hsl(${i * 10},100%,65%)`); HSL75.push(`hsl(${i * 10},100%,75%)`); HSL82.push(`hsl(${i * 10},100%,82%)`); }
+const hueI = (deg) => ((Math.round(deg / 10) % 36) + 36) % 36;
+const SPRINT_COL = rgb('#ff5a3c');
 
 function mk(w, h) {
   if (typeof document !== 'undefined') { const k = document.createElement('canvas'); k.width = w; k.height = h; return k; }
@@ -68,7 +74,11 @@ export class Renderer {
     this.beat = 0; this.reduced = false; this.lite = false;
     // particles: a preallocated ring buffer
     this.P = []; for (let i = 0; i < MAXP; i++) this.P.push({ k: 0, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, col: '#fff', size: 1, g: 0, rot: 0, vr: 0 });
-    this.pHead = 0;
+    this.pHead = 0; this.pHW = 0;                 // pHW: one past the highest slot ever used (the update loop stops there)
+    this.streaks = new Map(); this.ringSprs = new Map();
+    this.probe = null; this.bakes = 0; this.textScale = 1;
+    this.paidSeen = new WeakSet(); this.wallC = [255, 255, 255];
+    this.tubeG = null; this.tubeGK = '';
     this.resetRun();
     this.scr = {};
     this.frame = 0; this.ringN = 0;
@@ -76,9 +86,12 @@ export class Renderer {
   }
   // per-run display state (camY = null from main.js starts a new run)
   resetRun() {
-    this.pPh = 0; this.pTw = 15; this.lean = 0; this.lead = 0.27; this.trail = []; this.trailAcc = 0;
+    this.pPh = 0; this.pTw = 15; this.lean = 0; this.trail = []; this.trailAcc = 0;
     this.banks = []; this.bubble = null; this.desat = 0; this.ghostA = 0; this.ghostX = 0;
     this.lastBreakT = -9; this.lastBankT = -9; this.lastZi = -1; this.gateFlash = 0; this.emberT = 0;
+    this.lead = 0.34; this.pAng = null; this.pAngV = 0; this.prevE = null; this.prevOv = null; this.prevTier = 0;
+    this.accKey = -1; this.accList = []; this.accNew = null; this.accT = 0;
+    this.chompT = 0; this.winkT = 0; this.nearT = 0; this.winT = 0; this.overSeen = null; this.shardsDone = false;
   }
   resize(q = this.q) {
     this.q = q === 0 ? 0 : 1;
@@ -96,7 +109,7 @@ export class Renderer {
   get shake() { return this._trauma * 14; }
   set shake(v) { const a = clamp((+v || 0) / 14, 0, 1); if (a < this._trauma - 1e-6) this._trauma = a; else if (a > this._trauma + 1e-6) this.addTrauma(a); }
   // a directional camera nudge that springs back
-  kick(dx, dy) { const k = this.reduced ? 6 : 20; this.kvx += dx * k; this.kvy += dy * k; }
+  kick(dx, dy) { const k = this.reduced ? 60 : 380; this.kvx += dx * k; this.kvy += dy * k; }
   // full-screen flash: a new flash less than 0.34 s after the last one is ignored, alpha capped at 0.6 when drawn
   get flash() { return this._flash; }
   set flash(v) {
@@ -114,6 +127,7 @@ export class Renderer {
     const lim = this.lite ? MAXP_LITE : MAXP;
     if (this.pHead >= lim) this.pHead = 0;
     const q = this.P[this.pHead]; this.pHead = (this.pHead + 1) % lim;
+    if (this.pHead === 0) this.pHW = Math.max(this.pHW, lim); else this.pHW = Math.max(this.pHW, this.pHead);
     q.k = k; q.x = x; q.y = y; q.vx = vx; q.vy = vy; q.life = life; q.max = life; q.col = col; q.size = size; q.g = g; q.rot = rot; q.vr = vr;
   }
   burst(x, y, col, n = 10, spd = 120, life = 0.6, size = 3) {
@@ -124,8 +138,14 @@ export class Renderer {
     }
   }
   pop(x, y, text, col = '#fff', size = 16, life = 1.1) {
-    const small = size < 16;
+    const size0 = +size || 16, small = size0 < 16, big = size0 >= 20;
+    // a big moment owns the stage: little pops keep quiet while one is up
+    if (small && this.pops.some((q) => q.big)) return;
+    if (big) {
+      for (let i = this.pops.length - 1; i >= 0; i--) { const q = this.pops[i]; if (!q.big && Math.abs(q.x - x) < 80 && Math.abs((q.dy != null ? q.dy : q.y) - y) < 80) this.pops.splice(i, 1); }
+    }
     if (small) life *= 0.7;
+    size = Math.max(14, size0) * (this.textScale || 1);
     // stack below any live pop it would overlap
     for (let it = 0; it < 6; it++) {
       let hit = false;
@@ -135,13 +155,13 @@ export class Renderer {
       }
       if (!hit) break;
     }
-    // at most 5 live: drop the oldest small one first
-    while (this.pops.length >= 5) {
-      let k = this.pops.findIndex((q) => q.size < 18);
+    // at most 3 live: drop the oldest small one first
+    while (this.pops.length >= 3) {
+      let k = this.pops.findIndex((q) => !q.big);
       if (k < 0) k = 0;
       this.pops.splice(k, 1);
     }
-    this.pops.push({ x, y, dy: y, text: String(text), col, size, life, max: life, al: small ? 0.8 : 1, rot: (Math.random() - 0.5) * 0.25 });
+    this.pops.push({ x, y, dy: y, text: String(text), col, size, big, age: 0, life, max: life, al: small ? 0.85 : 1, rot: (Math.random() - 0.5) * 0.25 });
   }
   // an expanding shockwave ring at world (x, y)
   ring(x, y, col = '#fff', r = 70, life = 0.45, w = 5) {
@@ -173,6 +193,23 @@ export class Renderer {
       this.addP(5, x + Math.cos(a) * 30, y - Math.sin(a) * 30, Math.cos(a) * v, -Math.sin(a) * v, 0.55, col, 4 + Math.random() * 2, 0, a + Math.PI / 2, (Math.random() - 0.5) * 16);
     }
   }
+  // a link landed with the combo timer nearly gone (main.js: core event 'clutch'): the ring snaps gold
+  // and sparks fly off the end of the timer arc
+  clutch(x, y) {
+    const p = this.race && this.race.p;
+    if (x == null && p) { x = p.x; y = p.y; }
+    if (x == null) return;
+    this.ring(x, y, '#ffd75c', 34, 0.22, 7);
+    const f = p ? clamp((p.comboT || 0) / (p.comboMax || 1), 0, 1) : 0.1, a = -Math.PI / 2 + TAU * f;
+    const ex = x + Math.cos(a) * 30, ey = y - Math.sin(a) * 30, n = this.lite || this.reduced ? 5 : 10;
+    for (let i = 0; i < n; i++) {
+      const an = a + (Math.random() - 0.5) * 2.2, v = 140 + Math.random() * 160;
+      this.addP(1, ex, ey, Math.cos(an) * v, -Math.sin(an) * v, 0.35, i % 3 ? '#ffd75c' : '#ffffff', 2.4 + Math.random() * 1.6);
+    }
+    this.sqV -= 4;
+  }
+  // Kevin flinches, then grins (main.js may call this on a 'close' or 'dodge' combo link; drawEnts also spots paid near misses)
+  nearMiss() { if (this.nearT <= 0) this.nearT = 0.55; }
   // cash the combo in: pink DNA helices fly to the HUD (main.js: core event 'comboBank')
   comboBank(x, y, dna = 10) {
     this.lastBankT = this.lastBreakT = this.time;
@@ -216,6 +253,17 @@ export class Renderer {
     }
     return g;
   }
+  // a thin bubble ring (particle kind 4), 32 px, drawn once per colour
+  ringSpr(col) {
+    let g = this.ringSprs.get(col);
+    if (!g) {
+      if (this.ringSprs.size > 16) this.ringSprs.clear();
+      g = mk(32, 32); const x = g.getContext('2d');
+      x.strokeStyle = col; x.lineWidth = 2.2; x.beginPath(); x.arc(16, 16, 14, 0, TAU); x.stroke();
+      this.ringSprs.set(col, g);
+    }
+    return g;
+  }
   vignette() {
     if (!this.vig) {
       const mkV = (inner) => {
@@ -237,16 +285,20 @@ export class Renderer {
     this.tiles.set(zi, t); return t;
   }
   // text painted once (shadow, outline, fill, highlight at 2x); kind 'sign' draws a rounded plate
-  text(text, col, size, kind = 'pop') {
+  // canWait: the caller can skip a frame (pops), so a frame never paints more than BAKES_PER_FRAME new sprites
+  text(text, col, size, kind = 'pop', canWait = false) {
+    size = Math.round(size);
     const key = kind + '|' + text + '|' + col + '|' + size;
     let s = this.txt.get(key);
     if (s) { this.txt.delete(key); this.txt.set(key, s); return s; }
+    if (canWait && this.bakes >= BAKES_PER_FRAME) return null;
+    this.bakes++;
     if (this.txt.size >= TXT_MAX) this.txt.delete(this.txt.keys().next().value);
-    const K = 2, probe = mk(4, 4).getContext('2d');
+    const K = 2, probe = this.probe || (this.probe = mk(4, 4).getContext('2d'));
     const font = kind === 'sign' ? `800 ${size}px ${FONT}` : `900 ${size}px ${FONT}`;
     probe.font = font;
     const tw = Math.ceil(probe.measureText(text).width);
-    const w = kind === 'sign' ? tw + 26 : tw + Math.ceil(size * 0.6) + 6, h = kind === 'sign' ? 32 : Math.ceil(size * 1.7);
+    const w = kind === 'sign' ? tw + 26 : tw + Math.ceil(size * 0.7) + 6, h = kind === 'sign' ? 32 : Math.ceil(size * 1.7);
     const cv = mk(w * K, h * K), g = cv.getContext('2d');
     g.scale(K, K); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
     if (kind === 'sign') {
@@ -257,7 +309,7 @@ export class Renderer {
     } else {
       const cx = w / 2, cy = h / 2;
       g.fillStyle = 'rgba(30,0,30,0.55)'; g.fillText(text, cx + 1.5, cy + size * 0.14 + 1.5);
-      g.lineWidth = Math.max(3, size * 0.28); g.strokeStyle = '#2a0a24'; g.strokeText(text, cx, cy);
+      g.lineWidth = Math.max(4, size * 0.32); g.strokeStyle = '#1a0616'; g.strokeText(text, cx, cy);
       g.fillStyle = col; g.fillText(text, cx, cy);
       if (size >= 16) { g.globalAlpha = 0.35; g.fillStyle = '#fff'; g.fillText(text, cx, cy - size * 0.06); g.globalAlpha = 1; }
     }
@@ -302,20 +354,20 @@ export class Renderer {
 
   // ---------------------------------------------------------------- frame
   draw(race, dt, ts = 1) {
-    const c = this.ctx, p = race.p, wdt = dt * ts; this.time += dt; this.frame++; this.race = race; this.ts = ts;
+    const c = this.ctx, p = race.p, wdt = dt * ts; this.time += dt; this.frame++; this.race = race; this.ts = ts; this.bakes = 0;
     const beat = this.reduced ? 0 : clamp(+this.beat || 0, 0, 1);
     if (this.camY == null) this.resetRun();
-    // camera: looks further ahead the faster you swim
-    const wantLead = race.drill ? 0.5 : 0.27 + 0.13 * clamp((p.vy - 420) / 900, 0, 1);
+    // camera: looks further ahead the faster you swim (Kevin sits about 62% down: the thumb lives in the bottom third)
+    const wantLead = race.drill ? 0.5 : 0.34 + 0.10 * clamp((p.vy - 420) / 900, 0, 1);
     this.lead += (wantLead - this.lead) * Math.min(1, dt * 3);
     const target = p.y - this.H * this.lead;
     this.camY = this.camY == null ? target : this.camY + (target - this.camY) * Math.min(1, dt * 8);
     this.react(race, dt, wdt);
     // trauma shake (smooth two-sine noise) + spring kick
     this._trauma = Math.max(0, this._trauma - dt * 1.8);
-    const tr2 = this._trauma * this._trauma, T = this.time;
-    const ox = 14 * tr2 * (0.6 * Math.sin(T * 23 * TAU) + 0.4 * Math.sin(T * 31 * TAU + 1.3));
-    const oy = 14 * tr2 * (0.6 * Math.sin(T * 31 * TAU + 2.1) + 0.4 * Math.sin(T * 23 * TAU + 0.4));
+    const tr2 = this._trauma * this._trauma, tr15 = Math.pow(this._trauma, 1.5), T = this.time;
+    const ox = 14 * tr15 * (0.6 * Math.sin(T * 23 * TAU) + 0.4 * Math.sin(T * 31 * TAU + 1.3));
+    const oy = 14 * tr15 * (0.6 * Math.sin(T * 31 * TAU + 2.1) + 0.4 * Math.sin(T * 23 * TAU + 0.4));
     const rot = this.reduced ? 0 : 0.014 * tr2 * (0.5 * Math.sin(T * 23 * TAU + 3.3) + 0.5 * Math.sin(T * 31 * TAU + 0.9));
     this.kvx += (-220 * this.kx - 18 * this.kvx) * dt; this.kvy += (-220 * this.ky - 18 * this.kvy) * dt;
     this.kx = clamp(this.kx + this.kvx * dt, -16, 16); this.ky = clamp(this.ky + this.kvy * dt, -16, 16);
@@ -328,7 +380,7 @@ export class Renderer {
     c.translate(-VIEW_W / 2, -this.H / 2);
     if (zk !== 1) { c.translate(px, py); c.scale(zk, zk); c.translate(-px, -py); }
     // the opaque tile covers -20..420: only paint the flat colour when the view could peek past it
-    this.safeBack = Math.abs(ox + this.kx) + 7 * tr2 < 18;
+    this.safeBack = Math.abs(ox + this.kx) + 7 * tr15 < 18;
 
     const zi = zoneIndex(p.y), zn = ZONES[zi + 1];
     let bt = 0; if (zn) bt = clamp((p.y - (ZSTART[zi + 1] - 1500)) / 1500, 0, 1);
@@ -337,6 +389,7 @@ export class Renderer {
     const deep = zn ? lerpC(rgb(z.col[0]), rgb(zn.col[0]), bt) : rgb(z.col[0]);
     const lite = zn ? lerpC(rgb(z.col[1]), rgb(zn.col[1]), bt) : rgb(z.col[1]);
     const wall = zn ? lerpC(rgb(z.wall), rgb(zn.wall), bt) : rgb(z.wall);
+    this.wallC = wall;
     this.drawBack(deep, zi, bt);
     this.drawTube(race, lite, wall, deep);
     this.drawScent(race);
@@ -350,24 +403,26 @@ export class Renderer {
     if (fast && !race.drill) {
       const red = this.reduced, n = red ? 4 : 16, al = red ? 0.5 : 1;
       c.lineWidth = 1.6; c.lineCap = 'round';
-      c.strokeStyle = p.frenzyT > 0 ? (red ? `rgba(255,215,92,${0.16 * fast * al})` : `hsla(${(this.time * 500) % 360},100%,75%,${0.16 * fast})`) : `rgba(255,255,255,${0.14 * fast * al})`;
+      c.strokeStyle = p.frenzyT > 0 ? (red ? '#ffd75c' : HSL75[hueI(this.time * 500)]) : '#ffffff';
+      c.globalAlpha = Math.min(1, (p.frenzyT > 0 ? 0.16 : 0.14) * fast * al);
       c.beginPath();
       for (let i = 0; i < n; i++) { const x = (i * 97 + this.time * 31) % VIEW_W, y = ((i * 211 + this.time * 1500) % (this.H + 200)) - 100; c.moveTo(x, y); c.lineTo(x, y + 50 + 50 * fast); }
-      c.stroke();
+      c.stroke(); c.globalAlpha = 1;
     }
     // ---- screen space: threat chevrons, one vignette, the DNA fountain, combo-break grey, flash
     c.setTransform(this.s, 0, 0, this.s, 0, 0);
     this.drawWarnings(race);
     const [vn, vr] = this.vignette(), ef = p.e / (p.maxE || 100);
+    // full-screen layers: lite keeps to 4 (back tile x2 while blending, tube, inner tile), full to 6 (+ inner blend, vignette)
     if (ef < 0.25 && !race.over) {
       c.globalAlpha = this.reduced ? 0.6 : Math.max(0.7, clamp(0.55 + 0.35 * Math.sin(this.time * 8), 0, 1) * (1 - ef / 0.25 * 0.5));
       c.drawImage(vr, -20, -20, VIEW_W + 40, this.H + 40);
-    } else { c.globalAlpha = Math.min(1, 0.9 + 0.06 * beat); c.drawImage(vn, -20, -20, VIEW_W + 40, this.H + 40); }
+    } else if (!this.lite) { c.globalAlpha = Math.min(1, 0.9 + 0.06 * beat); c.drawImage(vn, -20, -20, VIEW_W + 40, this.H + 40); }
     c.globalAlpha = 1;
     this.drawBanks(dt);
-    if (this.desat > 0) {
-      c.globalCompositeOperation = 'saturation'; c.fillStyle = `rgba(128,128,128,${(this.desat / 0.2) * 0.85})`;
-      c.fillRect(-20, -20, VIEW_W + 40, this.H + 40); c.globalCompositeOperation = 'source-over';
+    if (this.desat > 0) {   // the combo break greys the world out for a moment (a plain wash: 'saturation' blending is slow on phones)
+      c.fillStyle = `rgba(90,80,110,${(0.35 * this.desat / 0.2).toFixed(3)})`;
+      c.fillRect(-20, -20, VIEW_W + 40, this.H + 40);
     }
     if (this._flash > 0.02) { c.fillStyle = this._fcol; c.globalAlpha = Math.min(0.6, this._flash); c.fillRect(-20, -20, VIEW_W + 40, this.H + 40); c.globalAlpha = 1; this._flash -= dt * 3; }
     else this._flash = 0;
@@ -382,6 +437,28 @@ export class Renderer {
     if (p.stuck > pv.stuck + 0.2) this.sqV += 10;
     // a chain of 3+ that drops shatters its ring (unless main.js already said so, or it was banked)
     if (pv.combo >= 3 && p.combo < pv.combo && this.time - this.lastBankT > 0.3) this.comboBreak(p.x, p.y);
+    // every link makes the chain feel bigger: a burst in the timer colour, a ring every 5, a punch every 10
+    if (p.combo > pv.combo && !race.demo && !race.over) {
+      const n = p.combo, cheap = this.lite || this.reduced, f = clamp((p.comboT || 0) / (p.comboMax || 1), 0, 1);
+      let cnt = Math.min(3 + Math.floor(n / 4), 12); if (cheap) cnt = Math.ceil(cnt / 2);
+      this.burst(p.x, p.y, this.ringCol(f), cnt, 110 + Math.min(n, 40) * 3, 0.45, 2.6);
+      if (Math.floor(n / 5) > Math.floor(pv.combo / 5) && (!cheap || n % 10 === 0)) this.ring(p.x, p.y, this.ringCol(f), 26 + Math.min(n, 40), 0.4, 4);
+      if (Math.floor(n / 10) > Math.floor(pv.combo / 10)) this.zoomPunch(cheap ? 0.02 : 0.04);
+      this.sqV -= cheap ? 1.5 : 3;
+    }
+    const tier = p.frenzyT > 0 ? (p.tier || 0) : 0;
+    if (tier > this.prevTier && !race.demo) {
+      this.zoomPunch(this.lite ? 0.035 : 0.07);
+      this.ring(p.x, p.y, '#ffd75c', 90, 0.5, 7);
+      if (!this.lite) this.ring(p.x, p.y, '#ff5cd2', 60, 0.4, 5);
+    }
+    this.prevTier = tier;
+    // micro reactions: gulp a snack, wink at an overtake, flinch then grin at a near miss
+    if (this.prevE != null && p.e > this.prevE + 2) this.chompT = 0.14;
+    if (this.prevOv != null && p.overtakes > this.prevOv) this.winkT = 0.4;
+    this.prevE = p.e; this.prevOv = p.overtakes;
+    this.chompT = Math.max(0, this.chompT - dt); this.winkT = Math.max(0, this.winkT - dt); this.nearT = Math.max(0, this.nearT - dt);
+    this.accT = Math.max(0, this.accT - dt);
     pv.dashT = p.dashT; pv.frenzyT = p.frenzyT; pv.inv = p.inv; pv.stuck = p.stuck; pv.combo = p.combo;
     // squash and stretch spring: stretches long while dashing
     const want = p.dashT > 0 ? 0.24 : p.frenzyT > 0 ? 0.08 : 0;
@@ -390,11 +467,14 @@ export class Renderer {
     this.desat = Math.max(0, this.desat - dt); this.gateFlash = Math.max(0, this.gateFlash - dt);
     // crossing into a new zone tears the gate membrane
     const zi = zoneIndex(p.y);
-    if (this.lastZi >= 0 && zi > this.lastZi) { this.confetti(p.x, p.y + 30, 28); this.gateFlash = 0.3; }
+    if (this.lastZi >= 0 && zi > this.lastZi) {
+      this.confetti(p.x, p.y + 30, 28);
+      if (this.reduced) { this.flash = 0.1; this.flashCol = css(this.wallC); } else this.gateFlash = 0.3;
+    }
     this.lastZi = zi;
     // steer ghost + body lean from the finger target (not for the autopilot demo)
     const tx = race.input && !race.demo && !race.autopilot ? race.input.tx : null;
-    if (tx != null) { this.ghostA = 1; this.ghostX = tx; } else this.ghostA = Math.max(0, this.ghostA - dt / 0.15);
+    if (tx != null) { this.ghostA = 1; this.ghostX = tx; } else this.ghostA = Math.max(0, this.ghostA - dt / 0.25);
     const lw = tx != null ? clamp((tx - p.x) / 120, -1, 1) * 0.35 : 0;
     this.lean += (lw - this.lean) * Math.min(1, dt * 10);
     // trail sampled at 60 Hz of world time, whatever the screen rate
@@ -458,37 +538,53 @@ export class Renderer {
         c.closePath();
       }
     };
-    const g = c.createLinearGradient(0, 0, VIEW_W, 0);
-    g.addColorStop(0, css(deep)); g.addColorStop(0.5, css(lite)); g.addColorStop(1, css(deep));
-    path(); c.fillStyle = g; c.fill();
+    // the tube gradient only depends on two colours: cache it, keyed on the colours quantised to steps of 4
+    const qd = deep.map((v) => (v >> 2) << 2), ql = lite.map((v) => (v >> 2) << 2), gk = qd.join(',') + '|' + ql.join(',');
+    if (gk !== this.tubeGK || !this.tubeG) {
+      const g = c.createLinearGradient(0, 0, VIEW_W, 0);
+      g.addColorStop(0, css(qd)); g.addColorStop(0.5, css(ql)); g.addColorStop(1, css(qd));
+      this.tubeG = g; this.tubeGK = gk;
+    }
+    path(); c.fillStyle = this.tubeG; c.fill();
     // inside the tube: the zone's texture at a faster parallax, soft inner shadow, then the floating stuff
     c.save(); path(); c.clip();
-    if (!this.lite) {
-      this.tileLayer(this.zi, 0.18 * (1 - this.bt), 0.6);
-      if (ZONES[this.zi + 1]) this.tileLayer(this.zi + 1, 0.18 * this.bt, 0.6);
+    if (this.lite) {   // one inner layer only on lite (the dominant zone of a blend)
+      const k = this.bt < 0.5 || !ZONES[this.zi + 1] ? this.zi : this.zi + 1;
+      this.tileLayer(k, 0.25, 0.6);
+    } else {
+      this.tileLayer(this.zi, 0.38 * (1 - this.bt), 0.6);
+      if (ZONES[this.zi + 1]) this.tileLayer(this.zi + 1, 0.38 * this.bt, 0.6);
     }
     c.lineJoin = 'round';
-    c.strokeStyle = css(deep, 0.55); c.lineWidth = 34;
-    for (const [L, R] of polys) { strokePts(c, L); strokePts(c, R); }
+    if (!this.lite) {
+      c.strokeStyle = css(deep, 0.55); c.lineWidth = 34;
+      for (const [L, R] of polys) { strokePts(c, L); strokePts(c, R); }
+    }
     c.strokeStyle = css(wall, 0.12); c.lineWidth = 8;
     for (const [L, R] of polys) { strokePts(c, L, 9); strokePts(c, R, -9); }
     this.drawNear(this.zi, 1 - this.bt * 0.999);
     if (ZONES[this.zi + 1] && this.bt > 0.02) this.drawNear(this.zi + 1, this.bt);
-    if (this.gateFlash > 0) { c.fillStyle = css(wall, (this.gateFlash / 0.3) * (this.reduced ? 0.12 : 0.35)); c.fillRect(-20, -20, VIEW_W + 40, this.H + 40); }
+    if (this.gateFlash > 0 && !this.reduced) { c.fillStyle = css(wall, (this.gateFlash / 0.3) * 0.35); c.fillRect(-20, -20, VIEW_W + 40, this.H + 40); }
     c.restore();
-    // glossy rims and waving cilia
+    // each zone's own wall (blended across the gate), then glossy rims and waving cilia
+    const zA = ZONES[this.zi].id, zB = ZONES[this.zi + 1] ? ZONES[this.zi + 1].id : null, bt = zB ? this.bt : 0;
+    this.drawWallStyle(race, zA, 1 - bt, wall);
+    if (zB && bt > 0.02) this.drawWallStyle(race, zB, bt, wall);
+    const rapW = (zA === 'rapids' ? 1 - bt : 0) + (zB === 'rapids' ? bt : 0);
     for (const [L, R] of polys) {
       for (const P of [L, R]) {
-        c.strokeStyle = css(wall, 0.22); c.lineWidth = 12; strokePts(c, P);
+        if (!this.lite) { c.strokeStyle = css(wall, 0.22); c.lineWidth = 12; strokePts(c, P); }
         c.strokeStyle = css(wall, 1); c.lineWidth = 2.6; strokePts(c, P);
       }
+      if (rapW > 0.98) continue;   // the Rapids comb their own long cilia
+      c.globalAlpha = 1 - rapW;
       c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1.3; c.lineCap = 'round'; c.beginPath();
       for (let i = 0; i < L.length; i += 2) {
         const sw = Math.sin(t * 6 + i * 0.45) * 5, sw2 = Math.sin(t * 6 + i * 0.45 + 1.2) * 4;
         c.moveTo(L[i], L[i + 1]); c.quadraticCurveTo(L[i] + 5, L[i + 1] + sw2, L[i] + 9, L[i + 1] + sw);
         c.moveTo(R[i], R[i + 1]); c.quadraticCurveTo(R[i] - 5, R[i + 1] + sw2, R[i] - 9, R[i + 1] + sw);
       }
-      c.stroke();
+      c.stroke(); c.globalAlpha = 1;
     }
     // a fleshy gate at every zone threshold
     for (let i = 1; i < ZONES.length; i++) this.drawZoneGate(i, race);
@@ -509,6 +605,96 @@ export class Renderer {
     }
     const fy = this.sy(FORK_Y0 - 500);
     if (fy > -60 && fy < this.H + 60) this.sign(centre(FORK_Y0 - 500), fy, '← PICK A TUBE →', '#ff9be0');
+  }
+  // the inner edge of one wall (s = -1 left, 1 right) at world y, wobbling exactly like drawTube's outline
+  wallX(y, side, s) {
+    const ch = channel(y, side), t = this.time;
+    const wob = Math.sin(y / 60 + t * 2) * 3 + Math.sin(y / 23 - t * 3) * 1.2;
+    return ch.c + s * (ch.h + wob);
+  }
+  // per-zone wall dressing, drawn at alpha a (two calls blend across a zone gate)
+  drawWallStyle(race, id, a, wall) {
+    if (a <= 0.02) return;
+    const c = this.ctx, t = this.time, y0 = this.camY - 40, y1 = this.camY + this.H + 40, ps = race.p.side;
+    const sides = this.sides(race), red = this.reduced;
+    const ok = (side, y) => !(side && ps && side !== ps && y > FORK_END + 200);
+    const each = (step, off, fn) => {
+      for (const side of sides) for (let y = Math.ceil((y0 - off) / step) * step + off; y <= y1; y += step) { if (!ok(side, y)) break; fn(side, y, this.sy(y)); }
+    };
+    c.lineCap = 'round'; c.lineJoin = 'round'; c.globalAlpha = a;
+    if (id === 'launch') {         // muscle ribs every 36 px, squeezing on the beat
+      const bk = red ? 0 : clamp(+this.beat || 0, 0, 1), len = 9 + 3 * bk;
+      c.strokeStyle = 'rgba(150,20,70,0.55)'; c.lineWidth = 4; c.beginPath();
+      each(36, 0, (side, y, sy) => { for (const s of [-1, 1]) { const x = this.wallX(y, side, s); c.moveTo(x, sy - 3); c.quadraticCurveTo(x - s * len * 0.6, sy - 1, x - s * len, sy + 3); } });
+      c.stroke();
+      c.strokeStyle = 'rgba(255,190,215,0.5)'; c.lineWidth = 1.4; c.beginPath();
+      each(36, 0, (side, y, sy) => { for (const s of [-1, 1]) { const x = this.wallX(y, side, s); c.moveTo(x - s * 1, sy - 5); c.quadraticCurveTo(x - s * len * 0.6, sy - 3, x - s * (len - 1), sy + 1); } });
+      c.stroke();
+    } else if (id === 'acid') {    // pitted, corroded wall and a few green drips sliding down it
+      c.fillStyle = 'rgba(8,24,0,0.5)'; c.beginPath();
+      each(26, 0, (side, y, sy) => { for (const s of [-1, 1]) { const hv = h1(y * 0.37 + s * 3.3); if (hv < 0.35) continue; const r = 1.6 + hv * 2.6, x = this.wallX(y, side, s) - s * (4 + hv * 3); c.moveTo(x + r, sy); c.ellipse(x, sy, r, r * 0.7, 0, 0, TAU); } });
+      c.fill();
+      c.strokeStyle = 'rgba(200,255,120,0.35)'; c.lineWidth = 1; c.beginPath();
+      each(26, 0, (side, y, sy) => { for (const s of [-1, 1]) { const hv = h1(y * 0.37 + s * 3.3); if (hv < 0.35) continue; const r = 1.6 + hv * 2.6, x = this.wallX(y, side, s) - s * (4 + hv * 3); c.moveTo(x - r, sy + 0.8); c.ellipse(x, sy + 0.8, r, r * 0.7, 0, Math.PI, TAU); } });
+      c.stroke();
+      const n = 4, side0 = sides.length > 1 ? (ps || 1) : sides[0];
+      for (let i = 0; i < n; i++) {
+        const s = i % 2 ? 1 : -1, k = ((t * 0.18 + i / n + h1(i) * 0.2) % 1), sy = -20 + k * (this.H + 40);
+        const wy = this.camY + this.H - sy, x = this.wallX(wy, side0, s) - s * 5, al = Math.sin(k * Math.PI);
+        c.globalAlpha = a * al * 0.9;
+        c.strokeStyle = 'rgba(157,255,60,0.5)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x, sy - 26); c.lineTo(x, sy - 5); c.stroke();
+        c.fillStyle = '#9dff3c'; c.beginPath(); c.moveTo(x, sy - 7); c.quadraticCurveTo(x + 3.4, sy, x, sy + 3.2); c.quadraticCurveTo(x - 3.4, sy, x, sy - 7); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.7)'; c.fillRect(x - 1.2, sy - 2, 1, 1.6);
+      }
+    } else if (id === 'goo') {     // a lumpy, milky rim and a few strands sagging off it
+      c.strokeStyle = css(lerpC(wall, [255, 255, 255], 0.4), 0.55); c.lineWidth = 6;
+      for (const side of sides) for (const s of [-1, 1]) {
+        c.beginPath(); let first = true;
+        for (let y = Math.floor(y0 / 11) * 11; y <= y1; y += 11) { if (!ok(side, y)) break; const x = this.wallX(y, side, s) - s * (5 + Math.sin(y / 17) * 6), sy = this.sy(y); if (first) { c.moveTo(x, sy); first = false; } else c.lineTo(x, sy); }
+        c.stroke();
+      }
+      c.strokeStyle = css(lerpC(wall, [255, 255, 255], 0.5), 0.5); c.fillStyle = css(lerpC(wall, [255, 255, 255], 0.5), 0.6);
+      each(300, 0, (side, y, sy) => {
+        const s = h1(y * 0.011) < 0.5 ? -1 : 1, x1 = this.wallX(y, side, s), x2 = this.wallX(y + 90, side, s), sy2 = this.sy(y + 90);
+        const sag = 26 + (red ? 0 : Math.sin(t * 1.4 + y) * 6), mx = (x1 + x2) / 2 - s * sag, my = (sy + sy2) / 2 + 10;
+        c.lineWidth = 2.4; c.beginPath(); c.moveTo(x1, sy); c.quadraticCurveTo(mx, my + 14, x2, sy2); c.stroke();
+        const d = red ? 0.5 : (t * 0.5 + h1(y)) % 1; c.beginPath(); c.arc(mx * 0.5 + (x1 + x2) * 0.25, my + 6 + d * 10, 2 + d, 0, TAU); c.fill();
+      });
+    } else if (id === 'sea') {     // rugae: deep soft folds along the wall, shaded on the inside
+      for (const side of sides) for (const s of [-1, 1]) {
+        const ys = [];
+        for (let y = Math.floor(y0 / 14) * 14; y <= y1; y += 14) { if (!ok(side, y)) break; ys.push(y); }
+        if (ys.length < 2) continue;
+        c.beginPath();
+        for (let i = 0; i < ys.length; i++) { const y = ys[i], x = this.wallX(y, side, s); i ? c.lineTo(x, this.sy(y)) : c.moveTo(x, this.sy(y)); }
+        for (let i = ys.length - 1; i >= 0; i--) { const y = ys[i], d = 7 + 7 * Math.sin(y * TAU / 140); c.lineTo(this.wallX(y, side, s) - s * (4 + d), this.sy(y)); }
+        c.closePath(); c.fillStyle = 'rgba(70,0,12,0.32)'; c.fill();
+        c.strokeStyle = css(wall, 0.35); c.lineWidth = 2; c.beginPath();
+        for (let i = 0; i < ys.length; i++) { const y = ys[i], d = 7 + 7 * Math.sin(y * TAU / 140), x = this.wallX(y, side, s) - s * (4 + d); i ? c.lineTo(x, this.sy(y)) : c.moveTo(x, this.sy(y)); }
+        c.stroke();
+      }
+    } else if (id === 'fork') {    // a starry rim: twinkling sparkles along both walls
+      c.fillStyle = '#ffe6fa'; c.beginPath();
+      each(46, 0, (side, y, sy) => { for (const s of [-1, 1]) { const k = red ? 0.7 : 0.5 + 0.5 * Math.sin(t * 4 + y * 0.13 + s); if (k < 0.35) continue; star4p(c, this.wallX(y, side, s) - s * 4, sy, 1.8 + 4 * k); } });
+      c.fill();
+    } else if (id === 'rapids') {  // long combed cilia, raked downstream by the current and waving fast
+      c.strokeStyle = css(lerpC(wall, [255, 255, 255], 0.35), 0.5); c.lineWidth = 1.6; c.beginPath();
+      each(12, 0, (side, y, sy) => {
+        for (const s of [-1, 1]) {
+          const L = 18 + 8 * h1(y * 0.21 + s), x = this.wallX(y, side, s), w = red ? 0 : Math.sin(t * 14 + y * 0.09) * 5;
+          c.moveTo(x, sy); c.quadraticCurveTo(x - s * L * 0.55, sy + L * 0.25 + w * 0.4, x - s * L * 0.7, sy + L * 0.7 + w);
+        }
+      });
+      c.stroke();
+    } else if (id === 'egg') {     // a soft golden glow on the rim
+      c.strokeStyle = 'rgba(255,215,92,0.35)'; c.lineWidth = 24;
+      for (const side of sides) for (const s of [-1, 1]) {
+        c.beginPath(); let first = true;
+        for (let y = Math.floor(y0 / 22) * 22; y <= y1; y += 22) { if (!ok(side, y)) break; const x = this.wallX(y, side, s), sy = this.sy(y); if (first) { c.moveTo(x, sy); first = false; } else c.lineTo(x, sy); }
+        c.stroke();
+      }
+    }
+    c.globalAlpha = 1;
   }
   // two fleshy pillars and a sagging membrane in the new zone's wall colour; torn once you are through
   drawZoneGate(zi, race) {
@@ -613,7 +799,7 @@ export class Renderer {
       c.fillStyle = '#fff3c0';
       for (let i = 40; i < 40 + N(12); i++) { const k = 0.5 + 0.5 * Math.sin(t * 4 + i * 2); if (k < 0.3) continue; star4(c, X(i), pos(i, 0.95, 20), 2 + 4 * k); }
     } else if (id === 'acid') {
-      for (let i = 0; i < N(4); i++) this.dglow('#9dff3c', X(i) + Math.sin(t * 0.4 + i * 2) * 60, pos(i, 0.6, 0), 90, a * 0.12);
+      for (let i = 0; i < N(4); i++) this.dglow('#9dff3c', X(i) + Math.sin(t * 0.4 + i * 2) * 60, pos(i, 0.6, 0), 90, a * 0.2);
       const n1 = 4 + N(30);
       c.globalAlpha = a; c.strokeStyle = 'rgba(200,255,140,0.45)'; c.lineWidth = 1.2; c.beginPath();
       for (let i = 4; i < n1; i++) { const x = X(i) + Math.sin(t * 2 + i) * 5, y = pos(i, 1, -40 - h1(i) * 50), r = 1.5 + h1(i + 0.7) * 4.5; c.moveTo(x + r, y); c.arc(x, y, r, 0, TAU); }
@@ -622,19 +808,19 @@ export class Renderer {
       for (let i = 4; i < n1; i++) { const x = X(i) + Math.sin(t * 2 + i) * 5, y = pos(i, 1, -40 - h1(i) * 50), r = 1.5 + h1(i + 0.7) * 4.5; c.moveTo(x - r * 0.3, y - r * 0.35); c.arc(x - r * 0.35, y - r * 0.35, r * 0.3, 0, TAU); }
       c.fill();
     } else if (id === 'goo') {
-      c.strokeStyle = 'rgba(230,200,255,0.18)'; c.lineCap = 'round';
+      c.strokeStyle = 'rgba(236,241,255,0.24)'; c.lineCap = 'round';
       for (let i = 0; i < N(9); i++) {
         const x1 = X(i) - 60, x2 = x1 + 80 + h1(i + 2) * 140, y = pos(i, 0.9, 0), sag = 18 + 14 * Math.sin(t * 1.5 + i);
         c.lineWidth = 2 + h1(i + 5) * 3; c.beginPath(); c.moveTo(x1, y); c.quadraticCurveTo((x1 + x2) / 2, y + sag * 2, x2, y + h1(i + 9) * 20 - 10); c.stroke();
-        c.fillStyle = 'rgba(230,200,255,0.25)'; c.beginPath(); c.arc((x1 + x2) / 2, y + sag + 3 + (t * 20 + i * 9) % 14, 2.2, 0, TAU); c.fill();
+        c.fillStyle = 'rgba(242,246,255,0.32)'; c.beginPath(); c.arc((x1 + x2) / 2, y + sag + 3 + (t * 20 + i * 9) % 14, 2.2, 0, TAU); c.fill();
       }
-      for (let i = 9; i < 9 + N(6); i++) this.dglow('#c79bff', X(i), pos(i, 0.8, 0), 30 + h1(i) * 20, a * 0.18);
+      for (let i = 9; i < 9 + N(6); i++) this.dglow('#dfe6ff', X(i), pos(i, 0.8, 0), 30 + h1(i) * 20, a * 0.18);
     } else if (id === 'sea') {
       // slow swell bands, then one or two huge translucent cell clusters drifting far below
       c.lineCap = 'round'; c.lineWidth = 26;
       for (let i = 0; i < (this.lite ? 2 : 4); i++) {
         const y = pos(i + 200, 0.7, 8), ph = t * 0.5 + i * 1.7;
-        c.strokeStyle = `rgba(255,120,150,${0.05 * a})`; c.beginPath(); c.moveTo(-20, y);
+        c.strokeStyle = `rgba(255,120,150,${(0.12 * a).toFixed(3)})`; c.beginPath(); c.moveTo(-20, y);
         c.bezierCurveTo(VIEW_W * 0.3, y + Math.sin(ph) * 26, VIEW_W * 0.7, y - Math.sin(ph) * 26, VIEW_W + 20, y + Math.sin(ph + 1) * 10); c.stroke();
       }
       const LT = this.H * 3;
@@ -645,8 +831,8 @@ export class Renderer {
         for (let k = 0; k < 6; k++) {
           const an = k * 1.05 + sp, rr = k ? 46 + 10 * h1(k + j) : 0, r = 34 + 14 * h1(k * 3 + j);
           const cx = lx + Math.cos(an) * rr, cy = ly + Math.sin(an) * rr * 0.8;
-          c.fillStyle = `rgba(255,140,165,${0.07 * a})`; c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
-          c.strokeStyle = `rgba(255,190,205,${0.12 * a})`; c.lineWidth = 2; c.stroke();
+          c.fillStyle = `rgba(255,140,165,${(0.15 * a).toFixed(3)})`; c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+          c.strokeStyle = `rgba(255,190,205,${(0.22 * a).toFixed(3)})`; c.lineWidth = 2; c.stroke();
           c.fillStyle = `rgba(140,20,50,${0.1 * a})`; c.beginPath(); c.arc(cx + r * 0.15, cy, r * 0.3, 0, TAU); c.fill();
         }
       }
@@ -696,6 +882,8 @@ export class Renderer {
   drawEnts(race, dt) {
     const c = this.ctx, top = this.camY + this.H + 80, bot = this.camY - 80, t = this.time, p = race.p;
     for (const e of race.ents) {
+      // a paid near miss (brushed it, never touched it) makes Kevin flinch, then grin
+      if (e.paid && !this.paidSeen.has(e)) { this.paidSeen.add(e); if (e.near && !e.touched && !e.hit && !race.demo) this.nearMiss(); }
       if (e.dead || e.y > top + e.r || e.y < bot - (e.h || 0) - e.r) continue;
       const x = e.x, y = this.sy(e.y);
       switch (e.t) {
@@ -732,7 +920,8 @@ export class Renderer {
           c.fillStyle = 'rgba(92,200,255,0.3)'; c.strokeStyle = '#9ae2ff'; c.lineWidth = 2;
           c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.stroke();
           c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.arc(x - r * 0.4, y - r * 0.4, 2.2, 0, TAU); c.fill();
-          c.fillStyle = '#e6f8ff'; c.font = `800 10px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('pH', x, y + 1);
+          c.font = `800 13px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+          c.lineWidth = 3; c.strokeStyle = 'rgba(10,30,60,0.85)'; c.strokeText('pH', x, y + 1); c.fillStyle = '#e6f8ff'; c.fillText('pH', x, y + 1);
           break; }
         case 'acid': case 'goo': {
           const acid = e.t === 'acid', col = acid ? '#9dff3c' : '#c79bff', seed = e.seed || 0;
@@ -754,6 +943,7 @@ export class Renderer {
           if (!acid) { c.strokeStyle = 'rgba(230,200,255,0.4)'; c.lineWidth = 1.5; c.beginPath(); for (let i = 0; i < 3; i++) { const xx = x + (i - 1) * e.r * 0.4, l = 8 + 6 * Math.sin(t * 2 + i + seed); c.moveTo(xx, y + e.r * 0.65); c.lineTo(xx, y + e.r * 0.65 + l); } c.stroke(); }
           break; }
         case 'gate': this.drawGate(e, y, t); break;
+        case 'cilia': this.drawCilia(e, y, t); break;
         case 'wbc': this.drawWbc(e, x, y, t, p, dt); break;
         case 'current': {
           const y1 = this.sy(e.y + e.h);
@@ -768,6 +958,46 @@ export class Renderer {
           }
           break; }
       }
+    }
+  }
+  // Tube Rapids cilia: a fat hair on one wall that swats you aside on the beat.
+  // state 0 idles and sways, 1 trembles and glows white (the tell), 2 snaps right across its reach.
+  drawCilia(e, y, t) {
+    const c = this.ctx, s = -(e.wall || -1), bx = e.x, st = e.state | 0, per = e.period || 2, ph = (e.phase || 0) * per, R = e.r;
+    const red = this.reduced, wc = this.wallC;
+    // its reach: a translucent band so you can see how far it swats
+    const bandA = st === 0 ? 0.1 : st === 1 ? 0.14 + 0.1 * clamp((ph - (per - 0.8)) / 0.45, 0, 1) : 0.26;
+    c.fillStyle = css(st === 2 ? [255, 255, 255] : wc, bandA); this.rrect(s > 0 ? bx : bx - R, y - 13, R, 26, 12); c.fill();
+    // pose: angle from the wall (0 = straight across, + = combed downstream), length, sway
+    const pose = (ang, len, sway) => ({ ang, len, sway, tx: bx + s * len * Math.cos(ang), ty: y + len * Math.sin(ang) + sway });
+    let P, white = 0, ghosts = null;
+    if (st === 0) P = pose(0.55, R * 0.55, Math.sin((e.phase || 0) * TAU) * 8);
+    else if (st === 1) { white = clamp((ph - (per - 0.8)) / 0.45, 0, 1); P = pose(0.62 + 0.08 * white, R * (0.55 - 0.05 * white), red ? 0 : Math.sin(t * 30 * TAU) * 4); }
+    else {
+      const k = clamp((ph - (per - 0.35)) / 0.35, 0, 1), sn = 1 - Math.pow(1 - Math.min(1, k / 0.22), 3), back = k > 0.7 ? (k - 0.7) / 0.3 : 0;
+      const f = sn * (1 - back);
+      P = pose(0.62 * (1 - f), R * (0.55 + 0.45 * f), 0); white = 1 - back;
+      if (!red && k < 0.7) ghosts = [pose(0.62 * (1 - f * 0.45), R * (0.55 + 0.45 * f * 0.45), 0), pose(0.62 * (1 - f * 0.75), R * (0.55 + 0.45 * f * 0.75), 0)];
+    }
+    const col = css(lerpC(wc, [255, 255, 255], white * 0.85));
+    const hair = (q, al) => {
+      const cx = bx + s * q.len * 0.45 * Math.cos(q.ang * 0.4), cy = y + q.len * 0.45 * Math.sin(q.ang * 0.4) + q.sway * 0.3;
+      let px = bx, py = y; c.globalAlpha = al;
+      for (let i = 1; i <= 4; i++) {
+        const u = i / 4, v = 1 - u, nx = v * v * bx + 2 * v * u * cx + u * u * q.tx, ny = v * v * y + 2 * v * u * cy + u * u * q.ty;
+        c.lineWidth = 10 - 6 * (i - 0.5) / 4; c.beginPath(); c.moveTo(px, py); c.lineTo(nx, ny); c.stroke(); px = nx; py = ny;
+      }
+    };
+    c.lineCap = 'round'; c.strokeStyle = col;
+    if (ghosts) { hair(ghosts[1], 0.16); hair(ghosts[0], 0.3); }
+    if (white > 0.05) this.dglow('#ffffff', P.tx, P.ty, 14 + 10 * white, 0.55 * white);
+    c.strokeStyle = col; hair(P, 1); c.globalAlpha = 1;
+    // a glossy highlight and a root bulb on the wall
+    c.strokeStyle = 'rgba(255,255,255,0.45)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(bx + s * 4, y - 3); c.quadraticCurveTo(bx + s * P.len * 0.4, y - 3 + P.len * 0.18 * Math.sin(P.ang), P.tx - s * 4, P.ty - 2); c.stroke();
+    c.fillStyle = css(wc); c.beginPath(); c.ellipse(bx, y, 6, 9, 0, 0, TAU); c.fill();
+    if (st === 1) {   // the tell: a little "!" at the tip
+      const b = this.text('!', '#ffffff', 14);
+      c.drawImage(b.cv, P.tx - b.w / 2, P.ty - 16 - b.h / 2, b.w, b.h);
     }
   }
   // goo walls with gaps (the 'gate' hazard)
@@ -904,6 +1134,7 @@ export class Renderer {
   eggSky(n) {
     const c = this.ctx, t = this.time;
     this.dglow('#ffd77a', VIEW_W / 2, -60, 240 + 220 * n, 0.5 * n);
+    if (this.lite) return;   // lite: the glow alone, no shafts
     c.save(); c.translate(VIEW_W / 2, -90); c.fillStyle = `rgba(255,232,160,${0.05 * n})`;
     for (let i = 0; i < 6; i++) {
       const a = (i - 2.5) * 0.24 + (this.reduced ? 0 : Math.sin(t * 0.25 + i * 1.3) * 0.05);
@@ -923,6 +1154,10 @@ export class Renderer {
     if (y < -900 || y > this.H + 500) return;
     const near = clamp(1 - (RACE_LEN - race.p.y) / 2500, 0, 1);
     const win = over && over.reason === 'win', late = over && over.reason === 'late';
+    // the ending plays out over 1.2 s (reduced motion: straight to the final poses)
+    if (over !== this.overSeen) { this.overSeen = over; this.winT = 0; this.shardsDone = false; }
+    if (over) this.winT = this.reduced ? 1.2 : Math.min(1.2, this.winT + dt);
+    const wk = clamp(this.winT / 1.2, 0, 1), we = wk * wk * (3 - 2 * wk);
     const jig = this.eggJig, sx = 1 + Math.sin(t * 28) * 0.025 * jig + Math.sin(t * 2) * 0.01, sy2 = 2 - sx;
     // the duel: arrived named rivals spread round the lower arc, each with its own drill ring
     let leadB = null, leadF = 0;
@@ -931,7 +1166,7 @@ export class Renderer {
       for (const a of race.agents) {
         if (!a.alive || !a.arrived || !a.boss) continue;
         const s = k % 2 ? -1 : 1, an = Math.PI / 2 + s * (0.35 + 0.3 * k);
-        this.duel.set(a, { x: x + Math.cos(an) * (R + 34), y: y + Math.sin(an) * (R + 34), ang: an - Math.PI / 2, ring: R + 50 + 10 * k });
+        this.duel.set(a, { x: x + Math.cos(an) * (R + 34), y: y + Math.sin(an) * (R + 34), ang: an - Math.PI / 2, an, ring: R + 50 + 10 * k });
         const f = d ? a.drill / d.need : 0; if (f > leadF) { leadF = f; leadB = a; }
         if (++k >= 5) break;
       }
@@ -939,7 +1174,7 @@ export class Renderer {
     // halo + god rays (static when reduced)
     this.dglow('#ffd77a', x, y, R * 2.3, 0.55 + (this.reduced ? 0 : 0.1 * Math.sin(t * 2)));
     c.save(); c.translate(x, y); c.rotate(this.reduced ? 0 : t * 0.08); c.fillStyle = 'rgba(255,235,160,0.08)';
-    for (let i = 0; i < 12; i++) { c.rotate(TAU / 12); c.beginPath(); c.moveTo(0, 0); c.lineTo(R * 2.6, -26); c.lineTo(R * 2.6, 26); c.closePath(); c.fill(); }
+    for (let i = 0; i < (this.lite ? 0 : 12); i++) { c.rotate(TAU / 12); c.beginPath(); c.moveTo(0, 0); c.lineTo(R * 2.6, -26); c.lineTo(R * 2.6, 26); c.closePath(); c.fill(); }
     c.restore();
     // corona radiata: a fluffy cloud of helper cells
     c.fillStyle = 'rgba(255,225,160,0.75)'; c.beginPath();
@@ -962,8 +1197,12 @@ export class Renderer {
       let w = race.eggTaken || null;
       if (!w) for (const a of race.agents) if (a.alive && a.arrived && (!w || a.drill > w.drill)) w = a;
       if (w) {
-        const L = w.boss ? (BOSS_LOOK[w.boss.name.split(' ')[0]] || {}) : null, f = (w.face || 0) % 6;
-        this.drawSwimmer(0, 96, Math.sin(t * 2) * 0.15, 1.7, w.boss ? w.boss.col : CROWD[f], t * 12, { acc: L ? L.acc : FACE_ACC[f], cap: L ? L.cap : CAPS[Math.floor((w.ph || 0) * 10) % CAPS.length], band: L && L.band, mouth: 'huge', happy: 1, blush: 1, taper: 1 });
+        const L = w.boss ? (BOSS_LOOK[w.boss.name.split(' ')[0]] || {}) : null, f = (w.face || 0) % 6, q = this.duel.get(w);
+        // steal: the winner eases in from its drilling spot, swelling 1.3 -> 1.7 with a squash
+        const lx0 = q ? (q.x - x) / sx : 0, ly0 = q ? (q.y - y) / sy2 : 96, lx = lx0 + (0 - lx0) * we, ly = ly0 + (96 - ly0) * we;
+        const sq = Math.sin(wk * Math.PI) * 0.18, done = wk >= 1;
+        this.drawSwimmer(lx, ly, done ? Math.sin(t * 2) * 0.15 : (q ? q.ang : 0) * (1 - we), 1.3 + 0.4 * we, w.boss ? w.boss.col : CROWD[f], t * 12,
+          { acc: L ? L.acc : FACE_ACC[f], cap: L ? L.cap : CAPS[Math.floor((w.ph || 0) * 10) % CAPS.length], band: L && L.band, mouth: done ? 'huge' : 'grin', happy: done ? 1 : 0, blush: 1, taper: 1, sx: 1 + sq, sy: 1 - sq, crown: done && w.boss ? 1 : 0 });
       }
     }
     // the face. Sleepy far away, wide awake when you arrive, giggly when drilled.
@@ -999,6 +1238,24 @@ export class Renderer {
     c.fillStyle = `rgba(255,110,140,${0.4 + 0.3 * (near + jig)})`;
     for (const s of [-1, 1]) { c.beginPath(); c.ellipse(s * 78, 32, 16, 9, 0, 0, TAU); c.fill(); }
     c.restore();
+    // the seal: a gold ring (the winner's colour on a steal) swells off the membrane; the rivals' drill rings shatter
+    if ((win || late) && wk < 1) {
+      const sc = late && race.eggTaken && race.eggTaken.boss ? race.eggTaken.boss.col : '#ffd75c';
+      c.globalAlpha = 1 - we; c.strokeStyle = sc; c.lineWidth = 8 * (1 - we) + 1.5;
+      c.beginPath(); c.arc(x, y, R + R * 1.6 * we, 0, TAU); c.stroke();
+      if (win) { c.strokeStyle = '#ff5cd2'; c.lineWidth = 4 * (1 - we) + 1; c.beginPath(); c.arc(x, y, R + R * 1.2 * we, 0, TAU); c.stroke(); }
+      c.globalAlpha = 1;
+    }
+    if ((win || late) && !this.shardsDone && d) {
+      this.shardsDone = true;
+      for (const [a, q] of this.duel) {
+        if (late && a === race.eggTaken) continue;
+        for (let i = 0; i < 8; i++) {
+          const an = i / 8 * TAU + Math.random() * 0.3, px = x + Math.cos(an) * q.ring, py = y + Math.sin(an) * q.ring, v = 120 + Math.random() * 120;
+          this.addP(5, px, this.camY + this.H - py, Math.cos(an) * v, -Math.sin(an) * v, 0.7, a.boss.col, 6 + Math.random() * 3, 0, an + Math.PI / 2, (Math.random() - 0.5) * 14);
+        }
+      }
+    }
     // Zzz while she naps
     if (!awake) {
       c.fillStyle = 'rgba(255,240,200,0.85)'; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1011,6 +1268,7 @@ export class Renderer {
       c.strokeStyle = '#5ce1ff'; c.lineWidth = 8; c.beginPath(); c.arc(x, y, R + 38, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, d.me / d.need)); c.stroke();
       let outer = R + 50;
       for (const [a, q] of this.duel) {
+        if (win || late) continue;    // shattered
         const f = Math.min(1, a.drill / d.need), end = -Math.PI / 2 + TAU * f;
         c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 5; c.beginPath(); c.arc(x, y, q.ring, 0, TAU); c.stroke();
         c.strokeStyle = a.boss.col; c.lineWidth = 4; c.beginPath(); c.arc(x, y, q.ring, -Math.PI / 2, end); c.stroke();
@@ -1032,12 +1290,13 @@ export class Renderer {
     }
   }
   // a tapered tail in local space (pointing down): thick near the head, whip-thin at the tip (3 strokes)
-  taperTail(c, len, amp, ph, w) {
+  // curl: the tail lags a turn (follow-through), bending the tip sideways by curl * len at the very end
+  taperTail(c, len, amp, ph, w, curl = 0) {
     let px = 0, py = 8;
     for (let s = 0; s < 3; s++) {
       const i0 = s * 3 + 1, i1 = Math.min(8, i0 + 2), km = ((i0 + i1) / 2) / 8;
       c.lineWidth = w * (1.15 - km * 0.85); c.beginPath(); c.moveTo(px, py);
-      for (let i = i0; i <= i1; i++) { const k = i / 8; px = Math.sin(ph - k * 5.5) * amp * k; py = 8 + len * k; c.lineTo(px, py); }
+      for (let i = i0; i <= i1; i++) { const k = i / 8; px = Math.sin(ph - k * 5.5) * amp * k + curl * k * k * len; py = 8 + len * k; c.lineTo(px, py); }
       c.stroke();
     }
   }
@@ -1113,23 +1372,61 @@ export class Renderer {
       for (const a of close) if (Math.max(a.bumpT || 0, a._bt) > 0) { const x = a._rx, y = this.sy(a.y + a._oy); for (let i = 0; i < 2; i++) { const an = t * 8 + i * Math.PI; star4(c, x + Math.cos(an) * 10, y - 13 + Math.sin(an) * 3, 2.6); } }
     }
     // the named rivals, each with a signature swim
-    const o = this.scr;
+    const o = this.scr, ov = race.over, red = this.reduced;
+    const win = !!(ov && ov.reason === 'win'), late = !!(ov && ov.reason === 'late');
+    const wk = clamp(this.winT / 1.2, 0, 1), wo = 1 - (1 - wk) * (1 - wk);
     for (const a of vis) if (a.boss) {
       const nm = a.boss.name, L = BOSS_LOOK[nm.split(' ')[0]] || {}, dq = this.duel.get(a);
+      if (dq && late && a === race.eggTaken) continue;   // it is inside the egg now (drawEgg draws it)
       let x = a._rx, y = this.sy(a.y + a._oy), ang = L.straight ? 0 : a._hd, sx = L.wide || 1, sy = 1;
       if (dq) { x = dq.x; y = dq.y; ang = dq.ang; }
-      const cyc = t + a.ph * 3, ph = t * (L.freq || 15) + a.ph, bt = Math.max(a.bumpT || 0, a._bt), pt = Math.max(a.passT || 0, a._pt);
+      // story beats: gloating right after passing you, a red-faced sprint for the egg, straining at the membrane
+      const gloat = !dq && a.tauntT > 2.8, sprint = !dq && !a.arrived && !!a.sprint;
+      let strain = 0, shv = 0, knocked = 0;
+      const cyc = gloat ? 4 - a.tauntT : t + a.ph * 3, ph = t * (L.freq || 15) * (sprint ? 1.6 : 1) + a.ph, bt = Math.max(a.bumpT || 0, a._bt), pt = Math.max(a.passT || 0, a._pt);
+      if (dq) {
+        const prev = a._dl == null ? a.drill : a._dl;
+        if (a.drill < prev - 1e-4) a._shv = 0.5;                       // Kevin's shove knocked it back
+        a._dr = (a._dr || 0) + (Math.max(0, a.drill - prev) / Math.max(dt, 1e-3) - (a._dr || 0)) * Math.min(1, dt * 6);
+        a._dl = a.drill; a._shv = Math.max(0, (a._shv || 0) - dt); shv = a._shv;
+        const ca = Math.cos(dq.an), sa = Math.sin(dq.an);
+        if ((win || late) && ov) {            // knocked off the egg, spinning
+          knocked = 1; const kb = 60 * wo; x += ca * kb; y += sa * kb; ang += wo * TAU * (a.ph > 0.5 ? 1.3 : -1.3);
+        } else if (!ov) {
+          const rate = clamp((a._dr || 0) / 1, 0, 1.5), hb = Math.abs(Math.sin(t * 14 + a.ph * 5));
+          strain = rate;
+          const jab = red ? 0 : 5 * hb * rate; x -= ca * jab; y -= sa * jab;
+          if (hb > 0.85 && rate > 0.2 && !red) { sy *= 0.86; sx *= 1.08; }   // squash on contact
+          if (shv > 0) { const u = 1 - shv / 0.5, off = 15 * Math.exp(-5 * u) * Math.sin(18 * u); x += ca * off; y += sa * off; }
+          a._swt = (a._swt || 0) - dt;
+          if (rate > 0.2 && a._swt <= 0) {
+            a._swt = 0.3; const sgn = Math.random() < 0.5 ? -1 : 1;
+            this.addP(3, x + sgn * 10, this.camY + this.H - y + 12, sgn * (30 + Math.random() * 30), 30 + Math.random() * 30, 0.55, '#9ae2ff', 2.2, 220);
+          }
+        }
+      }
+      if (gloat) { const dx = clamp((p.x - x) / 120, -0.45, 0.45); ang += dx; }
+      if (sprint) {
+        a._stm = (a._stm || 0) - dt;
+        if (a._stm <= 0) { a._stm = 0.15; this.addP(0, x + (Math.random() - 0.5) * 8, a.y + a._oy + 12, (Math.random() - 0.5) * 24, 30 + Math.random() * 20, 0.5, '#f4eeff', 2 + Math.random() * 1.5); }
+      }
       if (L.strut && !dq) { ang += Math.sin(t * 3 + a.ph) * 0.22; x += Math.sin(t * 3 + a.ph) * 3; }
       if (L.roll && cyc % L.roll < 0.5) { const r = Math.cos((cyc % L.roll) / 0.5 * TAU); sx *= Math.abs(r) < 0.08 ? (r < 0 ? -0.08 : 0.08) : r; }
       let flexK = 0; if (L.flex && cyc % L.flex < 0.6) { flexK = Math.sin((cyc % L.flex) / 0.6 * Math.PI); sx *= 1 + 0.12 * flexK; sy *= 1 + 0.08 * flexK; }
       if (a._bt > 0) { const e = 0.8 - a._bt, q = 1 - 0.25 * Math.cos(e * 22) * Math.exp(-e * 7); sy *= q; sx *= 1 + (1 - q) * 0.8; }
       const passed = pt > 0 || (a.y < p.y && p.y - a.y < 90);
       this.dglow(a.boss.col, x, y, 30, 0.35);
+      let bodyCol = a.boss.col;
+      if (sprint) { if (a._scK !== a.boss.col) { a._scK = a.boss.col; a._sc = css(lerpC(rgb(a.boss.col), SPRINT_COL, 0.25)); } bodyCol = a._sc; }
       o.name = nm; o.acc = L.acc; o.cap = L.cap; o.band = L.band; o.taper = 1; o.amp = L.amp; o.tw = L.tw; o.sx = sx; o.sy = sy; o.bob = L.strut ? Math.sin(t * 6 + a.ph) * 1.2 : 0;
-      o.look = clamp((p.x - x) / 50, -1.2, 1.2); o.dizzy = bt > 0 ? 1 : 0; o.shock = pt > 0 ? 1 : 0;
+      o.look = clamp((p.x - x) / 50, -1.2, 1.2); o.dizzy = bt > 0 || shv > 0.15 || knocked ? 1 : 0; o.shock = pt > 0 ? 1 : 0;
       o.mouth = bt > 0 ? 'wobble' : passed ? 'scared' : L.mouth; o.brow = bt > 0 ? undefined : passed ? 'worried' : L.brow;
-      o.blink = ((t + a.ph) % 2.9) < 0.12; o.happy = 0; o.blush = 0; o.star = undefined; o.tired = 0; o.flash = 0; o.stretch = 1; o.tail = undefined; o.flap = 1; o.crown = 0;
-      this.drawSwimmer(x, y, ang, 1.3, a.boss.col, ph, o);
+      o.blink = ((t + a.ph) % 2.9) < 0.12; o.happy = 0; o.blush = 0; o.star = undefined; o.tired = 0; o.flash = 0; o.stretch = 1; o.tail = undefined; o.flap = 1; o.crown = 0; o.wink = 0;
+      if (o.dizzy) o.mouth = 'wobble';
+      else if (gloat) { o.mouth = 'grin'; o.brow = 'angry'; o.wink = 1; o.look = p.x > x ? 1.2 : -1.2; o.blink = false; }
+      else if (strain > 0.2) { o.mouth = 'grit'; o.brow = 'angry'; o.tired = 1; }
+      else if (sprint) { o.mouth = 'pant'; o.brow = 'angry'; o.flap = 2; }
+      this.drawSwimmer(x, y, ang, 1.3, bodyCol, ph, o);
       if (bt > 0) { c.fillStyle = '#ffd75c'; for (let i = 0; i < 2; i++) { const an = t * 8 + i * Math.PI; star4(c, x + Math.cos(an) * 13, y - 17 + Math.sin(an) * 4, 3.2); } }
       if (L.wave && cyc % L.wave < 0.9 && !bt) {   // Steve waves at you. Steve waves at everybody.
         const k = (cyc % L.wave) / 0.9;
@@ -1178,14 +1475,15 @@ export class Renderer {
     c.save(); c.translate(x, y); c.rotate(ang); c.scale(sc * (o.sx || 1), sc * (o.sy || 1));
     // tail
     c.strokeStyle = o.tail || 'rgba(255,255,255,0.92)'; c.lineCap = 'round'; c.lineJoin = 'round';
-    if (o.taper) this.taperTail(c, 34 * (0.8 + 0.2 * st), o.amp || 6, ph, o.tw || 3.4);
+    if (o.taper) this.taperTail(c, 34 * (0.8 + 0.2 * st) * (o.tlen || 1), o.amp || 6, ph, o.tw || 3.4, o.curl || 0);
     else { c.lineWidth = 2.2; c.beginPath(); this.tail(c, 0, 8, 0, 32, o.amp || 6, ph); c.stroke(); }
+    if (o.yaw) c.rotate(-Math.sin(ph) * 0.06);   // the head counter-yaws against the tail beat
     c.scale(1 / Math.sqrt(st), st);
     this.head(c, col, ph, o);
     c.restore();
     if (o.name) {
-      c.font = `800 10px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      const ny = y - 21 * sc - (o.acc && o.acc.includes('crown') ? 6 : 0);
+      c.font = `800 13px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+      const ny = y - 23 * sc - (o.acc && o.acc.includes('crown') ? 6 : 0);
       c.lineWidth = 3; c.strokeStyle = 'rgba(20,0,20,0.75)'; c.strokeText(o.name, x, ny); c.fillStyle = col; c.fillText(o.name, x, ny);
     }
   }
@@ -1199,13 +1497,17 @@ export class Renderer {
     c.fillStyle = 'rgba(255,255,255,0.6)'; c.beginPath(); c.ellipse(-2.6, -4.5, 2.4, 3.4, -0.4, 0, TAU); c.fill();
     if (o.flash > 0) { c.fillStyle = `rgba(255,255,255,${Math.min(1, o.flash)})`; c.beginPath(); c.ellipse(0, 0, 7.8, 10.3, 0, 0, TAU); c.fill(); }
     const acc = o.acc || [];
-    if (acc.includes('mohawk')) { c.fillStyle = '#ff3d6e'; c.beginPath(); for (let i = -2; i <= 2; i++) { c.moveTo(i * 2.2 - 1.6, -8.5); c.lineTo(i * 2.2, -14 - (2 - Math.abs(i)) * 1.5 + Math.sin(ph * 0.5 + i) * 0.6); c.lineTo(i * 2.2 + 1.6, -8.5); } c.fill(); }
+    // a freshly earned piece scales in (o.accNew, o.accK) around its own anchor
+    const grow = (nm, ax, ay) => { if (o.accNew !== nm || !(o.accK < 0.999)) return false; const k = Math.max(0.01, o.accK); c.save(); c.translate(ax, ay); c.scale(k, k); c.translate(-ax, -ay); return true; };
+    let gr = false;
+    if (acc.includes('mohawk')) { gr = grow('mohawk', 0, -9); c.fillStyle = '#ff3d6e'; c.beginPath(); for (let i = -2; i <= 2; i++) { c.moveTo(i * 2.2 - 1.6, -8.5); c.lineTo(i * 2.2, -14 - (2 - Math.abs(i)) * 1.5 + Math.sin(ph * 0.5 + i) * 0.6); c.lineTo(i * 2.2 + 1.6, -8.5); } c.fill(); if (gr) c.restore(); }
     if (o.blush) { c.fillStyle = 'rgba(255,90,130,0.45)'; c.beginPath(); c.ellipse(-4.6, 1.4, 1.8, 1.1, 0, 0, TAU); c.ellipse(4.6, 1.4, 1.8, 1.1, 0, 0, TAU); c.fill(); }
     // eyes
     const look = o.look || 0, ink = '#1a0a1a', er = o.shock ? 3.4 : 2.9;
     for (const sx of [-1, 1]) {
       const ex = sx * 3.2, ey = -2.5;
       if (o.dizzy) { c.strokeStyle = ink; c.lineWidth = 1.1; c.beginPath(); c.arc(ex, ey, 2, ph * 0.4, ph * 0.4 + 4.5); c.stroke(); c.beginPath(); c.arc(ex, ey, 0.8, 0, TAU); c.stroke(); continue; }
+      if (o.wink && sx === 1) { c.strokeStyle = ink; c.lineWidth = 1.3; c.beginPath(); c.arc(ex, ey + 0.8, 2.1, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); continue; }
       if (o.blink || o.happy) { c.strokeStyle = ink; c.lineWidth = 1.1; c.beginPath(); if (o.happy) c.arc(ex, ey + 0.6, 2, Math.PI * 1.1, Math.PI * 1.9); else { c.moveTo(ex - 2.4, ey); c.lineTo(ex + 2.4, ey); } c.stroke(); continue; }
       c.fillStyle = '#fff'; c.beginPath(); c.arc(ex, ey, er, 0, TAU); c.fill();
       if (o.star) { c.fillStyle = o.star; star4(c, ex + look * 0.6, ey - 0.4, 2.4); }
@@ -1221,10 +1523,10 @@ export class Renderer {
       for (const sx of [-1, 1]) { const inY = o.brow === 'angry' ? -5.2 : -7, outY = o.brow === 'angry' ? -6.8 : -5.6; c.moveTo(sx * 1.2, inY); c.lineTo(sx * 5, outY); }
       c.stroke();
     }
-    if (acc.includes('glasses')) { c.strokeStyle = '#3a2a50'; c.lineWidth = 0.9; c.beginPath(); c.arc(-3.2, -2.5, 3.3, 0, TAU); c.moveTo(6.5, -2.5); c.arc(3.2, -2.5, 3.3, 0, TAU); c.moveTo(-0.1, -2.7); c.lineTo(0.1, -2.7); c.stroke(); }
+    if (acc.includes('glasses')) { gr = grow('glasses', 0, -2.5); c.strokeStyle = '#3a2a50'; c.lineWidth = 0.9; c.beginPath(); c.arc(-3.2, -2.5, 3.3, 0, TAU); c.moveTo(6.5, -2.5); c.arc(3.2, -2.5, 3.3, 0, TAU); c.moveTo(-0.1, -2.7); c.lineTo(0.1, -2.7); c.stroke(); if (gr) c.restore(); }
     if (acc.includes('shades')) {
-      c.fillStyle = '#141420'; c.beginPath(); c.moveTo(-7, -4.6); c.lineTo(7, -4.6); c.lineTo(6.2, -1.2); c.quadraticCurveTo(3.6, 0.6, 1, -1.6); c.lineTo(-1, -1.6); c.quadraticCurveTo(-3.6, 0.6, -6.2, -1.2); c.closePath(); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(-5.4, -4, 2, 0.9); c.fillRect(2, -4, 2, 0.9);
+      gr = grow('shades', 0, -3); c.fillStyle = '#141420'; c.beginPath(); c.moveTo(-7, -4.6); c.lineTo(7, -4.6); c.lineTo(6.2, -1.2); c.quadraticCurveTo(3.6, 0.6, 1, -1.6); c.lineTo(-1, -1.6); c.quadraticCurveTo(-3.6, 0.6, -6.2, -1.2); c.closePath(); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(-5.4, -4, 2, 0.9); c.fillRect(2, -4, 2, 0.9); if (gr) c.restore();
     }
     // mouth
     const m = o.mouth;
@@ -1233,13 +1535,14 @@ export class Renderer {
     else if (m === 'huge') { c.beginPath(); c.arc(0, 2, 4.4, 0, Math.PI); c.closePath(); c.fill(); c.fillStyle = '#ff7a9a'; c.beginPath(); c.ellipse(0, 4.8, 2.2, 1.2, 0, 0, TAU); c.fill(); }
     else if (m === 'scared') { c.beginPath(); c.ellipse(0, 4, 2, o.shock ? 3 : 2.6, 0, 0, TAU); c.fill(); }
     else if (m === 'pant') { c.beginPath(); c.ellipse(0, 4.2, 2.4, 1.6 + 0.8 * Math.abs(Math.sin(ph * 0.3)), 0, 0, TAU); c.fill(); c.fillStyle = '#ff7a9a'; c.beginPath(); c.ellipse(0.6, 5.8, 1.4, 1.4, 0, 0, TAU); c.fill(); }
+    else if (m === 'grit') { c.fillStyle = '#fff'; c.beginPath(); c.ellipse(0, 4, 3.2, 1.6, 0, 0, TAU); c.fill(); c.stroke(); c.beginPath(); c.moveTo(-3, 4); c.lineTo(3, 4); c.moveTo(-1, 2.6); c.lineTo(-1, 5.4); c.moveTo(1, 2.6); c.lineTo(1, 5.4); c.lineWidth = 0.6; c.stroke(); }
     else if (m === 'smirk') { c.beginPath(); c.moveTo(-2.4, 4.2); c.quadraticCurveTo(0.5, 5, 3, 2.8); c.stroke(); }
     else if (m === 'wobble') { c.beginPath(); c.moveTo(-3, 4); for (let i = 1; i <= 6; i++) c.lineTo(-3 + i, 4 + (i % 2 ? -0.7 : 0.7)); c.stroke(); }
     else { c.beginPath(); c.moveTo(-2, 4); c.quadraticCurveTo(0, 4.8, 2, 4); c.stroke(); }
-    if (acc.includes('stache')) { c.fillStyle = '#5a3418'; c.beginPath(); c.ellipse(-2, 2.6, 2.4, 1.2, 0.3, 0, TAU); c.ellipse(2, 2.6, 2.4, 1.2, -0.3, 0, TAU); c.fill(); c.beginPath(); c.arc(-4.3, 2, 0.9, 0, TAU); c.arc(4.3, 2, 0.9, 0, TAU); c.fill(); }
+    if (acc.includes('stache')) { gr = grow('stache', 0, 2.6); c.fillStyle = '#5a3418'; c.beginPath(); c.ellipse(-2, 2.6, 2.4, 1.2, 0.3, 0, TAU); c.ellipse(2, 2.6, 2.4, 1.2, -0.3, 0, TAU); c.fill(); c.beginPath(); c.arc(-4.3, 2, 0.9, 0, TAU); c.arc(4.3, 2, 0.9, 0, TAU); c.fill(); if (gr) c.restore(); }
     // headwear
     if (o.band || acc.includes('band')) {
-      const bc = o.band || '#ff7a2f', fl = o.flap || 1;
+      const bc = o.band || '#ff7a2f', fl = o.flap || 1; gr = grow('band', 0, -7);
       c.fillStyle = bc; c.beginPath(); c.moveTo(-7.4, -7.8); c.quadraticCurveTo(0, -9.6, 7.4, -7.8); c.lineTo(7.6, -5.2); c.quadraticCurveTo(0, -7, -7.6, -5.2); c.closePath(); c.fill();
       c.strokeStyle = bc; c.lineCap = 'round';
       for (let k = 0; k < 2; k++) {
@@ -1247,50 +1550,83 @@ export class Renderer {
         c.lineWidth = 2.2 - k * 0.4; c.beginPath(); c.moveTo(6.8, -6.4);
         c.quadraticCurveTo(6.8 + L * 0.6, -6.4 + L * 0.2 + w1, 6.8 + L * 0.7 + k * 1.5, -6.4 + L + w2); c.stroke();
       }
-      c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(-5, -8.4, 7, 0.8);
+      c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(-5, -8.4, 7, 0.8); if (gr) c.restore();
     }
     if (acc.includes('cap')) {
-      const cc = o.cap || '#5b7cff';
+      const cc = o.cap || '#5b7cff'; gr = grow('cap', 0, -7);
       c.fillStyle = cc; c.beginPath(); c.arc(0, -6.2, 6.8, Math.PI * 1.05, Math.PI * 1.95); c.closePath(); c.fill();
       c.beginPath(); c.ellipse(2.5, -6.6, 6, 1.6, -0.15, 0, TAU); c.fill();
-      c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -11.6, 1.1, 0, TAU); c.fill();
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -11.6, 1.1, 0, TAU); c.fill(); if (gr) c.restore();
     }
     if (acc.includes('bow')) {
-      c.fillStyle = '#ff5ca8'; c.save(); c.translate(-5, -8); c.rotate(-0.4 + Math.sin(ph * 0.3) * 0.08);
+      gr = grow('bow', -5, -8); c.fillStyle = '#ff5ca8'; c.save(); c.translate(-5, -8); c.rotate(-0.4 + Math.sin(ph * 0.3) * 0.08);
       c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-5, -4.5, -5, 0); c.quadraticCurveTo(-5, 4.5, 0, 0); c.quadraticCurveTo(5, -4.5, 5, 0); c.quadraticCurveTo(5, 4.5, 0, 0); c.fill();
-      c.fillStyle = '#ff9bd0'; c.beginPath(); c.arc(0, 0, 1.4, 0, TAU); c.fill(); c.restore();
+      c.fillStyle = '#ff9bd0'; c.beginPath(); c.arc(0, 0, 1.4, 0, TAU); c.fill(); c.restore(); if (gr) c.restore();
     }
     if (acc.includes('crown') || o.crown) {
-      const b = o.bob || 0;
+      const b = o.bob || 0; gr = grow('crown', 0, -11);
       c.fillStyle = '#ffd75c'; c.beginPath(); c.moveTo(-6, -8.5 + b); c.lineTo(-6.5, -15 + b); c.lineTo(-3, -11 + b); c.lineTo(0, -16.5 + b); c.lineTo(3, -11 + b); c.lineTo(6.5, -15 + b); c.lineTo(6, -8.5 + b); c.closePath(); c.fill();
       c.strokeStyle = '#b07a10'; c.lineWidth = 0.8; c.stroke();
-      c.fillStyle = '#ff3d6e'; c.beginPath(); c.arc(0, -11 + b, 1.2, 0, TAU); c.fill();
+      c.fillStyle = '#ff3d6e'; c.beginPath(); c.arc(0, -11 + b, 1.2, 0, TAU); c.fill(); if (gr) c.restore();
     }
   }
   // the colour of the combo ring for the time left (1 full .. 0 empty): gold, orange, red
   ringCol(f) {
     return f > 0.5 ? css(lerpC(rgb('#ff9a3c'), rgb('#ffd75c'), (f - 0.5) * 2)) : css(lerpC(rgb('#ff3d3d'), rgb('#ff9a3c'), clamp(f * 2, 0, 1)));
   }
+  // Kevin's look follows his build: the top 2 mutations (by level) as accessories, recomputed only when levels change
+  updateAcc(race) {
+    const m = race.muts || {}; let sum = 0;
+    for (const k in m) sum += m[k] || 0;
+    if (sum === this.accKey) return;
+    const ids = Object.keys(m).filter((k) => (m[k] || 0) > 0).sort((u, v) => m[v] - m[u]), out = [];
+    for (const id of ids) { const a = MUT_ACC[id]; if (a && !out.includes(a)) out.push(a); if (out.length >= 2) break; }
+    const fresh = out.find((a) => !this.accList.includes(a));
+    if (this.accKey >= 0 && fresh && !race.demo) {
+      const p = race.p;
+      this.accNew = fresh; this.accT = 0.35;
+      this.ring(p.x, p.y, '#ffd75c', 50, 0.35, 4);
+      this.burst(p.x, p.y, '#ffd75c', 10, 150, 0.5, 2.6);
+    }
+    this.accKey = sum; this.accList = out;
+  }
   drawPlayer(race, dt, wdt = dt, beat = 0) {
-    const c = this.ctx, p = race.p, x = p.x, y = this.sy(p.y), t = this.time, red = this.reduced;
+    const c = this.ctx, p = race.p, t = this.time, red = this.reduced;
+    let x = p.x, y = this.sy(p.y);
     const frenzy = p.frenzyT > 0, dash = p.dashT > 0, combo = p.combo || 0, hk = Math.min(combo, 50) / 50;
-    // trail: rainbow in frenzy (gold when reduced), icy while dashing
-    if (frenzy || dash) {
-      c.lineCap = 'round';
-      const wk = frenzy ? 1 + 0.25 * beat : 1, n = this.trail.length;
-      for (let i = 1; i < n; i++) {
-        const a = this.trail[i - 1], b = this.trail[i];
-        c.strokeStyle = frenzy ? (red ? `rgba(255,215,92,${i / n * 0.7})` : `hsla(${a.h},100%,65%,${i / n * 0.8})`) : `rgba(140,220,255,${i / n * 0.6})`;
-        c.lineWidth = (3 + i * 0.5) * wk; c.beginPath(); c.moveTo(a.x, this.sy(a.y) + 18); c.lineTo(b.x, this.sy(b.y) + 18); c.stroke();
+    // the egg: headbutt it while drilling; ease into her (win) or get bounced off (somebody else got in)
+    const ov = race.over, win = !!(ov && ov.reason === 'win' && race.drill), steal = !!(ov && ov.reason === 'late' && race.drill);
+    const wk = clamp(this.winT / 1.2, 0, 1), we = wk * wk * (3 - 2 * wk);
+    let scl = 1.45, spin = 0;
+    if (race.drill) {
+      const ex = centre(RACE_LEN), ey = this.sy(RACE_LEN + 120), dx = ex - x, dy = ey - y, dl = Math.hypot(dx, dy) || 1;
+      if (win) { x += (ex - x) * we; y += (ey + 70 - y) * we; scl = 1.45 * (1 + 0.7 * we); }
+      else if (steal) { const kb = 60 * (1 - (1 - wk) * (1 - wk)); x -= dx / dl * kb; y -= dy / dl * kb; spin = we * TAU * 1.25; }
+      else if (!ov) { const j = (red ? 2 : 5 * Math.abs(Math.sin(t * 14))) * clamp(this.eggJig * 1.5, 0, 1.2); x += dx / dl * j; y += dy / dl * j; }
+    }
+    // trail: rainbow in frenzy (gold when reduced), icy while dashing; 5 alpha bands, one stroke each
+    if ((frenzy || dash) && !win) {
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      const wkb = frenzy ? 1 + 0.25 * beat : 1, n = this.trail.length, B = 5;
+      if (n > 1) for (let b = 0; b < B; b++) {
+        const i0 = Math.floor(b * (n - 1) / B), i1 = Math.floor((b + 1) * (n - 1) / B), mid = (i0 + i1) >> 1;
+        if (i1 <= i0) continue;
+        const k = (b + 1) / B;
+        c.strokeStyle = frenzy ? (red ? '#ffd75c' : HSL65[hueI(this.trail[mid].h)]) : '#8cdcff';
+        c.globalAlpha = frenzy ? k * (red ? 0.7 : 0.8) : k * 0.6;
+        c.lineWidth = (3 + mid * 0.5) * wkb; c.beginPath();
+        for (let i = i0; i <= i1; i++) { const q = this.trail[i]; i === i0 ? c.moveTo(q.x, this.sy(q.y) + 18) : c.lineTo(q.x, this.sy(q.y) + 18); }
+        c.stroke();
       }
+      c.globalAlpha = 1;
     }
     // aura: heats up with the combo, breathes with the beat
     const gk = 1 + 0.08 * beat;
     const aCol = frenzy ? '#ffd75c' : dash ? '#8cdcff' : p.acid > 0.2 ? '#9dff3c' : combo >= 3 ? HEAT[Math.min(7, Math.round(hk * 7))] : '#96ffaa';
-    this.dglow(aCol, x, y, (frenzy ? 58 : 44 + 26 * hk) * gk, frenzy ? 0.7 : 0.45 + 0.35 * hk);
-    if (frenzy) {   // spinning rainbow halo (still and gold when reduced)
+    this.dglow(aCol, x, y, (frenzy ? 58 : 44 + 26 * hk) * gk * (scl / 1.45), frenzy ? 0.7 : 0.45 + 0.35 * hk);
+    if (frenzy && !win) {   // spinning rainbow halo (still and gold when reduced)
       c.lineWidth = 3; c.lineCap = 'round';
-      for (let i = 0; i < 6; i++) { const a0 = (red ? 0 : t * 5) + i * TAU / 6; c.strokeStyle = red ? '#ffd75c' : `hsl(${(i * 60 + t * 300) % 360},100%,65%)`; c.beginPath(); c.arc(x, y, 27 + (red ? 0 : Math.sin(t * 9) * 2), a0, a0 + 0.7); c.stroke(); }
+      for (let i = 0; i < 6; i++) { const a0 = (red ? 0 : t * 5) + i * TAU / 6; c.strokeStyle = red ? '#ffd75c' : HSL65[hueI(i * 60 + t * 300)]; c.beginPath(); c.arc(x, y, 27 + (red ? 0 : Math.sin(t * 9) * 2), a0, a0 + 0.7); c.stroke(); }
     }
     // combo timer ring: sweeps away as the chain cools
     if (combo >= 3 && !race.drill) {
@@ -1303,14 +1639,17 @@ export class Renderer {
     const tw = dash ? 26 : frenzy ? 21 : 15 + (p.vy / 500) * 3;
     this.pTw += (tw - this.pTw) * Math.min(1, dt * 8); this.pPh += this.pTw * wdt;
     // wingman
-    if (p.wing > 0) this.drawSwimmer(x - 26, y + 14 + Math.sin(t * 3) * 4, p.heading, 0.9, '#ffe0a8', this.pPh + 2, { band: '#5ce1ff', acc: ['glasses'], mouth: 'grin', blink: (t % 3) < 0.1 });
-    let danger = false; for (const e of race.ents) if (e.t === 'wbc' && !e.dead && Math.abs(e.y - p.y) < 130 && Math.hypot(e.x - x, e.y - p.y) < 120) { danger = true; break; }
-    const blinkInv = p.inv > 0 && p.inv < 1 && Math.floor(t * 20) % 2 === 0;
+    if (p.wing > 0 && !win) this.drawSwimmer(p.x - 26, this.sy(p.y) + 14 + Math.sin(t * 3) * 4, p.heading, 0.9, '#ffe0a8', this.pPh + 2, { band: '#5ce1ff', acc: ['glasses'], mouth: 'grin', blink: (t % 3) < 0.1 });
+    let danger = false; for (const e of race.ents) if (e.t === 'wbc' && !e.dead && Math.abs(e.y - p.y) < 130 && Math.hypot(e.x - p.x, e.y - p.y) < 120) { danger = true; break; }
+    const blinkInv = p.inv > 0 && p.inv < 1 && Math.floor(t * 20) % 2 === 0 && !ov;
     const low = p.e < 30, stuck = p.stuck > 0;
+    this.updateAcc(race);
+    const accK = this.accT > 0 ? backOut(clamp(1 - this.accT / 0.35, 0, 1)) : 1;
     const o = {
-      band: '#ff3d6e', taper: 1, flap: 1 + (dash ? 1.4 : 0) + (p.vy / 700), stretch: 1 + this.sq,
+      band: this.accList.includes('band') ? '#ffd75c' : '#ff3d6e', acc: this.accList.filter((a) => a !== 'band'), accNew: this.accNew, accK,
+      taper: 1, flap: 1 + (dash ? 1.4 : 0) + (p.vy / 700), stretch: 1 + this.sq,
       look: clamp(p.vx / 200, -1.2, 1.2), flash: this.pHit / 0.35,
-      blink: !danger && !dash && (t % 3.4) < 0.12,
+      blink: !danger && !dash && (t % 3.4) < 0.12, yaw: 1,
     };
     if (stuck) { o.dizzy = 1; o.mouth = 'wobble'; }
     else if (danger) { o.mouth = 'scared'; o.brow = 'worried'; }
@@ -1319,17 +1658,40 @@ export class Renderer {
     else if (combo > 5) { o.mouth = 'grin'; o.blush = 1; }
     else if (low) { o.mouth = 'pant'; o.tired = 1; o.brow = 'worried'; }
     else if (race.drill) { o.mouth = 'grin'; o.happy = 1; o.blush = 1; }
-    const body = frenzy ? (red ? '#ffd75c' : `hsl(${(t * 300) % 360},100%,82%)`) : p.acid > 0.2 ? '#e8ffd0' : '#ffffff';
-    const ang = race.drill ? p.heading : clamp((p.heading || 0) + this.lean, -0.8, 0.8);
-    // steer ghost: where your finger is taking you
-    if (this.ghostA > 0 && !race.drill && !race.over) {
-      const gx = this.ghostX, gy = this.sy(p.y + 40);
-      c.globalAlpha = 0.25 * this.ghostA; c.strokeStyle = '#ffffff'; c.lineWidth = 2;
-      c.beginPath(); c.arc(gx, gy, 7, 0, TAU); c.stroke();
-      c.lineWidth = 1.5; c.setLineDash([2, 5]); c.beginPath(); c.moveTo(x, y - 12); c.lineTo(gx, gy + 7); c.stroke(); c.setLineDash([]);
+    // micro reactions on top (never over a bonk or a Big Mac in your face)
+    if (!stuck && !danger) {
+      if (this.nearT > 0.35) { o.shock = 1; o.mouth = 'scared'; o.brow = 'worried'; o.star = undefined; o.happy = 0; o.blink = false; }
+      else if (this.nearT > 0) { o.mouth = 'grin'; o.blush = 1; o.brow = undefined; }
+      if (this.chompT > 0) { o.mouth = 'huge'; o.blink = false; }
+      if (this.winkT > 0 && !(this.nearT > 0.35)) { o.wink = 1; o.happy = 0; o.star = undefined; if (!this.chompT) o.mouth = 'smirk'; }
+    }
+    // the tail: follow-through curl from turning, tired droop, tight dash whip, wild frenzy
+    let ang = race.drill ? p.heading : clamp((p.heading || 0) + this.lean, -0.8, 0.8);
+    if (this.pAng == null) this.pAng = ang;
+    const av = clamp((ang - this.pAng) / Math.max(dt, 1e-3), -8, 8); this.pAng = ang;
+    this.pAngV += (av - this.pAngV) * Math.min(1, dt * 8);
+    o.amp = frenzy ? 8.5 : dash ? 4 : 6; o.curl = red ? 0 : clamp(-this.pAngV * 0.22, -0.5, 0.5);
+    if (dash) o.tw = 3;
+    if (low && !frenzy && !dash) { o.amp *= 0.6; o.curl += 0.1 + 0.08 * Math.sin(t * 0.9); o.tlen = 0.92; }
+    // win: Kevin is in. Steal: Kevin bounces off, seeing stars.
+    if (win) {
+      ang *= 1 - we; const sq = Math.sin(wk * Math.PI) * 0.18; o.sx = 1 + sq; o.sy = 1 - sq;
+      if (wk >= 1) { o.crown = 1; o.happy = 1; o.blush = 1; o.mouth = 'huge'; o.star = undefined; o.wink = 0; }
+    } else if (steal) { ang += spin; o.dizzy = 1; o.mouth = 'wobble'; o.star = undefined; }
+    const body = frenzy ? (red ? '#ffd75c' : HSL82[hueI(t * 300)]) : p.acid > 0.2 ? '#e8ffd0' : '#ffffff';
+    // steering readout: where your finger is taking you (red and pulsing when it sits on the edge of the band)
+    if (this.ghostA > 0 && !race.drill && !race.over && !race.demo) {
+      const gx = this.ghostX, gy = this.sy(p.y - 10), band = playBand(p.y, p.side), edge = gx <= band.l + 1.5 || gx >= band.r - 1.5;
+      const pul = edge && !red ? 0.5 + 0.5 * Math.sin(t * 16) : 0, col = edge ? '#ff4d5e' : css(this.wallC);
+      c.globalAlpha = (0.35 + 0.25 * pul) * this.ghostA; c.strokeStyle = col; c.lineWidth = 2;
+      c.beginPath(); c.arc(gx, gy, 10 * (1 + 0.15 * pul), 0, TAU); c.stroke();
+      const dx = gx - x, dy = gy - y, dl = Math.hypot(dx, dy);
+      if (dl > 24) {
+        c.setLineDash([2, 4]); c.beginPath(); c.moveTo(x + dx / dl * 12, y + dy / dl * 12); c.lineTo(gx - dx / dl * 11, gy - dy / dl * 11); c.stroke(); c.setLineDash([]);
+      }
       c.globalAlpha = 1;
     }
-    if (!blinkInv) this.drawSwimmer(x, y, ang, 1.45, body, this.pPh, o);
+    if (!blinkInv) this.drawSwimmer(x, y, ang, scl, body, this.pPh, o);
     // sweat when tired
     this.sweatT -= dt;
     if (low && !race.over && this.sweatT <= 0) {
@@ -1343,7 +1705,7 @@ export class Renderer {
       for (let i = 0; i < 3; i++) { const a = t * 7 + i * TAU / 3; star4(c, x + Math.cos(a) * 14, y - 18 + Math.sin(a) * 4, 3); }
     }
     // shields: bubbly hex shimmer
-    for (let i = 0; i < p.shield; i++) {
+    for (let i = 0; i < (ov ? 0 : p.shield); i++) {
       const r = 24 + i * 5 + Math.sin(t * 6 + i) * 1.5;
       c.strokeStyle = `rgba(255,215,92,${0.75 - i * 0.18})`; c.lineWidth = 2; c.beginPath();
       for (let k = 0; k <= 6; k++) { const a = k / 6 * TAU + t * (i % 2 ? -0.8 : 0.8); k ? c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : c.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
@@ -1403,39 +1765,70 @@ export class Renderer {
       c.beginPath(); c.arc(r.x, this.sy(r.y), 6 + r.r * e, 0, TAU); c.stroke();
     }
     this.rings.length = n; c.globalAlpha = 1;
-    // particles: ring buffer, frame-rate independent drag
+    // particles: ring buffer, frame-rate independent drag. Streaks (1) and shards (5) are batched into one path
+    // per colour and width bucket; bubble rings (4) come from a cached sprite.
     const d94 = Math.pow(0.94, wdt * 60), d985 = Math.pow(0.985, wdt * 60), d97 = Math.pow(0.97, wdt * 60);
-    const P = this.P, top = -40, bot = this.H + 40;
-    for (let i = 0; i < MAXP; i++) {
+    const P = this.P, top = -40, bot = this.H + 40, SB = this.streaks, NP = Math.min(this.pHW, P.length);
+    if (SB.size > 48) SB.clear();
+    for (const v of SB.values()) { v[0].length = 0; v[1].length = 0; v[2].length = 0; }
+    let live = 0;
+    for (let i = 0; i < NP; i++) {
       const q = P[i];
       if (q.life <= 0) continue;
       q.life -= wdt; if (q.life <= 0) continue;
+      live = i + 1;
       q.x += q.vx * wdt; q.y += q.vy * wdt; q.vy -= q.g * wdt;
       if (q.k === 2) { q.vx *= d985; q.vy *= d97; } else { q.vx *= d94; if (q.k !== 3) q.vy *= d94; }
+      if (q.k === 2 || q.k === 5) q.rot += q.vr * wdt;
       const sy = this.sy(q.y);
       if (sy < top || sy > bot) continue;
       const a = q.life / q.max;
       if (q.k === 0) { const r = q.size * (0.4 + a); c.globalAlpha = a; c.drawImage(this.dot(q.col), q.x - r * 1.45, sy - r * 1.45, r * 2.9, r * 2.9); continue; }
+      if (q.k === 1 || q.k === 5) {
+        let v = SB.get(q.col); if (!v) { v = [[], [], []]; SB.set(q.col, v); }
+        if (q.k === 1) { const w = q.size * 0.7 * (0.4 + a), bk = w < 1.6 ? 0 : w < 2.8 ? 1 : 2; v[bk].push(q.x, sy, q.x - q.vx * 0.05 * (0.4 + 0.6 * a), sy + q.vy * 0.05 * (0.4 + 0.6 * a)); }
+        else { const l = q.size * (0.35 + 0.65 * a), dx = Math.cos(q.rot) * l, dy = Math.sin(q.rot) * l; v[2].push(q.x - dx, sy - dy, q.x + dx, sy + dy); }
+        continue;
+      }
+      if (q.k === 4) { const r = q.size * (1.5 - a * 0.5); c.globalAlpha = a; c.drawImage(this.ringSpr(q.col), q.x - r - 1, sy - r - 1, r * 2 + 2, r * 2 + 2); continue; }
       c.globalAlpha = q.k === 2 ? Math.min(1, a * 3) : a; c.fillStyle = q.col;
-      if (q.k === 1) { c.strokeStyle = q.col; c.lineWidth = q.size * 0.7 * (0.4 + a); c.lineCap = 'round'; c.beginPath(); c.moveTo(q.x, sy); c.lineTo(q.x - q.vx * 0.05, sy + q.vy * 0.05); c.stroke(); }
-      else if (q.k === 2) { q.rot += q.vr * wdt; const w = Math.cos(q.rot) * q.size; c.fillRect(q.x - w / 2, sy - q.size * 0.3, w || 0.5, q.size * 0.6); }
+      if (q.k === 2) { const w = Math.cos(q.rot) * q.size; c.fillRect(q.x - w / 2, sy - q.size * 0.3, w || 0.5, q.size * 0.6); }
       else if (q.k === 3) { c.beginPath(); c.moveTo(q.x, sy - q.size * 1.8); c.quadraticCurveTo(q.x + q.size, sy, q.x, sy + q.size); c.quadraticCurveTo(q.x - q.size, sy, q.x, sy - q.size * 1.8); c.fill(); }
-      else if (q.k === 4) { c.strokeStyle = q.col; c.lineWidth = 1.2; c.beginPath(); c.arc(q.x, sy, q.size * (1.5 - a * 0.5), 0, TAU); c.stroke(); }
-      else if (q.k === 5) { q.rot += q.vr * wdt; const dx = Math.cos(q.rot) * q.size, dy = Math.sin(q.rot) * q.size; c.strokeStyle = q.col; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.moveTo(q.x - dx, sy - dy); c.lineTo(q.x + dx, sy + dy); c.stroke(); }
+    }
+    this.pHW = Math.max(live, this.pHead);   // dead slots past the last live one are skipped next frame
+    if (SB.size) {
+      c.globalAlpha = 0.9; c.lineCap = 'round';
+      for (const [col, v] of SB) {
+        c.strokeStyle = col;
+        for (let bk = 0; bk < 3; bk++) {
+          const L = v[bk]; if (!L.length) continue;
+          c.lineWidth = bk === 0 ? 1.2 : bk === 1 ? 2.2 : 3.2; c.beginPath();
+          for (let j = 0; j < L.length; j += 4) { c.moveTo(L[j], L[j + 1]); c.lineTo(L[j + 2], L[j + 3]); }
+          c.stroke();
+        }
+      }
     }
     c.globalAlpha = 1;
-    // popups: baked sprites, elastic pop-in, wobble; kept in a band around the swimmer so the lookahead stays clear
+    // popups: baked sprites, a 1.35x pop-in, wobble; kept in a band around the swimmer and above the bottom combo strip.
+    // They age on real time (half speed in slow-mo, frozen only in a hit-stop) so a slow-mo never parks text on screen.
     n = 0;
-    const py = this.sy(race.p.y), m = c.getTransform();
+    const ts = this.ts == null ? 1 : this.ts, pdt = ts === 0 ? 0 : dt * (0.5 + 0.5 * ts);
+    const py = this.sy(race.p.y), m = c.getTransform(), lo = py - 110, hi = Math.max(lo, Math.min(py + 50, this.H - 190));
+    const placed = this._placed || (this._placed = []); placed.length = 0;
     for (const q of this.pops) {
-      q.life -= wdt; if (q.life <= 0) continue; this.pops[n++] = q;
-      const k = 1 - q.life / q.max, ki = Math.min(1, k / 0.18);
-      const sc = k < 0.18 ? backOut(ki) : 1 - Math.max(0, k - 0.75) * 0.6;
+      const s = this.text(q.text, q.col, q.size, 'pop', true);
+      if (!s) { this.pops[n++] = q; continue; }        // bake budget used up: wait a frame, do not age
+      q.age += pdt; q.life -= pdt; if (q.life <= 0) continue; this.pops[n++] = q;
+      const k = 1 - q.life / q.max, ag = q.age;
+      const sc = ag < 0.08 ? 1.35 * backOut(ag / 0.08) / backOut(1) : ag < 0.18 ? 1.35 - 0.35 * (ag - 0.08) / 0.1 : 1 - Math.max(0, k - 0.7) * 0.4;
       q.dy = q.y + 30 * (1 - Math.pow(1 - k, 3));
-      const s = this.text(q.text, q.col, q.size);
-      const y = clamp(this.sy(q.dy), py - 40, py + 120), x = clamp(q.x, s.w / 2 + 2, VIEW_W - s.w / 2 - 2);
+      const x = clamp(q.x, s.w / 2 + 2, VIEW_W - s.w / 2 - 2);
+      let y = clamp(this.sy(q.dy), lo, hi);
+      // the clamp can squeeze two pops onto one line: nudge this one clear of those already drawn
+      for (let j = 0; j < placed.length; j += 3) if (Math.abs(placed[j] - x) < (placed[j + 2] + s.w) / 2 && Math.abs(placed[j + 1] - y) < s.h * 0.8) y = placed[j + 1] - s.h * 0.8;
+      placed.push(x, y, s.w);
       const rot = q.rot * (1 - k) + Math.sin(k * 18) * 0.05 * (1 - k);
-      c.globalAlpha = Math.min(1, q.life * 3) * q.al;
+      c.globalAlpha = (k > 0.7 ? (1 - k) / 0.3 : 1) * q.al;
       setXf(c, m, x, y, rot, sc, sc); c.drawImage(s.cv, -s.w / 2, -s.h / 2, s.w, s.h);
     }
     c.setTransform(m);
@@ -1504,6 +1897,10 @@ function strokePts(c, P, dx = 0) {
 function star4(c, x, y, r) {
   c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r); c.fill();
 }
+// star4 without beginPath/fill, so many sparkles share one fill
+function star4p(c, x, y, r) {
+  c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r);
+}
 function heart(c, x, y, r) {
   c.beginPath(); c.moveTo(x, y + r * 0.9);
   c.bezierCurveTo(x - r * 1.4, y - r * 0.1, x - r * 0.7, y - r * 1.1, x, y - r * 0.4);
@@ -1540,7 +1937,7 @@ function paintTile(g, z, zi) {
   } else if (z.id === 'goo') {
     for (let i = 0; i < 14; i++) {
       const x = rnd() * W, y = rnd() * H, L = 60 + rnd() * 140, w = 1.5 + rnd() * 3;
-      wrap((o) => { g.strokeStyle = 'rgba(217,184,255,0.22)'; g.lineWidth = w; g.beginPath(); g.moveTo(x, y + o); g.bezierCurveTo(x + 14, y + o + L * 0.3, x - 14, y + o + L * 0.7, x + 4, y + o + L); g.stroke(); g.fillStyle = 'rgba(217,184,255,0.3)'; g.beginPath(); g.arc(x + 4, y + o + L + 3, w + 1.5, 0, TAU); g.fill(); });
+      wrap((o) => { g.strokeStyle = 'rgba(232,238,255,0.24)'; g.lineWidth = w; g.beginPath(); g.moveTo(x, y + o); g.bezierCurveTo(x + 14, y + o + L * 0.3, x - 14, y + o + L * 0.7, x + 4, y + o + L); g.stroke(); g.fillStyle = 'rgba(240,244,255,0.32)'; g.beginPath(); g.arc(x + 4, y + o + L + 3, w + 1.5, 0, TAU); g.fill(); });
     }
   } else if (z.id === 'sea') {
     for (let i = 0; i < 24; i++) {
