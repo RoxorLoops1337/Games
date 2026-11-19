@@ -71,6 +71,7 @@ ok(await page.evaluate(() => game.race.rank < 1000000), 'you are already overtak
 await page.evaluate(() => { const r = game.race; r.p.y = 8950; r.genY = 9300; r.ents = []; r.p.e = r.p.maxE; });
 await page.waitForFunction(() => !document.getElementById('cards').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
 ok(await page.isVisible('#cards'), 'clearing a zone deals mutation cards');
+if (SHOTS) await page.waitForTimeout(800); // let the deal animation land so the shot shows all three cards
 await shot('3_cards');
 ok(await page.evaluate(() => document.querySelectorAll('#cardRow .card').length === 3), 'three cards are dealt');
 await page.tap('#cardRow .card');
@@ -92,6 +93,7 @@ ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
 await page.evaluate(() => { const r = game.race; r.over = null; r.end('energy'); });
 await page.waitForFunction(() => !document.getElementById('result').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
 ok(await page.isVisible('#result'), 'the end of a swim shows the result');
+if (SHOTS) await page.waitForTimeout(3200); // let the rank fall and the DNA receipt count up
 await shot('5_result');
 const dna = await page.evaluate(() => game.meta.dna);
 ok(dna > 0, 'the swim paid DNA (' + dna + ')');
