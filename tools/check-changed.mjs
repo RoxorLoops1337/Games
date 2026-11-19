@@ -15,7 +15,8 @@
 //   root *.md, docs/, design/, production/, project.yaml, .claude/, .gitignore, awesome_farm/   nothing (docs; Awesome Farm has its own check)
 //   package.json            only the suites whose `test:` script was added or changed. A dependency or an existing non-test script changing
 //                           still means FULL (it can affect every game); adding a test script for one game does not.
-//   build.js                the suites whose files mention build.js or dist/ (the build itself always runs first)
+//   build.js                the suites whose files mention build.js or dist/ (the build itself always runs first);
+//                           a change that only adds folder names (a new game listed in STATIC_PATHS) runs none
 //   index.html (the home)   test:site (every game card must point at a folder that exists)
 //   _headers, _redirects    the suites that mention them (usually none: the deploy is what they affect)
 // Anything it cannot place (package-lock.json, an unmapped folder, a new
@@ -87,6 +88,7 @@ const GAME_SUITES = {
   pitch_story: ['test:pitchstory'],
   groove_lock: ['test:groovelock'],
   ricochet_mint: ['test:ricochet'],
+  million_to_one: ['test:million'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
@@ -192,11 +194,22 @@ function packageSuites() {
   return suites;
 }
 
+// A build.js change that only ADDS folder names (lines like `  'my_game',`) just lists a new game
+// for the build. The build itself still runs, and the new folder brings its own suites, so no other game needs testing.
+function onlyNewStaticPaths() {
+  let old;
+  try { old = sh(`git show ${BASE || 'HEAD'}:build.js`).split('\n'); } catch { return false; }
+  const now = readFileSync(new URL('../build.js', import.meta.url), 'utf8').trim().split('\n');
+  const left = old.slice();
+  for (const line of now) { const k = left.indexOf(line); if (k >= 0) { left.splice(k, 1); continue; } if (!/^\s*'[\w-]+',\s*$/.test(line)) return false; }
+  return left.length === 0;      // nothing was removed or changed
+}
+
 // Suites for a shared root file, or null when it cannot be placed (= FULL).
 function sharedSuites(f) {
   if (f === 'package.json') return packageSuites();
   if (f === 'index.html') return SITE_SUITES;
-  if (f === 'build.js') return mentioning(/build\.js|['"`]dist['"`\/]|\bdist\//);
+  if (f === 'build.js') return onlyNewStaticPaths() ? [] : mentioning(/build\.js|['"`]dist['"`\/]|\bdist\//);
   if (f === '_headers' || f === '_redirects') return mentioning(new RegExp(f));
   return null;
 }

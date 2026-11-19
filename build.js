@@ -100,6 +100,7 @@ const STATIC_PATHS = [
   'drop_the_bass',
   'groove_lock',
   'ricochet_mint',
+  'million_to_one',
   'tools',
 ];
 
