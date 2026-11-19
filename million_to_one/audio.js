@@ -320,7 +320,7 @@ export class Audio {
       for (let k = 1; k < 3; k++) { let f = 220 * st(this.key + chord[k]); while (f > 520) f /= 2; while (f < 260) f *= 2; this._sing(this.stabBank, f, t, 0.16, 0.06, 0.01); }
     }
     // the whistled lead: only in frenzy or a big live combo
-    if ((L === 2 || blazing) && !stop && this.motif[i] !== null) {
+    if ((L === 2 || blazing) && !stop && this.motif && this.motif[i] !== null) {
       let f = 880 * st(this.key + PENTA[this.motif[i]]); while (f > 1500) f /= 2;
       this._whistle(t, f, spb * 1.7);
     }
@@ -360,8 +360,8 @@ export class Audio {
     switch (name) {
       case 'pass': {            // a blip that climbs the pentatonic scale as the combo grows
         this.heat = Math.max(this.heat, k); this.heatT = now;
-        const n = Math.min(k, 40), deg = PENTA[n % 5] + 12 * Math.min(2, Math.floor(n / 5) % 3 + (n >= 15 ? 1 : 0));
-        const f = 330 * st(K + Math.min(deg, 31));
+        const n = Math.min(k, 60), idx = n < 14 ? n : 9 + (n % 5);   // climb two octaves, then ripple at the top
+        const f = 220 * st(K + PENTA[idx % 5] + 12 * Math.floor(idx / 5));
         this.tone('triangle', f * 0.97, f, t, 0.07, 0.15, fx, 0.003, 0.02);
         if (k >= 10) this.tone('sine', f * 2, 0, t + 0.01, 0.05, 0.05, fx);
         if (k >= 25) this.tone('square', f * 1.5, 0, t, 0.03, 0.025, fx);
@@ -369,7 +369,7 @@ export class Audio {
       }
       case 'sugar': this.tone('sine', 500, 1300, t, 0.07, 0.2, fx); this.tone('triangle', 1568, 0, t + 0.05, 0.12, 0.1, fx); break;
       case 'dna': {             // coin arpeggio
-        const b = 988 * st(K % 12 === 0 ? 0 : 0);
+        const b = 988;
         this.tone('square', b, 0, t, 0.05, 0.09, fx, 0.002);
         this.tone('square', b * st(5), 0, t + 0.055, 0.22, 0.09, fx, 0.002);
         this.tone('sine', b * st(12), 0, t + 0.11, 0.18, 0.06, fx);
