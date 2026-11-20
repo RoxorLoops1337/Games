@@ -18,6 +18,13 @@
 // low priority voices (hats, ghosts) are dropped when too many are sounding, the vowel
 // filters for the pads and stabs are shared persistent nodes, and one 1s noise buffer is
 // reused by every hiss.
+//
+// Key changes (a new zone, a FRENZY or combo milestone lift, the lift dropping again) never land
+// mid-bar: _rekey() only stores the new key in _keyNext and tick() applies it on the next downbeat,
+// so the pads sung in the old key finish in tune. The lifts also get a rising "whoop" on step 12 of
+// the bar before. The combo ladder climbs in scale degrees (see ladderDegree), never off the scale.
+
+import { bankGrade } from './core.js';
 
 const VOW = {
   oo: [300, 870, 2240], oh: [570, 840, 2410], ah: [730, 1090, 2440],
@@ -41,8 +48,40 @@ const ZONE_FLAVOR = [
   { vowel: 'oh', sig: 'heart', prog: [[0, 3, 7], [-4, 0, 3], [-2, 2, 5], [-5, -1, 2]] },  // Am F G E
 ];
 const MENU_HOOK = [[4, 3, 2, 0, null, 2, 3, 5], [4, 3, 2, 0, null, null, 0, null]];   // pentatonic degrees on 8ths
-const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher']);   // the biggest moments, mixed 1.25x hotter
+// the "Million To One" theme: a 4-bar hook in pentatonic degrees (PENTA index) on 16ths, call and answer.
+// Bars 1 and 3 are the call ("one in a mil-lion"), bar 2 answers up in the air on the 5th, bar 4 walks
+// home and resolves to degree 0. The menu whistles it every other 8-bar phrase, the race whistles it over
+// the first 4 bars of every zone, later phrases play seeded variations of it, the win fanfare quotes bar 1
+// in brass and the lose sting starts it on a kazoo and gives up on the 4th note.
+const _ = null;
+const THEME_CALL = [5, _, _, 4, _, _, 5, _, 7, _, 6, _, 5, _, _, _];
+export const THEME = [
+  THEME_CALL,
+  [7, _, _, 6, _, _, 5, _, 4, _, 5, _, 3, _, _, _],
+  THEME_CALL,
+  [4, _, 3, _, 2, _, 1, _, 0, _, _, _, _, _, _, _],
+];
+// how many 16ths each theme note rings: up to the next note, at most 4
+const THEME_LEN = THEME.map((b) => b.map((d, s) => { if (d === null) return 0; let n = 1; while (s + n < 16 && n < 4 && b[s + n] === null) n++; return n; }));
+// the combo ladder: link n plays this pentatonic degree. It walks a 10-note run (two octaves) and every
+// ten links the run starts one scale degree higher (at most 5), so it keeps climbing and never leaves the key
+export const ladderDegree = (n) => { n = Math.max(0, n | 0); return n % 10 + Math.min(5, Math.floor(n / 10)); };
+// a seeded variation of a theme bar: shift by +-1 or +-2 degrees and drop about 30% of the notes
+// (the bar's first note always stays, so the line still starts on the beat). seed: any integer.
+export function themeVariation(seed) {
+  let a = (seed | 0) ^ 0x2545F491;
+  const rnd = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const src = THEME[Math.floor(rnd() * 4)], mag = rnd() < 0.5 ? 1 : 2, sh = rnd() < 0.5 ? -mag : mag;
+  let first = true;
+  return src.map((d) => {
+    if (d === null) return null;
+    if (!first && rnd() < 0.3) return null;
+    first = false;
+    return Math.max(0, Math.min(PENTA.length - 1, d + sh));
+  });
+}
 const PENTA = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher']);   // the biggest moments, mixed 1.25x hotter
 const AEOL = [0, 2, 3, 5, 7, 8, 10];
 const MUSIC_VOL = 0.5;
 const MASTER = 0.9;
@@ -84,6 +123,7 @@ const GAP = {
   comboBank: 0.2, comboBreak: 0.15, record: 0.5, legendary: 0.5, synergy: 0.3, eggClaim: 0.5, bossTaunt: 0.5, drillShove: 0.05,
   clutch: 0.12, finisher: 0.3, style: 0.2, loseClose: 0.5, drillLead: 0.15, rivalShove: 0.08, again: 0.2, ready: 0.15,
   synTease: 0.3, swat: 0.06, tell: 0.25, comboLow: 0.02, comboMilestone: 0.4,
+  fork: 0.5, backflow: 0.5, finale: 0.5, spot: 1.2,
 };
 // sfx that get a little random detune (+-15 cents) and volume (+-12%) so repeats never sound like a machine gun
 const HUMAN = new Set(['sugar', 'dna', 'pop', 'bump', 'bonk', 'dash']);
@@ -96,8 +136,6 @@ const inKey = (f, key) => {
 };
 const rivalIdx = (k) => { const v = k && typeof k === 'object' ? k.k : k; return typeof v === 'number' && v >= 0 && v <= 4 ? v | 0 : -1; };
 const fold = (f, top = 1760) => { while (f > top) f /= 2; return f; };
-const BANK_AT = [10, 25, 40, 60, 85];   // mirrors core.js bankGrade, so comboLow can size itself from A.combo
-const bankGradeOf = (n) => { let g = 0; while (g < BANK_AT.length - 1 && n >= BANK_AT[g + 1]) g++; return g; };
 
 export class Audio {
   constructor() {
@@ -112,7 +150,13 @@ export class Audio {
     this._kicks = new Float64Array(8).fill(-99); this._kickI = 0;
     this._slotT = -1; this._slotG = null; this._blipN = 0; this._passF = 440;
     this._mdUntil = -1; this._mdLast = -1;
-    this._lad = 0; this._linkN = 0;            // combo ladder transpose (+0.5 st per 10 links) and last link count
+    this._linkN = 0;                           // last combo link count
+    this._keyNext = null; this._keyBar = -1; this._keyCrash = false; this._whoopBar = -1;   // pending key change (lands on a downbeat)
+    this._fin = 0; this._rollLen = 4;          // finale tempo push (+bpm), length of the pending _rollAt roll in 16ths
+    this._themePend = true; this._themeAt = -99; this._varN = 0; this._themeOn = false;   // the theme's first bar, variation counter
+    this.calm = false;                         // calm mode (reduced motion): no gasps, shallow ducks, slow filter moves
+    this._thr = null; this._thrK = 0; this._thrPan = 0; this._slurpT = 0;   // proximity threat loop
+    this._acid = null; this._acidL = 0; this._crackT = 0;                  // acid sizzle loop
     this._dnaN = 0; this._dnaT = -9;           // DNA streak: arpeggio root in pentatonic degrees
     this._loseV = -1; this._leadN = 0;         // last lose sting variant, drill lead retakes
     this._contest = false; this._hatDuck = -1; // contested drill, hats ducked under a lowE heartbeat until
@@ -127,15 +171,35 @@ export class Audio {
   // ------------------------------------------------------------------ public knobs
   get bpm() { return this._bpm; }
   set bpm(v) {
-    v = +v || 96; if (v === this._bpm) return;
-    this._bpm = v; const z = zoneOf(v);
-    if (z !== this._zone) { this._zone = z; this._zoneBar = (this.stepI >> 4) + 1; }
+    v = +v || 96; if (v + this._fin === this._bpm) return;
+    this._bpm = v + this._fin; const z = zoneOf(v);
+    if (z !== this._zone) { this._zone = z; this._zoneBar = (this.stepI >> 4) + 1; this._themePend = true; }
     this._rekey();
     if (this.ctx && this.on) this._queueFill();
     this._applyTrem();
     this._syncDelay();
   }
-  _rekey() { this.key = ZONE_KEY[this._zone] + this._lift + this._mlift; }
+  // the key the song is heading to (now, or on the next downbeat)
+  get keyTarget() { return ZONE_KEY[this._zone] + this._lift + this._mlift; }
+  // a key change waits for a downbeat (tick() lands it), so pads sung in the old key never clash with the
+  // new one. whoop: a lift (FRENZY tier 3, combo milestone) also gets a rising "whoop" on step 12 of the
+  // bar before and a crash on the landing.
+  _rekey(whoop = false) {
+    const k = this.keyTarget;
+    if (!this.ctx || !this.on) { this.key = k; this._keyNext = null; this._whoopBar = -1; return; }
+    const i = this.stepI & 15, bar = this.stepI >> 4;
+    let nb = i === 0 ? bar : bar + 1;
+    if (whoop) { const wb = i <= 12 ? bar : bar + 1; this._whoopBar = wb; nb = wb + 1; this._keyCrash = true; }
+    this._keyBar = this._keyNext !== null ? Math.max(this._keyBar, nb) : nb;
+    this._keyNext = k;
+    if (k === this.key && !whoop) { this._keyNext = null; this._keyCrash = false; }
+  }
+  // called by tick() before each step: a pending key lands on its downbeat
+  _landKey() {
+    if (this._keyNext === null || (this.stepI & 15) !== 0 || (this.stepI >> 4) < this._keyBar) return;
+    this.key = this._keyNext; this._keyNext = null;
+    if (this._keyCrash) { this.crashNext = true; this._keyCrash = false; }
+  }
   _applyTrem() {           // the rapids' 6 Hz pad tremolo (a persistent LFO, its depth set per zone)
     if (!this.ctx || !this.tremD) return;
     const d = ZONE_FLAVOR[this._zone].sig === 'trem' && !this._menu(this._int) ? 0.45 : 0;
@@ -169,6 +233,58 @@ export class Audio {
     this._contest = on;
     return on;
   }
+  // ------------------------------------------------------------------ proximity loops (main.js sets both every frame)
+  // threat(k, pan): something nasty is close. k 0..1 (0 = nothing near), pan -1..1. A looped growl (a low saw
+  // through a lowpass that wobbles 180..320 Hz at 3 Hz) at 0.18 * k, plus a wet slurp every 0.6 s from tick().
+  // Persistent nodes built on first use; only the gain and pan move (60 ms ramps), so a call per frame costs
+  // two compares. Silent when muted, sfx are off or in calm mode.
+  threat(k, pan = 0) {
+    k = this.muted || this.sfxMuted || this.calm ? 0 : clamp01(k); pan = Math.max(-1, Math.min(1, +pan || 0));
+    if (!this.ctx) { this._thrK = k; return; }
+    if (!this._thr) { if (k <= 0) return; this._thr = this._loopThreat(); }
+    const n = this._thr, now = this.ctx.currentTime;
+    if (Math.abs(k - this._thrK) > 0.004 || (k === 0 && this._thrK !== 0)) { n.g.gain.setTargetAtTime(0.18 * k, now, 0.02); this._thrK = k; }
+    if (n.p && Math.abs(pan - this._thrPan) > 0.02) { n.p.pan.setTargetAtTime(pan, now, 0.02); this._thrPan = pan; }
+  }
+  _loopThreat() {
+    const c = this.ctx, g = c.createGain(); g.gain.value = 0;
+    let out = g; const p = c.createStereoPanner ? c.createStereoPanner() : null;
+    if (p) { g.connect(p); p.connect(this.fx); out = p; } else g.connect(this.fx);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 250; lp.Q.value = 4;
+    const lfo = c.createOscillator(), ld = c.createGain(); lfo.frequency.value = 3; ld.gain.value = 70;   // 250 +- 70: 180..320 Hz
+    lfo.connect(ld); ld.connect(lp.frequency); lfo.start();
+    for (const [f, det] of [[55, -7], [55, 7]]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det; o.connect(lp); o.start(); }
+    lp.connect(g);
+    return { g, p, out };
+  }
+  // 0..1: the player is in acid. A 3000 Hz bandpassed noise sizzle at 0.08 * level, and a crackle tick every
+  // 0.12 s from tick(). Same rules as threat(): persistent nodes, cheap every frame, never clicks.
+  get acid() { return this._acidL; }
+  set acid(v) {
+    v = this.muted || this.sfxMuted ? 0 : clamp01(v);
+    if (!this.ctx) { this._acidL = v; return; }
+    if (!this._acid) {
+      if (v <= 0) return;
+      const c = this.ctx, s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+      s.buffer = this.noiseBuf; s.loop = true; bp.type = 'bandpass'; bp.frequency.value = 3000; bp.Q.value = 1.4; g.gain.value = 0;
+      s.connect(bp); bp.connect(g); g.connect(this.fx); s.start();
+      this._acid = { g };
+    }
+    if (Math.abs(v - this._acidL) > 0.004 || (v === 0 && this._acidL !== 0)) { this._acid.g.gain.setTargetAtTime(0.08 * v, this.ctx.currentTime, 0.02); this._acidL = v; }
+  }
+  // the one-shot parts of the loops, scheduled from tick()
+  _loops(now) {
+    if (this._thr && this._thrK > 0.03 && now >= this._slurpT) {   // a wet slurp: a resonant filter gulping up and back
+      this._slurpT = now + 0.6; const k = this._thrK, t = now + 0.01;
+      this.hum(t, 0.14, 0.12 * k, 'bandpass', 280, 7, this._thr.out, 900, 0.01, 0);
+      this.tone('sine', 160, 90, t + 0.04, 0.08, 0.1 * k, this._thr.out, 0.004, 0, 0);
+    }
+    if (this._acid && this._acidL > 0.03 && now >= this._crackT) {   // a crackle tick
+      this._crackT = now + 0.12; const t = now + 0.005 + Math.random() * 0.03;
+      this.hum(t, 0.004, 0.06 * this._acidL + 0.02, 'bandpass', 2500 + Math.random() * 3500, 3, this.fx, 0, 0.0008, 0);
+    }
+  }
+
   // 0..1, how hard the last kick still pushes (render.js can pulse the screen on the beat)
   get pulse() {
     if (!this.ctx) return 0;
@@ -273,7 +389,11 @@ export class Audio {
     try { const p = c.resume(); if (p && p.then) p.then(reset, () => {}); } catch (e) { /* ignore */ }
   }
   // dull the music (pause menu, mutation cards). Optional: the game works without calling it.
-  setMuffle(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.mlp.frequency.cancelScheduledValues(t); this.mlp.frequency.setTargetAtTime(on ? 650 : 18000, t, on ? 0.06 : 0.15); }
+  setMuffle(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.mlp.frequency.cancelScheduledValues(t); this.mlp.frequency.setTargetAtTime(on ? 650 : 18000, t, this._ftc(on ? 0.06 : 0.15)); }
+  // calm mode (main.js passes S.reduced): no hit-stop gasps or micro ducks, ducks never below 0.8, filter
+  // moves take about 0.4 s, and the proximity growl stays silent
+  setCalm(b) { this.calm = !!b; if (this.calm) this.threat(0); }
+  _ftc(tc) { return this.calm ? Math.max(tc, 0.4 / 3) : tc; }   // filter time constant (3 tc is about the full move)
   // bullet time. slowmo(on, big): every slow pulls the music behind a lowpass (time constant 0.03 s, so it
   // never clicks). Only big ones (first FRENZY, egg drill start, zone-end crawl) also play a tape stop on
   // the way in, bend the beat to a half-time kick, let the echo hang on, and come out with a reversed
@@ -321,7 +441,7 @@ export class Audio {
   _slpTo(f, tc) {
     const now = this.ctx.currentTime, p = this.slp.frequency;
     if (now < this._impUntil) { p.cancelScheduledValues(this._impUntil); p.setTargetAtTime(f, this._impUntil, 0.04); return; }
-    p.cancelScheduledValues(now); p.setTargetAtTime(f, now, tc);
+    p.cancelScheduledValues(now); p.setTargetAtTime(f, now, this._ftc(tc));
   }
   // pause: drop every slow-mo state at once, no swell, no crash, no tape stop
   slowmoReset() {
@@ -333,7 +453,7 @@ export class Audio {
   // hit stop: the music gasps (micro duck to `depth`, lowpass to 2500 Hz) for `ms`, then breathes out
   // (time constant 0.04), under a 40 ms sub thump
   impact(ms, depth = 0.5) {
-    if (!this.ctx || !this.mduck) return;
+    if (!this.ctx || !this.mduck || this.calm) return;
     const c = this.ctx, now = c.currentTime, sec = Math.max(0.02, Math.min(0.5, (+ms || 0) / 1000)), end = now + sec;
     const dv = Math.max(0.05, Math.min(1, +depth || 0.5));
     const g = this.mduck.gain, f = this.slp.frequency;
@@ -349,16 +469,20 @@ export class Audio {
     if (!this.ctx) return;
     const T = this._tension, tc = T <= 0.5 ? 18000 : 18000 * Math.pow(1200 / 18000, (T - 0.5) / 0.5);
     const f = Math.min(tc, this._menu(this._int) ? 3200 : 18000), t = this.ctx.currentTime;
-    this.tlp.frequency.cancelScheduledValues(t); this.tlp.frequency.setTargetAtTime(f, t, 0.15);
+    this.tlp.frequency.cancelScheduledValues(t); this.tlp.frequency.setTargetAtTime(f, t, this._ftc(0.15));
   }
   // drop the music for a moment so a big sound effect can shine
+  // (no duck when sfx are off: there is nothing to make room for. Calm mode never ducks below 0.8.)
   duck(amount = 0.35, sec = 0.6) {
-    if (!this.ctx) return; const g = this.music.gain, t = this.ctx.currentTime, L = this._mLevel();
+    if (!this.ctx) return;
+    if (amount < 1 && (this.sfxMuted || this.sfxVol < 0.05)) return;
+    if (this.calm) amount = Math.max(0.8, amount);
+    const g = this.music.gain, t = this.ctx.currentTime, L = this._mLevel();
     g.cancelScheduledValues(t); g.setTargetAtTime(L * amount, t, 0.03); g.setTargetAtTime(L, t + sec, 0.25);
   }
   // automatic micro duck: any loud fx hit pulls the music to 0.7 for 120 ms
   _mduck(t) {
-    if (!this.mduck || this.sfxMuted || this.sfxVol < 0.05 || t - this._mdLast < 0.03 || t < this._impUntil) return;
+    if (!this.mduck || this.calm || this.sfxMuted || this.sfxVol < 0.05 || t - this._mdLast < 0.03 || t < this._impUntil) return;
     this._mdLast = t; const g = this.mduck.gain;
     if (t < this._mdUntil) g.cancelScheduledValues(t);
     g.setTargetAtTime(0.7, t, 0.006); g.setTargetAtTime(1, t + 0.12, 0.04); this._mdUntil = t + 0.12;
@@ -370,11 +494,12 @@ export class Audio {
   // a fresh race: back to zone 1 tempo and key, and land the first beat on a crash
   newRun() {
     this._bpm = ZONE_BPM[0]; this.key = 0; this._lift = 0; this._mlift = 0; this._ftier = 0; this._int = 0; this.heat = 0; this.combo = 0; this._dryUntil = 0;
-    this._lad = 0; this._linkN = 0; this._dnaN = 0; this._leadN = 0; this._contest = false; this._cTier = 0; this._rollAt = -1; this._clN = 0;
-    this._zone = 0; this._zoneBar = (this.stepI >> 4) + 1;
+    this._linkN = 0; this._dnaN = 0; this._leadN = 0; this._contest = false; this._cTier = 0; this._rollAt = -1; this._rollLen = 4; this._clN = 0;
+    this._zone = 0; this._zoneBar = (this.stepI >> 4) + 1; this._fin = 0;
+    this._keyNext = null; this._keyCrash = false; this._whoopBar = -1; this._themePend = true; this._themeAt = -99; this._varN = 0;
     if (!this.ctx) return;
     this._syncDelay(); this._applyTlp(); this._applyTrem();
-    this.setMuffle(false); this.duck(1, 0);
+    this.setMuffle(false); this.duck(1, 0); this.threat(0); this.acid = 0;
     if (this._slowOn) this.slowmoReset();
     const bar = (this.stepI >> 4) + 1; this.barBase = bar; this.crashBar = bar; this.fillBar = -1;
   }
@@ -521,7 +646,8 @@ export class Audio {
     if (this.next < now - 0.25 || this.next > now + 1.5) this.next = now + 0.06;   // woke from a sleep or clock jump
     const silent = this.muted || c.state !== 'running';
     let guard = 0;
-    while (this.next < now + 0.15 && guard++ < 32) { if (!silent) this._step(this.next); this.next += 60 / this._bpm / 4; this.stepI++; }
+    while (this.next < now + 0.15 && guard++ < 32) { this._landKey(); if (!silent) this._step(this.next); this.next += 60 / this._bpm / 4; this.stepI++; }
+    if (!silent) this._loops(now);
     // the tension bed: a heartbeat that races as the drama climbs (never below 0.6 in a contested drill)
     const T = this._contest ? Math.max(0.6, this._tension) : this._tension;
     if (T > 0.02) {
@@ -554,6 +680,11 @@ export class Audio {
     const menu = this._menu(I), prog = (!menu && Z.prog) || PROG;
     const chord = prog[pb & 3], root = 110 * st(this.key + chord[0]);
     this.chord = chord;
+    // a lift is coming on the next downbeat: a 1-beat rising "whoop" from the crew
+    if (i === 12 && bar === this._whoopBar && !menu) {
+      this._whoopBar = -1;
+      this.say(t, [fold(330 * st(this.key), 500)], 'oo', 'ee', spb * 4, 0.14, spb * 3, 1.12, this.music, 1);
+    }
     // waiting room (title, shop, result): hats, a soft bass, an "oo" pad on each bar, and every other
     // 4-bar phrase a whistled 2-bar hook
     if (menu) {
@@ -564,8 +695,11 @@ export class Audio {
         this._vowel(this.padBank, 'oo', t, 0.25);
         for (const s of chord) { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._sing(this.padBank, f, t, spb * 16 * 0.98, 0.02, 0.2); }
       }
+      // even 8-bar phrases: the theme (bars 0..3); odd ones: the old 2-bar waiting-room hook
       const hb = bar & 7;
-      if (hb < 2 && i % 2 === 0) {
+      if (((bar >> 3) & 1) === 0) {
+        if (hb < 4 && THEME[hb][i] !== null) { let f = 880 * st(this.key + PENTA[THEME[hb][i]]); while (f > 1500) f /= 2; this._whistle(t, f, spb * (THEME_LEN[hb][i] - 0.3), null, 0.05); }
+      } else if (hb < 2 && i % 2 === 0) {
         const d = MENU_HOOK[hb][i >> 1];
         if (d !== null) { let f = 880 * st(this.key + PENTA[d]); while (f > 1500) f /= 2; this._whistle(t, f, spb * 1.7, null, 0.05); }
       }
@@ -576,7 +710,7 @@ export class Audio {
     if (t0 < this._dryUntil) { if (i % 4 === 0) this.B(t, 1.1); this._cTier = 0; this._rollAt = -1; return; }
     // stem ladder: crossing combo 10, 20 or 30 rolls a 1-beat snare fill into a crash on the next beat
     const ct = Math.min(3, Math.floor(cmb / 10));
-    if (ct > this._cTier && this._rollAt < 0) this._rollAt = this.stepI + ((4 - (i & 3)) & 3);
+    if (ct > this._cTier && this._rollAt < 0) { this._rollAt = this.stepI + ((4 - (i & 3)) & 3); this._rollLen = 4; }
     this._cTier = ct;
     if (i === 0) {
       if (this.crashBar === bar || this.crashNext) { this.crash(t, 1); this.crashNext = false; }
@@ -586,12 +720,22 @@ export class Audio {
         if (this.fillBar === bar) this.barBase = bar + 1;
         this.crashBar = bar + 1; this.fillBar = -1;
       }
-      if (pb === 0 || !this.motif) this._newMotif();
+      // the theme over the first 4 bars of every zone (from the first phrase start after the zone began),
+      // then seeded variations of it, a new one every phrase
+      if (pb === 0 && this._themePend) { this._themePend = false; this._themeAt = bar; }
+      const tb = bar - this._themeAt;
+      this._themeOn = tb >= 0 && tb < 4;
+      if (this._themeOn) this.motif = THEME[tb];
+      else if (pb === 0 || !this.motif || tb === 4) this._newMotif();
     }
     if (this._rollAt >= 0) {
       const r = this.stepI - this._rollAt;
-      if (r >= 0 && r < 4) { this.Pf(t, 0.45 + 0.15 * r); if (r === 3) this.Kin(t + spb * 0.5, 0.7); }
-      else if (r === 4) { if (!(i === 0 && this.crashBar === bar)) this.crash(t, 0.9); this._rollAt = -1; }
+      const n = this._rollLen;
+      if (r >= 0 && r < n) {
+        this.Pf(t, 0.45 + 0.6 * r / n);
+        if (n > 4 && r >= n - 4) this.Pf(t + spb * 0.5, 0.4 + 0.5 * r / n);   // a long roll doubles up into 32nds for its last beat
+        if (r === n - 1) this.Kin(t + spb * 0.5, 0.7);
+      } else if (r === n) { if (!(i === 0 && (this.crashBar === bar || this.crashNext))) this.crash(t, n > 4 ? 1.1 : 0.9); this._rollAt = -1; this._rollLen = 4; }
     }
     const fill = this.curFill >= 0 && i >= 8 && !this._slow ? FILLS[this.curFill][i - 8] : null;
     const stop = this.curFill === 2 && i >= 9;
@@ -654,7 +798,8 @@ export class Audio {
     // the whistled lead in frenzy; stem ladder 3 (combo 25): a chopped vocal lead
     if (!stop && this.motif && this.motif[i] !== null) {
       const s = PENTA[this.motif[i]];
-      if (fz && L === 2) { let f = 880 * st(this.key + s); while (f > 1500) f /= 2; this._whistle(t, f, spb * 1.7, s); }
+      if (this._themeOn) { let f = 880 * st(this.key + s); while (f > 1500) f /= 2; const tb = bar - this._themeAt; this._whistle(t, f, spb * (THEME_LEN[tb][i] - 0.3), s, 0.05); }
+      else if (fz && L === 2) { let f = 880 * st(this.key + s); while (f > 1500) f /= 2; this._whistle(t, f, spb * 1.7, s); }
       if (blazing && i % 2 === 0) {
         let f = 220 * st(this.key + s); while (f > 440) f /= 2;
         this.say(t, [f], 'ah', i % 4 ? 'eh' : 'oh', spb * 1.3, 0.16, 0.05, 1, M, 0);
@@ -674,11 +819,8 @@ export class Audio {
       case 'heart': if (i % 4 === 0 && this._tension <= 0.02) this.tone('sine', 150, 90, t + spb * 0.75, 0.05, 0.22, M, 0.003, 0, 0); break;   // egg: the "dub"
     }
   }
-  _newMotif() {
-    const m = new Array(16).fill(null); let d = 2 + Math.floor(Math.random() * 3);
-    for (let s = 0; s < 16; s++) if (Math.random() < (s % 2 ? 0.14 : (s % 4 === 0 ? 0.5 : 0.32))) { d = Math.max(0, Math.min(PENTA.length - 1, d + Math.floor(Math.random() * 5) - 2)); m[s] = d; }
-    this.motif = m;
-  }
+  // a new lead line for the phrase: a seeded variation of a theme bar (so the race keeps humming the theme)
+  _newMotif() { this.motif = themeVariation(this._varN++ * 7919 + this._zone * 131); }
   _bass(t, f, dur, L, scale = 1) {
     if (this._busy(0)) return;
     const c = this.ctx, lp = this.bassLp, g = c.createGain(), o = c.createOscillator(), o2 = c.createOscillator();
@@ -709,9 +851,8 @@ export class Audio {
     if (g - now <= 0.07) return Math.max(fb, g);
     return Math.max(fb, g - spb / 2 >= now ? g - spb / 2 : g);
   }
-  // the combo ladder, Shepard style: it walks two octaves of the pentatonic (n % 10) and each ten links
-  // the whole ladder creeps up half a semitone (cap +3, reset when the combo banks or breaks), with a new
-  // layer on top (see _layers), so it always feels like it is still climbing. Never above 1760 Hz.
+  // like _quant, but a combo note never waits more than 45 ms for the grid (it plays right away instead)
+  _quantCap(now) { const g = this._quant(now); return g - now > 0.045 ? now + 0.005 : g; }
   // the next 16th on the grid (not a 32nd), or right now when the beat is not running
   _next16(now) {
     const fb = now + 0.005;
@@ -720,12 +861,18 @@ export class Audio {
     if (this.next < now || this.next > now + spb + 0.2) return fb;
     return Math.max(fb, this.next - Math.floor((this.next - now) / spb) * spb);
   }
+  // the combo ladder: link n plays pentatonic degree ladderDegree(n) (a two-octave run, and every ten links
+  // the run starts a degree higher, at most 5), with a new layer on top every ten (see _layers), so it
+  // always feels like it is still climbing and every note stays in the key. Folded under 1760 Hz.
+  // Used by pass, link, clutch and drill.
   _scaleF(n, base) {
-    n = Math.max(0, n | 0);
-    this._lad = Math.min(3, Math.max(this._lad, 0.5 * Math.floor(n / 10)));
-    const tr = this.key + this._lad;
     while (base * st(this.key + 22) > 1760 && base > 60) base /= 2;   // by key only, so the ladder never jumps mid-combo
-    return Math.min(1760, base * st(tr + pen(n % 10)));
+    return fold(base * st(this.key + pen(ladderDegree(n))));
+  }
+  // the unquantised front of a combo note: a click and a 1 ms square tick, right now, so the hit never feels late
+  _transient(t, f, dest) {
+    this.hum(t, 0.012, 0.14, 'highpass', 3500, 0.7, dest, 0, 0.001);
+    this.tone('square', fold(f * 2, 3600), 0, t, 0.001, 0.06, dest, 0.001);
   }
   // the layers a long combo earns on every blip: 10+ an octave, 20+ a fifth, 30+ a sparkle, 40+ a detuned unison
   _layers(q, f, n, dest) {
@@ -789,13 +936,18 @@ export class Audio {
     const endCombo = () => { this._clN = 0; if (this._mlift) { this._mlift = 0; this._rekey(); } };
     switch (name) {
       case 'pass': this.heat = Math.max(this.heat, +k || 0); this.heatT = now; break;
-      case 'comboBreak': this.heat = 0; this._lad = 0; this._dryUntil = now + 4 * 60 / this._bpm / 4; endCombo(); break;
-      case 'comboBank': case 'finisher': this._lad = 0; endCombo(); break;
+      case 'comboBreak': this.heat = 0; this._dryUntil = now + 4 * 60 / this._bpm / 4; endCombo(); break;
+      case 'comboBank': case 'finisher': endCombo(); break;
       case 'comboEnd': endCombo(); break;
-      case 'comboMilestone': if (!this._mlift) { this._mlift = 2; this._rekey(); this.crashNext = true; } break;
+      case 'comboMilestone': if (!this._mlift) { this._mlift = 2; this._rekey(true); } break;
       case 'dna': this._dnaN = now - this._dnaT <= 1.2 ? Math.min(8, this._dnaN + 1) : 0; this._dnaT = now; break;
       case 'drillLead': this._leadN = numArg(k, 'k') > 0 ? Math.min(6, this._leadN + 1) : this._leadN; break;
-      case 'frenzy': { const tier = Math.max(1, numArg(k, 'tier') | 0); this._ftier = tier; if (tier >= 3 && !this._lift) { this._lift = 1; this._rekey(); } break; }
+      case 'frenzy': { const tier = Math.max(1, numArg(k, 'tier') | 0); this._ftier = tier; if (tier >= 3 && !this._lift) { this._lift = 1; this._rekey(true); } break; }
+      case 'backflow': this._dryUntil = now + 60 / this._bpm; break;   // the band rewinds: one dry beat
+      case 'finale':            // the last sprint: a 1-bar snare roll from the next downbeat into a crash, and +6 bpm to the end
+        if (this.on) { const i = this.stepI & 15; this._rollAt = this.stepI + ((16 - i) & 15); this._rollLen = 16; }
+        if (!this._fin) { this._fin = 6; this._bpm += 6; this._syncDelay(); }
+        break;
       case 'synergy': if ((k === true || (k && k.fresh)) && this.on) this._queueFill(); break;
     }
     if (this.muted) { if (name === 'win' || name === 'lose') this._resetSong(); return; }
@@ -808,24 +960,26 @@ export class Audio {
   _sfx(name, k, now, t, K, fx) {
     const c = this.ctx, kf = (f) => inKey(f * st(K), K);   // a pickup pitch, moved into the song's key
     switch (name) {
-      case 'pass': {            // a blip that climbs the pentatonic scale, snapped onto the beat
-        const q = this._quant(now);
+      case 'pass': {            // a blip that climbs the pentatonic scale: a tick right now, the pitched tail on the beat
+        const q = this._quantCap(now);
         // the same overtake already rang as a combo link: just a dry tick, so it never sounds doubled
-        if (now - (this.last.link ?? -9) < 0.06) { this.hum(q, 0.006, 0.05, 'highpass', 5000, 0.7, fx, 0, 0.001); break; }
+        if (now - (this.last.link ?? -9) < 0.06) { this.hum(t, 0.006, 0.05, 'highpass', 5000, 0.7, fx, 0, 0.001); break; }
         const n = +k || 0, f = this._scaleF(n, 220);
         this._passF = f;
         if (this._slotG && Math.abs(q - this._slotT) < 0.02) {   // same 32nd: make that blip a bit louder instead
           this._slotG.gain.value = Math.min(0.22 / 0.15, this._slotG.gain.value + 0.12);
           break;
         }
+        this._transient(t, f, fx);
         const sg = this._gain(1, fx); this._slotG = sg; this._slotT = q; this._blipN++;
         this.tone('triangle', f * 0.97, f, q, 0.07, 0.15, sg, 0.003, 0.02);
         this._layers(q, f, n, sg);
         break;
       }
       case 'link': {            // a combo link: the next note of the climb, a timbre for each kind of trick
-        const n = numArg(k, 'n'), kind = (k && k.kind) || 'pass', q = this._quant(now), f = this._scaleF(n, 440);
+        const n = numArg(k, 'n'), kind = (k && k.kind) || 'pass', q = this._quantCap(now), f = this._scaleF(n, 440);
         this._passF = f; this._linkN = n; this._blipN++;
+        this._transient(t, f, fx);   // the hit lands now; only the pitched tail waits for the grid
         this._layers(q, f, n, fx);
         if (this._blipN % 4 === 0) {        // every 4th link sings a note of the pad chord
           const ch = this.chord || PROG[0]; let cf = 440 * st(K + ch[(this._blipN >> 2) % 3]); while (cf > 880) cf /= 2; while (cf < 440) cf *= 2;
@@ -835,6 +989,10 @@ export class Audio {
         else if (kind === 'gate') this._pluck(q, f / 2, 0.14);
         else if (kind === 'dodge') this.tone('sine', f * 0.9, f, q, 0.12, 0.09, fx, 0.01, 0.05);
         else if (kind === 'pop' || kind === 'bump') { const p = kind === 'pop' ? f : f / 2; this.tone('square', p, p * 0.5, q, 0.04, 0.05, fx, 0.001); this.hum(q, 0.012, 0.12, 'bandpass', 2200, 2, fx); }
+        if (kind === 'dodge' || kind === 'pop') {   // a little "aww" from the thing you just beat, sliding down
+          let af = f / 2; while (af > 420) af /= 2; while (af < 200) af *= 2;
+          this.say(q + 0.07, [af], 'ah', 'oo', 0.16, 0.06, 0.08, 0.84, fx, 0);
+        }
         else this.tone('triangle', f * 0.97, f, q, 0.07, 0.13, fx, 0.003, 0.02);
         break;
       }
@@ -945,9 +1103,15 @@ export class Audio {
         if (n >= 50) this._layers(t, f, n, fx);
         break;
       }
-      case 'win': {             // fanfare: "da da da DAAA, da da DAAAAA", in the key you finished in
-        this.duck(0.15, 3);
-        const m = st(K), r = 392 * m;
+      case 'win': {             // the theme's call in brass, then the fanfare "da da da DAAA, da da DAAAAA", in the key you finished in
+        this.duck(0.15, 3.9);
+        const m = st(K), r = 392 * m, sq = 0.075;
+        THEME[0].forEach((d, s) => {
+          if (d === null) return;
+          const f = fold(440 * m * st(PENTA[d]), 900), len = THEME_LEN[0][s];
+          this._brass(t + s * sq, f, sq * len * 0.85, 0.1);
+        });
+        t += 16 * sq;
         for (let j = 0; j < 9; j++) this.Pf(t + j * 0.04, 0.25 + j * 0.06, fx);
         [0, 0.12, 0.24].forEach((d) => this._brass(t + d, r, 0.1, 0.12));
         const t1 = t + 0.36, t2 = t + 1.14;
@@ -962,12 +1126,19 @@ export class Audio {
         this._resetSong();
         break;
       }
-      case 'lose': {            // the thief gloats with its own motif, then one of three sad stings
-        const m = st(K), rv = rivalIdx(k), t0 = rv >= 0 ? t + 0.9 : t;
+      case 'lose': {            // the thief gloats with its own motif, a kazoo tries the theme and gives up, then one of three sad stings
+        const m = st(K), rv = rivalIdx(k), tk = rv >= 0 ? t + 0.9 : t, t0 = tk + 0.95;
         if (rv >= 0) this._rival(t, rv, 1, 7, 0.6, K, 1);
+        let j = 0;
+        for (let s = 0; s < 16 && j < 4; s++) {   // the first 4 notes of the theme; the 4th hangs on and sags, unresolved
+          const d = THEME[0][s]; if (d === null) continue;
+          const last = j === 3, f = fold(440 * m * st(PENTA[d]), 700);
+          this.say(tk + j * 0.17, [f, f * 1.006], 'ee', last ? 'oo' : 'eh', last ? 0.6 : 0.15, 0.11, 0.05, last ? 0.94 : 1);
+          j++;
+        }
         let v = Math.floor(Math.random() * 3); if (v === this._loseV) v = (v + 1 + Math.floor(Math.random() * 2)) % 3;
         this._loseV = v;
-        this.duck(0.2, 3.2 + t0 - t); this.setMuffle(true); this.mlp.frequency.setTargetAtTime(18000, t0 + 3.2, 0.4);
+        this.duck(0.2, 3.2 + t0 - t); this.setMuffle(true); this.mlp.frequency.setTargetAtTime(18000, t0 + 3.2, this._ftc(0.4));
         if (v === 0) {          // sad trombone: wah wah wah waaaah
           [233, 220, 208].forEach((f, j) => this._brass(t0 + j * 0.42, f * m, 0.38, 0.13, true));
           this._brass(t0 + 1.26, 196 * m, 1.4, 0.13, true, true);
@@ -1029,7 +1200,7 @@ export class Audio {
         if (Math.abs(q - this._clQ) < 0.02) break;
         if (now - this._clT > 0.6) this._clN = 0;
         this._clT = now; this._clQ = q;
-        const gr = k && typeof k === 'object' && k.grade != null ? Math.max(0, Math.min(4, k.grade | 0)) : bankGradeOf(this.combo);
+        const gr = k && typeof k === 'object' && k.grade != null ? Math.max(0, Math.min(4, k.grade | 0)) : bankGrade(this.combo);
         const v = 0.55 + 0.15 * gr, n = Math.min(12, this._clN++), f = fold(880 * st(K + n), 1760);
         this.tone('sine', 150, 55, q, 0.05, 0.28 * v, fx, 0.002);
         this.tone('triangle', f, 0, q, 0.03, 0.07 * v, fx, 0.001);
@@ -1087,9 +1258,13 @@ export class Audio {
         this.tone('sine', f * st(4) * 2, 0, g + sp, 0.12, 0.03, this.fxEcho, 0.003);
         break;
       }
-      case 'tap': {             // k 0..1 climbs for the rank count-up; plain buttons use 0
-        const x = clamp01(k), f = 400 * Math.pow(4, x);
-        this.tone('sine', f * 1.75, f, t, 0.04, 0.15 + 0.15 * x, fx, 0.002);
+      case 'tap': {             // k 0..1 climbs for the rank count-up (in key, a soft triangle, never above 1100 Hz); plain buttons use 0
+        const x = clamp01(k);
+        if (x > 0) {
+          let f = inKey(Math.min(1100, 400 * Math.pow(4, x)), K);
+          if (f > 1100) f = inKey(f * st(-2.6), K);   // snapped up past the cap: take the scale note below
+          this.tone('triangle', f * 1.06, f, t, 0.04, 0.1 + 0.08 * x, fx, 0.002, 0.015);
+        } else this.tone('sine', 700, 400, t, 0.04, 0.15, fx, 0.002);
         this.hum(t, 0.01, 0.12, 'highpass', 4000, 0.7, fx);
         break;
       }
@@ -1167,12 +1342,10 @@ export class Audio {
         if (fresh) this.duck(0.5, 0.6);
         break;
       }
-      case 'close':             // a near miss: a whoosh and a tick on the combo note
+      case 'close':             // a near miss: just a whoosh (the combo link already played the note)
         this.hum(t, 0.18, 0.28, 'bandpass', 600, 1.5, fx, 2400, 0.02);
-        this.tone('triangle', this._passF, 0, t + 0.05, 0.03, 0.15, fx, 0.001);
         break;
-      case 'thread':            // threaded a gate: a rim and a little whistle
-        this.rim(t, 1.3, fx);
+      case 'thread':            // threaded a gate: a little whistle (the link's pluck is the hit)
         this.tone('sine', 1175 * st(K) * 0.94, 1175 * st(K), t + 0.02, 0.16, 0.08, fx, 0.01, 0.04);
         this.tone('sine', 1175 * st(K), 0, t + 0.06, 0.12, 0.03, this.fxEcho, 0.01);
         break;
@@ -1207,13 +1380,54 @@ export class Audio {
         this.tone('triangle', 300 * st(K), 450 * st(K), t, 0.5, 0.05, fx, 0.01, 0.25);
         break;
       }
-      case 'lockon': {          // something has you in its sights: a wet rising hum and a marimba knock
+      case 'spot': case 'lockon': {   // something has you in its sights (a lock-on, or a WBC spotting you): a wet rising hum and a marimba knock
         const pan = Math.max(-1, Math.min(1, numArg(k, 'pan'))), m = st(K);
+        if (name === 'spot' || (k && typeof k === 'object' && k.spot)) {   // the WBC alert adds a two-note "eep eep" so it reads as "you are seen"
+          const e = fold(kf(1320), 1500);
+          this.tone('square', e, 0, t, 0.035, 0.035, fx, 0.001); this.tone('square', e, 0, t + 0.09, 0.05, 0.035, fx, 0.001);
+        }
         let dest = fx;
         if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan; p.connect(fx); dest = p; }
         this.tone('triangle', 220 * m, 330 * m, t, 0.35, 0.09, dest, 0.03);
         this.tone('triangle', 220 * m, 330 * m, t, 0.3, 0.05, this.fxEcho, 0.03);
         [110, 130.81].forEach((f, j) => { this.tone('sine', f * m, 0, t + j * 0.09, 0.16, 0.22, dest, 0.001); this.tone('sine', f * m * 4, 0, t + j * 0.09, 0.04, 0.05, dest, 0.001); });
+        break;
+      }
+      case 'fork': {            // the fork: k.right true = a happy pluck run and a crowd "ooh"; false = sad brass and a "huh?"
+        const right = k === true || !!(k && k.right);
+        if (right) {
+          const r = fold(kf(523), 700);
+          [0, 4, 7, 12].forEach((s, j) => this._pluck(t + j * 0.05, r * st(s), 0.11));
+          this.say(t + 0.1, [220, 277, 330].map((f) => f * st(K)), 'oo', 'oh', 0.42, 0.12, 0.15, 1.03);
+        } else {
+          const r = fold(330 * st(K), 420);
+          this._brass(t, r, 0.18, 0.11, true); this._brass(t + 0.2, r * st(-2), 0.3, 0.11, true, false, r * st(-3), 0.3);
+          this.say(t + 0.3, [fold(196 * st(K), 260)], 'uh', 'eh', 0.22, 0.14, 0.06, 1.25);   // "huh?", rising like a question
+        }
+        break;
+      }
+      case 'backflow': {        // swimming the wrong way: a tape rewind (the band also drops out for a dry beat)
+        if (!this._busy(1)) {
+          const o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+          o.type = 'sawtooth'; o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(1400, t + 0.35);
+          lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 1;
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.04); g.gain.setValueAtTime(0.09, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+          o.connect(lp); lp.connect(g); g.connect(fx); this._go(o, t, t + 0.4);
+        }
+        this.hum(t, 0.35, 0.2, 'bandpass', 500, 2.5, fx, 4500, 0.03);
+        for (let j = 0; j < 5; j++) this.hum(t + j * 0.07, 0.012, 0.1, 'bandpass', 2500 + j * 400, 3, fx);   // the tape flutter
+        break;
+      }
+      case 'finale': {          // the final sprint: a riser and a "hey!" (the music rolls into a crash and speeds up)
+        if (!this._busy(1)) {   // a noise riser that swells to the "hey!"
+          const s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+          s.buffer = this.noiseBuf; bp.type = 'bandpass'; bp.Q.value = 1.5;
+          bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(5000, t + 0.36);
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.34); g.gain.linearRampToValueAtTime(0.0001, t + 0.38);
+          s.connect(bp); bp.connect(g); g.connect(fx); this.live++; s.onended = this._dec; s.start(t, Math.random() * 0.5); s.stop(t + 0.4);
+        }
+        this.tone('sawtooth', 220 * st(K), 440 * st(K), t, 0.06, 0.04, fx, 0.3, 0.34);
+        this.hey(t + 0.36, 1, fx);
         break;
       }
       case 'land':              // a heavy landing: low kick and a short cymbal
@@ -1259,7 +1473,8 @@ export class Audio {
   }
   _resetSong() {
     this._bpm = ZONE_BPM[0]; this.key = 0; this._lift = 0; this._mlift = 0; this._ftier = 0; this.heat = 0;
-    this._zone = 0; this._cTier = 0; this._rollAt = -1;
-    this._syncDelay(); this._applyTrem();
+    this._zone = 0; this._cTier = 0; this._rollAt = -1; this._rollLen = 4; this._fin = 0;
+    this._keyNext = null; this._keyCrash = false; this._whoopBar = -1;
+    this._syncDelay(); this._applyTrem(); this.threat(0); this.acid = 0;
   }
 }
