@@ -38,6 +38,8 @@ body.bright{--hudInk:#fff4f8}
 #rankTick{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:clip;margin-left:8px;white-space:nowrap;font-size:16px;line-height:1;font-weight:800;color:var(--mint);text-shadow:0 2px 0 var(--ink),0 0 6px var(--ink);opacity:0;transform:translateY(4px);transition:opacity .25s,transform .25s}
 #rankTick.on{opacity:1;transform:none}
 #rankRow.ms #rankTick,#rankTick.fork{opacity:0}
+/* swim 1: the +places ticker waits until Kevin has steered */
+body.noTick #rankTick{visibility:hidden}
 #rankBox{display:flex;align-items:baseline}
 #dist{flex:none;text-align:right;font-size:13px;color:var(--hudInk);font-weight:700;line-height:1.1;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink),0 0 8px rgba(20,4,20,.9)}
 #dist b{display:block;font-size:22px;color:var(--gold);text-shadow:0 2px 0 var(--ink),0 0 6px var(--ink)}
@@ -104,7 +106,7 @@ body.bright{--hudInk:#fff4f8}
 #combo.t7 .barW::after,#combo.t8 .barW::after{opacity:1;animation:sweep 1.2s linear infinite}
 @keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
 #combo .potRow{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;min-height:0;white-space:nowrap}
-#combo .m{display:none}
+#combo .m:empty{display:none}
 #combo .gap{font-size:12px;font-weight:800;line-height:1;letter-spacing:.04em;color:var(--cream);text-shadow:0 2px 0 var(--ink)}
 #combo .gap.near{color:var(--gold);animation:blink .4s infinite alternate}
 body.reduced #combo .gap.near{text-decoration:underline 2px}
@@ -122,7 +124,12 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 #combo .w,#combo .ft{font-size:16px;font-weight:800;letter-spacing:.04em;color:#fff;text-shadow:0 2px 0 var(--ink)}
 #combo .w.tagged{display:none}
 #combo .ft{text-shadow:0 2px 0 var(--ink),0 0 12px var(--pink)}
-#combo .m{font-size:13px;font-weight:800;color:var(--mint);opacity:.7;text-shadow:0 2px 0 var(--ink)}
+#combo .m{font-size:15px;font-weight:800;color:var(--mint);opacity:.9;text-shadow:0 2px 0 var(--ink);font-variant-numeric:tabular-nums}
+/* the recipe chips: the last 3 different links, joined by + (they take the gap-to-FRENZY slot while a chain builds) */
+#combo .links{font-size:11px;font-weight:800;line-height:1;letter-spacing:.04em;white-space:nowrap;text-shadow:0 2px 0 var(--ink);transition:opacity .4s}
+#combo .links i{font-style:normal;background:rgba(20,2,18,.7);border-radius:6px;padding:1px 4px 0}
+#combo .links b{margin:0 2px;color:var(--cream);opacity:.7}
+#combo .links.fade{opacity:.35}
 #combo .tag{font-size:12px;font-weight:800;background:var(--mint);color:#05301a;border-radius:8px;padding:1px 6px;opacity:0;transform:scale(.5);transition:opacity .2s,transform .25s cubic-bezier(.2,1.8,.4,1)}
 #combo .tag.on{opacity:1;transform:none}
 /* three rows at most (the number, the timer bar with the STYLE notches on it, the pot): 70 px tall */
@@ -176,6 +183,9 @@ body.racing #toast.on{transform:translate(-50%,0)}
 #banner .z:empty{display:none}
 #banner .t{font-size:26px;font-weight:800;color:#fff;line-height:1.05;text-shadow:0 3px 0 var(--ink),0 0 20px var(--pink)}
 #banner.intense .t{font-size:20px}
+/* a mid-swim MASHUP: one compact line under the HUD */
+#banner.compact .t{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ead9ff;text-shadow:0 2px 0 var(--ink),0 0 14px #b07bff}
+#banner.compact .bk{padding:2px 10px 3px}
 #banner .c{font-size:14px;color:var(--cream);max-width:min(330px,100%);margin:4px auto 0;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #banner.red .t{color:var(--bc,#ff5c7a);text-shadow:0 3px 0 var(--ink),0 0 22px #ff1f4a}
 #banner.red .z{color:#ff8b9b}
@@ -190,7 +200,7 @@ body.racing #toast.on{transform:translate(-50%,0)}
 body.egg #coach{display:none}
 #tut.lesson .dots{display:none}
 /* the tutorial: a compact one-line pill low on the screen, left of DASH (right of it for lefties), off Kevin and the tube ahead */
-#tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:64px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
+#tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:72px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
 body.lefty #tut{left:auto;right:calc(var(--safeR) + 12px)}
 /* the combo strip is up: the pill steps above it */
 body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
@@ -212,6 +222,8 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 #tut.ok{border-color:var(--mint)}#tut.ok .tt{color:var(--mint)}
 #tut.ok .tt::after{content:"  " attr(data-praise)}
 #tut.ok .ts{display:none}
+/* swim 1: the steer praise says what the swim is for on its second line */
+#tut.ok.goal .ts{display:block;color:var(--cream)}
 #tutTarget{position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px dashed var(--gold);pointer-events:none;animation:tgt 1s linear infinite;box-shadow:0 0 14px rgba(255,215,92,.6)}
 #tutTarget::after{content:attr(data-l);position:absolute;left:50%;top:48px;transform:translateX(-50%);white-space:nowrap;font-size:14px;line-height:1.2;font-weight:800;color:var(--gold);background:rgba(20,2,18,.88);border-radius:10px;padding:1px 8px 2px;text-shadow:0 2px 0 var(--ink)}
 #tutTarget[data-l=""]::after,#tutTarget:not([data-l])::after{display:none}
@@ -355,6 +367,15 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resLadder span.lost{color:#e6cfdc;background:transparent;border:1.5px dashed rgba(230,207,220,.55)}
 #resLadder span u{text-decoration:none;margin-right:3px;font-size:12px}
 #resLadder i{font-style:normal;color:#8f7388}
+/* the ladder folds into one chip (tap to open); a grudge or a nemesis keeps it open */
+#resLadder{flex-direction:column}
+#resLadder .lchip{min-height:44px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:800;color:var(--cream);background:rgba(255,255,255,.06)}
+#resLadder .lchip i{font-style:normal;font-size:11px;margin-left:2px;display:inline-block;transition:transform .2s}
+#resLadder.open .lchip i{transform:rotate(180deg)}
+#resLadder .lfull{display:none;flex-wrap:wrap;justify-content:center;align-items:center;gap:3px}
+#resLadder.open .lfull{display:flex}
+#resPep{text-align:center;font-size:12px;font-weight:700;color:var(--dim);max-width:330px;margin:0 auto 4px;line-height:1.2}
+#resReceipt div.trk{margin-top:2px;padding-top:2px;border-top:1px dashed rgba(255,255,255,.15)}
 #resEgg{width:100%;max-width:320px;margin:6px auto 0;font-size:12px;font-weight:700;color:var(--dim);text-align:center}
 #resEgg .bb{position:relative;height:10px;border-radius:6px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.12);margin-bottom:2px}
 #resEgg .bb i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:4px;background:linear-gradient(90deg,var(--pink),var(--gold));transform-origin:0 50%}
@@ -377,6 +398,8 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #result.first #resWhy{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
 #result.first #resActions{position:static;background:none;width:100%;margin:10px 0 0;padding:0}
 #result.first::before{flex-grow:.45;margin:0}#result.first::after{flex-grow:1;margin:0}
+/* every result sits a little high: SWIM AGAIN lands in the upper part of a tall phone, under the thumb */
+#result::before{flex-grow:.45;margin:0}#result::after{flex-grow:1;margin:0}
 #result.first #againBtn{min-height:60px;font-size:24px}
 #resShopBtn small.pk{font-size:11px;margin-top:1px}
 #resReceipt{width:100%;max-width:300px;margin:6px auto 0;font-size:14px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}
@@ -477,7 +500,7 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resEgg.close .bb::after{content:"";position:absolute;right:0;top:0;bottom:0;width:6%;border-radius:0 4px 4px 0;background:#ff1f4a;animation:gap .6s ease-in-out infinite alternate}
 @keyframes gap{from{opacity:.25}to{opacity:1}}
 #resTip.big{font-size:16px;font-weight:800;color:#fff;background:rgba(255,215,92,.14);border:2px solid rgba(255,215,92,.5);border-radius:14px;padding:8px 12px}
-#resSyn{text-align:center;color:#d9b8ff;font-size:13px;font-weight:800;max-width:330px;margin:4px auto 0;line-height:1.2}
+#resSyn{text-align:center;color:#d9b8ff;font-size:13px;font-weight:800;max-width:330px;margin:4px auto 0;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #resSyn:empty,#resTip:empty,#resNext:empty,#resRankLine:empty{display:none}
 #resActions{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:6px -18px 0;padding:10px 18px calc(var(--safeB) + 12px);background:rgba(20,2,18,.97);flex:none}
 /* the lesson sits right above the goal and SWIM AGAIN: two lines at most */
@@ -598,7 +621,13 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
      and the egg panel sit at the bottom of the HUD gutter, the lesson card at the top of the DASH gutter */
   #coach{top:calc(var(--safeT) + 8px)}
   #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,45vh) - 12px);max-height:120px;transform:translate(0,-10px)}
-  #tut .tt{-webkit-line-clamp:3}
+  /* the gutter card: the icon and the step dots sit in the flow, so the text gets the whole width and never clips */
+  #tut,#tut.step-drill{padding:6px 10px 8px;justify-content:flex-start;max-height:calc(100% - var(--safeT) - var(--safeB) - 110px)}
+  #tut>*{flex-shrink:0}
+  #tut .ic{position:static;margin:0 0 2px;font-size:18px;line-height:20px}
+  #tut .dots{position:static;flex-direction:row;gap:3px;margin-top:4px}
+  #tut .tt{font-size:14px;line-height:17px;-webkit-line-clamp:3;overflow-wrap:anywhere}
+  #tut .ts{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   #tut.on{transform:none}
   body.lefty #tut{right:auto;left:calc(var(--safeL) + 6px)}
   #combo{left:0;right:auto;width:calc(50% - min(280px,45vh));bottom:calc(var(--safeB) + 16px);padding-left:var(--safeL)}
@@ -621,6 +650,8 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   .card{flex:1;flex-direction:column;text-align:center;gap:4px;padding:8px 10px;min-height:0}
   .card .ic{width:auto;font-size:30px}
   .card .key{float:none}
+  /* COACH'S PICK rides on top of the card's column, centred, never over the icon */
+  .card .cp{position:static;order:-1;align-self:center;margin:0 auto}
   #cards h2,.ov h2{font-size:24px}
   #cards .sub{font-size:13px;margin-bottom:0}
   #rerollBtn{margin:4px auto}
@@ -636,6 +667,29 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   #title .btn{max-width:280px}
 }
 
+@media (orientation:landscape) and (max-height:420px){
+  #settings .setRow small{display:none}
+  /* Replay tutorial and Back share the last row */
+  body #settings #setTut{grid-column:1;margin:3px 0;max-width:none}
+  body #settings .foot{grid-column:2;position:static;width:auto;margin:3px 0;padding:0;background:none}
+  #settings .foot .btn{max-width:none}
+}
+/* very short landscape (568x320): the reroll button still fits under the cards */
+@media (orientation:landscape) and (max-height:340px){
+  .cardRow{margin:4px auto 2px}
+  #cards h2{font-size:20px}
+}
+/* short portrait: an empty mutation row takes no room, and the YOUR PLACE label goes (the HUD stays 110 px or less) */
+#mutRow:empty{height:0;margin-top:0}
+@media (max-height:600px) and (orientation:portrait){
+  #rankLbl{display:none}
+  /* a milestone still shows: over the rank number instead of in its own row */
+  #rankCol{position:relative}
+  #rankRow.ms #rankLbl{display:block;position:absolute;left:5px;bottom:100%;margin-bottom:1px}
+  #rankRow{height:42px}
+  #prog{margin-top:13px}
+  #energyRow{margin-top:11px}
+}
 /* Back buttons on long screens: a sticky footer, always one thumb away */
 .foot{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:4px -18px 0;padding:8px 18px calc(var(--safeB) + 12px);background:rgba(20,2,18,.97)}
 .foot .btn{margin:0 auto}
@@ -648,6 +702,8 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   #settings h2,#settings #setTut,#settings .foot{grid-column:1 / -1}
   #settings .setRow{margin:3px 0;min-height:44px;padding:4px 12px;font-size:15px}
   #setSensRow small{display:none}
+  /* every row keeps its own height (a squeezed track let rows overlap), and short screens drop the small print */
+  #settings{grid-auto-rows:max-content}
   #settings h2{margin-bottom:4px}
 }
 
@@ -722,7 +778,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
-  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
+  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
   <div id="tutTarget" class="hide"></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
@@ -793,6 +849,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div class="stats" id="resStats"></div>
     <div id="resReceipt"></div>
     <div id="resDna"></div>
+    <div id="resPep" class="hide"></div>
     <div id="resUp" class="hide"></div>
     <div id="resSyn"></div>
     <div id="resNext"></div>

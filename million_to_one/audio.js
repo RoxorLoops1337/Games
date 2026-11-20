@@ -88,7 +88,7 @@ export function themeVariation(seed) {
   });
 }
 const PENTA = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
-const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher']);   // the biggest moments, mixed 1.25x hotter
+const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher', 'trick']);   // the biggest moments, mixed 1.25x hotter (and a blast of 5+)
 const AEOL = [0, 2, 3, 5, 7, 8, 10];
 const MUSIC_VOL = 0.5;
 const MASTER = 0.9;
@@ -139,7 +139,7 @@ const GAP = {
   synTease: 0.3, swat: 0.06, tell: 0.25, comboLow: 0.02, comboMilestone: 0.4,
   fork: 0.5, backflow: 0.5, finale: 0.5, spot: 0.5,
   dnaTick: 0.03, rivalTell: 0.3, countered: 0.2, factory: 0.6, countTick: 0.04, medal: 0.4,
-  go: 0.3, resume: 0.3, wall: 0.12,
+  go: 0.3, resume: 0.3, wall: 0.12, trick: 0.3, domino: 0.1, whoosh: 0.15,
 };
 // sfx that get a little random detune (+-15 cents) and volume (+-12%) so repeats never sound like a machine gun
 const HUMAN = new Set(['sugar', 'dna', 'pop', 'bump', 'bonk', 'dash']);
@@ -190,6 +190,9 @@ export class Audio {
     this._cap = CAP; this._lite = false; this._iv = 0;                // voice cap, lite mode (slow phones), the scheduler's own timer
     this._rate = 1; this._rateFrom = 1; this._rateT0 = -9; this._fxR = 1;   // slow-mo bend: target, ease-out start, the rate the sfx being built uses
     this._rematch = false; this._rmClose = false; this._rmOpen = false; this._drone = null; this._closeF = 0; this._closeAt = -9;   // rematch groove
+    this._hs = 0;                              // the hat side for the 16th being built (0 left, 1 right)
+    this._tlift = 0; this._tliftPend = false; this._tliftEnd = -1;   // a first trick's one-bar key lift: semitones, waiting to land, the bar it drops on
+    this._cur = null; this._curK = 0; this._curPan = 0;              // the current (flow) loop
     this._dec = () => { this.live--; };
   }
 
@@ -205,7 +208,7 @@ export class Audio {
     this._syncDelay();
   }
   // the key the song is heading to (now, or on the next downbeat)
-  get keyTarget() { return ZONE_KEY[this._zone] + this._lift + this._mlift; }
+  get keyTarget() { return ZONE_KEY[this._zone] + this._lift + this._mlift + this._tlift; }
   // a key change waits for a downbeat (tick() lands it), so pads sung in the old key never clash with the
   // new one. whoop: a lift (FRENZY tier 3, combo milestone) also gets a rising "whoop" on step 12 of the
   // bar before and a crash on the landing.
@@ -221,8 +224,15 @@ export class Audio {
   }
   // called by tick() before each step: a pending key lands on its downbeat
   _landKey() {
-    if (this._keyNext === null || (this.stepI & 15) !== 0 || (this.stepI >> 4) < this._keyBar) return;
+    if ((this.stepI & 15) !== 0) return;
+    const bar = this.stepI >> 4;
+    if (this._tliftEnd >= 0 && bar >= this._tliftEnd) {   // a trick's one-bar lift is over: straight back down on this downbeat
+      this._tlift = 0; this._tliftEnd = -1;
+      if (this._keyNext !== null) this._keyNext = this.keyTarget; else this.key = this.keyTarget;
+    }
+    if (this._keyNext === null || bar < this._keyBar) return;
     this.key = this._keyNext; this._keyNext = null;
+    if (this._tliftPend && this._tlift) { this._tliftPend = false; this._tliftEnd = bar + 1; }
     if (this._keyCrash) { this.crashNext = true; this._keyCrash = false; }
   }
   _applyTrem() {           // the rapids' 6 Hz pad tremolo (a persistent LFO, its depth set per zone)
@@ -327,6 +337,33 @@ export class Audio {
     }
     if (Math.abs(v - this._acidL) > 0.004 || (v === 0 && this._acidL !== 0)) { this._acid.g.gain.setTargetAtTime(0.08 * v, this.ctx.currentTime, 0.02); this._acidL = v; }
   }
+  // current(k, pan): the player rides a flow current. k 0..1 (0 = out of it), pan -1..1 (the current's direction).
+  // A looped noise through a 600..900 Hz bandpass, then a lowpass sweeping 700..1500 Hz at 0.3 Hz (the water
+  // breathing), at 0.05 * k, panned pan * 0.6. In over 0.15 s, out over 0.3 s. Persistent nodes built on the
+  // first entry; a call per frame only compares two numbers. Silent when muted or sfx are off.
+  current(k, pan = 0) {
+    k = this.muted || this.sfxMuted ? 0 : clamp01(k); pan = Math.max(-1, Math.min(1, +pan || 0));
+    if (!this.ctx) { this._curK = k; return; }
+    if (!this._cur) { if (k <= 0) return; this._cur = this._loopCurrent(); this._curK = 0; }
+    const n = this._cur, now = this.ctx.currentTime;
+    if (Math.abs(k - this._curK) > 0.004 || (k === 0 && this._curK !== 0)) {
+      n.g.gain.cancelScheduledValues(now); n.g.gain.setTargetAtTime(0.05 * k, now, k > this._curK ? 0.05 : 0.1); this._curK = k;
+    }
+    if (n.p && Math.abs(pan - this._curPan) > 0.02) { n.p.pan.setTargetAtTime(pan * 0.6, now, 0.05); this._curPan = pan; }
+  }
+  _loopCurrent() {
+    const c = this.ctx, s = c.createBufferSource(), bp = c.createBiquadFilter(), lp = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noiseBuf; s.loop = true;
+    bp.type = 'bandpass'; bp.frequency.value = 735; bp.Q.value = 2.4;          // about 600..900 Hz
+    lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 1.2;
+    const lfo = c.createOscillator(), ld = c.createGain(); lfo.frequency.value = 0.3; ld.gain.value = 400;   // 1100 +- 400 Hz
+    lfo.connect(ld); ld.connect(lp.frequency); lfo.start();
+    g.gain.value = 0; s.connect(bp); bp.connect(lp); lp.connect(g);
+    let p = null;
+    if (c.createStereoPanner) { p = c.createStereoPanner(); p.pan.value = this._curPan * 0.6; g.connect(p); p.connect(this.fx); } else g.connect(this.fx);
+    s.start();
+    return { g, p };
+  }
   // the one-shot parts of the loops, scheduled from tick()
   _loops(now) {
     if (this._thr && this._thrK > 0.03 && now >= this._slurpT) {   // a wet slurp: a resonant filter gulping up and back
@@ -398,20 +435,49 @@ export class Audio {
       inp.connect(d); d.connect(dl); dl.connect(fb); fb.connect(d); dl.connect(wet); wet.connect(dest);
       return { inp, d, fb };
     };
-    const me = mkEcho(this.music, 0.33, 0.25), fe = mkEcho(this.fx, 0.3, 0.25);
-    this.echo = me.inp; this.delay = me.d; this.mfb = me.fb;
+    // the music's echo ping-pongs: tap 1 leans left, tap 2 right, and so on. Each side keeps a 0.33 crossfeed into
+    // the other channel (about pan 0.6), so a mono phone speaker still hears every tap
+    const pingPong = (dest, fbv, wetv) => {
+      const inp = c.createGain(), dL = c.createDelay(1.5), dR = c.createDelay(1.5), lpL = c.createBiquadFilter(), lpR = c.createBiquadFilter();
+      const fbL = c.createGain(), fbR = c.createGain(), wet = c.createGain(), dt = 3 * 60 / this._bpm / 4;
+      dL.delayTime.value = dt; dR.delayTime.value = dt; wet.gain.value = wetv; fbL.gain.value = fbv; fbR.gain.value = fbv;
+      for (const f of [lpL, lpR]) { f.type = 'lowpass'; f.frequency.value = 2400; }
+      inp.connect(dL); dL.connect(lpL); lpL.connect(fbL); fbL.connect(dR); dR.connect(lpR); lpR.connect(fbR); fbR.connect(dL);
+      let mg = null;
+      if (c.createChannelMerger) {
+        mg = c.createChannelMerger(2);
+        const side = (src, own, other) => { src.connect(mg, 0, own); const x = c.createGain(); x.gain.value = 0.33; src.connect(x); x.connect(mg, 0, other); };
+        side(lpL, 0, 1); side(lpR, 1, 0); mg.connect(wet);
+      } else { lpL.connect(wet); lpR.connect(wet); }
+      wet.connect(dest);
+      return { inp, d: dL, d2: dR, fb: fbL, fb2: fbR };
+    };
+    const me = pingPong(this.music, 0.33, 0.25), fe = mkEcho(this.fx, 0.3, 0.25);
+    this.echo = me.inp; this.delay = me.d; this.delayR = me.d2; this.mfb = me.fb; this.mfb2 = me.fb2;
     this.fxEcho = fe.inp; this.fxDelay = fe.d;
+    // stereo width on the music bus, never wider than |pan| 0.6: hats alternate -0.25 / +0.25 on even and odd
+    // 16ths, the rim sits at +0.35 (see hat(), ts(), rim()); pads are double voiced (see _pad())
+    const pan = (v) => { if (!c.createStereoPanner) return this.music; const p = c.createStereoPanner(); p.pan.value = v; p.connect(this.music); return p; };
+    this.hatPan = [pan(-0.25), pan(0.25)]; this.rimPan = pan(0.35);
     // shared noise
     const len = c.sampleRate; this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
     const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.noise = this.noiseBuf; // legacy name
     // the choir: two persistent vowel filter banks (pads sing "ooh", stabs go "wah")
     // the pads pass a tremolo gain: a persistent 6 Hz LFO whose depth is 0 except in the rapids
-    this.padBank = this._bank('oo', 2.4); this.padTrem = c.createGain(); this.padTrem.gain.value = 1;
-    this.padBank.out.connect(this.padTrem); this.padTrem.connect(this.music);
+    // the pads sing through two banks, one panned -0.4 and one +0.4, each voice detuned -7 / +7 cents (see _pad)
+    this.padBank = this._bank('oo', 2.4); this.padBankR = this._bank('oo', 2.4); this.padTrem = c.createGain(); this.padTrem.gain.value = 1;
+    for (const [b, pv] of [[this.padBank, -0.4], [this.padBankR, 0.4]]) {
+      if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pv; b.out.connect(p); p.connect(this.padTrem); } else b.out.connect(this.padTrem);
+    }
+    this.padTrem.connect(this.music);
     this.tremD = c.createGain(); this.tremD.gain.value = 0; this._trem = 0;
     const lfo = c.createOscillator(); lfo.frequency.value = 6; lfo.connect(this.tremD); this.tremD.connect(this.padTrem.gain); lfo.start();
-    const ps = c.createGain(); ps.gain.value = 0.35; this.padBank.out.connect(ps); ps.connect(this.echo);
+    const ps = c.createGain(); ps.gain.value = 0.35; this.padBank.out.connect(ps); this.padBankR.out.connect(ps); ps.connect(this.echo);
+    // the kick's body goes through a tanh shaper (drive 3, out 0.6): 2nd and 3rd harmonics around 200..400 Hz,
+    // where a phone speaker can actually play the kick (see B())
+    const kc = new Float32Array(1024); for (let i = 0; i < 1024; i++) kc[i] = Math.tanh(3 * (i / 1023 * 2 - 1));
+    this._kickCurve = kc; this._kickSh = new WeakMap();
     this.stabBank = this._bank('ah', 2.8); this.stabBank.out.connect(this.music);
     // the hummed bass shares one lowpass and one soft-clip shaper (harmonics a phone can play)
     this.bassLp = c.createBiquadFilter(); this.bassLp.type = 'lowpass'; this.bassLp.frequency.value = 500; this.bassLp.Q.value = 5;
@@ -482,7 +548,7 @@ export class Audio {
       this._rate = this._slowBig ? 0.72 : 0.85; this._rateT0 = -9;
       this._slpTo(this._slowBig ? 1400 : 2200, 0.03);
       if (big && !wasBig) {
-        this._setG(this.mfb.gain, 0.45);
+        this._setG(this.mfb.gain, 0.45); this._setG(this.mfb2.gain, 0.45);
         if (play) {           // tape stop: a saw and a hiss both sag from 900 to 120 Hz
           const g = this._gain(0.25, fx);
           this.tone('sawtooth', 900, 120, t, 0.18, 0.5, g, 0.004);
@@ -495,7 +561,7 @@ export class Audio {
     this._slowOn = false; this._slowBig = false; this._slow = false;
     this._slpTo(18000, 0.08);
     if (!wasBig && !big) return;
-    this._setG(this.mfb.gain, 0.33);
+    this._setG(this.mfb.gain, 0.33); this._setG(this.mfb2.gain, 0.33);
     if (!play) return;
     // reverse swell peaking on a 16th, then a soft crash
     const spb = 60 / this._bpm / 4; let pk = this._quant(now);
@@ -532,7 +598,7 @@ export class Audio {
     this._slowOn = false; this._slowBig = false; this._slow = false; this._impUntil = -1;
     this._rate = 1; this._rateFrom = 1; this._rateT0 = -9;
     if (!this.ctx) return; const now = this.ctx.currentTime;
-    for (const [p, v] of [[this.slp.frequency, 18000], [this.mfb.gain, 0.33], [this.mduck.gain, 1]]) { p.cancelScheduledValues(now); p.setValueAtTime(v, now); }
+    for (const [p, v] of [[this.slp.frequency, 18000], [this.mfb.gain, 0.33], [this.mfb2.gain, 0.33], [this.mduck.gain, 1]]) { p.cancelScheduledValues(now); p.setValueAtTime(v, now); }
     this._mdUntil = -1;
   }
   // hit stop: the music gasps (micro duck to `depth`, lowpass to 2500 Hz) for `ms`, then breathes out
@@ -576,7 +642,7 @@ export class Audio {
   }
   _syncDelay() {
     if (!this.ctx) return; const dt = Math.min(1.4, 3 * 60 / this._bpm / 4), t = this.ctx.currentTime;
-    this.delay.delayTime.setTargetAtTime(dt, t, 0.05); this.fxDelay.delayTime.setTargetAtTime(dt, t, 0.05);
+    this.delay.delayTime.setTargetAtTime(dt, t, 0.05); this.delayR.delayTime.setTargetAtTime(dt, t, 0.05); this.fxDelay.delayTime.setTargetAtTime(dt, t, 0.05);
   }
   // a fresh race: back to zone 1 tempo and key, and land the first beat on a crash. seed (optional, the daily's
   // seed) makes the phrase variations and the fill order repeatable; without one every run gets new ones
@@ -585,6 +651,7 @@ export class Audio {
     this._linkN = 0; this._dnaN = 0; this._leadN = 0; this._contest = false; this._cTier = 0; this._rollAt = -1; this._rollLen = 4; this._clN = 0;
     this._zone = 0; this._zoneBar = (this.stepI >> 4) + 1; this._fin = 0;
     this._keyNext = null; this._keyCrash = false; this._whoopBar = -1; this._themePend = true; this._themeAt = -99;
+    this._tlift = 0; this._tliftPend = false; this._tliftEnd = -1;
     const seeded = seed !== undefined && seed !== null && seed !== '' && Number.isFinite(+seed), sv = seeded ? Math.abs(+seed | 0) : 0;
     this._varN = seeded ? sv % 1000000 : (Math.random() * 1e6) | 0;
     this.fillN = seeded ? (sv >>> 3) % FILLS.length : this.fillN + Math.floor(Math.random() * 5);
@@ -592,7 +659,7 @@ export class Audio {
     this._holdUntil = 0; this._softIn = false; this._gaspUntil = -1; this._duelK = null; this._eggK = -1; this._bankPend = -1; this._themeOn = false;
     if (!this.ctx) return;
     this._syncDelay(); this._applyTlp(); this._applyTrem();
-    this.setMuffle(false); this.duck(1, 0); this.threat(0); this.acid = 0;
+    this.setMuffle(false); this.duck(1, 0); this.threat(0); this.acid = 0; this.current(0);
     if (this._slowOn) this.slowmoReset();
     const bar = (this.stepI >> 4) + 1; this.barBase = bar; this.crashBar = bar; this.fillBar = -1;
   }
@@ -696,13 +763,21 @@ export class Audio {
     });
     return { in: inp, out, fs };
   }
+  // the pad choir: every note double voiced, -7 cents in the left bank (pan -0.4) and +7 in the right (+0.4).
+  // Lite mode sings each chord note once, alternating sides (j = the note's index in the chord)
+  _pad(f, t, dur, vol, att, j) {
+    if (this._lite || !this.padBankR) { this._sing(j & 1 && this.padBankR ? this.padBankR : this.padBank, f, t, dur, vol, att); return; }
+    this._sing(this.padBank, f, t, dur, vol * 0.72, att, 0, 1, -7);
+    this._sing(this.padBankR, f, t, dur, vol * 0.72, att, 0, 1, 7);
+  }
+  _padVowel(v, t, glide) { this._vowel(this.padBank, v, t, glide); if (this.padBankR) this._vowel(this.padBankR, v, t, glide); }
   _vowel(bank, v, t, glide) { VOW[v].forEach((fr, k) => { const f = bank.fs[k].frequency; f.setTargetAtTime(fr, t, Math.max(0.002, glide / 3)); }); }
   // one sung note into a vowel bank (sawtooth, gentle attack, held, released)
-  _sing(bank, f, t, dur, vol, att = 0.1, pri = 0, scoop = 1) {
+  _sing(bank, f, t, dur, vol, att = 0.1, pri = 0, scoop = 1, det = null) {
     if (this._busy(pri)) return;
     const c = this.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth';
     o.frequency.setValueAtTime(f * scoop, t); if (scoop !== 1) o.frequency.exponentialRampToValueAtTime(f, t + Math.min(0.08, dur * 0.4));
-    o.detune.value = (Math.random() - 0.5) * 14;
+    o.detune.value = det !== null ? det : (Math.random() - 0.5) * 14;
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + att);
     g.gain.setValueAtTime(vol, t + Math.max(att, dur * 0.75)); g.gain.linearRampToValueAtTime(0, t + dur);
     o.connect(g); g.connect(bank.in); this._go(o, t, t + dur + 0.02);
@@ -749,8 +824,8 @@ export class Audio {
     if (lfo) this._go(lfo, t + dur * 0.25, t + dur + 0.03);
   }
   // a plucked string: saw through a lowpass that snaps shut
-  _pluck(t, f, vol, dest = this.fx) {
-    if (this._busy(1)) return;
+  _pluck(t, f, vol, dest = this.fx, pri = 1) {
+    if (this._busy(pri)) return;
     const c = this.ctx, o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
     o.type = 'sawtooth'; o.frequency.value = f; lp.type = 'lowpass'; lp.Q.value = 3;
     lp.frequency.setValueAtTime(Math.min(9000, f * 8), t); lp.frequency.exponentialRampToValueAtTime(f * 1.2, t + 0.12);
@@ -758,9 +833,12 @@ export class Audio {
   }
 
   // ------------------------------------------------------------------ the kit (all mouth noises)
-  B(t, v = 1, dest = this.music) {         // kick: sub thump, a body a phone can play, and a lip click
-    this.tone('sine', 185, 46, t, 0.22, 0.6 * v, dest, 0.002, 0.09);
-    this.tone('sine', 160, 95, t, 0.12, 0.75 * v, dest, 0.002, 0.09);
+  // kick: a sub thump (kept low: no phone plays it), a body pushed through the tanh shaper so its 2nd and 3rd
+  // harmonics (200..400 Hz) carry the kick on a phone speaker, a 330 Hz triangle knock and a lip click
+  B(t, v = 1, dest = this.music) {
+    this.tone('sine', 185, 46, t, 0.22, 0.35 * v, dest, 0.002, 0.09);
+    this.tone('sine', 160, 95, t, 0.12, 0.75 * v, this._shaped(dest), 0.002, 0.09);
+    this.tone('triangle', 330, 190, t, 0.06, 0.22 * v, dest, 0.002, 0.04);
     this.hum(t, 0.008, 0.35 * v, 'bandpass', 1200, 1.2, dest, 0, 0.001);
     this._kicks[this._kickI] = t; this._kickI = (this._kickI + 1) & 7;
   }
@@ -778,9 +856,21 @@ export class Audio {
     g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.42 * v, t + 0.07); g.gain.linearRampToValueAtTime(0.0001, t + 0.085);
     s.connect(f); f.connect(g); g.connect(dest); this.live++; s.onended = this._dec; s.start(t, Math.random() * 0.8); s.stop(t + 0.1);
   }
-  rim(t, v = 1, dest = this.music) { this.hum(t, 0.02, 0.24 * v, 'bandpass', 3800, 5, dest, 0, 0.001, 0); }
-  hat(t, v = 1, dest = this.music) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.022, 0.15 * v, 'highpass', 8500, 0.7, dest, 0, 0.001, 0); }
-  ts(t, v = 1, dest = this.music) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.13, 0.12 * v, 'highpass', 6000, 0.8, dest, 0, 0.004, 0); }
+  // the kick body's shaper in front of `dest` (one per destination, built on first use and kept while dest lives)
+  _shaped(dest) {
+    if (!this._kickSh || !dest) return dest;
+    let s = this._kickSh.get(dest);
+    if (!s) {
+      const c = this.ctx, w = c.createWaveShaper(), o = c.createGain(); w.curve = this._kickCurve; o.gain.value = 0.6;
+      w.connect(o); o.connect(dest); s = w; this._kickSh.set(dest, s);
+    }
+    return s;
+  }
+  // music-bus hats and rims go through their panners (hats: side 0 = left on even 16ths, 1 = right on odd ones)
+  _mpan(dest, side) { return dest === this.music && this.hatPan ? this.hatPan[side & 1] : dest; }
+  rim(t, v = 1, dest = this.music) { this.hum(t, 0.02, 0.24 * v, 'bandpass', 3800, 5, dest === this.music && this.rimPan ? this.rimPan : dest, 0, 0.001, 0); }
+  hat(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.022, 0.15 * v, 'highpass', 8500, 0.7, this._mpan(dest, side), 0, 0.001, 0); }
+  ts(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.13, 0.12 * v, 'highpass', 6000, 0.8, this._mpan(dest, side), 0, 0.004, 0); }
   tom(t, f, v = 1, dest = this.music) {    // mouth toms: "doon"
     this.tone('sine', f, f * 0.55, t, 0.2, 0.55 * v, dest, 0.003);
     this.tone('triangle', f * 2, f, t, 0.03, 0.14 * v, dest, 0.002);
@@ -830,6 +920,7 @@ export class Audio {
   }
   _step(t0) {
     const i = this.stepI & 15, bar = this.stepI >> 4, I = this._int;
+    this._hs = i & 1;                               // which side this 16th's hats sit on (even left, odd right)
     // a win/lose stinger owns the stage: the groove waits for it to finish and for the next downbeat, then
     // counts back in on a soft crash (it never clashes with the fanfare's key)
     if (this._holdUntil) {
@@ -861,8 +952,8 @@ export class Audio {
       if (i === 14 && (bar & 1)) this.ts(t, 0.64);
       for (const [s, semi, len] of BASS[0]) if (s === i) this._bass(t, root * st(semi), spb * len * 0.95, 0, 0.55);
       if (i === 0) {
-        this._vowel(this.padBank, 'oo', t, 0.25);
-        for (const s of chord) { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._sing(this.padBank, f, t, spb * 16 * 0.98, 0.02, 0.2); }
+        this._padVowel('oo', t, 0.25);
+        chord.forEach((s, j) => { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._pad(f, t, spb * 16 * 0.98, 0.02, 0.2, j); });
       }
       // even 8-bar phrases: the theme (bars 0..3); odd ones: the old 2-bar waiting-room hook
       const hb = bar & 7;
@@ -904,6 +995,16 @@ export class Audio {
       else if (pb === 0 || !this.motif || tb === 4) this._newMotif();
       if (this._drillOn && this._duelK !== null && !this._slow) this._duelBar(t, spb);
     }
+    // the B section: odd 8-bar phrases outside FRENZY (and outside the theme and the egg duel) pluck the phrase's
+    // motif, so the hook carries the whole race; even phrases stay open for the pass and link blips
+    const bsec = !fz && !this._themeOn && !this._drillOn && this.motif && bar >= this.barBase && (((bar - this.barBase) >> 3) & 1) === 1;
+    let bNote = false;
+    if (bsec && this.motif[i] !== null) {
+      if (L >= 1) bNote = true;
+      else { let j = 0; while (j < 16 && this.motif[j] === null) j++; bNote = i === j; }   // L 0: just the bar's first note
+    }
+    if (bsec && i === 0 && L >= 1) this._hatDuck = Math.max(this._hatDuck, t0 + 16 * spb - 0.005);   // the hats sit back under it
+    else if (bNote && L === 0) this._hatDuck = Math.max(this._hatDuck, t0 + 2 * spb);
     if (this._rollAt >= 0) {
       const r = this.stepI - this._rollAt;
       const n = this._rollLen;
@@ -953,7 +1054,7 @@ export class Audio {
       else { if (i % 4 === 2) this.ts(t, 1.1); else this.hat(t, hv * 1.1); }
       if (hot && L < 2 && i === 6) this.ts(t, 0.8);
       // stem ladder 1 (combo 6): hats double up into 32nds
-      if (cmb >= 6) { if (L === 0 && (i & 1)) this.hat(t, 0.6); else if (i % 2 === 0) this.hat(t + spb * 0.5, 0.6); }
+      if (cmb >= 6) { if (L === 0 && (i & 1)) this.hat(t, 0.6); else if (i % 2 === 0) this.hat(t + spb * 0.5, 0.6, M, 1); }
       this._signature(Z.sig, t, i, bar, spb, L);
     }
     // bass hum (stem ladder 2, combo 15: the busier bass line)
@@ -964,8 +1065,8 @@ export class Audio {
     // choir pads on the downbeat in the zone's vowel (the 4th bar opens up), wah stabs on the offbeats in FRENZY
     if (i === 0 && this.curFill !== 2) {
       const vol = L === 0 ? 0.028 : L === 1 ? 0.04 : 0.032;
-      this._vowel(this.padBank, (pb & 3) === 3 ? (Z.vowel === 'ah' ? 'oh' : 'ah') : Z.vowel, t, 0.25);
-      for (const s of chord) { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._sing(this.padBank, f, t, spb * 16 * 0.98, vol, 0.12); }
+      this._padVowel((pb & 3) === 3 ? (Z.vowel === 'ah' ? 'oh' : 'ah') : Z.vowel, t, 0.25);
+      chord.forEach((s, j) => { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._pad(f, t, spb * 16 * 0.98, vol, 0.12, j); });
     }
     if (!stop && fz && ((L === 2 && (i === 6 || i === 14)) || (L === 1 && hot && i === 14))) {
       this._vowel(this.stabBank, 'oo', t, 0.004); this._vowel(this.stabBank, 'ah', t + 0.03, 0.08);
@@ -977,6 +1078,7 @@ export class Audio {
       const tl = this._themeOn ? THEME_LEN[bar - this._themeAt] : null;
       if (tl) { let f = 880 * st(this.key + s); while (f > 1500) f /= 2; const ln = tl[i]; this._whistle(t, f, spb * (ln - 0.3), s, 0.08, true, ln >= 2); }
       else if (fz && L === 2) { let f = 880 * st(this.key + s); while (f > 1500) f /= 2; this._whistle(t, f, spb * 1.7, s); }
+      if (bNote && !stop) this._pluck(t, fold(440 * st(this.key + s), 1100), 0.05, M, 0);
       if (blazing && i % 2 === 0) {
         let f = 220 * st(this.key + s); while (f > 440) f /= 2;
         this.say(t, [f], 'ah', i % 4 ? 'eh' : 'oh', spb * 1.3, 0.16, 0.05, 1, M, 0);
@@ -993,7 +1095,7 @@ export class Audio {
         break;
       case 'goo': if (i === 15 && (bar & 1) === 0) this.tom(t, 98 * st(this.key % 12), 0.5); break;   // gate of goo: a sticky low tom pickup
       case 'wave': if (i === 0 && (bar & 1) === 0) this.hum(t, spb * 14, 0.05, 'lowpass', 260, 1.5, M, 1300, spb * 7, 0); break;   // womb sea: a wave washes in
-      case 'heart': if (i % 4 === 0 && this._tension <= 0.02) this.tone('sine', 150, 90, t + spb * 0.75, 0.05, 0.22, M, 0.003, 0, 0); break;   // egg: the "dub"
+      case 'heart': if (i % 4 === 0 && this._tension <= 0.02) this.tone('triangle', 300, 180, t + spb * 0.75, 0.05, 0.12, M, 0.003, 0, 0); break;   // egg: the "dub"
     }
   }
   // a new lead line for the phrase: a seeded variation of a theme bar (so the race keeps humming the theme)
@@ -1059,6 +1161,21 @@ export class Audio {
   }
   // like _quant, but a combo note never waits more than 45 ms for the grid (it plays right away instead)
   _quantCap(now) { const g = this._quant(now); return g - now > 0.045 ? now + 0.005 : g; }
+  // true when a kick (groove or sfx) already sits within `w` seconds of time q
+  _kickNear(q, w = 0.03) { for (let j = 0; j < 8; j++) if (Math.abs(this._kicks[j] - q) < w) return true; return false; }
+  // an sfx's kick layer at grid time q, skipped when the groove already kicks within 30 ms of it (no flams)
+  _gridKick(q, v, dest) { if (!this._kickNear(q)) this.B(q, v, dest); }
+  // the grid slot at or after time tw (a 16th, else a 32nd) when it is at most 45 ms away, else tw itself
+  _snapAt(tw) {
+    const c = this.ctx;
+    if (!this.on || !c || c.state !== 'running' || !this.next) return tw;
+    const now = c.currentTime, spb = 60 / this._bpm / 4;
+    if (!gridOk(this.next, now, spb)) return tw;
+    const g16 = this.next + Math.ceil((tw - this.next) / spb - 1e-6) * spb;
+    if (g16 - tw <= 0.045) return g16;
+    const g32 = this.next + Math.ceil((tw - this.next) / (spb / 2) - 1e-6) * spb / 2;
+    return g32 - tw <= 0.045 ? g32 : tw;
+  }
   // the first 16th the scheduler has not built yet (the beat runs LOOK ahead): where a cut in the groove can start
   _unsched(now) { const q = this._next16(now); return this.on && this.next > q && gridOk(this.next, now, 60 / this._bpm / 4) ? this.next : q; }
   // the next 16th on the grid (not a 32nd), or right now when the beat is not running
@@ -1136,7 +1253,7 @@ export class Audio {
   // thief's motif; lowE (k = 1 when critical). drillLead also takes core's event { k, kevin } (k = rival index,
   // -1 Kevin), which names the rival for the duel ostinato. dnaTick ({ i, n, grade? }: helix i of n lands),
   // rivalTell (k = rival index), countered, factory (k = 0..3 fill level), countTick (k = 0..1), medal (k = tier 1..3),
-  // spot (k = { pan }: one gap per side). comboBank (k = grade, or { grade, cascade: true } for the whole coin run).
+  // spot (k = { pan }: one gap per side), trick ({ id, first, kinds }), domino (k = chain length), whoosh ({ pan }). comboBank (k = grade, or { grade, cascade: true } for the whole coin run).
   sfx(name, k) {
     if (!this.ctx) return;
     const c = this.ctx, now = c.currentTime, t = now + 0.005;
@@ -1184,7 +1301,7 @@ export class Audio {
     // Sound effects off but music on: win and lose still stop the groove for their stinger (_holdUntil), so the
     // stinger plays on the music side instead (0.8x, at the music's volume, after the muffle so lose's
     // setMuffle(true) dulls the band and not its own sad trombone). Music-only players hear the fanfare.
-    const big = BOOST.has(name), base = this.fx, rescue = this.sfxMuted && (name === 'win' || name === 'lose');
+    const big = BOOST.has(name) || (name === 'blast' && numArg(k, 'n') >= 5), base = this.fx, rescue = this.sfxMuted && (name === 'win' || name === 'lose');
     const fx = rescue ? this._gain(0.8 * this._mLevel(), this.slp) : big ? this._gain(this.calm ? 0.8 : 1.25, base) : base;
     this.fx = fx; if ((big || rescue) && this.calm) this._minA = 0.015;
     this._fxR = UI_SFX.has(name) ? 1 : this._rateNow(now);   // slow-mo bends every non-UI effect built below
@@ -1550,8 +1667,8 @@ export class Audio {
       }
       case 'combo': {           // a crew member shouts "yeah!", higher for bigger combos
         const p = fold(220 * st(K + pen(Math.min(5, Math.floor((+k || 0) / 10)))), 440);   // climbs the pentatonic, in key
-        this.say(t, [p, p * 1.5], 'ee', 'ah', 0.28, 0.24, 0.12, 0.85);
-        this.B(t, 0.6, fx);
+        this.say(t, [p, p * 1.5], 'ee', 'ah', 0.28, 0.24, 0.12, 0.85);   // the voice right away
+        this._gridKick(this._quantCap(now), 0.6, fx);                      // its kick on the groove
         break;
       }
       case 'comboEnd':          // combo dropped: a deflating slide whistle
@@ -1579,7 +1696,7 @@ export class Audio {
       case 'boss': {            // passed a named rival: their own motif, a kick and a crash
         if (typeof k === 'number' && k >= 0 && k <= 4) this._rival(t, k, 1);
         else [0, 4, 7].forEach((s) => this._brass(t, 392 * st(K + s), 0.25, 0.08));
-        this.B(t, 1, fx); this.crash(t, 0.8, fx);
+        const q = this._quantCap(now); this._gridKick(q, 1, fx); this.crash(q, 0.8, fx);
         break;
       }
       case 'bossTaunt': this._rival(t, +k || 0, 0.5, -5); break;
@@ -1626,16 +1743,17 @@ export class Audio {
         this.tone('sine', 1175 * st(K), 0, t + 0.06, 0.12, 0.03, this.fxEcho, 0.01);
         break;
       case 'blast': {           // chain pop: one kick and a rising ladder of pops
-        const n = Math.max(0, numArg(k, 'n') | 0);
-        this.B(t, Math.min(1.8, 1 + 0.1 * n), fx);
+        const n = Math.max(0, numArg(k, 'n') | 0), q = this._quantCap(now);
+        this._gridKick(q, Math.min(1.8, 1 + 0.1 * n), fx);
         for (let j = 0; j < Math.min(n, 8); j++) { const f = 380 * st(K + j * 2); this.tone('sine', f, f * 4, t + 0.03 + j * 0.04, 0.05, 0.22, fx, 0.002, 0, 1, j === 0 ? DUCK : null); }
+        if (n >= 5) { this.crash(Math.max(q, t + 0.03), 0.6, fx, 0.3); this.impact(90); }   // a big chain: a crash and a hit-stop gasp (and the BOOST send)
         break;
       }
-      case 'record': {          // new personal best: da-da-DAA plus a crash
-        const m = st(K);
+      case 'record': {          // new personal best: da-da-DAA plus a crash (the whole sting slides so the DAA lands on the grid)
+        const m = st(K), tg = this._snapAt(t + 0.2); t = tg - 0.2;
         this._brass(t, 523 * m, 0.08, 0.11); this._brass(t + 0.1, 523 * m, 0.08, 0.11);
         [523, 659, 784].forEach((f) => this._brass(t + 0.2, f * m, 0.36, 0.08));
-        this.B(t + 0.2, 0.9, fx); this.crash(t + 0.2, 0.8, fx, 0.4);
+        this._gridKick(tg, 0.9, fx); this.crash(tg, 0.8, fx, 0.4);
         break;
       }
       case 'legendary': {       // a rising hiss, then a bell
@@ -1768,11 +1886,63 @@ export class Audio {
         if (tier >= 3) [0, 4, 7, 12].forEach((s, j) => this.tone('triangle', fold(1047 * m, 1400) * st(s), 0, lt + 0.08 + j * 0.05, 0.16, 0.05, this.fxEcho));
         break;
       }
+      case 'trick': {           // a named trick: its 3 links replayed as a quantised arpeggio, a wah chord and a crash
+        // k = { id, first, kinds: [k1, k2, k3] }. Each kind keeps its own link timbre on ladder degrees +0 / +2 / +4
+        // from the live combo's degree, 1/16 apart from the next 16th. first: the first time this trick is landed
+        // this run, so the band also lifts the key for one bar (like comboMilestone, but it drops back after the bar)
+        const kinds = k && Array.isArray(k.kinds) ? k.kinds : [];
+        const sp = 60 / this._bpm / 4, q = this._next16(now), d0 = ladderDegree(this._linkN);
+        let base = 440; while (base * st(K + 22) > 1760 && base > 60) base /= 2;   // the same octave as the link ladder
+        for (let j = 0; j < 3; j++) {
+          const f = fold(base * st(K + pen(d0 + 2 * j))), qj = q + j * sp;
+          if (j === 0) this._transient(t, f, fx);
+          this._kindVoice(qj, f, typeof kinds[j] === 'string' ? kinds[j] : 'pass', fx);
+        }
+        const tc = q + 3 * sp, ch = this.chord || PROG[0];
+        if (this.stabBank) {    // the stab bank's "wah" (music bus), sung in the current chord
+          this._vowel(this.stabBank, 'oo', tc, 0.004); this._vowel(this.stabBank, 'ah', tc + 0.03, 0.08);
+          for (const s of ch) { let f = 220 * st(K + s); while (f > 520) f /= 2; while (f < 260) f *= 2; this._sing(this.stabBank, f, tc, 0.22, 0.07, 0.01, 1); }
+        }
+        this.say(tc, [fold(330 * st(K + ch[0]), 520)], 'oo', 'ah', 0.2, 0.08, 0.06, 1, fx, 0);   // the wah on the fx side too (music off still hears it)
+        this.crash(tc, 0.8, fx, 0.5);
+        if (k && k.first && !this._tlift && this.on) { this._tlift = 2; this._tliftPend = true; this._rekey(true); }
+        break;
+      }
+      case 'domino': {          // a domino chain: bowling pins clacking up the scale, and an "oooh" for 3+
+        const n = Math.max(0, numArg(k, 'n') | 0), m = Math.min(n, 6), f0 = this._passF || 440;
+        for (let j = 0; j < m; j++) {
+          const tj = t + j * 0.035, f = fold(f0 * st(pen(j)), 2400);
+          this.hum(tj, 0.025, 0.12, 'bandpass', 1800, 4, fx, 2600, 0.001, 1, j === 0 ? DUCK : null);   // the clack
+          this.tone('triangle', f, f * 0.92, tj, 0.025, 0.07, fx, 0.001);                            // the pin's knock, in key
+          this.tone('sine', fold(f * 2.3, 4000), 0, tj, 0.018, 0.025, fx, 0.001);                     // a woody overtone
+        }
+        if (n >= 3) {
+          const r = fold(220 * st(K), 330);
+          this.say(t + m * 0.035 + 0.05, [r, r * st(4), r * 1.5], 'oo', 'oh', 0.45, 0.12, 0.18, 1.05, fx, 0);
+        }
+        break;
+      }
+      case 'whoosh': {          // swept into a current: a 0.25 s noise sweep 400 -> 2000 Hz from its side
+        const pan = Math.max(-1, Math.min(1, numArg(k, 'pan')));
+        let dest = fx;
+        if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan * 0.6; p.connect(fx); dest = p; }
+        this.hum(t, 0.25, 0.22, 'bandpass', 400, 1.6, dest, 2000, 0.06);
+        break;
+      }
       case 'land':              // a heavy landing: low kick and a short cymbal
         this.B(t, 0.8, fx); this.tone('sine', 90, 40, t, 0.12, 0.3, fx, 0.002);
         this.hum(t, 0.12, 0.14, 'highpass', 6000, 0.7, fx);
         break;
     }
+  }
+  // one trick link's timbre at time q and pitch f (see 'trick'): close a bell, gate a pluck, dodge a slide, pop or
+  // bump a square, anything else (pass, unknown) the pass blip
+  _kindVoice(q, f, kind, fx) {
+    if (kind === 'close') { this.tone('sine', f, 0, q, 0.14, 0.11, fx, 0.002); this.tone('sine', f * 2, 0, q, 0.2, 0.04, fx, 0.002); this.tone('sine', f * 3.01, 0, q, 0.1, 0.02, this.fxEcho, 0.002); }
+    else if (kind === 'gate') this._pluck(q, f / 2, 0.14, fx);
+    else if (kind === 'dodge') this.tone('sine', f * 0.9, f, q, 0.12, 0.09, fx, 0.01, 0.05);
+    else if (kind === 'pop' || kind === 'bump') { const p = kind === 'pop' ? f : f / 2; this.tone('square', p, p * 0.5, q, 0.04, 0.05, fx, 0.001); this.hum(q, 0.012, 0.12, 'bandpass', 2200, 2, fx); }
+    else this.tone('triangle', f * 0.97, f, q, 0.07, 0.15, fx, 0.003, 0.02);
   }
   // coins climbing the pentatonic: grade 0 one coin, grade 4 twelve over 0.8 s, grades 3 and 4 end in a bell.
   // from/to pick a slice of the cascade (comboBank plays coin 0 alone, the fallback plays the rest, starting now);
@@ -1812,12 +1982,13 @@ export class Audio {
     this.hum(t, 0.02, 0.4 * v, 'highpass', 3000, 0.7, this.fx);
     this.tone('sine', f * 2.76, 0, t + 0.01, 0.4, 0.04 * v, this.fxEcho);
   }
-  // "lub-dub": a low thump, plus a triangle an octave up and a 12 ms knock at 1100 Hz, the band a phone speaker
-  // can actually play (the sub alone vanishes on a phone)
+  // "lub-dub": a low thump, plus triangles about 2x up (lub 280 -> 160 Hz, dub 340 -> 220 Hz, both at 0.3x, a bit
+  // over the 0.25x / 0.2x minimum the phone mix needs) and a 12 ms knock at 1100 Hz, the band a phone speaker can
+  // actually play (the sub alone vanishes on a phone)
   heart(t, v, dest = this.fx) {
     this.tone('sine', 70, 40, t, 0.14, 0.6 * v, dest, 0.005);
     this.tone('sine', 140, 90, t, 0.06, 0.35 * v, dest, 0.003);
-    this.tone('triangle', 280, 180, t, 0.06, 0.3 * v, dest, 0.003);
+    this.tone('triangle', 280, 160, t, 0.06, 0.3 * v, dest, 0.003);
     this._knock(t, 1100, 0.012, 0.15 * v, dest);
     this.tone('sine', 85, 45, t + 0.14, 0.12, 0.45 * v, dest, 0.005);
     this.tone('sine', 170, 110, t + 0.14, 0.05, 0.28 * v, dest, 0.003);
@@ -1835,7 +2006,8 @@ export class Audio {
     this._bpm = ZONE_BPM[0]; this.key = 0; this._lift = 0; this._mlift = 0; this._ftier = 0; this.heat = 0;
     this._zone = 0; this._cTier = 0; this._rollAt = -1; this._rollLen = 4; this._fin = 0;
     this._keyNext = null; this._keyCrash = false; this._whoopBar = -1;
+    this._tlift = 0; this._tliftPend = false; this._tliftEnd = -1;
     this._gaspUntil = -1; this._duelK = null; this._bankPend = -1;
-    this._syncDelay(); this._applyTrem(); this.threat(0); this.acid = 0;
+    this._syncDelay(); this._applyTrem(); this.threat(0); this.acid = 0; this.current(0);
   }
 }
