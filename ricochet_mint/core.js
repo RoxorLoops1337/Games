@@ -1,3 +1,4 @@
+import {tr,getLang,setLang} from './i18n.js';
 // Ricochet Mint: game rules and physics. No DOM, so the tests can run it headless.
 const W=400,WALL=8,CEIL=8,G=520,BASE_H=540;
 // the Den's ceiling hatch up to the Attic, and the Attic's pinball parts
@@ -18,8 +19,10 @@ const SZ={bumper:27,bucket:28,spinner:50,ring:30,launcher:22,small:17,jackpot:28
 function tierVal(t){return Math.pow(BAL.val,t)}
 const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
 for(let a=0;a<26;a++)for(let b=0;b<26;b++)SUF.push(String.fromCharCode(97+a)+String.fromCharCode(97+b));
+const ZHU=['','万','亿','兆','京','垓','秭','穰','沟','涧','正','载','极'];
 function fmt(n){
   if(!isFinite(n))return '∞';
+  if(getLang()==='zh'&&n>=1e4&&n<1e52){let i=0;while(n>=1e4&&i<ZHU.length-1){n/=1e4;i++}return (n<10?n.toFixed(2):n<100?n.toFixed(1):n.toFixed(0))+ZHU[i]}
   if(n<1000)return n<10&&n%1?n.toFixed(1):String(Math.floor(n));
   let i=0;while(n>=1000&&i<SUF.length-1){n/=1000;i++}
   return (n<10?n.toFixed(2):n<100?n.toFixed(1):n.toFixed(0))+SUF[i];
@@ -64,15 +67,22 @@ const PERKS={
  hunter:{i:'🎯',name:'Monster Hunter',desc:'Critters take 50% more damage and pay double bounty.',max:5},
  copy:{i:'🪣',name:'Copy Cat',desc:'Copy Buckets hold coins 15% shorter.',max:3}
 };
+// names and descriptions come from i18n.js, in the current language
+const live=(o,f,key)=>Object.defineProperty(o,f,{get:()=>tr(key),enumerable:true,configurable:true});
+TIERS.forEach((t,i)=>live(t,'n','tier.'+i));
+ROOMS.forEach((r,i)=>{live(r,'name','room.'+i+'.name');live(r,'short','room.'+i+'.short')});
+for(const k in ITEMS){live(ITEMS[k],'name','item.'+k+'.name');live(ITEMS[k],'desc','item.'+k+'.desc')}
+for(const k in ENEMIES){live(ENEMIES[k],'name','enemy.'+k+'.name');live(ENEMIES[k],'intro','enemy.'+k+'.intro')}
+for(const k in PERKS){live(PERKS[k],'name','perk.'+k+'.name');live(PERKS[k],'desc','perk.'+k+'.desc')}
 function itemStat(T,L,room){
-  if(T==='bumper')return 'Pays '+fmt(2*Math.pow(BAL.up,L-1))+'x per hit';
-  if(T==='bucket')return 'Copies coins up to '+TIERS[bucketMax(room,L)].n+'. '+TIERS[room.def.tier].n+' takes '+bucketTime(room,room.def.tier,L).toFixed(1)+'s, '+Math.round(Math.min(.4,.03*(L-1))*100)+'% chance the copy is one tier up';
-  if(T==='spinner')return 'Pays '+fmt(1.5*Math.pow(BAL.up,L-1))+'x per hit, '+(2+.15*L).toFixed(1)+' spin speed';
-  if(T==='zapper')return (1+.7*(L-1)).toFixed(1)+' damage every '+(1.5*Math.pow(.92,L-1)).toFixed(2)+'s, range '+(100+10*L);
-  if(T==='ring')return 'Next 3 hits pay '+(3+.5*(L-1)).toFixed(1)+'x';
-  if(T==='magnet')return 'Pull range '+(90+8*L)+', merges nearby pay '+(3+3*L)+'x bonus';
-  if(T==='launcher')return '+'+(2+L)+' combo per launch, pays '+fmt(Math.pow(BAL.up,L-1))+'x';
-  if(T==='jackpot')return 'Base '+fmt(2*Math.pow(BAL.up,L-1))+'x, 100x chance '+(1+.4*(L-1)).toFixed(1)+'%, 10x chance '+(8+(L-1)).toFixed(0)+'%';
+  if(T==='bumper')return tr('stat.bumper',{x:fmt(2*Math.pow(BAL.up,L-1))});
+  if(T==='bucket')return tr('stat.bucket',{max:TIERS[bucketMax(room,L)].n,base:TIERS[room.def.tier].n,s:bucketTime(room,room.def.tier,L).toFixed(1),p:Math.round(Math.min(.4,.03*(L-1))*100)});
+  if(T==='spinner')return tr('stat.spinner',{x:fmt(1.5*Math.pow(BAL.up,L-1)),v:(2+.15*L).toFixed(1)});
+  if(T==='zapper')return tr('stat.zapper',{d:(1+.7*(L-1)).toFixed(1),s:(1.5*Math.pow(.92,L-1)).toFixed(2),r:100+10*L});
+  if(T==='ring')return tr('stat.ring',{x:(3+.5*(L-1)).toFixed(1)});
+  if(T==='magnet')return tr('stat.magnet',{r:90+8*L,x:3+3*L});
+  if(T==='launcher')return tr('stat.launcher',{c:2+L,x:fmt(Math.pow(BAL.up,L-1))});
+  if(T==='jackpot')return tr('stat.jackpot',{x:fmt(2*Math.pow(BAL.up,L-1)),a:(1+.4*(L-1)).toFixed(1),b:(8+(L-1)).toFixed(0)});
   return '';
 }
 // where pads go, in the order you buy them: walls (and the floor in the Den and on the Rooftop)
@@ -126,7 +136,7 @@ class Room{
   float(x,y,txt,col){if(this.floats.length<40)this.floats.push({x,y,txt,life:1.4,col,big:true})}
   pay(c,base,x,y){
     let a=this.value(c)*base*(1+c.combo*this.g.comboStep())*(this.g.frenzy>0?3:1);c.sq=1;
-    if(c.combo>=10&&c.combo%10===0&&c.cpop!==c.combo){c.cpop=c.combo;this.float(c.x,c.y-34,'COMBO '+c.combo+'!','#ff8fa3');this.g.sfx('combo',c.combo)}
+    if(c.combo>=10&&c.combo%10===0&&c.cpop!==c.combo){c.cpop=c.combo;this.float(c.x,c.y-34,tr('f.combo',{n:c.combo}),'#ff8fa3');this.g.sfx('combo',c.combo)}
     if(c.charge>0){a*=c.chargeM;c.charge--}
     let lucky=false;const L=this.g.pk('lucky');
     if(L&&this.rng()<.03*L){a*=10;lucky=true;this.burst(x,y,'#7dff7a',10)}
@@ -199,15 +209,15 @@ class Room{
     if(this.real()<this.cap()){
       const up=this.rng()<Math.min(.4,.03*(it.lv-1))&&t<MAXT;
       const b=this.addCoin(up?t+1:t,s.x,s.y-30,60+this.rng()*60,-520);b.bucketCd=1.4;b.flash=1;
-      this.float(s.x,s.y-40,up?'UPGRADED COPY!':'COPY!','#22e6e6');
-    }else this.float(s.x,s.y-40,'WALLET FULL','#ff4766');
+      this.float(s.x,s.y-40,tr(up?'f.upCopy':'f.copy'),'#22e6e6');
+    }else this.float(s.x,s.y-40,tr('f.walletFull'),'#ff4766');
     this.burst(s.x,s.y-20,'#22e6e6',12);this.g.sfx('release',t);
   }
   damage(e,d){
     e.hp-=d*(1+.5*this.g.pk('hunter'));e.flash=1;
     if(e.hp<=0&&!e.dead){e.dead=true;this.kills++;this.g.kills++;
       const bounty=120*this.unit()*Math.pow(1.15,Math.min(this.kills,40))*(e.type==='jammer'?1.5:1)*(1+this.g.pk('hunter'));
-      this.earn(bounty+e.loot*2,e.x,e.y,'#ffcf3f',true);this.float(e.x,e.y-26,'POP!','#7dff7a');
+      this.earn(bounty+e.loot*2,e.x,e.y,'#ffcf3f',true);this.float(e.x,e.y-26,tr('f.pop'),'#7dff7a');
       if(e.target&&e.target.item)e.target.item.jam=false;
       this.burst(e.x,e.y,ENEMIES[e.type].col,40);this.g.sfx('pop',0);}
   }
@@ -238,7 +248,7 @@ class Room{
       if(e.leaving){}
       else if(e.type==='jammer'){
         if(!e.target||!e.target.item){e.target=null;e.stuck=false;const b=this.slots.filter(s=>s.item&&!s.item.jam);if(b.length)e.target=b[Math.floor(this.rng()*b.length)]}
-        if(e.target&&!e.stuck){const dx=e.target.x-e.x,dy=e.target.y-e.y,d=Math.hypot(dx,dy);if(d<4){e.stuck=true;e.target.item.jam=true;g.sfx('jam',0);this.float(e.x,e.y-30,'JAMMED!','#ff8a1f')}else{const sp=70;e.vx=dx/d*sp;e.vy=dy/d*sp}}
+        if(e.target&&!e.stuck){const dx=e.target.x-e.x,dy=e.target.y-e.y,d=Math.hypot(dx,dy);if(d<4){e.stuck=true;e.target.item.jam=true;g.sfx('jam',0);this.float(e.x,e.y-30,tr('f.jammed'),'#ff8a1f')}else{const sp=70;e.vx=dx/d*sp;e.vy=dy/d*sp}}
         if(e.stuck){e.vx=0;e.vy=0;e.x=e.target.x;e.y=e.target.y}
         else if(!e.target){e.vx=e.vx||40;e.vy=e.vy||30}
       }else if(e.type==='thief'){
@@ -247,13 +257,13 @@ class Room{
         if(this.rng()<dt*.4){const a=this.rng()*6.283;e.vx=Math.cos(a)*40;e.vy=Math.sin(a)*40}
         if(e.y<Math.max(50,FLOOR-480)&&e.vy<0)e.vy=Math.abs(e.vy);
       }
-      if(e.type!=='thief'&&e.life>120&&!e.leaving){e.leaving=true;if(e.stuck&&e.target&&e.target.item)e.target.item.jam=false;e.stuck=false;e.target=null;this.float(e.x,e.y-26,'bye!','#9a93c9')}
+      if(e.type!=='thief'&&e.life>120&&!e.leaving){e.leaving=true;if(e.stuck&&e.target&&e.target.item)e.target.item.jam=false;e.stuck=false;e.target=null;this.float(e.x,e.y-26,tr('f.bye'),'#9a93c9')}
       if(e.leaving){e.vx*=.95;e.vy=-140;if(e.y<-40){e.dead=true;e.gone=true}}
       e.x+=e.vx*dt;e.y+=e.vy*dt;
       if(!e.stuck&&!e.leaving){
         if(e.x<WALL+e.r){e.x=WALL+e.r;e.vx=Math.abs(e.vx)}const xr=(this.i===1?LANE-3:W-WALL)-e.r;if(e.x>xr){e.x=xr;e.vx=-Math.abs(e.vx)}
         const yb=FLOOR-(this.i===1?190:90);if(e.y>yb){e.y=yb;e.vy=-Math.abs(e.vy)}
-        if(e.type==='thief'&&e.life>45&&e.y<-30){e.dead=true;e.gone=true;if(e.loot>0)g.toast('The Pickpocket got away with '+fmt(e.loot)+'!')}
+        if(e.type==='thief'&&e.life>45&&e.y<-30){e.dead=true;e.gone=true;if(e.loot>0)g.toast(tr('t.thiefAway',{v:fmt(e.loot)}))}
       }
     }
   }
@@ -285,7 +295,7 @@ class Room{
       for(const e of this.enemies){if(e.dead||e.leaving)continue;
         const er=e.stuck?e.r+12:e.r,dx=c.x-e.x,dy=c.y-e.y;if(dx*dx+dy*dy>=(c.r+er)*(c.r+er))continue;
         if(e.type==='muncher'&&e.bite<=0&&c.t<=this.biteMax()){
-          c.dead=true;e.bite=9;e.hp=Math.min(e.max,e.hp+e.max*.25);e.r=Math.min(34,e.r+1.5);this.float(e.x,e.y-28,'CHOMP!','#5dff7a');g.sfx('chomp',0);break}
+          c.dead=true;e.bite=9;e.hp=Math.min(e.max,e.hp+e.max*.25);e.r=Math.min(34,e.r+1.5);this.float(e.x,e.y-28,tr('f.chomp'),'#5dff7a');g.sfx('chomp',0);break}
         if(e.type==='thief'&&e.steal<=0&&e.life<45){const st=Math.min(g.cash,this.value(c)*25);if(st>0){g.cash-=st;e.loot+=st;this.float(e.x,e.y-24,'-'+fmt(st),'#ff4766');g.sfx('steal',0)}e.steal=2.5}
         if(this.solid(c,e.x,e.y,e.stuck?e.r+12:e.r,e.vx,e.vy,210)&&c.ehit<=0){c.ehit=.2;this.damage(e,c.t-this.def.tier+1);this.burst(c.x,c.y,ENEMIES[e.type].col,4)}
       }
@@ -318,7 +328,7 @@ class Room{
       }}
     if(cs.some(c=>c.dead))this.coins=cs.filter(c=>!c.dead);
     if(this.enemies.some(e=>e.dead))this.enemies=this.enemies.filter(e=>!e.dead);
-    if(this.i!==1&&!this.pool().some(r=>r.coins.length||r.queue.length||r.slots.some(s=>s.item&&s.item.hold))&&g.cash<this.cost('mint')){this.rescueT+=dt;if(this.rescueT>3){this.rescueT=0;this.addCoin(this.def.tier,200,40);g.toast('Here, a free coin to keep you going.')}}else this.rescueT=0;
+    if(this.i!==1&&!this.pool().some(r=>r.coins.length||r.queue.length||r.slots.some(s=>s.item&&s.item.hold))&&g.cash<this.cost('mint')){this.rescueT+=dt;if(this.rescueT>3){this.rescueT=0;this.addCoin(this.def.tier,200,40);g.toast(tr('t.freeCoin'))}}else this.rescueT=0;
   }
   wallHit(c,side,pads){
     const pd=pads.find(p=>p.s===side&&Math.abs(c.y-p.y)<PAD_LEN/2+c.r*.3);
@@ -388,7 +398,7 @@ class Room{
     room.merge(a,b,[],hi);room.coins=room.coins.filter(c=>!c.dead);return p}
   merge(a,b,mags,at){
     a.dead=b.dead=true;const x=at?at.x:(a.x+b.x)/2,y=at?at.y:(a.y+b.y)/2,g=this.g;
-    if(a.t===MAXT){const v=this.value(a)*200;this.earn(v,x,y,'#ffffff',true);this.burst(x,y,'#ffffff',60);g.sfx('jackpot',MAXT);this.float(x,y-30,'PRISM JACKPOT!','#ffcf3f');return}
+    if(a.t===MAXT){const v=this.value(a)*200;this.earn(v,x,y,'#ffffff',true);this.burst(x,y,'#ffffff',60);g.sfx('jackpot',MAXT);this.float(x,y-30,tr('f.prism'),'#ffcf3f');return}
     const n=this.addCoin(a.t+1,x,y,(a.vx+b.vx)/2,Math.min((a.vy+b.vy)/2,-160));n.combo=Math.max(a.combo,b.combo);n.flash=1;
     let bonus=.5+4*g.pk('merge');for(const m of mags){if(Math.hypot(m.x-x,m.y-y)<90+8*m.item.lv){bonus+=3+3*m.item.lv;m.item.pulse=1}}
     this.earn(this.value(n)*bonus,x,y,TIERS[a.t+1].c,true);this.burst(x,y,TIERS[a.t+1].c,18);g.sfx('merge',a.t+1);
@@ -419,16 +429,16 @@ class Game{
   room(){return this.rooms[this.cur]}
   roomCost(i){return i===1?BAL.room2:BAL.room3}
   unlockRoom(i){const r=this.rooms[i];if(r.open||this.cash<this.roomCost(i))return false;this.cash-=this.roomCost(i);r.init();this.cur=i;this.sfx('clear');
-    this.events.push({k:'info',icon:ROOMS[i].icon,spr:'room:'+i,title:ROOMS[i].name+' is open!',text:i===1?'The hatch in the Den ceiling is open. Any coin that flies up through it lands in the shooter lane up here and gets fired into a pinball room with automatic flippers. Everything pays 12x. Coins that slip past the flippers fall back to the Den. Tip: a Launcher shoots coins up to the hatch.':'Up on the roof under the moon. Coins start as Ruby and everything pays 900x. Three critters at a time though, so build zappers.'});return true}
+    this.events.push({k:'info',icon:ROOMS[i].icon,spr:'room:'+i,title:tr('unlock.'+i+'.title'),text:tr('unlock.'+i+'.text')});return true}
   itemUnlocked(T){const u=ITEMS[T].unlock;return u<0?this.enemiesOn:this.life>=u}
-  discover(t){if(t+1>this.seen){this.seen=t+1;if(t>0&&!this.headless)this.toast('New coin: '+TIERS[t].n+'!');if(t>0)this.sfx('new',t)}}
+  discover(t){if(t+1>this.seen){this.seen=t+1;if(t>0&&!this.headless)this.toast(tr('t.newCoin',{n:TIERS[t].n}));if(t>0)this.sfx('new',t)}}
   toast(t){this.events.push({k:'toast',t})}
   meetEnemy(type,room){if(!this.met[type]){this.met[type]=1;const d=ENEMIES[type];this.events.push({k:'info',icon:d.i,spr:'enemy:'+type,title:d.name,text:d.intro})}}
   earn(a){this.cash+=a;this.life+=a;this.rateBuf[this.rateBuf.length-1]+=a;
     if(!this.enemiesOn&&this.life>=1500){this.enemiesOn=true;this.rooms[0].enemyT=12}
   }
   checkUnlocks(){
-    ITEM_ORDER.forEach((T,i)=>{const bit=1<<i;if(!(this.notified&bit)&&this.itemUnlocked(T)){this.notified|=bit;if(i>0)this.toast('New build unlocked: '+ITEMS[T].name+'! Tap an empty slot.')}});
+    ITEM_ORDER.forEach((T,i)=>{const bit=1<<i;if(!(this.notified&bit)&&this.itemUnlocked(T)){this.notified|=bit;if(i>0)this.toast(tr('t.newBuild',{n:ITEMS[T].name}))}});
     const goal=BAL.lifeMile*Math.pow(10,this.mile);
     if(!this.pending&&this.life>=goal){this.mile++;this.pending=this.offer()}
   }
@@ -442,7 +452,7 @@ class Game{
   }
   // tap the Lucky Coin: a cash burst or a 3x Frenzy
   tapLucky(x,y){const L=this.lucky;if(!L||L.room!==this.cur||Math.hypot(L.x-x,L.y-y)>40)return null;this.lucky=null;const R=this.room();
-    if(this.rng()<.5){this.frenzy=20;R.float(x,y-30,'FRENZY x3!','#ffcc4d');this.sfx('jackpot',0);return 'frenzy'}
+    if(this.rng()<.5){this.frenzy=20;R.float(x,y-30,tr('f.frenzy'),'#ffcc4d');this.sfx('jackpot',0);return 'frenzy'}
     const v=Math.max(this.rate*45,300*R.unit());this.cash+=v;this.life+=v;this.rateBuf[this.rateBuf.length-1]+=v;R.float(x,y-30,'+'+fmt(v)+'!','#ffcc4d');R.burst(x,y,'#ffcc4d',40);this.sfx('jackpot',0);return 'cash'}
   step(dt){this.time+=dt;this.stepGlobal(dt);for(const r of this.rooms)if(r.open)r.step(dt)}
   tick(dt){this.rateT+=dt;if(this.rateT>=1){this.rateT-=1;this.rateBuf.push(0);if(this.rateBuf.length>16)this.rateBuf.shift()}
@@ -463,4 +473,4 @@ class Game{
   }
 }
 
-export {HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,padSpots,setRoomHeight,BASE_H,SZ,W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
+export {tr,setLang,getLang,HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,padSpots,setRoomHeight,BASE_H,SZ,W,H,WALL,CEIL,FLOOR,G,BAL,TIERS,MAXT,coinR,tierVal,SUF,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketTime,bucketMax,ghostLife,mulberry,Room,Game};
