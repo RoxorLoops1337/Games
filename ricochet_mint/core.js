@@ -352,6 +352,15 @@ class Room{
       if(f.state===1&&Math.abs(target-f.ang)<1e-4){f.hold+=dt;if(f.hold>.12){f.state=0;f.hold=0;f.cd=.2}}
     }
   }
+  // one-sided: the pocket above it is sealed, so a coin shoved past the end is put back into the room
+  deflect(c){
+    const ax=W-WALL+20,ay=LANE_TOP-45,bx=W-170,by=CEIL-6,abx=bx-ax,aby=by-ay,L=Math.hypot(abx,aby);
+    const t=((c.x-ax)*abx+(c.y-ay)*aby)/(L*L);if(t<0||t>1)return this.seg(c,ax,ay,bx,by,6,null,180);
+    const nx=aby/L,ny=-abx/L,s=(c.x-ax)*nx+(c.y-ay)*ny,rr=c.r+6;if(s>=rr)return false;
+    const px=ax+abx*t,py=ay+aby*t;c.x=px+nx*rr;c.y=py+ny*rr;
+    const vn=c.vx*nx+c.vy*ny;if(vn<180){c.vx+=nx*(180-vn)-(vn<0?.75*vn*nx:0);c.vy+=ny*(180-vn)-(vn<0?.75*vn*ny:0)}
+    return true;
+  }
   atticPhysics(c,dt){
     const g=this.g;
     if(!(c.plunge>0)){if(Math.abs(c.vx)+Math.abs(c.vy)<25)c.still=(c.still||0)+dt;else c.still=0;if(c.still>1.5){c.still=0;c.vy=-380;c.vx=(c.x<(WALL+LANE)/2?1:-1)*180}}
@@ -362,7 +371,7 @@ class Room{
     if(this.seg(c,LANE,LANE_TOP,LANE,FLOOR,3,null,0)&&c.x<LANE&&c.y>LANE_TOP){c.vx=vxIn;c.x=Math.min(c.x,LANE-3-c.r);this.wallHit(c,'R',this.pads())}
     if(c.x>LANE&&c.y+c.r>FLOOR-4&&c.vy>=0){c.dead=true;this.queue.unshift({t:c.t,combo:c.combo});return}
     // top-right deflector sends launched coins into the room
-    this.seg(c,W-WALL+20,LANE_TOP-45,W-170,CEIL-6,6,null,180);
+    this.deflect(c);
     // inlane slopes down to the flippers
     const f0=this.flip[0],f1=this.flip[1];
     this.seg(c,WALL,FLOOR-170,f0.px,f0.py,6,null,0);this.seg(c,LANE-3,FLOOR-170,f1.px,f1.py,6,null,0);

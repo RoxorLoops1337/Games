@@ -1,6 +1,6 @@
 // Ricochet Mint: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { fmt, LANE, HOLE_X, setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
+import { fmt, LANE, LANE_TOP, HOLE_X, setRoomHeight, BASE_H, Game, Room, W, H, WALL, CEIL, FLOOR, BAL, MAXT, ITEMS, ITEM_ORDER, bucketTime, bucketMax, mulberry } from '../ricochet_mint/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
@@ -176,6 +176,20 @@ const run = (g, sec, each) => { const dt = 1 / 60; for (let t = 0; t < sec; t +=
   let atticPays = 0; const op = A.pay.bind(A); A.pay = (...a) => { atticPays++; op(...a); };
   g.enemiesOn = false; run(g, 20);
   ok(atticPays > 5, 'the plunger fires it into the pinball room, where hits pay (' + atticPays + ')');
+}
+{
+  // coins shoved into the top-right corner above the deflector used to stay there forever
+  const g = new Game(mulberry(41), true); g.cash = BAL.room2; g.unlockRoom(1); g.enemiesOn = false;
+  const D = g.rooms[0], A = g.rooms[1]; D.coins = [];
+  const ax = W - WALL + 20, ay = LANE_TOP - 45, bx = W - 170, by = CEIL - 6, L = Math.hypot(bx - ax, by - ay);
+  const inPocket = (c) => ((c.x - ax) * (by - ay) / L - (c.y - ay) * (bx - ax) / L) < 0;
+  for (const [t, dx] of [[7, 30], [8, 30], [0, 70], [1, 100]]) { const x = W - WALL - dx, ly = ay + (by - ay) * (x - ax) / (bx - ax); const c = A.addCoin(t, x, CEIL + (ly - CEIL) * 0.4, 0, 0); ok(inPocket(c), 'test coin starts in the pocket'); }
+  for (let i = 0; i < 240 * 2; i++) g.step(1 / 240);
+  ok(!A.coins.some(inPocket), 'coins in the top-right pocket get pushed back into the room');
+  // and a busy Attic never traps coins there again
+  [0, 1, 3, 2, 6, 1, 4, 2, 5, 1, 3, 5, 7, 8, 6, 4].forEach((t) => A.receive({ t, combo: 0 }));
+  let stuck = 0; run(g, 180, () => { if (A.coins.some(inPocket)) stuck++; });
+  ok(stuck === 0, 'no coin ends up in the pocket in 3 busy minutes (' + stuck + ' frames)');
 }
 for (const tier of [0, 5, 9, 11]) {
   // every coin size gets out of the shooter lane (big ones used to bounce back down forever)
