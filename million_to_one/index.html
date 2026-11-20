@@ -183,6 +183,9 @@ body.reduced #combo .links i.ghost{opacity:.7}
 #dashBtn.lowGas .lg{display:block}
 #dashBtn.nudge{animation:nudge .8s ease-in-out infinite;box-shadow:0 5px 0 #5c0822,0 0 0 6px rgba(255,215,92,.35),0 0 24px rgba(255,215,92,.7)}
 #dashBtn.refuse{animation:refuse .3s ease-out}
+/* DASH pressed with the cooldown still running: the cooldown arc pulses for .25 s (the press is not stored) */
+#dashBtn.cdp::before{animation:cdp .25s ease-out}
+@keyframes cdp{40%{transform:scale(1.14);box-shadow:0 0 0 3px rgba(255,244,248,.7)}}
 @keyframes refuse{0%,100%{transform:none}20%{transform:translateX(-7px) rotate(-6deg)}40%{transform:translateX(6px) rotate(5deg)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
 @keyframes nudge{50%{transform:scale(1.14)}}
 #dashBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #5c0822}
@@ -293,7 +296,9 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
 #drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
-#drillUI .row b{width:auto;min-width:48px;max-width:110px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drillUI .row b{flex:none;width:78px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:clip}
+/* a long rival name drops a size instead of an ellipsis (main.js sets .long past 7 characters) */
+#drillUI .row b.long{font-size:11px;letter-spacing:0}
 /* the counter's taps so far, in the rival's colour, under the TAP LEFT / RIGHT prompt; each new one pops a +1 */
 #drillUI .cpips{display:flex;justify-content:center;gap:6px;margin:3px 0 1px}
 #drillUI .cpips i{position:relative;width:12px;height:12px;border-radius:50%;border:2px solid var(--pc,#ffd75c);background:transparent}
@@ -387,7 +392,7 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 .card.r3{border-color:var(--gold);background:#3d2a08;box-shadow:0 5px 0 #12030f,0 0 22px rgba(255,215,92,.45)}.card.r3 .lvl{color:var(--gold)}
 .card.r1 .lvl{color:var(--pink2)}
 /* result */
-#resTitle{font-size:clamp(24px,8.5vw,36px);white-space:nowrap;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
+#resTitle{font-size:clamp(24px,8.5vw,36px);white-space:nowrap;max-width:100%;box-sizing:border-box;padding:0 8px;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
 #resWhy,#resRankLine,#resTip,#resNext,#resGloat,#resSyn,#resEgg span{text-wrap:balance}
 #resWhy{text-align:center;color:var(--cream);font-size:16px;font-weight:700;margin:4px auto 0;max-width:340px;line-height:1.2}
 #resRankLine{text-align:center;color:var(--dim);font-size:13px;font-weight:600;margin:2px auto 4px;max-width:330px;line-height:1.2}
@@ -416,6 +421,10 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 #dailyBtn .dpips i{width:9px;height:9px;border-radius:50%;background:rgba(58,32,0,.25)}
 #dailyBtn .dpips i.on{background:#3a2000}
 #dailyBtn .dpips i.x3{box-shadow:0 0 0 2px #fff4f8}
+/* streak freezes held: ice pips after the week */
+#dailyBtn .dfrz{display:flex;gap:3px;margin-left:6px}
+#dailyBtn .dpips .dfrz i{width:auto;height:9px;background:none;font-style:normal;font-size:11px;line-height:9px;color:#1d6f9a;text-shadow:0 0 4px rgba(255,255,255,.9)}
+.hab.frz .pips i.on{color:#5ce1ff}
 #dailyBtn .dnx{font-size:12px;opacity:.85}
 #resGap .nb{display:inline-block;margin-left:6px;background:var(--mint);color:#05301a;border-radius:8px;padding:0 6px;font-size:12px;vertical-align:2px}
 #resLadder{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:3px;margin:6px auto 2px;font-size:13px;font-weight:800}
@@ -801,7 +810,8 @@ body.reduced .card .shine{display:none}
   #drillUI .cd{white-space:normal}
   #drillUI .cd small{display:block;margin:0;vertical-align:0}
   #drillUI .cd b{font-size:22px}
-  #drillUI .row b{width:auto;min-width:40px;max-width:90px}
+  #drillUI .row b{width:68px}
+  body.egg #hud #prog{margin-left:0}
   #drillUI.up{transform:none}
   #banner{top:22%}
   #banner.top,body.egg #banner.top{top:calc(var(--safeT) + 40px)}
@@ -895,10 +905,17 @@ body.reduced .card .shine{display:none}
 /* ---------- threat lane: something hostile within 700 px ahead. A banner always goes up under the HUD (main.js adds
    .top, never down onto Kevin) at .55, and the lesson pill fades, so the tube ahead stays readable ---------- */
 body.threat #tut.on{opacity:.3}
-/* intense (combo 10+, FRENZY, the egg zone): the HUD keeps only what matters */
-body.intense #alive,body.intense #zoneName,body.intense #toEgg{visibility:hidden}
-body.intense #mutRow:not(.peek){visibility:hidden}
-body.intense #rank{font-size:clamp(20px,9cqw,28px)}
+/* intense (combo 10+, FRENZY, or something hostile 600 px ahead): the screen calms down. The side text fades to .3 and the
+   HUD's shade lightens; opacity only, so nothing changes size and --hudB holds still */
+#rankLbl,#alive,#toEgg,#zoneName,#mutRow,#energyRow .gas{transition:opacity .25s}
+body.intense #rankLbl,body.intense #alive,body.intense #zoneName,body.intense #toEgg,body.intense #energyRow .gas{opacity:.3}
+body.intense #mutRow:not(.peek){opacity:.3}
+body.intense #hud{background:linear-gradient(180deg,rgba(20,4,20,.5),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
+body.intense.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.4),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
+@media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){
+  body.intense #hud,body.intense.egg #hud{background:linear-gradient(90deg,rgba(20,4,20,.55),rgba(20,4,20,.35))}
+  body.lefty.intense #hud{background:linear-gradient(270deg,rgba(20,4,20,.55),rgba(20,4,20,.35))}
+}
 #toEgg{display:block}
 /* swim 1: the rival pips, name tags and the distance wait for the lesson to end, then pop in */
 body.tutHud .rv,body.tutHud #dist{visibility:hidden}
@@ -956,6 +973,9 @@ body.egg #headRow,body.egg #shields,body.egg #dnaHud,body.egg #pace,body.egg #mu
 body.egg #rankRow{height:auto}
 body.egg #rank{font-size:26px}
 body.egg #prog{margin-top:8px}
+/* the folded rank row no longer pushes the bar below the pause button: the bar clears it on the left (#me and the rival
+   dots are placed in px of the bar's own width, measured again when body.egg toggles) */
+body.egg #prog{margin-left:52px}
 body.egg #energyRow{margin-top:8px}
 body.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.45),rgba(20,4,20,.45) 70%,rgba(20,4,20,0))}
 /* swim 1's lesson card sits centred right under the HUD (portrait), off the thumbs and the tube ahead */
@@ -980,7 +1000,15 @@ body.bnr #tut .ts{display:none!important}
 #result.first #againBtn{min-height:68px}
 /* the first result with Dad's pick affordable: spending is the primary move, the rematch is second */
 #result.spend #resShopBtn{font-size:22px;min-height:60px}
-#result.spend #againBtn{min-height:64px;font-size:22px}
+#result.spend #againBtn{min-height:68px;font-size:24px}
+/* the spend card: Habits is gold but a size under SWIM AGAIN, and 🏠 stays the small ghost icon beside it, so SWIM AGAIN
+   is still the biggest, lowest target */
+#result.spend #resShopBtn,.row3.spendRow #resShopBtn{font-size:19px;min-height:56px}
+#result.spend #resMenuBtn,#result.first #resMenuBtn{flex:0 0 52px;width:52px;min-height:48px;font-size:20px;padding:8px 0}
+/* the first shop (no habit bought yet): Dad's pick is the full row, the others fold to name, effect and price */
+#shopList.firstShop .hab:not(.pick) .qp,#shopList.firstShop .hab:not(.pick) .pips,#shopList.firstShop .hab:not(.pick) .np{display:none}
+#shopList.firstShop .hab:not(.pick){opacity:.55;padding:5px 10px}
+#shopList.firstShop .hab:not(.pick) .ic{font-size:24px}
 /* shop: the first-visit caption, Dad's pick pulsing, the Grandad levels (gold), the one-time ribbon */
 #shopCap{font-size:15px;font-weight:800;color:var(--gold);text-align:center;max-width:330px;margin:0 auto 6px;line-height:1.15;text-shadow:0 2px 0 var(--ink);animation:land .5s cubic-bezier(.2,1.8,.4,1)}
 .hab button.pulse{animation:buyPulse 1.4s ease-in-out infinite}
