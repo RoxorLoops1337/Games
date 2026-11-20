@@ -85,10 +85,18 @@ export const TRICKS = [
   { id: 'grudge',   kinds: ['rival', 'bump', 'rival'] },
   { id: 'snack',    kinds: ['sugar', 'dna', 'close'] },
   { id: 'popcorn',  kinds: ['pop', 'close', 'weave'] },
-  { id: 'domino',   kinds: ['domino', 'pop', 'rival'] },
+  { id: 'domino',   kinds: ['bump', 'pop', 'rival'] },     // (the id stays 'domino' so saved meta.tricks counts stay valid)
   { id: 'needle',   kinds: ['gate', 'weave', 'snipe'] },
+  // 'cash' is no link and no STYLE kind: cashOut pushes it into the sequence, so a finisher can open a trick
+  { id: 'encore',   kinds: ['cash', 'pop', 'weave'] },
+  { id: 'rebound',  kinds: ['cash', 'slingshot', 'rival'] },
 ];
-export const TRICK_T = 2.0, TRICK_LINKS = 5, TRICK_FIRST = 3, TRICK_MULT = 0.2, TRICK_MULT_CAP = 1.0, TRICK_FRENZY = 1.0, TRICK_DNA = 10;
+// TRICK STREAK: a different trick within TRICK_STREAK_T s of the last one climbs p.trickStreak (anything else resets it
+// to 0). A trick's links pay x(1 + TRICK_STREAK_K * streak), at most x TRICK_STREAK_CAP; from streak 2 a running
+// FRENZY also gets TRICK_STREAK_FRENZY s. Emits trickStreak {n, x, y, mult}.
+export const TRICK_STREAK_T = 4.0, TRICK_STREAK_K = 0.5, TRICK_STREAK_CAP = 3, TRICK_STREAK_FRENZY = 1.5;
+export const trickStreakMult = (n) => Math.min(TRICK_STREAK_CAP, 1 + TRICK_STREAK_K * Math.max(0, n || 0));
+export const TRICK_T = 2.6, TRICK_LINKS = 5, TRICK_FIRST = 3, TRICK_MULT = 0.2, TRICK_MULT_CAP = 1.0, TRICK_FRENZY = 1.0, TRICK_DNA = 10;
 // the FRENZY tier your STYLE allows: 1 kind tier 1, 2 kinds tier 2, 3 kinds tier 4, 4+ kinds everything
 export const styleTierCap = (style) => (style >= 4 ? Infinity : style >= 3 ? 4 : style >= 2 ? 2 : 1);
 
