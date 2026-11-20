@@ -11,13 +11,20 @@
 // top shelf and its own glue compressor; sound effects go through a soft bus compressor whose
 // automatic makeup gain (about +6 dB) is trimmed back by a 0.55 gain, so stacked hits leave the
 // limiter headroom and the big stingers (frenzy, egg, win, finisher, mixed 1.25x hotter) still
-// stand out; both meet in a master gain and a brickwall-ish limiter. Big fx hits micro-duck the
-// music. Music and sfx have their own echoes so muting or muffling the music never cuts an sfx tail.
+// stand out; both meet in a master gain and a brickwall-ish limiter. Only real hits (bonk, hit, bump,
+// pop, the chain pop, dash) micro-duck the music, and only with a sound a phone speaker can play (opts.duck,
+// never under 200 Hz), so the groove never pumps on a sub nobody hears. Music and sfx have their own echoes
+// so muting or muffling the music never cuts an sfx tail.
 //
-// CPU budget: notes are scheduled ~150ms ahead from tick(), every source is counted and
-// low priority voices (hats, ghosts) are dropped when too many are sounding, the vowel
-// filters for the pads and stabs are shared persistent nodes, and one 1s noise buffer is
-// reused by every hiss.
+// CPU budget: notes are scheduled 300 ms ahead from tick(), which runs from its own 40 ms timer (and from
+// every frame too: it is idempotent), so a janky frame never starves the beat. Every source is counted:
+// hats and the combo sparkle go first (CAP - 8), then low priority voices (CAP), the bass keeps a reserve
+// (CAP + 12) and stingers have the most (CAP + 24). setLite(true) (slow phones) drops CAP from 64 to 40
+// and sings say() vowels without their harmony voices. The vowel filters for the pads and stabs are shared
+// persistent nodes, and one 1s noise buffer is reused by every hiss.
+//
+// Slow-mo bends the sound effects too: while a slow runs every sfx is built at 0.85x pitch and speed
+// (0.72x in a big slow), easing back over 0.15 s when it ends; UI sounds never bend.
 //
 // Key changes (a new zone, a FRENZY or combo milestone lift, the lift dropping again) never land
 // mid-bar: _rekey() only stores the new key in _keyNext and tick() applies it on the next downbeat,
@@ -85,7 +92,14 @@ const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher']);   // the biggest mo
 const AEOL = [0, 2, 3, 5, 7, 8, 10];
 const MUSIC_VOL = 0.5;
 const MASTER = 0.9;
-const CAP = 64;                     // concurrent sources before low priority voices are skipped
+const CAP = 64;                     // concurrent sources before low priority voices are skipped (40 in lite mode)
+const CAP_LITE = 40;
+const LOOK = 0.3;                   // how far ahead tick() schedules the beat and the heartbeat, in seconds
+// the window in which this.next is trusted as the live grid (it runs up to LOOK + one 16th ahead)
+const gridOk = (next, now, spb) => next >= now && next <= now + spb + LOOK + 0.05;
+// sounds that never bend in slow-mo (menus and buttons)
+const DUCK = { duck: true };       // tone()/hum() opts: this hit micro-ducks the music
+const UI_SFX = new Set(['tap', 'buy', 'cards', 'reroll', 'countTick', 'ready']);
 const st = (s) => Math.pow(2, s / 12);
 const pen = (i) => PENTA[i % 5] + 12 * Math.floor(i / 5);
 const clamp01 = (v) => Math.max(0, Math.min(1, +v || 0));
@@ -125,6 +139,7 @@ const GAP = {
   synTease: 0.3, swat: 0.06, tell: 0.25, comboLow: 0.02, comboMilestone: 0.4,
   fork: 0.5, backflow: 0.5, finale: 0.5, spot: 0.5,
   dnaTick: 0.03, rivalTell: 0.3, countered: 0.2, factory: 0.6, countTick: 0.04, medal: 0.4,
+  go: 0.3, resume: 0.3, wall: 0.12,
 };
 // sfx that get a little random detune (+-15 cents) and volume (+-12%) so repeats never sound like a machine gun
 const HUMAN = new Set(['sugar', 'dna', 'pop', 'bump', 'bonk', 'dash']);
@@ -136,6 +151,8 @@ const inKey = (f, key) => {
   return 440 * st(key + 12 * o + b);
 };
 const rivalIdx = (k) => { const v = k && typeof k === 'object' ? k.k : k; return typeof v === 'number' && v >= 0 && v <= 4 ? v | 0 : -1; };
+// freeze a param where it is at time t (mid-ramp included) before new automation
+const hold = (p, t) => { if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else p.cancelScheduledValues(t); };
 const fold = (f, top = 1760) => { while (f > top) f /= 2; return f; };
 
 export class Audio {
@@ -170,6 +187,9 @@ export class Audio {
     this._bankG = 0; this._bankAt = -9; this._bankPend = -1; this._bankTicks = 0;   // last bank grade, when, cascade fallback due time, helix ticks heard
     this._drillOn = false; this._duelK = null; this._eggK = -1;   // egg duel: drill running, who leads (-1 Kevin, 0..4 a rival, -2 a rival we cannot name)
     this._gaspUntil = -1; this._minA = 0; this._tickSeen = false;     // duelGasp beat cut, minimum attack while a calm stinger is built
+    this._cap = CAP; this._lite = false; this._iv = 0;                // voice cap, lite mode (slow phones), the scheduler's own timer
+    this._rate = 1; this._rateFrom = 1; this._rateT0 = -9; this._fxR = 1;   // slow-mo bend: target, ease-out start, the rate the sfx being built uses
+    this._rematch = false; this._rmClose = false; this._rmOpen = false; this._drone = null; this._closeF = 0; this._closeAt = -9;   // rematch groove
     this._dec = () => { this.live--; };
   }
 
@@ -244,17 +264,17 @@ export class Audio {
   // beat from the next 16th (a quick inhale on the fx bus, skipped in calm mode), then crashes back in.
   duelGasp() {
     if (!this.ctx) return;
-    const c = this.ctx, now = c.currentTime, spb = 60 / this._bpm / 4, q = this._next16(now);
+    const c = this.ctx, now = c.currentTime, spb = 60 / this._bpm / 4, q = this._unsched(now);
     this._gaspUntil = q + 4 * spb;
     if (this.muted || this.calm || c.state !== 'running') return;
-    this.hum(now + 0.005, 0.16, 0.12, 'bandpass', 900, 1.6, this.fx, 3200, 0.12);
+    this.hum(Math.max(now + 0.005, q - 0.16), 0.16, 0.12, 'bandpass', 900, 1.6, this.fx, 3200, 0.12);   // the inhale, just before the cut
   }
   // 0..1: where the music is inside the current beat (0 on the beat). Uses the step clock while the beat runs,
   // else the audio clock at the current bpm, else 0. render.js and main.js can pulse in time with it.
   beatPhase() {
     const c = this.ctx; if (!c) return 0;
     const now = c.currentTime, spb = 60 / this._bpm / 4;
-    if (this.on && this.next && this.next >= now - 0.01 && this.next <= now + spb + 0.2) {
+    if (this.on && this.next && this.next >= now - 0.01 && this.next <= now + spb + LOOK + 0.05) {
       const j = Math.ceil((this.next - now) / spb - 1e-6), idx = this.stepI - j, ts = this.next - j * spb;
       const ph = ((((idx & 3) + 4) & 3) + Math.max(0, Math.min(1, (now - ts) / spb))) / 4;
       return Math.max(0, Math.min(0.9999, ph));
@@ -265,13 +285,14 @@ export class Audio {
   // threat(k, pan): something nasty is close. k 0..1 (0 = nothing near), pan -1..1. A looped growl (a low saw
   // through a lowpass that wobbles 180..320 Hz at 3 Hz) at 0.18 * k, plus a wet slurp every 0.6 s from tick().
   // Persistent nodes built on first use; only the gain and pan move (60 ms ramps), so a call per frame costs
-  // two compares. Silent when muted, sfx are off or in calm mode.
+  // two compares. Silent when muted or sfx are off. Calm mode keeps the warning (it is information, not
+  // juice) but softens it: 0.12 * k, the lowpass held still at 240 Hz, and a slurp every 0.9 s.
   threat(k, pan = 0) {
-    k = this.muted || this.sfxMuted || this.calm ? 0 : clamp01(k); pan = Math.max(-1, Math.min(1, +pan || 0));
+    k = this.muted || this.sfxMuted ? 0 : clamp01(k); pan = Math.max(-1, Math.min(1, +pan || 0));
     if (!this.ctx) { this._thrK = k; return; }
-    if (!this._thr) { if (k <= 0) return; this._thr = this._loopThreat(); }
+    if (!this._thr) { if (k <= 0) return; this._thr = this._loopThreat(); this._thrStyle(); }
     const n = this._thr, now = this.ctx.currentTime;
-    if (Math.abs(k - this._thrK) > 0.004 || (k === 0 && this._thrK !== 0)) { n.g.gain.setTargetAtTime(0.18 * k, now, 0.02); this._thrK = k; }
+    if (Math.abs(k - this._thrK) > 0.004 || (k === 0 && this._thrK !== 0)) { n.g.gain.setTargetAtTime((this.calm ? 0.12 : 0.18) * k, now, 0.02); this._thrK = k; }
     if (n.p && Math.abs(pan - this._thrPan) > 0.02) { n.p.pan.setTargetAtTime(pan, now, 0.02); this._thrPan = pan; }
   }
   _loopThreat() {
@@ -283,7 +304,13 @@ export class Audio {
     lfo.connect(ld); ld.connect(lp.frequency); lfo.start();
     for (const [f, det] of [[55, -7], [55, 7]]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det; o.connect(lp); o.start(); }
     lp.connect(g);
-    return { g, p, out };
+    return { g, p, out, lp, ld };
+  }
+  // calm mode holds the growl's lowpass still at 240 Hz (no 3 Hz wobble); otherwise 250 +- 70 Hz
+  _thrStyle() {
+    const n = this._thr; if (!n || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    n.ld.gain.setTargetAtTime(this.calm ? 0 : 70, now, 0.05); n.lp.frequency.setTargetAtTime(this.calm ? 240 : 250, now, 0.05);
   }
   // 0..1: the player is in acid. A 3000 Hz bandpassed noise sizzle at 0.08 * level, and a crackle tick every
   // 0.12 s from tick(). Same rules as threat(): persistent nodes, cheap every frame, never clicks.
@@ -303,7 +330,7 @@ export class Audio {
   // the one-shot parts of the loops, scheduled from tick()
   _loops(now) {
     if (this._thr && this._thrK > 0.03 && now >= this._slurpT) {   // a wet slurp: a resonant filter gulping up and back
-      this._slurpT = now + 0.6; const k = this._thrK, t = now + 0.01;
+      this._slurpT = now + (this.calm ? 0.9 : 0.6); const k = this._thrK, t = now + 0.01;
       this.hum(t, 0.14, 0.12 * k, 'bandpass', 280, 7, this._thr.out, 900, 0.01, 0);
       this.tone('sine', 160, 90, t + 0.04, 0.08, 0.1 * k, this._thr.out, 0.004, 0, 0);
     }
@@ -322,7 +349,10 @@ export class Audio {
   }
 
   unlock() {
-    if (this.ctx) { if (this.ctx.state !== 'running' && !this._suspended) { try { this.ctx.resume(); } catch (e) { /* ignore */ } } return; }
+    if (this.ctx) {
+      if (!this._suspended) { this._startClock(); if (this.ctx.state !== 'running') { try { this.ctx.resume(); } catch (e) { /* ignore */ } } }
+      return;
+    }
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext); if (!AC) return;
     let c; try { c = new AC(); } catch (e) { return; }
     this.ctx = c;
@@ -391,7 +421,15 @@ export class Audio {
     const bo = c.createGain(); bo.gain.value = 0.7;
     this.bassLp.connect(sh); sh.connect(bo); bo.connect(this.music); this.shaper = sh;
     this._applyTlp(); this._applyTrem();
+    this._startClock();
   }
+  // the scheduler's own clock: tick() every 40 ms, so the beat keeps its lookahead even when frames stall
+  // (main.js still calls tick() every frame; tick() is idempotent, a second call in the same ms does nothing)
+  _startClock() {
+    if (this._iv || typeof setInterval !== 'function') return;
+    this._iv = setInterval(() => { try { this.tick(); } catch (e) { /* never let a sound break the clock */ } }, 40);
+  }
+  _stopClock() { if (this._iv) { clearInterval(this._iv); this._iv = 0; } }
 
   // ------------------------------------------------------------------ volume, mute, lifecycle
   _mLevel() { return this.musicMuted ? 0 : MUSIC_VOL * this.musicVol; }
@@ -407,20 +445,26 @@ export class Audio {
   }
   // app hidden / shown: stop the clock, and on return restart the grid so queued notes do not burst
   suspend() {
-    this._suspended = true;
+    this._suspended = true; this._stopClock();
     if (this.ctx && this.ctx.state === 'running') { try { this.ctx.suspend(); } catch (e) { /* ignore */ } }
   }
   resume() {
     this._suspended = false; const c = this.ctx; if (!c) return;
     const reset = () => { this.next = c.currentTime + 0.05; this._nextHeart = c.currentTime + 0.1; this._slotT = -1; };
-    reset();
+    reset(); this._startClock();
     try { const p = c.resume(); if (p && p.then) p.then(reset, () => {}); } catch (e) { /* ignore */ }
   }
   // dull the music (pause menu, mutation cards). Optional: the game works without calling it.
   setMuffle(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.mlp.frequency.cancelScheduledValues(t); this.mlp.frequency.setTargetAtTime(on ? 650 : 18000, t, this._ftc(on ? 0.06 : 0.15)); }
   // calm mode (main.js passes S.reduced): no hit-stop gasps or micro ducks, ducks never below 0.8, filter
-  // moves take about 0.4 s, and the proximity growl stays silent
-  setCalm(b) { this.calm = !!b; if (this.calm) this.threat(0); }
+  // moves take about 0.4 s, and the proximity growl is softer and steadier (see threat())
+  setCalm(b) {
+    const was = this.calm; this.calm = !!b; if (was === this.calm) return;
+    this._thrStyle();
+    if (this._thr && this._thrK > 0) { const k = this._thrK; this._thrK = -1; this.threat(k, this._thrPan); }   // re-level the growl now
+  }
+  // lite mode (main.js passes stage >= 2 on slow phones): a lower voice cap and no say() harmony voices
+  setLite(on) { this._lite = !!on; this._cap = this._lite ? CAP_LITE : CAP; }
   _ftc(tc) { return this.calm ? Math.max(tc, 0.4 / 3) : tc; }   // filter time constant (3 tc is about the full move)
   // bullet time. slowmo(on, big): every slow pulls the music behind a lowpass (time constant 0.03 s, so it
   // never clicks). Only big ones (first FRENZY, egg drill start, zone-end crawl) also play a tape stop on
@@ -435,6 +479,7 @@ export class Audio {
     const wasBig = this._slowBig, play = !this.muted && c.state === 'running';
     if (on) {
       this._slowOn = true; this._slowBig = this._slowBig || big; this._slow = this._slowBig;
+      this._rate = this._slowBig ? 0.72 : 0.85; this._rateT0 = -9;
       this._slpTo(this._slowBig ? 1400 : 2200, 0.03);
       if (big && !wasBig) {
         this._setG(this.mfb.gain, 0.45);
@@ -446,6 +491,7 @@ export class Audio {
       }
       return;
     }
+    this._rateFrom = this._rateNow(now); this._rateT0 = now; this._rate = 1;   // the sfx bend eases back over 0.15 s
     this._slowOn = false; this._slowBig = false; this._slow = false;
     this._slpTo(18000, 0.08);
     if (!wasBig && !big) return;
@@ -464,6 +510,12 @@ export class Audio {
     }
     if (d > 0) this.crash(pk, 0.5, fx, 0.6);
   }
+  // the pitch and speed factor for a sound effect built right now: _rate in a slow, easing back to 1 over 0.15 s after one
+  _rateNow(now) {
+    if (this._slowOn) return this._rate;
+    const x = (now - this._rateT0) / 0.15;
+    return x >= 0 && x < 1 ? this._rateFrom + (1 - this._rateFrom) * x : 1;
+  }
   _slowF() { return this._slowOn ? (this._slowBig ? 1400 : 2200) : 18000; }
   // move the slowmo lowpass, unless an impact() is holding it; the impact's release then lands on _slowF()
   _slpTo(f, tc) {
@@ -473,7 +525,12 @@ export class Audio {
   }
   // pause: drop every slow-mo state at once, no swell, no crash, no tape stop
   slowmoReset() {
+    this._rematchOff();   // title and shop come through here (main.js menuMusic): the rematch groove ends
+    this._slowReset();
+  }
+  _slowReset() {
     this._slowOn = false; this._slowBig = false; this._slow = false; this._impUntil = -1;
+    this._rate = 1; this._rateFrom = 1; this._rateT0 = -9;
     if (!this.ctx) return; const now = this.ctx.currentTime;
     for (const [p, v] of [[this.slp.frequency, 18000], [this.mfb.gain, 0.33], [this.mduck.gain, 1]]) { p.cancelScheduledValues(now); p.setValueAtTime(v, now); }
     this._mdUntil = -1;
@@ -493,11 +550,12 @@ export class Audio {
     this.tone('sine', 90, 45, now + 0.003, 0.04, 0.35, this.fx, 0.002);
     this._thudUp(now + 0.003, 90, 45, 0.04, 0.35, this.fx);
   }
-  _menu(I) { return I > 0.2 && I < 0.45; }
+  _menu(I) { return !this._rematch && I > 0.2 && I < 0.45; }   // the rematch groove is the race loop, whatever the intensity
   _applyTlp() {
     if (!this.ctx) return;
     const T = this._tension, tc = T <= 0.5 ? 18000 : 18000 * Math.pow(1200 / 18000, (T - 0.5) / 0.5);
-    const f = Math.min(tc, this._menu(this._int) ? 3200 : 18000), t = this.ctx.currentTime;
+    const lim = this._rematch && !this._rmOpen ? 400 : this._menu(this._int) ? 3200 : 18000;
+    const f = Math.min(tc, lim), t = this.ctx.currentTime;
     this.tlp.frequency.cancelScheduledValues(t); this.tlp.frequency.setTargetAtTime(f, t, this._ftc(0.15));
   }
   // drop the music for a moment so a big sound effect can shine
@@ -509,7 +567,7 @@ export class Audio {
     const g = this.music.gain, t = this.ctx.currentTime, L = this._mLevel();
     g.cancelScheduledValues(t); g.setTargetAtTime(L * amount, t, 0.03); g.setTargetAtTime(L, t + sec, 0.25);
   }
-  // automatic micro duck: any loud fx hit pulls the music to 0.7 for 120 ms
+  // micro duck: a real hit (opts.duck on its tone() or hum()) pulls the music to 0.7 for 120 ms
   _mduck(t) {
     if (!this.mduck || this.calm || this.sfxMuted || this.sfxVol < 0.05 || t - this._mdLast < 0.03 || t < this._impUntil) return;
     this._mdLast = t; const g = this.mduck.gain;
@@ -520,12 +578,17 @@ export class Audio {
     if (!this.ctx) return; const dt = Math.min(1.4, 3 * 60 / this._bpm / 4), t = this.ctx.currentTime;
     this.delay.delayTime.setTargetAtTime(dt, t, 0.05); this.fxDelay.delayTime.setTargetAtTime(dt, t, 0.05);
   }
-  // a fresh race: back to zone 1 tempo and key, and land the first beat on a crash
-  newRun() {
+  // a fresh race: back to zone 1 tempo and key, and land the first beat on a crash. seed (optional, the daily's
+  // seed) makes the phrase variations and the fill order repeatable; without one every run gets new ones
+  newRun(seed) {
     this._bpm = ZONE_BPM[0]; this.key = 0; this._lift = 0; this._mlift = 0; this._ftier = 0; this._int = 0; this.heat = 0; this.combo = 0; this._dryUntil = 0;
     this._linkN = 0; this._dnaN = 0; this._leadN = 0; this._contest = false; this._cTier = 0; this._rollAt = -1; this._rollLen = 4; this._clN = 0;
     this._zone = 0; this._zoneBar = (this.stepI >> 4) + 1; this._fin = 0;
-    this._keyNext = null; this._keyCrash = false; this._whoopBar = -1; this._themePend = true; this._themeAt = -99; this._varN = 0;
+    this._keyNext = null; this._keyCrash = false; this._whoopBar = -1; this._themePend = true; this._themeAt = -99;
+    const seeded = seed !== undefined && seed !== null && seed !== '' && Number.isFinite(+seed), sv = seeded ? Math.abs(+seed | 0) : 0;
+    this._varN = seeded ? sv % 1000000 : (Math.random() * 1e6) | 0;
+    this.fillN = seeded ? (sv >>> 3) % FILLS.length : this.fillN + Math.floor(Math.random() * 5);
+    this._rematchOff(); this._rate = 1; this._rateT0 = -9;
     this._holdUntil = 0; this._softIn = false; this._gaspUntil = -1; this._duelK = null; this._eggK = -1; this._bankPend = -1; this._themeOn = false;
     if (!this.ctx) return;
     this._syncDelay(); this._applyTlp(); this._applyTrem();
@@ -534,34 +597,92 @@ export class Audio {
     const bar = (this.stepI >> 4) + 1; this.barBase = bar; this.crashBar = bar; this.fillBar = -1;
   }
 
+  // after a loss (ui calls this from showResult instead of menuMusic): the race loop at race tempo, kick and hats
+  // behind a 400 Hz lowpass, already itching to go again. sfx('ready') opens the filter over 600 ms onto a beat,
+  // where its pluck lands. close (lost by a whisker): loseClose's top note, the leading tone, keeps hanging as a
+  // quiet drone until sfx('again') resolves it to the tonic. Ends with newRun(), slowmoReset() (main.js's
+  // menuMusic on the title and shop) or rematchOff().
+  rematchMusic(close = false) {
+    this._rematch = true; this._rmOpen = false; this._rmClose = !!close;
+    this._int = 0.3; this._tension = 0; this._contest = false; this._slowReset();   // the plain L=0 loop, no heartbeat bed, no slow-mo
+    if (this._bpm !== ZONE_BPM[0] || this._zone !== 0) { this._bpm = ZONE_BPM[0]; this._fin = 0; this._zone = 0; this._themePend = true; }
+    if (!this.ctx) return;
+    this._syncDelay(); this._applyTrem(); this._applyTlp();
+    if (this._rmClose && this._closeF && this.ctx.currentTime - this._closeAt < 3) this._droneOn(this._closeF, this.ctx.currentTime + 0.02);
+  }
+  rematchOff() { this._rematchOff(); }
+  _rematchOff() {
+    if (!this._rematch && !this._drone) return;
+    const was = this._rematch; this._rematch = false; this._rmOpen = false; this._rmClose = false;
+    this._droneOff(0.12);
+    if (was) { this._applyTlp(); this._applyTrem(); }
+  }
+  // open the rematch lowpass over 600 ms so it is wide open on the first beat at least 0.6 s away; returns that beat's time
+  _rematchOpen(now) {
+    const spb = 60 / this._bpm / 4;
+    let q = this._grid(now, 4); while (q < now + 0.6) q += 4 * spb;
+    this._rmOpen = true;
+    const p = this.tlp.frequency, f = this._tension > 0.5 ? 18000 * Math.pow(1200 / 18000, (this._tension - 0.5) / 0.5) : 18000;
+    p.cancelScheduledValues(now); p.setValueAtTime(400, now); p.setValueAtTime(400, q - 0.6); p.exponentialRampToValueAtTime(f, q);
+    return q;
+  }
+  // the so-close drone: one soft triangle on the fx bus (it belongs to loseClose), 0.05
+  _droneOn(f, t) {
+    if (!this.ctx || this.muted) return;
+    if (this._drone) { this._drone.o.frequency.setTargetAtTime(f, t, 0.05); this._drone.f = f; return; }
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = f * 3; lp.Q.value = 0.5;
+    g.gain.value = 0.0001; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.4);
+    o.connect(lp); lp.connect(g); g.connect(this.fx); this.live++; o.onended = this._dec; o.start(t);
+    this._drone = { o, g, f };
+  }
+  _droneOff(fade) {
+    const d = this._drone; if (!d || !this.ctx) { this._drone = null; return; }
+    this._drone = null; const now = this.ctx.currentTime;
+    hold(d.g.gain, now); d.g.gain.setTargetAtTime(0.0001, now, fade / 3); d.o.stop(now + fade + 0.05);
+  }
+  // sfx('again'): the leading tone steps up a semitone to the tonic, swells a little, and lets go
+  _droneResolve(t) {
+    const d = this._drone; if (!d) return;
+    this._drone = null;
+    const g = d.g.gain, F = d.o.frequency;
+    F.cancelScheduledValues(t); F.setValueAtTime(d.f, t); F.exponentialRampToValueAtTime(d.f * st(1), t + 0.12);
+    hold(g, t); g.setTargetAtTime(0.07, t, 0.04); g.setTargetAtTime(0.0001, t + 0.35, 0.2);
+    d.o.stop(t + 1.4);
+  }
+
   // ------------------------------------------------------------------ voice helpers
   _go(node, t, end) { this.live++; node.onended = this._dec; node.start(t); node.stop(end); }
-  _busy(pri) { return this.live > (pri ? CAP + 24 : CAP); }
+  _busy(pri) { return this.live > (pri ? this._cap + 24 : this._cap); }
   _gain(v, dest) { const g = this.ctx.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; }
   // exponential attack then decay
   env(g, t, a, peak, dec) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); }
-  // a pitched blip; f1 is the target pitch reached after `glide` seconds (defaults to dur)
-  tone(type, f0, f1, t, dur, vol, dest, a = 0.004, glide = 0, pri = 1) {
+  // a pitched blip; f1 is the target pitch reached after `glide` seconds (defaults to dur).
+  // opts.duck: a real hit, micro-duck the music (only on the fx bus and only from 200 Hz up, where a phone can hear it).
+  // Inside sfx() a slow-mo bends it: pitch times _fxR, length and glide divided by it.
+  tone(type, f0, f1, t, dur, vol, dest, a = 0.004, glide = 0, pri = 1, opts = null) {
     if (this._busy(pri)) return null;
     const c = this.ctx, o = c.createOscillator(), g = c.createGain(); o.type = type; dest = dest || this.fx;
     if (a < this._minA) a = this._minA;
+    const r = this._fxR; if (r !== 1) { f0 *= r; f1 *= r; dur /= r; glide /= r; }
     o.frequency.setValueAtTime(f0, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + (glide || dur));
     if (this._hd) { o.detune.value = this._hd; vol *= this._hv; }
     this.env(g, t, a, vol, dur); o.connect(g); g.connect(dest); this._go(o, t, t + a + dur + 0.03);
-    if (vol > 0.3 && dest === this.fx) this._mduck(t);
+    if (opts && opts.duck && f0 >= 200 && dest === this.fx) this._mduck(t);
     return o;
   }
-  // filtered noise; f1 sweeps the filter over the whole sound
-  hum(t, dur, vol, type, f0, q, dest, f1 = 0, a = 0.002, pri = 1) {
+  // filtered noise; f1 sweeps the filter over the whole sound (opts and the slow-mo bend: see tone())
+  hum(t, dur, vol, type, f0, q, dest, f1 = 0, a = 0.002, pri = 1, opts = null) {
     if (this._busy(pri)) return;
     const c = this.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); dest = dest || this.fx;
     if (a < this._minA) a = this._minA;
+    const r = this._fxR; if (r !== 1) { f0 *= r; f1 *= r; dur /= r; }
     s.buffer = this.noiseBuf; if (dur > 0.9) s.loop = true;
     f.type = type; f.frequency.setValueAtTime(f0, t); f.Q.value = q; if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
     if (this._hd) { f.detune.value = this._hd; vol *= this._hv; }
     this.env(g, t, a, vol, dur); s.connect(f); f.connect(g); g.connect(dest);
     this.live++; s.onended = this._dec; s.start(t, Math.random() * Math.max(0, 0.95 - dur)); s.stop(t + a + dur + 0.03);
-    if (vol > 0.3 && dest === this.fx) this._mduck(t);
+    if (opts && opts.duck && f0 >= 200 && dest === this.fx) this._mduck(t);
   }
   // legacy helpers kept for compatibility
   osc(type, f0, f1, t, dur, vol, dest) { return this.tone(type, f0, f1, t, dur, vol, dest); }
@@ -589,6 +710,7 @@ export class Audio {
   // a one-off sung or shouted vowel (own little formant filters): "ooh-AH", "hey!", "yeah"
   say(t, freqs, v0, v1, dur, vol, glide = 0.15, bend = 1, dest, pri = 1) {
     if (this._busy(pri)) return;
+    if (this._lite && freqs.length > 1) freqs = [freqs[0]];   // lite: the lead voice only, no harmony
     const c = this.ctx, out = c.createGain(); out.connect(dest || this.fx);
     if (this._hd) vol *= this._hv;
     out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(vol, t + 0.03);
@@ -657,8 +779,8 @@ export class Audio {
     s.connect(f); f.connect(g); g.connect(dest); this.live++; s.onended = this._dec; s.start(t, Math.random() * 0.8); s.stop(t + 0.1);
   }
   rim(t, v = 1, dest = this.music) { this.hum(t, 0.02, 0.24 * v, 'bandpass', 3800, 5, dest, 0, 0.001, 0); }
-  hat(t, v = 1, dest = this.music) { if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.022, 0.15 * v, 'highpass', 8500, 0.7, dest, 0, 0.001, 0); }
-  ts(t, v = 1, dest = this.music) { if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.13, 0.12 * v, 'highpass', 6000, 0.8, dest, 0, 0.004, 0); }
+  hat(t, v = 1, dest = this.music) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.022, 0.15 * v, 'highpass', 8500, 0.7, dest, 0, 0.001, 0); }
+  ts(t, v = 1, dest = this.music) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this.hum(t, 0.13, 0.12 * v, 'highpass', 6000, 0.8, dest, 0, 0.004, 0); }
   tom(t, f, v = 1, dest = this.music) {    // mouth toms: "doon"
     this.tone('sine', f, f * 0.55, t, 0.2, 0.55 * v, dest, 0.003);
     this.tone('triangle', f * 2, f, t, 0.03, 0.14 * v, dest, 0.002);
@@ -684,14 +806,14 @@ export class Audio {
     if (this.next < now - 0.25 || this.next > now + 1.5) this.next = now + 0.06;   // woke from a sleep or clock jump
     const silent = this.muted || c.state !== 'running';
     let guard = 0;
-    while (this.next < now + 0.15 && guard++ < 32) { this._landKey(); if (!silent) this._step(this.next); this.next += 60 / this._bpm / 4; this.stepI++; }
+    while (this.next < now + LOOK && guard++ < 32) { this._landKey(); if (!silent) this._step(this.next); this.next += 60 / this._bpm / 4; this.stepI++; }
     if (!silent) this._loops(now);
     // the tension bed: a heartbeat that races as the drama climbs (never below 0.6 in a contested drill)
     const T = this._contest ? Math.max(0.6, this._tension) : this._tension;
     if (T > 0.02) {
       if (this._nextHeart < now - 0.25 || this._nextHeart > now + 2) this._nextHeart = now + 0.05;
       guard = 0;
-      while (this._nextHeart < now + 0.15 && guard++ < 4) {
+      while (this._nextHeart < now + LOOK && guard++ < 4) {
         if (!silent) this.heart(this._nextHeart, 0.35 + 0.45 * T, this.fx);   // fx bus: survives music off, duck() and the tension lowpass
         this._nextHeart += 60 / (60 + 120 * T);
       }
@@ -876,18 +998,18 @@ export class Audio {
   }
   // a new lead line for the phrase: a seeded variation of a theme bar (so the race keeps humming the theme)
   _newMotif() { this.motif = themeVariation(this._varN++ * 7919 + this._zone * 131); }
+  // the hummed bass keeps its own reserve over the low priority voices (CAP + 12): the groove's floor goes last
   _bass(t, f, dur, L, scale = 1) {
-    if (this._busy(0)) return;
+    if (this.live > this._cap + 12) return;
     const c = this.ctx, lp = this.bassLp, g = c.createGain(), o = c.createOscillator(), o2 = c.createOscillator();
     o.type = 'sawtooth'; o.frequency.value = f; o2.type = 'triangle'; o2.frequency.value = f * 2;
     lp.frequency.setValueAtTime(L === 2 ? 1600 : 1100, t); lp.frequency.setTargetAtTime(L === 0 ? 500 : 700, t + 0.01, 0.05);
     const v = (L === 2 ? 0.16 : 0.14) * scale;
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.012);
     g.gain.setValueAtTime(v, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.04);
-    const g2 = this._gain(0.35); o.connect(g); o2.connect(g2); g2.connect(g); g.connect(lp);
+    // the octave triangle also carries the old sub's level (a sine at f/2, 33..65 Hz, that no phone could play)
+    const g2 = this._gain(0.35 + 0.06 / (L === 2 ? 0.16 : 0.14)); o.connect(g); o2.connect(g2); g2.connect(g); g.connect(lp);
     this._go(o, t, t + dur + 0.06); this._go(o2, t, t + dur + 0.06);
-    // the clean sub an octave down, under the shaper so it stays round
-    this.tone('sine', f / 2, 0, t, dur, 0.06 * scale, this.music, 0.01, 0, 0);
   }
   // hook: the theme's whistle (louder, a triangle partial an octave up at 0.25x, and on notes of 2+ sixteenths a
   // 5.5 Hz +-12 cent vibrato fading in after 0.12 s), so the theme is the loudest melodic moment of each zone
@@ -930,19 +1052,21 @@ export class Audio {
     const fb = now + 0.005;
     if (!this.on || !this.ctx || this.ctx.state !== 'running' || !this.next) return fb;
     const spb = 60 / this._bpm / 4;
-    if (this.next < now || this.next > now + spb + 0.2) return fb;
+    if (!gridOk(this.next, now, spb)) return fb;
     const g = this.next - Math.floor((this.next - now) / spb) * spb;   // next 16th, in [now, now + spb)
     if (g - now <= 0.07) return Math.max(fb, g);
     return Math.max(fb, g - spb / 2 >= now ? g - spb / 2 : g);
   }
   // like _quant, but a combo note never waits more than 45 ms for the grid (it plays right away instead)
   _quantCap(now) { const g = this._quant(now); return g - now > 0.045 ? now + 0.005 : g; }
+  // the first 16th the scheduler has not built yet (the beat runs LOOK ahead): where a cut in the groove can start
+  _unsched(now) { const q = this._next16(now); return this.on && this.next > q && gridOk(this.next, now, 60 / this._bpm / 4) ? this.next : q; }
   // the next 16th on the grid (not a 32nd), or right now when the beat is not running
   _next16(now) {
     const fb = now + 0.005;
     if (!this.on || !this.ctx || this.ctx.state !== 'running' || !this.next) return fb;
     const spb = 60 / this._bpm / 4;
-    if (this.next < now || this.next > now + spb + 0.2) return fb;
+    if (!gridOk(this.next, now, spb)) return fb;
     return Math.max(fb, this.next - Math.floor((this.next - now) / spb) * spb);
   }
   // the combo ladder: link n plays pentatonic degree ladderDegree(n) (a two-octave run, and every ten links
@@ -962,7 +1086,7 @@ export class Audio {
   _layers(q, f, n, dest) {
     if (n >= 10) this.tone('sine', fold(f * 2), 0, q + 0.005, 0.06, 0.04, dest, 0.003, 0, 0);
     if (n >= 20) this.tone('sine', fold(f * st(7)), 0, q + 0.005, 0.06, 0.03, dest, 0.003, 0, 0);
-    if (n >= 30) this.hum(q, 0.015, 0.05, 'highpass', 7000, 0.7, dest, 0, 0.001, 0);
+    if (n >= 30 && this.live <= this._cap - 8) this.hum(q, 0.015, 0.05, 'highpass', 7000, 0.7, dest, 0, 0.001, 0);
     if (n >= 40) for (const c of [-8, 8]) { const o = this.tone('triangle', f, 0, q, 0.07, 0.05, dest, 0.003, 0, 0); if (o) o.detune.value = c; }
   }
 
@@ -1028,7 +1152,7 @@ export class Audio {
     const endCombo = () => { this._clN = 0; if (this._mlift) { this._mlift = 0; this._rekey(); } };
     switch (name) {
       case 'pass': this.heat = Math.max(this.heat, +k || 0); this.heatT = now; break;
-      case 'comboBreak': this.heat = 0; this._dryUntil = now + 4 * 60 / this._bpm / 4; endCombo(); break;
+      case 'comboBreak': this.heat = 0; this._dryUntil = this._unsched(now) + 4 * 60 / this._bpm / 4; endCombo(); break;
       case 'finisher': endCombo(); break;
       case 'comboEnd': endCombo(); break;
       case 'comboMilestone': if (!this._mlift) { this._mlift = 2; this._rekey(true); } break;
@@ -1046,7 +1170,7 @@ export class Audio {
       case 'comboBank': endCombo(); this._bankG = Math.max(0, Math.min(4, numArg(k, 'grade') | 0)); this._bankAt = now; this._bankTicks = 0; break;
       case 'dnaTick': this._bankTicks++; this._bankPend = -1; this._tickSeen = true; break;
       case 'frenzy': { const tier = Math.max(1, numArg(k, 'tier') | 0); this._ftier = tier; if (tier >= 3 && !this._lift) { this._lift = 1; this._rekey(true); } break; }
-      case 'backflow': this._dryUntil = now + 60 / this._bpm; break;   // the band rewinds: one dry beat
+      case 'backflow': this._dryUntil = this._unsched(now) + 60 / this._bpm; break;   // the band rewinds: one dry beat
       case 'finale':            // the last sprint: a 1-bar snare roll from the next downbeat into a crash, and +6 bpm to the end
         if (this.on) { const i = this.stepI & 15; this._rollAt = this.stepI + ((16 - i) & 15); this._rollLen = 16; }
         if (!this._fin) { this._fin = 6; this._bpm += 6; this._syncDelay(); }
@@ -1057,9 +1181,14 @@ export class Audio {
     if (HUMAN.has(name)) { this._hd = (Math.random() * 2 - 1) * 15 || 0.01; this._hv = 1 + (Math.random() * 2 - 1) * 0.12; }
     // the biggest moments get their own 1.25x send, swapped in as this.fx while they are built
     // (calm mode: that send drops to 0.8 and every attack is at least 15 ms, so nothing snaps at the player)
-    const big = BOOST.has(name), base = this.fx, fx = big ? this._gain(this.calm ? 0.8 : 1.25, base) : base;
-    this.fx = fx; if (big && this.calm) this._minA = 0.015;
-    try { this._sfx(name, k, now, t, this.key, fx); } finally { this._hd = 0; this._hv = 1; this.fx = base; this._minA = 0; }
+    // Sound effects off but music on: win and lose still stop the groove for their stinger (_holdUntil), so the
+    // stinger plays on the music side instead (0.8x, at the music's volume, after the muffle so lose's
+    // setMuffle(true) dulls the band and not its own sad trombone). Music-only players hear the fanfare.
+    const big = BOOST.has(name), base = this.fx, rescue = this.sfxMuted && (name === 'win' || name === 'lose');
+    const fx = rescue ? this._gain(0.8 * this._mLevel(), this.slp) : big ? this._gain(this.calm ? 0.8 : 1.25, base) : base;
+    this.fx = fx; if ((big || rescue) && this.calm) this._minA = 0.015;
+    this._fxR = UI_SFX.has(name) ? 1 : this._rateNow(now);   // slow-mo bends every non-UI effect built below
+    try { this._sfx(name, k, now, t, this.key, fx); } finally { this._hd = 0; this._hv = 1; this.fx = base; this._minA = 0; this._fxR = 1; }
   }
   _sfx(name, k, now, t, K, fx) {
     const c = this.ctx, kf = (f) => inKey(f * st(K), K);   // a pickup pitch, moved into the song's key
@@ -1120,31 +1249,31 @@ export class Audio {
         for (let j = 0; j < 6; j++) this.tone('sine', 1500 + Math.random() * 1600, 0, t + j * 0.03, 0.03, 0.08, fx);
         break;
       case 'dash':              // whoosh with a doppler sweep and a lip "pff"
-        this.hum(t, 0.32, 0.45, 'bandpass', 380, 1.4, fx, 2800, 0.04);
+        this.hum(t, 0.32, 0.45, 'bandpass', 380, 1.4, fx, 2800, 0.04, 1, DUCK);
         this.hum(t + 0.12, 0.2, 0.2, 'bandpass', 2600, 1.2, fx, 700);
         this.tone('sine', 180, 520, t, 0.18, 0.16, fx);
         this.hum(t, 0.03, 0.3, 'bandpass', 1200, 1, fx);
         break;
       case 'bonk': {            // squelchy goo: a resonant filter sliding down and a wobbling plop
-        this.hum(t, 0.28, 0.55, 'bandpass', 1500, 7, fx, 170, 0.004);
+        this.hum(t, 0.28, 0.55, 'bandpass', 1500, 7, fx, 170, 0.004, 1, DUCK);
         const o = this.tone('sine', 280, 0, t, 0.26, 0.5, fx, 0.003);
         if (o) { const F = o.frequency; F.setValueAtTime(280, t); F.exponentialRampToValueAtTime(150, t + 0.05); F.exponentialRampToValueAtTime(210, t + 0.09); F.exponentialRampToValueAtTime(110, t + 0.15); F.exponentialRampToValueAtTime(130, t + 0.19); F.exponentialRampToValueAtTime(55, t + 0.26); }
         this.say(t + 0.02, [150], 'oo', 'uh', 0.18, 0.1, 0.1, 0.7);
         break;
       }
       case 'bump': {            // springy boing off a rival
-        const o = this.tone('sine', 220, 0, t, 0.22, 0.3, fx, 0.003);
+        const o = this.tone('sine', 220, 0, t, 0.22, 0.3, fx, 0.003, 0, 1, DUCK);
         if (o) { const F = o.frequency; F.setValueAtTime(220, t); F.exponentialRampToValueAtTime(480, t + 0.04); F.exponentialRampToValueAtTime(300, t + 0.1); F.exponentialRampToValueAtTime(380, t + 0.14); F.exponentialRampToValueAtTime(260, t + 0.22); }
         this.hum(t, 0.03, 0.2, 'lowpass', 1200, 1, fx);
         break;
       }
       case 'hit':               // something big hit your shield: clang plus a thud
-        this.clang(t, 1, 420); this.tone('sine', 130, 45, t, 0.25, 0.5, fx); this.hum(t, 0.2, 0.3, 'lowpass', 900, 1, fx);
+        this.clang(t, 1, 420); this.tone('sine', 130, 45, t, 0.25, 0.5, fx); this.hum(t, 0.2, 0.3, 'lowpass', 900, 1, fx, 0, 0.002, 1, DUCK);
         this.duck(0.5, 0.3);
         break;
       case 'clang': this.clang(t, 1, 420); break;
       case 'pop':               // bubble pop
-        this.tone('sine', 380, 1700, t, 0.06, 0.38, fx, 0.002);
+        this.tone('sine', 380, 1700, t, 0.06, 0.38, fx, 0.002, 0, 1, DUCK);
         this.hum(t, 0.04, 0.3, 'highpass', 3000, 0.7, fx);
         this.tone('sine', 2200, 0, t + 0.04, 0.03, 0.08, fx);
         break;
@@ -1178,10 +1307,39 @@ export class Audio {
         this.duck(0.3, 1.2);
         break;
       }
-      case 'zone': {            // choir "ooh-AH" plus a crash
-        const ch = [0, 3, 7, 12].map((s) => 220 * st(K + s));
-        this.say(t, ch, 'oo', 'ah', 0.7, 0.24, 0.3, 1);
-        this.B(t, 0.9, fx); this.crash(t, 0.7, fx);
+      case 'zone': {            // choir "ooh-AH" plus a crash, sung in the new zone's key and landing with it
+        // the new key waits for the next downbeat (_rekey): the "oo" starts 0.25 s before it, opens to "AH" on it,
+        // and the kick and crash hit it, so the arrival and the key change are one moment
+        const KT = this.keyTarget, ch = [0, 3, 7, 12].map((s) => 220 * st(KT + s));
+        let land = t;
+        const spb = 60 / this._bpm / 4;
+        if (this._keyNext !== null && this.on && c.state === 'running' && gridOk(this.next, now, spb)) {
+          const s16 = Math.max(this._keyBar * 16, (this.stepI + 15) & ~15);   // the step the key lands on
+          land = Math.max(t, this.next + (s16 - this.stepI) * spb);
+        }
+        const st0 = Math.max(t, land - 0.25), lead = land - st0;
+        this.say(st0, ch, 'oo', 'ah', 0.7 + lead, 0.24, Math.max(0.05, lead - 0.03), 1);
+        this.B(land, 0.9, fx); this.crash(land, 0.7, fx);
+        break;
+      }
+      case 'go': case 'resume': {   // GO! (race start) and back from pause: "B-Pf" on the grid and a crash
+        const q = this._next16(now), sp = 60 / this._bpm / 4;
+        this.B(q, 1, fx); this.Pf(q + 2 * sp, 0.9, fx); this.crash(q, 0.6, fx);
+        if (name === 'go') this._brass(q, fold(440 * st(K + PENTA[5]), 900), 0.25, 0.1);   // the theme's first note
+        else this.hum(t, Math.max(0.12, q - t + 0.1), 0.2, 'bandpass', 300, 1.5, fx, 2400, Math.max(0.03, q - t));   // whoosh back in
+        break;
+      }
+      case 'wall': {            // bounced off the wall: a short rubbery "bwomp" from that side
+        const side = Math.max(-1, Math.min(1, numArg(k, 'side'))), r = st((Math.random() * 2 - 1) * 1.5), d = 0.06 + Math.random() * 0.03;
+        let dest = fx;
+        if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = side * 0.7; p.connect(fx); dest = p; }
+        const o = this.tone('sine', 180 * r, 110 * r, t, d, 0.2, dest, 0.003);
+        if (o && !this._busy(0)) {   // an 18 Hz wobble: the rubber
+          const lfo = c.createOscillator(), dg = c.createGain(); lfo.frequency.value = 18; dg.gain.value = 60;
+          lfo.connect(dg); dg.connect(o.detune); this._go(lfo, t, t + d / this._fxR + 0.04);
+        }
+        this.tone('triangle', 360 * r, 220 * r, t, d * 0.8, 0.06, dest, 0.003);   // the octave a phone speaker can play
+        this.hum(t, 0.05, 0.1, 'lowpass', 1100, 2, dest, 350, 0.002);               // the squish
         break;
       }
       case 'egg':               // arrived at the egg: big drum, heavenly chord
@@ -1270,6 +1428,8 @@ export class Audio {
           this.tone('triangle', f, 0, t + j * 0.11, last ? 0.5 : 0.1, 0.11, fx, 0.004);
           if (last) this.tone('sine', f, 0, t + j * 0.11, 0.45, 0.04, this.fxEcho, 0.01);
         });
+        this._closeF = r * 2 * st(11); this._closeAt = now;
+        if (this._rematch && this._rmClose) this._droneOn(this._closeF, t + 0.33);   // and it keeps hanging there
         break;
       }
       case 'drillLead': {       // +1: you took the lead (a brass stab, 2 st higher each retake); -1: a rival did
@@ -1283,6 +1443,7 @@ export class Audio {
         this.say(t, [110], 'uh', 'uh', 0.1, 0.12, 0.05, 0.8);
         break;
       case 'again': {           // retry: a 0.5 s rev-up, whoosh 300 to 3000 Hz, "ba-DUM", zip
+        this._droneResolve(t);  // a so-close loss's hanging note finally steps up to the tonic
         const g = this._gain(0.45, fx);
         this.hum(t, 0.36, 0.6, 'bandpass', 300, 1.6, g, 3000, 0.25);
         this.B(t + 0.3, 0.7, g); this.B(t + 0.42, 1, g); this.Pf(t + 0.42, 1, g);
@@ -1322,7 +1483,12 @@ export class Audio {
         this.duck(0.5, 0.6);
         break;
       }
-      case 'ready': { const f = fold(kf(440), 600); this._pluck(t, f, 0.08); this._pluck(t + 0.07, f * 1.5, 0.08); break; }
+      case 'ready': {
+        // the rematch groove: the band's lowpass opens over 600 ms and the pluck lands on the beat it opens onto
+        const q = this._rematch && !this._rmOpen ? this._rematchOpen(now) : t;
+        const f = fold(kf(440), 600); this._pluck(q, f, 0.08); this._pluck(q + 0.07, f * 1.5, 0.08);
+        break;
+      }
       case 'synTease': {        // two mutations are one card away from a synergy: a shimmer, fifth to octave
         const r = fold(440 * st(K), 700);
         this.tone('triangle', r * 1.5, 0, t, 0.12, 0.25, fx, 0.006);
@@ -1383,7 +1549,7 @@ export class Audio {
         break;
       }
       case 'combo': {           // a crew member shouts "yeah!", higher for bigger combos
-        const p = 200 * st(Math.min(12, Math.floor((+k || 0) / 10) * 2) + K);
+        const p = fold(220 * st(K + pen(Math.min(5, Math.floor((+k || 0) / 10)))), 440);   // climbs the pentatonic, in key
         this.say(t, [p, p * 1.5], 'ee', 'ah', 0.28, 0.24, 0.12, 0.85);
         this.B(t, 0.6, fx);
         break;
@@ -1462,7 +1628,7 @@ export class Audio {
       case 'blast': {           // chain pop: one kick and a rising ladder of pops
         const n = Math.max(0, numArg(k, 'n') | 0);
         this.B(t, Math.min(1.8, 1 + 0.1 * n), fx);
-        for (let j = 0; j < Math.min(n, 8); j++) { const f = 380 * st(K + j * 2); this.tone('sine', f, f * 4, t + 0.03 + j * 0.04, 0.05, 0.22, fx, 0.002); }
+        for (let j = 0; j < Math.min(n, 8); j++) { const f = 380 * st(K + j * 2); this.tone('sine', f, f * 4, t + 0.03 + j * 0.04, 0.05, 0.22, fx, 0.002, 0, 1, j === 0 ? DUCK : null); }
         break;
       }
       case 'record': {          // new personal best: da-da-DAA plus a crash
@@ -1637,7 +1803,7 @@ export class Audio {
     const fb = now + 0.005;
     if (!this.on || !this.ctx || this.ctx.state !== 'running' || !this.next) return fb;
     const spb = 60 / this._bpm / 4;
-    if (this.next < now || this.next > now + spb + 0.2) return fb;
+    if (!gridOk(this.next, now, spb)) return fb;
     const j = Math.floor((this.next - now) / spb), idx = this.stepI - j;
     return Math.max(fb, this.next - j * spb + (((div - (idx % div)) % div + div) % div) * spb);
   }

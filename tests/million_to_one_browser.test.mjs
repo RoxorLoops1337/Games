@@ -67,6 +67,9 @@ await touch('touchEnd', 120, 600);
 ok(after < before - 15, `dragging left steers left (${before.toFixed(0)} -> ${after.toFixed(0)})`);
 ok(await page.evaluate(() => game.race.rank < 1000000), 'you are already overtaking');
 
+// swim 1 never teaches cashing in: a watcher records every class #tut gets from here on
+await page.evaluate(() => { window.__tutCls = []; new MutationObserver(() => window.__tutCls.push(document.getElementById('tut').className)).observe(document.getElementById('tut'), { attributes: true, attributeFilter: ['class'] }); });
+
 // Act: jump to the end of zone 1 so the mutation cards come up
 await page.evaluate(() => { const r = game.race; r.p.y = 8950; r.genY = 9300; r.ents = []; r.p.e = r.p.maxE; });
 await page.waitForFunction(() => !document.getElementById('cards').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
@@ -79,15 +82,17 @@ await page.waitForTimeout(400);
 ok(await page.evaluate(() => Object.keys(game.race.muts).length === 1 && !game.race.pending), 'tapping a card takes it and the swim goes on');
 
 // every zone draws without errors (keep the swimmer alive while we skip around)
-const ZY = [16000, 40000, 58000, 61500, 70000, 82500];
+const ZY = [4000, 16000, 30000, 46000, 61500, 70000, 82500];
 for (const y of ZY) {
   await page.evaluate((y) => { const r = game.race; if (r.pending) r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); r.p.y = y; r.genY = y + 300; r.ents = r.ents.filter((e) => e.y > y); r.p.e = r.p.maxE; r.p.shield = 9; if (y > 60000 && !r.p.side) r.p.side = r.eggSide; r.p.x = (y > 59400 ? (r.eggSide < 0 ? 150 : 250) : 200); }, y);
   await page.waitForTimeout(1600);
   await page.evaluate(() => { const r = game.race; if (r.pending) { r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); } r.p.e = r.p.maxE; });
   await page.waitForTimeout(600);
+  await page.evaluate(() => document.getElementById('banner').classList.remove('on')); // the shot shows the zone, not a banner
   await shot('4_zone_' + y);
 }
 ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
+ok(await page.evaluate(() => !window.__tutCls.some((c) => /\bstep-cash\b/.test(c))), 'swim 1 never shows the cash lesson');
 
 // Act: give up, see the result, buy a habit
 await page.evaluate(() => { const r = game.race; r.over = null; r.end('energy'); });
@@ -95,6 +100,11 @@ await page.waitForFunction(() => !document.getElementById('result').classList.co
 ok(await page.isVisible('#result'), 'the end of a swim shows the result');
 if (SHOTS) await page.waitForTimeout(3200); // let the rank fall and the DNA receipt count up
 await shot('5_result');
+// Assert: the egg-bar caption fits one phone line, and the retry button is in the first viewport
+const cap = await page.evaluate(() => { const sp = document.querySelector('#resEgg span'); const c = sp.cloneNode(true); c.querySelectorAll('i').forEach((i) => i.remove()); return c.textContent.trim(); });
+const capMax = /^[\d.]+ cm short/.test(cap) ? 34 : 48; // the plain gap line 34, a SHORT_BY joke 48 (its writer limit)
+ok(cap.length <= capMax, `the egg caption is ${capMax} characters or fewer ("${cap}")`);
+ok(await page.evaluate(() => { const b = document.getElementById('againBtn').getBoundingClientRect(); return b.height > 0 && b.top >= 0 && b.bottom <= innerHeight; }), 'SWIM AGAIN sits inside the first viewport');
 const dna = await page.evaluate(() => game.meta.dna);
 ok(dna > 0, 'the swim paid DNA (' + dna + ')');
 await page.evaluate(() => { game.meta.dna += 500; });
