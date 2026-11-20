@@ -17,21 +17,21 @@ export const ZONES = [
     hazards: { sugar: 1.0, acid: 1.0, alkali: 0.4 },
     coach: 'Coach Gonad: "pH 4, people! Green puddles melt you. Blue bubbles are antacid. Do NOT lick anything. I mean it."' },
   { id: 'goo', name: 'The Gate of Goo', len: 12000, hw: 150, wob: 30, q: 0.3, keep: 0.2,
-    col: ['#1c2346', '#56649e'], wall: '#eef2ff', beat: 110,
+    col: ['#262a3a', '#6a7088'], wall: '#eef2ff', beat: 110,
     hazards: { sugar: 0.9, gate: 1.0, goo: 0.6 },
     coach: 'Coach Gonad: "Goo walls! Aim for the gaps. Hit the goo and you stick like a raisin in porridge."' },
   { id: 'sea', name: 'The Great Womb Sea', len: 22000, hw: 200, wob: 90, q: 0.36, keep: 0.1,
     col: ['#4a0c14', '#b02a36'], wall: '#ff7a5c', beat: 116,
-    hazards: { sugar: 1.0, wbc: 1.0, current: 0.7, acid: 0.2 },
+    hazards: { sugar: 1.0, wbc: 1.1, current: 0.7, acid: 0.2 },
     coach: 'Coach Gonad: "Big Macros ahead! White blood cells EAT swimmers. Keep a rival between you and the mouth. Teamwork!"' },
   { id: 'fork', name: 'The Fork', len: 6000, hw: 190, wob: 0, q: 0.5, keep: 0.5,
-    col: ['#1f0a2e', '#5a1f78'], wall: '#ffa4e6', beat: 120, fork: true,
+    col: ['#120c2e', '#2e3a7a'], wall: '#a8c8ff', beat: 120, fork: true,
     hazards: { sugar: 0.6, acid: 0.35, goo: 0.3 },
     coach: 'Coach Gonad: "Two tubes. One egg. Follow the pink sparkles, son. The other tube is a very long, very empty hallway."' },
   { id: 'rapids', name: 'Tube Rapids', len: 16000, hw: 105, wob: 50, q: 0.36, keep: 0.3,
     col: ['#04303c', '#0f7a8a'], wall: '#5ce1ff', beat: 128, current: 0.22,
-    hazards: { sugar: 1.1, wbc: 0.8, cilia: 1.7 },
-    coach: 'Coach Gonad: "The current is AGAINST you. Chain your overtakes, DASH! Wall hairs swat on the beat. Hug the far wall, or dash!"' },
+    hazards: { sugar: 1.1, wbc: 0.8, cilia: 1.85 },
+    coach: 'Coach Gonad: "Current is AGAINST you. Chain overtakes, DASH! Hairs flash white, then swat. Slip past as they reload!"' },
   { id: 'egg', name: 'THE EGG', len: 4000, hw: 170, wob: 0, q: 0, keep: 1,
     col: ['#3b2a08', '#6b4a10'], wall: '#ffd75c', beat: 136, egg: true,
     hazards: { sugar: 0.5 },
@@ -50,8 +50,8 @@ export const MUTATIONS = {
   antacid: { name: 'Antacid Coat',     icon: '🧴', r: 1, max: 2, desc: 'Acid burns 60% less.' },
   eco:     { name: 'Lazy Wiggle',      icon: '😴', r: 1, max: 3, desc: 'Energy drains 18% slower.' },
   memory:  { name: 'Long Memory',      icon: '🧠', r: 1, max: 3, desc: 'Combos last 1 second longer.' },
-  whip:    { name: 'Whiplash',         icon: '⚡', r: 1, max: 3, desc: 'Dash recharges 20% faster and costs 15% less.' },
-  ram:     { name: 'Battering Ram',    icon: '🐏', r: 2, max: 2, desc: 'Bump rivals aside for +1 combo and +3 energy per level.' },
+  whip:    { name: 'Whiplash',         icon: '⚡', r: 1, max: 3, desc: 'DASH comes back 20% sooner and sips 15% less GAS.' },
+  ram:     { name: 'Battering Ram',    icon: '🐏', r: 2, max: 2, desc: 'Bonk rivals aside: +1 combo, +3 energy, more reach per level.' },
   rush:    { name: 'Overtake Rush',    icon: '🔋', r: 2, max: 3, desc: 'Every overtake gives +1.5 energy.' },
   hype:    { name: 'Hype Man',         icon: '📣', r: 2, max: 2, desc: 'FRENZY needs 3 fewer combo and lasts 2s longer.' },
   goo:     { name: 'Goo Surfer',       icon: '🏄', r: 2, max: 1, desc: 'Goo and mucus walls barely slow you.' },
@@ -72,24 +72,26 @@ export const MUT_ORDER = Object.keys(MUTATIONS);
 // Dad's Habits: the permanent (rogue-lite) upgrades, bought with DNA between runs.
 // Healthy dad, healthy swimmers.
 export const HABITS = {
-  broccoli: { name: 'Dad eats broccoli',     icon: '🥦', max: 10, base: 40, grow: 1.5, desc: '+3.5% swim speed' },
+  broccoli: { name: 'Dad eats broccoli',     icon: '🥦', max: 10, base: 40, grow: 1.42, desc: '+3.5% swim speed' },
   water:    { name: 'Dad drinks water',      icon: '💧', max: 10, base: 22, grow: 1.5, desc: '+6 max energy' },
-  sleep:    { name: 'Dad sleeps 8 hours',    icon: '😴', max: 5,  base: 55, grow: 1.5, desc: '-5% energy drain' },
-  jeans:    { name: 'Dad ditches tight jeans', icon: '👖', max: 8, base: 45, grow: 1.5, desc: 'Start 250 µm further up the field' },
-  berries:  { name: 'Dad eats berries',      icon: '🫐', max: 8,  base: 35, grow: 1.5, desc: '+6% energy from fruit sugar' },
-  walk:     { name: 'Dad walks every day',   icon: '🚶', max: 6,  base: 60, grow: 1.5, desc: '+8% drafting power' },
-  beatbox:  { name: 'Dad beatboxes',         icon: '🎤', max: 6,  base: 55, grow: 1.5, desc: 'Combos last +0.25s longer' },
-  hottub:   { name: 'No more hot tubs',      icon: '🛁', max: 2,  base: 150, grow: 2.5, desc: 'Start every run with +1 shield' },
-  meditate: { name: 'Dad meditates',         icon: '🧘', max: 3,  base: 80, grow: 2.4,  desc: '+1 reroll of mutation cards per run' },
+  sleep:    { name: 'Dad sleeps 8 hours',    icon: '😴', max: 5,  base: 70, grow: 1.8, desc: '-5% energy drain' },
+  jeans:    { name: 'Dad ditches tight jeans', icon: '👖', max: 8, base: 45, grow: 1.55, desc: 'Start 250 µm further up the field' },
+  berries:  { name: 'Dad eats berries',      icon: '🫐', max: 8,  base: 35, grow: 1.55, desc: '+6% energy from fruit sugar' },
+  walk:     { name: 'Dad walks every day',   icon: '🚶', max: 6,  base: 60, grow: 1.65, desc: '+8% drafting power' },
+  beatbox:  { name: 'Dad beatboxes',         icon: '🎤', max: 6,  base: 55, grow: 1.65, desc: 'Combos last +0.25s longer' },
+  hottub:   { name: 'No more hot tubs',      icon: '🛁', max: 2,  base: 200, grow: 3, desc: 'Start every run with +1 shield' },
+  meditate: { name: 'Dad meditates',         icon: '🧘', max: 3,  base: 100, grow: 2.6,  desc: '+1 reroll of mutation cards per run' },
   factory:  { name: 'Bigger factory',        icon: '🏭', max: 10, base: 120, grow: 1.35, desc: "Earn more DNA while you're away" },
   gps:      { name: "Dad's sat-nav",         icon: '🛰️', max: 1,  base: 1200, grow: 1,  desc: 'Unlock AUTOPILOT (it swims for you, a bit badly)' },
 };
 export const HABIT_ORDER = Object.keys(HABITS);
-// Grandad levels (past max, they come with the generations) grow 12% a level from the last normal price.
+// Grandad levels (past max, they come with the generations) start at GRANDAD_PRICE of the last normal price and grow
+// 8% a level from there: a steady late-game DNA sink, something to buy most runs.
+export const GRANDAD_PRICE = 0.6;
 export const habitCost = (id, lv) => {
   const H = HABITS[id];
   if (lv < H.max) return Math.round(H.base * Math.pow(H.grow, lv));
-  return Math.round(habitCost(id, H.max - 1) * Math.pow(1.12, lv - H.max + 1));
+  return Math.round(habitCost(id, H.max - 1) * GRANDAD_PRICE * Math.pow(1.08, lv - H.max + 1));
 };
 
 // Named rivals: the real race. sp is speed relative to the field, smart is the chance they pick the right tube.
@@ -259,7 +261,7 @@ export const ZONE_LINES = {
     'Coach Gonad: "Watch the smart rivals. Tiffany always picks the right tube. Annoying, but useful."',
   ],
   rapids: [
-    'Coach Gonad: "Wall hairs swat on the beat. Hug the far wall, or DASH past them!"',
+    'Coach Gonad: "Wall hairs flash white, then swat. Slip past while they reload!"',
     'Coach Gonad: "DASH through the fast bits! That\'s what it\'s for!"',
     'Coach Gonad: "The tube is narrow. Every overtake counts double in your heart."',
     'Coach Gonad: "Almost there! I can smell the egg. It smells like... success."',
@@ -276,16 +278,16 @@ export const ZONE_LINES = {
 // Boss rivals: "pass" is what they say when they overtake YOU, "passed" is what they cry when you overtake them.
 export const RIVAL_TAUNTS = {
   'Steve': {
-    pass: ['Steve: "Oh hi! Sorry! Coming through! Sorry!"', 'Steve: "Is this the race? I think I\'m winning?"', 'Steve: "Nice tail! See you at the egg maybe!"', 'Steve: "I brought orange slices for everyone!"'],
-    passed: ['Steve: "Aw, good for you, buddy!"', 'Steve: "I was just enjoying the view anyway."', 'Steve: "Wait, there\'s a SECOND place?"', 'Steve: "Go Kevin! Wait, am I Kevin? No. Go Kevin!"'],
+    pass: ['Steve: "Coming through! Sorry! Lovely tail!"', 'Steve: "Is the egg the gift shop? I need a magnet."', 'Steve: "My mum packed me a sandwich. It\'s in my tail."', 'Steve: "Wait up! Is this bit on the tour?"'],
+    passed: ['Steve: "Aw, good for you, buddy!"', 'Steve: "Go on! I only came for the brochure."', 'Steve: "I cried at a sunset today. Go, Kevin!"', 'Steve: "Sorry! Was I in your way? Go, Kevin!"'],
   },
   'Brock': {
-    pass: ['Brock: "PROTEIN, BRO!"', 'Brock: "ONE! TWO! Brock counts every wiggle OUT LOUD!"', 'Brock: "Gerald and Brock say BYE!"', 'Brock: "Tail day is EVERY day, bro!"'],
+    pass: ['Brock: "Roses are red. Brock is ahead."', 'Brock: "ONE! TWO! Brock counts every wiggle OUT LOUD!"', 'Brock: "Gerald and Brock say BYE!"', 'Brock: "Tail day is EVERY day, bro!"'],
     passed: ['Brock: "Brock needs a protein shake."', 'Brock: "Not cool, bro. Kind of cool. Not cool."', 'Brock: "BRO. BROOO."', 'Brock: "Respect. Rematch at the egg, bro."'],
   },
   'Tiffany': {
-    pass: ['Tiffany: "Page 412 says you are swimming wrong."', 'Tiffany: "Statistically, I win. Bye!"', 'Tiffany: "I did the reading, Kevin."', 'Tiffany: "Chapter 9: Swimmers Who Are Not You."'],
-    passed: ['Tiffany: "That was NOT in the book!"', 'Tiffany: "I am writing a strongly worded letter."', 'Tiffany: "Recalculating... recalculating..."', 'Tiffany: "I am adding you to the footnotes."'],
+    pass: ['Tiffany: "You are 0.4% annoying. Rising."', 'Tiffany: "Tube: two stars. Lighting: moody."', 'Tiffany: "I did the reading, Kevin."', 'Tiffany: "Overtake logged. 0.8 seconds. Clean."'],
+    passed: ['Tiffany: "That was NOT in the book!"', 'Tiffany: "Your overtake: one star. Rude."', 'Tiffany: "Recalculating... 61.3%... 61.2%..."', 'Tiffany: "Noted. In my review. In red ink."'],
   },
   'Gunther': {
     pass: ['Gunther: "Watch THIS!" *barrel roll*', 'Gunther: "No stunt double. No fear. No plan."', 'Gunther: "Dieter! Get my good fin!"', 'Gunther: "Hold my wiggle!"'],
@@ -386,12 +388,12 @@ export function tierLine(table, rank) {
 // First-run tutorial captions: t is the big line, s the small one (6 words or fewer each).
 export const TUT_TEXT = {
   steer: { t: 'Drag anywhere to steer', s: 'Left, right, wiggle wiggle.' },
-  dash:  { t: 'Tap DASH for a burst!', s: 'Zoom past them! Costs a sip of GAS.' },
+  dash:  { t: 'Tap DASH for a burst!', s: 'Zoom past them! Each zoom sips GAS.' },
   draft: { t: 'Tuck in BEHIND a rival', s: 'Free speed. Rude, but fast.' },
   combo: { t: 'Pass 3 in a row', s: 'Keep passing. Watch it grow.' },
   fruit: { t: 'Grab the fruit sugar', s: 'Fruit fills your GAS. Eat up!' },
   drill: { t: 'Tap FAST to drill in!', s: 'Both thumbs. The egg is waiting.' },
-  cash:  { t: 'Swipe DOWN to cash in!', s: 'Turns your combo into DNA. Ka-ching!' },
+  cash:  { t: 'Tap CASH to bank your combo!', s: 'A bonk smashes the pot. Bank it!' },
   frenzy: 'That was FRENZY! Chain passes to light it again.',
   natural: 'Natural talent. Coach is impressed.',
   retry: 'Good start! More tricks next swim, keep going!',
@@ -404,7 +406,7 @@ export const COACH_SHORT = {
   goo:    'Find the gap. Not the goo.',
   sea:    'Big Macros bite. Use the crowd.',
   fork:   'Follow the pink sparkles, son.',
-  rapids: 'Hairs swat! Hug the far wall!',
+  rapids: 'Hairs flash, then swat. Time it!',
   egg:    'THERE SHE IS! TAP TAP TAP!',
 };
 
@@ -425,6 +427,10 @@ export const POP_LINES = {
   backflow:   ['WRONG WAY!', 'SWIM BACK!', 'TURN AROUND!', 'U-TURN, KEVIN!', 'EGG IS THAT WAY'],
   drillShove: ['SHOVE!', 'MY EGG!', 'BACK OFF!', 'SCRAM!', 'ELBOWS OUT!'],
   draft:      ['COMFY!', 'FREE RIDE!', 'COUCH MODE!', 'LAZY GENIUS!', 'FEET UP!'],
+  second:     ['SECOND WIND!', 'NOT DEAD YET!', 'PLOT TWIST!'],
+  spare:      ['SPAT OUT!', 'TOO CRUNCHY!'],
+  record:     ['NEW BEST!', 'FRIDGE-WORTHY!'],
+  pastBest:   ['PAST YOUR BEST!', 'NEW TERRITORY!'],
 };
 // Grade shown when a combo is banked, worst to best.
 export const BANK_GRADES = ['TIDY', 'SICK', 'FILTHY', 'OUTRAGEOUS', 'ONE IN A MILLION'];
@@ -728,7 +734,7 @@ export const HAZARD_INTRO = {
   goo:      'Goo blob! Dodge it or get stuck.',
   wbc:      'Macro eyes go wide? SWERVE!',
   current:  'Current! Steer against it, or ride it.',
-  cilia:    'Wall hairs swat! Hug the far wall.',
+  cilia:    'Hairs flash, then swat. Slip past!',
   forkSign: 'Two tubes! Follow the pink sparkles.',
   dna:      'DNA blob! Grab it for Dad\'s Habits.',
   helmet:   'Helmet! Grab it. Blocks one hit.',
@@ -738,6 +744,7 @@ export const HAZARD_INTRO = {
 export const FIRST_DEATH = {
   energy: 'Kevin ran on empty. Fruit = GAS!',
   energyEgg: 'Out of GAS {cm} cm from the egg. Fruit, Kevin!',
+  energyEggAt: 'Out of GAS touching the egg. Fruit, Kevin!',
   acid:   'Green puddles melt you. Go around, or grab blue.',
   wbc:    'A Big Macro ate you. Hide behind a rival!',
   bonk:   'Stuck in the goo. Line up with the gap early.',
@@ -750,10 +757,10 @@ export const FIRST_DEATH = {
 // sprint: they find the last gear, drill: muttering while shoving at the egg.
 export const RIVAL_REACTS = {
   'Steve': {
-    bump:   ['Steve: "Sorry! Was that my fault?"', 'Steve: "Oops! Sorry! Sorry!"', 'Steve: "Sorry, Kevin! Sorry, wall!"'],
-    shove:  ['Steve: "Sorry! I didn\'t mean to shove!"', 'Steve: "Sorry, egg! Sorry, everyone!"', 'Steve: "Oh no, was that me? Sorry!"'],
-    sprint: ['Steve: "I found a little extra! Sorry!"', 'Steve: "Wheee! Is this allowed?"', 'Steve: "Sorry, current! Coming through!"'],
-    drill:  ['Steve: "Knock knock! Sorry to bother!"', 'Steve: "Hello, egg! Big fan!"', 'Steve: "Sorry, egg. This may pinch."'],
+    bump:   ['Steve: "Sorry! Was that my fault?"', 'Steve: "Ow! That was my sandwich side."', 'Steve: "Is bumping part of the tour?"'],
+    shove:  ['Steve: "Excuse me! Mum says share."', 'Steve: "Is this the gift shop queue?"', 'Steve: "Oh no, was that me? Sorry!"'],
+    sprint: ['Steve: "Wheee! Is this allowed?"', 'Steve: "Tour group, keep up! That\'s me!"', 'Steve: "I had a big breakfast for this!"'],
+    drill:  ['Steve: "Knock knock! Sorry to bother!"', 'Steve: "Hello, egg! Do you do tours?"', 'Steve: "Egg, I wrote you a song. Verse one."'],
   },
   'Brock': {
     bump:   ['Brock: "BRO. My gains!"', 'Brock: "Watch it! That shake is Gerald!"', 'Brock: "That was cardio. Thanks, bro."'],
@@ -762,10 +769,10 @@ export const RIVAL_REACTS = {
     drill:  ['Brock: "Eight... nine... TEN REPS!"', 'Brock: "Push, bro. PUSH."', 'Brock: "Egg, thou art... very round."'],
   },
   'Tiffany': {
-    bump:   ['Tiffany: "Page 88: no bumping. Rude."', 'Tiffany: "That breaks rule 14b."', 'Tiffany: "Rude. Like my reviews."'],
-    shove:  ['Tiffany: "Page 301 allows shoving."', 'Tiffany: "Strategic repositioning."', 'Tiffany: "Move. I have a book signing."'],
-    sprint: ['Tiffany: "Page 500: final sprint."', 'Tiffany: "Appendix C. Go time."', 'Tiffany: "Nobody reads this far. Go!"'],
-    drill:  ['Tiffany: "Drill angle 42. Perfect."', 'Tiffany: "Chapter 20: Getting In."', 'Tiffany: "One star? ONE STAR? Drilling."'],
+    bump:   ['Tiffany: "Bump rate up 12%. Concerning."', 'Tiffany: "That breaks rule 14b."', 'Tiffany: "Bumpy service. One star."'],
+    shove:  ['Tiffany: "Shove angle: 31 degrees. Ideal."', 'Tiffany: "Strategic repositioning."', 'Tiffany: "Move. I have a book signing."'],
+    sprint: ['Tiffany: "Page 500: final sprint."', 'Tiffany: "Top speed: 99.7%. Holding."', 'Tiffany: "Rapids: three stars. Splashy."'],
+    drill:  ['Tiffany: "Drill angle 42. Perfect."', 'Tiffany: "Egg texture: four stars. Firm."', 'Tiffany: "Chapter 20: Getting In."'],
   },
   'Gunther': {
     bump:   ['Gunther: "That was a stunt. Planned."', 'Gunther: "Bump? No. Choreography."', 'Gunther: "Dieter, tell me you got that."'],
@@ -838,8 +845,8 @@ export const MUT_FLAVOR = {
   antacid: 'Lemon-proof. Lagoon-proof. Not Chad-proof.',
   eco:     'Wiggles less. Wins more. Naps often.',
   memory:  'Remembers every combo. And your birthday.',
-  whip:    'Crack! That was the tail. Probably.',
-  ram:     'Polite, but structurally a battering ram.',
+  whip:    'Snaps like a wet towel. Ready again already.',
+  ram:     'Says "excuse me". Does not wait for an answer.',
   rush:    'Every overtake is a tiny espresso.',
   hype:    'Comes with an air horn. Uses it a lot.',
   goo:     "Slime is just a wave that hasn't left.",
@@ -886,7 +893,7 @@ export const RUN_MILESTONES = [
 export const FINALE_LINES = [
   'Nine generations. Every Kevin who ever lost is cheering.',
   'Coach Gonad lifts his cap. There is a number on his tail: #999,999.',
-  '"I was one place ahead of the first Kevin. He looked so lost back there."',
+  '"I was one place ahead of Kevin #1. He looked so lost back there."',
   '"So I stopped. I stayed. I coached. Every Kevin, every swim."',
   'And now, at last, Coach Gonad cries. The tear ducts were in there all along.',
   'Dad is a Great-Great-Great-Great-Great-Great-Great-Grandad. He still beatboxes.',
@@ -926,7 +933,8 @@ export const ZONE_LINES_SHORT = {
     '999,999 to go. Easy maths.',
     "DASH isn't a doorbell. Pick your moment.",
     'I started back there too. Long story.',
-    'Wiggle like you mean it, Kevin!',
+    'Wiggle like you mean it. I meant it once.',
+    'One place ahead of last. Best seat in here.',
     'Last place is just first from the back!',
     'Tube tip: the walls are not snacks.',
   ],
@@ -947,7 +955,7 @@ export const ZONE_LINES_SHORT = {
     'Let a rival find the gap. Then borrow it.',
     "It's like jelly, but sadder.",
     'Find the gap. The goo can smell fear.',
-    'Thread the gap for style points!',
+    'Thread the gap. I scored a 3. Out of 100.',
     'Nobody wants to be the raisin.',
   ],
   sea: [
@@ -956,38 +964,39 @@ export const ZONE_LINES_SHORT = {
     'Shields take a bite. I wear three. Habit.',
     'FRENZY at 10. I get one at 2. Coffee.',
     'Ride the current. I surfed here once. Ahem.',
-    'Halfway! Legends only from here.',
-    'Big sea, tiny you. Draft someone!',
-    'Swing wide, then DASH past.',
+    'Halfway! I cried here. Happy tears. Mostly.',
+    'Draft a rival. I drafted a Macro. Once.',
+    'Swing wide, then DASH. I swung once. Wide.',
   ],
   fork: [
     'Pink sparkles, son. I hung those myself.',
     'The wrong tube has my old flip-flop in it.',
     "Don't flip a coin. You have no hands.",
     'Tiffany always picks right. Follow her!',
-    'Sparkles left? Sparkles right? LOOK.',
+    'LOOK for sparkles. I forgot my glasses once.',
     'Two tubes. I picked wrong once. ONCE.',
     'Trust the sparkles. Not Chad.',
     'The empty tube is very pretty. And empty.',
   ],
   rapids: [
-    'Wall hairs swat on the beat. Time it!',
-    'Swat coming? Switch walls!',
+    'Hairs flash white, then swat. I just flinch.',
+    'Swat coming? Switch walls. I just cry.',
     'DASH the fast bits. My knees cannot.',
-    'The current hates you. Swim anyway.',
+    'The current hates you. It hates me more.',
     'Narrow tube. I got stuck here, back then.',
     'I can smell the egg. And cinnamon?',
     "Almost there! I'm warming up the whistle.",
     'Chain the passes. Coach needs a show.',
   ],
   egg: [
-    'TAP TAP TAP!',
+    'TAP TAP TAP! I am air-tapping too.',
     'Tap fast. I drilled like that once. Shh.',
     'Both thumbs! Toes too, if you find any!',
-    'Stop reading. Start tapping.',
+    'Stop reading. I read once. Lost a race.',
     "This is it, Kevin! I'm SO proud!",
     "Shove them off! It's YOUR egg!",
-    'Your finger is a hero now.',
+    'Your finger is a hero. Mine retired.',
+    'Never got this far myself. Busy helping.',
     'Win this and I buy the sausage rolls.',
   ],
 };
@@ -1029,10 +1038,10 @@ export const DAD_PICK_LINES = {
 // hair: under 0.3 s, tail: under 1 s, length: under 3 s. Always points at the next swim.
 export const NEAR_MISS_BY_GAP = {
   // 34 characters or fewer each.
-  hair:   ['Lost by a hair. A single hair.', 'Photo finish. Photo says: again.', 'The egg blinked. Be there first.',
+  hair:   ['Lost by a hair. A single hair.', 'Photo finish. You blinked first.', 'The egg blinked. Be there first.',
            'Tiffany needed a microscope.', 'Dad saw the replay. He gasped.'],
-  tail:   ['One wiggle short. Go find it!', 'Lost by a tail. Use yours again.', 'Under a second. One wiggle!',
-           'One DASH earlier. That was it.', 'Coach is drawing arrows. Again!'],
+  tail:   ['One wiggle short. Go find it!', 'A tail behind. Yours was napping.', 'Under a second. One wiggle!',
+           'One DASH earlier. That was it.', 'Coach drew arrows. All say DASH.'],
   length: ['A few lengths back. Catchable!', "Three seconds. One combo's worth.", 'Close enough to wave. Now knock.',
            'Three seconds is one FRENZY.', 'You heard the drilling. Be it.'],
 };
@@ -1100,13 +1109,13 @@ export const SYNERGY_SHORT = {
 };
 // Extra zone-banner lines for Coach Gonad, 6 words or fewer. {n} is the Kevin number.
 export const COACH_SHORT_MORE = {
-  launch: ['Kevin #{n}! Same tail, new you!', 'Back of the queue? I remember.', 'Wiggle first. I never explain.', 'Draft, pass, repeat. Then lunch.', 'Fresh legs! Well, fresh tail.', "Kevin #{n}, let's GO!"],
-  acid:   ['Lemon lagoon. You know the drill.', 'Green bad. Blue good. Lick nothing.', 'Kevin #{n}: fizz is not flavour.', "Melting's optional today.", 'Around the puddles. Trust my scars.', 'Acid ahead. Stay zesty.'],
-  goo:    ['Gap hunting season is open.', 'Goo walls. I hold a grudge.', 'Be the needle, not the haystack.', 'Kevin #{n}, gap first. Snacks later.', 'Jelly ahead. Stay unsticky.', 'Thread it. I did once. Legendary.'],
-  sea:    ['Big Macros, big appetites. Hide!', 'Macros eat loners. And my sandwiches.', 'Halfway, Kevin #{n}! Keep going!', 'Wide sea. I swam it. Once.', 'Shields up. Is it lunch yet?', "Swim like they're not hungry."],
-  fork:   ['Pink sparkles. Follow the glitter.', 'Sparkly tube. The other has echoes.', 'Kevin #{n}, trust your nose.', 'Left? Right? My whistle says LOOK.', 'Not the empty hallway, son.', 'Sparkles mean egg. I glued them.'],
-  rapids: ['Hairs swat on the beat. Dance!', 'Far wall. The swats fall short.', 'Hairs high-five you. Unwanted. Dodge.', 'Kevin #{n}, upstream! Like ambitious salmon.', 'Egg can hear you. Wiggle louder!', 'Last tube! My cap is sweating.'],
-  egg:    ['THIS IS THE ONE. Probably!', 'TAP TAP TAP, Kevin #{n}!', 'Both thumbs! I believe in thumbs!', 'Elbows out. Sausage rolls after. TAP!', "She's right there! DRILL!", 'Tap! I am NOT crying. TAP!'],
+  launch: ['Kevin #{n}! Same tail, new you!', 'Back of the queue? I remember.', 'Wiggle first. I never explain.', 'Draft, pass, repeat. Then lunch.', 'Fresh legs! Well, fresh tail.', "Kevin #{n}, GO! I'll jog behind."],
+  acid:   ['Lemon lagoon. You know the drill.', 'Green bad. Blue good. Lick nothing.', 'Kevin #{n}: fizz is not flavour.', "Melting's optional today.", 'Around the puddles. Trust my scars.', 'Acid ahead. I still smell lemony.'],
+  goo:    ['Gap hunting season is open.', 'Goo walls. I hold a grudge.', 'Be the needle, not the haystack.', 'Kevin #{n}, gap first. Snacks later.', 'Jelly ahead. I still have bits.', 'Thread it. I did once. Legendary.'],
+  sea:    ['Macros bite. I hide behind Brock.', 'Macros eat loners. And my sandwiches.', 'Halfway, Kevin #{n}! Keep going!', 'Wide sea. I swam it. Once.', 'Shields up. Is it lunch yet?', 'Act calm. Worked for me. Twice.'],
+  fork:   ['Follow the glitter. I sneezed some.', 'Sparkly tube. The other has echoes.', 'Trust your nose. Mine is blocked.', 'Left? Right? My whistle says LOOK.', 'Skip the empty tube. I napped.', 'Sparkles mean egg. I glued them.'],
+  rapids: ['Hairs swat on beat. I flinch.', 'White flash, then swat. I blink.', 'Hairs high-five you. Unwanted. Dodge.', 'Kevin #{n}, upstream! Like ambitious salmon.', 'Wiggle louder! I hum. Nobody notices.', 'Last tube! My cap is sweating.'],
+  egg:    ['THIS IS THE ONE. Probably!', 'TAP, Kevin #{n}! I air-tap too!', 'Both thumbs! I believe in thumbs!', 'Elbows out. Sausage rolls after. TAP!', 'DRILL! I never got this close.', 'Tap! I am NOT crying. TAP!'],
 };
 
 // ================================================================ UI lessons (first swim, drill, cash-in)
@@ -1166,26 +1175,26 @@ export const ZONE_FIRST_LOSS = {
 // Keyed by the exact RIVALS names.
 // RIVAL_GLOATS: a rival won and dares you to come back. RIVAL_GLOATS_TIGHT: shared, for a winning gap under 1 s.
 export const RIVAL_GLOATS = {
-  'Steve': ['Steve: "I won? Sorry! Race me again?"', 'Steve: "Same time tomorrow, buddy?"', 'Steve: "I said sorry to the egg. Again?"'],
+  'Steve': ['Steve: "I won? Sorry! Race me again?"', 'Steve: "Fun tour! Same time tomorrow?"', 'Steve: "Mum will frame this. Come back!"'],
   'Brock': ['Brock: "Brock wins. Come back stronger."', 'Brock: "Rematch, bro. Bring protein."', 'Brock: "Brock wrote you a sonnet. Come."'],
-  'Tiffany': ['Tiffany: "As predicted. Try again?"', 'Tiffany: "See you on page one. Again."', 'Tiffany: "Signed copies at the egg."'],
+  'Tiffany': ['Tiffany: "Predicted: 0.1 s. Try harder."', 'Tiffany: "See you on page one. Again."', 'Tiffany: "Signed copies at the egg."'],
   'Gunther': ['Gunther: "Stunt of the year. Top it."', 'Gunther: "Come back. Bring a ramp."', 'Gunther: "Dieter missed it. Once more!"'],
   'Chad Thundertail': ['Chad: "Add it to the pile. Big pile."', 'Chad: "Come back. Chad needs fans."', 'Chad: "Rematch? The hair is ready."'],
 };
-export const RIVAL_GLOATS_TIGHT = ['"That was way too close. Again?"', '"I felt your breath. Rematch?"', '"By a whisker! Do not tell anyone."'];
+export const RIVAL_GLOATS_TIGHT = ['"Felt your breath. Hush, Mum."', '"My tail is still shaking."', '"By a whisker! Tell no one."', '"You were RIGHT there. Spooky."'];
 // RIVAL_STEAL: said from inside the egg, after a rival got in first.
 export const RIVAL_STEAL = {
-  'Steve': ['Steve: "It is so cosy in here! Sorry!"', 'Steve: "Hello from inside! Sorry!"', 'Steve: "I will name the baby Kevin!"'],
+  'Steve': ['Steve: "In! Is there an audio guide?"', 'Steve: "I\'m in! Mum will cry. I\'ll cry."', 'Steve: "Sorry! I\'ll name it Kevin!"'],
   'Brock': ['Brock: "Brock is IN. Brock is home."', 'Brock: "Nice egg. Good gains, bro."', 'Brock: "Brock will be a big baby."'],
-  'Tiffany': ['Tiffany: "Exactly as chapter 20 said."', 'Tiffany: "Footnote: Kevin knocked."', 'Tiffany: "I brought my own bookmark."'],
+  'Tiffany': ['Tiffany: "Interior: five stars. Cosy."', 'Tiffany: "In 0.3 s ahead. As modelled."', 'Tiffany: "I brought my own bookmark."'],
   'Gunther': ['Gunther: "Stuck the landing. Inside!"', 'Gunther: "Ten out of ten. Egg agrees."', 'Gunther: "No stunt double. Just me."'],
   'Chad Thundertail': ['Chad: "Chad is in. Tell the fan club."', 'Chad: "Egg, meet the hair."', 'Chad: "Told you. Chad gets in."'],
 };
 // RIVAL_FAREWELLS: a rival drops out of the race.
 export const RIVAL_FAREWELLS = {
-  'Steve': ['Steve: "I am out! Go, Kevin! Sorry!"', 'Steve: "Tell the egg I said hi!"', 'Steve: "Sorry, tube! Sorry, Macro! Bye!"'],
+  'Steve': ['Steve: "Tour over for me! Go, Kevin!"', 'Steve: "Tell the egg I said hi!"', 'Steve: "Sorry, all! Save me a sandwich!"'],
   'Brock': ['Brock: "Brock is done. Brock rests."', 'Brock: "Win it for Brock, bro."', 'Brock: "Tell Gerald... Brock loved him."'],
-  'Tiffany': ['Tiffany: "This was NOT in the book."', 'Tiffany: "The reviews were right. Bye."', 'Tiffany: "Recalculating. Forever."'],
+  'Tiffany': ['Tiffany: "This was NOT in the book."', 'Tiffany: "This race: one star. Leaving."', 'Tiffany: "Odds of this: 3.1%. Annoying."'],
   'Gunther': ['Gunther: "Stunt failed. Worth it."', 'Gunther: "Dieter, roll the sad credits."', 'Gunther: "Remember me. In slow-mo."'],
   'Chad Thundertail': ['Chad: "Chad is not out. Chad rests."', 'Chad: "This one does not count."', 'Chad: "Still counts as a win. Somehow."'],
 };
@@ -1324,7 +1333,7 @@ export const GEN_STEP_LINES = {
 export const TUT_TEXT_KEYS = {
   steer: { t: 'Arrow keys to steer', s: 'Or A and D. Wiggle wiggle.' },
   dash:  { t: 'SPACE for a burst!', s: 'Costs a little GAS. Use it on gaps.' },
-  cash:  { t: 'Press S to cash in!', s: 'Turns your combo into DNA. Ka-ching!' },
+  cash:  { t: 'Press S to cash in!', s: 'A bonk smashes the pot. Bank it first!' },
   drill: { t: 'Mash SPACE to drill in!', s: 'Any keys work. Faster!' },
 };
 // Start-line hint for keyboard players (instead of START_HINT).
@@ -1335,31 +1344,31 @@ export const START_HINT_KEYS = 'Arrows steer. SPACE burns GAS to zoom.';
 export const RIVAL_MOVE_NAMES = {
   Steve: 'SORRY, YOU GO',
   Brock: 'MAX REP!',
-  Tiffany: 'BY THE BOOK',
+  Tiffany: 'CITATION!',
   Gunther: 'STUNT DIVE!',
   Chad: 'HAIR CHECK',
 };
 // Said during the wind-up of the move (the tell).
 export const RIVAL_MOVE_TELLS = {
-  Steve:   ['Steve: "Sorry, coming over! Sorry!"', 'Steve: "Mind if I just squeeze in?"', 'Steve: "Big move! Excuse me! Sorry!"'],
+  Steve:   ['Steve: "Sorry, coming over! Sorry!"', 'Steve: "Mind if I just squeeze in?"', 'Steve: "Is this the side entrance?"'],
   Brock:   ['Brock: "Spot me, bro..."', 'Brock: "Brock is loading the bar..."', 'Brock: "Deep breath. BIG lift."'],
-  Tiffany: ['Tiffany: "Turning to page 600..."', 'Tiffany: "Footnote incoming. Brace."', 'Tiffany: "As the book predicted..."'],
+  Tiffany: ['Tiffany: "Citation needed... from ME."', 'Tiffany: "Hold still. I am citing you."', 'Tiffany: "Source: me. Peer review: me."'],
   Gunther: ['Gunther: "Roll camera... and..."', 'Gunther: "Clear the set! Big one!"', 'Gunther: "Do NOT try this at home."'],
   Chad:    ['Chad: "Hold on. Checking the hair."', 'Chad: "Lighting is perfect. Watch."', 'Chad: "Fans, get your phones out."'],
 };
 // Kevin countered the move.
 export const RIVAL_COUNTERED = {
-  Steve:   ['Steve: "Oh! Good one! Sorry!"', 'Steve: "Ha! You got me fair and square!"', 'Steve: "I deserved that. Sorry!"'],
+  Steve:   ['Steve: "Good block! Fair! Sorry!"', 'Steve: "Oh, this side is taken. Okay!"', 'Steve: "Blocked! I will use the front."'],
   Brock:   ['Brock: "Bro. You blocked the rep."', 'Brock: "Brock pulled a tail muscle."', 'Brock: "Failed set. Brock is sad."'],
-  Tiffany: ['Tiffany: "That page was a misprint."', 'Tiffany: "Erratum! A huge erratum!"', 'Tiffany: "Who wrote this book?!"'],
+  Tiffany: ['Tiffany: "My citation! REJECTED?"', 'Tiffany: "Bad source. It was me."', 'Tiffany: "Peer review was BRUTAL."'],
   Gunther: ['Gunther: "Cut! Cut! Again!"', 'Gunther: "Blooper reel. Keep it."', 'Gunther: "My stunt double did that."'],
   Chad:    ['Chad: "Not on camera, Kevin!"', 'Chad: "That never happened. Fans?"', 'Chad: "Chad meant to wobble."'],
 };
 // Back in the race after taking the wrong tube at the Fork.
 export const RIVAL_COMEBACK = {
-  Steve:   ['Steve: "Wrong tube! Lovely, though!"', 'Steve: "Nobody was home. I\'m back!"', 'Steve: "Sorry I\'m late! Took a tour!"'],
+  Steve:   ['Steve: "No gift shop in there. Back!"', 'Steve: "Back! I left my sandwich here."', 'Steve: "Sorry I\'m late! Took a tour!"'],
   Brock:   ['Brock: "Wrong tube. Did a lap anyway."', 'Brock: "That was the warm-up tube."', 'Brock: "Brock is BACK. Brock is pumped."'],
-  Tiffany: ['Tiffany: "Field research. Obviously."', 'Tiffany: "The map was upside down."', 'Tiffany: "I fact-checked that tube."'],
+  Tiffany: ['Tiffany: "Field research. Obviously."', 'Tiffany: "That tube: zero stars. Empty."', 'Tiffany: "Detour: 4.7 s. Recovering."'],
   Gunther: ['Gunther: "U-turn! Did you film it?"', 'Gunther: "Planned detour. Very scenic."', 'Gunther: "Gunther returns! The sequel!"'],
   Chad:    ['Chad: "Shortcut. Totally meant it."', 'Chad: "Chad was scouting. For fans."', 'Chad: "That tube had bad lighting."'],
 };
@@ -1367,15 +1376,15 @@ export const RIVAL_COMEBACK = {
 export const RIVAL_EGG_LOSS = {
   Steve:   ['Steve: "Yay! Congrats! Name it Steve?"', 'Steve: "You did it, buddy! Group hug?"', 'Steve: "So happy for you! Truly!"'],
   Brock:   ['Brock: "BRO. Respect. Huge respect."', 'Brock: "Gerald, hold me. Brock is sad."', 'Brock: "Good set, Kevin. Good set."'],
-  Tiffany: ['Tiffany: "This contradicts chapter 20."', 'Tiffany: "Rewriting the ending. Again."', 'Tiffany: "Fine. You get a footnote."'],
+  Tiffany: ['Tiffany: "Your win: three stars. Lucky."', 'Tiffany: "Rewriting the ending. Again."', 'Tiffany: "Fine. You get a footnote."'],
   Gunther: ['Gunther: "Best stunt I ever saw."', 'Gunther: "You stole my ending. Respect."', 'Gunther: "Who is your stunt coach?"'],
   Chad:    ['Chad: "Chad let you. For the fans."', 'Chad: "Chad counts that one. For Chad."', 'Chad: "This does not count. Probably."'],
 };
 // Kevin is drafting right behind them.
 export const RIVAL_DRAFTED = {
-  Steve:   ['Steve: "Comfy back there? Lovely!"', 'Steve: "Mind the wake! Sorry, wake!"', 'Steve: "Tailgating? I love company!"'],
+  Steve:   ['Steve: "On your left: my tail. Lovely!"', 'Steve: "Sorry about the wake! New tail."', 'Steve: "Company! Did I mention Mum?"'],
   Brock:   ['Brock: "Free ride? Brock wants rent."', 'Brock: "Get your own wake, bro!"', 'Brock: "Company. Brock feels a haiku."'],
-  Tiffany: ['Tiffany: "Drafting? Chapter 4. Copycat."', 'Tiffany: "Stop reading over my tail."', 'Tiffany: "Reading over my tail? Buy it."'],
+  Tiffany: ['Tiffany: "Gap: 0.2 tails. Back off."', 'Tiffany: "Your drafting: two stars."', 'Tiffany: "Copying me? Cite your source."'],
   Gunther: ['Gunther: "A stunt double? Finally!"', 'Gunther: "Stay close. Big jump ahead."', 'Gunther: "Dieter, frame Kevin out."'],
   Chad:    ['Chad: "Behind a legend? Lucky view."', 'Chad: "Fans always follow Chad."', 'Chad: "Back there? Get my good side."'],
 };
@@ -1440,11 +1449,11 @@ export const COACH_CLUES = [
 export const RIVAL_STEAL_WHY = {
   Steve: [
     'Steve got in first. He said sorry to the door.',
-    'Steve slipped in mid-apology. Sneaky. Sorry.',
-    'Steve is in. He sent the egg a thank-you card.',
-    'Steve won again. He apologised to the trophy.',
+    'Steve thought the egg was the gift shop. It was.',
+    'Steve is in. He told the egg about Mum. Twice.',
+    'Steve won again. He asked the egg for a selfie.',
     'Steve is inside saying sorry to every wall.',
-    'Steve: polite, lovely, and a total menace.',
+    'Steve: chatty, lovely, and a total menace.',
   ],
   Brock: [
     'Brock got in first. Brock flexed at the door.',
@@ -1455,12 +1464,12 @@ export const RIVAL_STEAL_WHY = {
     'Brock has a key to the egg now. He did reps.',
   ],
   Tiffany: [
-    'Tiffany got in first. Exactly on schedule.',
+    'Tiffany got in first. 0.0 s off her schedule.',
     'Tiffany is in, reviewing the egg. Four stars.',
-    'Tiffany followed her own book. It worked. Once.',
+    'Tiffany got in 0.3 s ahead. She predicted 0.3.',
     'Tiffany is inside writing chapter 21: You.',
-    'Tiffany left you a one-star review. Of you.',
-    'Tiffany is signing copies inside the egg.',
+    'Tiffany won again. Her odds of that: 97.2%.',
+    'Tiffany rated the race. Kevin: two stars.',
   ],
   Gunther: [
     'Gunther got in first. Dieter got the shot.',
@@ -1509,19 +1518,20 @@ export const GEN10_INTRO = [
 export const ACT2_CLUES = [
   [11, 'Chad says "1000 wins". A Kevin asked for one name. Silence.'],
   [12, 'Chad brought the family album. Page one: a real egg photo.'],
-  [13, 'The caption says: "Great-great-grandad. Win number one."'],
-  [14, 'Chad: "After the first one, we just kept counting. Upwards."'],
+  [13, 'Caption: "Great-great-great... (ran out) Uncle Thad. Win 1."'],
+  [14, 'Chad: "After Uncle Thad, we just kept counting. Upwards."'],
   [15, 'Coach Gonad saw the album. He dropped his whistle.'],
-  [16, 'Old photo, back corner: a swimmer waving. Number #999,999.'],
-  [17, 'Chad: "Grandad said someone let him through. Who does that?"'],
+  [16, 'Old photo, back corner: a swimmer turning back. #999,999.'],
+  [17, 'Chad: "Thad saw a swimmer turn back for the last one. Why?"'],
   [18, 'Coach polishes his old number. "Tomorrow," he says.'],
 ];
 // Gen 19: the reveal of the Thundertail win.
 export const ACT2_FINALE = [
   'Generation 19. Coach Gonad finally tells the whole story.',
-  '"The first Kevin was lost back there. So I turned around."',
-  '"While I helped him, a Thundertail swam past. Straight in."',
-  'Chad goes very quiet. "So we won once. Because of you?"',
+  '"Kevin #1 was lost, dead last. So I turned around."',
+  '"I helped Kevin #1. Thad Thundertail swam by. Straight in."',
+  '"Kevin #1 lost that day. His family has won it back since."',
+  'Chad goes quiet. "So Uncle Thad won once. Because of you?"',
   'Chad: "Thank you, Coach. From every Thundertail. Really."',
   'Chad: "So that is 1001 wins." Nobody corrects him.',
 ];
@@ -1554,7 +1564,7 @@ export const FAMILY_ZONE_LINES = {
   ],
   rapids: [
     '{who} smelled cinnamon here. {heir} bakes it every year.',
-    '{heir} says {who} hugged the far wall. Copy {who}.',
+    '{heir} says {who} timed every swat here. Copy {who}.',
     '{who} beat the Rapids. {heir} cried at the finish line.',
   ],
   egg: [
@@ -1610,8 +1620,8 @@ export const TAP_STEER_HINT = 'Drag, do not tap! Slide your thumb left and right
 // ================================================================ signature tricks (systems emits them by id)
 // name: 16 characters or fewer (the pop). hint: 40 characters or fewer, the recipe in plain words.
 // Recipes: tailgate draft, slingshot, snipe; matador close, dodge, weave; pinball gate, bump, slingshot;
-// grudge rival, bump, rival; snack sugar, dna, close; popcorn pop, close, weave; domino domino, pop, rival;
-// needle gate, weave, snipe.
+// grudge rival, bump, rival; snack sugar, dna, close; popcorn pop, close, weave; domino bump, pop, rival;
+// needle gate, weave, snipe; encore cash, pop, weave; rebound cash, slingshot, rival.
 export const TRICK_TEXT = {
   tailgate: { name: 'TAILGATE TANGO', hint: 'Draft, slingshot out, then snipe a pass.' },
   matador:  { name: 'MATADOR WIGGLE', hint: 'Shave danger, dodge, then weave a pass.' },
@@ -1619,8 +1629,10 @@ export const TRICK_TEXT = {
   grudge:   { name: 'GRUDGE MATCH', hint: 'Pass a big name, bump, pass a big name.' },
   snack:    { name: 'SNACK ATTACK', hint: 'Eat fruit, grab DNA, then a near miss.' },
   popcorn:  { name: 'POPCORN PARTY', hint: 'Pop a Macro, near miss, weave a pass.' },
-  domino:   { name: 'DOMINO DISCO', hint: 'Mosh a rival, pop a Macro, pass a rival.' },
+  domino:   { name: 'DOMINO DISCO', hint: 'Bump a rival, pop a Macro, pass a rival.' },
   needle:   { name: 'NEEDLE NOSE', hint: 'Thread a gate, weave, then snipe a pass.' },
+  encore:   { name: 'ENCORE!', hint: 'Cash in, pop a Macro, then weave a pass.' },
+  rebound:  { name: 'BOUNCE BACK', hint: 'Cash in, slingshot out, pass a big name.' },
 };
 // Pop when a signature trick lands for the first time (16 characters or fewer).
 export const TRICK_NEW_LINES = ['NEW MOVE!', 'COACH FAINTED!', 'SIGNATURE MOVE!', 'DAD SAW THAT!', 'TEXTBOOK!', 'INVENTED IT!'];
@@ -1633,3 +1645,43 @@ export const HZ_REMIX_INTRO = {
   pulse: 'The acid learned to dance. Time your gaps.',
   pair:  'Hairs on both walls now. No hiding, Kevin.',
 };
+
+// ================================================================ round text: secret, swim 1, HUD, egg duel, tricks, result
+// Baby Album with no babies, once Act 2 has been told (generation 19 and up): replaces 'Chad has never won'.
+export const ALBUM_EMPTY_AFTER_ACT2 = 'No babies yet. The record holder is Chad Thundertail. Technically. Ask Coach.';
+// Coach strip on swim 1, when the named rivals start slow (44 characters or fewer).
+export const RIVALS_TIRED = 'The big names partied last night. Pounce!';
+// First time the combo counter shows (32 characters or fewer).
+export const COMBO_INTRO = 'Passes in a row = COMBO. Maths!';
+// Label on a combo ring to swim through.
+export const COMBO_RING_LABEL = 'go through!';
+// Dashing with the GAS tank low (30 characters or fewer each).
+export const DASH_LOW_GAS = ['Easy on the DASH! Eat fruit.', 'Tank says no. Fruit says yes.', 'DASH runs on GAS. Snack!', 'Zoom less, munch more.'];
+// Result tip when dashing drained the tank. {n} dashes, {g} GAS burned.
+export const DASH_COST_TIP = 'You dashed {n} times and burned {g} GAS. Snack between zooms!';
+// Short names of the two combo meters.
+export const COMBO_LABELS = { speed: 'ZOOM', cash: 'CASH' };
+// The first time a bonk smashes an unbanked pot.
+export const BREAK_POT_FIRST = 'POT SMASHED! Cash in sooner next time.';
+// After a few cash-ins by button: the swipe shortcut.
+export const CASH_SWIPE_TIP = 'Pro move: swipe DOWN to cash, no button needed.';
+// Egg duel: which side to tap to block a rival's move.
+export const EGG_TELL_SIDE = { left: '<< TAP LEFT!', right: 'TAP RIGHT! >>' };
+// Signature tricks landed back to back (16 characters or fewer). 4 means 4 or more.
+export const TRICK_STREAK_LINES = {
+  2: ['DOUBLE TRICK!', 'TWO FOR TWO!', 'BACK TO BACK!'],
+  3: ['TRICK TRIPLE!', 'HAT TRICK!', 'COACH SAT DOWN'],
+  4: ['COACH LIES DOWN', 'MUM IS FILMING', 'TRICK MACHINE!', 'CALL THE NEWS!'],
+};
+// Retry button when a named rival beat you by a little (18 characters or fewer once filled).
+// {name} the rival's first name, {sec} seconds behind (one decimal).
+export const REMATCH_CLOSE_FOE = [
+  'GET {name}! {sec} S',
+  '{name} IS NERVOUS',
+  'CATCH {name}',
+  'ONE WIGGLE. GO.',
+  '{sec} S. GO GET IT',
+  'PASS {name} NOW',
+  '{name} BLINKED',
+  'REMATCH {name}',
+];
