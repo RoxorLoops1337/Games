@@ -225,4 +225,17 @@ for (const tier of [0, 5, 9, 11]) {
   setRoomHeight(BASE_H);
 }
 
+// ---------------------------------------------------------------- Chinese version
+{
+  const { EN, ZH, setLang, tr } = await import('../ricochet_mint/i18n.js');
+  const missing = Object.keys(EN).filter((k) => !ZH[k]);
+  eq(missing, [], 'every English string has a Chinese translation');
+  eq(Object.keys(ZH).filter((k) => !(k in EN)), [], 'no stray Chinese keys');
+  for (const k in EN) { const v = (t) => (t.match(/\{\w+\}/g) || []).sort().join(); eq(v(ZH[k]), v(EN[k]), 'same placeholders in ' + k); }
+  ok(!Object.values(EN).concat(Object.values(ZH)).some((t) => t.includes('\u2014')), 'no em dashes in any text');
+  setLang('zh');
+  eq(fmt(12345), '1.23万', 'Chinese numbers use 万'); eq(fmt(4e9), '40.0亿', 'and 亿'); eq(ITEMS.bucket.name, '复制桶', 'item names switch language');
+  ok(tr('f.combo', { n: 20 }) === '连击 20！', 'placeholders fill in Chinese');
+  setLang('en'); eq(fmt(4e9), '4.00B', 'English numbers are back'); eq(ITEMS.bucket.name, 'Copy Bucket', 'and English names');
+}
 console.log('ricochet_mint core: ' + passed + ' checks passed');

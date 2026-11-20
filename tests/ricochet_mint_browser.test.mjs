@@ -43,6 +43,10 @@ for (const [name, w, h, dpr] of [['phone', 390, 844, 3], ['wide viewport', 990, 
   await page.goto(URL); await page.waitForFunction(() => window.game && document.getElementById('playBtn'), null, { timeout: 15000 });
   await page.waitForTimeout(400);
   await page.tap('#playBtn'); await page.waitForTimeout(250);
+  // a first game opens the 8-card guide; step through it to the end
+  const guide = await page.evaluate(() => document.getElementById('ovGuide').classList.contains('show'));
+  if (guide) { let cards = 1; while (cards < 8) { await page.tap('#gNext'); cards++; await page.waitForTimeout(60); } await page.tap('#gNext'); await page.waitForTimeout(200); }
+  ok(guide && await page.evaluate(() => !document.getElementById('ovGuide').classList.contains('show')), 'the guide opens on a first game and closes after the last card');
   if (await page.isVisible('#infoGo')) await page.tap('#infoGo');
   await page.evaluate(() => { const R = game.room(); R.coins = []; R.slots.forEach((s) => { s.open = true; }); game.cash = 1e6; game.life = 1e3; game.mile = 1; game.enemiesOn = false; });
 

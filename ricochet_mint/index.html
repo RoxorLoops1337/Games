@@ -11,7 +11,7 @@
 <style>
 :root{--bg:#2a1c2c;--bg2:#1f1521;--panel:#3d2a3c;--panel2:#4a3348;--ink:#1a0f1c;--cream:#fbe9c8;--dim:#c4a99a;--gold:#ffcc4d;--goldd:#c98a1e;--pink:#ff8fa3;--mint:#7fd6a4;--sky:#7cc4e8;--wood:#8a5a3c}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;background:var(--bg2);color:var(--cream);font-family:"Pixelify Sans",ui-monospace,monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+html,body{height:100%;background:var(--bg2);color:var(--cream);font-family:"Pixelify Sans","ZCOOL QingKe HuangYou",ui-monospace,monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 button{font:inherit;color:inherit;cursor:pointer}
 img.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .tab img,#roomName img{height:22px;width:auto}
@@ -83,6 +83,64 @@ h2{font-size:28px;font-weight:700;color:var(--gold);text-shadow:3px 3px 0 var(--
 .act span{display:block;font-size:14px;color:var(--gold)}
 .book{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;max-width:320px}
 .book div{font-size:13px;color:var(--dim);display:flex;flex-direction:column;align-items:center;gap:3px}
+
+/* language picker */
+.langs{display:flex;gap:8px;margin-top:14px}
+.langs button{font:inherit;font-size:16px;padding:6px 14px;background:var(--panel);color:var(--dim);border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer}
+.langs button.on{background:var(--gold);color:var(--ink)}
+/* how-to-play guide */
+#ovGuide{justify-content:center;padding:14px}
+.gcard{position:relative;width:100%;max-width:360px;background:var(--panel);border:3px solid var(--ink);box-shadow:inset 0 0 0 3px var(--panel2),6px 6px 0 var(--ink);padding:16px 16px 14px;text-align:center}
+.gtop{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--dim)}
+.gskip{font:inherit;font-size:14px;background:none;border:0;color:var(--dim);text-decoration:underline;cursor:pointer;padding:4px}
+.gs{position:relative;height:178px;margin:10px 0 0;border:3px solid var(--ink);box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);overflow:hidden;background:#14112e center 72%/cover no-repeat;image-rendering:pixelated}
+.gs img,.gs .g{position:absolute;image-rendering:pixelated;will-change:transform}
+.gs .lbl{position:absolute;font-weight:700;color:var(--gold);text-shadow:2px 2px 0 var(--ink);font-size:16px;white-space:nowrap}
+.gnum{display:inline-block;background:var(--gold);color:var(--ink);font-weight:700;width:30px;height:30px;line-height:30px;border:3px solid var(--ink);margin-top:12px;font-size:16px}
+.gcard h3{font-size:24px;color:var(--gold);text-shadow:3px 3px 0 var(--ink);margin-top:6px;line-height:1.1}
+.gcard p{font-size:16px;line-height:1.35;margin-top:8px;color:var(--cream);min-height:66px}
+.gtip{display:flex;gap:8px;align-items:center;text-align:left;margin-top:10px;background:var(--bg2);border:3px solid var(--ink);padding:8px 10px;font-size:14px;color:var(--mint);line-height:1.3}
+.gtip img{flex:none;width:14px}
+.gdots{display:flex;justify-content:center;gap:7px;margin-top:14px}
+.gdots i{width:10px;height:10px;background:var(--bg2);border:2px solid var(--ink);cursor:pointer}
+.gdots i.on{background:var(--gold);width:22px}
+.gnav{display:flex;gap:10px;margin-top:14px}
+.gnav .pbtn{flex:1;margin:0;padding:10px 0;font-size:19px}
+.gnav .prev{background:var(--panel2);color:var(--cream)}
+.gnav .prev[disabled]{opacity:.35}
+.gin{animation:gin .25s steps(4)}
+@keyframes gin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes gfall{0%{transform:translateY(-150px)}30%{transform:translateY(0)}42%{transform:translateY(-52px)}54%{transform:translateY(0)}62%{transform:translateY(-18px)}70%,100%{transform:translateY(0)}}
+@keyframes gring{0%,8%{transform:scale(.2);opacity:0}10%{opacity:1}40%,100%{transform:scale(1.7);opacity:0}}
+@keyframes gfinger{0%,6%{transform:translate(0,0)}10%{transform:translate(2px,4px)}16%,100%{transform:translate(0,0)}}
+@keyframes gup{0%,45%{transform:translateY(0);opacity:0}50%{opacity:1}85%{transform:translateY(-34px);opacity:1}100%{transform:translateY(-40px);opacity:0}}
+@keyframes ghit{0%{transform:translate(-90px,-80px)}50%{transform:translate(0,0)}100%{transform:translate(95px,-85px)}}
+@keyframes gsquash{0%,45%,62%,100%{transform:scale(1,1)}50%{transform:scale(1.18,.82)}55%{transform:scale(.92,1.08)}}
+@keyframes gslideL{0%{transform:translateX(-70px);opacity:1}45%{transform:translateX(0);opacity:1}50%,100%{transform:translateX(0);opacity:0}}
+@keyframes gslideR{0%{transform:translateX(70px);opacity:1}45%{transform:translateX(0);opacity:1}50%,100%{transform:translateX(0);opacity:0}}
+@keyframes gborn{0%,46%{transform:scale(0);opacity:0}56%{transform:scale(1.35);opacity:1}64%,92%{transform:scale(1);opacity:1}100%{transform:scale(1);opacity:0}}
+@keyframes gpress{0%,40%,52%,100%{transform:translateY(0)}44%,48%{transform:translateY(3px)}}
+@keyframes glock{0%,40%{opacity:1;transform:scale(1)}48%{opacity:0;transform:scale(1.6)}100%{opacity:0}}
+@keyframes gbuilt{0%,46%{opacity:0;transform:scale(0)}56%{opacity:1;transform:scale(1.25)}64%,94%{opacity:1;transform:scale(1)}100%{opacity:0}}
+@keyframes gglow{0%,100%{box-shadow:0 0 0 2px #ffcc4d,0 0 14px #ffcc4d}50%{box-shadow:0 0 0 2px #fff3b0,0 0 26px #ffcc4d}}
+@keyframes gdrop{0%{transform:translateY(-110px);opacity:1}35%{transform:translateY(0);opacity:1}40%,100%{transform:translateY(0);opacity:0}}
+@keyframes gwob{0%,35%,75%,100%{transform:rotate(0)}45%{transform:rotate(-6deg)}55%{transform:rotate(6deg)}65%{transform:rotate(-3deg)}}
+@keyframes goutL{0%,70%{transform:translate(0,0);opacity:0}72%{opacity:1}100%{transform:translate(-90px,-70px);opacity:1}}
+@keyframes goutR{0%,70%{transform:translate(0,0);opacity:0}72%{opacity:1}100%{transform:translate(90px,-70px);opacity:1}}
+@keyframes gbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes gspin{to{transform:rotate(360deg)}}
+@keyframes gflap{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes gzap{0%,40%{transform:translate(-110px,40px)}50%{transform:translate(0,0)}100%{transform:translate(-60px,90px)}}
+@keyframes gfly{0%{transform:translateY(0);opacity:0}8%{opacity:1}80%{transform:translateY(-130px);opacity:1}100%{transform:translateY(-150px);opacity:0}}
+@keyframes gfloat{0%,100%{transform:translate(0,0) rotate(-4deg)}50%{transform:translate(10px,-10px) rotate(4deg)}}
+@keyframes gtw{0%,100%{opacity:.2;transform:scale(.6)}50%{opacity:1;transform:scale(1.2)}}
+@keyframes gblink{0%,49%{opacity:1}50%,100%{opacity:.25}}
+@keyframes gfan{0%,100%{transform:rotate(var(--r)) translateY(0)}50%{transform:rotate(var(--r)) translateY(-6px)}}
+.gperk{position:absolute;width:62px;height:76px;background:var(--panel2);border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;font-size:28px;animation:gfan 2s ease-in-out infinite}
+.gslot{position:absolute;border-radius:50%;border:3px dashed #ffcc4d;animation:gglow 1.2s steps(3) infinite}
+.gbtn{position:absolute;background:var(--gold);color:var(--ink);font-weight:700;font-size:14px;padding:5px 10px;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.ghatch{position:absolute;left:0;right:0;height:10px;background:repeating-linear-gradient(90deg,#8a5a3c 0 10px,#6b4129 10px 12px);border-top:3px solid var(--ink);border-bottom:3px solid var(--ink)}
+@media (prefers-reduced-motion:reduce){.gs *{animation-duration:0s!important;animation-iteration-count:1!important}}
 </style>
 </head>
 <body>
@@ -112,44 +170,65 @@ h2{font-size:28px;font-weight:700;color:var(--gold);text-shadow:3px 3px 0 var(--
     </div>
 
     <div class="ov show" id="ovTitle">
-      <h1>RICOCHET<br>MINT</h1>
-      <div class="tag">BOUNCE · BUILD · GET COZY RICH</div>
-      <ul class="how" id="howList"></ul>
-      <button class="pbtn go" id="playBtn">Play</button>
-      <button class="pbtn ghost" id="newBtn" style="display:none">New game</button>
+      <h1 data-th="ui.title">RICOCHET<br>MINT</h1>
+      <div class="tag" data-t="ui.tag">BOUNCE · BUILD · GET COZY RICH</div>
+      <div class="langs" id="langs"></div>
+      <button class="pbtn go" id="playBtn" data-t="ui.play">Play</button>
+      <button class="pbtn ghost" id="newBtn" style="display:none" data-t="ui.newGame">New game</button>
+      <button class="pbtn ghost" id="howBtn" data-t="ui.howToPlay">How to play</button>
     </div>
     <div class="ov" id="ovInfo">
       <div id="infoIcon"></div>
       <h2 id="infoTitle" style="margin-top:12px"></h2>
       <p class="sub" id="infoText"></p>
-      <button class="pbtn go" id="infoGo">Got it</button>
+      <button class="pbtn go" id="infoGo" data-t="ui.gotIt">Got it</button>
     </div>
     <div class="ov" id="ovPerk">
       <div style="font-size:48px">🏆</div>
-      <h2 id="perkTitle" style="margin-top:8px">Milestone!</h2>
-      <p class="sub">Pick a perk. It lasts forever.</p>
+      <h2 id="perkTitle" style="margin-top:8px" data-t="ui.milestone">Milestone!</h2>
+      <p class="sub" data-t="ui.pickPerk">Pick a perk. It lasts forever.</p>
       <div class="cards" id="perkCards"></div>
     </div>
     <div class="ov" id="ovMenu">
-      <h2>Menu</h2>
+      <h2 data-t="ui.menu">Menu</h2>
       <button class="pbtn ghost" id="muteBtn" style="margin-top:16px">Sound: on</button>
-      <button class="pbtn ghost" id="bookBtn">Coin book</button>
-      <button class="pbtn ghost" id="perksBtn">My perks</button>
+      <button class="pbtn ghost" id="bookBtn" data-t="ui.book">Coin book</button>
+      <button class="pbtn ghost" id="perksBtn" data-t="ui.myPerks">My perks</button>
+      <button class="pbtn ghost" id="guideBtn" data-t="ui.howToPlay">How to play</button>
+      <button class="pbtn ghost" id="langBtn"></button>
       <button class="pbtn ghost" id="resetBtn">Reset game</button>
       <div id="menuExtra"></div>
-      <button class="pbtn go" id="menuClose">Back</button>
+      <button class="pbtn go" id="menuClose" data-t="ui.back">Back</button>
+    </div>
+    <div class="ov" id="ovGuide">
+      <div class="gcard">
+        <div class="gtop"><span id="gHead"></span><button class="gskip" id="gSkip"></button></div>
+        <div id="gBody"></div>
+        <div class="gdots" id="gDots"></div>
+        <div class="gnav"><button class="pbtn go prev" id="gPrev"></button><button class="pbtn go" id="gNext"></button></div>
+      </div>
     </div>
   </div>
   <footer>
-    <button class="pbtn buy" data-k="mint"><img class="px" data-ic="coin"><b>Coin</b><span>0</span><small>0/6</small></button>
-    <button class="pbtn buy" data-k="merge"><img class="px" data-ic="merge"><b>Merge</b><span>FREE</span><small>no pair</small></button>
+    <button class="pbtn buy" data-k="mint"><img class="px" data-ic="coin"><b data-t="ui.coin">Coin</b><span>0</span><small>0/6</small></button>
+    <button class="pbtn buy" data-k="merge"><img class="px" data-ic="merge"><b data-t="ui.merge">Merge</b><span>FREE</span><small>no pair</small></button>
     <button class="pbtn buy" data-k="pad"><img class="px" data-ic="cushion"><b>Add Pad</b><span>0</span><small>Lv 0</small></button>
-    <button class="pbtn buy" data-k="cap"><img class="px" data-ic="purse"><b>Wallet</b><span>0</span><small>6 coins</small></button>
+    <button class="pbtn buy" data-k="cap"><img class="px" data-ic="purse"><b data-t="ui.wallet">Wallet</b><span>0</span><small>6 coins</small></button>
   </footer>
 </div>
 
 <script type="module">
-import {HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
+import {tr,setLang,getLang,HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR,BAL,TIERS,MAXT,coinR,fmt,ROOMS,ITEMS,ITEM_ORDER,ENEMIES,PERKS,itemStat,bucketMax,Game} from './core.js';
+// language: saved choice, else the browser's
+const LANG_KEY='ricochetMint.lang';
+let LANG0=null;try{LANG0=localStorage.getItem(LANG_KEY)}catch(e){}
+if(LANG0!=='en'&&LANG0!=='zh')LANG0=/^zh/i.test(navigator.language||'')?'zh':'en';
+setLang(LANG0);document.documentElement.lang=LANG0==='zh'?'zh-CN':'en';
+if(LANG0==='zh'){const l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=ZCOOL+QingKe+HuangYou&display=swap';document.head.appendChild(l);document.title='弹弹金币屋 Ricochet Mint'}
+function applyStatic(){document.querySelectorAll('[data-t]').forEach(el=>el.textContent=tr(el.dataset.t));document.querySelectorAll('[data-th]').forEach(el=>el.innerHTML=tr(el.dataset.th))}
+applyStatic();
+function chooseLang(l){if(l===getLang())return;try{localStorage.setItem(LANG_KEY,l)}catch(e){}if(started)persist();location.reload()}
+
 
 // ---- fit to the screen: scale the menus on wide/zoomed-out viewports, then make the room as tall as the space allows
 {const vw=window.innerWidth,vh=window.innerHeight;const k=Math.max(1,Math.min(vw/400,vh/820,3));
@@ -160,7 +239,7 @@ import {HOLE_X,HOLE_W,LANE,LANE_TOP,PAD_LEN,setRoomHeight,SZ,W,H,WALL,CEIL,FLOOR
 // =================== PIXEL KIT (16-bit style, 1 pixel = 1 world unit) ===================
 const LW=W,LH=H;
 const P=v=>Math.round(v);
-const FONT='"Pixelify Sans",ui-monospace,monospace';
+const FONT='"Pixelify Sans","ZCOOL QingKe HuangYou",ui-monospace,monospace';
 const C={ink:'#1a0f1c',cream:'#fbe9c8',gold:'#ffcc4d',goldd:'#c98a1e',goldl:'#fff0a8',pink:'#ff8fa3',pinkd:'#c94f6d',pinkl:'#ffc7d1',
   wood:'#8a5a3c',woodd:'#5a3a2e',woodl:'#b07a4f',mint:'#7fd6a4',mintd:'#3f8f6a',teal:'#4fb8b0',sky:'#7cc4e8',skyd:'#3a5f8f',
   purple:'#a77bd6',purpled:'#5e3f8a',red:'#e5534b',redd:'#8f2d34',gray:'#b9b3c4',grayd:'#6e6680',slime:'#8fd16a',rust:'#d9823b',dim:'#c4a99a'};
@@ -441,16 +520,16 @@ cv.addEventListener('pointerdown',e=>{
   if(R.tapAt(x,y))return;
   if(s){openSlot(s);return}
   if(sheet){closeSheet();return}
-  if(game.cur===1){toast('Coins come up through the hatch in the Den ceiling');return}
+  if(game.cur===1){toast(tr('toast.fromHatch'));return}
   const res=R.mint(x);
-  if(res==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');
-  else if(res==='cash')toast('A coin costs '+fmt(R.cost('mint')));
+  if(res==='full')toast(tr('toast.walletFull'));
+  else if(res==='cash')toast(tr('toast.coinCosts',{v:fmt(R.cost('mint'))}));
 });
 document.querySelectorAll('.buy').forEach(btn=>btn.addEventListener('click',()=>{
   if(paused)return;Snd.init();const k=btn.dataset.k,R=game.room();
-  if(k==='merge'){const m=R.mergeBest();if(!m)toast('No matching pair to merge yet');else if(m.room!==R)toast('Merged in '+m.room.def.name);return}
-  if(k==='mint'){if(game.cur===1)toast('Dropped into the Den');const r=R.mint();if(r==='full')toast('Wallet full. Merge coins or upgrade your Wallet.');else if(r==='cash')toast('Need '+fmt(R.cost('mint')));return}
-  if(!R.buy(k))toast('Need '+fmt(R.cost(k)));else if(k==='cap')toast('Wallet now holds '+R.cap()+' coins');else if(k==='pad')toast(R.padFull()&&R.padLv?'Pads now pay '+fmt(R.padMult())+'x':'New pad placed!');
+  if(k==='merge'){const m=R.mergeBest();if(!m)toast(tr('toast.noPair'));else if(m.room!==R)toast(tr('toast.mergedIn',{r:m.room.def.name}));return}
+  if(k==='mint'){if(game.cur===1)toast(tr('toast.droppedDen'));const r=R.mint();if(r==='full')toast(tr('toast.walletFull'));else if(r==='cash')toast(tr('toast.need',{v:fmt(R.cost('mint'))}));return}
+  if(!R.buy(k))toast(tr('toast.need',{v:fmt(R.cost(k))}));else if(k==='cap')toast(tr('toast.walletNow',{n:R.cap()}));else if(k==='pad')toast(R.padFull()&&R.padLv?tr('toast.padsPay',{x:fmt(R.padMult())}):tr('toast.newPad'));
 }));
 
 // ----- sheets -----
@@ -462,32 +541,32 @@ function renderSheet(){
   const el=$('shBody');el.innerHTML='';if(!sheet)return;
   if(sheet.roomUnlock!=null){
     const i=sheet.roomUnlock,d=ROOMS[i];setTitle(i===1?S.attic:S.moon,d.name);
-    el.innerHTML='<div class="stat">'+(i===1?'A whole new room upstairs. Coins start as <b>Gold</b>, everything pays <b>30x</b>, and new critters show up. The Den keeps earning on its own.':'Up on the roof under the moon. Coins start as <b>Ruby</b> and everything pays <b>900x</b>. Up to three critters at once.')+'</div>';
+    el.innerHTML='<div class="stat">'+tr('ui.room'+i+'Sheet')+'</div>';
     const b=document.createElement('button');b.className='pbtn act';b.style.width='100%';b.style.marginTop='10px';b.dataset.role='room';
-    b.innerHTML='Open it<span>'+fmt(game.roomCost(i))+'</span>';b.onclick=()=>{if(game.unlockRoom(i)){closeSheet();buildTabs()}else toast('Need '+fmt(game.roomCost(i)))};el.appendChild(b);
+    b.innerHTML=tr('ui.openIt')+'<span>'+fmt(game.roomCost(i))+'</span>';b.onclick=()=>{if(game.unlockRoom(i)){closeSheet();buildTabs()}else toast(tr('toast.need',{v:fmt(game.roomCost(i))}))};el.appendChild(b);
   }else{
     const s=sheet.slot,R=game.rooms[sheet.room];
     if(!s.open){
-      setTitle(S.lock,'Locked slot');
-      el.innerHTML='<div class="stat">Unlock this slot to build on it. Each new slot costs more than the last.</div>';
+      setTitle(S.lock,tr('ui.locked'));
+      el.innerHTML='<div class="stat">'+tr('ui.lockedText')+'</div>';
       const b=document.createElement('button');b.className='pbtn act';b.style.width='100%';b.style.marginTop='10px';b.dataset.role='slot';
-      b.onclick=()=>{if(R.unlockSlot(s))renderSheet();else toast('Need '+fmt(R.slotCost()))};el.appendChild(b);
+      b.onclick=()=>{if(R.unlockSlot(s))renderSheet();else toast(tr('toast.need',{v:fmt(R.slotCost())}))};el.appendChild(b);
     }else if(!s.item){
-      setTitle(null,'Build');
+      setTitle(null,tr('ui.build'));
       ITEM_ORDER.forEach(T=>{const d=ITEMS[T],b=document.createElement('button');b.className='pbtn it';b.dataset.role='build';b.dataset.t=T;
         const ic=imgOf(itemIcon(T),2);ic.style.width='44px';ic.style.height='auto';b.appendChild(ic);
         b.insertAdjacentHTML('beforeend','<div class="tx"><b>'+d.name+'</b><span>'+d.desc+'</span></div><div class="pr"></div>');
-        b.onclick=()=>{if(!game.itemUnlocked(T)){toast(ITEMS[T].unlock<0?'Unlocks when critters show up':'Unlocks at '+fmt(ITEMS[T].unlock)+' lifetime earnings');return}
-          if(R.build(s,T))renderSheet();else toast('Need '+fmt(R.buildCost(T)))};
+        b.onclick=()=>{if(!game.itemUnlocked(T)){toast(ITEMS[T].unlock<0?tr('toast.unlocksCritters'):tr('toast.unlocksAt',{v:fmt(ITEMS[T].unlock)}));return}
+          if(R.build(s,T))renderSheet();else toast(tr('toast.need',{v:fmt(R.buildCost(T))}))};
         el.appendChild(b)});
     }else{
-      const it=s.item,d=ITEMS[it.type];setTitle(itemIcon(it.type),d.name+'  Lv '+it.lv);
+      const it=s.item,d=ITEMS[it.type];setTitle(itemIcon(it.type),d.name+'  '+tr('ui.lv',{n:it.lv}));
       const st=document.createElement('div');st.className='stat';st.dataset.role='stat';el.appendChild(st);
       const row=document.createElement('div');row.className='btnrow';
-      const up=document.createElement('button');up.className='pbtn act';up.dataset.role='up';up.onclick=()=>{if(R.upgrade(s))renderSheet();else if(it.lv<25)toast('Need '+fmt(R.upCost(it)))};
+      const up=document.createElement('button');up.className='pbtn act';up.dataset.role='up';up.onclick=()=>{if(R.upgrade(s))renderSheet();else if(it.lv<25)toast(tr('toast.need',{v:fmt(R.upCost(it))}))};
       const sl=document.createElement('button');sl.className='pbtn act';sl.dataset.role='sell';
-      sl.onclick=()=>{if(sl.dataset.arm){const r=R.sell(s);toast('Sold for '+fmt(r));renderSheet()}else{sl.dataset.arm=1;sl.innerHTML='Sure?<span>+'+fmt(it.spent*.5)+'</span>'}};
-      sl.innerHTML='Sell<span>+'+fmt(it.spent*.5)+'</span>';
+      sl.onclick=()=>{if(sl.dataset.arm){const r=R.sell(s);toast(tr('toast.sold',{v:fmt(r)}));renderSheet()}else{sl.dataset.arm=1;sl.innerHTML=tr('ui.sure')+'<span>+'+fmt(it.spent*.5)+'</span>'}};
+      sl.innerHTML=tr('ui.sell')+'<span>+'+fmt(it.spent*.5)+'</span>';
       row.appendChild(up);row.appendChild(sl);el.appendChild(row);
     }
   }
@@ -497,15 +576,15 @@ function updateSheet(){
   if(!sheet)return;const el=$('shBody');
   if(sheet.roomUnlock!=null){const b=el.querySelector('[data-role=room]');if(b)b.classList.toggle('can',game.cash>=game.roomCost(sheet.roomUnlock));return}
   const s=sheet.slot,R=game.rooms[sheet.room];
-  const sb=el.querySelector('[data-role=slot]');if(sb){const c=R.slotCost();sb.innerHTML='Unlock slot<span>'+fmt(c)+'</span>';sb.classList.toggle('can',game.cash>=c)}
+  const sb=el.querySelector('[data-role=slot]');if(sb){const c=R.slotCost();sb.innerHTML=tr('ui.unlockSlot')+'<span>'+fmt(c)+'</span>';sb.classList.toggle('can',game.cash>=c)}
   el.querySelectorAll('[data-role=build]').forEach(b=>{const T=b.dataset.t,ok=game.itemUnlocked(T),c=R.buildCost(T);
     b.classList.toggle('lockd',!ok);b.classList.toggle('can',ok&&game.cash>=c);
-    b.querySelector('.pr').textContent=ok?fmt(c):(ITEMS[T].unlock<0?'critters':'at '+fmt(ITEMS[T].unlock))});
+    b.querySelector('.pr').textContent=ok?fmt(c):(ITEMS[T].unlock<0?tr('ui.unlocksCritters'):tr('ui.unlocksAt',{v:fmt(ITEMS[T].unlock)}))});
   const st=el.querySelector('[data-role=stat]');
   if(st&&s.item){const it=s.item;
-    const html=(it.jam?'<b style="color:#ff8a5c">Jammed! Pop the Jammer to switch it back on.</b><br>':'')+'Now: '+itemStat(it.type,it.lv,R)+(it.lv<25?'<br><span class="nx">Next: '+itemStat(it.type,it.lv+1,R)+'</span>':'<br><span class="nx">Max level</span>');
+    const html=(it.jam?'<b style="color:#ff8a5c">'+tr('ui.jammedNote')+'</b><br>':'')+tr('ui.now',{s:itemStat(it.type,it.lv,R)})+(it.lv<25?'<br><span class="nx">'+tr('ui.next',{s:itemStat(it.type,it.lv+1,R)})+'</span>':'<br><span class="nx">'+tr('ui.maxLevel')+'</span>');
     if(st.dataset.h!==html){st.dataset.h=html;st.innerHTML=html}
-    const up=el.querySelector('[data-role=up]');if(up){const c=R.upCost(it),h=it.lv>=25?'Maxed':'Upgrade<span>'+fmt(c)+'</span>';if(up.dataset.h!==h){up.dataset.h=h;up.innerHTML=h}up.classList.toggle('can',it.lv<25&&game.cash>=c)}}
+    const up=el.querySelector('[data-role=up]');if(up){const c=R.upCost(it),h=it.lv>=25?tr('ui.maxed'):tr('ui.upgrade')+'<span>'+fmt(c)+'</span>';if(up.dataset.h!==h){up.dataset.h=h;up.innerHTML=h}up.classList.toggle('can',it.lv<25&&game.cash>=c)}}
   if(sheet.slot&&((!s.item&&el.querySelector('[data-role=stat]'))||(s.item&&el.querySelector('[data-role=build]'))))renderSheet();
 }
 $('shClose').onclick=closeSheet;
@@ -541,28 +620,27 @@ function drainEvents(){
   if(game.pending)showPerk();
 }
 function showPerk(){
-  $('perkTitle').textContent='You hit '+fmt(BAL.lifeMile*Math.pow(10,game.mile-1))+' lifetime!';
+  $('perkTitle').textContent=tr('ui.hit',{v:fmt(BAL.lifeMile*Math.pow(10,game.mile-1))});
   const box=$('perkCards');box.innerHTML='';
   game.pending.forEach(id=>{const p=PERKS[id],b=document.createElement('button');b.className='pbtn card';
-    b.innerHTML='<div class="pi">'+p.i+'</div><div><b>'+p.name+'</b><span>'+p.desc+'</span>'+(game.pk(id)?'<br><em>You have '+game.pk(id)+'</em>':'')+'</div>';
+    b.innerHTML='<div class="pi">'+p.i+'</div><div><b>'+p.name+'</b><span>'+p.desc+'</span>'+(game.pk(id)?'<br><em>'+tr('ui.youHave',{n:game.pk(id)})+'</em>':'')+'</div>';
     b.onclick=()=>{game.choose(id);persist();show(null);Snd.play('build')};box.appendChild(b)});
   show('ovPerk');
 }
-const WELCOME={k:'info',spr:'room:0',title:'Welcome to the Den',text:'Tap the room to drop coins. Save up, then tap the glowing circles to unlock slots and build things. It starts slow and gets wild, so get comfy.'};
 $('infoGo').onclick=()=>show(null);
 $('playBtn').onclick=()=>{Snd.init();started=true;
   const s=readSave();
-  if(s&&!$('playBtn').dataset.loaded){$('playBtn').dataset.loaded=1;game.load(s);buildTabs();const g=game.offline((Date.now()-(s.at||Date.now()))/1000);show(null);if(g>0)toast('While you were away: +'+fmt(g));return}
-  show(null);if(!s)game.events.push(WELCOME)};
-$('newBtn').onclick=()=>{try{localStorage.removeItem(SAVE)}catch(e){}$('playBtn').dataset.loaded=1;game.reset();buildTabs();started=true;Snd.init();show(null);game.events.push(WELCOME)};
-$('menuBtn').onclick=()=>{if(!started)return;closeSheet();$('menuExtra').innerHTML='';$('resetBtn').textContent='Reset game';$('resetBtn').dataset.arm='';show('ovMenu')};
+  if(s&&!$('playBtn').dataset.loaded){$('playBtn').dataset.loaded=1;game.load(s);buildTabs();const g=game.offline((Date.now()-(s.at||Date.now()))/1000);show(null);if(g>0)toast(tr('toast.away',{v:fmt(g)}));return}
+  if(s)show(null);else openGuide('play')};
+$('newBtn').onclick=()=>{try{localStorage.removeItem(SAVE)}catch(e){}$('playBtn').dataset.loaded=1;game.reset();buildTabs();started=true;Snd.init();openGuide('play')};
+$('menuBtn').onclick=()=>{if(!started)return;closeSheet();$('menuExtra').innerHTML='';$('resetBtn').textContent=tr('ui.reset');$('resetBtn').dataset.arm='';show('ovMenu')};
 $('menuClose').onclick=()=>show(null);
-$('muteBtn').onclick=()=>{Snd.muted=!Snd.muted;$('muteBtn').textContent='Sound: '+(Snd.muted?'off':'on');try{localStorage.setItem(SAVE+'.mute',Snd.muted?'1':'')}catch(e){}};
+$('muteBtn').onclick=()=>{Snd.muted=!Snd.muted;$('muteBtn').textContent=tr(Snd.muted?'ui.soundOff':'ui.soundOn');try{localStorage.setItem(SAVE+'.mute',Snd.muted?'1':'')}catch(e){}};
 $('bookBtn').onclick=()=>{const box=$('menuExtra');box.innerHTML='';const g=document.createElement('div');g.className='book';
   TIERS.forEach((t,i)=>{const d=document.createElement('div');if(i<game.seen)d.appendChild(imgOf(i===MAXT?S.prism[0]:S.coin[i],2));else{const q=document.createElement('div');q.style.cssText='width:30px;height:30px;background:#3d2a3c;border:3px solid #1a0f1c';d.appendChild(q)}d.appendChild(document.createTextNode(i<game.seen?t.n:'???'));g.appendChild(d)});
-  box.appendChild(g);box.insertAdjacentHTML('beforeend','<p class="sub">Merge two Prism coins for a jackpot.</p>')};
-$('perksBtn').onclick=()=>{const ks=Object.keys(game.perks);$('menuExtra').innerHTML=ks.length?'<div class="cards">'+ks.map(k=>'<div class="pbtn card"><div class="pi">'+PERKS[k].i+'</div><div><b>'+PERKS[k].name+' x'+game.perks[k]+'</b><span>'+PERKS[k].desc+'</span></div></div>').join('')+'</div>':'<p class="sub">No perks yet. You get one at every lifetime milestone.</p>'};
-$('resetBtn').onclick=()=>{const b=$('resetBtn');if(!b.dataset.arm){b.dataset.arm=1;b.textContent='Tap again to wipe it all';return}
+  box.appendChild(g);box.insertAdjacentHTML('beforeend','<p class="sub">'+tr('ui.bookNote')+'</p>')};
+$('perksBtn').onclick=()=>{const ks=Object.keys(game.perks);$('menuExtra').innerHTML=ks.length?'<div class="cards">'+ks.map(k=>'<div class="pbtn card"><div class="pi">'+PERKS[k].i+'</div><div><b>'+PERKS[k].name+' x'+game.perks[k]+'</b><span>'+PERKS[k].desc+'</span></div></div>').join('')+'</div>':'<p class="sub">'+tr('ui.noPerks')+'</p>'};
+$('resetBtn').onclick=()=>{const b=$('resetBtn');if(!b.dataset.arm){b.dataset.arm=1;b.textContent=tr('ui.resetSure');return}
   try{localStorage.removeItem(SAVE)}catch(e){}game.reset();buildTabs();show(null)};
 
 // ----- HUD -----
@@ -570,22 +648,22 @@ function updateUI(){
   const R=game.room();
   const rn=$('roomName');if(rn.dataset.i!==String(game.cur)){rn.dataset.i=game.cur;rn.innerHTML='';rn.appendChild(imgOf([S.house,S.attic,S.moon][game.cur],2));rn.appendChild(document.createTextNode(R.def.name))}
   shownCash+=(game.cash-shownCash)*.35;if(Math.abs(game.cash-shownCash)<game.cash*.001+1)shownCash=game.cash;$('cash').lastChild.textContent=fmt(shownCash);
-  $('rate').textContent=fmt(game.rate)+' / sec';
+  $('rate').textContent=tr('ui.perSec',{v:fmt(game.rate)});
   const g=game.nextMile(),p=g/10;
   $('barFill').style.width=Math.max(0,Math.min(100,(Math.log10(Math.max(game.life,1))-Math.log10(Math.max(p,1)))*100))+'%';
-  $('goalTxt').textContent='Next perk at '+fmt(g)+' lifetime';
+  $('goalTxt').textContent=tr('ui.nextPerk',{v:fmt(g)});
   let mc=0;for(const c of R.coins)if(c.combo>mc)mc=c.combo;
-  $('comboTxt').textContent=mc>=3?'combo '+mc+' x'+(1+mc*game.comboStep()).toFixed(1):'';
+  $('comboTxt').textContent=mc>=3?tr('ui.combo',{n:mc,m:(1+mc*game.comboStep()).toFixed(1)}):'';
   const tb=$('tiers');if(tb.dataset.s!==String(game.seen)){tb.dataset.s=game.seen;tb.innerHTML='';for(let i=0;i<TIERS.length;i++){const im=imgOf(i<game.seen?(i===MAXT?S.prism[0]:S.coin[i]):S.coin[0],1);im.style.width='10px';im.style.height='10px';if(i>=game.seen)im.style.filter='brightness(.25) grayscale(1)';tb.appendChild(im)}}
   {const mb=document.querySelector('.buy[data-k=merge]'),pr=R.bestPair();mb.classList.toggle('can',!!pr);mb.classList.toggle('no',!pr);
-    mb.querySelector('span').textContent=pr?(pr.t>=MAXT?'JACKPOT':TIERS[pr.t+1].n):'—';mb.querySelector('small').textContent=pr?'2× '+TIERS[pr.t].n:'no pair'}
+    mb.querySelector('span').textContent=pr?(pr.t>=MAXT?tr('ui.jackpot'):TIERS[pr.t+1].n):'—';mb.querySelector('small').textContent=pr?tr('ui.two',{n:TIERS[pr.t].n}):tr('ui.noPair')}
   document.querySelectorAll('.buy').forEach(b=>{const k=b.dataset.k;if(k==='merge')return;const c=R.cost(k);
     const full=k==='mint'&&R.real()>=R.cap(),can=!full&&game.cash>=c;
     b.classList.toggle('can',can);b.classList.toggle('no',!can);
-    b.querySelector('span').textContent=full?'FULL':fmt(c);
+    b.querySelector('span').textContent=full?tr('ui.full'):fmt(c);
     const sm=b.querySelector('small');
-    if(k==='mint')sm.textContent=R.real()+'/'+R.cap()+' coins';
-    if(k==='pad'){b.querySelector('b').textContent=R.padFull()?'Pad Power':'Add Pad';sm.textContent=R.padFull()?'Lv '+R.padLv+' · '+fmt(R.padMult())+'x':R.padN+'/'+R.padObjs.length+' pads'}
+    if(k==='mint')sm.textContent=tr('ui.coins',{n:R.real(),m:R.cap()});
+    if(k==='pad'){b.querySelector('b').textContent=tr(R.padFull()?'ui.padPower':'ui.addPad');sm.textContent=R.padFull()?tr('ui.lv',{n:R.padLv})+' · '+fmt(R.padMult())+'x':tr('ui.pads',{n:R.padN,m:R.padObjs.length})}
     if(k==='cap')sm.textContent=R.cap()+' → '+(R.cap()+2)});
   updateTabs();updateSheet();
 }
@@ -628,9 +706,9 @@ function draw(){
   for(const b of R.beams){const col=TIERS[Math.min(MAXT,b.t+1)].c;x.globalAlpha=Math.min(1,b.life*4);line(x,P(b.x1),P(b.y1),P(b.x2),P(b.y2),col,7);line(x,P(b.x1),P(b.y1),P(b.x2),P(b.y2),'#ffffff',3);x.globalAlpha=1}
   const L=game.lucky;if(L&&L.room===game.cur){const lx2=P(L.x),ly2=P(L.y),pu=1+Math.sin(T*10)*.12;x.globalAlpha=.35;disc(x,lx2,ly2,Math.round(30*pu),'#ffcc4d');x.globalAlpha=1;
     for(let k=0;k<4;k++){const a=T*3+k*1.57;x.drawImage(S.sparkle,Math.round(lx2+Math.cos(a)*34)-2,Math.round(ly2+Math.sin(a)*34)-2)}
-    const sp=S.coin[2],w=Math.round(sp.width*1.3);x.drawImage(sp,lx2-(w>>1),ly2-(w>>1),w,w);text(x,'TAP!',lx2,ly2-36,(T*6|0)%2?'#ffffff':'#ffcc4d',16,'#1a0f1c','c')}
+    const sp=S.coin[2],w=Math.round(sp.width*1.3);x.drawImage(sp,lx2-(w>>1),ly2-(w>>1),w,w);text(x,tr('f.tap'),lx2,ly2-36,(T*6|0)%2?'#ffffff':'#ffcc4d',16,'#1a0f1c','c')}
   if(game.frenzy>0){const a=.25+.15*Math.sin(T*12);x.globalAlpha=a;x.fillStyle='#ffcc4d';x.fillRect(0,0,LW,6);x.fillRect(0,LH-6,LW,6);x.fillRect(0,0,6,LH);x.fillRect(LW-6,0,6,LH);x.globalAlpha=1;
-    text(x,'FRENZY x3  '+Math.ceil(game.frenzy)+'s',LW/2,30,'#ffcc4d',18,'#1a0f1c','c')}
+    text(x,tr('f.frenzyBar',{s:Math.ceil(game.frenzy)}),LW/2,30,'#ffcc4d',18,'#1a0f1c','c')}
   for(const p of R.parts){if(p.life<.08)continue;x.fillStyle=p.col;const sz=p.sz>3?3:2;x.fillRect(P(p.x),P(p.y),sz,sz)}
   for(const f of R.floats){if(f.life<.12&&(T*20|0)%2)continue;const big=f.big&&/[A-Z]/.test(f.txt);text(x,f.txt,P(f.x),P(f.y)-6,f.col,big?20:13,'#1a0f1c','c')}
   // blit
@@ -664,7 +742,7 @@ function drawRoomParts(x,R,T){
     const apron=(pts,col)=>{x.fillStyle=col;x.beginPath();x.moveTo(pts[0][0],pts[0][1]);for(const q of pts.slice(1))x.lineTo(q[0],q[1]);x.closePath();x.fill()};
     apron([[8,FLOOR-170],[f0.px,f0.py],[f0.px,FLOOR+12],[8,FLOOR+12]],'#2a1830');apron([[LANE-3,FLOOR-170],[f1.px,f1.py],[f1.px,FLOOR+12],[LANE-3,FLOOR+12]],'#2a1830');
     const t0x=f0.px+Math.cos(f0.rest)*f0.len,t1x=f1.px+Math.cos(f1.rest)*f1.len;px(x,f0.px,FLOOR-24,'#120a14',f1.px-f0.px,36);
-    text(x,'▼ DEN ▼',(t0x+t1x)/2,FLOOR-2,'rgba(255,204,77,.5)',11,null,'c');
+    text(x,tr('f.den'),(t0x+t1x)/2,FLOOR-2,'rgba(255,204,77,.5)',11,null,'c');
     line(x,8,FLOOR-170,f0.px,f0.py,'#1a0f1c',8);line(x,8,FLOOR-170,f0.px,f0.py,'#b07a4f',4);
     line(x,LANE-3,FLOOR-170,f1.px,f1.py,'#1a0f1c',8);line(x,LANE-3,FLOOR-170,f1.px,f1.py,'#b07a4f',4);
     // shooter lane
@@ -706,7 +784,7 @@ function drawItem(x,R,s,it,T){
       if(it.win>0&&(T*10|0)%2){x.globalAlpha=.35;px(x,sx-30,sy-24,'#ffffff',60,48);x.globalAlpha=1}break}
   }
   x.globalAlpha=1;
-  if(it.jam)text(x,'JAMMED',sx,sy-40,'#ff8a5c',14,'#1a0f1c','c');
+  if(it.jam)text(x,tr('f.jam'),sx,sy-40,'#ff8a5c',14,'#1a0f1c','c');
   badge(x,sx+16,sy+14,it.lv);
 }
 function drawEnemy(x,R,e,T){
@@ -722,7 +800,7 @@ function drawEnemy(x,R,e,T){
 let last=performance.now(),saveT=0,uiT=0;
 function frame(now){
   let dt=(now-last)/1000;last=now;
-  if(dt>10&&started&&!paused){const g=game.offline(dt);if(g>0)toast('While you were away: +'+fmt(g))}
+  if(dt>10&&started&&!paused){const g=game.offline(dt);if(g>0)toast(tr('toast.away',{v:fmt(g)}))}
   dt=Math.min(dt,.05);
   if(started&&!paused){const n=Math.ceil(dt/.004),h=dt/n;for(let i=0;i<n;i++)game.step(h);game.tick(dt)}
   for(const r of game.rooms)if(r.open)r.fx(dt);
@@ -736,15 +814,51 @@ window.addEventListener('pagehide',()=>{if(started)persist()});
 Object.assign(window,{show,persist,view,toWorld});
 
 // boot
-try{await Promise.race([document.fonts.load('700 20px "Pixelify Sans"'),new Promise(r=>setTimeout(r,2500))])}catch(e){}
+try{await Promise.race([Promise.all([document.fonts.load('700 20px "Pixelify Sans"'),getLang()==='zh'?document.fonts.load('20px "ZCOOL QingKe HuangYou"','弹弹金币屋铜银金'):0]),new Promise(r=>setTimeout(r,2500))])}catch(e){}
 buildSprites();for(let i=0;i<ROOMS.length;i++)BG[i]=buildBg(i);
 $('cashIcon').src=dataURL(S.coin[2]);$('cashIcon').style.width='26px';
 document.querySelectorAll('[data-ic]').forEach(im=>{const c={coin:S.coin[0],cushion:S.cushion,purse:S.purse,merge:mergeIcon()}[im.dataset.ic];im.src=dataURL(c);im.style.height='22px';im.style.width='auto'});
-const HOW=[[S.coin[0],'Tap the room to drop a coin. Bumpers and the little cushion pads pay on every hit.'],[S.coin[1],'Hit Merge to combine your two best matching coins into a better one. Keep small ones around for the buckets to copy.'],[S.bucket,'Tap the glowing circles to unlock slots and build: bumpers, copy buckets and more.'],[slimeSprite(21,true,false),'Critters wander in. Bop them with coins, taps or zappers.'],[S.attic,'Open the hatch to the Attic: a pinball room where coins that fly up get shot around by flippers.']];
-HOW.forEach(([c,t])=>{const li=document.createElement('li');const im=imgOf(c,2);im.style.width='34px';im.style.height='auto';li.appendChild(im);li.appendChild(document.createTextNode(t));$('howList').appendChild(li)});
-try{Snd.muted=localStorage.getItem(SAVE+'.mute')==='1';$('muteBtn').textContent='Sound: '+(Snd.muted?'off':'on')}catch(e){}
+// ---------- how to play: eight illustrated cards ----------
+const GUIDE_N=8;let gPage=0,gAfter='title';
+function gImg(c,x,y,anim,extra){const im=imgOf(c,2);im.style.left=x+'px';im.style.top=y+'px';if(anim)im.style.animation=anim;if(extra)Object.assign(im.style,extra);return im}
+function gEl(cls,x,y,html,anim,extra){const d=document.createElement('div');d.className=cls;d.style.left=x+'px';d.style.top=y+'px';if(html!=null)d.innerHTML=html;if(anim)d.style.animation=anim;if(extra)Object.assign(d.style,extra);return d}
+function gScene(n,st){
+  const cw=S.coin[0].width,A=(a)=>a+' infinite';
+  if(n===0){st.append(gImg(S.coin[0],140,104,A('gfall 2.4s cubic-bezier(.5,0,.5,1)')),gEl('g',118,10,'',A('gring 2.4s ease-out'),{width:56,height:56,borderRadius:'50%',border:'3px solid #fff3b0',width:'56px',height:'56px'}),gEl('lbl',178,26,'👆',A('gfinger 2.4s'),{fontSize:'30px'}),gImg(S.cushion,8,150),gImg(S.cushion,256,150))}
+  if(n===1){st.append(gImg(S.bumper[0],124,92,A('gsquash 1.6s')),gImg(S.coin[1],136,70,A('ghit 1.6s ease-in-out')),gEl('lbl',140,62,'+12',A('gup 1.6s')),gImg(S.cushion,4,40,null,{transform:'rotate(90deg)'}),gImg(S.cushion,262,40,null,{transform:'rotate(-90deg)'}),gEl('lbl',14,8,'x1.4',null,{fontSize:'13px',color:'#7fd6a4'}))}
+  if(n===2){const c=S.coin[1].width;st.append(gImg(S.coin[1],150-c,62,A('gslideL 2.6s ease-in')),gImg(S.coin[1],150,62,A('gslideR 2.6s ease-in')),gImg(S.coin[2],150-S.coin[2].width/2,58,A('gborn 2.6s')),gImg(S.sparkle,110,50,A('gtw 1.3s')),gImg(S.sparkle,182,96,A('gtw 1.3s .6s')),gEl('gbtn',112,132,tr('ui.merge'),A('gpress 2.6s')))}
+  if(n===3){st.append(gEl('gslot',118,52,'',null,{width:'64px',height:'64px'}),gImg(S.lock,139,70,A('glock 3s')),gImg(S.bumper[0],150-S.bumper[0].width/2,84-S.bumper[0].height/2,A('gbuilt 3s')),gEl('lbl',196,40,'🔒→🍩',null,{fontSize:'13px',color:'#c4a99a'}),gEl('gslot',30,110,'',null,{width:'40px',height:'40px',opacity:.5}),gEl('gslot',230,110,'',null,{width:'40px',height:'40px',opacity:.5}))}
+  if(n===4){const bw=S.bucket.width;st.append(gImg(S.coin[0],150-cw/2,58,A('gdrop 2.8s ease-in')),gImg(S.bucket,150-bw/2,90,A('gwob 2.8s'),{transformOrigin:'50% 100%'}),gImg(S.coin[0],150-cw/2,80,A('goutL 2.8s ease-out')),gImg(S.coin[0],150-cw/2,80,A('goutR 2.8s ease-out')),gEl('lbl',118,40,tr('f.copy'),A('gup 2.8s'),{color:'#22e6e6'}))}
+  if(n===5){const sl=slimeSprite(21,true,false);st.append(gImg(sl,40,96,A('gbob 1.4s ease-in-out')),gImg(S.bat[0],116,30,A('gflap .3s steps(1)')),gImg(S.bat[1],116,30,A('gflap .3s steps(1) .15s')),gImg(S.gear[0],222,96,A('gspin 3s linear')),gImg(S.coin[3],60,96,A('gzap 2s ease-in')),gEl('lbl',36,70,tr('f.pop'),A('gup 2s'),{color:'#7dff7a'}))}
+  if(n===6){st.style.backgroundImage='url('+dataURL(BG[1])+')';st.append(gEl('ghatch',0,96,'',null,{}),gEl('g',120,96,'',null,{width:'60px',height:'16px',background:'#0b0714',top:'94px'}),gImg(S.house,22,128,null,{width:'44px',height:'auto'}),gImg(S.attic,22,18,null,{width:'44px',height:'auto'}),gImg(S.coin[2],150-S.coin[2].width/2,140,A('gfly 2s ease-out')),gImg(S.launcher,150-S.launcher.width/2,146),gEl('lbl',214,22,'x12',A('gblink 1s steps(1)'),{fontSize:'26px'}))}
+  if(n===7){const c=S.coin[2];st.append(gEl('g',36,44,'',null,{width:'70px',height:'70px',borderRadius:'50%',background:'radial-gradient(#ffcc4d88,transparent 70%)'}),gImg(c,71-c.width/2*1.3,79-c.height/2*1.3,A('gfloat 2s ease-in-out'),{width:Math.round(c.width*1.3)+'px',height:'auto'}),gImg(S.sparkle,40,40,A('gtw 1s')),gImg(S.sparkle,100,104,A('gtw 1s .5s')),gEl('lbl',52,18,tr('f.tap'),A('gblink .5s steps(1)')),
+    gEl('gperk',170,52,'🔥',null,{'--r':'-10deg'}),gEl('gperk',206,44,'🏆',null,{'--r':'0deg',zIndex:1,animationDelay:'.3s'}),gEl('gperk',242,52,'🍀',null,{'--r':'10deg',animationDelay:'.6s'}))}
+}
+function renderGuide(){
+  const n=gPage,b=$('gBody');b.innerHTML='';b.className='gin';void b.offsetWidth;
+  $('gHead').textContent=tr('g.title');$('gSkip').textContent=tr('g.skip');
+  const st=document.createElement('div');st.className='gs';st.style.backgroundImage='url('+dataURL(BG[0])+')';gScene(n,st);b.appendChild(st);
+  b.insertAdjacentHTML('beforeend','<div class="gnum">'+(n+1)+'</div><h3></h3><p></p><div class="gtip"></div>');
+  b.querySelector('h3').textContent=tr('g.'+(n+1)+'.t');b.querySelector('p').textContent=tr('g.'+(n+1)+'.b');
+  const tip=b.querySelector('.gtip');tip.appendChild(imgOf(S.sparkle,2));tip.appendChild(document.createTextNode(tr('g.'+(n+1)+'.tip')));
+  const d=$('gDots');d.innerHTML='';for(let i=0;i<GUIDE_N;i++){const e=document.createElement('i');if(i===n)e.className='on';e.onclick=()=>{gPage=i;renderGuide()};d.appendChild(e)}
+  $('gPrev').textContent=tr('g.prev');$('gPrev').disabled=n===0;$('gNext').textContent=n===GUIDE_N-1?tr('g.done'):tr('g.next');
+}
+function openGuide(after){gAfter=after;gPage=0;renderGuide();show('ovGuide')}
+function closeGuide(){try{localStorage.setItem(SAVE+'.guide','1')}catch(e){}show(gAfter==='play'?null:gAfter==='menu'?'ovMenu':'ovTitle')}
+$('gNext').onclick=()=>{Snd.init();if(gPage<GUIDE_N-1){gPage++;renderGuide()}else closeGuide()};
+$('gPrev').onclick=()=>{if(gPage>0){gPage--;renderGuide()}};
+$('gSkip').onclick=closeGuide;
+{let sx=null;$('ovGuide').addEventListener('pointerdown',e=>{sx=e.clientX});$('ovGuide').addEventListener('pointerup',e=>{if(sx==null)return;const dx=e.clientX-sx;sx=null;if(Math.abs(dx)>50){if(dx<0&&gPage<GUIDE_N-1){gPage++;renderGuide()}else if(dx>0&&gPage>0){gPage--;renderGuide()}}})}
+$('howBtn').onclick=()=>openGuide('title');
+$('guideBtn').onclick=()=>openGuide('menu');
+// language picker on the title screen and in the menu
+{const box=$('langs');[['en','English'],['zh','中文']].forEach(([l,t])=>{const b=document.createElement('button');b.textContent=t;b.dataset.lang=l;if(l===getLang())b.className='on';b.onclick=()=>chooseLang(l);box.appendChild(b)})}
+$('langBtn').textContent=tr('ui.language')+': '+(getLang()==='zh'?'中文':'English')+'  ⇄  '+(getLang()==='zh'?'English':'中文');
+$('langBtn').onclick=()=>chooseLang(getLang()==='zh'?'en':'zh');
+try{Snd.muted=localStorage.getItem(SAVE+'.mute')==='1';$('muteBtn').textContent=tr(Snd.muted?'ui.soundOff':'ui.soundOn')}catch(e){}
 const sv=readSave();
-if(sv&&sv.v===2){$('playBtn').textContent='Continue';$('newBtn').style.display='block';game.seen=sv.seen||0}
+if(sv&&sv.v===2){$('playBtn').textContent=tr('ui.continue');$('newBtn').style.display='block';game.seen=sv.seen||0}
 resize();buildTabs();updateUI();requestAnimationFrame(frame);
 </script>
 </body>
