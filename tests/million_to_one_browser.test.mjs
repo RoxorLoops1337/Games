@@ -125,6 +125,9 @@ await page.waitForFunction(() => !document.getElementById('result').classList.co
 ok(await page.isVisible('#result'), 'the end of a swim shows the result');
 if (SHOTS) await page.waitForTimeout(3200); // let the rank fall and the DNA receipt count up
 await shot('5_result');
+// Assert: an energy death right at the egg never reads "0.0 cm from the egg" (it says Kevin was at the egg)
+const resTipT = await page.evaluate(() => (document.getElementById('resTip') || {}).textContent || '');
+ok(!/(^|[^\d.])0\.0 cm/.test(resTipT), 'a GAS death at the egg never says 0.0 cm ("' + resTipT + '")');
 // Assert: the egg-bar caption fits one phone line, and the retry button is in the first viewport
 const cap = await page.evaluate(() => { const sp = document.querySelector('#resEgg span'); const c = sp.cloneNode(true); c.querySelectorAll('i').forEach((i) => i.remove()); return c.textContent.trim(); });
 const capMax = /^[\d.]+ cm short/.test(cap) ? 34 : 48; // the plain gap line 34, a SHORT_BY joke 48 (its writer limit)

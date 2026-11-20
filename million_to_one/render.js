@@ -74,7 +74,7 @@ const HSL65 = [], HSL75 = [], HSL82 = [];
 for (let i = 0; i < 36; i++) { HSL65.push(`hsl(${i * 10},100%,65%)`); HSL75.push(`hsl(${i * 10},100%,75%)`); HSL82.push(`hsl(${i * 10},100%,82%)`); }
 const hueI = (deg) => ((Math.round(deg / 10) % 36) + 36) % 36;
 const SPRINT_COL = rgb('#ff5a3c');
-const KEVIN_HITS = new Set(['kevin', 'player', 'hit', 'shieldHit', 'wingHit', 'second', 'bonk', 'swat', 'acid', 'stuck']);
+const KEVIN_HITS = new Set(['kevin', 'player', 'hit', 'shieldHit', 'wingHit', 'second', 'bonk', 'swat', 'acid', 'stuck', 'death']);
 const FORK_I_R = Math.max(0, ZONES.findIndex((z) => z.fork));
 const RIVAL_SC = 1.3, KEVIN_SC = RIVAL_SC * 1.12;   // Kevin is drawn 1.12x the size of the biggest crowd swimmers
 const TILE_CACHE = 5;                         // zone tiles kept baked
@@ -98,6 +98,9 @@ const lineOf = (tbl, fn, full) => {
   if (Array.isArray(v)) v = v.length ? v[Math.floor(Math.random() * v.length)] : '';
   return typeof v === 'string' ? v : '';
 };
+
+// the same named rival (one agent, or two agent objects carrying the same rival index k)
+const sameRival = (a, b) => a === b || (!!a && !!b && !!a.boss && !!b.boss && a.k != null && a.k === b.k);
 
 function mk(w, h) {
   if (typeof document !== 'undefined') { const k = document.createElement('canvas'); k.width = w; k.height = h; return k; }
@@ -391,7 +394,7 @@ export class Renderer {
     this.imp = { tg, x, y, ang, t: clamp(+sec || 0.06, 0.02, 0.3), st };
     this.hitDebris(kind, x, y, ang, p);
     // the jolt: the camera is knocked straight off the hit axis on the hit frame, and the spring brings it home
-    const J = { bonk: 7, bump: 5, shieldHit: 9, player: 12 }[kind];
+    const J = { bonk: 7, bump: 5, shieldHit: 9, player: 12, death: 12 }[kind];
     if (J) {
       const jl = this.reduced ? Math.min(2, J) : J;
       this.kx = clamp(-Math.cos(ang) * jl, -16, 16); this.ky = clamp(-Math.sin(ang) * jl, -16, 16);
@@ -418,7 +421,7 @@ export class Renderer {
     } else if (kind === 'shieldHit') {
       const n = cnt(12);
       for (let i = 0; i < n; i++) shot(5, p.x, p.y, i / n * TAU + Math.random() * 0.3, 150 + Math.random() * 90, 0.55, '#ffd75c', 4 + Math.random() * 2);
-    } else if (kind === 'player') {
+    } else if (kind === 'player' || kind === 'death') {
       const n = cnt(16);
       for (let i = 0; i < n; i++) shot(0, p.x, p.y, i / n * TAU + Math.random() * 0.4, 110 + Math.random() * 150, 0.6 + Math.random() * 0.3, i % 3 ? '#ff8fc8' : '#ffc2de', 3 + Math.random() * 2.5, 120);
       this.ring(p.x, p.y, '#ff8fc8', 90, 0.5, 5);
@@ -3328,7 +3331,7 @@ export class Renderer {
     if (mode === 0) for (let it = 0; it < 4; it++) {
       let moved = false;
       for (let i = 0; i < this.labRN * 4; i += 4) {
-        if (a && LK[i >> 2] === a) continue;
+        if (a && sameRival(LK[i >> 2], a)) continue;
         if (bx + w / 2 > LR[i] && bx - w / 2 < LR[i + 2] && by + h > LR[i + 1] && by < LR[i + 3]) { by = LR[i + 1] - h - 3; moved = true; }
       }
       if (!moved) break;
@@ -3416,13 +3419,14 @@ export class Renderer {
     const c = this.ctx, n = this.labelN, L = this.labels, fs = this.fpx(13), h = fs;
     this.labelQ = false; this.labelN = 0;
     if (race.over || !n) { this.layoutBubble(race, dt); return; }
-    // one tag per rival: the higher priority (the egg's drill ring tag) wins, else the first queued
+    // one tag per rival (by its rival index k, so two copies of Gunther never both get one): the higher priority
+    // (the egg's drill ring tag) wins, else the first queued
     for (let i = 0; i < n; i++) {
       const q = L[i];
       if (q.key == null) continue;
       for (let j = 0; j < i; j++) {
         const r = L[j];
-        if (r.skip || r.key !== q.key) continue;
+        if (r.skip || !sameRival(r.key, q.key)) continue;
         if (q.pri > r.pri) r.skip = true; else { q.skip = true; break; }
       }
     }
@@ -3458,7 +3462,7 @@ export class Renderer {
     const B = this.layoutBubble(race, dt);
     if (B && B.a) for (let i = 0; i < m; i++) {
       const q = S[i];
-      if (q.skip || q.key !== B.a) continue;
+      if (q.skip || !sameRival(q.key, B.a)) continue;
       if (q.x + q.w / 2 > B.bx - B.w / 2 - 2 && q.x - q.w / 2 < B.bx + B.w / 2 + 2 && q.y + q.h / 2 > B.by - 2 && q.y - q.h / 2 < B.by + B.h + 2) q.skip = true;
     }
     for (let i = 0; i < m; i++) {

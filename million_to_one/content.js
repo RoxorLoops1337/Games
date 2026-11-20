@@ -17,20 +17,20 @@ export const ZONES = [
     hazards: { sugar: 1.0, acid: 1.0, alkali: 0.4 },
     coach: 'Coach Gonad: "pH 4, people! Green puddles melt you. Blue bubbles are antacid. Do NOT lick anything. I mean it."' },
   { id: 'goo', name: 'The Gate of Goo', len: 12000, hw: 150, wob: 30, q: 0.3, keep: 0.2,
-    col: ['#1c2346', '#56649e'], wall: '#eef2ff', beat: 110,
+    col: ['#262a3a', '#6a7088'], wall: '#eef2ff', beat: 110,
     hazards: { sugar: 0.9, gate: 1.0, goo: 0.6 },
     coach: 'Coach Gonad: "Goo walls! Aim for the gaps. Hit the goo and you stick like a raisin in porridge."' },
   { id: 'sea', name: 'The Great Womb Sea', len: 22000, hw: 200, wob: 90, q: 0.36, keep: 0.1,
     col: ['#4a0c14', '#b02a36'], wall: '#ff7a5c', beat: 116,
-    hazards: { sugar: 1.0, wbc: 1.0, current: 0.7, acid: 0.2 },
+    hazards: { sugar: 1.0, wbc: 1.1, current: 0.7, acid: 0.2 },
     coach: 'Coach Gonad: "Big Macros ahead! White blood cells EAT swimmers. Keep a rival between you and the mouth. Teamwork!"' },
   { id: 'fork', name: 'The Fork', len: 6000, hw: 190, wob: 0, q: 0.5, keep: 0.5,
-    col: ['#1f0a2e', '#5a1f78'], wall: '#ffa4e6', beat: 120, fork: true,
+    col: ['#120c2e', '#2e3a7a'], wall: '#a8c8ff', beat: 120, fork: true,
     hazards: { sugar: 0.6, acid: 0.35, goo: 0.3 },
     coach: 'Coach Gonad: "Two tubes. One egg. Follow the pink sparkles, son. The other tube is a very long, very empty hallway."' },
   { id: 'rapids', name: 'Tube Rapids', len: 16000, hw: 105, wob: 50, q: 0.36, keep: 0.3,
     col: ['#04303c', '#0f7a8a'], wall: '#5ce1ff', beat: 128, current: 0.22,
-    hazards: { sugar: 1.1, wbc: 0.8, cilia: 1.7 },
+    hazards: { sugar: 1.1, wbc: 0.8, cilia: 1.85 },
     coach: 'Coach Gonad: "Current is AGAINST you. Chain overtakes, DASH! Hairs flash white, then swat. Slip past as they reload!"' },
   { id: 'egg', name: 'THE EGG', len: 4000, hw: 170, wob: 0, q: 0, keep: 1,
     col: ['#3b2a08', '#6b4a10'], wall: '#ffd75c', beat: 136, egg: true,
@@ -72,24 +72,26 @@ export const MUT_ORDER = Object.keys(MUTATIONS);
 // Dad's Habits: the permanent (rogue-lite) upgrades, bought with DNA between runs.
 // Healthy dad, healthy swimmers.
 export const HABITS = {
-  broccoli: { name: 'Dad eats broccoli',     icon: '🥦', max: 10, base: 40, grow: 1.5, desc: '+3.5% swim speed' },
+  broccoli: { name: 'Dad eats broccoli',     icon: '🥦', max: 10, base: 40, grow: 1.42, desc: '+3.5% swim speed' },
   water:    { name: 'Dad drinks water',      icon: '💧', max: 10, base: 22, grow: 1.5, desc: '+6 max energy' },
-  sleep:    { name: 'Dad sleeps 8 hours',    icon: '😴', max: 5,  base: 55, grow: 1.5, desc: '-5% energy drain' },
-  jeans:    { name: 'Dad ditches tight jeans', icon: '👖', max: 8, base: 45, grow: 1.5, desc: 'Start 250 µm further up the field' },
-  berries:  { name: 'Dad eats berries',      icon: '🫐', max: 8,  base: 35, grow: 1.5, desc: '+6% energy from fruit sugar' },
-  walk:     { name: 'Dad walks every day',   icon: '🚶', max: 6,  base: 60, grow: 1.5, desc: '+8% drafting power' },
-  beatbox:  { name: 'Dad beatboxes',         icon: '🎤', max: 6,  base: 55, grow: 1.5, desc: 'Combos last +0.25s longer' },
-  hottub:   { name: 'No more hot tubs',      icon: '🛁', max: 2,  base: 150, grow: 2.5, desc: 'Start every run with +1 shield' },
-  meditate: { name: 'Dad meditates',         icon: '🧘', max: 3,  base: 80, grow: 2.4,  desc: '+1 reroll of mutation cards per run' },
+  sleep:    { name: 'Dad sleeps 8 hours',    icon: '😴', max: 5,  base: 70, grow: 1.8, desc: '-5% energy drain' },
+  jeans:    { name: 'Dad ditches tight jeans', icon: '👖', max: 8, base: 45, grow: 1.55, desc: 'Start 250 µm further up the field' },
+  berries:  { name: 'Dad eats berries',      icon: '🫐', max: 8,  base: 35, grow: 1.55, desc: '+6% energy from fruit sugar' },
+  walk:     { name: 'Dad walks every day',   icon: '🚶', max: 6,  base: 60, grow: 1.65, desc: '+8% drafting power' },
+  beatbox:  { name: 'Dad beatboxes',         icon: '🎤', max: 6,  base: 55, grow: 1.65, desc: 'Combos last +0.25s longer' },
+  hottub:   { name: 'No more hot tubs',      icon: '🛁', max: 2,  base: 200, grow: 3, desc: 'Start every run with +1 shield' },
+  meditate: { name: 'Dad meditates',         icon: '🧘', max: 3,  base: 100, grow: 2.6,  desc: '+1 reroll of mutation cards per run' },
   factory:  { name: 'Bigger factory',        icon: '🏭', max: 10, base: 120, grow: 1.35, desc: "Earn more DNA while you're away" },
   gps:      { name: "Dad's sat-nav",         icon: '🛰️', max: 1,  base: 1200, grow: 1,  desc: 'Unlock AUTOPILOT (it swims for you, a bit badly)' },
 };
 export const HABIT_ORDER = Object.keys(HABITS);
-// Grandad levels (past max, they come with the generations) grow 12% a level from the last normal price.
+// Grandad levels (past max, they come with the generations) start at GRANDAD_PRICE of the last normal price and grow
+// 8% a level from there: a steady late-game DNA sink, something to buy most runs.
+export const GRANDAD_PRICE = 0.6;
 export const habitCost = (id, lv) => {
   const H = HABITS[id];
   if (lv < H.max) return Math.round(H.base * Math.pow(H.grow, lv));
-  return Math.round(habitCost(id, H.max - 1) * Math.pow(1.12, lv - H.max + 1));
+  return Math.round(habitCost(id, H.max - 1) * GRANDAD_PRICE * Math.pow(1.08, lv - H.max + 1));
 };
 
 // Named rivals: the real race. sp is speed relative to the field, smart is the chance they pick the right tube.
@@ -742,6 +744,7 @@ export const HAZARD_INTRO = {
 export const FIRST_DEATH = {
   energy: 'Kevin ran on empty. Fruit = GAS!',
   energyEgg: 'Out of GAS {cm} cm from the egg. Fruit, Kevin!',
+  energyEggAt: 'Out of GAS touching the egg. Fruit, Kevin!',
   acid:   'Green puddles melt you. Go around, or grab blue.',
   wbc:    'A Big Macro ate you. Hide behind a rival!',
   bonk:   'Stuck in the goo. Line up with the gap early.',

@@ -95,7 +95,7 @@ body.noTick #rankTick{visibility:hidden}
 #coach.on{opacity:1;transform:translate(-50%,0)}
 /* combo strip: one row above the DASH button row */
 #combo{position:absolute;left:0;right:0;bottom:calc(var(--safeB) + 104px);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
-#combo .in{display:inline-flex;align-items:baseline;gap:8px;padding:2px 14px;border-radius:20px;background:radial-gradient(closest-side,rgba(20,2,18,.6),rgba(20,2,18,0));transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
+#combo .in{display:inline-flex;align-items:baseline;gap:8px;padding:2px 14px;border-radius:20px;background:rgba(20,2,18,.72);transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
 /* tiers change colour only; main.js sets the size (fitCombo), so the strip never runs off a narrow screen */
 #combo.t3 .n{color:#ffb35c}#combo.t4 .n{color:#ff7a5c}#combo.t5 .n{color:#ff5cd2}#combo.t6 .n{color:#b6ff5c}#combo.t7 .n{color:#7fe8ff}
 /* 100+ and 150+: the strip goes rainbow */
@@ -120,7 +120,7 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 #cashBtn::before{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%)}
 #combo.flash .in{animation:cflash .35s ease-out}
 @keyframes cflash{0%{filter:brightness(2.5)}}
-#combo .n{display:inline-block;font-size:34px;font-weight:800;line-height:1;color:var(--gold);text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.6)}
+#combo .n{display:inline-block;font-size:34px;font-weight:800;line-height:1;color:var(--gold);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.6)}
 #combo .w,#combo .ft{font-size:16px;font-weight:800;letter-spacing:.04em;color:#fff;text-shadow:0 2px 0 var(--ink)}
 #combo .w.tagged{display:none}
 #combo .ft{text-shadow:0 2px 0 var(--ink),0 0 12px var(--pink)}
@@ -147,6 +147,19 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 @keyframes pipcall{to{opacity:.3}}
 #combo.fz .n{color:#fff;animation:rainbow 2.4s steps(6) infinite}
 @keyframes rainbow{0%{color:#fff}17%{color:#bff4ff}33%{color:#d6ffe6}50%{color:#fff1b0}67%{color:#ffd0f4}83%{color:#d9e4ff}100%{color:#fff}}
+/* swim 1 keeps the strip to the number and the bar; swim 2 brings the pot and CASH in with the cash lesson */
+body.hud1 #combo .pot,body.hud1 #combo .gap,body.hud1 #combo .links,body.hud1 #combo .m,body.hud1 #cashBtn,body.hud2 #combo .pot,body.hud2 #cashBtn{display:none!important}
+/* the trick strip: a ghost chip for the kind that finishes a trick, its name and a bar that empties over the window */
+#combo .links i.ghost{border:1.5px dashed currentColor;background:rgba(20,2,18,.45);animation:ghostp .5s ease-in-out infinite alternate}
+@keyframes ghostp{to{opacity:.45}}
+#combo .links i.gold{background:var(--gold);color:#3a2000!important;box-shadow:0 0 10px var(--gold)}
+#combo .links em.tn{position:relative;display:inline-block;margin-left:5px;font-style:normal;color:var(--gold);padding-bottom:3px}
+#combo .links em.tn u{position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:1px;background:rgba(255,255,255,.2);overflow:hidden;text-decoration:none}
+#combo .links em.tn s{display:block;height:100%;width:100%;background:var(--gold);transform-origin:0 50%;text-decoration:none}
+body.reduced #combo .links i.ghost{opacity:.7}
+/* a dash's price flies off the GAS bar */
+#energyRow{position:relative}
+#gasChip{position:absolute;top:-6px;left:0;transform:translate(-50%,0);font-size:12px;font-weight:800;line-height:1;color:#ff8b9b;background:rgba(20,2,18,.85);border-radius:6px;padding:1px 4px 0;pointer-events:none;white-space:nowrap}
 /* buttons: right-handed by default, swapped for lefties */
 #dashBtn{position:absolute;right:calc(var(--safeR) + 14px);bottom:calc(var(--safeB) + 28px);width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff6b95,#cc2456 55%,#8f0f34);box-shadow:0 5px 0 #5c0822,0 0 20px rgba(255,61,110,.5);font-weight:800;font-size:16px;color:#fff;pointer-events:auto;text-shadow:0 2px 0 rgba(0,0,0,.45)}
 /* the cooldown: a dark conic sweep that clears clockwise as --cd runs 0 -> 1 (main.js writes it in 0.02 steps) */
@@ -159,6 +172,10 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 #dashBtn::after{content:"";position:absolute;inset:-7px;border-radius:50%;pointer-events:none;opacity:0;background:conic-gradient(var(--gold) calc(var(--hold,0) * 360deg),rgba(255,255,255,.15) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px))}
 #dashBtn.holding::after{opacity:1}
 #dashBtn.cd{filter:grayscale(.5) brightness(.8)}
+/* the first swims: LOW GAS under the word when the tank has 2.5 dashes left or fewer */
+#dashBtn .dl{position:relative;font-weight:800}
+#dashBtn .lg{display:none;position:absolute;left:0;right:0;bottom:15px;font-size:10px;letter-spacing:.06em;line-height:1;font-weight:800;opacity:.7}
+#dashBtn.lowGas .lg{display:block}
 #dashBtn.nudge{animation:nudge .8s ease-in-out infinite;box-shadow:0 5px 0 #5c0822,0 0 0 6px rgba(255,215,92,.35),0 0 24px rgba(255,215,92,.7)}
 #dashBtn.refuse{animation:refuse .3s ease-out}
 @keyframes refuse{0%,100%{transform:none}20%{transform:translateX(-7px) rotate(-6deg)}40%{transform:translateX(6px) rotate(5deg)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
@@ -198,6 +215,8 @@ body.racing #toast.on{transform:translate(-50%,0)}
 @keyframes cnt{0%{opacity:0;transform:scale(2.2)}40%{opacity:1;transform:scale(1)}100%{opacity:.9}}
 /* the tutorial card sits under the HUD at every portrait size; the coach strip steps below it while it shows */
 body.egg #coach{display:none}
+/* the duel panel is up: the lesson pill steps away */
+body.egg #tut{visibility:hidden}
 #tut.lesson .dots{display:none}
 /* the tutorial: a compact one-line pill low on the screen, left of DASH (right of it for lefties), off Kevin and the tube ahead */
 #tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:72px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
@@ -234,10 +253,12 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 #tutTarget.down::before{content:"👇";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:28px;line-height:1;animation:downcue .7s ease-in infinite;filter:drop-shadow(0 2px 0 var(--ink))}
 @keyframes downcue{0%{translate:0 -18px;opacity:0}30%{opacity:1}100%{translate:0 22px;opacity:0}}
 @keyframes tgt{0%{scale:1.15}50%{scale:.9}100%{scale:1.15}}
-/* first swim: a ghost finger swipes left and right over Kevin during the countdown */
-#tutTarget.swipe{border-style:solid;border-color:rgba(255,255,255,.6);animation:tgt 1s linear infinite,ghost .6s ease-in-out infinite alternate}
-#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;transform:translate(-30%,-10%);font-size:30px;line-height:1;filter:drop-shadow(0 2px 0 var(--ink))}
-@keyframes ghost{from{translate:-40px 0}to{translate:40px 0}}
+/* first swim: a big ghost finger swings along a 140 px arc over Kevin from GO until he has steered */
+#tutTarget .trail{display:none}
+#tutTarget.swipe{border-color:transparent;box-shadow:none;animation:none}
+#tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:140px;height:44px;margin:-2px 0 0 -70px;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
+#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 3px 0 var(--ink));animation:ghost 1.2s ease-in-out infinite alternate}
+@keyframes ghost{0%{translate:-70px 14px;rotate:-14deg}50%{translate:0 -6px;rotate:0deg}100%{translate:70px 14px;rotate:14deg}}
 #toast{position:absolute;left:50%;bottom:calc(var(--safeB) + 24px);transform:translate(-50%,30px);opacity:0;background:#fff4f8;color:#4a1030;font-weight:800;padding:8px 14px;border-radius:14px;max-width:calc(100% - 32px);text-align:center;font-size:14px;pointer-events:none;transition:all .25s;z-index:5;box-shadow:0 4px 0 #9a3a60;word-break:break-word}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 /* the egg: a race to drill in, you vs the best rival */
@@ -401,6 +422,11 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* every result sits a little high: SWIM AGAIN lands in the upper part of a tall phone, under the thumb */
 #result::before{flex-grow:.45;margin:0}#result::after{flex-grow:1;margin:0}
 #result.first #againBtn{min-height:60px;font-size:24px}
+/* a close raced loss: the title, one rival voice, the rank, the egg bar with one gap number, +DNA and the buttons */
+#result.tight #resRankLine,#result.tight #resLadder,#result.tight #resChips,#result.tight #resGrudge,#result.tight #resGap,#result.tight #resDynasty,
+#result.tight #resBaby,#result.tight #resMuts,#result.tight #resMutStrip,#result.tight #resStats,#result.tight #resReceipt,#result.tight #resPep,
+#result.tight #resUp,#result.tight #resSyn,#result.tight #resNext,#result.tight #resTip,#result.tight #resGoal{display:none!important}
+#result.tight #resWhy:empty,#result.tight #resGloat:empty{display:none}
 #resShopBtn small.pk{font-size:11px;margin-top:1px}
 #resReceipt{width:100%;max-width:300px;margin:6px auto 0;font-size:14px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}
 #resReceipt{overflow:hidden;max-height:400px;transition:max-height .3s ease,opacity .3s}
@@ -486,7 +512,7 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* cards: the first draft is calmer, a golden draft shines */
 #cards.golden h2{color:#fff1b0;text-shadow:0 3px 0 #7a4a12,0 0 24px rgba(255,215,92,.8)}
 /* result additions */
-.resL,.resR{display:contents}
+.resL,.resR,.tL,.tR{display:contents}
 #resLadder span small{margin-left:4px;font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
 #resLadder span em{display:block;font-style:normal;font-size:11px;letter-spacing:.08em;color:#ff5c7a;line-height:1}
 #resLadder span.on em{color:#5c0822}
@@ -556,6 +582,13 @@ body.reduced #pace.hot{background:#ff1f4a;color:#fff;border-color:#fff}
 body.reduced #efill.low{background:#ff3d6e;opacity:1}
 body.reduced #drillUI.tell .t{color:var(--gold);text-decoration:underline 3px}
 body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
+/* reduced motion: the cues that only lived in an animation stay on as static marks */
+body.reduced #cashBtn::after{opacity:.75}
+body.reduced #drillUI.claim::before{opacity:.9}
+body.reduced #tutTarget.down::before{opacity:1;translate:0 0}
+body.reduced .card.mash{outline-color:rgba(255,215,92,.95)}
+body.reduced #title.fresh #playBtn::after,body.reduced #dailyBtn.pulse::after{opacity:.8}
+body.reduced #tutTarget.swipe::before{translate:0 0}
 #ver{position:absolute;z-index:5;right:calc(var(--safeR) + 8px);bottom:calc(env(safe-area-inset-bottom) + 4px);font-size:12px;color:rgba(255,255,255,.35);pointer-events:none}
 @media (max-width:400px){#dist{font-size:12px}#dist b{font-size:19px}#rankTick{font-size:14px;margin-left:6px}}
 /* narrow phones and landscape: the +places ticker tucks under the number (over the swimmers-alive line, which steps aside) */
@@ -606,21 +639,26 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
 /* landscape phones: the tube is a centred column, the HUD lives in the left gutter and DASH in the right one */
 @media (orientation:landscape) and (max-height:520px){
   #app{max-width:none}
-  #cv{left:50%;right:auto;width:min(560px,90vh);margin-left:calc(min(560px,90vh) / -2)}
-  #hud{right:auto;width:calc(50% - min(280px,45vh));background:linear-gradient(90deg,rgba(20,4,20,.78),rgba(20,4,20,.55));bottom:0;padding-top:calc(var(--safeT) + 58px)}
+  #cv{left:50%;right:auto;width:min(560px,74vh);margin-left:calc(min(560px,74vh) / -2)}
+  #hud{right:auto;width:calc(50% - min(280px,37vh));background:linear-gradient(90deg,rgba(20,4,20,.78),rgba(20,4,20,.55));bottom:0;padding-top:calc(var(--safeT) + 58px)}
   #rankRow{flex-direction:column;align-items:flex-start;padding-left:0;height:auto}
   #mutRow{height:auto;flex-wrap:wrap}
   #dist{text-align:left}
+  /* the gutter is narrow: the gas bar takes its own line, only the nemesis keeps a name tag on the bar */
+  #energyRow{flex-wrap:wrap;row-gap:4px}
+  #ebar{min-width:0;flex:1 0 100%}
+  .rv:not(.nem) .tag{display:none!important}
+  #prog{margin-top:18px}
   #pauseBtn{left:calc(var(--safeL) + 10px)}
-  #dashBtn,body.lefty #dashBtn{left:auto;right:calc(var(--safeR) + max(14px,(50% - min(280px,45vh) - 78px) / 2));bottom:calc(var(--safeB) + 24px)}
+  #dashBtn,body.lefty #dashBtn{left:auto;right:calc(var(--safeR) + max(14px,(50% - min(280px,37vh) - 78px) / 2));bottom:calc(var(--safeB) + 24px)}
   /* lefties: everything mirrors, HUD and pause in the right gutter, DASH in the left one */
   body.lefty #hud{left:auto;right:0;background:linear-gradient(270deg,rgba(20,4,20,.78),rgba(20,4,20,.55))}
   body.lefty #pauseBtn{left:auto;right:calc(var(--safeR) + 10px)}
-  body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + max(14px,(50% - min(280px,45vh) - 78px) / 2))}
+  body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + max(14px,(50% - min(280px,37vh) - 78px) / 2))}
   /* the HUD is a full-height gutter here (so --hudB is the screen height): everything re-anchors to the screen. The combo strip
      and the egg panel sit at the bottom of the HUD gutter, the lesson card at the top of the DASH gutter */
   #coach{top:calc(var(--safeT) + 8px)}
-  #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,45vh) - 12px);max-height:120px;transform:translate(0,-10px)}
+  #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,37vh) - 12px);max-height:120px;transform:translate(0,-10px)}
   /* the gutter card: the icon and the step dots sit in the flow, so the text gets the whole width and never clips */
   #tut,#tut.step-drill{padding:6px 10px 8px;justify-content:flex-start;max-height:calc(100% - var(--safeT) - var(--safeB) - 110px)}
   #tut>*{flex-shrink:0}
@@ -630,15 +668,13 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   #tut .ts{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   #tut.on{transform:none}
   body.lefty #tut{right:auto;left:calc(var(--safeL) + 6px)}
-  #combo{left:0;right:auto;width:calc(50% - min(280px,45vh));bottom:calc(var(--safeB) + 16px);padding-left:var(--safeL)}
+  #combo{left:0;right:auto;width:calc(50% - min(280px,37vh));bottom:calc(var(--safeB) + 16px);padding-left:var(--safeL)}
   body.lefty #combo{left:auto;right:0;padding-left:0;padding-right:var(--safeR)}
-  #drillUI{top:auto;bottom:calc(var(--safeB) + 12px);left:calc(var(--safeL) + 6px);width:calc(50% - min(280px,45vh) - 12px);transform:none}
+  #drillUI{top:auto;bottom:calc(var(--safeB) + 12px);left:calc(var(--safeL) + 6px);width:calc(50% - min(280px,37vh) - 12px);transform:none}
   body.lefty #drillUI{left:auto;right:calc(var(--safeR) + 6px)}
   #banner{top:22%}
   #banner.top,body.egg #banner.top{top:calc(var(--safeT) + 40px)}
-  body.threat #banner{top:22%;bottom:auto}
-  body.threat #banner.top{top:calc(var(--safeT) + 40px)}
-  body.threat #banner.on,body.threat #tut.on{opacity:1}
+  body.threat #tut.on{opacity:1}
   body.comboOn #tut,body.threat #tut{bottom:auto}
   body.racing #hint{top:auto;bottom:calc(var(--safeB) + 24px);padding:0 calc(var(--safeR) + 30px) 0 calc(var(--safeL) + 30px)}
   body.racing #toast{top:calc(var(--safeT) + 8px)}
@@ -661,10 +697,21 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   #resActions{width:100%;margin:6px 0 0;padding:10px 0 calc(var(--safeB) + 8px);bottom:calc(-8px - var(--safeB))}
   #resRank{font-size:44px}#resTitle{font-size:clamp(22px,4.5vw,26px)}
   #result .stats,#result .mutList{display:none}
-  #title{flex-wrap:wrap;flex-direction:row;align-content:center;align-content:safe center;justify-content:center;justify-content:safe center;column-gap:20px}
+  /* the title: two columns (the story and the stats on the left, SWIM, Daily, Habits and Album on the right) */
+  #title{display:grid;grid-template-columns:repeat(2,minmax(0,280px));justify-content:center;align-content:center;align-content:safe center;align-items:center;column-gap:20px}
   #title::before,#title::after{display:none}
-  #title #logo,#title .sub{width:100%}
-  #title .btn{max-width:280px}
+  #title .tL,#title .tR{display:flex;flex-direction:column;align-items:center;min-width:0;width:100%}
+  #title .tL{grid-column:1}#title .tR{grid-column:2}
+  #title #logo{font-size:40px;margin-bottom:6px}#title #logo span{font-size:24px}
+  #title .sub{font-size:14px;margin-bottom:6px}
+  #title .stats{margin:2px 0 6px;flex-wrap:nowrap;gap:4px}#title .stat{padding:2px 5px;font-size:11px}#title .stat b{font-size:14px}
+  #title #bankBox{margin:2px auto 0;padding:4px 10px 5px}
+  #title #bankBox .bb{margin:3px 0 2px}
+  #title .toggle{min-height:36px;margin:0}
+  #title .btn{max-width:280px;min-height:42px;margin:4px auto;padding:7px 12px;font-size:17px}
+  #title .btn small{font-size:12px}
+  #title #dailyBtn .dpips{margin:2px 0 0}#title #dailyBtn .dmed{margin:2px 0 0}
+  #title.fresh{grid-template-columns:minmax(0,280px) minmax(0,280px)}
 }
 
 @media (orientation:landscape) and (max-height:420px){
@@ -674,8 +721,10 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   body #settings .foot{grid-column:2;position:static;width:auto;margin:3px 0;padding:0;background:none}
   #settings .foot .btn{max-width:none}
 }
-/* very short landscape (568x320): the reroll button still fits under the cards */
+/* very short landscape (568x320): the reroll button still fits under the cards, and the title's buttons all fit */
 @media (orientation:landscape) and (max-height:340px){
+  #title #dailyBtn .dnx{display:none}
+  #title .btn{min-height:40px;margin:3px auto;padding:6px 12px}
   .cardRow{margin:4px auto 2px}
   #cards h2{font-size:20px}
 }
@@ -693,6 +742,9 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
 /* Back buttons on long screens: a sticky footer, always one thumb away */
 .foot{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:4px -18px 0;padding:8px 18px calc(var(--safeB) + 12px);background:rgba(20,2,18,.97)}
 .foot .btn{margin:0 auto}
+/* Give up sits apart, and needs a second tap (main.js arms it for 2.5 s) */
+#quitBtn{margin-top:20px}
+#quitBtn.arm{box-shadow:0 5px 0 #1f0a28,0 0 0 3px #ff1f4a;color:#ffd0d8}
 @media (orientation:landscape) and (max-height:520px){
   .foot{bottom:calc(-8px - var(--safeB));padding:6px 18px calc(var(--safeB) + 8px)}
   #shopList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-width:760px;gap:8px}
@@ -707,14 +759,9 @@ body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
   #settings h2{margin-bottom:4px}
 }
 
-/* ---------- threat lane: something hostile within 700 px ahead. Banners and the lesson pill fade and drop to the bottom
-   (above the combo strip), so the tube ahead stays readable ---------- */
-body.threat #banner{top:auto;bottom:calc(var(--padBot,104px) + 90px)}
-body.threat #banner.on{opacity:.3}
-/* a banner that must show over a threat goes up under the HUD at full strength (main.js adds .top) */
-body.threat #banner.top{top:calc(var(--hudB) + 34px);bottom:auto}
-body.threat #banner.top.on{opacity:1}
-@media (orientation:landscape) and (max-height:520px){body.threat #banner.top{top:calc(var(--safeT) + 40px)}}
+/* ---------- threat lane: something hostile within 700 px ahead. A banner always goes up under the HUD (main.js adds
+   .top, never down onto Kevin) at .55, and the lesson pill fades, so the tube ahead stays readable ---------- */
+body.threat #banner.on{opacity:.55}
 body.threat #tut.on{opacity:.3}
 /* intense (combo 10+, FRENZY, the egg zone): the HUD keeps only what matters */
 body.intense #alive,body.intense #zoneName,body.intense #toEgg{visibility:hidden}
@@ -774,12 +821,12 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
       <div id="dist"><b id="cm">13.4 cm</b><span id="toEgg">to the egg 🥚</span><div id="zoneName">The Launch Tube</div><div id="goalPill" class="hide"></div></div>
     </div>
     <div id="prog"><div id="progFill"></div><div id="me"></div><div id="egg">🥚</div></div>
-    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="dnaHud" class="hide">🧬 0</span><span id="pace" class="hide"></span></div>
+    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="dnaHud" class="hide">🧬 0</span><span id="pace" class="hide"></span><span id="gasChip" class="hide"></span></div>
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
   <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
-  <div id="tutTarget" class="hide"></div>
+  <div id="tutTarget" class="hide"><i class="trail"></i></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
   <div id="count"></div>
@@ -791,11 +838,14 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div class="ep"></div>
     <div class="rate hide"><i></i><span>MAX!</span></div>
   </div>
-  <button id="dashBtn" class="hide" aria-label="Dash">DASH</button>
+  <button id="dashBtn" class="hide" aria-label="Dash"><b class="dl">DASH</b><span class="lg">LOW GAS</span></button>
   <button id="pauseBtn" class="hide" aria-label="Pause">⏸</button>
   <div id="hint"></div>
 
   <div id="title" class="ov">
+    <button class="gear" id="titleSetBtn" aria-label="Settings">⚙️</button>
+    <button class="muteBtn tmute" aria-label="Sound on">🔊</button>
+    <div class="tL">
     <canvas id="heroCv" aria-hidden="true"></canvas>
     <div id="logo">MILLION<span>TO ONE</span></div>
     <div class="sub" id="titleSub">1,000,000 swimmers. 1 egg.<br>You start dead last.</div>
@@ -803,14 +853,15 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div class="stats" id="titleStats"></div>
     <div id="titleGoal" class="hide"></div>
     <div id="bankBox"><div class="top"><span id="bankName"></span><button id="bankBtn">Collect</button></div><div class="bb"><i id="bankFill"></i></div><div class="bl" id="bankLine"></div></div>
-    <button class="gear" id="titleSetBtn" aria-label="Settings">⚙️</button>
-    <button class="muteBtn tmute" aria-label="Sound on">🔊</button>
+    </div>
+    <div class="tR">
     <button class="btn" id="playBtn">SWIM! 💦</button>
     <button class="btn gold hide" id="dailyBtn">Daily Swim 📅</button>
     <button class="btn alt" id="shopBtn">Dad's Habits 🥦</button>
     <button class="btn alt" id="albumBtn">Baby Album 👶</button>
     <label class="toggle hide" id="autoWrap"><input type="checkbox" id="autoChk"> Autopilot (Dad's sat-nav)</label>
     <label class="toggle hide"><input type="checkbox" id="muteChk"> Mute</label>
+    </div>
   </div>
 
   <div id="intro" class="ov hide"><div id="introTxt"></div><div id="introHint">tap to continue</div><button id="introSkip">Skip ⏭</button></div>
