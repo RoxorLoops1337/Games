@@ -14,8 +14,8 @@ export function shareText(info) {
 }
 
 export const SHARE_W = 1080, SHARE_H = 1080;
-const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif';
-const BODY = '"Baloo 2","Nunito","Arial Rounded MT Bold",system-ui,sans-serif';
+const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif';
+const BODY = '"Baloo 2","Nunito","Arial Rounded MT Bold","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif';
 export const SHARE_URL = 'games-71g.pages.dev/stacking_cats';
 export const SHARE_TAGLINE = 'Help rescue the catnapped cats of Whiskerton!';
 

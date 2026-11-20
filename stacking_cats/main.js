@@ -34,8 +34,8 @@ import { freedLineFor, kingdomLine, roadLine, pickLine, nestBannerTitle, nestTit
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
-const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif';
-const FONT = '"Baloo 2","Nunito","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif';
+const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif';
+const FONT = '"Baloo 2","Nunito","Arial Rounded MT Bold","Trebuchet MS","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei",system-ui,sans-serif';
 const $ = (id) => document.getElementById(id);
 const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('screen');
 const sfx = new Sfx();
@@ -430,7 +430,7 @@ function watchIntro(then) {
 }
 
 // language: Auto follows the browser. The two buttons (title, pause menu) pick English or Danish at once, Settings also has Auto.
-const langSwitch = (cls = '') => { const cur = getLang(); return `<div class="langsw ${cls}" data-no-tr="1" role="group" aria-label="Language"><button class="${cur === 'en' ? 'on' : ''}" data-act="lang" data-v="en">English</button><button class="${cur === 'da' ? 'on' : ''}" data-act="lang" data-v="da">Dansk</button></div>`; };
+const langSwitch = (cls = '') => { const cur = getLang(); return `<div class="langsw ${cls}" data-no-tr="1" role="group" aria-label="Language"><button class="${cur === 'en' ? 'on' : ''}" data-act="lang" data-v="en">English</button><button class="${cur === 'da' ? 'on' : ''}" data-act="lang" data-v="da">Dansk</button><button class="${cur === 'zh' ? 'on' : ''}" data-act="lang" data-v="zh">\u4E2D\u6587</button></div>`; };
 async function chooseLang(code, redraw) {
   save.opt.lang = code; persist();
   await setLang(code); retranslate();
@@ -472,7 +472,7 @@ function showSettings(back, msg) {
   setScreen(`<h2>Settings</h2><div class="tbody"><div class="setgrid">
       <div class="setcol">
         <div class="setrow"><b>Difficulty</b>${seg('diff', [['cozy', 'Cozy'], ['normal', 'Normal'], ['hard', 'Hard']], save.diff)}<small>${DIFFS[save.diff].desc}</small></div>
-        <div class="setrow"><b>Language</b><div class="seg" data-no-tr="1">${[['auto', 'Auto'], ['en', 'English'], ['da', 'Dansk']].map(([v, l]) => `<button class="${(o.lang || 'auto') === v ? 'on' : ''}" data-act="lang" data-v="${v}">${l}</button>`).join('')}</div><small>${(o.lang || 'auto') === 'auto' ? 'Auto follows your browser.' : ''}</small></div>
+        <div class="setrow"><b>Language</b><div class="seg" data-no-tr="1">${[['auto', 'Auto'], ['en', 'English'], ['da', 'Dansk'], ['zh', '\u4E2D\u6587']].map(([v, l]) => `<button class="${(o.lang || 'auto') === v ? 'on' : ''}" data-act="lang" data-v="${v}">${l}</button>`).join('')}</div><small>${(o.lang || 'auto') === 'auto' ? 'Auto follows your browser.' : ''}</small></div>
         <div class="setrow"><b>Sound effects</b><input type="range" min="0" max="100" value="${Math.round(o.sfxVol * 100)}" data-r="sfxVol"></div>
         <div class="setrow"><b>Music</b><input type="range" min="0" max="100" value="${Math.round(o.musicVol * 100)}" data-r="musicVol"></div>
         <div class="setrow"><b>Screen shake</b>${seg('shake', [[0, 'Off'], [0.5, 'Low'], [1, 'Normal']], o.shake)}</div>
@@ -2937,8 +2937,8 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     if (hpBars) {
       const bx = cx - 142, by = feetY - 50, bw = 84;
       ctx.font = `400 ${window.innerHeight <= 400 ? 16 : 13}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
-      ctx.strokeText(d.name, bx, by - 4); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 4);
-      if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
+      { const nm = tr(d.name); ctx.strokeText(nm, bx, by - 4); ctx.fillStyle = "#fff"; ctx.fillText(nm, bx, by - 4); }
+      if (c.lvl > 1) { const nw = ctx.measureText(tr(d.name)).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
       const r = Math.min(1, Math.max(0, c.hp / c.max));
       const cb = save.opt.colorblind;
       const hc = r > 0.5 ? (cb ? ['#bfe4ff', '#4aa8ff'] : ['#b8ffd0', '#3fcf78']) : r > 0.25 ? ['#ffe9a0', '#f0a81a'] : (Math.sin(t * 14) > 0 ? (cb ? ['#ffd0a0', '#ff8a2a'] : ['#ffc0c0', '#ff5a5a']) : ['#fff0e0', '#ffd9b0']);
@@ -3614,7 +3614,7 @@ function frame(ts) {
 }
 
 window.stackingCats = { i18nMissing, clearChoices: () => { rewardChoices = null; }, ui: { showTitle, showSettings, showTrophies, showHow, showDex, showRelics, showDaily, showNamePrompt, showRanking, showCollection, showDiffPicker, showWardrobe, showKingdom, showKingdomWalk, openBuilding, openWonder, showPickStart, showFinale, showEvent, showRouteReward, showCatReward, showFull, showBox, showBoxSummary, showBoxReveal, showSnackReward, showRelicReward, showStats, showTower, showOver, showPause }, nextReward, get queue() { return queue; }, setLangNow: (c) => chooseLang(c), showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; }, get walk() { return walk; }, openList, openAvatars, leaveWalk };
-await setLang(save.opt.lang);   // Auto follows the browser; the Danish dictionary loads only when it is needed
+await setLang(save.opt.lang);   // Auto follows the browser; the Danish or Chinese dictionary loads only when it is needed
 startDom(document.body);
 showTitle();
 // the boot splash (in index.html) covers the half-built first frame; it stays long enough for the three slams, then lifts onto the title
