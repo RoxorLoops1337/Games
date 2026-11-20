@@ -81,6 +81,20 @@ await page.tap('#cardRow .card');
 await page.waitForTimeout(400);
 ok(await page.evaluate(() => Object.keys(game.race.muts).length === 1 && !game.race.pending), 'tapping a card takes it and the swim goes on');
 
+// a hit-stop lets go: after a bonk the impact frame is gone by 0.25 s and the flash by 0.4 s
+await page.evaluate(() => { const r = game.race, p = r.p; r.emit('bonk', { x: p.x, y: p.y + 20 }); });
+await page.waitForTimeout(250);
+ok(await page.evaluate(() => game.R.imp == null), 'the bonk impact frame has released by 0.25 s');
+await page.waitForTimeout(150);
+ok(await page.evaluate(() => !(game.R._flash > 0.1)), 'and its flash has faded by 0.4 s');
+// marks (BEST line, a grave) draw on the track without an error
+await page.evaluate(() => { const y = game.race.p.y; game.R.marks = [{ y: y + 260, kind: 'best', label: 'BEST' }, { y: y + 520, kind: 'grave', label: 'Kevin #3' }]; });
+await page.waitForTimeout(400);
+await shot('4_marks');
+ok(errs.length === 0, 'BEST and grave marks draw without page errors ' + errs.join(' | '));
+
+// the egg duel panel's rival line never names its speaker twice ('Gunther: Gunther: ...')
+await page.evaluate(() => { window.__epBad = []; const ep = document.querySelector('#drillUI .ep'); if (ep) new MutationObserver(() => { const t = ep.textContent || ''; if (/^([^:]{1,20}): \1:/.test(t)) window.__epBad.push(t); }).observe(ep, { childList: true, characterData: true, subtree: true }); });
 // every zone draws without errors (keep the swimmer alive while we skip around)
 const ZY = [4000, 16000, 30000, 46000, 61500, 70000, 82500];
 for (const y of ZY) {
@@ -92,7 +106,18 @@ for (const y of ZY) {
   await shot('4_zone_' + y);
 }
 ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
+// Act: at the egg, a rival winds up a move (its tell line already names the speaker)
+const drillOn = await page.evaluate(() => !document.getElementById('drillUI').classList.contains('hide'));
+if (drillOn) {
+  await page.evaluate(() => game.race.emit('rivalMove', { phase: 'tell', k: 3, move: 'test' }));
+  await page.waitForTimeout(150);
+  const epT = await page.evaluate(() => document.querySelector('#drillUI .ep').textContent);
+  ok(/^Gunther: "/.test(epT) && !/^Gunther: Gunther:/.test(epT), 'a tell at the egg shows the speaker once ("' + epT + '")');
+}
+ok(drillOn, 'the last zone hop lands at the egg duel');
+ok(await page.evaluate(() => window.__epBad.length === 0), 'the egg panel never doubles a speaker name ' + (await page.evaluate(() => window.__epBad.join(' | '))));
 ok(await page.evaluate(() => !window.__tutCls.some((c) => /\bstep-cash\b/.test(c))), 'swim 1 never shows the cash lesson');
+
 
 // Act: give up, see the result, buy a habit
 await page.evaluate(() => { const r = game.race; r.over = null; r.end('energy'); });
