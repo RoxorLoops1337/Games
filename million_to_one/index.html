@@ -24,13 +24,17 @@ body.bright{--hudInk:#fff4f8}
 #rankRow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding-left:52px}
 #rankCol{flex:1;min-width:0}
 #rankLbl{font-size:12px;letter-spacing:.14em;color:var(--hudInk);font-weight:700;line-height:1;transition:color .2s;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink),0 0 8px rgba(20,4,20,.9)}
-#rankRow.ms #rankLbl{color:var(--gold);letter-spacing:.06em;font-size:14px}
+#rankRow.ms #rankLbl{position:relative;z-index:1;color:var(--gold);letter-spacing:.06em;font-size:14px;background:rgba(20,2,18,.8);border-radius:6px;padding:1px 5px 0;margin-left:-5px;width:max-content}
 #rank{font-size:clamp(22px,13cqw,40px);font-weight:800;line-height:.95;color:#fff;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,61,110,.6);transition:transform .08s;transform-origin:0 100%;font-variant-numeric:tabular-nums;white-space:nowrap}
 #rank.bump{transform:scale(1.06)}
-#rankBox{transition:transform .08s;transform-origin:0 100%}
+#rankBox{transition:transform .08s;transform-origin:0 100%;margin-top:3px}
+/* the rank row never changes height mid-swim (so --hudB holds still): lines hide with visibility, not display */
+#rankRow{height:72px;overflow:visible}
+@media (max-width:400px){#rankRow{height:66px}}
+#mutRow{height:22px;flex-wrap:nowrap;overflow:hidden}
 #rankBox.jump{transform:scale(1.14)}
-#rankRow.ms #rank{animation:msflash 1.3s ease-out}
-@keyframes msflash{0%{transform:scale(1.3)}40%{transform:scale(1.08)}100%{transform:none}}
+#rankRow.ms #rank{animation:msflash 1.3s ease-out;transform-origin:0 0}
+@keyframes msflash{0%{transform:scale(1.15)}40%{transform:scale(1.06)}100%{transform:none}}
 #rankTick{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:clip;margin-left:8px;white-space:nowrap;font-size:16px;line-height:1;font-weight:800;color:var(--mint);text-shadow:0 2px 0 var(--ink),0 0 6px var(--ink);opacity:0;transform:translateY(4px);transition:opacity .25s,transform .25s}
 #rankTick.on{opacity:1;transform:none}
 #rankRow.ms #rankTick,#rankTick.fork{opacity:0}
@@ -40,10 +44,10 @@ body.bright{--hudInk:#fff4f8}
 #prog{position:relative;height:10px;margin-top:16px;background:rgba(0,0,0,.45);border-radius:6px;border:2px solid rgba(255,255,255,.12)}
 #progFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,var(--pink),var(--gold));border-radius:4px;transform-origin:0 50%;transform:scaleX(0)}
 .tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:rgba(255,255,255,.35)}
-.rv{position:absolute;left:0;top:-1px;width:9px;height:9px;margin-left:-4.5px;transition:opacity .3s;will-change:transform}
-.rv .dot{display:block;width:100%;height:100%;border-radius:50%;border:1.5px solid #000;font-style:normal;font-size:7px;font-weight:800;line-height:6px;text-align:center;color:#1a0616;overflow:hidden}
-.rv .tag{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:11px;font-weight:800;line-height:1;white-space:nowrap;letter-spacing:.02em;background:rgba(20,2,18,.85);padding:1px 4px 0;border-radius:6px}
-.rv.lo .tag{bottom:auto;top:10px}
+.rv{position:absolute;left:0;top:-3px;width:13px;height:13px;margin-left:-6.5px;transition:opacity .3s;will-change:transform}
+.rv .dot{display:block;width:100%;height:100%;border-radius:50%;border:1.5px solid #000;font-style:normal;font-size:12px;font-weight:800;line-height:10px;text-align:center;color:#1a0616;overflow:hidden}
+.rv .tag{position:absolute;left:50%;bottom:13px;transform:translateX(-50%);font-size:12px;font-weight:800;line-height:1;white-space:nowrap;letter-spacing:.02em;background:rgba(20,2,18,.85);padding:1px 4px 0;border-radius:6px}
+.rv.lo .tag{bottom:auto;top:13px}
 .rv.notag .tag{display:none}
 .rv.dead{opacity:.35}.rv.dead .dot{background:#555!important}.rv.dead .tag{text-decoration:line-through}
 .rv.hit .dot{animation:rvhit .6s ease-out}
@@ -54,23 +58,23 @@ body.bright{--hudInk:#fff4f8}
 #me{position:absolute;left:0;top:-8px;will-change:transform;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#fff;border:3px solid var(--pink);box-shadow:0 0 8px #fff}
 #egg{position:absolute;right:-10px;top:-9px;font-size:16px}
 #energyRow{display:flex;align-items:center;gap:6px;margin-top:14px}
-#energyRow .gas{flex:none;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--hudInk);line-height:1;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink)}
-#ebar{position:relative;flex:1;height:12px;background:rgba(0,0,0,.45);border-radius:7px;overflow:hidden;border:2px solid rgba(255,255,255,.12)}
+#energyRow .gas{flex:none;font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--hudInk);line-height:1;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink)}
+#ebar{position:relative;flex:1;min-width:60%;height:12px;background:rgba(0,0,0,.45);border-radius:7px;overflow:hidden;border:2px solid rgba(255,255,255,.12)}
 #efill{height:100%;width:100%;background:linear-gradient(90deg,#7dffb0,#c6ff5c);transform-origin:0 50%;transition:transform .1s}
 #efill.low{background:repeating-linear-gradient(-45deg,#ff3d6e 0 6px,#ff8b5c 6px 12px);animation:blink .4s infinite alternate}
-#elow{position:absolute;right:3px;top:50%;transform:translateY(-50%);font-size:8px;font-weight:800;line-height:8px;letter-spacing:.08em;color:#fff;background:#ff1f4a;border-radius:4px;padding:0 4px}
+#elow{position:absolute;right:3px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:800;line-height:10px;letter-spacing:.08em;color:#fff;background:#ff1f4a;border-radius:4px;padding:0 4px}
 @keyframes blink{to{opacity:.45}}
-#ebar.shake{animation:eshake .22s infinite}
+#ebar.shake{animation:eshake .72s infinite}
 #ebar.crit{border-color:rgba(255,61,110,.8);box-shadow:0 0 10px rgba(255,61,110,.6)}
 @keyframes eshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px) rotate(-.4deg)}75%{transform:translateX(2px) rotate(.4deg)}}
 #mutRow{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;min-height:0}
 #mutRow span{position:relative;font-size:15px;line-height:1;background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.14);border-radius:8px;padding:2px 3px}
 #mutRow span.more{font-size:12px;font-weight:800;color:var(--cream);padding:3px 5px}
-#mutRow span b{position:absolute;right:-4px;bottom:-4px;font-size:9px;background:var(--pink);color:#fff;border-radius:6px;padding:0 3px;line-height:12px}
+#mutRow span b{position:absolute;right:-4px;bottom:-4px;font-size:11px;background:var(--pink);color:#fff;border-radius:6px;padding:0 3px;line-height:12px}
 #mutRow span.sy{border-color:#d9b8ff;box-shadow:0 0 8px rgba(217,184,255,.6)}
 #mutRow span.new{animation:mutin .6s cubic-bezier(.2,1.8,.4,1)}
 @keyframes mutin{0%{transform:scale(2.6) translateY(30px);opacity:0}}
-#shields{flex:none;font-size:11px;font-weight:800;line-height:1;white-space:nowrap;color:#fff;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,215,92,.5);border-radius:8px;padding:2px 5px 1px}
+#shields{flex:none;font-size:12px;font-weight:800;line-height:1;white-space:nowrap;color:#fff;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,215,92,.5);border-radius:8px;padding:2px 5px 1px}
 #shields.flash{animation:shflash .5s ease-out}
 #shields.lost{animation:shlost .4s ease-out}
 @keyframes shflash{0%{transform:scale(1.5);box-shadow:0 0 12px var(--gold);border-color:var(--gold)}}
@@ -78,63 +82,80 @@ body.bright{--hudInk:#fff4f8}
 #alive{font-size:12px;color:var(--hudInk);margin-top:2px;font-weight:700;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink),0 0 8px rgba(20,4,20,.9)}
 #zoneName{font-size:12px;color:var(--hudInk);font-weight:700;letter-spacing:.06em;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink)}
 /* the bounty pill under the distance, and the egg clock in the gas row */
-#goalPill{display:inline-block;margin-top:2px;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:800;letter-spacing:.02em;line-height:1;color:#3a2000;background:var(--gold);border-radius:7px;padding:2px 6px 1px}
+#goalPill{display:inline-block;margin-top:2px;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:800;letter-spacing:.02em;line-height:1;color:#3a2000;background:var(--gold);border-radius:7px;padding:2px 6px 1px}
 #goalPill.done{background:var(--mint);color:#05301a;animation:land .45s cubic-bezier(.2,1.8,.4,1)}
-#pace{flex:none;font-size:11px;font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;color:#fff;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:2px 5px 1px}
+#pace{flex:none;font-size:12px;font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;color:#fff;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.2);border-radius:8px;padding:2px 5px 1px}
 #pace.ahead{color:var(--mint);border-color:rgba(125,255,176,.6)}
 #pace.behind{color:#ff8b9b;border-color:rgba(255,61,110,.6)}
-#pace.hot{animation:blink .3s infinite alternate}
+#pace.hot{animation:blink .4s infinite alternate}
 /* coach strip: one small line under the HUD */
 #coach{position:absolute;left:50%;top:calc(var(--hudB) + 4px);z-index:1;transform:translate(-50%,-6px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-size:13px;font-weight:700;line-height:1.2;color:var(--cream);background:rgba(20,2,18,.72);border:1.5px solid rgba(255,215,92,.35);border-radius:12px;padding:4px 10px;pointer-events:none;opacity:0;transition:opacity .3s,transform .3s}
 #coach.on{opacity:1;transform:translate(-50%,0)}
 /* combo strip: one row above the DASH button row */
 #combo{position:absolute;left:0;right:0;bottom:calc(var(--safeB) + 104px);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
-#combo .in{display:inline-flex;align-items:baseline;gap:8px;transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
+#combo .in{display:inline-flex;align-items:baseline;gap:8px;padding:2px 14px;border-radius:20px;background:radial-gradient(closest-side,rgba(20,2,18,.6),rgba(20,2,18,0));transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
 /* tiers change colour only; main.js sets the size (fitCombo), so the strip never runs off a narrow screen */
 #combo.t3 .n{color:#ffb35c}#combo.t4 .n{color:#ff7a5c}#combo.t5 .n{color:#ff5cd2}#combo.t6 .n{color:#b6ff5c}#combo.t7 .n{color:#7fe8ff}
 /* 100+ and 150+: the strip goes rainbow */
-#combo.t7 .bar i,#combo.t8 .bar i{background:linear-gradient(90deg,#ff5c7a,#ffd75c,#7dffb0,#5ce1ff,#d9b8ff,#ff5c7a);background-size:200% 100%;animation:rbw 1.2s linear infinite}
-#combo.t8 .n{background:linear-gradient(90deg,#ff5c7a,#ffd75c,#7dffb0,#5ce1ff,#d9b8ff,#ff5c7a);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 3px 0 var(--ink));animation:rbw .8s linear infinite}
-@keyframes rbw{to{background-position:200% 0}}
-#combo .potRow{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;min-height:0}
+/* static rainbows (no per-frame repaint); the life comes from a light sweep that only moves (transform) */
+#combo.t7 .bar i,#combo.t8 .bar i{background:linear-gradient(90deg,#ff5c7a,#ffd75c,#7dffb0,#5ce1ff,#d9b8ff)}
+#combo.t8 .n{background:linear-gradient(90deg,#ff5c7a,#ffd75c,#7dffb0,#5ce1ff,#d9b8ff);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 3px 0 var(--ink))}
+#combo .barW::after{content:"";position:absolute;top:0;left:0;width:30%;height:5px;border-radius:3px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.75),rgba(255,255,255,0));opacity:0;pointer-events:none}
+#combo.t7 .barW::after,#combo.t8 .barW::after{opacity:1;animation:sweep 1.2s linear infinite}
+@keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+#combo .potRow{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;min-height:0;white-space:nowrap}
+#combo .m{display:none}
+#combo .gap{font-size:12px;font-weight:800;line-height:1;letter-spacing:.04em;color:var(--cream);text-shadow:0 2px 0 var(--ink)}
+#combo .gap.near{color:var(--gold);animation:blink .4s infinite alternate}
+body.reduced #combo .gap.near{text-decoration:underline 2px}
 #combo .pot{font-size:13px;font-weight:800;line-height:1;color:var(--mint);text-shadow:0 2px 0 var(--ink),0 0 8px rgba(125,255,176,.45);font-variant-numeric:tabular-nums;transition:font-size .15s}
 #combo .pot.broke{color:#ff3d6e;text-decoration:line-through 3px;animation:potbreak .3s ease-out}
 @keyframes potbreak{0%{transform:scale(1.3)}40%{transform:translateX(-4px)}70%{transform:translateX(4px)}}
 /* CASH: a 44x44 hit area round the chip (::before); it glows instead of growing, so it never jumps under the thumb */
-#cashBtn{position:relative;pointer-events:auto;min-height:36px;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:800;letter-spacing:.04em;line-height:1;background:linear-gradient(#ffe07a,#f0b02c);color:#3a2000;box-shadow:0 3px 0 #9a6410;animation:cashp .7s ease-in-out infinite alternate;touch-action:none}
+#cashBtn{position:relative;pointer-events:auto;min-height:36px;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:800;letter-spacing:.04em;line-height:1;background:linear-gradient(#ffe07a,#f0b02c);color:#3a2000;box-shadow:0 3px 0 #9a6410;touch-action:none}
+#cashBtn::after{content:"";position:absolute;inset:0;border-radius:10px;box-shadow:0 0 16px 2px rgba(255,215,92,.9);opacity:0;animation:glowp .7s ease-in-out infinite alternate;pointer-events:none}
+@keyframes glowp{to{opacity:1}}
 #cashBtn::before{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%)}
-@keyframes cashp{to{box-shadow:0 3px 0 #9a6410,0 0 16px 2px rgba(255,215,92,.9)}}
 #combo.flash .in{animation:cflash .35s ease-out}
 @keyframes cflash{0%{filter:brightness(2.5)}}
 #combo .n{display:inline-block;font-size:34px;font-weight:800;line-height:1;color:var(--gold);text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.6)}
 #combo .w,#combo .ft{font-size:16px;font-weight:800;letter-spacing:.04em;color:#fff;text-shadow:0 2px 0 var(--ink)}
 #combo .w.tagged{display:none}
 #combo .ft{text-shadow:0 2px 0 var(--ink),0 0 12px var(--pink)}
-#combo .m{font-size:15px;font-weight:800;color:var(--mint);text-shadow:0 2px 0 var(--ink)}
-#combo .tag{font-size:11px;font-weight:800;background:var(--mint);color:#05301a;border-radius:8px;padding:1px 6px;opacity:0;transform:scale(.5);transition:opacity .2s,transform .25s cubic-bezier(.2,1.8,.4,1)}
+#combo .m{font-size:13px;font-weight:800;color:var(--mint);opacity:.7;text-shadow:0 2px 0 var(--ink)}
+#combo .tag{font-size:12px;font-weight:800;background:var(--mint);color:#05301a;border-radius:8px;padding:1px 6px;opacity:0;transform:scale(.5);transition:opacity .2s,transform .25s cubic-bezier(.2,1.8,.4,1)}
 #combo .tag.on{opacity:1;transform:none}
-#combo .bar{width:150px;height:5px;margin:3px auto 0;background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden}
+/* three rows at most (the number, the timer bar with the STYLE notches on it, the pot): 70 px tall */
+#combo{max-height:70px}
+#combo .barW{position:relative;width:150px;margin:3px auto 0}
+#combo .bar{width:100%;height:5px;background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden}
 #combo .bar i{display:block;height:100%;width:100%;background:var(--gold);transform-origin:0 50%}
-#combo .bar.low i{background:#ff3d6e;animation:blink .18s infinite alternate}
-/* STYLE pips: one per different move in the chain; they pulse when the style is what holds the next FRENZY tier back */
-#combo .pips{display:flex;justify-content:center;gap:4px;margin:3px auto 0}
-#combo .pips i{width:7px;height:7px;border-radius:50%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25)}
-#combo .pips i.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 6px rgba(125,255,176,.7)}
-#combo .pips.lock i:not(.on){border-color:var(--gold);animation:pipcall .35s ease-in-out infinite alternate}
-@keyframes pipcall{to{background:rgba(255,215,92,.7);box-shadow:0 0 8px var(--gold)}}
-#combo.fz .n{color:#fff;animation:rainbow .5s steps(1) infinite}
-@keyframes rainbow{0%{color:#fff}33%{color:#bff4ff}66%{color:#d6ffe6}}
+#combo .bar.low i{background:#ff3d6e;animation:blink .36s infinite alternate}
+/* STYLE notches: one per different move in the chain, cut into the timer bar; they pulse (opacity only) when the style is
+   what holds the next FRENZY tier back */
+#combo .pips{position:absolute;left:0;right:0;top:-2px;height:9px;display:flex;justify-content:space-evenly;pointer-events:none}
+#combo .pips i{width:3px;height:9px;border-radius:2px;background:rgba(20,2,18,.85)}
+#combo .pips i.on{background:var(--mint)}
+#combo .pips.lock i:not(.on){background:var(--gold);animation:pipcall .4s ease-in-out infinite alternate}
+@keyframes pipcall{to{opacity:.3}}
+#combo.fz .n{color:#fff;animation:rainbow 2.4s steps(6) infinite}
+@keyframes rainbow{0%{color:#fff}17%{color:#bff4ff}33%{color:#d6ffe6}50%{color:#fff1b0}67%{color:#ffd0f4}83%{color:#d9e4ff}100%{color:#fff}}
 /* buttons: right-handed by default, swapped for lefties */
-#dashBtn{position:absolute;right:calc(var(--safeR) + 14px);bottom:calc(var(--safeB) + 18px);width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff6b95,#cc2456 55%,#8f0f34);box-shadow:0 5px 0 #5c0822,0 0 20px rgba(255,61,110,.5);font-weight:800;font-size:16px;color:#fff;pointer-events:auto;text-shadow:0 2px 0 rgba(0,0,0,.45)}
-#dashBtn::before{content:"";position:absolute;inset:-6px;border-radius:50%}
+#dashBtn{position:absolute;right:calc(var(--safeR) + 14px);bottom:calc(var(--safeB) + 28px);width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff6b95,#cc2456 55%,#8f0f34);box-shadow:0 5px 0 #5c0822,0 0 20px rgba(255,61,110,.5);font-weight:800;font-size:16px;color:#fff;pointer-events:auto;text-shadow:0 2px 0 rgba(0,0,0,.45)}
+/* the cooldown: a dark conic sweep that clears clockwise as --cd runs 0 -> 1 (main.js writes it in 0.02 steps) */
+#dashBtn::before{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;background:conic-gradient(transparent calc(var(--cd,1) * 360deg),rgba(20,2,18,.6) 0)}
+#dashBtn.rdy{animation:dashrdy .12s ease-out}
+@keyframes dashrdy{50%{transform:scale(1.12)}}
+/* not enough GAS for a dash: a thin red tick ring */
+#dashBtn.lowE{box-shadow:0 5px 0 #5c0822,0 0 0 2px #ff3d6e,0 0 10px rgba(255,61,110,.6)}
 /* long press to cash in: a gold ring fills round the button (main.js sets --hold 0..1) */
 #dashBtn::after{content:"";position:absolute;inset:-7px;border-radius:50%;pointer-events:none;opacity:0;background:conic-gradient(var(--gold) calc(var(--hold,0) * 360deg),rgba(255,255,255,.15) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px))}
 #dashBtn.holding::after{opacity:1}
-#dashBtn.cd{filter:grayscale(.8) brightness(.6)}
-#dashBtn.nudge{animation:nudge .7s ease-in-out infinite}
+#dashBtn.cd{filter:grayscale(.5) brightness(.8)}
+#dashBtn.nudge{animation:nudge .8s ease-in-out infinite;box-shadow:0 5px 0 #5c0822,0 0 0 6px rgba(255,215,92,.35),0 0 24px rgba(255,215,92,.7)}
 #dashBtn.refuse{animation:refuse .3s ease-out}
 @keyframes refuse{0%,100%{transform:none}20%{transform:translateX(-7px) rotate(-6deg)}40%{transform:translateX(6px) rotate(5deg)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
-@keyframes nudge{50%{transform:scale(1.14);box-shadow:0 5px 0 #5c0822,0 0 0 10px rgba(255,215,92,.35),0 0 30px rgba(255,215,92,.8)}}
+@keyframes nudge{50%{transform:scale(1.14)}}
 #dashBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #5c0822}
 #pauseBtn{position:absolute;left:calc(var(--safeL) + 8px);top:calc(var(--safeT) + 8px);width:44px;height:44px;border-radius:12px;background:rgba(20,2,18,.6);border:2px solid rgba(255,255,255,.45);font-size:17px;pointer-events:auto;z-index:2}
 #pauseBtn.off{display:none}
@@ -146,47 +167,54 @@ body.racing #toast{top:calc(var(--hudB) + 8px);bottom:auto;transform:translate(-
 body.racing #toast.on{transform:translate(-50%,0)}
 #banner{position:absolute;left:0;right:0;top:max(20%,calc(var(--hudB) + 50px));text-align:center;pointer-events:none;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.6,.4,1);padding:0 16px}
 /* in the egg zone, at a drill or a claim: right under the HUD (or under the egg panel), no box, small */
-#banner.top{top:calc(var(--hudB) + 6px)}
-body.egg #banner.top{top:var(--duB,calc(var(--hudB) + 124px))}
-#banner.top .bk{background:none;padding:0}
-#banner.top .t{font-size:20px}
+#banner.top,body.egg #banner.top{top:calc(var(--hudB) + 34px)}
+#banner.top .bk{background:rgba(20,2,18,.55);padding:2px 10px 4px;border-radius:12px}
+#banner.top .t{font-size:20px;-webkit-text-stroke:4px var(--ink);paint-order:stroke fill}
 #banner.on{opacity:1;transform:scale(1)}
 #banner .bk{display:inline-block;max-width:100%;background:rgba(20,2,18,.72);border-radius:16px;padding:6px 14px 8px}
 #banner .z{font-size:13px;letter-spacing:.14em;color:var(--gold);font-weight:800;line-height:1.2}
 #banner .z:empty{display:none}
 #banner .t{font-size:26px;font-weight:800;color:#fff;line-height:1.05;text-shadow:0 3px 0 var(--ink),0 0 20px var(--pink)}
 #banner.intense .t{font-size:20px}
-#banner .c{font-size:14px;color:var(--cream);max-width:300px;margin:4px auto 0;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#banner .c{font-size:14px;color:var(--cream);max-width:min(330px,100%);margin:4px auto 0;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #banner.red .t{color:var(--bc,#ff5c7a);text-shadow:0 3px 0 var(--ink),0 0 22px #ff1f4a}
 #banner.red .z{color:#ff8b9b}
 #banner .t{position:relative}
-#banner.red .t::after{content:"";position:absolute;inset:-6px -10px;border-radius:16px;background:radial-gradient(closest-side,rgba(255,31,74,.45),rgba(255,31,74,0));opacity:0;animation:redpulse .45s ease-in-out 3;z-index:-1}
+#banner.red .t::after{content:"";position:absolute;inset:-6px -10px;border-radius:16px;background:radial-gradient(closest-side,rgba(255,31,74,.45),rgba(255,31,74,0));opacity:0;animation:redpulse .8s ease-in-out 2;z-index:-1}
 @keyframes redpulse{50%{opacity:1}}
 #count{position:absolute;left:0;right:0;top:40%;text-align:center;pointer-events:none;font-size:84px;font-weight:800;line-height:1;color:#fff;text-shadow:0 6px 0 var(--ink),0 0 40px var(--pink);opacity:0}
 #count.on{animation:cnt .4s cubic-bezier(.2,1.6,.4,1) forwards}
 #count.go{color:var(--gold);text-shadow:0 6px 0 var(--ink),0 0 40px var(--gold)}
 @keyframes cnt{0%{opacity:0;transform:scale(2.2)}40%{opacity:1;transform:scale(1)}100%{opacity:.9}}
 /* the tutorial card sits under the HUD at every portrait size; the coach strip steps below it while it shows */
-body:has(#tut.on) #coach{top:calc(var(--hudB) + 120px)}
 body.egg #coach{display:none}
 #tut.lesson .dots{display:none}
-#tut.step-drill{top:var(--duB,calc(var(--hudB) + 124px))}
-#tut{position:absolute;left:50%;top:calc(var(--hudB) + 38px);bottom:auto;width:min(320px,calc(100% - 40px));transform:translate(-50%,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.8);border:2px solid rgba(255,215,92,.6);border-radius:16px;padding:8px 12px 8px 50px;min-height:54px}
-#tut.on{opacity:1;transform:translate(-50%,0)}
-#tut .ic{position:absolute;left:10px;top:50%;margin-top:-16px;font-size:28px;line-height:32px}
+/* the tutorial: a compact one-line pill low on the screen, left of DASH (right of it for lefties), off Kevin and the tube ahead */
+#tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:64px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
+body.lefty #tut{left:auto;right:calc(var(--safeR) + 12px)}
+/* the combo strip is up: the pill steps above it */
+body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
+@media (max-width:380px){#tut .tt{font-size:13px;line-height:16px}#tut{padding-right:24px}}
+#tut.step-drill{bottom:calc(var(--safeB) + 126px + var(--duH,150px))}
+#tut.on{opacity:1;transform:none}
+#tut .ic{position:absolute;left:8px;top:50%;margin-top:-13px;font-size:22px;line-height:26px}
 #tut.step-steer .ic{animation:swipe 1.1s ease-in-out infinite}
 @keyframes swipe{0%,100%{transform:translateX(-5px) rotate(-10deg)}50%{transform:translateX(7px) rotate(10deg)}}
-#tut .tt{font-size:16px;font-weight:800;line-height:1.1;color:var(--gold)}
-#tut .ts{font-size:13px;font-weight:600;color:var(--cream);line-height:1.15}
-#tut .dots{display:flex;gap:4px;margin-top:4px}
-#tut .dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.25)}
+/* two lines at most (the title may wrap once, the subtitle keeps one line); descenders clear the timer bar */
+#tut .tt{font-size:16px;font-weight:800;line-height:19px;color:var(--gold);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#tut .ts{font-size:12px;font-weight:600;color:var(--cream);line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tut.rg .ts{display:none}
+#tut .dots{position:absolute;right:9px;top:7px;display:flex;flex-direction:column;gap:2px}
+#tut .dots i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.25)}
 #tut .dots i.cur{background:var(--gold)}#tut .dots i.ok{background:var(--mint)}#tut .dots i.sk{background:#7a6a76}
-#tut .bar{height:3px;margin-top:4px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden}
+#tut .bar{position:absolute;left:0;right:0;bottom:0;height:3px;pointer-events:none;background:rgba(255,255,255,.12);overflow:hidden}
 #tut .bar i{display:block;height:100%;width:100%;background:var(--gold);transform-origin:0 50%}
 #tut.ok{border-color:var(--mint)}#tut.ok .tt{color:var(--mint)}
 #tut.ok .tt::after{content:"  " attr(data-praise)}
+#tut.ok .ts{display:none}
 #tutTarget{position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px dashed var(--gold);pointer-events:none;animation:tgt 1s linear infinite;box-shadow:0 0 14px rgba(255,215,92,.6)}
-#tutTarget::after{content:attr(data-l);position:absolute;left:50%;top:46px;transform:translateX(-50%);font-size:12px;font-weight:800;color:var(--gold);text-shadow:0 2px 0 var(--ink)}
+#tutTarget::after{content:attr(data-l);position:absolute;left:50%;top:48px;transform:translateX(-50%);white-space:nowrap;font-size:14px;line-height:1.2;font-weight:800;color:var(--gold);background:rgba(20,2,18,.88);border-radius:10px;padding:1px 8px 2px;text-shadow:0 2px 0 var(--ink)}
+#tutTarget[data-l=""]::after,#tutTarget:not([data-l])::after{display:none}
 /* a target off the screen: the ring waits at the edge with an arrow that points at it */
 #tutTarget.edge{border-style:solid}
 #tutTarget.edge::before{content:"";position:absolute;left:50%;top:50%;width:0;height:0;margin:-34px 0 0 -8px;border:8px solid transparent;border-bottom:12px solid var(--gold);border-top:0;transform-origin:8px 34px;transform:rotate(var(--ang,0deg));filter:drop-shadow(0 1px 0 var(--ink))}
@@ -201,14 +229,14 @@ body.egg #coach{display:none}
 #toast{position:absolute;left:50%;bottom:calc(var(--safeB) + 24px);transform:translate(-50%,30px);opacity:0;background:#fff4f8;color:#4a1030;font-weight:800;padding:8px 14px;border-radius:14px;max-width:calc(100% - 32px);text-align:center;font-size:14px;pointer-events:none;transition:all .25s;z-index:5;box-shadow:0 4px 0 #9a3a60;word-break:break-word}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 /* the egg: a race to drill in, you vs the best rival */
-#drillUI{position:absolute;left:50%;top:calc(var(--hudB) + 8px);bottom:auto;
+#drillUI{position:absolute;left:50%;top:auto;bottom:calc(var(--safeB) + 116px);
 transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;pointer-events:none;background:rgba(20,2,18,.7);border-radius:16px;padding:6px 12px 8px;border:2px solid rgba(92,225,255,.4)}
 #drillUI.claim{border-color:#ff3d6e}
-#drillUI.claim::before{content:"";position:absolute;inset:-3px;border-radius:18px;box-shadow:0 0 16px 2px rgba(255,31,74,.8);opacity:0;animation:redpulse .6s ease-in-out infinite;pointer-events:none}
-#drillUI .t{font-size:30px;font-weight:800;color:var(--sky);text-shadow:0 3px 0 var(--ink);animation:pulse .25s infinite alternate;line-height:1.05}
+#drillUI.claim::before{content:"";position:absolute;inset:-3px;border-radius:18px;box-shadow:0 0 16px 2px rgba(255,31,74,.8);opacity:0;animation:redpulse .8s ease-in-out infinite;pointer-events:none}
+#drillUI .t{font-size:30px;font-weight:800;color:var(--sky);text-shadow:0 3px 0 var(--ink);animation:pulse .36s infinite alternate;line-height:1.05}
 @keyframes pulse{to{transform:scale(1.08)}}
 #drillUI .cd{font-size:14px;font-weight:800;color:#ff8b9b;line-height:1.1;white-space:nowrap}
-#drillUI .cd small{display:inline-block;font-size:9px;letter-spacing:.12em;margin-right:6px;vertical-align:.6em;color:var(--cream)}
+#drillUI .cd small{display:inline-block;font-size:11px;letter-spacing:.12em;margin-right:6px;vertical-align:.6em;color:var(--cream)}
 #drillUI .cd b{font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--gold);text-shadow:0 2px 0 var(--ink)}
 #drillUI .cd b.hot{color:#ff3d6e}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
@@ -217,10 +245,11 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #drillUI .row .bb i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(0)}
 #drillUI .you i{background:linear-gradient(90deg,#5ce1ff,#7dffb0)}
 #drillUI .riv i{background:linear-gradient(90deg,#ff8b5c,#ff3d6e)}
-#drillUI .riv.hot .bb{animation:blink .2s infinite alternate}
+#drillUI .riv.hot .bb{animation:blink .36s infinite alternate}
 /* ---------- overlays ---------- */
-.ov{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;padding:calc(var(--safeT) + 16px) calc(var(--safeR) + 18px) calc(var(--safeB) + 16px) calc(var(--safeL) + 18px);background:rgba(20,2,18,.84);backdrop-filter:blur(3px);overflow-y:auto;touch-action:pan-y}
+.ov{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;padding:calc(var(--safeT) + 16px) calc(var(--safeR) + 18px) calc(var(--safeB) + 16px) calc(var(--safeL) + 18px);background:rgba(20,2,18,.9);overflow-y:auto;touch-action:pan-y}
 /* safe centring: the first and last flex children soak up spare room, and give it back when the screen overflows */
+.ov>*{flex-shrink:0}
 .ov::before,.ov::after{content:"";flex:0 0 0;margin:auto 0 0}
 .ov::after{margin:0 0 auto}
 .btn{position:relative;display:block;width:100%;max-width:320px;min-height:48px;margin:7px auto;padding:12px 16px;border-radius:16px;font-weight:800;font-size:20px;background:linear-gradient(#d42a5a,#a8123f);box-shadow:0 5px 0 #5c0822;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3);line-height:1.1}
@@ -255,7 +284,7 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #cards h2,.ov h2{font-size:32px;font-weight:800;text-align:center;line-height:1;color:var(--gold);text-shadow:0 3px 0 var(--ink)}
 #cardsOwned{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin:6px auto 0;max-width:340px;min-height:0}
 #cardsOwned span{position:relative;font-size:16px;line-height:1;background:rgba(0,0,0,.35);border-radius:8px;padding:3px 4px}
-#cardsOwned span b{position:absolute;right:-4px;bottom:-4px;font-size:9px;background:var(--pink);color:#fff;border-radius:6px;padding:0 3px;line-height:12px}
+#cardsOwned span b{position:absolute;right:-4px;bottom:-4px;font-size:11px;background:var(--pink);color:#fff;border-radius:6px;padding:0 3px;line-height:12px}
 .cardRow{display:flex;flex-direction:column;gap:10px;width:100%;max-width:360px;margin:12px auto 6px;perspective:900px}
 .cardRow.locked .card{pointer-events:none}
 .card{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;text-align:left;padding:12px 14px;border-radius:18px;background:var(--card);border:3px solid #6b2a5e;box-shadow:0 5px 0 #12030f;animation:deal .5s cubic-bezier(.2,1.4,.4,1) backwards;min-height:64px}
@@ -269,11 +298,11 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .card .fl{font-size:12px;font-style:italic;font-weight:500;opacity:.75;line-height:1.15;margin-top:2px}
 #cards.nofl .card .fl{display:none}
 @media (max-height:640px){.card .fl{display:none}}
-.card .cp{position:absolute;right:8px;top:6px;font-size:9px;font-weight:800;letter-spacing:.08em;line-height:14px;padding:0 6px;border-radius:7px;background:var(--mint);color:#05301a;box-shadow:0 0 10px rgba(125,255,176,.6)}
+.card .cp{position:absolute;right:8px;top:6px;font-size:12px;font-weight:800;letter-spacing:.08em;line-height:14px;padding:0 6px;border-radius:7px;background:var(--mint);color:#05301a;box-shadow:0 0 10px rgba(125,255,176,.6)}
 .card.simple{min-height:72px}
 .card.simple .nm{font-size:21px}
-.card .pb{display:inline-block;margin-left:6px;padding:0 5px;border-radius:6px;background:#8a4dff;color:#fff;font-size:9px;letter-spacing:.08em;line-height:14px;vertical-align:1px;box-shadow:0 0 8px rgba(160,110,255,.7)}
-.card .key{float:right;opacity:.45;font-size:10px;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
+.card .pb{display:inline-block;margin-left:6px;padding:0 5px;border-radius:6px;background:#8a4dff;color:#fff;font-size:11px;letter-spacing:.08em;line-height:14px;vertical-align:1px;box-shadow:0 0 8px rgba(160,110,255,.7)}
+.card .key{float:right;opacity:.45;font-size:11px;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 @media (hover:none){.card .key{display:none}}
 .card.picked{animation:picked .3s ease-out forwards;z-index:2}
 @keyframes picked{to{transform:scale(1.12);filter:brightness(1.6);box-shadow:0 0 40px rgba(255,215,92,.9)}}
@@ -284,12 +313,13 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .card .ic{font-size:36px;width:48px;text-align:center;flex:none}
 .card .nm{font-size:19px;font-weight:800;line-height:1.05}
 .card .ds{font-size:14px;color:var(--dim);line-height:1.2;font-weight:500}
-.card .lvl{font-size:11px;font-weight:800;letter-spacing:.1em}
+.card .lvl{font-size:12px;font-weight:800;letter-spacing:.1em}
 .card.r2{border-color:#5ce1ff;background:#0f2a3d}.card.r2 .lvl{color:var(--sky)}
 .card.r3{border-color:var(--gold);background:#3d2a08;box-shadow:0 5px 0 #12030f,0 0 22px rgba(255,215,92,.45)}.card.r3 .lvl{color:var(--gold)}
 .card.r1 .lvl{color:var(--pink2)}
 /* result */
-#resTitle{font-size:36px;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
+#resTitle{font-size:clamp(24px,8.5vw,36px);white-space:nowrap;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
+#resWhy,#resRankLine,#resTip,#resNext,#resGloat,#resSyn,#resEgg span{text-wrap:balance}
 #resWhy{text-align:center;color:var(--cream);font-size:16px;font-weight:700;margin:4px auto 0;max-width:340px;line-height:1.2}
 #resRankLine{text-align:center;color:var(--dim);font-size:13px;font-weight:600;margin:2px auto 4px;max-width:330px;line-height:1.2}
 #resRankLbl{text-align:center;font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:800}
@@ -310,23 +340,48 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .baby .gm{margin-top:4px;font-size:15px;font-weight:800;color:#a8124f}
 #titleGoal{font-size:14px;font-weight:800;color:var(--gold);text-align:center;max-width:330px;margin:-4px auto 8px;line-height:1.15;text-shadow:0 2px 0 var(--ink)}
 #title.fresh #titleGoal{display:none}
+#heroCv{display:none;position:relative;inset:auto;flex-shrink:0;width:110px;height:215px;pointer-events:none;margin:-20px auto -14px}
+#title.fresh #heroCv{display:block}
+@media (max-height:600px){#title.fresh #heroCv{display:none}}
 #dailyBtn .dpips{display:flex;justify-content:center;gap:4px;margin:4px 0 1px}
 #dailyBtn .dpips i{width:9px;height:9px;border-radius:50%;background:rgba(58,32,0,.25)}
 #dailyBtn .dpips i.on{background:#3a2000}
-#dailyBtn .dpips i.x2{box-shadow:0 0 0 2px #fff4f8}
+#dailyBtn .dpips i.x3{box-shadow:0 0 0 2px #fff4f8}
 #dailyBtn .dnx{font-size:12px;opacity:.85}
 #resGap .nb{display:inline-block;margin-left:6px;background:var(--mint);color:#05301a;border-radius:8px;padding:0 6px;font-size:12px;vertical-align:2px}
 #resLadder{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:3px;margin:6px auto 2px;font-size:13px;font-weight:800}
 #resLadder span{padding:2px 7px;border-radius:9px;background:rgba(255,255,255,.07);color:#8f7388}
 #resLadder span.on{background:var(--c);color:#1a0616;box-shadow:0 0 10px var(--c)}
 #resLadder span.lost{color:#e6cfdc;background:transparent;border:1.5px dashed rgba(230,207,220,.55)}
-#resLadder span u{text-decoration:none;margin-right:3px;font-size:11px}
+#resLadder span u{text-decoration:none;margin-right:3px;font-size:12px}
 #resLadder i{font-style:normal;color:#8f7388}
 #resEgg{width:100%;max-width:320px;margin:6px auto 0;font-size:12px;font-weight:700;color:var(--dim);text-align:center}
 #resEgg .bb{position:relative;height:10px;border-radius:6px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.12);margin-bottom:2px}
 #resEgg .bb i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:4px;background:linear-gradient(90deg,var(--pink),var(--gold));transform-origin:0 50%}
 #resEgg .bb em{position:absolute;right:-9px;top:-9px;font-style:normal;font-size:16px}
+/* your furthest swim: a BEST tick on the egg bar, and a chip that says how this one compares */
+#resEgg .bb u.best{position:absolute;top:-6px;bottom:-6px;width:2px;margin-left:-1px;background:#fff;text-decoration:none;font-size:0;line-height:1}
+#resEgg .bb u.best::before{content:"BEST";position:absolute;left:50%;bottom:100%;transform:translateX(-50%);padding-bottom:1px;font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 0 var(--ink)}
+#resEgg span i{display:inline-block;margin-left:6px;font-style:normal;font-size:12px;font-weight:800;border-radius:8px;padding:0 6px;vertical-align:1px}
+#resEgg span i.far{background:var(--mint);color:#05301a}
+#resEgg span i.bst{background:rgba(255,255,255,.1);color:var(--dim)}
+#resEgg span .nb{display:inline-block;margin-left:6px;background:var(--mint);color:#05301a;border-radius:8px;padding:0 6px;font-size:12px}
+#resMutStrip{display:none;justify-content:center;flex-wrap:wrap;gap:3px;margin:4px auto 0;max-width:330px}
+#resMutStrip span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;font-size:17px;line-height:1;border-radius:8px;background:rgba(255,255,255,.08)}
+#resMutStrip span.sy{box-shadow:0 0 0 1.5px #d9b8ff inset}
+@media (max-height:900px) and (orientation:portrait){#resMutStrip{display:flex}#resMutStrip.none{display:none}}
+/* the first death: the punchline, the rank, how far, the DNA, one tip and SWIM AGAIN; nothing else */
+#result.first #resRankLine,#result.first #resLadder,#result.first #resChips,#result.first #resReceipt,#result.first #resSyn,#result.first #shareBtn,
+#result.first #resUp,#result.first #resGap,#result.first #resGloat,#result.first #resNext,#result.first #resGoal,#result.first #resMuts,#result.first #resStats,
+#result.first #resMutStrip,#result.first #resGrudge,#result.first #resBest{display:none!important}
+#result.first #resWhy{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+#result.first #resActions{position:static;background:none;width:100%;margin:10px 0 0;padding:0}
+#result.first::before{flex-grow:.45;margin:0}#result.first::after{flex-grow:1;margin:0}
+#result.first #againBtn{min-height:60px;font-size:24px}
+#resShopBtn small.pk{font-size:11px;margin-top:1px}
 #resReceipt{width:100%;max-width:300px;margin:6px auto 0;font-size:14px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}
+#resReceipt{overflow:hidden;max-height:400px;transition:max-height .3s ease,opacity .3s}
+#resReceipt.fold{max-height:0;opacity:0;margin-top:0}
 #resReceipt div{display:flex;justify-content:space-between;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s;line-height:1.35}
 #resReceipt div.on{opacity:1;transform:none}
 #resReceipt div b{color:#fff}
@@ -340,11 +395,12 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resUp .bb{height:7px;border-radius:4px;background:rgba(0,0,0,.45);overflow:hidden;margin-top:3px}
 #resUp .bb i{display:block;height:100%;width:100%;background:var(--mint);transform-origin:0 50%}
 #resUp button{flex:none;min-width:76px;min-height:44px;border-radius:12px;font-weight:800;background:linear-gradient(#7dffb0,#2fc472);color:#05301a;box-shadow:0 4px 0 #136b3a;font-size:15px;line-height:1}
-#resUp button small{display:block;font-size:10px}
+#resUp button small{display:block;font-size:11px}
 #resUp.can{border-color:var(--mint);box-shadow:0 0 14px rgba(125,255,176,.35)}
 .row3{display:flex;gap:8px;width:100%;max-width:320px;margin:0 auto}
 .row3 .btn{margin:7px 0;font-size:15px;padding:10px 4px;flex:1}
 .row3 .btn.gold,.row3 .btn.prime{font-size:15px}
+#shareBtn{white-space:nowrap;font-size:14px;padding-left:2px;padding-right:2px}
 .btn.prime{background:linear-gradient(#ffe07a,#f0b02c);box-shadow:0 5px 0 #9a6410;color:#3a2000;text-shadow:none}
 #resTip{text-align:center;color:var(--cream);font-size:13px;font-weight:600;max-width:330px;margin:6px auto 0;line-height:1.25}
 #resNext{text-align:center;color:var(--dim);font-size:13px;font-weight:700;max-width:330px;margin:2px auto 0;line-height:1.2}
@@ -362,13 +418,13 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .hab.can{border-color:rgba(125,255,176,.6)}
 .hab .ic{font-size:30px;width:40px;text-align:center;flex:none}
 .hab .nm{font-weight:800;font-size:16px;line-height:1.05}
-.hab .qp{font-size:11px;font-style:italic;font-weight:600;color:var(--dim);line-height:1.15;opacity:.85}
+.hab .qp{font-size:12px;font-style:italic;font-weight:600;color:var(--dim);line-height:1.15;opacity:.85}
 .hab .ds{font-size:13px;color:var(--dim);line-height:1.15}
 .hab .ef{font-size:13px;font-weight:800;color:var(--mint);line-height:1.15}
-.hab .pips{font-size:10px;letter-spacing:1px;color:var(--pink2)}
+.hab .pips{font-size:11px;letter-spacing:1px;color:var(--pink2)}
 .hab button{margin-left:auto;flex:none;min-width:78px;min-height:44px;padding:8px 8px;border-radius:12px;font-weight:800;background:linear-gradient(#7dffb0,#2fc472);color:#05301a;box-shadow:0 4px 0 #136b3a;font-size:15px;line-height:1}
 .hab button[disabled]{background:#4a3048;color:#c9a9bf;box-shadow:0 4px 0 #2a1528}
-.hab button small{display:block;font-size:10px}
+.hab button small{display:block;font-size:11px}
 .cx{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:8px 10px;border:2px solid #5a2050}
 .cx.got{border-color:#d9b8ff;box-shadow:0 0 10px rgba(217,184,255,.25)}
 .cx .ic{font-size:28px;width:40px;text-align:center;flex:none}
@@ -379,7 +435,7 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .tabs button{flex:1;min-height:44px;border-radius:12px;font-weight:800;font-size:15px;background:rgba(255,255,255,.08);color:var(--dim)}
 .tabs button.on{background:var(--gold);color:#3a2000}
 #dnaTop{font-size:22px;font-weight:800;color:var(--mint);text-align:center}
-#intro{background:rgba(13,2,11,.72);cursor:pointer;backdrop-filter:none}
+#intro{background:rgba(13,2,11,.72);cursor:pointer}
 #introTxt{font-size:26px;font-weight:800;text-align:center;max-width:340px;line-height:1.15;min-height:120px;display:flex;align-items:center;justify-content:center;text-shadow:0 3px 0 var(--ink)}
 #introTxt.in{animation:itin .4s cubic-bezier(.2,1.5,.4,1)}
 @keyframes itin{0%{opacity:0;transform:translateY(16px) scale(.94)}}
@@ -393,18 +449,23 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 .setRow small{display:block;font-size:12px;color:var(--dim);font-weight:600}
 .setRow.dim{opacity:.5}
 .setRow input[type=checkbox]{width:24px;height:24px;accent-color:var(--pink);flex:none}
-.setRow input[type=range]{width:90px;accent-color:var(--pink);flex:none}
+.setRow input[type=range]{width:90px;height:44px;accent-color:var(--pink);flex:none;background:transparent;-webkit-appearance:none;appearance:none}
+.setRow input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:rgba(255,255,255,.25)}
+.setRow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--pink);border:2px solid #fff}
+.setRow input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:rgba(255,255,255,.25)}
+.setRow input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:var(--pink);border:2px solid #fff}
+.setRow .ck{display:flex;align-items:center;justify-content:center;width:44px;height:44px;flex:none;cursor:pointer}
 .setRow .rt{display:flex;align-items:center;gap:8px}
 .seg{display:flex;gap:4px;flex:none}
-.seg button{min-width:44px;min-height:44px;border-radius:10px;background:rgba(255,255,255,.08);font-weight:800;font-size:14px;color:var(--dim)}
+.seg button{min-width:52px;min-height:44px;border-radius:10px;background:rgba(255,255,255,.08);font-weight:800;font-size:14px;color:var(--dim)}
 .seg button.on{background:var(--pink);color:#fff}
 #setSens button{padding:0 7px;font-size:13px}
 /* cards: the first draft is calmer, a golden draft shines */
 #cards.golden h2{color:#fff1b0;text-shadow:0 3px 0 #7a4a12,0 0 24px rgba(255,215,92,.8)}
 /* result additions */
 .resL,.resR{display:contents}
-#resLadder span small{margin-left:4px;font-size:10px;opacity:.75;font-variant-numeric:tabular-nums}
-#resLadder span em{display:block;font-style:normal;font-size:9px;letter-spacing:.08em;color:#ff5c7a;line-height:1}
+#resLadder span small{margin-left:4px;font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
+#resLadder span em{display:block;font-style:normal;font-size:11px;letter-spacing:.08em;color:#ff5c7a;line-height:1}
 #resLadder span.on em{color:#5c0822}
 #resLadder span.nemesis{box-shadow:0 0 0 2px #ff3d6e inset}
 #resLadder span.beaten{box-shadow:0 0 0 2px var(--gold) inset,0 0 12px var(--gold)}
@@ -424,7 +485,7 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resActions #resTip.big{font-size:13px;padding:5px 10px}
 #resActions #resTip:empty{display:none}
 #resDynasty{text-align:center;font-size:17px;font-weight:800;color:var(--gold);max-width:330px;margin:6px auto 0;line-height:1.15;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.7);animation:rec 1s cubic-bezier(.2,1.8,.4,1)}
-#resUp .dp{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--gold);line-height:1.15}
+#resUp .dp{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--gold);line-height:1.15}
 @media (max-height:900px) and (orientation:portrait){#resMuts,#resStats{display:none!important}}
 #resGoal{text-align:center;color:var(--gold);font-size:15px;font-weight:800;line-height:1.15;max-width:330px;margin:0 auto 2px;text-shadow:0 2px 0 var(--ink)}
 #againBtn.rival{background:linear-gradient(#d42a5a,#a8123f);box-shadow:0 5px 0 #5c0822,0 0 0 3px var(--rc),0 0 22px var(--rc)}
@@ -450,7 +511,7 @@ canvas.face{position:static;inset:auto}
 /* pulses with a glow ring (a pseudo-element), so the button itself never moves under the thumb */
 #title.fresh #playBtn::after,#dailyBtn.pulse::after{content:"";position:absolute;inset:-4px;border-radius:20px;border:3px solid var(--gold);opacity:0;animation:swimPulse 1.4s ease-in-out infinite;pointer-events:none}
 @keyframes swimPulse{50%{opacity:.9}}
-.newb{position:absolute;left:-6px;top:-8px;background:var(--mint);color:#05301a;font-size:11px;font-weight:800;border-radius:8px;padding:1px 6px;line-height:16px;text-shadow:none;animation:land .5s cubic-bezier(.2,1.8,.4,1)}
+.newb{position:absolute;left:-6px;top:-8px;background:var(--mint);color:#05301a;font-size:12px;font-weight:800;border-radius:8px;padding:1px 6px;line-height:16px;text-shadow:none;animation:land .5s cubic-bezier(.2,1.8,.4,1)}
 #titleNem{font-size:13px;font-weight:800;color:var(--cream);background:rgba(255,31,74,.16);border:1.5px solid var(--c,#ff5c7a);border-radius:12px;padding:3px 10px;margin:0 auto 2px}
 #titleNem b{color:var(--c,#ff5c7a);letter-spacing:.08em;margin-right:4px}
 #titleNem small{opacity:.75;margin-left:4px}
@@ -466,8 +527,14 @@ canvas.face{position:static;inset:auto}
 body.reduced *,body.reduced *::before,body.reduced *::after{animation-duration:.01s!important;animation-iteration-count:1!important;transition-duration:.01s!important}
 body.reduced #rank.bump,body.reduced #rank.jump,body.reduced #banner,body.reduced #banner.on{transform:none}
 body.reduced #ebar.shake{animation:none}
-#ver{position:absolute;z-index:5;right:calc(var(--safeR) + 8px);bottom:calc(env(safe-area-inset-bottom) + 4px);font-size:11px;color:rgba(255,255,255,.35);pointer-events:none}
-@media (max-width:400px){#dist{font-size:11px}#dist b{font-size:19px}#rankTick{font-size:14px;margin-left:6px}}
+/* reduced motion: the blinkers become static marks, so the warning still reads */
+body.reduced #combo .bar.low i{background:#ff3d6e;box-shadow:0 0 0 1px #fff}
+body.reduced #pace.hot{background:#ff1f4a;color:#fff;border-color:#fff}
+body.reduced #efill.low{background:#ff3d6e;opacity:1}
+body.reduced #drillUI.tell .t{color:var(--gold);text-decoration:underline 3px}
+body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
+#ver{position:absolute;z-index:5;right:calc(var(--safeR) + 8px);bottom:calc(env(safe-area-inset-bottom) + 4px);font-size:12px;color:rgba(255,255,255,.35);pointer-events:none}
+@media (max-width:400px){#dist{font-size:12px}#dist b{font-size:19px}#rankTick{font-size:14px;margin-left:6px}}
 /* narrow phones and landscape: the +places ticker tucks under the number (over the swimmers-alive line, which steps aside) */
 #rankBox{position:relative}
 @media (max-width:400px){
@@ -480,11 +547,12 @@ body.reduced #ebar.shake{animation:none}
 }
 /* short phones: tighten the screens so nothing needs a scroll */
 @media (max-height:700px){
+  #resReceipt{display:none}
   #logo{font-size:42px}#logo span{font-size:24px}
   .sub{font-size:14px;margin-bottom:8px}
   .btn{min-height:44px;padding:9px 14px;font-size:18px;margin:5px auto}
   .btn.alt{font-size:15px}
-  #resTitle{font-size:28px}#resRank{font-size:46px}#resWhy{font-size:14px}
+  #resTitle{font-size:clamp(22px,7.5vw,28px)}#resRank{font-size:46px}#resWhy{font-size:14px}
   #resRankLine,#resTip,#resNext{font-size:12px}
   #resReceipt{font-size:12px}#resDna{font-size:20px}
   .baby{padding:8px 12px;margin:4px auto}.baby .face{font-size:38px}.baby .bn{font-size:19px}
@@ -497,14 +565,15 @@ body.reduced #ebar.shake{animation:none}
   /* the race HUD: under 125 px tall at 360x640 */
   #hud{padding-top:calc(var(--safeT) + 6px);padding-bottom:4px}
   #alive,#zoneName{display:none}
-  #rankLbl{font-size:11px}
+  #rankRow{height:52px}
+  #rankLbl{font-size:12px}
   #dist{font-size:12px}#dist b{font-size:19px}
   #prog{margin-top:15px;height:9px}
   #energyRow{margin-top:13px}
   #ebar{height:10px}
   #mutRow{margin-top:3px}
   #mutRow span{font-size:13px;padding:1px 2px}
-  #tut{top:calc(var(--hudB) + 38px);bottom:auto}
+  #tut{bottom:calc(var(--safeB) + 128px)}
   #hint{bottom:calc(var(--safeB) + 118px)}
   #rank{font-size:clamp(22px,11cqw,34px)}
   .tree .node{padding:8px 10px}
@@ -516,7 +585,8 @@ body.reduced #ebar.shake{animation:none}
   #app{max-width:none}
   #cv{left:50%;right:auto;width:min(560px,90vh);margin-left:calc(min(560px,90vh) / -2)}
   #hud{right:auto;width:calc(50% - min(280px,45vh));background:linear-gradient(90deg,rgba(20,4,20,.78),rgba(20,4,20,.55));bottom:0;padding-top:calc(var(--safeT) + 58px)}
-  #rankRow{flex-direction:column;align-items:flex-start;padding-left:0}
+  #rankRow{flex-direction:column;align-items:flex-start;padding-left:0;height:auto}
+  #mutRow{height:auto;flex-wrap:wrap}
   #dist{text-align:left}
   #pauseBtn{left:calc(var(--safeL) + 10px)}
   #dashBtn,body.lefty #dashBtn{left:auto;right:calc(var(--safeR) + max(14px,(50% - min(280px,45vh) - 78px) / 2));bottom:calc(var(--safeB) + 24px)}
@@ -526,17 +596,22 @@ body.reduced #ebar.shake{animation:none}
   body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + max(14px,(50% - min(280px,45vh) - 78px) / 2))}
   /* the HUD is a full-height gutter here (so --hudB is the screen height): everything re-anchors to the screen. The combo strip
      and the egg panel sit at the bottom of the HUD gutter, the lesson card at the top of the DASH gutter */
-  #coach,body:has(#tut.on) #coach{top:calc(var(--safeT) + 8px)}
-  #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,45vh) - 12px);transform:translate(0,-10px);padding-left:44px}
+  #coach{top:calc(var(--safeT) + 8px)}
+  #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,45vh) - 12px);max-height:120px;transform:translate(0,-10px)}
+  #tut .tt{-webkit-line-clamp:3}
   #tut.on{transform:none}
   body.lefty #tut{right:auto;left:calc(var(--safeL) + 6px)}
-  #combo{left:0;right:auto;width:calc(50% - min(280px,45vh));bottom:calc(var(--safeB) + 16px)}
-  body.lefty #combo{left:auto;right:0}
+  #combo{left:0;right:auto;width:calc(50% - min(280px,45vh));bottom:calc(var(--safeB) + 16px);padding-left:var(--safeL)}
+  body.lefty #combo{left:auto;right:0;padding-left:0;padding-right:var(--safeR)}
   #drillUI{top:auto;bottom:calc(var(--safeB) + 12px);left:calc(var(--safeL) + 6px);width:calc(50% - min(280px,45vh) - 12px);transform:none}
   body.lefty #drillUI{left:auto;right:calc(var(--safeR) + 6px)}
   #banner{top:22%}
   #banner.top,body.egg #banner.top{top:calc(var(--safeT) + 40px)}
-  body.racing #hint{top:auto;bottom:calc(var(--safeB) + 24px)}
+  body.threat #banner{top:22%;bottom:auto}
+  body.threat #banner.top{top:calc(var(--safeT) + 40px)}
+  body.threat #banner.on,body.threat #tut.on{opacity:1}
+  body.comboOn #tut,body.threat #tut{bottom:auto}
+  body.racing #hint{top:auto;bottom:calc(var(--safeB) + 24px);padding:0 calc(var(--safeR) + 30px) 0 calc(var(--safeL) + 30px)}
   body.racing #toast{top:calc(var(--safeT) + 8px)}
   #goalPill{max-width:100%}
 
@@ -553,13 +628,84 @@ body.reduced #ebar.shake{animation:none}
   #result::before,#result::after{display:none}
   .resL,.resR{display:block;flex:1;max-width:380px;min-width:0}
   #resActions{width:100%;margin:6px 0 0;padding:10px 0 calc(var(--safeB) + 8px);bottom:calc(-8px - var(--safeB))}
-  #resRank{font-size:44px}#resTitle{font-size:26px}
+  #resRank{font-size:44px}#resTitle{font-size:clamp(22px,4.5vw,26px)}
   #result .stats,#result .mutList{display:none}
   #title{flex-wrap:wrap;flex-direction:row;align-content:center;align-content:safe center;justify-content:center;justify-content:safe center;column-gap:20px}
   #title::before,#title::after{display:none}
   #title #logo,#title .sub{width:100%}
   #title .btn{max-width:280px}
 }
+
+/* Back buttons on long screens: a sticky footer, always one thumb away */
+.foot{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:4px -18px 0;padding:8px 18px calc(var(--safeB) + 12px);background:rgba(20,2,18,.97)}
+.foot .btn{margin:0 auto}
+@media (orientation:landscape) and (max-height:520px){
+  .foot{bottom:calc(-8px - var(--safeB));padding:6px 18px calc(var(--safeB) + 8px)}
+  #shopList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-width:760px;gap:8px}
+  /* settings: two columns of rows, the title and the buttons across both */
+  #settings{display:grid;grid-template-columns:repeat(2,minmax(0,320px));justify-content:center;align-content:start;column-gap:12px;row-gap:0}
+  #settings::before,#settings::after{display:none}
+  #settings h2,#settings #setTut,#settings .foot{grid-column:1 / -1}
+  #settings .setRow{margin:3px 0;min-height:44px;padding:4px 12px;font-size:15px}
+  #setSensRow small{display:none}
+  #settings h2{margin-bottom:4px}
+}
+
+/* ---------- threat lane: something hostile within 700 px ahead. Banners and the lesson pill fade and drop to the bottom
+   (above the combo strip), so the tube ahead stays readable ---------- */
+body.threat #banner{top:auto;bottom:calc(var(--padBot,104px) + 90px)}
+body.threat #banner.on{opacity:.3}
+/* a banner that must show over a threat goes up under the HUD at full strength (main.js adds .top) */
+body.threat #banner.top{top:calc(var(--hudB) + 34px);bottom:auto}
+body.threat #banner.top.on{opacity:1}
+@media (orientation:landscape) and (max-height:520px){body.threat #banner.top{top:calc(var(--safeT) + 40px)}}
+body.threat #tut.on{opacity:.3}
+/* intense (combo 10+, FRENZY, the egg zone): the HUD keeps only what matters */
+body.intense #alive,body.intense #zoneName,body.intense #toEgg{visibility:hidden}
+body.intense #mutRow:not(.peek){visibility:hidden}
+body.intense #rank{font-size:clamp(20px,9cqw,28px)}
+#toEgg{display:block}
+/* swim 1: the rival pips, name tags and the distance wait for the lesson to end, then pop in */
+body.tutHud .rv,body.tutHud #dist{visibility:hidden}
+body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
+@keyframes hudin{0%{opacity:0;transform:scale(.4)}}
+/* this swim's DNA: where banked helices land */
+#dnaHud{flex:none;font-size:12px;font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;color:#ffd0f4;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,92,210,.55);border-radius:8px;padding:2px 5px 1px}
+/* the egg duel: the rival's epithet, the tap-rate meter, a pulsing TAP! during a rival's tell */
+#drillUI .ep{font-size:12px;font-style:italic;font-weight:700;color:var(--dim);line-height:1.1;text-align:right;padding-right:4px}
+#drillUI .ep:empty{display:none}
+#drillUI .rate{position:relative;height:8px;margin:5px 2px 0;border-radius:5px;background:rgba(0,0,0,.5);overflow:visible}
+#drillUI .rate i{display:block;height:100%;width:100%;border-radius:5px;background:linear-gradient(90deg,#5ce1ff,#d9b8ff);transform-origin:0 50%;transform:scaleX(0);transition:transform .1s}
+#drillUI .rate span{position:absolute;right:-2px;top:-14px;font-size:12px;font-weight:800;color:var(--gold);opacity:0;text-shadow:0 2px 0 var(--ink)}
+#drillUI .rate.max i{background:linear-gradient(90deg,#ffd75c,#fff1b0);box-shadow:0 0 10px var(--gold)}
+#drillUI .rate.max span{opacity:1}
+#drillUI.tell{border-color:var(--gold)}
+#drillUI.tell .t{color:var(--gold);animation:pulse .36s infinite alternate}
+@media (orientation:landscape) and (max-height:520px){#drillUI{bottom:calc(var(--safeB) + 12px)}}
+/* cards: a card that completes a MASHUP gets a gold pulse outline */
+.card.mash{outline:3px solid rgba(255,215,92,0);outline-offset:2px;animation:deal .5s cubic-bezier(.2,1.4,.4,1) backwards,mashp 1.6s ease-in-out .6s infinite}
+.card.mash.r3{animation:dealL .7s cubic-bezier(.2,1.4,.4,1) backwards,mashp 1.6s ease-in-out .8s infinite}
+@keyframes mashp{50%{outline-color:rgba(255,215,92,.95);box-shadow:0 5px 0 #12030f,0 0 22px rgba(255,215,92,.6)}}
+.card .pb{background:linear-gradient(#ffe07a,#f0b02c);color:#3a2000;box-shadow:0 0 8px rgba(255,215,92,.7)}
+.card .syn small{display:block;font-size:12px;font-weight:700;color:#cbb6ea}
+/* shop: Dad's Pick first and lit, locked rows say when they open */
+.hab.pick{border-color:var(--gold);box-shadow:0 0 14px rgba(255,215,92,.35)}
+.hab .dp{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--gold);line-height:1.1}
+.hab.locked{opacity:.7;border-style:dashed}
+.hab .lk{font-size:12px;font-weight:800;color:var(--pink2);line-height:1.15}
+/* result: the story lines, the bounty on the rematch button, the daily medal stamp */
+#resNext{white-space:pre-line}
+#againBtn small{font-size:12px;font-weight:700;opacity:.9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#resEgg span b{color:#fff;font-size:1.15em}
+#resMedal{text-align:center;font-size:22px;font-weight:800;letter-spacing:.08em;margin:4px auto 0;line-height:1.1;text-shadow:0 3px 0 var(--ink);animation:rec .9s cubic-bezier(.2,1.8,.4,1) .9s backwards}
+#resMedal .md{display:block;font-size:40px;line-height:1}
+#resMedal small{display:block;font-size:13px;letter-spacing:0;color:var(--cream);font-weight:700;text-shadow:none}
+#resMedal.m1{color:#ffb36b}#resMedal.m2{color:#e6eef7}#resMedal.m3{color:var(--gold)}
+/* the daily button: today's rule and three medal slots */
+#dailyBtn .drule{font-size:12px;font-weight:800;opacity:.95}
+#dailyBtn .dmed{display:flex;justify-content:center;gap:6px;margin:3px 0 1px}
+#dailyBtn .dmed i{width:20px;height:20px;border-radius:50%;font-style:normal;font-size:14px;line-height:20px;background:rgba(58,32,0,.18);box-shadow:inset 0 0 0 2px rgba(58,32,0,.25)}
+#dailyBtn .dmed i.on{background:#fff4f8;box-shadow:none}
 </style>
 </head>
 <body>
@@ -569,14 +715,14 @@ body.reduced #ebar.shake{animation:none}
   <div id="hud" class="hide">
     <div id="rankRow">
       <div id="rankCol"><div id="rankLbl">YOUR PLACE</div><div id="rankBox"><div id="rank">#1,000,000</div><div id="rankTick"></div></div><div id="alive">1,000,000 swimmers alive</div></div>
-      <div id="dist"><b id="cm">13.4 cm</b>to the egg 🥚<div id="zoneName">The Launch Tube</div><div id="goalPill" class="hide"></div></div>
+      <div id="dist"><b id="cm">13.4 cm</b><span id="toEgg">to the egg 🥚</span><div id="zoneName">The Launch Tube</div><div id="goalPill" class="hide"></div></div>
     </div>
     <div id="prog"><div id="progFill"></div><div id="me"></div><div id="egg">🥚</div></div>
-    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="pace" class="hide"></span></div>
+    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="dnaHud" class="hide">🧬 0</span><span id="pace" class="hide"></span></div>
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
-  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="potRow"><span class="pot hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH x1.3</button></div></div>
+  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
   <div id="tutTarget" class="hide"></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
@@ -586,12 +732,15 @@ body.reduced #ebar.shake{animation:none}
     <div class="cd"></div>
     <div class="row you"><b>YOU</b><div class="bb"><i></i></div></div>
     <div class="row riv"><b>RIVAL</b><div class="bb"><i></i></div></div>
+    <div class="ep"></div>
+    <div class="rate hide"><i></i><span>MAX!</span></div>
   </div>
   <button id="dashBtn" class="hide" aria-label="Dash">DASH</button>
   <button id="pauseBtn" class="hide" aria-label="Pause">⏸</button>
   <div id="hint"></div>
 
   <div id="title" class="ov">
+    <canvas id="heroCv" aria-hidden="true"></canvas>
     <div id="logo">MILLION<span>TO ONE</span></div>
     <div class="sub" id="titleSub">1,000,000 swimmers. 1 egg.<br>You start dead last.</div>
     <div id="titleNem" class="hide"></div>
@@ -628,17 +777,19 @@ body.reduced #ebar.shake{animation:none}
     <div id="resRank"></div>
     <div id="resBest" class="badge hide"></div>
     <div id="resRecord" class="hide">NEW RECORD! 🏆</div>
+    <div id="resMedal" class="hide"></div>
     <div id="resGap" class="hide"></div>
     <div id="resGloat" class="hide"></div>
     <div id="resLadder"></div>
     <div id="resChips"></div>
     <div id="resGrudge" class="hide"></div>
     <div id="resDynasty" class="hide"></div>
-    <div id="resEgg" class="hide"><div class="bb"><i></i><em>🥚</em></div><span></span></div>
+    <div id="resEgg" class="hide"><div class="bb"><i></i><u class="best hide">BEST</u><em>🥚</em></div><span></span></div>
     <div id="resBaby"></div>
     </div>
     <div class="resR">
     <div class="mutList" id="resMuts"></div>
+    <div id="resMutStrip"></div>
     <div class="stats" id="resStats"></div>
     <div id="resReceipt"></div>
     <div id="resDna"></div>
@@ -663,15 +814,15 @@ body.reduced #ebar.shake{animation:none}
     <div class="sub" style="margin:4px auto">Healthy dad, faster swimmers. These last forever.</div>
     <div id="dnaTop"></div>
     <div id="shopList"></div>
-    <button class="btn" id="shopBack">Back</button>
+    <div class="foot"><button class="btn" id="shopBack">Back</button></div>
   </div>
 
   <div id="album" class="ov hide">
     <h2 id="albumH">Baby Album</h2>
-    <div class="tabs"><button id="tabBabies" class="on">Babies 👶</button><button id="tabCombos">Combos</button></div>
+    <div class="tabs"><button id="tabBabies" class="on">Babies 👶</button><button id="tabCombos">Mashups</button></div>
     <div class="sub" id="albumSub" style="margin:8px auto 0"></div>
     <div id="albumList"></div>
-    <button class="btn" id="albumBack">Back</button>
+    <div class="foot"><button class="btn" id="albumBack">Back</button></div>
   </div>
 
   <div id="pause" class="ov hide">
@@ -685,16 +836,16 @@ body.reduced #ebar.shake{animation:none}
 
   <div id="settings" class="ov hide">
     <h2>Settings</h2>
-    <div class="setRow"><span>Music 🎶<small>Coach Gonad's beatbox band</small></span><span class="rt"><input type="range" id="setMusicVol" min="0" max="1" step="0.05" aria-label="Music volume"><input type="checkbox" id="setMusic" aria-label="Music on"></span></div>
-    <div class="setRow"><span>Sound effects 🔊<small>Splats, pops and boings</small></span><span class="rt"><input type="range" id="setSfxVol" min="0" max="1" step="0.05" aria-label="Sound volume"><input type="checkbox" id="setSfx" aria-label="Sound effects on"></span></div>
+    <div class="setRow"><span>Music 🎶<small>Coach Gonad's beatbox band</small></span><span class="rt"><input type="range" id="setMusicVol" min="0" max="1" step="0.05" aria-label="Music volume"><label class="ck"><input type="checkbox" id="setMusic" aria-label="Music on"></label></span></div>
+    <div class="setRow"><span>Sound effects 🔊<small>Splats, pops and boings</small></span><span class="rt"><input type="range" id="setSfxVol" min="0" max="1" step="0.05" aria-label="Sound volume"><label class="ck"><input type="checkbox" id="setSfx" aria-label="Sound effects on"></label></span></div>
     <label class="setRow" id="setHapticsRow"><span>Haptics 📳<small>Buzz on dashes, hits and FRENZY</small></span><input type="checkbox" id="setHaptics"></label>
     <label class="setRow"><span>Reduced motion 🐢<small>Less shake, flash and slow-mo</small></span><input type="checkbox" id="setReduced"></label>
-    <div class="setRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
+    <div class="setRow" id="setSensRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
 </div>
     <label class="setRow"><span>Left-handed 🤚<small>DASH button on the left</small></span><input type="checkbox" id="setLefty"></label>
     <div class="setRow"><span>Graphics 🎨<small>Auto steps down on slow phones</small></span><span class="seg" id="setGfx"><button data-v="auto">Auto</button><button data-v="full">Full</button><button data-v="lite">Lite</button></span></div>
     <button class="btn alt" id="setTut">Replay tutorial</button>
-    <button class="btn" id="setBack">Back</button>
+    <div class="foot"><button class="btn" id="setBack">Back</button></div>
   </div>
   <div id="welcome" class="ov hide">
     <div class="wbIc">🏭</div>

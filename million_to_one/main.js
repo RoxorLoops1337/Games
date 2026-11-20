@@ -47,6 +47,11 @@ const GEN_INTROS_ENDLESS = K.GEN_INTROS_ENDLESS || [], FINALE_LINES = K.FINALE_L
 const reactsOf = (name) => RIVAL_REACTS[name] || RIVAL_REACTS[first(name)] || Object.keys(RIVAL_REACTS).reduce((o, k) => o || (first(k) === first(name) ? RIVAL_REACTS[k] : null), null) || {};
 const byFirst = (tbl, name) => (tbl[name] != null ? tbl[name] : Object.keys(tbl).reduce((o, k) => (o != null ? o : first(k) === first(name) ? tbl[k] : null), null));
 const POP = (key, fb) => pickLine(POP_LINES[key]) || fb;
+// Chad claims one more 'win' every time he says so: the single 1xxx number in a Chad line counts up for ever (S.chadClaim)
+const chadFix = (t) => {
+  if (typeof t !== 'string' || !/Chad/.test(t) || !/\b1\d{3}\b/.test(t)) return t;
+  return t.replace(/\b1\d{3}\b/, () => { S.chadClaim = (S.chadClaim | 0) + 1; try { saveUI(); } catch (e) { /* later */ } return String(S.chadClaim); });
+};
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -71,7 +76,7 @@ try { prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches; }
 const S = { music: true, sfx: true, mvol: 1, svol: 1, haptics: true, reduced: false, redSet: false, tutDone: false, tutTries: 0,
   sens: 1.6, lefty: false, q: 1, qT: 0, qs: 0, gfx: 'auto', frenzySeen: false, bestGap: 0, tutSkipped: [], seenHaz: [], revealSeen: false,
   lowSeen: 0, streakLostDay: -1, welcomeAt: 0, genIntroSeen: 0, cashHint: false, finaleSeen: false, dynastySeen: false,
-  cashDone: false, cashN: 0, drillSeen: false };
+  cashDone: false, cashN: 0, drillSeen: false, tutReplay: false, zoneFirst: [], zoneLoss: [], clues: [], chadClaim: 1000, lessonTries: {}, bestProg: 0 };
 try { const o = JSON.parse(localStorage.getItem(UI_KEY) || 'null'); if (o && typeof o === 'object') for (const k of Object.keys(S)) if (typeof o[k] === typeof S[k]) S[k] = o[k]; } catch (e) { /* ignore */ }
 // an explicit choice wins, otherwise follow the system setting
 if (!S.redSet) S.reduced = prefersReduced;
@@ -79,7 +84,10 @@ if (!S.redSet) S.reduced = prefersReduced;
 { const SENS_MAP = { 1: 1.2, 1.35: 1.6, 1.8: 2.1 }; if (SENS_MAP[S.sens]) S.sens = SENS_MAP[S.sens]; if (![1.2, 1.6, 2.1].includes(S.sens)) S.sens = 1.6; }
 if (!Array.isArray(S.tutSkipped)) S.tutSkipped = [];
 if (!Array.isArray(S.seenHaz)) S.seenHaz = [];
+for (const k of ['zoneFirst', 'zoneLoss', 'clues']) if (!Array.isArray(S[k])) S[k] = [];
 if (!['auto', 'full', 'lite'].includes(S.gfx)) S.gfx = 'auto';
+if (!(S.chadClaim >= 1000)) S.chadClaim = 1000;
+if (!S.lessonTries || typeof S.lessonTries !== 'object' || Array.isArray(S.lessonTries)) S.lessonTries = {};
 const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
 // players who already swam before the tutorial existed do not need it
 if (meta.runs > 0 && !S.tutDone && !S.tutTries) { S.tutDone = true; saveUI(); }
@@ -89,6 +97,8 @@ function applyAudio() {
   try { if (A.setCalm) A.setCalm(!!S.reduced); } catch (e) { /* optional */ }
 }
 function unlock() {
+  // a hidden tab never wakes the band (a late focus or pointer event while switching apps)
+  if (document.hidden) return;
   A.unlock();
   if (A.ctx && (A._suspended || A.ctx.state === 'suspended')) { try { A.resume(); } catch (e) { /* ignore */ } }
 }
@@ -110,8 +120,12 @@ try {
   if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
 } catch (e) { /* old browser */ }
 // the very first tap anywhere starts the band (quietly, behind the menu filter)
-document.addEventListener('pointerdown', () => {
+document.addEventListener('pointerdown', (e) => {
   unlock();
+  if (e.pointerType === 'touch') touchUsed = true;
+  // the egg finale: a tap after the first 0.8 s goes straight to the result card
+  if (mode === 'race' && finHold) finishSkip();
+  else if (mode === 'race' && birthOn) birthSkip();
   if (!A.on) { A.on = true; if (mode !== 'race') A.intensity = 0.3; }
 }, { capture: true });
 
@@ -120,7 +134,9 @@ let lastBuzz = 0;
 function buzz(pat, force) {
   if (!S.haptics || !navigator.vibrate) return;
   const now = performance.now(); if (!force && now - lastBuzz < 70) return; lastBuzz = now;
-  try { navigator.vibrate(pat); } catch (e) { /* not allowed */ }
+  // every buzz is at least 12 ms: shorter ones do nothing on most phones (pauses in a pattern stay as they are)
+  const v = Array.isArray(pat) ? pat.map((x, i) => (i % 2 ? x : Math.max(12, x | 0))) : Math.max(12, pat | 0);
+  try { navigator.vibrate(v); } catch (e) { /* not allowed */ }
 }
 // camera feel
 const trauma = (a, dx, dy) => { if (R.addTrauma) R.addTrauma(S.reduced ? a * 0.3 : a, dx, dy); else R.shake = Math.max(R.shake, a * 14); };
@@ -134,14 +150,14 @@ window.game = { get race() { return race; }, get meta() { return meta; }, get se
 function demo() { race = new Race(newMeta(), Math.random, { autopilot: true }); race.demo = true; R.camY = null; }
 
 const OVERLAYS = ['title', 'intro', 'cards', 'result', 'shop', 'album', 'pause', 'settings', 'welcome'];
-function show(id) { for (const o of OVERLAYS) $(o).classList.toggle('hide', o !== id); if (id !== 'cards') $('cards').classList.remove('out'); $('ver').classList.toggle('hide', id !== 'title'); }
+function show(id) { if (id !== 'title' && R.titleHero) R.titleHero(false); for (const o of OVERLAYS) $(o).classList.toggle('hide', o !== id); if (id !== 'cards') $('cards').classList.remove('out'); $('ver').classList.toggle('hide', id !== 'title'); }
 function hud(on) {
   for (const id of ['hud', 'dashBtn', 'pauseBtn']) $(id).classList.toggle('hide', !on);
   // body.racing re-anchors the hint and the toast under the HUD; body.egg hides the coach strip under the egg panel
   document.body.classList.toggle('racing', !!on);
   if (!on) {
     setC(document.body, 'egg', false); setC($('pauseBtn'), 'off', false); lessonEnd();
-    $('combo').style.opacity = 0; H.combo._op = 0; setC(DU.ui, 'hide', true); tutHide(); coClear();
+    $('combo').style.opacity = 0; H.combo._op = 0; setC(document.body, 'comboOn', false); setC(DU.ui, 'hide', true); tutHide(); coClear();
     coachClear(); $('hint').style.opacity = 0; $('count').className = ''; setC($('tutTarget'), 'hide', true); dashHoldEnd();
   } else requestAnimationFrame(measureHud);
 }
@@ -149,20 +165,41 @@ function hud(on) {
 function measureHud() {
   const h = $('hud'), hh = h.offsetHeight; if (!hh) return;
   document.documentElement.style.setProperty('--hudB', hh + 'px');
+  // the renderer's copies (logical units): where the HUD ends, and the DASH button's box (labels keep clear of it)
+  { const c = cv.getBoundingClientRect(), kk = c.width ? VIEW_W / c.width : (R.cssK || 1); hudBottomL = hh * (R.cssK || kk);
+    const d = $('dashBtn').getBoundingClientRect(); dashAvoidL = d.width && c.width ? { x: (d.left - c.left) * kk, y: (d.top - c.top) * kk, w: d.width * kk, h: d.height * kk } : null;
+    if (H && H.tick) H.tick._res = null; }
   // in landscape the HUD is a side gutter, so nothing in the tube is under it
   const land = landscape();
   R.padTop = land ? 0 : hh;
   // the bottom: the combo strip while it shows, otherwise the room it keeps (safe area + 104 px). Landscape: a gutter again.
   const cb = $('combo'), r = cb.getBoundingClientRect(), ab = APP.getBoundingClientRect().bottom;
   R.padBot = land ? 0 : Math.max(0, Math.round(ab - (H.combo._op === 1 ? r.top : r.bottom)));
+  // the egg zone: the duel panel sits low (above the DASH row), so Kevin is framed above it
+  if (!land && document.body.classList.contains('egg') && !DU.ui.classList.contains('hide')) { const dr = DU.ui.getBoundingClientRect(); if (dr.height) R.padBot = Math.max(R.padBot, Math.round(ab - dr.top + 6)); }
+  document.documentElement.style.setProperty('--padBot', R.padBot + 'px');
+  measureBankTarget();
   // rival name tags: a row is only used when it has room, so a tag never runs into the rank, the gas bar or the chips
   const pr = $('prog').getBoundingClientRect(), rr = $('rankRow').getBoundingClientRect(), er = $('energyRow').getBoundingClientRect(), mr = $('mutRow').getBoundingClientRect();
   const below = Math.min(er.top, mr.height > 0 ? mr.top : 1e9);
   tagRowOk[0] = pr.top - rr.bottom >= 9;
-  tagRowOk[1] = below - pr.top >= 24;
+  // the lower row's tag (from 9 px to 22 px under the bar's top) keeps 4 px off the gas bar and the mutation chips
+  tagRowOk[1] = below - pr.top >= 26;
   if (!tagRowOk[0] && !tagRowOk[1]) tagRowOk[0] = true;
 }
 let tagRowOk = [true, true];
+// banked helices fly to the HUD's DNA counter (logical screen units, as the renderer wants them)
+function measureBankTarget() {
+  const el = $('dnaHud'); if (!el || el.classList.contains('hide')) return;
+  const r = el.getBoundingClientRect(), c = cv.getBoundingClientRect(); if (!r.width || !c.width) return;
+  const k = VIEW_W / c.width;
+  R.bankTarget = { x: (r.left + r.width / 2 - c.left) * k, y: (r.top + r.height / 2 - c.top) * k };
+}
+R.onBankLand = (i, n) => {
+  sfx('dnaTick', { i, n });
+  const el = $('dnaHud'); if (!el || S.reduced || !el.animate) return;
+  el.animate([{ transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-out' });
+};
 // the same rule the CSS uses for the landscape layout, so JS and CSS never disagree
 const LAND_MQ = (() => { try { return matchMedia('(orientation:landscape) and (max-height:520px)'); } catch (e) { return null; } })();
 const landscape = () => (LAND_MQ ? LAND_MQ.matches : innerWidth > innerHeight && innerHeight <= 520);
@@ -206,6 +243,8 @@ function buy(id) {
 }
 
 // ------------------------------------------------------------------ title
+// the factory payout sound's level: bank under 25%, 25-60%, 60-99%, full
+const factoryLv = (f) => (f >= 0.99 ? 3 : f >= 0.6 ? 2 : f >= 0.25 ? 1 : 0);
 function capHours() { const v = C.factoryCapHours; let h = 12; try { h = typeof v === 'function' ? v(meta) : +v; } catch (e) { /* default */ } return h > 0 ? h : 12; }
 function hm(h) { const m = Math.max(0, Math.round(h * 60)); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; }
 function renderFactory() {
@@ -220,9 +259,10 @@ function renderFactory() {
 $('bankBtn').onclick = () => {
   idleTick(meta, Date.now());
   const rate = Math.max(1, factoryRate(meta)), cap = rate * capHours(), wasFull = meta.bank >= cap - 0.5;
+  const fill = clamp((meta.bank || 0) / Math.max(1, cap), 0, 1);
   const d = collectBank(meta); if (d < 1) return;
   const h = d / rate, key = wasFull ? 'full' : h < 1 ? '<1' : h < 4 ? '1-4' : h < 8 ? '4-8' : '8+';
-  sfx('dna'); sfx('buy'); buzz(20); save();
+  sfx('factory', factoryLv(fill)); buzz(20); save();
   toast(fillLine(pickLine(AWAY_LINES[key]) || '+{dna} DNA collected!', { dna: fmt(d) }));
   if (race) R.pop(VIEW_W / 2, race.p.y + 200, '+' + fmt(d) + ' DNA', '#7dffb0', 26);
   titleStats(); renderFactory(); badges();
@@ -231,6 +271,18 @@ function titleStats() {
   $('titleStats').innerHTML = `<div class="stat"><b>${meta.best >= TOTAL_SWIMMERS ? '-' : '#' + fmt(meta.best)}</b>best place</div><div class="stat"><b>${fmt(meta.dna)}</b>DNA 🧬</div><div class="stat"><b>${meta.gen + 1}</b>generation</div><div class="stat"><b>${meta.babies.length}</b>babies</div>`;
 }
 const streakOf = () => +(meta.dailyStreak ?? meta.streak ?? 0) || 0;
+// the daily's rule (systems: C.dailyRule(day) -> an event id, or race.dailyRule) and today's medal (meta.dailyMedal)
+const MEDAL_IC = { 1: '🥉', 2: '🥈', 3: '🥇' };
+function dailyRuleId(day) {
+  try { if (typeof C.dailyRule === 'function') { const r = C.dailyRule(day); return r && typeof r === 'object' ? r.id : r || null; } } catch (e) { /* optional */ }
+  return race && race.daily === day && race.dailyRule ? race.dailyRule : null;
+}
+function dailyRuleShort(day) { const id = dailyRuleId(day); return id ? EVENT_SHORT[id] || (C.RACE_EVENTS && C.RACE_EVENTS[id] && C.RACE_EVENTS[id].name) || '' : ''; }
+function dailyMedalToday(day) {
+  const m = meta.dailyMedal; if (m == null) return 0;
+  if (typeof m === 'object') return m.day === day ? clamp(m.tier | 0, 0, 3) : (m[day] != null ? clamp(m[day] | 0, 0, 3) : 0);
+  return meta.dailyDay === day ? clamp(m | 0, 0, 3) : 0;
+}
 function newBadge(el, on) {
   let n = el.querySelector('.newb');
   if (!on) { if (n) n.remove(); return; }
@@ -238,11 +290,15 @@ function newBadge(el, on) {
 }
 function title() {
   mode = 'title'; demo(); hud(false); show('title'); muffle(false); menuMusic(); govHold(3);
+  birthOn = null; try { if (typeof R.birthEnd === 'function') R.birthEnd(); } catch (e) { /* optional */ }
+  pushGuard();
   save();
   titleStats(); renderFactory();
   // the very first visit: just the story and one big SWIM button; the rest opens up after the first swim
   const fresh = meta.runs === 0;
   $('title').classList.toggle('fresh', fresh);
+  // art's idle Kevin with his #1,000,000 bib, drawn into his own canvas above the logo on the very first visit
+  if (R.titleHero) R.titleHero(fresh && innerHeight > 600, $('heroCv'));
   // after the first visit the subtitle rotates through the taglines (the story line stays for the very first look)
   const tl = !fresh && K.TITLE_TAGLINES && K.TITLE_TAGLINES.length ? fillLine(pickLine(K.TITLE_TAGLINES), { n: fmt(kevinNo()) }) : '';
   if (tl) setT($('titleSub'), tl); else { const ts = $('titleSub'); ts._v = null; ts.innerHTML = '1,000,000 swimmers. 1 egg.<br>You start dead last.'; }
@@ -266,16 +322,18 @@ function title() {
     } else sub = done && meta.dailyBest < TOTAL_SWIMMERS ? 'today: #' + fmt(meta.dailyBest) : 'same tube for everyone today';
     if (alive && !done && n > 0) S.streakLostDay = -1;
     if (best > 1) sub += ` · best ${best}`;
-    // a week of pips (day 7 pays double), what the next counted daily pays, and when the next tube opens
+    // a week of pips (day 7 pays triple), what the next counted daily pays, and when the next tube opens
     const pos = alive && n > 0 ? ((n - 1) % 7) + 1 : 0;
-    const pips = Array.from({ length: 7 }, (_, i) => `<i class="${i < pos ? 'on' : ''}${i === 6 ? ' x2' : ''}"></i>`).join('');
+    const pips = Array.from({ length: 7 }, (_, i) => `<i class="${i < pos ? 'on' : ''}${i === 6 ? ' x3' : ''}"${i === 6 ? ' title="Day 7 pays x3"' : ''}></i>`).join('');
     const bonus = typeof C.dailyBonusFor === 'function' ? C.dailyBonusFor(done ? n + 1 : alive ? n + 1 : 1, meta.gen) : 0;
     const left = (today + 1) * 86400000 - now;
     const nxt = (bonus > 0 ? `${done ? 'Tomorrow' : 'Today'}: +${fmt(bonus)} DNA` : '') + (done ? `${bonus > 0 ? ' · ' : ''}next tube in ${hm(left / 3600000)}` : '');
-    $('dailyBtn').innerHTML = `Daily Swim 📅 <small>${esc(sub)}</small><span class="dpips">${pips}</span>${nxt ? `<small class="dnx">${esc(nxt)}</small>` : ''}`;
+    const rule = dailyRuleShort(today), tier = dailyMedalToday(today);
+    const medals = [1, 2, 3].map((m) => `<i class="m${m}${tier >= m ? ' on' : ''}">${tier >= m ? MEDAL_IC[m] : ''}</i>`).join('');
+    $('dailyBtn').innerHTML = `Daily Swim 📅 ${rule ? `<small class="drule">${esc(rule)}</small>` : ''}<small>${esc(sub)}</small><span class="dpips">${pips}</span><span class="dmed" aria-label="today's medal">${medals}</span>${nxt ? `<small class="dnx">${esc(nxt)}</small>` : ''}`;
   }
   const seen = (meta.synergiesSeen || []).length;
-  $('albumBtn').innerHTML = `Baby Album 👶 <small>${meta.babies.length} babies · Combos ${seen}/${SYNERGIES.length}</small>`;
+  $('albumBtn').innerHTML = `Baby Album 👶 <small>${meta.babies.length} babies · Mashups ${seen}/${SYNERGIES.length}</small>`;
   const reveal = !fresh && !S.revealSeen;
   newBadge($('shopBtn'), reveal); newBadge($('albumBtn'), reveal);
   if (reveal) { S.revealSeen = true; saveUI(); }
@@ -311,12 +369,13 @@ function welcomeTick(dt) {
   const a = welcomeAnim; a.t += dt;
   const k = clamp(a.t / a.dur, 0, 1), e = 1 - Math.pow(1 - k, 3);
   setT($('wbDna'), '+' + fmt(a.n * e) + ' 🧬');
-  a.tick -= dt; if (a.tick <= 0 && k < 1) { a.tick = 0.12; sfx('dna'); }
+  a.tick -= dt; if (a.tick <= 0 && k < 1) { a.tick = 0.12; sfx('countTick', k); }
   if (k >= 1) welcomeAnim = null;
 }
 $('wbCollect').onclick = () => {
   welcomeAnim = null; idleTick(meta, Date.now());
-  const d = collectBank(meta); if (d >= 1) { sfx('dna'); sfx('buy'); buzz(20); }
+  const fill = clamp((meta.bank || 0) / Math.max(1, factoryRate(meta) * capHours()), 0, 1);
+  const d = collectBank(meta); if (d >= 1) { sfx('factory', factoryLv(fill)); buzz(20); }
   save(); setT($('wbDna'), '+' + fmt(d) + ' 🧬'); setT($('wbLine'), 'Collected! It is all in the bank.');
   setC($('wbCollect'), 'hide', true); setT($('wbClose'), 'Back');
   const n = affordable().length;
@@ -333,6 +392,8 @@ function intro(done, lines = INTRO) {
   const end = () => { clearTimeout(introTO); $('intro').onclick = null; $('introSkip').onclick = null; if (lines === INTRO) meta.introSeen = true; save(); done(); };
   const next = () => {
     clearTimeout(introTO);
+    // the story waits while the tab is hidden: nobody misses a line, and the swim never starts in the background
+    if (document.hidden) { introTO = setTimeout(next, 500); return; }
     if (i >= lines.length) return end();
     const t = lines[i++], el = $('introTxt');
     el.textContent = t; el.classList.toggle('big', t === 'SWIM.' || t === 'Dead last.' || t === 'NEW GENERATION');
@@ -355,6 +416,9 @@ function genStory() {
   out.push(`${b.name}${fw ? '. First words: ' + fw : ''}`);
   // the DNA multiplier jump is shown on the result screen, where the numbers live
   out.push(pickLine(GEN_UNLOCK_LINES) || 'A new generation!');
+  // what the new generation changes in the tube (one line)
+  const GS = K.GEN_STEP_LINES || {}, step = meta.gen === 1 ? GS.hazGen : meta.gen === 2 ? GS.chaseOn : GS.genFaster;
+  if (step) out.push(step);
   out.push(`${b.name} grew up. Their Kevins are lining up.`);
   // index 0 is generation 2 (the hero is generation 1); from generation 11 the endless pool cycles
   const gn = meta.gen + 1, v = { heir: heirName() || b.name, grandad: bs.length >= 2 ? bs[bs.length - 2].name : 'Dad', gen: gn };
@@ -381,7 +445,8 @@ let runOpts = {};
 function start(opts) {
   unlock(); A.on = true;
   runOpts = opts || {};
-  try { A.newRun(); } catch (e) { /* optional */ }
+  // the daily's music is seeded too: the same tube sounds the same for everyone today
+  try { A.newRun(runOpts.daily && typeof C.dailySeed === 'function' ? C.dailySeed() : undefined); } catch (e) { /* optional */ }
   muffle(false); setTension(0);
   const o = { autopilot: meta.autopilot && lv(meta, 'gps') > 0 };
   if (runOpts.daily && typeof C.dailySeed === 'function') o.seed = C.dailySeed();
@@ -393,12 +458,15 @@ function start(opts) {
   passedOnce = new Set(); rivalIntro = RIVALS.map(() => false); eggClaimed = false; eggOn = false; rivalF = 0; rivalK = -1; drillN = 0; quip = { zi: -1, done: 0 };
   nemAtStart = nemesisOf();
   simAcc = 0; coreHas = {}; shoveAt = {}; bonkN = 0; lowDone = false; lowRingT = 0; hazT = 0; hazSlowT = 0; hazAt = -99; crawlOn = false; threatSaid = false; leadSaid = 0;
-  tut = null; clearInput(); resetHud();
-  crawlN = 0; crawlAt = -99; nearAt = []; kevLeadFx = false; fruitN = 0; paceSaid = false; paceV = null; vEma = 0; tierTagSaid = false;
+  tut = null; frenzyCoachPend = false; clearInput(); resetHud(); draftK = -1; draftT = 0; draftSaid = new Set(); draftZone = -1;
+  crawlN = 0; crawlAt = -99; nearAt = []; kevLeadFx = false; kindPopT = -9; fruitN = 0; paceSaid = false; paceV = null; vEma = 0; tierTagSaid = false;
   lessonEnd(); cashLast = -99; wallSide = 0; goalHit = false; hazPend = null;
+  overAt = -1; finHold = null; birthOn = null; endPot = null; lastDashAt = -99; frozenRecent = 0; finPopUntil = -99; laterQ = []; comboSeenAt = -1; comboIntroDone = false; threatOnB = false; intenseOn = false;
+  synHoldAt = -1; drillTapLog = []; drillCounted = 0; gaspDone = false; photoDone = false; tellOn = 0; lastDrillTapId.clear(); dnaHudV = -1;
+  setC(document.body, 'threat', false); setC(document.body, 'intense', false); setC($('dnaHud'), 'hide', true);
   R.teach = meta.runs < 3;
   // the OS back swipe pauses the swim instead of leaving the page
-  try { if (!(history.state && history.state.mto)) history.pushState({ mto: 1 }, ''); } catch (e) { /* sandboxed */ }
+  pushGuard();
   mode = 'race'; show(null); hud(true);
   // the very first swim: a quick 2, 1, GO (0.6 s a number)
   countT = runOpts.countdown ? (firstSwim ? 1.2 : 1.8) : 0; goT = 0; lastCount = 0; ghostT = 0;
@@ -408,23 +476,55 @@ function start(opts) {
   const tk = firstSwim ? null : threatName();
   // the bounty goes on the zone 1 banner; when it takes the line, the threat gets its own banner when it shows up
   const gl = firstSwim ? '' : nextGoalLine(meta.goal);
-  callout('zone', { t: ZONES[0].name, z: `${kevinLabel()} · ${race.daily != null ? 'DAILY SWIM · ' : ''}ZONE 1`, c: gl ? '🎯 ' + gl : tk ? threatLine(tk) : null, sec: firstSwim ? 1.2 : gl || tk ? 2.6 : 1.8 });
+  const zo = { t: ZONES[0].name, z: `${kevinLabel()} · ${race.daily != null ? 'DAILY SWIM · ' : ''}ZONE 1`, c: gl ? '🎯 ' + gl : tk ? threatLine(tk) : null, sec: firstSwim ? 1.6 : gl || tk ? 2.6 : 1.8 };
+  // no bounty and no threat to name: say what this generation's field is like (systems: C.freshGenActive, C.fieldInfo)
+  if (!zo.c && !firstSwim) { const hl = genHelpLine(); if (hl) { zo.c = hl; zo.sec = 2.4; } }
+  // swim 1: the zone banner waits for GO (+0.4 s), so the countdown and the ghost finger have the screen to themselves
+  countFromPause = false; launchCo = null;
+  if (firstSwim) { zo.c = FIRST_SWIM_LAUNCH || null; launchCo = zo; if (countT <= 0) goNow(); }
+  else callout('zone', zo);
   if ((tk && !gl) || firstSwim) threatSaid = true;
   goalPill();
   const tired = !firstSwim && race.daily == null && (meta.raceLosses | 0) > 0;
+  // swim 1: the minimap pips, the name tags and the distance text wait until the lesson is over
+  setC(document.body, 'tutHud', false); setC(document.body, 'hudIn', false);
   if (!S.tutDone && !race.autopilot) {
     tutStart();
+    if (firstSwim) setC(document.body, 'tutHud', true);
     // the first swim: no launch line, the steering card and the ghost finger say it all
     if (firstSwim) { tutNext(); ghostT = 1.2; }
     else coach(zoneCoach('launch'), 4.5, 1);
   }
   else if (race.autopilot) hint('Autopilot is ON. Sit back. Tap DASH if you like.', 4, 1);
-  else if (meta.runs < 3) hint(K.START_HINT || 'Drag to steer. Tap DASH to zoom.', 4, 1);
-  // the named rivals were eased off after a loss to them: say so, it is a reason to go again
-  else if (tired) coach(K.RIVALS_TIRED || 'The big names look tired today. Pounce!', 3.2, 1);
+  // the named rivals were eased off after a loss to them: say so, it is a reason to go again (it wins over the early hint)
+  else if (tired) coach(K.RIVALS_TIRED || 'The big names look tired today. Pounce!', 3.4, 1, true);
+  else if (meta.runs < 3) hint(touchUsed ? K.START_HINT || 'Drag to steer. Tap DASH to zoom.' : K.START_HINT_KEYS || K.START_HINT || 'Arrows steer. SPACE to zoom.', 4, 1);
   else coach(zoneCoach('launch'), 3);
+  // started in a tab that went to the background meanwhile: wait on the pause card
+  if (document.hidden) pause();
 }
 
+// the start card's field line: a fresh family (rivals ease off) or this generation's field numbers
+function genHelpLine() {
+  const HL = K.RESULT_HELP_LINES || {};
+  try {
+    if (typeof C.freshGenActive === 'function' && HL.freshGen && C.freshGenActive(meta)) return HL.freshGen;
+    if (typeof C.fieldInfo === 'function' && HL.genField && (meta.gen | 0) >= 1) {
+      const fi = C.fieldInfo(meta); if (!fi || typeof fi !== 'object') return '';
+      const sp = +(fi.speedPct ?? fi.speed), fr = +(fi.fruit ?? fi.fruitMul ?? fi.fruitMult);
+      if (!Number.isFinite(sp) || !Number.isFinite(fr)) return '';
+      return fillLine(HL.genField, { gen: fi.gen != null ? fi.gen : meta.gen + 1, speed: Math.round(sp), fruit: +fr.toFixed(2) });
+    }
+  } catch (e) { /* optional */ }
+  return '';
+}
+// the swim-1 zone banner, held until GO
+let launchCo = null;
+function goNow() {
+  if (!launchCo) return;
+  const o = launchCo; launchCo = null;
+  later(0.4, () => { if (race && !race.over && !race.demo) callout('zone', o); });
+}
 // Coach Gonad's zone line: the plain one for the first 3 swims, then a rotating pool that knows Kevin's number
 function zoneCoach(id) {
   if (meta.runs >= 3 && Array.isArray(COACH_SHORT_MORE[id]) && COACH_SHORT_MORE[id].length) {
@@ -442,7 +542,7 @@ function coach(t, sec = 3.2, pri = 0, force = false) {
   if (!t) return false;
   if (!force && pri < 2 && tutCardUp()) return false;
   if (coachT > 0 && pri < coachPri) return false;
-  const c = $('coach'); setT(c, t); c.classList.add('on'); coachT = sec; coachPri = pri; coachLong = false; return true;
+  const c = $('coach'); setT(c, chadFix(t)); c.classList.add('on'); coachT = sec; coachPri = pri; coachLong = false; return true;
 }
 function hint(t, sec = 3, pri = 0) {
   if (eggOn && pri < 2) return false;
@@ -471,9 +571,12 @@ function threatLine(name) { const nem = nemesisOf(); return nem === first(name) 
 
 // ------------------------------------------------------------------ callouts: ONE queue for banners and milestones
 const PRI = { drill: 5, synergy: 4, eggClaim: 4, goal: 3, event: 3, zone: 2, milestone: 1 };
-let coCur = null, coQ = [];
+let coCur = null, coQ = [], bannerBoxL = null, hudBottomL = null, dashAvoidL = null;
 function callout(kind, o) {
   o.kind = kind; o.pri = PRI[kind] || 2; o.at = clock; o.sec = o.sec || (o.c ? 2.2 : 1.6);
+  // a MASHUP, a zone or a goal banner waits (2.5 s at most) until nothing hostile is within 900 px ahead: never a banner
+  // over a threat. One that still has to show over one goes up under the HUD (.top)
+  if (HOLD_KINDS.has(kind) && !o.held && race && !race.demo && mode === 'race' && hostileAhead(900)) { o.held = true; synWait.push(o); if (synHoldAt < 0) synHoldAt = clock; return; }
   if (!coCur) return coShow(o);
   if (o.pri > coCur.pri && coCur.shown > 0.35) { coEnd(); return coShow(o); }
   coQ.push(o); coQ.sort((a, b) => b.pri - a.pri || a.at - b.at); if (coQ.length > 5) coQ.length = 5;
@@ -482,67 +585,119 @@ function coShow(o) {
   coCur = o; o.shown = 0; o.left = o.sec;
   if (o.kind === 'milestone') {
     const rr = $('rankRow'); setT($('rankLbl'), o.t); rr.style.setProperty('--mc', o.col || '#ffd75c');
-    rr.classList.remove('ms'); void rr.offsetWidth; rr.classList.add('ms'); o.left = Math.min(o.sec, 1.4);
+    rr.classList.remove('ms'); void rr.offsetWidth; rr.classList.add('ms'); o.left = Math.min(o.sec, 1.4); H.tick._res = null;
     return;
   }
   const b = $('banner');
-  // a new synergy banner takes the old one's long rule off the coach strip
-  if (o.kind === 'synergy' && coachLong && coachT > 0) coachClear();
+  // a new MASHUP banner wipes the coach strip: one text at a time
+  if (o.kind === 'synergy') coachClear();
   // mid-combo, in FRENZY or at the egg nobody reads: one short line, no kicker, no caption, gone in 1.4 s.
   // In the egg zone, at a drill or a claim the banner also moves up under the HUD with no box, so Kevin stays clear
   const p = race && race.p, eggish = !!p && !!race && (zoneIndex(p.y) === C.EGG_I || !!race.drill || eggOn);
   const intense = !!p && (p.combo >= 10 || p.frenzyT > 0 || eggish);
-  b.classList.toggle('top', eggish);
+  let top = eggish || !!o.mustTop;
+  b.classList.toggle('top', top);
   const t = intense && o.short ? o.short : o.t, c = intense ? '' : o.short || o.c || '';
   if (intense) o.left = Math.min(o.left, 1.4);
-  b.querySelector('.t').textContent = t; b.querySelector('.z').textContent = intense || eggOn ? '' : o.z || ''; b.querySelector('.c').textContent = c;
+  b.querySelector('.t').textContent = t; b.querySelector('.z').textContent = (intense || eggOn) && !o.zKeep ? '' : o.z || ''; b.querySelector('.c').textContent = c;
   b.querySelector('.c').style.display = c ? '' : 'none';
   b.classList.toggle('intense', intense);
   b.classList.toggle('red', o.kind === 'eggClaim' || !!o.red); b.style.setProperty('--bc', o.col || '#ff5c7a');
   b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+  // never within 90 px of Kevin: a banner whose band would cover him goes up under the HUD instead
+  const k = cv.clientWidth / VIEW_W;
+  if (!top && p && R.camY != null && k > 0 && !landscape()) {
+    const ky = R.sy(p.y) * k + cv.offsetTop, y0 = b.offsetTop, y1 = y0 + b.offsetHeight;
+    if (y1 > ky - 90 && y0 < ky + 90) { top = true; b.classList.add('top'); }
+  }
+  // where the banner is, for the renderer (logical units): canvas signs and labels keep out of its band
+  bannerBoxL = k > 0 ? { y0: (b.offsetTop - cv.offsetTop) / k, y1: (b.offsetTop + b.offsetHeight - cv.offsetTop) / k } : null;
   // the full rule follows on the coach strip, but only when there is a moment to read it
   if (o.long && o.long !== c && p && p.combo < 10 && !eggOn) o.coachLong = true;
 }
 function coEnd() {
   if (!coCur) return;
   if (coCur.coachLong && race && race.p.combo < 10 && !eggOn && coach(coCur.long, clamp(1.6 + coCur.long.length * 0.035, 2.2, 3.4), 1)) coachLong = true;
-  if (coCur.kind === 'milestone') { $('rankRow').classList.remove('ms'); setT($('rankLbl'), 'YOUR PLACE'); }
-  else $('banner').classList.remove('on');
+  if (coCur.kind === 'milestone') { $('rankRow').classList.remove('ms'); setT($('rankLbl'), 'YOUR PLACE'); H.tick._res = null; }
+  else { $('banner').classList.remove('on'); bannerBoxL = null; }
   coCur = null;
 }
 function coTick(dt) {
   if (coCur) { coCur.shown += dt; coCur.left -= dt; if (coCur.left <= 0) coEnd(); }
-  if (!coCur && coQ.length) { coQ = coQ.filter((q) => clock - q.at < 2); const n = coQ.shift(); if (n) coShow(n); }
+  if (!coCur && coQ.length) { coQ = coQ.filter((q) => q.keep || clock - q.at < 2); const n = coQ.shift(); if (n) coShow(n); }
+  // held MASHUP banners go out once the lane is clear (or after 2.5 s)
+  if (synWait.length && (!race || !hostileAhead(900) || clock - synHoldAt >= 2.5)) {
+    const w = synWait, still = !!race && hostileAhead(900); synWait = []; synHoldAt = -1;
+    for (const o of w) { o.at = clock; o.mustTop = still; callout(o.kind, o); }
+  }
 }
-function coClear() { coQ = []; coEnd(); }
+function coClear() { coQ = []; synWait = []; synHoldAt = -1; coEnd(); }
+let synWait = [], synHoldAt = -1;
+const HOLD_KINDS = new Set(['synergy', 'zone', 'goal']);
+// a zone banner; the first ever arrival in zones 2 to 7 tells its little story (K.ZONE_FIRST): three short beats of 1.4 s,
+// the first one in place of the subtitle
+function zoneArrive(zi, o) {
+  const z = ZONES[zi], lines = z && zi >= 1 && zi <= 6 && K.ZONE_FIRST ? K.ZONE_FIRST[z.id] : null;
+  if (race && !race.demo && Array.isArray(lines) && lines.length && !S.zoneFirst.includes(z.id)) {
+    S.zoneFirst.push(z.id); saveUI();
+    lines.slice(0, 3).forEach((l, i) => callout('zone', i ? { t: o.t, z: o.z, c: l, sec: 1.4, keep: true } : Object.assign({}, o, { c: l, sec: 1.4, keep: true })));
+    return;
+  }
+  callout('zone', o);
+}
+// the threat lane: a hostile within range ahead of Kevin, with the same filter the renderer's edge warnings use
+// (Big Macros anywhere, acid and goo only in Kevin's lane, goo gates on his side of the fork)
+function hostileAhead(range) {
+  if (!race || !race.p) return false;
+  const p = race.p;
+  for (const e of race.ents) {
+    if (e.dead) continue;
+    const dy = e.y - p.y; if (dy <= 0 || dy > range) continue;
+    if (e.t === 'gate') { if (e.side && p.side && e.side !== p.side) continue; return true; }
+    if (e.t === 'wbc') return true;
+    if ((e.t === 'acid' || e.t === 'goo') && Math.abs(e.x - p.x) <= (e.r || 0) + 60) return true;
+  }
+  return false;
+}
 const bannerUp = () => !!coCur && coCur.kind !== 'milestone';
 
 // ------------------------------------------------------------------ first-run tutorial (never blocks: every step times out)
 // A step is only credited once its card has been shown; a step the swim never got to is 'pre' (queued for next time), not 'skip'.
-const TUT_STEPS = [
-  { id: 'steer', ic: '👆', to: 4, d: { t: 'Drag anywhere to steer', s: 'Left, right, wiggle wiggle.' } },
-  { id: 'dash', ic: '⚡', to: 4, d: { t: 'Tap DASH for a burst!', s: 'Or tap with your other thumb.' } },
-  { id: 'fruit', ic: '🍓', to: 5, d: { t: 'Grab the fruit sugar', s: 'Fruit is energy. Eat fruit.' } },
-  { id: 'combo', ic: '🔥', to: 5, d: { t: 'Pass 3 in a row', s: 'Chain passes for a COMBO.' } },
-  { id: 'draft', ic: '💨', to: 5, d: { t: 'Tuck in BEHIND a rival', s: 'Free speed. Rude, but fast.' } },
-];
+const TUT_ALL = {
+  steer: { id: 'steer', ic: '👆', to: 5, d: { t: 'Drag anywhere to steer', s: 'Left, right, wiggle wiggle.' } },
+  dash: { id: 'dash', ic: '⚡', to: 3, d: { t: 'Tap DASH for a burst!', s: 'Or tap with your other thumb.' } },
+  fruit: { id: 'fruit', ic: '🍓', to: 5, d: { t: 'Grab the fruit sugar', s: 'Fruit is energy. Eat fruit.' } },
+  combo: { id: 'combo', ic: '🔥', to: 5, d: { t: 'Pass 3 in a row', s: 'Chain passes for a COMBO.' } },
+  cash: { id: 'cash', ic: '👇', to: 6, d: { t: 'Swipe DOWN to cash in!', s: 'Bank it before you bonk.' } },
+  draft: { id: 'draft', ic: '💨', to: 4, d: { t: 'Tuck in BEHIND a rival', s: 'Free speed. Rude, but fast.' } },
+};
+// swim 1 learns what keeps Kevin alive (steer, dash, fruit is GAS, draft); cashing in waits for swim 2's lesson card
+const TUT_FIRST = ['steer', 'dash', 'fruit', 'draft'].map((id) => TUT_ALL[id]);
+const TUT_REPLAY = ['steer', 'dash', 'fruit', 'combo', 'draft'].map((id) => TUT_ALL[id]);
+let TUT_STEPS = TUT_REPLAY;
 const TUT_DNA = 5;
-const tutText = (st) => { const x = TUT_TEXT[st.id]; return x && x.t ? x : st.d; };
+// keyboard players get the key names (K.TUT_TEXT_KEYS) for the steps that have them
+const tutText = (st) => { const kx = !touchUsed && K.TUT_TEXT_KEYS && K.TUT_TEXT_KEYS[st.id]; if (kx && kx.t) return kx; const x = TUT_TEXT[st.id]; return x && x.t ? x : st.d; };
+// where the lesson ends: zone 2 on swim 1 (the Acid Lagoon stays for the hazard look), zone 3 on a replay
+const tutEndZone = () => (firstSwim ? 1 : 2);
 let tut = null;
 function tutStart() {
-  tut = { on: true, i: -1, t: 0, st: {}, shown: {}, steer: 0, dirs: 0, lastDir: 0, draftT: 0, okT: 0, combo0: 0 };
+  TUT_STEPS = firstSwim ? TUT_FIRST : TUT_REPLAY;
+  tut = { on: true, i: -1, t: 0, st: {}, shown: {}, steer: 0, dirs: 0, lastDir: 0, draftT: 0, okT: 0, combo0: 0, cashSlow: false };
   // a second lesson only replays the steps that were missed last time
   const sk = S.tutSkipped || [];
   if (S.tutTries > 0 && sk.length) for (const x of TUT_STEPS) if (!sk.includes(x.id)) tut.st[x.id] = 'pre';
 }
 // steering counts once the finger has travelled 180 px and changed direction at least once
 function tutSteer(dx) {
+  lessonSteer(dx);
   if (!tut || !tut.on) return;
   tut.steer += Math.abs(dx);
   const sg = Math.sign(dx);
   if (sg && Math.abs(dx) >= 2) { if (tut.lastDir && sg !== tut.lastDir) tut.dirs++; tut.lastDir = sg; }
 }
 function tutDots() { return TUT_STEPS.filter((x) => tut.st[x.id] !== 'pre').map((x) => `<i class="${tut.st[x.id] === 'ok' ? 'ok' : tut.st[x.id] === 'skip' ? 'sk' : x === TUT_STEPS[tut.i] ? 'cur' : ''}"></i>`).join(''); }
+const tutCur = () => (tut && tut.on && tut.okT <= 0 && TUT_STEPS[tut.i] ? TUT_STEPS[tut.i].id : '');
 function tutNext() {
   if (!tut) return;
   let i = 0; while (i < TUT_STEPS.length && tut.st[TUT_STEPS[i].id]) i++;
@@ -552,7 +707,8 @@ function tutNext() {
   tut.shown[st.id] = true;
   if (st.id === 'combo') tut.combo0 = Math.floor(race ? race.p.combo : 0);
   if (st.id === 'draft') tut.draftT = 0;
-  el.querySelector('.ic').textContent = st.ic; el.querySelector('.tt').textContent = tx.t; el.querySelector('.ts').textContent = tx.s;
+  if (st.id === 'cash') tut.cashSlow = false;
+  el.querySelector('.ic').textContent = st.ic; el.querySelector('.tt').textContent = tx.t; el.querySelector('.ts').textContent = tx.s || '';
   el.querySelector('.tt').dataset.praise = (TUT_PRAISE[st.id] || 'NICE!') + ' +' + TUT_DNA + ' DNA';
   el.querySelector('.dots').innerHTML = tutDots();
   el.className = 'on step-' + st.id;
@@ -572,6 +728,8 @@ function tutMark(id) {
 function tutFinish() {
   if (!tut || !tut.on) return;
   tut.on = false; tutHide();
+  // swim 1: the race HUD fills in now (rival pips, name tags, the distance), with a little pop
+  if (document.body.classList.contains('tutHud')) { setC(document.body, 'tutHud', false); setC(document.body, 'hudIn', true); setTimeout(() => setC(document.body, 'hudIn', false), 500); requestAnimationFrame(measureHud); }
   const skipped = [], unseen = [];
   let met = 0;
   for (const st of TUT_STEPS) {
@@ -585,7 +743,7 @@ function tutFinish() {
   S.tutSkipped = missed;
   if (missed.length && (skipped.length >= 2 || unseen.length)) { S.tutTries = (S.tutTries || 0) + 1; S.tutDone = S.tutTries >= 2; }
   else S.tutDone = true;
-  if (S.tutDone) S.tutSkipped = [];
+  // a step still missed after the lessons stays in S.tutSkipped: it comes back once as a single card when its moment is live
   saveUI();
   if (!race || race.demo || race.over) return;
   if (!missed.length) { coach(TUT_TEXT.natural || "You're a natural!", 2.6, 2); sfx('milestone'); buzz([15, 25, 15]); }
@@ -596,6 +754,14 @@ function tutFinish() {
 function tutHide() { $('tut').className = ''; $('dashBtn').classList.remove('nudge'); }
 // ------------------------------------------------------------------ lessons: one #tut card outside the tutorial (cash in, drill)
 let lesson = null;
+function gasPulse() {
+  if (S.reduced) return;
+  const er = $('energyRow'), ef = $('efill');
+  try {
+    if (er.animate) er.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+    if (ef.animate) ef.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(1.8) saturate(.6)', offset: 0.3 }, { filter: 'brightness(1)' }], { duration: 300, easing: 'ease-out' });
+  } catch (e) { /* old browser */ }
+}
 function lessonShow(id, ic, tx, sec) {
   if (tut && tut.on) return false;
   const el = $('tut');
@@ -606,34 +772,94 @@ function lessonShow(id, ic, tx, sec) {
   return true;
 }
 function lessonEnd() { if (!lesson) return; lesson = null; if (!(tut && tut.on)) tutHide(); }
+// steering during a replayed steer lesson (the same rule as the tutorial: 180 px and one change of direction)
+function lessonSteer(dx) {
+  if (!lesson || !lesson.redo || lesson.id !== 'steer') return;
+  lesson.steer += Math.abs(dx); const sg = Math.sign(dx);
+  if (sg && Math.abs(dx) >= 2) { if (lesson.lastDir && sg !== lesson.lastDir) lesson.dirs++; lesson.lastDir = sg; }
+}
 // the cash lesson: the first pots worth cashing (bank 12+) slow the swim a beat and show how; up to 3 times, 20 s apart
 let cashLast = -99, lessonSlowT = 0;
 const CASH_TXT = () => {
   const x = TUT_TEXT.cash || { t: 'Swipe DOWN to cash in!', s: 'Bank it before you bonk.' };
-  return touchUsed ? x : { t: K.CASH_HINT_KEYS || 'Press S to cash in your combo!', s: x.s || '' };
+  const kx = K.TUT_TEXT_KEYS && K.TUT_TEXT_KEYS.cash;
+  return touchUsed ? x : kx && kx.t ? kx : { t: K.CASH_HINT_KEYS || 'Press S to cash in your combo!', s: x.s || '' };
 };
 function lessonTick(dt) {
   if (lessonSlowT > 0) lessonSlowT -= dt;
-  if (!race || race.demo || race.over) { lessonEnd(); return; }
+  if (!race || race.demo || race.over) { lessonEnd(); drillRingT = 0; return; }
   const p = race.p;
+  if (drillRingT > 0) { drillRingT -= dt; if (race.drill) ringAsk(p.x, p.y, ''); }
   if (lesson) {
     lesson.t -= dt;
     setBar($('tut').querySelector('.bar i'), lesson.t / lesson.sec);
     if (lesson.id === 'cash') { if (p.bank < 3 || race.drill) { lessonEnd(); return; } ringAsk(p.x, p.y - 30, touchUsed ? 'swipe!' : 'S!', touchUsed ? 'down' : ''); }
-    else if (lesson.id === 'drill') { if (!race.drill) { lessonEnd(); return; } ringAsk(p.x, p.y, 'TAP!'); }
+    else if (lesson.redo) {
+      // a replayed step: its ring and its check, the same as in the tutorial
+      if (lesson.id === 'fruit') { const f = nearestFruit(700); if (f) ringAsk(f.x, f.y, 'fruit!'); }
+      else if (lesson.id === 'steer' && lesson.steer > 180 && lesson.dirs > 0) { lessonDone('steer'); return; }
+      else if (lesson.id === 'combo') { lesson.combo0 = Math.min(lesson.combo0, Math.floor(p.combo)); if (p.combo >= lesson.combo0 + 3) { lessonDone('combo'); return; } }
+      else if (lesson.id === 'draft') {
+        if (p.draft > 0.08) { lesson.draftT += dt; if (lesson.draftT > 0.6) { lessonDone('draft'); return; } }
+        let bd = 1e9, tg = null;
+        for (const a of race.agents) { if (!a.alive || a.arrived) continue; const dy = a.y - p.y; if (dy < 50 || dy > 320) continue; const d = dy + Math.abs(race.agentX(a) - p.x) * 1.5; if (d < bd) { bd = d; tg = a; } }
+        if (tg) ringAsk(race.agentX(tg), tg.y - 55, 'here!');
+      }
+    }
+    else if (lesson.id === 'drill' || race.drill) { lessonEnd(); return; }
     if (lesson && lesson.t <= 0) lessonEnd();
     return;
   }
-  if (S.cashDone || (S.cashN | 0) >= 3 || clock - cashLast < 20 || p.bank < 12 || race.drill || race.pending || countT > 0 || eggOn || race.autopilot) return;
+  if (redoTick(p)) return;
+  if ((meta.runs | 0) < 1 || S.cashDone || (S.cashN | 0) >= 3 || clock - cashLast < 20 || p.bank < 12 || race.drill || race.pending || countT > 0 || eggOn || race.autopilot) return;
   if (!lessonShow('cash', '👇', CASH_TXT(), 3.2)) return;
   cashLast = clock; S.cashN = (S.cashN | 0) + 1; saveUI();
   if (!S.reduced) lessonSlowT = 1;
   sfx('tap', 0.6); buzz([10, 20, 10]);
 }
-// the drill lesson: the first drill on a save with no wins
+// a tutorial step that was skipped: once the tutorial is done it comes back as one lesson card when its moment is live
+// (2 tries per step, 15 s apart, never in the first 4 s, under a banner, at the egg or on autopilot)
+let redoAt = -99;
+function redoLive(id, p) {
+  if (id === 'steer') return true;
+  if (id === 'dash') return !(p.dashCd > 0) && !lowForDash();
+  if (id === 'fruit') return !!nearestFruit(600);
+  if (id === 'combo') return p.combo >= 1 && p.combo < 3;
+  if (id === 'cash') return p.bank >= TUT_CASH_BANK && p.combo >= 3;
+  if (id === 'draft') return race.agents.some((a) => a.alive && !a.arrived && a.y - p.y > 50 && a.y - p.y < 320);
+  return false;
+}
+function redoTick(p) {
+  const sk = S.tutSkipped || [];
+  if (!S.tutDone || !sk.length || (tut && tut.on) || (meta.runs | 0) < 1) return false;
+  if (clock - redoAt < 15 || clock - raceT0 < 4 || race.drill || race.pending || countT > 0 || eggOn || race.autopilot || bannerUp() || hazT > 0) return false;
+  for (const id of sk.slice()) {
+    const st = TUT_ALL[id];
+    if (!st || (S.lessonTries[id] | 0) >= 2) { S.tutSkipped = S.tutSkipped.filter((x) => x !== id); saveUI(); continue; }
+    if (id === 'cash' && S.cashDone) continue;
+    if (!redoLive(id, p)) continue;
+    if (!lessonShow(id, st.ic, tutText(st), id === 'cash' ? 4 : 3.5)) return false;
+    redoAt = clock; S.lessonTries[id] = (S.lessonTries[id] | 0) + 1; saveUI();
+    lesson.redo = true; lesson.steer = 0; lesson.dirs = 0; lesson.lastDir = 0; lesson.draftT = 0; lesson.combo0 = Math.floor(p.combo);
+    if (id === 'dash') $('dashBtn').classList.add('nudge');
+    sfx('tap', 0.6); buzz([10, 20, 10]);
+    return true;
+  }
+  return false;
+}
+// the lesson card's move was made: praise, +DNA and the step is learned for good
+function lessonDone(id) {
+  if (!lesson || lesson.id !== id || !race || race.demo) return;
+  S.tutSkipped = (S.tutSkipped || []).filter((x) => x !== id); saveUI();
+  if (lesson.redo) { meta.dna += TUT_DNA; R.pop(race.p.x, race.p.y + 70, (TUT_PRAISE[id] || 'NICE!') + ' +' + TUT_DNA + ' DNA', '#7dffb0', 18, 1.2); sfx('pick'); buzz(12); }
+  lessonEnd();
+}
+// the drill lesson: the first drill on a save with no wins. No pill (the egg panel already says TAP, and a card over the
+// duel hides the bars): a ring on Kevin for 3.5 s does the pointing
+let drillRingT = 0;
 function drillLesson() {
   if (S.drillSeen || (meta.wins | 0) > 0 || race.autopilot) return;
-  if (lessonShow('drill', '👆', TUT_TEXT.drill || { t: 'Tap FAST to drill in!', s: 'Both thumbs. The egg is waiting.' }, 3.5)) { S.drillSeen = true; saveUI(); }
+  lessonEnd(); drillRingT = 3.5; S.drillSeen = true; saveUI();
 }
 
 function nearestFruit(maxDy) {
@@ -641,10 +867,12 @@ function nearestFruit(maxDy) {
   for (const e of race.ents) { if (e.t !== 'sugar' || e.dead) continue; const dy = e.y - p.y; if (dy < 30 || dy > maxDy) continue; if (e.side && p.side && e.side !== p.side) continue; const d = dy + Math.abs(e.x - p.x) * 2; if (d < bd) { bd = d; best = e; } }
   return best;
 }
+// the cash step needs a pot to cash: 6 in the bank (the clock waits until then)
+const TUT_CASH_BANK = 6;
 function tutTick(dt) {
   if (!tut || !tut.on || !race || race.demo) return;
-  // the lesson runs through zone 2 so every step gets its moment
-  if (race.over || race.zoneReached >= 2) return tutFinish();
+  // swim 1 ends the lesson at the Acid Lagoon, a replay runs through zone 2 so every step gets its moment
+  if (race.over || race.zoneReached >= tutEndZone()) return tutFinish();
   if (race.pending || !$('cards').classList.contains('hide') || countT > 0) return;
   // the first swim starts at GO; a replay waits for the zone banner to clear
   if (tut.i < 0) { if (!firstSwim && bannerUp()) return; tutNext(); if (!tut.on) return; }
@@ -665,11 +893,19 @@ function tutTick(dt) {
     if (target) ringAsk(race.agentX(target), target.y - 55, 'here!'); else paused = true;
   } else if (cur === 'fruit') {
     const f = nearestFruit(700);
-    if (f) ringAsk(f.x, f.y, 'fruit!'); else paused = true;
+    // the fruit step is the sugar's first look too (it never gets a second intro)
+    if (f) ringAsk(f.x, f.y, 'fruit!', '', 'sugar'); else paused = true;
+  } else if (cur === 'cash') {
+    // nothing to cash yet: the clock waits. The moment there is: a beat of slow-mo and the swipe cue on Kevin
+    if (p.bank < TUT_CASH_BANK || p.combo < 3) paused = true;
+    else {
+      if (!tut.cashSlow) { tut.cashSlow = true; if (!S.reduced) lessonSlowT = Math.max(lessonSlowT, 1); sfx('tap', 0.6); buzz([10, 20, 10]); }
+      ringAsk(p.x, p.y - 30, touchUsed ? 'swipe!' : 'S!', touchUsed ? 'down' : '');
+    }
   }
   if (tut.okT > 0) { tut.okT -= dt; if (tut.okT <= 0) tutNext(); }
   else if (st) {
-    // the clock stops while there is nothing to do (no rival to tuck behind, no fruit ahead) or a banner is up
+    // the clock stops while there is nothing to do (no rival to tuck behind, no fruit ahead, no pot) or a banner is up
     // a hazard's first look owns the ring and the player's eyes: the step clock waits for it too
     if (!bannerUp() && !paused && hazT <= 0) tut.t += dt;
     setBar($('tut').querySelector('.bar i'), 1 - tut.t / st.to);
@@ -690,6 +926,8 @@ let ringReq = null;
 function ringAsk(wx, wy, label, cls, haz) { if (!ringReq) ringReq = { wx, wy, label, cls: cls || '', haz: haz || null }; }
 function ringApply() {
   const tg = $('tutTarget');
+  // the pill drops its second line while a ring or the ghost finger does the explaining
+  setC($('tut'), 'rg', !!ringReq && mode === 'race');
   if (!ringReq || R.camY == null || !race || mode !== 'race') { setC(tg, 'hide', true); ringReq = null; return; }
   const k = cv.clientWidth / VIEW_W, x0 = ringReq.wx * k + cv.offsetLeft, y0 = R.sy(ringReq.wy) * k + cv.offsetTop;
   // kept on the screen (below the HUD, above the bottom edge); a clamped ring shows an arrow at the real spot
@@ -722,9 +960,9 @@ function lowTick(dt) {
   }
 }
 // the first time each hazard scrolls into view: a ring, one line and a short slow-down
-const HAZ_KEY = { acid: 'acid', alkali: 'alkali', gate: 'gate', goo: 'goo', wbc: 'wbc', current: 'current', cilia: 'cilia', dna: 'dna', shield: 'helmet' };
+const HAZ_KEY = { acid: 'acid', alkali: 'alkali', gate: 'gate', goo: 'goo', wbc: 'wbc', current: 'current', cilia: 'cilia', dna: 'dna', shield: 'helmet', sugar: 'sugar' };
 // pickups, not dangers: they wait until the tutorial is done
-const HAZ_SOFT = new Set(['dna', 'helmet', 'shield']);
+const HAZ_SOFT = new Set(['dna', 'helmet', 'shield', 'sugar']);
 let hazAt = -99, hazEnt = null, hazT = 0, hazSlowT = 0, hazPend = null;
 function hazTick(dt) {
   if (hazSlowT > 0) hazSlowT -= dt;
@@ -741,8 +979,10 @@ function hazTick(dt) {
   }
   hazPend = null;
   // the tutorial's own ring (fruit, draft) and the low-energy rescue come first: an intro waits, it is never used up unseen
-  const tStep = tut && tut.on && tut.okT <= 0 && TUT_STEPS[tut.i] ? TUT_STEPS[tut.i].id : '';
-  if (tStep === 'fruit' || tStep === 'draft' || lowRingT > 0 || lesson) return;
+  const tStep = tutCur();
+  if (tStep === 'fruit' || tStep === 'draft' || tStep === 'cash' || lowRingT > 0 || lesson) return;
+  // swim 1: the Acid Lagoon's first look waits for the lesson to wrap up
+  if (firstSwim && tut && tut.on) return;
   if (firstSwim && clock - raceT0 < 6) return;
   if (clock - hazAt < 4 || bannerUp() || race.pending || countT > 0 || !$('cards').classList.contains('hide')) return;
   const seen = S.seenHaz, soft = !!(tut && tut.on);
@@ -776,7 +1016,8 @@ const fingers = new Map();
 function clearInput() {
   drag = null; lastDown = 0; dashBuf = 0; holdOff = null; fingers.clear();
   for (const k of Object.keys(keys)) keys[k] = 0;
-  if (race) { race.input.tx = null; race.input.dash = false; race.input.tap = 0; race.input.touch = false; race.input.dir = 0; }
+  dashPress = null;
+  if (race) { race.input.tx = null; race.input.dash = false; race.input.tap = 0; race.input.touch = false; race.input.dir = 0; race.input.finger = false; }
 }
 const toWorldX = (clientX) => { const r = cv.getBoundingClientRect(); return (clientX - r.left) / r.width * VIEW_W; };
 const playBlocked = () => !race || mode !== 'race' || race.paused || race.pending || race.over;
@@ -792,16 +1033,18 @@ function steerTick() {
   let tx = c + drag.off0 + drag.acc;
   // wall feel: a tiny tick on the rising edge of hitting a wall, re-armed once the finger leaves it by 8 world px
   const hit = tx <= b.l ? -1 : tx >= b.r ? 1 : 0;
-  if (hit && hit !== wallSide) { wallSide = hit; buzz(5); sfx('tap', 0.15); }
+  if (hit && hit !== wallSide) { wallSide = hit; buzz(5); sfx('wall', hit); }
   else if (wallSide && (wallSide < 0 ? tx > b.l + 8 : tx < b.r - 8)) wallSide = 0;
   // pushed past a wall: rebase the anchor so moving back responds at once
   if (tx < b.l) { tx = b.l; drag.off0 = tx - c; drag.acc = 0; }
   else if (tx > b.r) { tx = b.r; drag.off0 = tx - c; drag.acc = 0; }
   drag.off = tx - c;
-  race.input.tx = tx; race.input.touch = true;
+  // a finger on the glass is playing even when it holds still (core reads input.finger)
+  race.input.tx = tx; race.input.touch = true; race.input.finger = true;
 }
 // finger lifted: keep the lane it chose, following the tube's wiggle
 function holdTick(kd) {
+  if (race && !drag) race.input.finger = false;
   if (!race || race.drill || race.autopilot) { holdOff = null; return; }
   if (drag || kd || holdOff == null) return;
   const p = race.p, b = band(p.y, p.side);
@@ -811,7 +1054,7 @@ const lowForDash = () => { const p = race.p, cost = (race.s && race.s.dashCost) 
 function requestDash() {
   if (!race || race.drill) return;
   if (lowForDash()) { refuseDash(); return; }   // only an empty tank says no at once; a cooldown just waits a beat
-  race.input.dash = true; dashBuf = Math.max(0.15, Math.min(0.35, (race.p.dashCd || 0) + 0.05));
+  race.input.dash = true; dashBuf = Math.max(0.15, Math.min(0.6, (race.p.dashCd || 0) + 0.05));
 }
 function refuseDash() {
   const b = $('dashBtn'); b.classList.remove('refuse'); void b.offsetWidth; b.classList.add('refuse'); buzz(6);
@@ -821,19 +1064,32 @@ function cashOut() {
   if (playBlocked() || race.drill || countT > 0) return;
   race.input.cashOut = true; buzz(10);
 }
-function drillTap() {
+// drill taps: throttled per finger (45 ms), so two thumbs drum twice as fast. A raw tap only clicks; the burst, the shake
+// and the buzz wait for core's 'drillTap' event (the taps it really counted)
+const lastDrillTapId = new Map();
+function drillTap(id = 'k') {
   const now = performance.now();
-  if (now - lastDrillTap < 80 || race.input.tap >= 3) return;
-  lastDrillTap = now; race.input.tap++; drillN++;
-  sfx('drill', drillN); buzz(6);
-  R.burst(race.p.x, race.p.y + 20, '#5ce1ff', 4, 160, 0.3, 2); trauma(0.06);
+  // a hit-stop holds the sim: taps queue up (6 while it holds, 3 otherwise), so a slow-mo never eats a drum roll
+  if (now - (lastDrillTapId.get(id) || 0) < 45 || race.input.tap >= (stopT > 0 ? 6 : 3)) return;
+  lastDrillTapId.set(id, now); lastDrillTap = now; race.input.tap++; drillN++;
+  sfx('drill', drillN);
 }
 // the whole app takes touches, so the gutters steer too in landscape
 const APP = $('app');
 const smooth01 = (x) => x * x * (3 - 2 * x);
 
-function newDrag(id, x, y, now, extra) {
-  return Object.assign({ id, t0: now, x0: x, y0: y, lx: x, lt: now, v: 0, acc: 0, off0: race.p.x - mid(race.p.y), off: race.p.x - mid(race.p.y), moved: 0, hx: 0, flick: false, dashed: false }, extra);
+// re-grip: a new touch carries on from the lane Kevin was aiming for (the held lane, else the live target), so lifting and
+// touching again never snaps him back to where he is; only a target 140+ world px from Kevin falls back to his spot
+function gripOff(prefer) {
+  const p = race.p, c = mid(p.y);
+  let off = prefer != null ? prefer : race.input.tx != null ? race.input.tx - c : p.x - c;
+  if (!Number.isFinite(off) || Math.abs(c + off - p.x) > 140) off = p.x - c;
+  return off;
+}
+function newDrag(id, x, y, now, extra, off) {
+  const o = off != null ? off : gripOff(null);
+  return Object.assign({ id, t0: now, x0: x, y0: y, lx: x, lt: now, v: 0, acc: 0, off0: o, off: o, moved: 0, hx: 0, flick: false, dashed: false,
+    win: [], ring: [], flArmed: true, flFrozen: false, flTop: y }, extra);
 }
 APP.addEventListener('pointerdown', (e) => {
   if (mode !== 'race' || playBlocked()) return;
@@ -843,47 +1099,83 @@ APP.addEventListener('pointerdown', (e) => {
   fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (e.pointerType === 'touch') touchUsed = true;
   // a second thumb: dash (or drill) without stealing the steering finger
-  if (drag && e.pointerId !== drag.id) { if (race.drill) { if (countT <= 0) drillTap(); } else if (countT <= 0) requestDash(); return; }
+  if (drag && e.pointerId !== drag.id) { if (race.drill) { if (countT <= 0) drillTap(e.pointerId); } else if (countT <= 0) requestDash(); return; }
   try { APP.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
-  holdOff = null;
-  if (race.drill) { if (countT <= 0) drillTap(); return; }
+  if (race.drill) { holdOff = null; if (countT <= 0) drillTap(e.pointerId); return; }
+  const off0 = gripOff(holdOff); holdOff = null;
   const now = performance.now();
   const dbl = lastDown && now - lastDown < 300 && Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 64;
   if (dbl && countT <= 0) { requestDash(); lastDown = 0; }
-  drag = newDrag(e.pointerId, e.clientX, e.clientY, now, { dashed: dbl });
+  drag = newDrag(e.pointerId, e.clientX, e.clientY, now, { dashed: dbl }, off0);
   steerTick();
   if (race.autopilot) { race.autopilot = false; hint('Autopilot off. You are driving!', 2, 1); }
 });
+// one-thumb flick dash: the finger went up 45+ px in the last 120 ms at 700+ px/s, mostly straight (|dx| < 0.6 |dy|).
+// It re-arms once the finger slows under 200 px/s or comes back down 20 px; the steering freezes while the flick runs
+// (and the sideways drift of the flick itself is undone), so a dash never jerks Kevin sideways.
+const FLICK_UP = 45, FLICK_MS = 120, FLICK_V = 700;
+function flickTick(d, x, y, t) {
+  const r = d.ring; r.push({ x, y, t, acc: d.acc }); if (r.length > 6) r.shift();
+  if (!d.flArmed) {
+    d.flTop = Math.min(d.flTop, y);
+    const a = r[r.length - 2], vy = a ? Math.abs(y - a.y) / Math.max(6, t - a.t) * 1000 : 0;
+    if (vy < 200 || y - d.flTop >= 20) { d.flArmed = true; d.flFrozen = false; }
+    return;
+  }
+  let o = null; for (const q of r) if (t - q.t <= FLICK_MS) { o = q; break; }
+  if (!o || o === r[r.length - 1]) return;
+  const up = o.y - y, dx = Math.abs(x - o.x), v = up / Math.max(6, t - o.t) * 1000;
+  // the press that already dashed (DASH button, double tap) gets 300 ms before a flick may dash again
+  if (up >= FLICK_UP && v > FLICK_V && dx < 0.6 * up && !(d.dashed && t - d.t0 < 300) && countT <= 0 && !playBlocked()) {
+    d.flArmed = false; d.flFrozen = true; d.flTop = y; d.flick = true; d.acc = o.acc;
+    requestDash();
+  }
+}
 APP.addEventListener('pointermove', (e) => {
   const f = fingers.get(e.pointerId); if (f) { f.x = e.clientX; f.y = e.clientY; }
   if (!drag || e.pointerId !== drag.id || !race) return;
-  const now = performance.now(), sdx = e.clientX - drag.lx, w = cv.getBoundingClientRect().width || 1;
-  // finger acceleration: slow moves are precise, fast swipes carry further (speed in CSS px/s, smoothed)
-  const sp = Math.abs(sdx) / Math.max(1, now - drag.lt) * 1000;
+  const w = cv.getBoundingClientRect().width || 1;
+  // every sample the browser coalesced into this event (a 120 Hz finger on a 60 Hz frame), in order
+  let list = null; try { list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; } catch (err) { list = null; }
+  if (!list || !list.length) list = [e];
+  let sdxSum = 0;
+  for (const ce of list) {
+    const t = ce.timeStamp || e.timeStamp || performance.now(), sdx = ce.clientX - drag.lx;
+    drag.win.push({ x: ce.clientX, t }); while (drag.win.length > 2 && t - drag.win[0].t > 50) drag.win.shift();
+    if (!drag.flFrozen) sdxSum += sdx;
+    drag.lx = ce.clientX; drag.lt = t; drag.hx += Math.abs(sdx);
+    drag.moved = Math.max(drag.moved, Math.hypot(ce.clientX - drag.x0, ce.clientY - drag.y0));
+    flickTick(drag, ce.clientX, ce.clientY, t);
+  }
+  // finger speed in CSS px/s over the last 50 ms (at least 6 ms), smoothed once per event
+  const w0 = drag.win[0], w1 = drag.win[drag.win.length - 1];
+  const sp = w0 && w1 && w1 !== w0 ? Math.abs(w1.x - w0.x) / Math.max(6, w1.t - w0.t) * 1000 : 0;
   drag.v += (sp - drag.v) * 0.4;
-  drag.acc += sdx / w * VIEW_W * S.sens * (1 + 0.7 * smooth01(clamp((drag.v - 300) / 1200, 0, 1)));
-  drag.lx = e.clientX; drag.lt = now; drag.hx += Math.abs(sdx);
-  drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0));
+  // finger acceleration: slow moves are precise, fast swipes carry further
+  if (!drag.flFrozen) drag.acc += sdxSum / w * VIEW_W * S.sens * (1 + 0.7 * smooth01(clamp((drag.v - 300) / 1200, 0, 1)));
+  const now = e.timeStamp || performance.now();
   if (dashHold && e.pointerId === dashHold.id && Math.hypot(e.clientX - dashHold.x0, e.clientY - dashHold.y0) > 20) dashHoldEnd();
-  if (tut) tutSteer(sdx);
-  // a quick vertical flick: up dashes, a long fast straight one down cashes the combo in (only with a pot worth it,
-  // and never out of a steering move: under 30 px of sideways travel before it)
+  dashPressMove(e);
+  if (sdxSum) tutSteer(sdxSum);
+  // a long fast straight flick down cashes the combo in (only with a pot worth it, and never out of a steering move:
+  // under 30 px of sideways travel before it)
   const dy = e.clientY - drag.y0, adx = Math.abs(e.clientX - drag.x0), age = now - drag.t0;
-  if (!drag.flick && !drag.dashed && age < 160 && -dy > 60 && -dy > 1.6 * adx && countT <= 0 && !playBlocked()) { drag.flick = true; requestDash(); }
-  else if (!drag.flick && potReady() && age < 200 && dy > 110 && adx < 0.5 * dy && drag.hx < 30) { drag.flick = true; cashOut(); }
+  if (!drag.flick && potReady() && age < 200 && dy > 110 && adx < 0.5 * dy && drag.hx < 30) { drag.flick = true; cashOut(); }
   steerTick();
 });
 const up = (e) => {
   fingers.delete(e.pointerId);
   if (dashHold && e.pointerId === dashHold.id) dashHoldEnd();
+  if (e.type === 'pointerup') dashPressUp(e); else if (dashPress && dashPress.id === e.pointerId) dashPress = null;
   if (!drag || e.pointerId !== drag.id) return;
 
   const now = performance.now(), d = drag;
   drag = null;
-  // thumb handoff: another finger is still on the glass, it steers from where it is (no flick, no double tap)
+  if (race) race.input.finger = false;
+  // thumb handoff: another finger is still on the glass, it steers on from the lane this one held
   if (race && mode === 'race' && !playBlocked() && !race.drill && fingers.size) {
     const [id, f] = fingers.entries().next().value;
-    drag = newDrag(id, f.x, f.y, now, { flick: true, dashed: true });
+    drag = newDrag(id, f.x, f.y, now, { flick: true, dashed: true }, gripOff(d.off));
     try { APP.setPointerCapture(id); } catch (err) { /* already released */ }
     steerTick();
     return;
@@ -914,6 +1206,8 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (mode === 'result') { if ((k === ' ' || k === 'Enter') && resultReady) { e.preventDefault(); again(); } return; }
+  if (mode === 'race' && finHold && (k === ' ' || k === 'Enter')) { e.preventDefault(); finishSkip(); return; }
+  if (mode === 'race' && birthOn && (k === ' ' || k === 'Enter')) { e.preventDefault(); birthSkip(); return; }
   if (!race || mode !== 'race') return;
   if (race.pending) {
     if (!cardsLive() || e.repeat) return;
@@ -926,19 +1220,20 @@ addEventListener('keydown', (e) => {
   if (DASH_KEYS.includes(k)) {
     e.preventDefault();
     if (e.repeat || countT > 0) return;
-    if (race.drill) drillTap(); else requestDash();
+    if (race.drill) drillTap('key:' + k); else requestDash();
     return;
   }
   if (k === 's' || k === 'ArrowDown') { if (!e.repeat) cashOut(); return; }
   keys[k] = 1;
-  if (STEER_KEYS.includes(k)) { holdOff = null; if (tut) tutSteer(k === 'ArrowLeft' || k === 'a' ? -25 : 25); }
+  if (STEER_KEYS.includes(k)) { holdOff = null; tutSteer(k === 'ArrowLeft' || k === 'a' ? -25 : 25); }
 });
 addEventListener('keyup', (e) => { keys[keyName(e.key)] = 0; });
 // long press on DASH cashes the combo in, but only when there is a pot worth it (combo 10+, bank 3+).
 // A ring fills round the button (--hold) for 650 ms; sliding 20 px or off the button cancels.
 const HOLD_MS = 650;
 let dashHold = null;
-const potReady = () => !!race && race.p.combo >= 10 && race.p.bank >= 3;
+// the tutorial's cash step takes any pot it asked for (combo 3+, bank 3+)
+const potReady = () => !!race && race.p.bank >= 3 && (race.p.combo >= 10 || (tutCur() === 'cash' && race.p.combo >= 3));
 function dashHoldEnd() {
   dashHold = null; const b = $('dashBtn');
   if (b._hold !== 0) { b._hold = 0; b.style.setProperty('--hold', '0'); b.classList.remove('holding'); }
@@ -950,23 +1245,35 @@ function dashHoldTick() {
   if (b._hold !== v) { b._hold = v; b.style.setProperty('--hold', String(v)); }
   if (f >= 1) { dashHoldEnd(); cashOut(); buzz(8, true); }
 }
+// portrait, one thumb: a DASH press that turns into a steering slide must not dash. It fires on release, or after 70 ms
+// held under 10 px, and a slide of 14+ px first cancels it. A second finger (another one steers) and landscape fire at once.
+let dashPress = null;
+function dashPressFire() { const d = dashPress; if (!d || d.fired) return; d.fired = true; if (!playBlocked() && countT <= 0 && race && !race.drill) requestDash(); }
+function dashPressMove(e) {
+  const d = dashPress; if (!d || d.fired || e.pointerId !== d.id) return;
+  d.moved = Math.max(d.moved, Math.hypot(e.clientX - d.x0, e.clientY - d.y0));
+  if (d.moved >= 14) dashPress = null;
+}
+function dashPressUp(e) { const d = dashPress; if (!d || e.pointerId !== d.id) return; dashPressFire(); dashPress = null; }
+function dashPressTick() { const d = dashPress; if (d && !d.fired && performance.now() - d.t0 >= 70 && d.moved < 10) dashPressFire(); }
 $('dashBtn').addEventListener('pointerdown', (e) => {
   e.stopPropagation(); unlock();
   if (playBlocked() || countT > 0) return;
-  if (race.drill) { drillTap(); return; }
-  requestDash();
+  if (race.drill) { drillTap(e.pointerId); return; }
+  const instant = !!drag || landscape();
+  if (instant) requestDash(); else dashPress = { id: e.pointerId, t0: performance.now(), x0: e.clientX, y0: e.clientY, moved: 0, fired: false };
   dashHoldEnd();
   if (potReady()) { dashHold = { id: e.pointerId, t0: performance.now(), x0: e.clientX, y0: e.clientY }; $('dashBtn').classList.add('holding'); }
   // the thumb that pressed DASH steers too when no other finger does: sliding off the button just keeps swimming
   if (!drag) {
-    drag = newDrag(e.pointerId, e.clientX, e.clientY, performance.now(), { flick: true, dashed: true });
+    drag = newDrag(e.pointerId, e.clientX, e.clientY, performance.now(), { flick: true, dashed: true }, gripOff(holdOff));
     fingers.set(e.pointerId, { x: e.clientX, y: e.clientY }); holdOff = null;
     try { APP.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
   }
 });
-$('dashBtn').addEventListener('pointermove', (e) => { if (dashHold && e.pointerId === dashHold.id && Math.hypot(e.clientX - dashHold.x0, e.clientY - dashHold.y0) > 20) dashHoldEnd(); });
+$('dashBtn').addEventListener('pointermove', (e) => { if (dashHold && e.pointerId === dashHold.id && Math.hypot(e.clientX - dashHold.x0, e.clientY - dashHold.y0) > 20) dashHoldEnd(); dashPressMove(e); });
 // (not pointerleave: the press hands its pointer to the steering drag, which moves the capture off the button)
-for (const ev of ['pointerup', 'pointercancel']) $('dashBtn').addEventListener(ev, (e) => { if (dashHold && e.pointerId === dashHold.id) dashHoldEnd(); });
+for (const ev of ['pointerup', 'pointercancel']) $('dashBtn').addEventListener(ev, (e) => { if (dashHold && e.pointerId === dashHold.id) dashHoldEnd(); if (ev === 'pointerup') dashPressUp(e); else if (dashPress && dashPress.id === e.pointerId) dashPress = null; });
 function toggleMute() {
   meta.muted = !meta.muted; applyAudio(); save(); $('muteChk').checked = meta.muted; syncMute();
 }
@@ -988,8 +1295,8 @@ function pause() {
 function resume() {
   if (!race) return;
   unlock(); race.paused = false; clearInput(); show(null); muffle(false);
-  // a short "2, 1, GO" so the thumb is back on the glass before the tube moves
-  if (!race.drill && !race.over && !race.pending) { countT = 0.8; lastCount = 0; }
+  // a short "2, 1, GO" so the thumb is back on the glass before the tube moves (at the drill too: no lost taps)
+  if (!race.over && !race.pending) { countT = 0.8; lastCount = 0; countFromPause = true; }
   govHold(3);
 }
 $('pauseBtn').onclick = pause;
@@ -998,23 +1305,38 @@ $('quitBtn').onclick = () => { if (!race || race.over) return; race.paused = fal
 function toBackground() {
   save(); clearInput();
   if (mode === 'race' && race && !race.over && !race.demo && !race.pending) pause();
+  // the cards stay up while away: no half-held DASH ring, and no muffled band left behind
+  else if (mode === 'race' && race && race.pending) dashHoldEnd();
   try { A.suspend(); } catch (e) { /* ignore */ }
 }
 document.addEventListener('visibilitychange', () => {
+  govReset();
   if (document.hidden) { toBackground(); return; }
   const away = meta.lastSeen ? Date.now() - meta.lastSeen : 0;
   unlock();
+  // back to a card deal: the band stays behind the cards' filter
+  if (mode === 'race' && race && race.pending && cardsLive()) muffle(true);
   if (mode === 'title') {
     // a quick app switch keeps whatever was open; a long break rebuilds the title and says welcome back
     if (!$('title').classList.contains('hide') && away >= 15 * 60000) { title(); maybeWelcome(away); }
     else { titleStats(); renderFactory(); badges(); }
   }
 });
-// the OS back gesture mid-swim: pause, and put the guard entry back
+// the OS back gesture: one step back inside the game (a swim pauses, a sub-screen goes to its Back button, the story
+// skips, the result goes to the menu), and the guard entry goes back on. On the title a back leaves the page.
+const pushGuard = () => { try { if (!(history.state && history.state.mto)) history.pushState({ mto: 1 }, ''); } catch (e) { /* sandboxed */ } };
+const openOv = () => OVERLAYS.find((o) => !$(o).classList.contains('hide')) || null;
 addEventListener('popstate', () => {
-  if (mode !== 'race' || !race || race.demo || race.over) return;
-  pause();
-  try { history.pushState({ mto: 1 }, ''); } catch (e) { /* sandboxed */ }
+  const ov = openOv();
+  if (mode === 'race') { if (race && !race.demo && !race.over && !race.pending) pause(); }
+  else if (mode === 'intro') $('introSkip').click();
+  else if (ov === 'settings') $('setBack').click();
+  else if (ov === 'shop') $('shopBack').click();
+  else if (ov === 'album') $('albumBack').click();
+  else if (ov === 'welcome') $('wbClose').click();
+  else if (mode === 'result') { if (resultReady) { resAnim = null; title(); } }
+  else if (ov === 'title' || mode === 'title') return;
+  pushGuard();
 });
 addEventListener('focus', unlock);
 
@@ -1043,13 +1365,18 @@ $('setReduced').onchange = (e) => { S.reduced = e.target.checked; S.redSet = tru
 $('setLefty').onchange = (e) => { S.lefty = e.target.checked; saveUI(); document.body.classList.toggle('lefty', S.lefty); };
 for (const b of $('setSens').querySelectorAll('button')) b.onclick = () => { S.sens = +b.dataset.v; saveUI(); openSettings(settingsFrom); sfx('tap'); };
 for (const b of $('setGfx').querySelectorAll('button')) b.onclick = () => { S.gfx = b.dataset.v; saveUI(); applyGfx(); openSettings(settingsFrom); sfx('tap'); };
-$('setTut').onclick = () => { S.tutDone = false; S.tutTries = 0; saveUI(); $('setTut').textContent = 'Tutorial on next swim ✓'; };
+$('setTut').onclick = () => {
+  // a full replay: every lesson and first look comes back (and the runs >= 15 migration must not skip the hazards again)
+  S.tutDone = false; S.tutTries = 0; S.cashDone = false; S.cashN = 0; S.drillSeen = false; S.frenzySeen = false;
+  S.seenHaz = []; S.tutSkipped = []; S.tutReplay = true; saveUI();
+  $('setTut').textContent = 'Tutorial on next swim ✓';
+};
 
 // ------------------------------------------------------------------ mutation cards: slow-mo stinger, then a dramatic deal
 let revealT = 0, pickT = 0, cardsReady = false, cardsTO = 0;
 const cardsLive = () => !$('cards').classList.contains('hide') && !$('cards').classList.contains('out');
 function cardStinger() {
-  clearInput();
+  { const ho = drag ? drag.off : holdOff; clearInput(); holdOff = ho; }
   revealT = S.reduced ? 0.12 : 0.6;
   const p = race.p;
   sfx('zone'); buzz([20, 40, 30]); muffle(true);
@@ -1071,7 +1398,7 @@ function partnerLines(id, plain) {
   for (const s of SYNERGIES) {
     if ((race.syn && race.syn[s.id]) || !s.needs.includes(id)) continue;
     const others = s.needs.filter((n) => n !== id);
-    if (others.every((n) => race.muts[n] > 0)) { held.push(`<div class="syn">${s.icon} Unlocks combo: ${esc(s.name)}!</div>`); continue; }
+    if (others.every((n) => race.muts[n] > 0)) { const r = SYNERGY_SHORT[s.id]; held.push(`<div class="syn">${s.icon} Completes MASHUP: ${esc(s.name)}!${r ? `<small>${esc(r)}</small>` : ''}</div>`); continue; }
     // never tease a partner that can no longer be dealt this swim
     if (typeof race.canOffer === 'function' && others.some((n) => !(race.muts[n] > 0) && !race.canOffer(n))) continue;
     const o = MUTATIONS[others[0]]; if (!o) continue;
@@ -1113,8 +1440,8 @@ function cards() {
     // the very first deal: the icon, the name and what it does, one card at a time
     if (firstDraft) return `<button class="card simple r${m.r}" data-id="${id}" style="animation-delay:${delay.toFixed(2)}s"><div class="ic">${m.icon}</div><div><div class="nm">${esc(m.name)}</div><div class="ds">${esc(m.desc)}</div></div>${cpTag(id)}${m.r === 3 ? '<i class="shine"></i>' : ''}</button>`;
     const lvl = firstDraft ? ['COMMON', 'RARE', 'LEGENDARY'][m.r - 1] : `${['COMMON', 'RARE', 'LEGENDARY'][m.r - 1]} · ${have ? `LV ${have} → ${have + 1}` : 'NEW'}${m.max > 1 ? ' of ' + m.max : ''}`;
-    const fl = MUT_FLAVOR[id] ? `<div class="fl">${esc(MUT_FLAVOR[id])}</div>` : '', pb = completesPair(id) ? '<span class="pb">COMBO</span>' : '';
-    return `<button class="card r${m.r}" data-id="${id}" style="animation-delay:${delay.toFixed(2)}s"><div class="ic">${m.icon}</div><div><div class="lvl">${lvl}${pb}<span class="key">${k + 1}</span></div><div class="nm">${esc(m.name)}</div><div class="ds">${esc(m.desc)}</div>${fl}${partnerLines(id, false)}</div>${cpTag(id)}${m.r === 3 ? '<i class="shine"></i>' : ''}</button>`;
+    const fl = MUT_FLAVOR[id] ? `<div class="fl">${esc(MUT_FLAVOR[id])}</div>` : '', mash = completesPair(id), pb = mash ? '<span class="pb">MASHUP!</span>' : '';
+    return `<button class="card r${m.r}${mash ? ' mash' : ''}" data-id="${id}" style="animation-delay:${delay.toFixed(2)}s"><div class="ic">${m.icon}</div><div><div class="lvl">${lvl}${pb}<span class="key">${k + 1}</span></div><div class="nm">${esc(m.name)}</div><div class="ds">${esc(m.desc)}</div>${fl}${partnerLines(id, false)}</div>${cpTag(id)}${m.r === 3 ? '<i class="shine"></i>' : ''}</button>`;
   }).join('');
   // a card that completes a combo gets a shimmer once the deal lands
   const completes = race.pending.some(completesPair);
@@ -1140,34 +1467,44 @@ function pick(id) {
   if (!race || !race.pending || !cardsReady) return;
   const el = $('cardRow').querySelector(`.card[data-id="${id}"]`), mid = !!race.pendingMid;
   if (!race.choose(id)) return;
+  // the pick is in: no second pick, and a late "cards ready" timer can never unlock a dead row
+  cardsReady = false; clearTimeout(cardsTO);
   offerGolden = false;
-  clearInput();
+  // Kevin holds the lane he had when the cards came up (clearInput drops it)
+  { const ho = holdOff; clearInput(); holdOff = ho; }
   sfx('pick'); buzz(18);
   if (el) el.classList.add('picked');
   $('cards').classList.add('out'); pickT = S.reduced ? 0.05 : 0.28;
   muffle(false);
   const zi = race.zoneReached, z = ZONES[zi];
   if (!mid) {
-    if (zi >= 2) tutFinish();
+    if (zi >= tutEndZone()) tutFinish();
     coachClear();
-    callout('zone', { t: z.name, z: `ZONE ${zi + 1}`, sec: 1.6 });
+    zoneArrive(zi, { t: z.name, z: `ZONE ${zi + 1}`, sec: 1.6 });
     if (race.p.combo < 20) coach(zoneCoach(z.id), firstSwim ? 4.5 : 3, 1);
     A.bpm = z.beat;
   }
   setIntensity();
-  sfx('boss', 4);
+  sfx('resume');
   R.pop(race.p.x, race.p.y + 60, MUTATIONS[id].icon + ' ' + MUTATIONS[id].name, '#ffd75c', 18, 1.6);
-  timeScale = S.reduced ? 1 : 0.25;   // ease back into the action
+  timeScale = S.reduced ? 1 : 0.3;   // ease back into the action
 }
 
 // ------------------------------------------------------------------ events -> juice
-let bankedNow = false, leadK = -1, leadSaid = 0, kevLeadFx = false;
+let bankedNow = false, leadK = -1, leadSaid = 0, kevLeadFx = false, kindPopT = -9;
 let bonkN = 0, shoveAt = {}, coreHas = {}, passedOnce = new Set(), rivalIntro = [], lastBubble = -99, eggClaimed = false, rivalF = 0, rivalK = -1, passBlip = false, lastBlip = 0;
 // hit-stop: the frame holds for ms. Only the big ones (60 ms+) make the music gasp, and at most one gasp per 0.5 s.
 // With a place (x, y) the hit thing flashes white for the hold (R.impactFrame).
 let lastImpact = -99;
-function hitStop(ms, x, y, kind) {
+// a leaky freeze budget: frozenRecent counts the seconds held lately (it drains 1 a second). Past 0.22 s the small holds
+// shrink to 40% and the ones that end up under 20 ms are skipped, so a pile-up never turns into stutter.
+// force: FRENZY, milestones, a shield hit, second wind and Kevin taking the egg lead always land in full.
+let frozenRecent = 0, finPopUntil = -99;
+const BIG_HOLDS = new Set(['frenzy', 'milestone', 'shieldHit', 'second', 'kevin']);
+function hitStop(ms, x, y, kind, force) {
   if (S.reduced || !race || race.demo) return;
+  if (!force && !BIG_HOLDS.has(kind) && frozenRecent > 0.22) { ms *= 0.4; if (ms < 20) return; }
+  frozenRecent += ms / 1000;
   stopT = Math.max(stopT, ms / 1000);
   if (ms >= 60 && clock - lastImpact >= 0.5) { lastImpact = clock; try { if (A.impact) A.impact(ms); } catch (e) { /* optional */ } }
   if (x != null && y != null) { try { if (R.impactFrame) R.impactFrame(x, y, kind || 'hit', ms / 1000); } catch (e) { /* optional */ } }
@@ -1185,9 +1522,9 @@ function nearMissFx(ev, p) {
   if (R.zoomPunch) R.zoomPunch(0.03);
   kick(x < p.x ? 0.25 : -0.25, 0); buzz(8);
 }
-function sayRival(k, text, dur = 2.2) {
-  if (!text || clock - lastBubble < 5 || !R.say) return false;
-  lastBubble = clock; R.say(k, text, dur); return true;
+function sayRival(k, text, dur = 2.2, force) {
+  if (!text || (!force && clock - lastBubble < 5) || !R.say) return false;
+  lastBubble = clock; R.say(k, chadFix(text), dur); return true;
 }
 // a rival's own reaction line (RIVAL_REACTS[name][kind]), through the same 5 s bubble throttle
 function react(k, kind, dur = 2.2) {
@@ -1195,8 +1532,15 @@ function react(k, kind, dur = 2.2) {
   return sayRival(k, pickLine(reactsOf(r.name)[kind]), dur);
 }
 // hit-stop is rate limited: one per 0.08 s, so a pile-up never freezes the frame
+// inside the 80 ms window a bigger hit (1.3x what is left of the hold) replaces the current one
 let lastHitStop = -99;
-function hitStopRL(ms, x, y, kind) { if (clock - lastHitStop < 0.08) return; lastHitStop = clock; hitStop(ms, x, y, kind); }
+function hitStopRL(ms, x, y, kind) {
+  if (clock - lastHitStop < 0.08) {
+    if (!(ms / 1000 > 1.3 * stopT)) return;
+    lastHitStop = clock; stopT = 0; hitStop(ms, x, y, kind); return;
+  }
+  lastHitStop = clock; hitStop(ms, x, y, kind);
+}
 // the music follows the race: calm in the launch tube, busier in the middle, loud near the egg, flat out in FRENZY
 function setIntensity() {
   if (!race || race.demo || mode !== 'race' || !A.on) return;
@@ -1223,6 +1567,9 @@ function comboLadderFx(n, p) {
   buzz(bz);
   R.pop(p.x, p.y + 125, at + 'x!', li >= 2 ? '#ff5cd2' : '#ffd75c', 28 + li * 4, 1.1);
 }
+// a rival's epithet (K.RIVAL_EPITHETS: 'the Protein Shake') and the banner kicker that carries it
+const epithetOf = (name) => byFirst(K.RIVAL_EPITHETS || {}, name) || '';
+const rivalKicker = (name) => { const e = epithetOf(name); return e ? `${first(name)} ${e}`.toUpperCase() : 'RIVAL'; };
 const rivalIndex = (ev) => (Number.isInteger(ev.k) && RIVALS[ev.k] ? ev.k : RIVALS.findIndex((r) => r.name === (ev.boss || ev.name) || first(r.name) === first(ev.boss || ev.name)));
 function passedBy(k) {
   const r = RIVALS[k]; if (!r) return;
@@ -1231,7 +1578,7 @@ function passedBy(k) {
 }
 function comboBreakFx(n, ringDone, potLost) {
   const p = race.p;
-  if (R.comboBreak && !ringDone) R.comboBreak(p.x, p.y);
+  if (R.comboBreak && !ringDone) R.comboBreak(p.x, p.y, n);
   sfx('comboBreak');
   // a lost pot already said its line
   if (!potLost) R.pop(p.x, p.y + 70, (pickLine(BREAK_LINES) || 'COMBO DROPPED') + (n >= 10 ? ` (${n})` : ''), '#ff8bb0', 18);
@@ -1251,7 +1598,7 @@ function onEvents() {
     try { onEvent(ev, p); } catch (e) { if (evErrs++ < 3) console.error(e); }
   }
 }
-let frenzyNow = false;
+let frenzyNow = false, frenzyCoachPend = false;
 function onEvent(ev, p) {
     switch (ev.type) {
       case 'pass':
@@ -1277,6 +1624,12 @@ function onEvent(ev, p) {
         if (ev.kind === 'gate') { sfx('thread'); R.pop(p.x, p.y + 40, POP('thread', 'THREADED!'), '#d9b8ff', 16); }
         if (ev.kind === 'dodge') R.pop(ev.x, ev.y + 30, POP('dodge', 'DODGED!'), '#5ce1ff', 15);
         if (ev.kind === 'draft') R.pop(p.x, p.y + 40, POP('draft', 'COMFY!'), '#b8f0ff', 14);
+        // the new overtake kinds (systems): a small named pop, at most one every 0.45 s so a plow does not spam
+        if ((ev.kind === 'slingshot' || ev.kind === 'weave' || ev.kind === 'snipe') && race.t - (kindPopT || -9) > 0.45) {
+          kindPopT = race.t;
+          const KP = { slingshot: ['SLINGSHOT!', '#ffd75c'], weave: ['WEAVE!', '#7dffb0'], snipe: ['SNIPED!', '#ff8fc8'] }[ev.kind];
+          R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 34, POP(ev.kind, KP[0]), KP[1], 15);
+        }
         comboLadderFx(ev.n | 0, p);
         if (ev.fresh && (ev.style || 1) >= 3) {
           const w = STYLE_WORDS[clamp((ev.style | 0) - 3, 0, Math.max(0, STYLE_WORDS.length - 1))];
@@ -1290,37 +1643,55 @@ function onEvent(ev, p) {
         bankedNow = true;
         if (R.comboBank) R.comboBank(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y, dna);
         if (ev.finisher) {
-          // a cash-in on purpose: the lesson is learned
+          // a cash-in on purpose: the lesson is learned (and the tutorial's cash step is done)
+          lessonDone('cash');
           if (!S.cashDone) { S.cashDone = true; saveUI(); lessonEnd(); }
-          const bn = ev.blastN | 0;
+          tutMark('cash');
+          const bn = ev.blastN | 0, big = bn >= 3;
+          // a finisher that blasted 3+ Big Macros: the stinger one grade up and an extra shove of shake
+          sfx('finisher', big ? Math.min(4, g + 1) : ev.grade);
+          trauma(0.25 + (bn > 0 ? 0.15 : 0) + (big ? 0.3 : 0));
           if (bn > 0) {
-            // the finisher blasted Big Macros too: a bigger stinger, one step up the grade
-            sfx('finisher', Math.min(4, (ev.grade | 0) + 1)); trauma(0.45); if (R.zoomPunch) R.zoomPunch(0.1);
+            if (R.zoomPunch) R.zoomPunch(0.1);
             if (R.ring) R.ring(p.x, p.y, '#ffd75c', 150, 0.55, 8);
             if (!S.reduced) { R.flash = Math.max(R.flash || 0, 0.3); R.flashCol = 'rgba(255,215,92,0.4)'; }
-            R.pop(p.x, p.y + 140, `BLASTED ${bn}!`, '#ffd75c', 24 + Math.min(8, bn * 2), 1.3); buzz([20, 20, 30, 20, 60]);
-          } else { sfx('finisher', ev.grade); trauma(0.25); }
-          R.pop(p.x, p.y + 110, pickLine(FINISHER_LINES), '#ffd75c', 22, 1.3);
+            buzz([20, 20, 30, 20, 60]);
+          } else buzz([10, 20, 10]);
+          // ONE pop for the whole cash-in, not a stack of three
+          R.pop(p.x, p.y + 100, `${BANK_GRADES[g] || 'BANKED'} +${dnaS} DNA${bn > 0 ? ' · BLASTED ' + bn : ''}`, '#ffd75c', 28 + g * 2, 1.3);
+          finPopUntil = clock + 1.3;
+          if ((ev.n | 0) < 10) coach(pickLine(FINISHER_LINES), 1.8, 1);
+        } else {
+          sfx('comboBank', ev.grade);
+          R.pop(p.x, p.y + 80, (BANK_GRADES[g] || 'BANKED') + ' +' + dnaS, '#7dffb0', 18 + g * 2, 1.4); buzz([10, 20, 10]);
         }
-        else sfx('comboBank', ev.grade);
-        R.pop(p.x, p.y + 80, (BANK_GRADES[g] || 'BANKED') + ' +' + dnaS, '#7dffb0', 18 + g * 2, 1.4); buzz([10, 20, 10]);
+        // the bigger banks land with a hold and a punch
+        if (g >= 2) { hitStop([0, 0, 30, 50, 80][Math.min(4, g)]); if (R.zoomPunch) R.zoomPunch(0.03 + 0.025 * g); }
         break;
       }
       case 'comboBreak': {
-        const potLost = potBreak();
+        const potLost = potBreak(), n = ev.n | 0;
         if (ev.kept > 0) echoFx(ev.kept);
-        else if (!bankedNow) { if (R.comboBreak) R.comboBreak(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y); comboBreakFx(ev.n || 0, true, potLost); }
+        else if (!bankedNow) {
+          if (R.comboBreak) R.comboBreak(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y, n);
+          comboBreakFx(n, true, potLost);
+          if (n >= 25) { hitStop(45); trauma(0.25); }
+        }
         break;
       }
       case 'comboMilestone': {
         const n = ev.n | 0;
         if (R.confetti) R.confetti(p.x, p.y, 60);
-        hitStop(120); trauma(0.4); buzz([30, 30, 30, 30, 90]);
-        R.pop(p.x, p.y + 150, MILESTONE_LINES[n] || n + ' COMBO!', '#ffd75c', 34, 1.6);
+        hitStop(120, null, null, 'milestone'); trauma(0.4); buzz([30, 30, 30, 30, 90]);
+        // a cash-in pop still on screen: the milestone waits a beat so the two never stack
+        const mPop = () => { if (race && !race.over) R.pop(race.p.x, race.p.y + 150, MILESTONE_LINES[n] || n + ' COMBO!', '#ffd75c', 34, 1.6); };
+        if (finPopUntil > clock) later(0.35, mPop); else mPop();
         sfx('comboMilestone', n);
         break;
       }
       case 'comboEnd':
+        // a cash-in is not a combo ending: its head start shows as one small pop, no ECHO!, no whistle
+        if (ev.finisher) { if (ev.kept > 0) R.pop(p.x, p.y + 60, fillLine(pickLine(K.HEAD_START_LINES || ['HEAD START +{n}']), { n: ev.kept }), '#ffd75c', 16, 1); break; }
         if (ev.kept > 0) { if (!coreHas.comboBreak) echoFx(ev.kept); }
         else if (!coreHas.comboBreak && !bankedNow && ev.n >= 5) comboBreakFx(ev.n);
         else if (!bankedNow && !coreHas.comboBreak) sfx('comboEnd', ev.n);
@@ -1332,7 +1703,7 @@ function onEvent(ev, p) {
       case 'offer': offerGolden = !!ev.golden; break;
       case 'threat': {
         const k = rivalIndex(ev);
-        if (!threatSaid && k >= 0) { threatSaid = true; callout('event', { t: `${first(RIVALS[k].name).toUpperCase()} IS HERE`, z: 'RIVAL', c: threatLine(RIVALS[k].name), col: RIVALS[k].col, sec: 2.2 }); }
+        if (!threatSaid && k >= 0) { threatSaid = true; callout('event', { t: `${first(RIVALS[k].name).toUpperCase()} IS HERE`, z: rivalKicker(RIVALS[k].name), c: threatLine(RIVALS[k].name), col: RIVALS[k].col, sec: 2.2 }); }
         if (k >= 0) { sfx('bossTaunt', k); buzz(15); }
         break;
 
@@ -1342,7 +1713,7 @@ function onEvent(ev, p) {
         const nm = kev ? 'KEVIN' : k >= 0 ? first(RIVALS[k].name).toUpperCase() : 'A RIVAL';
         const line = kev && EGG_LINES.leadYou ? pickLine(EGG_LINES.leadYou) : fillLine(pickLine(EGG_LINES.lead) || '{name} TAKES THE LEAD!', { name: nm });
         callout('drill', { t: line, z: 'THE EGG', col: kev ? '#7dffb0' : k >= 0 ? RIVALS[k].col : '#ff5c7a', sec: 1.3 });
-        sfx('drillLead', kev ? 1 : -1); buzz(kev ? [15, 20, 30] : 20);
+        sfx('drillLead', { k, kevin: kev }); buzz(kev ? [15, 20, 30] : 20);
         // the one big hit at the egg: Kevin takes the lead (once a swim)
         if (kev && !kevLeadFx) { kevLeadFx = true; hitStop(140, p.x, p.y, 'kevin'); if (!S.reduced) { R.flash = Math.max(R.flash || 0, 0.4); R.flashCol = 'rgba(125,255,176,0.45)'; } }
         if (!kev && k >= 0) leadK = k;
@@ -1356,7 +1727,7 @@ function onEvent(ev, p) {
       }
       case 'frenzy': {
         const T = C.FRENZY_TIERS, tier = ev.tier || 1, name = ev.name || (ev.first ? 'FRENZY!' : 'MEGA FRENZY!');
-        sfx('frenzy', tier); R.flash = 0.35; R.flashCol = 'rgba(255,255,255,0.4)'; trauma(0.45 + 0.1 * tier); hitStop(80);
+        sfx('frenzy', tier); R.flash = 0.35; R.flashCol = 'rgba(255,255,255,0.4)'; trauma(0.45 + 0.1 * tier); hitStop(80, null, null, 'frenzy');
         if (clock - lastSlowAt >= 2) slow(0.3 + tier * 0.05, !!ev.first);
         R.burst(p.x, p.y, '#ffd75c', 30, 260, 0.8, 4); R.pop(p.x, p.y + 80, name, '#ffd75c', 28 + tier * 2, 1.4);
         if (R.ring) R.ring(p.x, p.y, '#ffd75c', 90 + tier * 25, 0.5, 6);
@@ -1364,14 +1735,22 @@ function onEvent(ev, p) {
         if (!S.frenzySeen) {
           S.frenzySeen = true; saveUI();
           if (!S.reduced) freezeT = 0.8;
-          coach(TUT_TEXT.frenzy || 'FRENZY! Keep passing to stay on fire.', 2.6, 2);
+          // the line waits for the FRENZY to end: nobody reads mid-FRENZY
+          frenzyCoachPend = true;
         } else if (ev.desc && T && tier > 1) hint(ev.desc, 2.2, 1);
         A.intensity = 2; buzz(tier >= 3 ? [30, 40, 30, 40, 80] : [20, 30, 60]);
         comboFlash = 0.5;
         break;
       }
-      case 'frenzyEnd': setIntensity(); sfx('frenzyEnd'); break;
-      case 'sugar': fruitN++; sfx('sugar'); R.burst(ev.x, ev.y, '#7dffb0', 6, 90, 0.4, 2.5); tutMark('fruit'); break;
+      case 'frenzyEnd':
+        setIntensity(); sfx('frenzyEnd');
+        if (frenzyCoachPend) { frenzyCoachPend = false; coach(TUT_TEXT.frenzy || 'FRENZY! Keep passing to stay on fire.', 2.6, 2); }
+        break;
+      case 'sugar':
+        fruitN++; sfx('sugar'); R.burst(ev.x, ev.y, '#7dffb0', 6, 90, 0.4, 2.5); tutMark('fruit'); lessonDone('fruit');
+        // swims 1 to 3: the first fruit shows where it went (the GAS bar swells and flashes mint)
+        if (fruitN === 1 && (meta.runs | 0) < 3) gasPulse();
+        break;
       case 'dna': {
         const n = Math.round(ev.amount || 5);
         sfx('dna'); R.burst(ev.x, ev.y, '#ff5cd2', 14, 140, 0.6, 3);
@@ -1380,7 +1759,7 @@ function onEvent(ev, p) {
       }
       case 'shield': sfx('shield'); R.pop(ev.x, ev.y + 20, POP('shield', '+1 SHIELD'), '#ffd75c', 16); buzz(12); break;
       case 'alkali': sfx('alkali'); R.pop(ev.x, ev.y + 20, POP('alkali', 'pH OK!'), '#5cc8ff', 14); break;
-      case 'dash': dashBuf = 0; sfx('dash'); R.burst(p.x, p.y - 20, '#8cdcff', 10, 180, 0.4, 2.5); kick(0, -0.4); buzz(12); tutMark('dash'); break;
+      case 'dash': dashBuf = 0; sfx('dash'); R.burst(p.x, p.y - 20, '#8cdcff', 10, 180, 0.4, 2.5); kick(0, -0.4); buzz(12); tutMark('dash'); lessonDone('dash'); lastDashAt = clock; break;
       case 'bonk': bonkN++; sfx('bonk'); trauma(0.55, 0, 1); kick(0, 0.6); hitStopRL(70, ev.x, ev.y, 'bonk'); R.pop(ev.x, ev.y, POP('bonk', 'SPLAT'), '#d9b8ff', 20); hint(pickLine(UI_LINES.bonkHint) || 'Find the GAP in the goo wall!', 2, 1); buzz(45); break;
       case 'surf': sfx('surf'); R.pop(ev.x, ev.y + 20, POP('surf', 'SURF!'), '#d9b8ff', 18); break;
       case 'bump': {
@@ -1431,9 +1810,9 @@ function onEvent(ev, p) {
         crawlEnd();
         if (ev.draft === false) {
           const z = ZONES[ev.zi] || ZONES[ZONES.length - 1];
-          if (ev.zi >= 2) tutFinish();
+          if (ev.zi >= tutEndZone()) tutFinish();
           coachClear();
-          callout('zone', { t: z.name, z: `ZONE ${ev.zi + 1}`, sec: 1.6 }); A.bpm = z.beat; sfx('zone'); buzz([20, 40, 30]);
+          zoneArrive(ev.zi, { t: z.name, z: `ZONE ${ev.zi + 1}`, sec: 1.6 }); A.bpm = z.beat; sfx('zone'); buzz([20, 40, 30]);
           coach(zoneCoach(z.id), firstSwim ? 4.5 : 3, 1);
           if (R.confetti) R.confetti(p.x, p.y, 30);
         }
@@ -1445,18 +1824,30 @@ function onEvent(ev, p) {
         const ks = Array.isArray(ev.ks) ? ev.ks : [];
         const k0 = ks.length ? ks[0] : ev.sprinters && ev.sprinters.length ? RIVALS.findIndex((r) => first(r.name) === first(ev.sprinters[0])) : -1;
         if (k0 >= 0) react(k0, 'sprint', 2.4);
+        // a rival who took the wrong tube is back for the finale
+        const cb = ev.comeback, ck = Number.isInteger(cb) ? cb : typeof cb === 'string' ? RIVALS.findIndex((r) => first(r.name) === first(cb)) : Array.isArray(cb) && cb.length ? (Number.isInteger(cb[0]) ? cb[0] : RIVALS.findIndex((r) => first(r.name) === first(cb[0]))) : cb === true ? k0 : -1;
+        if (ck >= 0 && RIVALS[ck]) {
+          const r = RIVALS[ck];
+          callout('event', { t: `${first(r.name).toUpperCase()} IS BACK!`, z: rivalKicker(r.name), col: r.col, sec: 1.8 });
+          sayRival(ck, pickLine(byFirst(K.RIVAL_COMEBACK || {}, r.name) || []), 2.4, true);
+        }
         break;
       }
       case 'swat': trauma(0.3, 1, 0); kick(ev.wall < 0 ? 0.4 : -0.4, 0); hitStopRL(45, p.x, p.y, 'swat'); R.pop(p.x, p.y + 40, 'SWAT!', '#5ce1ff', 16); sfx('swat'); buzz(20); break;
       case 'domino': R.pop(p.x, p.y + 90, `DOMINO x${ev.n}!`, '#ffd75c', 20); sfx('blast', ev.n); break;
-      case 'lockon': sfx('lockon', clamp(((ev.x != null ? ev.x : p.x) - 200) / 200, -1, 1)); break;
-      // a Big Macro spotted Kevin: a '!' over it and the lock-on knock, panned to where it is
-      case 'spot': if (ev.x != null) R.pop(ev.x, ev.y + 40, '!', '#ff5c7a', 26, 0.7); sfx('lockon', clamp(((ev.x != null ? ev.x : p.x) - p.x) / 200, -1, 1)); break;
-      case 'spareBite': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'SPARE LIFE!', '#ffd75c', 18, 1.1); sfx('shield'); buzz([20, 30, 20]); if (Array.isArray(K.SPARE_BITE_LINES) && K.SPARE_BITE_LINES.length) coach(pickLine(K.SPARE_BITE_LINES), 2.6, 1); break;
+      // panned by where the Big Macro is from Kevin (160 px is a full pan)
+      case 'lockon': sfx('lockon', clamp(((ev.x != null ? ev.x : p.x) - p.x) / 160, -1, 1)); break;
+      // a Big Macro spotted Kevin: a '!' over it and its own spotted sting, panned to where it is
+      case 'spot': if (ev.x != null) R.pop(ev.x, ev.y + 40, '!', '#ff5c7a', 26, 0.7); sfx('spot', { pan: clamp(((ev.x != null ? ev.x : p.x) - p.x) / 160, -1, 1) }); break;
+      // a gift (a free sugar on the first swims, systems 'gift'): a gold sugar sparkle where it was
+      case 'gift': R.burst(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y, '#ffd75c', 16, 140, 0.6, 3); if (R.ring) R.ring(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y, '#ffd75c', 40, 0.4, 3); break;
+      case 'drillTap': drillTapFx(ev); break;
+      case 'rivalMove': rivalMoveFx(ev); break;
+      case 'spareBite': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'SPARE LIFE!', '#ffd75c', 18, 1.1); sfx('chomp'); buzz([20, 30, 20]); if (Array.isArray(K.SPARE_BITE_LINES) && K.SPARE_BITE_LINES.length) coach(pickLine(K.SPARE_BITE_LINES), 2.6, 1); break;
       case 'swatBonk': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'BONK!', '#7ae0ff', 20, 0.9); sfx('bonk'); buzz(12); break;
       case 'goalMet':
         goalHit = true; goalPill();
-        callout('goal', { t: 'GOAL SMASHED!', z: '+' + fmt(ev.dna || 0) + ' 🧬', col: '#ffd75c', sec: 1.8 });
+        callout('goal', { t: 'GOAL SMASHED!', z: '+' + fmt(ev.dna || 0) + ' 🧬', c: fillLine(pickLine(K.GOAL_MET_LINES) || '', { dna: fmt(ev.dna || 0) }) || null, col: '#ffd75c', sec: 1.8 });
         sfx('record'); buzz([20, 30, 60]);
         break;
 
@@ -1476,7 +1867,7 @@ function onEvent(ev, p) {
       case 'drill':
         sfx('egg'); drillLesson();
         callout('drill', { t: ev.rank === 1 ? (pickLine(EGG_LINES.first) || 'FIRST ONE THERE!') : `#${ev.rank} AT THE EGG`, z: 'THE EGG', sec: 1.6 });
-        slow(0.6, true); buzz([40, 40, 80]);
+        drillFeel(0.6); buzz([40, 40, 80]);
         break;
       case 'over': finish(ev); break;
     }
@@ -1487,7 +1878,8 @@ function claimEgg(ev) {
   let a = Number.isInteger(ev.k) ? race.agents[ev.k] : null;
   const nm = ev.name || ev.boss || (a && a.boss && a.boss.name) || '';
   const who = nm ? first(nm).toUpperCase() : 'SWIMMER #' + fmt(2 + Math.floor(Math.random() * 90000));
-  callout('eggClaim', { t: fillLine(pickLine(EGG_LINES.claim) || '{name} IS AT THE EGG!', { name: who }), z: 'HURRY!', col: ev.col || (a && a.boss && a.boss.col) || '#ff5c7a', sec: 2.2 });
+  const ep = nm ? epithetOf(nm) : '';
+  callout('eggClaim', { t: fillLine(pickLine(EGG_LINES.claim) || '{name} IS AT THE EGG!', { name: who }), z: ep ? `${first(nm)} ${ep} · HURRY!`.toUpperCase() : 'HURRY!', zKeep: true, col: ev.col || (a && a.boss && a.boss.col) || '#ff5c7a', sec: 2.2 });
   { const ri = rivalIndex(ev); sfx('eggClaim', ri >= 0 ? ri : undefined); } buzz([30, 30, 60]);
 }
 // overtakes come in floods: show them as one rolling "+places" number instead of a pile of popups
@@ -1508,8 +1900,54 @@ let tensionV = 0;
 function setTension(v) { if (Math.abs(v - tensionV) < 0.02 && !(v === 0 && tensionV !== 0)) return; tensionV = v; try { A.tension = v; } catch (e) { /* ignore */ } }
 
 // ------------------------------------------------------------------ the egg panel: you vs the best rival
-const DU = (() => { const ui = $('drillUI'); return { ui, t: ui.querySelector('.t'), cd: ui.querySelector('.cd'), you: ui.querySelector('.you i'), youB: ui.querySelector('.you b'), riv: ui.querySelector('.riv'), rivI: ui.querySelector('.riv i'), rivB: ui.querySelector('.riv b') }; })();
+const DU = (() => { const ui = $('drillUI'); return { ui, t: ui.querySelector('.t'), cd: ui.querySelector('.cd'), you: ui.querySelector('.you i'), youB: ui.querySelector('.you b'), riv: ui.querySelector('.riv'), rivI: ui.querySelector('.riv i'), rivB: ui.querySelector('.riv b'), ep: ui.querySelector('.ep'), rate: ui.querySelector('.rate'), rateI: ui.querySelector('.rate i') }; })();
 let eggOn = false;
+// drill feel: core's 'drillTap' {n} is the taps it really counted. Each counted batch bursts, shakes and buzzes harder the
+// further in Kevin is (frac = me / need); every 5th counted tap holds a beat with a ring. The meter shows taps a second
+// (core counts 8 at most): gold with MAX! at the cap.
+const DRILL_CAP = 8;
+let drillTapLog = [], drillCounted = 0, gaspDone = false, photoDone = false, photoT = 0, tellOn = 0;
+function drillTapFx(ev) {
+  const n = ev.n | 0; if (n <= 0 || !race || !race.drill) return;
+  const p = race.p, frac = clamp((race.drill.me || 0) / (race.drill.need || 1), 0, 1);
+  R.burst(p.x, p.y + 20, '#5ce1ff', Math.round(4 + 8 * frac), 160, 0.3, 2);
+  trauma(0.06 + 0.12 * frac); if (R.zoomPunch) R.zoomPunch(0.015 + 0.035 * frac);
+  buzz(12);
+  for (let i = 0; i < n; i++) {
+    drillTapLog.push(clock); drillCounted++;
+    if (drillCounted % 5 === 0) { hitStop(22); if (R.ring) R.ring(p.x, p.y, frac > 0.7 ? '#ffd75c' : '#5ce1ff', 60 + 40 * frac, 0.3, 4); }
+  }
+  // a tap answers the rival's tell
+  tellOn = 0;
+}
+// a named rival's signature move at the egg (systems 'rivalMove' {k, move, phase}): the tell, the hit, the counter
+function rivalMoveFx(ev) {
+  try { if (R.rivalMove) R.rivalMove(ev); } catch (e) { /* optional */ }
+  const k = rivalIndex(ev), r = RIVALS[k]; if (!r) return;
+  const fn = first(r.name), p = race.p;
+  if (ev.phase === 'tell') {
+    callout('drill', { t: byFirst(K.RIVAL_MOVE_NAMES || {}, r.name) || 'WATCH OUT!', z: rivalKicker(r.name), zKeep: true, col: r.col, sec: 0.8 });
+    sayRival(k, pickLine(byFirst(K.RIVAL_MOVE_TELLS || {}, r.name) || []), 1.6, true);
+    buzz([12, 10, 12], true); sfx('rivalTell', ev.k != null ? ev.k : k);
+    tellOn = clock + 1.2;
+  } else if (ev.phase === 'hit') {
+    trauma(0.3); kick(0, 0.3); buzz([20, 20, 30]); tellOn = 0;
+  } else if (ev.phase === 'countered') {
+    hitStop(90, p.x, p.y, 'countered');
+    R.pop(p.x, p.y + 90, pickLine(K.EGG_COUNTER_BANNERS || ['COUNTERED!']), '#ffd75c', 28, 1.2);
+    sfx('countered'); buzz([15, 20, 40]); tellOn = 0;
+    sayRival(k, pickLine(byFirst(K.RIVAL_COUNTERED || {}, r.name) || []), 1.8, true);
+  }
+  void fn;
+}
+// a slow-mo at the egg is felt, not lived: the music bends (A.slowmo), the camera leans in and the edges darken for 0.3 s,
+// while the sim keeps 0.85 speed or more (frameBody) so no tap is lost
+function drillFeel(sec) {
+  slow(sec, true);
+  if (S.reduced) return;
+  if (R.zoomPunch) R.zoomPunch(0.15);
+  R.breakVig = Math.max(R.breakVig || 0, 0.3);
+}
 // audio: every drilling agent's progress 0..1 (contested drills keep the heartbeat up); [] when no drill
 let ringsOn = false;
 function drillRingsTick(need) {
@@ -1524,7 +1962,7 @@ function drillRingsTick(need) {
   try { A.drillRings(list); } catch (e) { /* ignore */ }
 }
 function eggTick() {
-  if (!race || race.demo || race.over) { eggOn = false; drillRingsTick(0); return; }
+  if (!race || race.demo || race.over) { eggOn = false; drillRingsTick(0); setC(DU.ui, 'hide', true); return; }
   const need = race.drill ? race.drill.need : (C.EGG_DRILL || 3);
   let best = null, f = 0;
   for (const a of race.agents) if (a.alive && a.arrived) { const af = (a.drill || 0) / (a.need || need); if (af > f) { f = af; best = a; } }
@@ -1532,59 +1970,125 @@ function eggTick() {
   if (best && !eggClaimed) claimEgg({ name: best.boss ? best.boss.name : '', col: best.boss ? best.boss.col : null });
   const on = !!race.drill || !!best;
   if (on && !eggOn) coachClear();
+  if (on !== eggOn) requestAnimationFrame(measureHud);
   eggOn = on;
   setC(DU.ui, 'hide', !on);
   if (!on) setC(document.body, 'egg', false);
 
-  setTension(best ? clamp(0.25 + f * 0.75, 0, 1) : race.drill ? 0.2 : 0);
+  const me = race.drill ? (race.drill.me || 0) / need : 0;
+  // photo finish: both of you past 85%: the world slows, the camera leans in, the band holds its breath (once)
+  if (!photoDone && race.drill && best && me >= 0.85 && f >= 0.85) { photoDone = true; photoT = clock + 1.2; drillFeel(1.0); }
+  // the lead passes 90%: one gasp from the band
+  if (!gaspDone && race.drill && Math.max(me, f) > 0.9) { gaspDone = true; try { if (A.duelGasp) A.duelGasp(); } catch (e) { /* optional */ } }
+  setTension(clock < photoT ? 1 : best ? clamp(0.25 + f * 0.75, 0, 1) : race.drill ? 0.2 : 0);
   drillRingsTick(need);
   if (!on) return;
+  // the tap-rate meter, and a pulsing TAP! while a rival winds up a move
+  drillTapLog = drillTapLog.filter((t) => clock - t < 1);
+  const rate = drillTapLog.length / DRILL_CAP;
+  setC(DU.rate, 'hide', !race.drill); setBar(DU.rateI, rate); setC(DU.rate, 'max', rate >= 0.99);
+  setC(DU.ui, 'tell', clock < tellOn);
+  if (clock < tellOn) setT(DU.t, 'TAP! TAP!'); else setT(DU.t, 'TAP TAP TAP!');
   setC(DU.ui, 'claim', !!best);
   setC(DU.t, 'hide', !race.drill);
   // the egg panel sits under the HUD: the coach strip steps away and the egg banners and the drill lesson go below it
   setC(document.body, 'egg', true);
   const dk = (race.drill ? 'd' : '') + (best ? 'b' : '');
-  if (DU.ui._k !== dk) { DU.ui._k = dk; requestAnimationFrame(() => { const h = DU.ui.offsetHeight; if (h) document.documentElement.style.setProperty('--duB', `calc(var(--hudB) + ${h + 14}px)`); }); }
+  if (DU.ui._k !== dk) { DU.ui._k = dk; requestAnimationFrame(() => { const h = DU.ui.offsetHeight; if (h) { document.documentElement.style.setProperty('--duB', `calc(var(--hudB) + ${h + 14}px)`); document.documentElement.style.setProperty('--duH', h + 'px'); } measureHud(); }); }
   setBar(DU.you, race.drill ? race.drill.me / need : race.progress());
   setT(DU.youB, race.drill ? 'YOU' : 'YOU 🏊');
   setC(DU.riv, 'hide', !best); setC(DU.riv, 'hot', f > 0.7);
   if (best) {
     setBar(DU.rivI, f);
     const nm = best.boss ? first(best.boss.name).toUpperCase() : 'RIVAL';
-    setT(DU.rivB, nm);
+    setT(DU.rivB, nm); setT(DU.ep, best.boss ? epithetOf(best.boss.name) : '');
     // a big countdown: seconds in a fixed-width number, red under 1.5 s
     const secs = Math.max(0, (1 - f) * need), st = secs.toFixed(1), key = nm + '|' + st;
     if (DU.cd._k !== key) {
       DU.cd._k = key; DU.cd._v = null;
       DU.cd.innerHTML = `<small>${esc(nm)} BREAKS IN</small><b class="${secs < 1.5 ? 'hot' : ''}">${st}s</b>`;
     }
-  } else if (DU.cd._k !== '') { DU.cd._k = ''; DU.cd.textContent = 'Drill in before the others do!'; }
+  } else if (DU.cd._k !== '') { DU.cd._k = ''; DU.cd.textContent = 'Drill in before the others do!'; setT(DU.ep, ''); }
 }
 
 // ------------------------------------------------------------------ end of run
 let resAnim = null, prevBestCombo = 0, lastResult = null, resultReady = false, resultTO = 0;
-function finish(o) {
-  save(); lastResult = o; clearInput(); setTension(0);
-  const win = o.reason === 'win';
-  if (win) buzz([50, 50, 50, 50, 200], true); else buzz([90, 60, 160], true);
-  hitStop(160);
-  const fin = race;
-  // the egg itself: a stolen egg names the thief in their colour and lets it sink in; a win says who is in
-  const stolen = o.reason === 'late' && !!race.drill;
-  if (stolen || win) {
-    const th = race.eggTaken && race.eggTaken.boss ? race.eggTaken.boss : null;
-    const nm = win ? 'KEVIN' : th ? first(th.name).toUpperCase() : o.by ? first(o.by).toUpperCase() : 'A RIVAL';
-    const pool = win ? EGG_LINES.win : EGG_LINES.stolen, line = fillLine(pickLine(pool) || (win ? '{name} IS IN!' : '{name} STOLE THE EGG!'), { name: nm });
-    coClear();
-    callout('drill', { t: line, z: 'THE EGG', col: win ? '#7dffb0' : th ? th.col : '#ff5c7a', red: !win, sec: win ? 1.4 : 1.7 });
+// the egg finale: the result card waits (3 s on a win, 2.4 s on a steal) while the rivals at the egg have their say;
+// the first tap after 0.8 s skips straight to it. The timer is set first, so nothing below can ever lock the swim.
+let finHold = null, overAt = -1;
+function goResult(fin, o) {
+  if (race !== fin || race.over !== o || mode !== 'race' || birthOn) return;
+  finHold = null;
+  // a real (not practice) win: the birth plays over the frozen egg first (a tap skips it), then the card
+  if (o.reason === 'win' && o.baby && !o.baby.practice && typeof R.birth === 'function' && !S.reduced) {
+    birthOn = { o, at: clock };
+    try { hud(false); coClear(); } catch (e) { /* the HUD can stay */ }
+    const done = () => { if (!birthOn || birthOn.o !== o) return; birthOn = null; try { showResult(o); } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left */ } } };
+    try { R.birth(o.baby, { first: (meta.wins | 0) === 1 }, done); return; } catch (e) { console.error(e); birthOn = null; }
   }
-  setTimeout(() => {
-    if (race !== fin || race.over !== o) return;
-    try { showResult(o); } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left to show */ } }
-  }, win ? 1400 : stolen ? 1700 : o.reason === 'quit' ? 300 : 900);
-
-  if (win) { R.flash = 1; R.flashCol = 'rgba(255,240,200,0.9)'; for (let i = 0; i < 6; i++) R.burst(race.p.x, race.p.y + 150, ['#ffd75c', '#ff5c8a', '#5ce1ff'][i % 3], 30, 400, 1.4, 5); if (R.confetti) R.confetti(); }
-  else if (o.reason !== 'quit') { trauma(0.8); R.flash = 0.5; R.flashCol = 'rgba(120,0,30,0.6)'; }
+  try { showResult(o); } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left to show */ } }
+}
+// the birth beat (R.birth) is up: { o, at } until its done() hands over to the result card
+let birthOn = null;
+function birthSkip() { if (!birthOn) return false; try { if (typeof R.birthSkip === 'function') R.birthSkip(); else { const o = birthOn.o; birthOn = null; showResult(o); } } catch (e) { /* the watchdog still ends it */ } return true; }
+function finishSkip() {
+  if (!finHold || clock < finHold.ready && performance.now() < finHold.readyMs) return false;
+  const h = finHold; goResult(h.fin, h.o); return true;
+}
+function finish(o) {
+  const fin = race, win = o.reason === 'win', stolen = o.reason === 'late' && !!race.drill;
+  // eaten by a Big Macro or starved in the wrong tube: a beat longer, so the NOM lands before the card
+  const gulp = o.reason === 'wbc' || o.reason === 'wrong';
+  const wait = win ? 3000 : stolen ? 2400 : o.reason === 'quit' ? 300 : gulp ? 1400 : 900;
+  // the card waits on the race clock (frameBody), so a hidden tab or a hitch never skips the finale
+  finHold = { fin, o, until: clock + wait / 1000, ready: clock + 0.8, readyMs: performance.now() + 800 };
+  try { save(); } catch (e) { /* storage */ }
+  lastResult = o; endPot = { combo: Math.floor(Math.max(lastCombo, race.p.combo || 0)), pot: potV };
+  try {
+    clearInput(); setTension(0);
+    if (win) buzz([50, 50, 50, 50, 200], true); else buzz([90, 60, 160], true);
+    if (o.reason !== 'quit') hitStop(win ? 180 : 160, race.p.x, race.p.y, win ? 'kevin' : 'player', true);
+    if (gulp) {
+      const p = race.p;
+      slow(0.7, true); if (R.zoomPunch && !S.reduced) R.zoomPunch(0.2); kick(0, 0.8);
+      R.pop(p.x, p.y + 90, o.reason === 'wbc' ? 'NOM.' : 'pfffft...', o.reason === 'wbc' ? '#ff5c7a' : '#c9b6c2', 40, 1.4);
+    }
+    // the egg itself: a stolen egg names the thief in their colour and lets it sink in; a win says who is in
+    if (stolen || win) {
+      const th = race.eggTaken && race.eggTaken.boss ? race.eggTaken.boss : null;
+      const nm = win ? 'KEVIN' : th ? first(th.name).toUpperCase() : o.by ? first(o.by).toUpperCase() : 'A RIVAL';
+      const pool = win ? EGG_LINES.win : EGG_LINES.stolen, line = fillLine(pickLine(pool) || (win ? '{name} IS IN!' : '{name} STOLE THE EGG!'), { name: nm });
+      coClear();
+      callout('drill', { t: line, z: 'THE EGG', col: win ? '#7dffb0' : th ? th.col : '#ff5c7a', red: !win, sec: win ? 1.4 : 1.7 });
+      eggFinaleLines(win, th);
+    }
+    // the win flash must never lose to the 0.5 s flash limiter (a lead-change flash just before it)
+    if (win) { R.lastFlashT = -9; R.flash = 1; R.flashCol = 'rgba(255,240,200,0.9)'; for (let i = 0; i < 6; i++) R.burst(race.p.x, race.p.y + 150, ['#ffd75c', '#ff5c8a', '#5ce1ff'][i % 3], 30, 400, 1.4, 5); if (R.confetti) R.confetti(); }
+    else if (o.reason !== 'quit') { trauma(0.8); R.flash = 0.5; R.flashCol = 'rgba(120,0,30,0.6)'; }
+  } catch (e) { console.error(e); }
+}
+// each named rival still at the egg says one line, 0.35 s apart: a win gets their sore-loser lines, a steal the thief's
+// line from inside the egg and one sore line from another rival
+function eggFinaleLines(win, thief) {
+  const at = [];
+  RIVALS.forEach((r, k) => { const a = race.agents[k]; if (a && a.alive && a.arrived && a.boss && (!thief || a.boss !== thief)) at.push(k); });
+  const says = [];
+  if (win) for (const k of at) says.push([k, pickLine(byFirst(K.RIVAL_EGG_LOSS || {}, RIVALS[k].name) || [])]);
+  else {
+    const tk = thief ? RIVALS.findIndex((r) => r.name === thief.name || first(r.name) === first(thief.name)) : -1;
+    if (tk >= 0) says.push([tk, pickLine(byFirst(K.RIVAL_STEAL || {}, RIVALS[tk].name) || [])]);
+    if (at.length) says.push([at[0], pickLine(byFirst(K.RIVAL_EGG_LOSS || {}, RIVALS[at[0]].name) || [])]);
+  }
+  says.filter((x) => x[1]).forEach(([k, l], i) => later(0.35 * i + 0.3, () => sayRival(k, l, 1.6, true)));
+}
+// a tiny clock-driven delay queue (pauses with the race, cleared on a new swim)
+let laterQ = [];
+function later(sec, fn) { laterQ.push({ at: clock + sec, fn }); }
+function laterTick() {
+  if (!laterQ.length) return;
+  const due = laterQ.filter((q) => clock >= q.at); if (!due.length) return;
+  laterQ = laterQ.filter((q) => clock < q.at);
+  for (const q of due) { try { q.fn(); } catch (e) { console.error(e); } }
 }
 function eggWinner() {
   let w = race.eggTaken || null;
@@ -1624,9 +2128,21 @@ function gapInfo(o, by) {
 }
 // a joke about this very swim (K.RESULT_STAT_QUIPS), about 40% of the time when one fits
 let fruitN = 0;
+let lastDashAt = -99, endPot = null;
 function statQuip(o, win) {
-  const Q = K.RESULT_STAT_QUIPS; if (!Q || Math.random() >= 0.4) return '';
-  const z = o.zone | 0, fits = [];
+  const Q = K.RESULT_STAT_QUIPS; if (!Q) return '';
+  const z = o.zone | 0, fits = [], p = race.p, lost = !win && o.reason !== 'quit';
+  // the sharp ones about how this very swim ended: 70% of the time when one fits
+  const sharp = [];
+  if (lost && p.frenzyT > 0) sharp.push(['diedInFrenzy', {}]);
+  if (lost && endPot && endPot.combo >= 10 && endPot.pot >= 3) sharp.push(['unbankedPot', { n: fmt(endPot.combo) }]);
+  if (lost && (p.shield | 0) >= 2) sharp.push(['shieldsUnused', { n: p.shield | 0 }]);
+  if (lost && (o.uiCause === 'wrong' || o.reason === 'wrong')) { const ck = RIVALS.findIndex((r) => first(r.name) === 'Chad'), ca = ck >= 0 ? race.agents[ck] : null; if (ca && ca.side && ca.side === p.side) sharp.push(['followedChadWrong', {}]); }
+  if (lost) for (const nm of passedOnce) { const k = RIVALS.findIndex((r) => r.name === nm || first(r.name) === first(nm)), a = k >= 0 ? race.agents[k] : null; if (a && a.alive && a.y > p.y) { sharp.push(['passedRivalThenDied', { name: first(nm) }]); break; } }
+  if (o.reason === 'wbc' && (p.dashT > 0 || clock - lastDashAt < 1.2)) sharp.push(['wbcAfterDash', {}]);
+  const sOk = sharp.filter(([id]) => Array.isArray(Q[id]) && Q[id].length);
+  if (sOk.length && Math.random() < 0.7) { const [id, v] = sOk[Math.floor(Math.random() * sOk.length)]; return fillLine(pickLine(Q[id]), v); }
+  if (Math.random() >= 0.4) return '';
   if (!win && o.reason !== 'quit' && z === 0 && (race.t || 0) < 25) fits.push(['fastDeath', {}]);
   if (fruitN === 0 && z >= 1) fits.push(['noFruit', {}]);
   if ((o.combo | 0) >= 40) fits.push(['hugeCombo', { n: fmt(o.combo) }]);
@@ -1703,14 +2219,16 @@ function soCloseLine() {
     const miss = s.needs.filter((n) => !(race.muts[n] > 0));
     if (miss.length !== 1 || miss.length === s.needs.length || !MUTATIONS[miss[0]]) continue;
     const m = MUTATIONS[miss[0]];
-    const known = seen.includes(s.id), hintTxt = !known && SYNERGY_HINTS[s.id] ? ' ' + SYNERGY_HINTS[s.id] : '';
-    return fillLine(pickLine(SYNERGY_SO_CLOSE), { card: m.icon + ' ' + m.name, combo: known ? s.icon + ' ' + s.name : 'a secret mashup' }) + hintTxt;
+    const known = seen.includes(s.id);
+    return fillLine(pickLine(SYNERGY_SO_CLOSE), { card: m.icon + ' ' + m.name, combo: known ? s.icon + ' ' + s.name : 'a secret mashup' });
   }
   return '';
 }
 function rematchLabel(o, by, close) {
   if (o.reason !== 'win' && by) { const l = byFirst(REMATCH_LINES, by); if (Array.isArray(l) && l.length) return pickLine(l); }
   if (close && REMATCH_LINES.close) return pickLine(REMATCH_LINES.close);
+  const bc = o.reason !== 'win' && K.REMATCH_BY_CAUSE ? K.REMATCH_BY_CAUSE[o.uiCause] : null;
+  if (Array.isArray(bc) && bc.length) return pickLine(bc) + ' 💦';
   return pickLine(REMATCH_LINES.default) || 'SWIM AGAIN 💦';
 }
 function babyCanvas(b, size) {
@@ -1724,7 +2242,7 @@ let nemAtStart = null;
 // which cause a zone's own death jokes are about (the egg's only when you were drilling)
 const ZONE_HAZ = { acid: 'acid', sea: 'wbc', goo: 'bonk', fork: 'wrong', rapids: 'energy', egg: 'late' };
 function showResult(o) {
-  mode = 'result'; hud(false); menuMusic(); muffle(false); A.intensity = 0.3;
+  mode = 'result'; hud(false); muffle(false);
   const win = o.reason === 'win', z = ZONES[clamp(o.zone | 0, 0, ZONES.length - 1)], by = byName(o), reason = o.reason;
   const g = gapInfo(o, by);
   // ONE foe for the whole screen: who took the egg, else the named rival nearest ahead, else whoever the gap names
@@ -1732,6 +2250,9 @@ function showResult(o) {
   const byK = foe ? RIVALS.findIndex((r) => first(r.name) === first(foe)) : -1, topK = win ? topDriller() : -1;
   sfx(win ? 'win' : 'lose', win ? (topK >= 0 ? topK : undefined) : (byK >= 0 ? byK : undefined));
   const prog = clamp(race.p.y / RACE_LEN, 0, 1), close = !win && reason !== 'quit' && prog >= 0.85;
+  // a loss keeps the race loop going behind a filter, itching for the rematch (audio's rematchMusic); a win gets the menu
+  if (!win && typeof A.rematchMusic === 'function') { setTension(0); slowmoReset(); try { A.rematchMusic(close); } catch (e) { menuMusic(); } }
+  else { menuMusic(); A.intensity = 0.3; }
   // what really ended the swim (core's o.cause); reaching the egg and losing the drill is always 'late'
   const drilled = !!race.drill;
   let cause = win ? 'win' : o.cause || (reason === 'energy' && race.p.acid > 0 ? 'acid' : reason === 'energy' && bonkN >= 3 ? 'bonk' : reason);
@@ -1740,7 +2261,7 @@ function showResult(o) {
   // headline and the why
   let tt, why, near = false;
   if (win) { tt = "IT'S A BABY! 🍼"; why = topK >= 0 ? linesOf(RIVALS[topK].name).loseEgg || pickLine(WIN_LINES) : pickLine(WIN_LINES); }
-  else if (by) { tt = `${first(by).toUpperCase()} GOT THERE FIRST`; why = linesOf(by).stealEgg || pickLine(DEATH_LINES.late); }
+  else if (by) { tt = `${first(by).toUpperCase()} GOT THERE FIRST`; why = pickLine(byFirst(K.RIVAL_STEAL_WHY || {}, by) || []) || linesOf(by).stealEgg || pickLine(DEATH_LINES.late); }
   else if (reason === 'quit') { tt = pickLine(RESULT_TITLES.quit) || 'BREAK TIME'; why = pickLine(DEATH_LINES.quit) || 'Kevin is taking a little break.'; if (o.counted === false) why += ' Too short to count: no daily, no rival record.'; }
   else if ((o.zone | 0) >= 6) { tt = pickLine(RESULT_TITLES.close) || 'SO. CLOSE.'; why = null; }
   else { tt = pickLine(RESULT_TITLES[cause]) || pickLine(RESULT_TITLES[reason]) || pickLine(LOSE_TITLES); why = null; }
@@ -1750,15 +2271,22 @@ function showResult(o) {
     const zh = ZONE_HAZ[z.id], zoneFits = zh === cause && (z.id !== 'egg' || drilled);
     if (bucket && NEAR_MISS_BY_GAP && Array.isArray(NEAR_MISS_BY_GAP[bucket]) && NEAR_MISS_BY_GAP[bucket].length) { why = pickLine(NEAR_MISS_BY_GAP[bucket]); near = true; }
     else if (o.rank <= 10 && NEAR_MISS_LINES.length) { why = pickLine(NEAR_MISS_LINES); near = true; }
+    // out of GAS with the egg in sight gets its own lines
+    else if (cause === 'energy' && (o.zone | 0) >= 5 && Array.isArray(DEATH_LINES.energyEgg) && DEATH_LINES.energyEgg.length) why = pickLine(DEATH_LINES.energyEgg);
     else if (zoneFits && DEATH_BY_ZONE[z.id] && Math.random() < 0.5) why = pickLine(DEATH_BY_ZONE[z.id]);
     else why = pickLine(DEATH_LINES[cause] || DEATH_LINES[reason] || DEATH_LINES.energy);
   }
-  $('resTitle').textContent = tt; $('resWhy').textContent = why;
+  $('resTitle').textContent = tt; $('resWhy').textContent = chadFix(why || '');
+  // the first death: one title, one line, the rank, the egg bar, the DNA, one tip and SWIM AGAIN (nothing else)
+  const firstRes = (meta.runs | 0) <= 1;
+  setC($('result'), 'first', firstRes);
   // two joke lines at most: the why and the rank line (none after a near-miss line, which already says it).
   // Never contradict the headline: rank 1 and 2 lines only ever mean a win
   // the joke line: about 40% of the time one about this very swim (when one fits), else the rank joke
-  const sq = near ? '' : statQuip(o, win);
-  $('resRankLine').textContent = near ? '' : sq || (!win && o.rank <= 2 ? pickLine(LOSS_RANK_LINES) : rankLine(o.rank));
+  // a close loss (beaten by under 3 s) keeps its two joke lines for the why and the rival's gloat: no rank line
+  const closeLoss = !!foe && !!g && g.sec < 3;
+  const sq = near || closeLoss ? '' : statQuip(o, win);
+  $('resRankLine').textContent = near || closeLoss ? '' : sq || (!win && o.rank <= 2 ? pickLine(LOSS_RANK_LINES) : rankLine(o.rank));
   $('resRankLbl').textContent = `${kevinLabel()} · FINAL PLACE`;
   $('resRank').textContent = '#' + fmt(TOTAL_SWIMMERS);
   $('resStats').innerHTML = `<div class="stat"><b>${(o.dist / PX_PER_CM).toFixed(1)} cm</b>swum</div><div class="stat"><b>${fmt(o.overtakes)}</b>overtakes</div><div class="stat${o.combo > prevBestCombo && prevBestCombo > 0 ? ' rec' : ''}"><b>${o.combo}</b>best combo</div><div class="stat"><b>${(o.zone | 0) + 1}/${ZONES.length}</b>zones</div>`;
@@ -1774,6 +2302,8 @@ function showResult(o) {
     }
   }
   const syn = Array.isArray(o.synergies) ? o.synergies.map((id) => SYNERGIES.find((s) => s.id === id)).filter(Boolean) : [];
+  // short portrait screens hide the named list: a compact strip of icons instead
+  { const ms = $('resMutStrip'); if (ms) { ms.innerHTML = Object.keys(race.muts).filter((id) => MUTATIONS[id]).map((id) => `<span title="${esc(MUTATIONS[id].name)}">${MUTATIONS[id].icon}</span>`).join('') + syn.map((sy) => `<span class="sy" title="${esc(sy.name)}">${sy.icon}</span>`).join(''); setC(ms, 'none', !ms.innerHTML || firstRes); } }
   $('resMuts').innerHTML = Object.keys(race.muts).filter((id) => MUTATIONS[id]).map((id) => `<span>${MUTATIONS[id].icon} ${esc(MUTATIONS[id].name)}${race.muts[id] > 1 ? ' x' + race.muts[id] : ''}</span>`).join('') + syn.map((s) => `<span class="sy">${s.icon} ${esc(s.name)}</span>`).join('');
   // rival ladder with lifetime win-loss, the nemesis marked, and the gap to the one who beat you
   const beat = beatenSet(o), nemNow = nemesisOf();
@@ -1790,24 +2320,28 @@ function showResult(o) {
   } else gs.classList.add('hide');
   // ONE celebration badge, in this order: the NEW RECORD stamp, the best badge (first record, daily best), the gap's NEW BEST
   const firstRec = prevBest >= TOTAL_SWIMMERS, rec = o.rank < prevBest, dailyBest = o.daily != null && !!o.dailyBest;
-  const gEl = $('resGap');
-  let gapNB = false;
+  // the gap to whoever beat you: no line of its own, it is the egg bar's caption (below)
+  $('resGap').classList.add('hide');
+  let gapNB = false, gapTxt = '';
   if (g) {
     const had = S.bestGap > 0, better = !had || g.sec < S.bestGap;
     if (better) { S.bestGap = g.sec; saveUI(); }
     gapNB = had && better && !rec && !dailyBest;
-    gEl.innerHTML = `${g.name ? esc(first(g.name)) : 'The winner'} beat you by ${g.sec.toFixed(1)} s${gapNB ? '<span class="nb">NEW BEST</span>' : ''}`;
-    gEl.style.color = byK >= 0 && (!g.name || first(g.name) === first(foe)) ? RIVALS[byK].col : '';
-    gEl.classList.remove('hide');
-  } else gEl.classList.add('hide');
-  // the foe gloats (a tight one under a second), unless the why line is already a near-miss line
+    gapTxt = `${g.name ? esc(first(g.name)) : 'The winner'} beat you by <b>${g.sec.toFixed(1)} s</b>${gapNB ? '<span class="nb">NEW BEST</span>' : ''}`;
+  }
+  // the joke budget: one punchline (the rank line) and ONE rival voice: the gloat (or the thief's steal line), else the
+  // SHORT_BY joke on the egg bar, else the why line
   const gw = $('resGloat');
   let gloat = '';
-  if (foe && !near) {
+  const stealLine = reason === 'late' && drilled && by ? pickLine(byFirst(K.RIVAL_STEAL || {}, by) || []) : '';
+  if (firstRes) gloat = '';
+  else if (stealLine) gloat = stealLine;
+  else if (foe && (!near || closeLoss)) {
     const tight = g && g.sec < 1 && K.RIVAL_GLOATS_TIGHT && K.RIVAL_GLOATS_TIGHT.length;
     gloat = tight ? `${first(foe)}: ${pickLine(K.RIVAL_GLOATS_TIGHT)}` : pickLine(byFirst(K.RIVAL_GLOATS || {}, foe) || []);
   }
-  setT(gw, gloat || ''); setC(gw, 'hide', !gloat);
+  gloat = chadFix(gloat || '');
+  setT(gw, gloat); setC(gw, 'hide', !gloat);
   if (gloat) gw.style.setProperty('--c', byK >= 0 ? RIVALS[byK].col : '#ff8b9b');
   // one chip row: the swim in numbers; a beaten combo record turns it gold (unless the big NEW RECORD stamp goes off)
   const comboRec = o.combo > prevBestCombo && prevBestCombo > 0 && !(rec && !firstRec);
@@ -1821,41 +2355,88 @@ function showResult(o) {
     S.dynastySeen = true; saveUI(); dy.textContent = DYNASTY_STAMP; dy.classList.remove('hide');
     setTimeout(() => { if (mode === 'result') { sfx('record'); if (R.confetti) R.confetti(); } }, 1300);
   } else dy.classList.add('hide');
+  // the egg bar: every loss that is not a quit. Your best ever distance is a BEST tick; going further says by how much
   const eg = $('resEgg');
   placeResEgg(close);
-  if (reason === 'late' || reason === 'energy' || close) {
+  let shortJoke = false;
+  if (!win && reason !== 'quit') {
     const cm = race.remaining() / PX_PER_CM;
     const bar = eg.querySelector('i'); bar.style.transition = 'none'; bar.style.transform = `scaleX(${close && !S.reduced ? 0 : prog.toFixed(3)})`;
     if (close && !S.reduced) { void bar.offsetWidth; bar.style.transition = ''; requestAnimationFrame(() => { bar.style.transform = `scaleX(${prog.toFixed(3)})`; }); }
-    eg.querySelector('span').textContent = race.drill ? 'You made it to the egg!' : `${cm.toFixed(cm < 1 ? 2 : 1)} cm short of the egg (${Math.min(99, Math.round(prog * 100))}% of the way)`;
+    const bp = clamp(+S.bestProg || 0, 0, 1), pct = Math.min(99, Math.round(prog * 100)), further = prog > bp + 0.005 && bp > 0;
+    const bt = eg.querySelector('.best'); if (bt) { bt.style.left = (bp * 100).toFixed(1) + '%'; setC(bt, 'hide', !(bp > 0.01) || further); }
+    if (prog > bp) { S.bestProg = Math.round(prog * 1000) / 1000; saveUI(); }
+    const sp = eg.querySelector('span'), sec = g ? g.sec : 99;
+    // a hair short (under half a cm, or under a second): one of the numbered near-miss jokes, the number in bold
+    const sbk = cm < 0.15 || sec < 0.3 ? 'hair' : 'tiny', sbl = K.SHORT_BY_LINES && K.SHORT_BY_LINES[sbk];
+    let cap;
+    if ((cm < 0.5 || sec < 1) && Array.isArray(sbl) && sbl.length && !firstRes) { shortJoke = true; cap = fillLine(esc(pickLine(sbl)), { cm: `<b>${cm.toFixed(cm < 1 ? 2 : 1)}</b>`, sec: `<b>${sec.toFixed(1)}</b>` }); }
+    else if (gapTxt && !firstRes) cap = gapTxt;
+    else cap = race.drill ? 'You made it to the egg!' : `${cm.toFixed(cm < 1 ? 2 : 1)} cm short (${pct}% there)`;
+    const chip = further ? `<i class="far">NEW FURTHEST +${Math.max(1, Math.round((prog - bp) * 100))}%</i>` : bp > 0.01 ? `<i class="bst">best: ${Math.min(99, Math.round(bp * 100))}%</i>` : '';
+    sp.innerHTML = cap + chip;
     eg.classList.remove('hide');
     if (close) setTimeout(() => { if (mode === 'result') sfx('loseClose'); }, 700);
   } else eg.classList.add('hide');
+  // one rival voice: a gloat or the egg bar's SHORT_BY joke takes the why line's place
+  if (gloat || shortJoke) $('resWhy').textContent = '';
   // the receipt counts up line by line
   const lines = receipt(o);
+  $('resReceipt').classList.remove('fold');
   $('resReceipt').innerHTML = lines.map((l) => `<div class="${!l.mult && l.v < 0 ? 'neg' : ''}"><span>${esc(l.label)}</span><b>${l.mult ? 'x' + +l.v.toFixed(2) : (l.v < 0 ? '-' : '+') + '0'}</b></div>`).join('');
   $('resDna').textContent = '+0 DNA 🧬';
   $('resBest').textContent = rec ? (firstRec ? 'FIRST RECORD!' : `old best #${fmt(prevBest)}`) : `best ever #${fmt(meta.best)}`;
   if (dailyBest) $('resBest').textContent += ' · DAILY BEST!';
   $('resBest').className = 'badge hide';
   $('resRecord').classList.add('hide');
-  $('shareBtn').textContent = 'Brag 📋';
+  $('shareBtn').textContent = o.daily != null ? 'Share Daily 📅' : 'Brag 📋';
   renderResUp();
-  // one lesson (plain words on the first two swims) and the next Kevin
-  const big = !win && meta.runs <= 2 && FIRST_DEATH[cause];
-  const tip = win || reason === 'quit' ? '' : big || pickLine(TIP_BY_REASON[cause]) || pickLine(TIP_BY_REASON[reason]) || pickLine(TIPS);
+  // one lesson (plain words on the very first swim, never after a close one) and the next Kevin
+  const big = !win && (firstRes || (meta.runs === 1 && !close && !(g && g.sec < 3))) && FIRST_DEATH[cause];
+  let tip = win || reason === 'quit' ? '' : big || pickLine(TIP_BY_REASON[cause]) || pickLine(TIP_BY_REASON[reason]) || pickLine(TIPS);
+  // Dad's Pick already says what to fix for this cause (from swim 3 on): no second lesson on top
+  if (!big && meta.runs > 2 && resPickCause === cause) tip = '';
+  // holding half a MASHUP beats the generic tip (it is the reason to swim again)
+  const sc = !big && !firstRes && !win ? soCloseLine() : '';
+  if (sc) tip = sc;
+  // the egg drill pumped Kevin's arms: next time drills faster
+  if (!tip && !win && reason === 'late' && typeof C.eggBoostPct === 'function' && K.RESULT_HELP_LINES && K.RESULT_HELP_LINES.eggBoost) {
+    try { const pc = Math.round(+C.eggBoostPct(meta) || 0); if (pc > 0) tip = fillLine(K.RESULT_HELP_LINES.eggBoost, { pct: pc }); } catch (e) { /* optional */ }
+  }
   $('resTip').textContent = tip;
   $('resTip').classList.toggle('big', !!big);
-  $('resSyn').textContent = soCloseLine();
+  // the MASHUP tease never shares the screen with the upgrade card, and the first death keeps it simple
+  $('resSyn').textContent = !tip && !firstRes && $('resUp').classList.contains('hide') ? soCloseLine() : '';
   const nk = kevinNo(), kt = nk <= 3 ? KEVIN_NEXT.few : nk <= 10 ? KEVIN_NEXT.many : KEVIN_NEXT.tenPlus;
   const ms = RUN_MILESTONES.find((x) => x[0] === meta.runs);
   // the next-Kevin joke only when there is no tip to read, or once the player knows the ropes (swim 3 on)
   let nx = ms ? ms[1] : win || (tip && meta.runs < 3) ? '' : fillLine(pickLine(kt), { n: fmt(nk) });
   if (o.daily != null && DAILY_LINES.streak && streakOf() > 0) nx = (DAILY_LINES.streak[clamp(streakOf(), 1, DAILY_LINES.streak.length) - 1] || '') + (nx ? ' ' + nx : '');
-  $('resNext').textContent = nx;
-  const goal = nextGoalLine(o.nextGoal); setT($('resGoal'), goal); setC($('resGoal'), 'hide', !goal);
+  // the family saga: the first loss in each zone, and Coach Gonad's clues at their run counts, go above the next-Kevin line
+  const story = [];
+  if (!win && reason !== 'quit' && o.counted !== false && K.ZONE_FIRST_LOSS && K.ZONE_FIRST_LOSS[z.id] && !S.zoneLoss.includes(z.id)) {
+    S.zoneLoss.push(z.id); saveUI(); story.push(fillLine(K.ZONE_FIRST_LOSS[z.id], { n: fmt(kevinNo()) }));
+  }
+  const clue = Array.isArray(K.COACH_CLUES) ? K.COACH_CLUES.find((x) => x[0] === meta.runs && !S.clues.includes(x[0])) : null;
+  if (clue) { S.clues.push(clue[0]); saveUI(); story.push(clue[1]); }
+  $('resNext').textContent = story.concat(nx ? [nx] : []).slice(0, 2).join('\n');
+  // the bounty rides on the rematch button; once today's daily is done, a line for tomorrow sits above it
+  const goal = nextGoalLine(o.nextGoal);
+  let tmr = '';
+  if (o.daily != null && o.counted !== false && Array.isArray(K.TOMORROW_LINES) && K.TOMORROW_LINES.length && typeof C.dailySeed === 'function' && meta.dailyDay === C.dailySeed()) {
+    const day = streakOf() + 1, n = typeof C.dailyBonusFor === 'function' ? C.dailyBonusFor(day, meta.gen) : 0;
+    tmr = fillLine(K.TOMORROW_LINES[day % K.TOMORROW_LINES.length], { n: fmt(n), day });
+    const nr = dailyRuleShort(C.dailySeed() + 1);
+    if (nr) tmr += ' · Tomorrow: ' + nr;
+  }
+  setT($('resGoal'), tmr); setC($('resGoal'), 'hide', !tmr);
   // the rematch button names who you are coming back for, in their colour
-  const ab = $('againBtn'); ab.textContent = rematchLabel(o, foe, close);
+  const ab = $('againBtn'), rl = rematchLabel(o, foe, close);
+  ab.innerHTML = esc(rl) + (goal ? `<small>🎯 ${esc(goal)}</small>` : '');
+  medalStamp(o);
+  // short phones: the lesson and the tomorrow line leave the sticky bar (it keeps just the buttons)
+  { const acts = $('resActions'), short = innerHeight <= 700;
+    for (const id of ['resGoal', 'resTip']) { const el = $(id); if (short) { if (el.parentNode === acts) acts.parentNode.insertBefore(el, acts); } else if (el.parentNode !== acts) acts.insertBefore(el, acts.firstChild); } }
 
   ab.style.setProperty('--rc', byK >= 0 && !win ? RIVALS[byK].col : '#ff3d6e');
   ab.classList.toggle('rival', byK >= 0 && !win);
@@ -1864,11 +2445,16 @@ function showResult(o) {
   for (const id of ['againBtn', 'resShopBtn', 'resMenuBtn']) { const b = $(id); b.classList.remove('ready', 'breathe'); b.classList.add('wait'); }
   $('resShopBtn').classList.toggle('prime', meta.runs === 1);
   badges();
+  // the first death: Dad's Pick rides on the Habits button instead of its own card
+  { const sb = $('resShopBtn'), pk = firstRes ? dadPickId() : null; let sm = sb.querySelector('.pk');
+    if (pk && HABITS[pk]) { if (!sm) { sm = document.createElement('small'); sm.className = 'pk'; sb.appendChild(sm); } sm.textContent = "Dad's pick " + HABITS[pk].icon; }
+    else if (sm) sm.remove(); }
   show('result'); $('result').scrollTop = 0;
   resultTO = setTimeout(() => {
     resultReady = true; sfx('ready');
     for (const id of ['againBtn', 'resShopBtn', 'resMenuBtn']) { const b = $(id); b.classList.remove('wait'); void b.offsetWidth; b.classList.add('ready'); }
     $('againBtn').classList.add('breathe');
+    if ($('result').classList.contains('first')) { try { $('againBtn').focus({ preventScroll: true }); } catch (e) { /* old browser */ } }
   }, 600);
   const red = S.reduced;
   resAnim = { t: 0, dur: red ? 0.01 : 1.2, step: red ? 0.01 : 0.28, rank: o.rank, dna: o.dna, rec, firstRec, celebrate: firstRec || dailyBest, gapNB, done: false, tick: 0, lines, shown: -1 };
@@ -1902,16 +2488,28 @@ function tickResult(dt) {
   }
   const ft = clamp(lt / totalDur, 0, 1);
   if (k >= 1) $('resDna').textContent = `+${fmt(a.dna * ft)} DNA 🧬`;
-  if (k >= 1 && ft >= 1) { a.done = true; if (!a.rec || a.firstRec) sfx('dna'); renderResUp(); }
+  if (k >= 1 && ft >= 1) {
+    a.done = true; if (!a.rec || a.firstRec) sfx('dna'); renderResUp();
+    // the receipt has been read: 0.6 s later it folds into the one +DNA line
+    const rc = $('resReceipt'); setTimeout(() => { if (resAnim === a) rc.classList.add('fold'); }, S.reduced ? 0 : 600);
+  }
 }
 // one quick upgrade right on the result screen: Dad's Pick follows what ended the swim, else the cheapest
 const DAD_PICKS = { energy: ['water', 'sleep', 'berries'], acid: ['water', 'sleep', 'berries'], wbc: ['hottub', 'sleep'], late: ['broccoli', 'beatbox'],
   bonk: ['walk', 'broccoli'], wrong: ['meditate', 'broccoli'], win: ['meditate', 'hottub', 'gps', 'factory'] };
 
+let resPickShown = false, resPickCause = null;
+// Dad's Pick for the shop: what the last swim's ending asks for (one that can still level), the affordable one first
+function dadPickId() {
+  const o = lastResult; if (!o) return null;
+  const cause = o.uiCause || (o.reason === 'win' ? 'win' : o.cause || o.reason), wants = DAD_PICKS[cause] || [];
+  const open = wants.filter((id) => HABITS[id] && lv(meta, id) < habMax(id));
+  return open.find((id) => meta.dna >= habitCost(id, lv(meta, id))) || open[0] || null;
+}
 function renderResUp() {
   const el = $('resUp'), o = lastResult || {};
   const opts = HABIT_ORDER.filter((id) => lv(meta, id) < habMax(id)).map((id) => ({ id, l: lv(meta, id), cost: habitCost(id, lv(meta, id)) })).sort((a, b) => a.cost - b.cost);
-  if (!opts.length) { el.classList.add('hide'); return; }
+  if (!opts.length) { el.classList.add('hide'); resPickShown = false; resPickCause = null; return; }
   const cause = o.uiCause || (o.reason === 'win' ? 'win' : o.cause || o.reason), wants = DAD_PICKS[cause] || [];
   const picks = wants.map((id) => opts.find((x) => x.id === id)).filter(Boolean);
   const dad = picks.find((x) => meta.dna >= x.cost) || picks[0] || null;
@@ -1921,6 +2519,7 @@ function renderResUp() {
   const dl = DAD_PICK_LINES[cause === 'energy' && (o.zone | 0) >= 5 && DAD_PICK_LINES.energyEgg ? 'energyEgg' : cause] || DAD_PICK_LINES.generic || '';
   const why = dad && x === dad ? `<div class="dp">DAD'S PICK${dl ? ' · ' + esc(dl) : ''}</div>` : '';
   const affordable = meta.dna >= x.cost;
+  resPickShown = !!why; resPickCause = why ? cause : null;
   el.classList.remove('hide'); el.classList.toggle('can', affordable);
   if (affordable) {
     el.innerHTML = `<div class="ic">${h.icon}</div><div class="tx">${why}<b>${esc(h.name)}</b><small>${eff}</small></div><button id="resBuy">BUY<small>${fmt(x.cost)} DNA</small></button>`;
@@ -1929,17 +2528,38 @@ function renderResUp() {
     el.innerHTML = `<div class="ic">${h.icon}</div><div class="tx">${why}<b>${esc(h.name)} in ${fmt(x.cost - meta.dna)} DNA</b><small>${eff}</small><div class="bb"><i style="transform:scaleX(${clamp(meta.dna / x.cost, 0, 1).toFixed(3)})"></i></div></div>`;
   }
 }
+// the daily's medal (systems: over.medalNew, the tier 1 bronze, 2 silver, 3 gold, or over.medal with medalNew true)
+const medalTier = (o) => clamp(typeof o.medalNew === 'number' ? o.medalNew : o.medalNew ? o.medal | 0 : 0, 0, 3);
+function medalStamp(o) {
+  const el = $('resMedal'); if (!el) return;
+  const t = o.daily != null ? medalTier(o) : 0;
+  if (!t) { el.classList.add('hide'); return; }
+  const l = pickLine((K.DAILY_MEDAL_LINES || {})[t] || []) || '';
+  el.innerHTML = `<span class="md">${MEDAL_IC[t]}</span>${esc(['', 'BRONZE', 'SILVER', 'GOLD'][t])}${l ? `<small>${esc(l)}</small>` : ''}`;
+  el.className = 'm' + t;
+  setTimeout(() => { if (mode === 'result') { sfx('medal', t); buzz([20, 30, 60]); } }, 1500);
+}
+// Daily #1 is the day the daily went live
+const DAILY_EPOCH = Math.floor(Date.UTC(2026, 10, 1) / 86400000);
+function dailyShareText(o) {
+  const z = clamp(o.zone | 0, 0, 6), win = o.reason === 'win', atEgg = !win && z >= 6;
+  const row = Array.from({ length: 7 }, (_, i) => (win ? (i < 6 ? '🟩' : '👶') : i < z ? '🟩' : i === z ? (atEgg ? '🥚' : '🟥') : '⬛')).join('');
+  const t = medalTier(o) || (o.medal | 0), md = t ? ' · ' + MEDAL_IC[t] : '';
+  const T = K.DAILY_SHARE_TAILS || {}, tail = pickLine(T[win ? 'won' : atEgg || z >= 5 ? 'egg' : 'early'] || []) || '';
+  const n = Math.max(1, (o.daily | 0) - DAILY_EPOCH + 1), st = Math.max(1, o.streak | 0 || streakOf());
+  return `Million To One Daily #${n} 🔥${st}\n${row}\n#${fmt(o.rank)} · combo x${fmt(o.combo | 0)}${md}${tail ? '\n' + tail : ''}`;
+}
 async function share() {
   const o = lastResult; if (!o) return;
   const tail = tierLine(SHARE_LINES, o.rank);
   const head = o.reason === 'win' ? 'I beat 999,999 swimmers and became a PERSON in Million To One.'
     : `I finished #${fmt(o.rank)} out of 1,000,000 swimmers in Million To One.`;
-  const text = `${head}${tail ? ' ' + tail : ''} (Kevin #${kevinN})`;
+  const text = o.daily != null ? dailyShareText(o) : `${head}${tail ? ' ' + tail : ''} (Kevin #${kevinN})`;
   buzz(10);
   if (navigator.share) {
     try { await navigator.share({ title: 'Million To One', text, url: SHARE_URL }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
   }
-  const full = text + ' ' + SHARE_URL;
+  const full = text + (o.daily != null ? '\n' : ' ') + SHARE_URL;
   let ok = false;
   try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(full); ok = true; } } catch (e) { /* fall through */ }
   if (!ok) {
@@ -1959,12 +2579,21 @@ let shopFrom = 'title';
 function shop(from) {
   shopFrom = from || shopFrom; show('shop');
   $('dnaTop').textContent = `${fmt(meta.dna)} DNA 🧬`;
-  $('shopList').innerHTML = HABIT_ORDER.map((id) => {
-    const h = HABITS[id], l = lv(meta, id), mx = habMax(id), maxed = l >= mx, cost = habitCost(id, l);
+  // Dad's Pick first and highlighted; then what you can afford (cheapest first), what you cannot yet, the locked ones, the maxed ones
+  const dad = dadPickId();
+  const rows = HABIT_ORDER.map((id) => {
+    const l = lv(meta, id), mx = habMax(id), locked = HABITS[id].max > 0 && mx === 0, maxed = !locked && l >= mx, cost = habitCost(id, l);
+    return { id, l, mx, locked, maxed, cost, can: !locked && !maxed && meta.dna >= cost };
+  });
+  const rank = (r) => (r.id === dad ? 0 : r.can ? 1 : !r.locked && !r.maxed ? 2 : r.locked ? 3 : 4);
+  rows.sort((a, b) => rank(a) - rank(b) || a.cost - b.cost);
+  $('shopList').innerHTML = rows.map(({ id, l, mx, locked, maxed, cost }) => {
+    const h = HABITS[id];
+    if (locked) return `<div class="hab locked"><div class="ic">${h.icon}</div><div><div class="nm">${esc(h.name)}</div><div class="lk">🔒 Unlocks at Generation 2</div><div class="ds">${esc(h.desc)}</div></div></div>`;
     const a = habEff(id, l), b = maxed ? null : habEff(id, l + 1);
     const ef = maxed && a ? `<div class="ef">${esc(a)} · MAXED</div>` : a && b ? `<div class="ef">${l ? esc(a) + ' → ' + esc(b) : 'Next: ' + esc(b)}</div>` : `<div class="ds">${esc(h.desc)}</div>`;
-    const q = habitQuip(id);
-    return `<div class="hab${!maxed && meta.dna >= cost ? ' can' : ''}"><div class="ic">${h.icon}</div><div><div class="nm">${esc(h.name)}</div>${q ? `<div class="qp">${esc(q)}</div>` : ''}${ef}<div class="pips">${'●'.repeat(Math.min(l, mx))}${'○'.repeat(Math.max(0, mx - l))}</div></div><button data-id="${id}" ${maxed || meta.dna < cost ? 'disabled' : ''}>${maxed ? 'MAX' : fmt(cost)}<small>${maxed ? '' : 'DNA'}</small></button></div>`;
+    const q = habitQuip(id), pick = id === dad ? `<div class="dp">DAD'S PICK</div>` : '';
+    return `<div class="hab${!maxed && meta.dna >= cost ? ' can' : ''}${pick ? ' pick' : ''}"><div class="ic">${h.icon}</div><div>${pick}<div class="nm">${esc(h.name)}</div>${q ? `<div class="qp">${esc(q)}</div>` : ''}${ef}<div class="pips">${'●'.repeat(Math.min(l, mx))}${'○'.repeat(Math.max(0, mx - l))}</div></div><button data-id="${id}" ${maxed || meta.dna < cost ? 'disabled' : ''}>${maxed ? 'MAX' : fmt(cost)}<small>${maxed ? '' : 'DNA'}</small></button></div>`;
   }).join('');
   for (const b of $('shopList').querySelectorAll('button')) b.onclick = () => { if (buy(b.dataset.id)) shop(); };
 }
@@ -1976,7 +2605,7 @@ function album(tab) {
   albumTab = tab || albumTab; show('album');
   const seen = meta.synergiesSeen || [], tot = SYNERGIES.length;
   $('tabBabies').classList.toggle('on', albumTab === 'babies'); $('tabCombos').classList.toggle('on', albumTab === 'combos');
-  $('tabCombos').textContent = `Combos ${seen.length}/${tot}`;
+  $('tabCombos').textContent = `Mashups ${seen.length}/${tot}`;
   if (albumTab === 'babies') {
     $('albumH').textContent = 'Baby Album';
     $('albumSub').textContent = 'Every win becomes a person. Every person grows up and becomes the next dad.';
@@ -2020,7 +2649,7 @@ const H = {
   efill: $('efill'), ebar: $('ebar'), shields: $('shields'), combo: $('combo'), cn: $('combo').querySelector('.n'), cw: $('combo').querySelector('.w'),
   cbar: $('combo').querySelector('.bar i'), cbarW: $('combo').querySelector('.bar'), cm2: $('combo').querySelector('.m'), cft: $('combo').querySelector('.ft'),
   ctag: $('combo').querySelector('.tag'), cin: $('combo').querySelector('.in'), dash: $('dashBtn'), muts: $('mutRow'), elow: $('elow'),
-  pot: $('combo').querySelector('.pot'), cash: $('cashBtn'), pips: $('combo').querySelector('.pips'), pipI: [...$('combo').querySelectorAll('.pips i')], pace: $('pace'),
+  pot: $('combo').querySelector('.pot'), gap: $('combo').querySelector('.gap'), cash: $('cashBtn'), pips: $('combo').querySelector('.pips'), pipI: [...$('combo').querySelectorAll('.pips i')], pace: $('pace'),
 
   rv: RIVALS.map((r, k) => $('rv' + k)),
 };
@@ -2029,7 +2658,9 @@ let quip = { zi: -1, done: 0 }, lastQuip = ''; const usedQuips = new Set();
 const MILESTONES = [[100000, 'TOP 100,000!'], [10000, 'TOP 10,000!'], [1000, 'TOP 1,000!'], [100, 'TOP 100!'], [10, 'TOP 10!'], [1, 'IN THE LEAD!']];
 const COMBO_TIERS = [3, 10, 20, 30, 45, 60, 100, 150];
 // the combo pot: what cashing in would pay right now, rolling upward; a smashed pot strikes through for 0.3 s
-let potV = 0, potBrokeT = 0, comboLadder = 0, touchUsed = false;
+let potV = 0, potBrokeT = 0, comboLadder = 0;
+// a touch screen talks about swipes from the very first card; a keyboard (no touch seen) gets the key names
+let touchUsed = (() => { try { return matchMedia('(pointer:coarse)').matches || (navigator.maxTouchPoints | 0) > 0; } catch (e) { return false; } })();
 const multTxt = (m) => 'x' + Math.round(m * 10) / 10;
 const finMult = (style) => (typeof C.finisherMult === 'function' ? C.finisherMult(style) : style >= 5 ? 2 : style >= 4 ? 1.6 : 1.3);
 function potBreak() {
@@ -2077,7 +2708,7 @@ function resetHud() {
   setC(DU.ui, 'hide', true);
   potV = 0; potBrokeT = 0; comboLadder = 0; setC(H.pot, 'broke', false); setC(H.pot, 'hide', true); setC(H.cash, 'hide', true);
   H.shields._n = -1; H.shields._w = -1; DU.cd._k = null;
-  setC(H.pace, 'hide', true); H.pips._n = -1; setC(H.pips, 'lock', false); DU.ui._k = null;
+  setC(H.pace, 'hide', true); setC(H.gap, 'hide', true); H.pot._fm = null; H.tick._res = null; H.pips._n = -1; setC(H.pips, 'lock', false); DU.ui._k = null;
   for (const el of H.rv) el._hotUntil = -99;
 }
 function bossPassed(k) {
@@ -2087,12 +2718,47 @@ function bossPassed(k) {
 }
 function comboTag(t) { setT(H.ctag, t); H.ctag.classList.add('on'); setC(H.cw, 'tagged', true); tagT = 1.3; }
 const TIER_SCALE = [1, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35];
+let comboIntroNow = false, comboSeenAt = -1, comboIntroDone = false, mutShowT = 0, threatOnB = false, intenseOn = false, dnaHudV = -1, cdV = -1;
+// DASH: a conic cooldown sweep (--cd 0..1, written on 0.02 steps), a pop and a buzz when it is ready, a thin red tick when
+// the tank cannot pay for a dash
+function dashTick(p) {
+  const b = H.dash, full = race.s && race.s.dashCd > 0 ? race.s.dashCd : 1;
+  const v = race.drill ? 1 : clamp(1 - (p.dashCd || 0) / full, 0, 1);
+  if (Math.abs(v - cdV) >= 0.02 || (v === 1 && cdV !== 1)) {
+    const was = cdV; cdV = v; b.style.setProperty('--cd', v.toFixed(2));
+    if (v === 1 && was >= 0 && was < 1 && !race.drill) { b.classList.remove('rdy'); void b.offsetWidth; b.classList.add('rdy'); buzz(12); }
+  }
+  setC(b, 'lowE', !race.drill && lowForDash());
+}
+// the threat lane and the intense HUD (body classes, so the CSS moves banners and trims the HUD)
+function laneTick(p) {
+  const th = !race.over && !race.pending && hostileAhead(700);
+  if (th !== threatOnB) { threatOnB = th; setC(document.body, 'threat', th); }
+  const zi = zoneIndex(p.y), it = p.combo >= 10 || p.frenzyT > 0 || zi === C.EGG_I;
+  if (it !== intenseOn) { intenseOn = it; setC(document.body, 'intense', it); requestAnimationFrame(measureHud); }
+}
+// this swim's DNA so far, in the HUD: where banked helices fly to (R.bankTarget), popping as each one lands
+function dnaHudTick() {
+  const el = $('dnaHud'), v = Math.floor(race.dnaRun || 0);
+  if (v !== dnaHudV) { const was = el.classList.contains('hide'); dnaHudV = v; setT(el, '🧬 ' + fmt(v)); setC(el, 'hide', v <= 0); if (was && v > 0) requestAnimationFrame(measureBankTarget); }
+}
 let hudSlowT = 0, barW = 0;
 // the progress bar's pixel width, cached (rival dots move with transforms, never with left)
 function measureBar() { barW = $('prog').clientWidth || barW; }
 const setX = (el, px) => { const v = Math.round(px * 2) / 2; if (el._x !== v) { el._x = v; el.style.transform = `translate3d(${v}px,0,0)`; } };
+// the +places ticker (or a milestone label) reaches down into the rival tags' top row: that much of row 0 is taken
+function rankReserve() {
+  const ms = coCur && coCur.kind === 'milestone';
+  if (!ms && !H.tick.classList.contains('on')) return 0;
+  if (H.tick._res == null) {
+    const el = ms ? $('rankLbl') : H.tick, r = el.getBoundingClientRect(), pr = $('prog').getBoundingClientRect();
+    H.tick._res = r.width && r.bottom > pr.top - 24 ? r.right - pr.left + 6 : 0;
+  }
+  return H.tick._res;
+}
 function drawHud(dt, live) {
   const p = race.p;
+  R.hudBottom = hudBottomL; R.bannerBox = bannerUp() ? bannerBoxL : null; R.avoidRect = dashAvoidL;
   if (!barW) measureBar();
   // text that changes every frame is written at most 15 times a second
   hudSlowT -= dt; const slowTick = hudSlowT <= 0; if (slowTick) hudSlowT = 1 / 15;
@@ -2116,7 +2782,7 @@ function drawHud(dt, live) {
     }
     if (jumpT > 0) { jumpT -= dt; if (jumpT <= 0) setC(H.rank.parentNode, 'jump', false); }
     const prev = H.tick._last == null ? race.rank : H.tick._last; H.tick._last = race.rank;
-    if (race.rank < prev) { tickSum += prev - race.rank; tickT = 1.1; if (slowTick) setT(H.tick, '+' + sig3(tickSum)); setC(H.tick, 'on', true); }
+    if (race.rank < prev) { tickSum += prev - race.rank; tickT = 1.1; if (slowTick) { const tv = H.tick._v; setT(H.tick, '+' + sig3(tickSum)); if (H.tick._v !== tv) H.tick._res = null; } setC(H.tick, 'on', true); }
     else if (tickT > 0) { tickT -= dt; if (tickT <= 0) { tickSum = 0; setC(H.tick, 'on', false); } }
     // several thresholds in one leap: only the best one gets the flash
     let ms = null; while (msIdx < MILESTONES.length && race.rank <= MILESTONES[msIdx][0]) ms = MILESTONES[msIdx++];
@@ -2162,9 +2828,13 @@ function drawHud(dt, live) {
   }
   const want = [];
   if (na >= 0) want.push([na, 0]);
-  if (nb >= 0) want.push([nb, 1]);
-  for (let k = 0; k < RIVALS.length; k++) if (k !== na && k !== nb && tagX[k] != null && H.rv[k]._hotUntil > clock) want.push([k, -1]);
-  const rowsUsed = [[], []], placed = new Set();
+  // intense (big combo, FRENZY, the egg zone): only the nearest rival ahead keeps a name tag
+  if (!intenseOn) {
+    if (nb >= 0) want.push([nb, 1]);
+    for (let k = 0; k < RIVALS.length; k++) if (k !== na && k !== nb && tagX[k] != null && H.rv[k]._hotUntil > clock) want.push([k, -1]);
+  }
+  const rowsUsed = [[], []], placed = new Set(), rsv = rankReserve();
+  if (rsv > 0) rowsUsed[0].push([-1e9, rsv]);
   for (const [k, pref] of want) {
     const el = H.rv[k], tg = el._tag || (el._tag = el.querySelector('.tag'));
     if (!el._tw && !el._cnotag) { const w = tg ? tg.offsetWidth : 0; if (w > 0) el._tw = w; }
@@ -2190,7 +2860,16 @@ function drawHud(dt, live) {
     if (!S.reduced && pn >= 0) { H.shields.classList.remove('flash', 'lost'); void H.shields.offsetWidth; H.shields.classList.add(grew ? 'flash' : 'lost'); }
   }
   // combo strip: one row, one bar; its size grows a step per tier but never past the screen edge
-  const cb = H.combo, showCombo = (p.combo >= 3 || potBrokeT > 0) && !race.drill && !eggOn && !(firstSwim && clock - raceT0 < 4);
+  // swim 1: the strip waits until the chain means something (combo 5+, or a chain that has lasted 2 s)
+  if (p.combo >= 3) { if (comboSeenAt < 0) comboSeenAt = clock; } else comboSeenAt = -1;
+  // swim 1: COMBO_INTRO waits until Kevin can steer, then names the strip the next time a chain reaches 3
+  const steerOk = !tut || !tut.on || tut.st.steer === 'ok';
+  if (firstSwim && !comboIntroDone && steerOk && p.combo >= 3 && lastCombo < 3 && !race.drill && !eggOn) {
+    comboIntroDone = true; comboIntroNow = true;
+    coach(K.COMBO_INTRO || 'Passing in a row = COMBO', 2.4, 2, true);
+  }
+  const firstOk = !firstSwim || comboIntroDone || p.combo >= 5 || (comboSeenAt >= 0 && clock - comboSeenAt >= 2);
+  const cb = H.combo, showCombo = (p.combo >= 3 || potBrokeT > 0) && !race.drill && !eggOn && firstOk;
   if (p.combo < 10) comboLadder = 0;
   // the pot: what cashing in pays right now (rolls upward over ~120 ms, drops at once); a smashed pot shows struck through
   if (potBrokeT > 0) { potBrokeT -= dt; if (potBrokeT <= 0) { potV = 0; setC(H.pot, 'broke', false); } }
@@ -2202,7 +2881,12 @@ function drawHud(dt, live) {
     if (potT - potV < 0.05) potV = potT;
   }
   if (showCombo) {
-    if (cb._op !== 1) { cb._op = 1; cb.style.opacity = 1; requestAnimationFrame(measureHud); }
+    if (cb._op !== 1) {
+      cb._op = 1; cb.style.opacity = 1; requestAnimationFrame(measureHud); setC(document.body, 'comboOn', true);
+      // the intro on swim 1: a little bounce as the strip arrives
+      if (comboIntroNow && !S.reduced && H.combo.animate) H.combo.animate([{ transform: 'scale(.4)' }, { transform: 'scale(1.15)', offset: 0.6 }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+      comboIntroNow = false;
+    }
     let changed = false;
     const ct0 = H.cn._v; setT(H.cn, Math.floor(p.combo) + 'x'); if (H.cn._v !== ct0) changed = true;
     const fz = p.frenzyT > 0;
@@ -2212,7 +2896,8 @@ function drawHud(dt, live) {
     const ft = ti >= 0 ? T[ti].name : '', ww = ti >= 0 ? '' : w;
     if (H.cft._v !== ft || H.cw._v !== ww) changed = true;
     setT(H.cft, ft); setT(H.cw, ww);
-    setC(H.cw, 'hide', ti >= 0); setC(H.cft, 'hide', ti < 0);
+    // in FRENZY the tier name already shouted on the canvas: the strip keeps the number, the pot and the gap to MEGA
+    setC(H.cw, 'hide', ti >= 0); setC(H.cft, 'hide', true);
     const f = p.comboT / (p.comboMax || race.s.combo || 1);
     setBar(H.cbar, f); setC(H.cbarW, 'low', f < 0.3);
     let ct = 0; while (ct < COMBO_TIERS.length && p.combo >= COMBO_TIERS[ct]) ct++;
@@ -2223,19 +2908,29 @@ function drawHud(dt, live) {
     if (changed || cb._sw == null) fitCombo(ct);
     const potOn = potV > 0.05;
     setC(H.pot, 'hide', !potOn);
+    // ONE multiplier on the strip: what cashing in pays now, with the finisher multiplier ('+5.2 DNA x1.3')
+    const fm = finMult(p.style);
     if (potOn) {
-      setT(H.pot, '🧬 +' + (potV < 10 ? potV.toFixed(1) : fmt(potV)));
+      setT(H.pot, '+' + (potV < 10 ? potV.toFixed(1) : fmt(potV)) + ' DNA ' + multTxt(fm));
+      if (H.pot._fm != null && fm > H.pot._fm + 0.001 && !S.reduced && H.pot.animate) H.pot.animate([{ transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' });
+      H.pot._fm = fm;
       const g = typeof C.bankGrade === 'function' ? C.bankGrade(p.bank) : 0;
       if (H.pot._g !== g && potBrokeT <= 0) { H.pot._g = g; H.pot.style.fontSize = (13 + 2 * g) + 'px'; }
     }
     // a big enough pot gets a tappable CASH chip with the finisher multiplier
     const cashOn = p.bank >= 10 && potBrokeT <= 0 && !race.pending;
     setC(H.cash, 'hide', !cashOn);
-    if (cashOn) setT(H.cash, 'CASH ' + multTxt(finMult(p.style)));
+    if (cashOn) setT(H.cash, 'CASH');
+    // how far the next FRENZY tier is (gold at 3 or less)
+    let gp = -1;
+    if (typeof race.fzPoints === 'function' && Number.isFinite(p.nextFrenzy)) gp = Math.ceil(p.nextFrenzy - race.fzPoints());
+    const gOn = gp > 0 && gp <= 30 && !cashOn;
+    setC(H.gap, 'hide', !gOn);
+    if (gOn) { setT(H.gap, gp + (fz ? ' TO MEGA' : ' TO FRENZY')); setC(H.gap, 'near', gp <= 3); }
     stylePips(p);
     if (p.combo > lastCombo && H.cn.animate && !S.reduced) H.cn.animate([{ transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-out' });
   } else {
-    if (cb._op !== 0) { cb._op = 0; cb.style.opacity = 0; requestAnimationFrame(measureHud); }
+    if (cb._op !== 0) { cb._op = 0; cb.style.opacity = 0; requestAnimationFrame(measureHud); setC(document.body, 'comboOn', false); }
     setC(H.cash, 'hide', true);
     if (cb._tier) { for (let i = 1; i <= COMBO_TIERS.length; i++) cb.classList.remove('t' + i); cb._tier = 0; }
   }
@@ -2255,9 +2950,16 @@ function drawHud(dt, live) {
     const cap = innerHeight <= 700 ? 8 : 99;
     H.muts.innerHTML = chips.slice(0, cap).join('') + (chips.length > cap ? `<span class="more">+${chips.length - cap}</span>` : '');
     requestAnimationFrame(measureHud);
+    // hidden while intense, but a new chip shows for 1.5 s
+    mutShowT = 1.5;
   }
+  if (mutShowT > 0) mutShowT -= dt;
+  setC(H.muts, 'peek', mutShowT > 0);
+  laneTick(p);
+  dnaHudTick();
   if (slowTick) paceTick(p);
   setC(H.dash, 'cd', p.dashCd > 0 && !race.drill);
+  dashTick(p);
 
   setT(H.dash, race.drill ? 'DRILL' : 'DASH');
   if (live) {
@@ -2299,7 +3001,10 @@ function paceTick(p) {
   const gap = theirs - mine;
   paceV = paceV == null ? gap : paceV + (gap - paceV) * 0.15;
   const v = Math.round(paceV * 10) / 10;
-  setT(el, `${first(lead.boss.name)} ${v >= 0 ? '+' : ''}${v.toFixed(1)}s`);
+  // whole seconds, and only while it is a race worth watching (30 s behind to 10 s ahead)
+  if (v < -30 || v > 10) { setC(el, 'hide', true); return; }
+  const sec = Math.max(1, Math.round(Math.abs(v)));
+  setT(el, v < 0 ? `🏁 ${first(lead.boss.name)} ${sec}s ahead` : `🏁 ${first(lead.boss.name)} ${sec}s behind`);
   setC(el, 'hide', false); setC(el, 'ahead', v >= 0); setC(el, 'behind', v < 0); setC(el, 'hot', v < -5);
   const zid = ZONES[zi] && ZONES[zi].id;
   if (!paceSaid && v < -4 && (zid === 'sea' || zid === 'fork')) {
@@ -2332,7 +3037,7 @@ function threatTick(live) {
 // scale the combo strip to its tier, but never wider than the screen (measured only when its text changes)
 function fitCombo(ct) {
   const cb = H.combo, inr = H.cin;
-  const w = inr.scrollWidth || 1, avail = Math.min(innerWidth, cb.clientWidth || innerWidth) - 24;
+  const w = inr.scrollWidth || 1, avail = (cb.clientWidth || innerWidth) - 24;
   const sc = Math.max(0.5, Math.min(TIER_SCALE[ct] || 1, avail / w));
   cb._sw = w;
   const v = S.reduced ? Math.min(1, sc) : sc;
@@ -2357,6 +3062,21 @@ function quipTick() {
   if (!pool.length) return;
   const l = pickLine(pool); usedQuips.add(l); lastQuip = l;
   coach(l, clamp(1.6 + l.length * 0.035, 2, 3.2), 0);
+}
+// a named rival you tuck in behind for 1 s says something about it (K.RIVAL_DRAFTED): once per rival per zone, never
+// within 4 s of another bubble, never in the swim-1 lesson
+let draftK = -1, draftT = 0, draftSaid = new Set(), draftZone = -1;
+function draftTick(dt) {
+  if (!race || race.demo || race.drill || race.over || race.pending || countT > 0) { draftK = -1; draftT = 0; return; }
+  const zi = race.zoneReached | 0; if (zi !== draftZone) { draftZone = zi; draftSaid = new Set(); }
+  const a = race.draftTarget, k = a && a.boss ? race.agents.indexOf(a) : -1;
+  if (k < 0 || !RIVALS[k] || !(race.p.draft > 0.08)) { draftK = -1; draftT = 0; return; }
+  if (k !== draftK) { draftK = k; draftT = 0; }
+  draftT += dt;
+  if (draftT < 1 || draftSaid.has(k) || (firstSwim && tut && tut.on) || clock - lastBubble < 4) return;
+  const pool = byFirst(K.RIVAL_DRAFTED || {}, RIVALS[k].name);
+  if (!Array.isArray(pool) || !pool.length) { draftSaid.add(k); return; }
+  if (sayRival(k, pickLine(pool), 2, true)) draftSaid.add(k);
 }
 // meet the named rivals: one line the first time each comes into view
 function rivalTick() {
@@ -2383,6 +3103,7 @@ const Q_KEEP = 7 * 86400000;
 function govHold(sec) { gov.holdUntil = Math.max(gov.holdUntil, clock + sec); gov.slowFor = 0; gov.fastFor = 0; }
 function setStage(st) {
   gov.stage = st; gov.stageAt = clock;
+  try { if (typeof A.setLite === 'function') A.setLite(st >= 2); } catch (e) { /* optional */ }
   R.lite = st >= 2;          // set before resize: the renderer caps the lite canvas lower
   R.resize(st >= 1 ? 0 : 1);
 }
@@ -2400,15 +3121,20 @@ function applyGfx() {
   if (R.textScale != null) R.textScale = textScaleNow();
 }
 function learnStage(st) { setStage(st); S.qs = st; S.qT = Date.now(); saveUI(); gov.slowFor = 0; gov.fastFor = 0; gov.ema = gov.period; }
+// the display's frame period: the 20th percentile of 90 live-race frames, snapped to a real refresh rate (never above 60 Hz's)
+const PERIODS = [6.94, 8.33, 11.1, 16.67];
+const snapPeriod = (v) => PERIODS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a), PERIODS[0]);
+function govReset() { gov.samples = []; gov.period = 0; gov.slowFor = 0; gov.fastFor = 0; }
 function governor(raw) {
   if (S.gfx !== 'auto' || raw > 100 || raw <= 0 || document.hidden) return;
-  if (gov.samples.length < 90) {
+  // only a live race says anything about the phone: not paused, no cards, no pending deal, not in a hold after a screen change
+  const busy = mode !== 'race' || !race || race.demo || race.paused || race.pending || race.over || !$('cards').classList.contains('hide');
+  if (busy || clock < gov.holdUntil) { gov.slowFor = 0; gov.fastFor = 0; return; }
+  if (gov.samples.length < 90 || !gov.period) {
     gov.samples.push(raw);
-    if (gov.samples.length === 90) { const s = gov.samples.slice().sort((a, b) => a - b); gov.period = clamp(s[45], 6, 34); gov.ema = gov.period; }
+    if (gov.samples.length >= 90) { const s = gov.samples.slice().sort((a, b) => a - b); gov.period = snapPeriod(s[Math.floor(s.length * 0.2)]); gov.ema = gov.period; }
     return;
   }
-  const busy = mode !== 'race' || !race || race.paused || race.pending || !$('cards').classList.contains('hide');
-  if (busy || clock < gov.holdUntil) { gov.slowFor = 0; gov.fastFor = 0; return; }
   gov.ema += (raw - gov.ema) * 0.05;
   if (gov.ema > gov.period * 1.3) { gov.slowFor += raw / 1000; gov.fastFor = 0; }
   else { gov.slowFor = 0; if (gov.ema < gov.period * 0.9) gov.fastFor += raw / 1000; else gov.fastFor = 0; }
@@ -2438,15 +3164,21 @@ function crawlEnd(crossed) {
 
 // ------------------------------------------------------------------ 2, 1, GO (0.6 s a number)
 let lastCount = 0;
+// countFromPause: this countdown is the one after a pause (its GO is sfx('resume'))
+let countFromPause = false;
 function countTick(dt) {
   const el = $('count');
   countT -= dt;
+  // the countdown is idle time: art bakes the crowd sprites the swim is about to need
+  if (countT > 0 && typeof R.prewarmRun === 'function') { try { R.prewarmRun(); } catch (e) { /* optional */ } }
   if (countT > 0) {
     const n = Math.ceil(countT / 0.6);
     if (n !== lastCount) { lastCount = n; el.textContent = n; el.className = ''; void el.offsetWidth; el.className = 'on'; sfx('tap', 0.3 + (3 - n) * 0.2); buzz(10); }
   } else {
     countT = 0; lastCount = 0; el.textContent = 'GO!'; el.className = ''; void el.offsetWidth; el.className = 'on go'; goT = 0.5;
-    sfx('boss', 4); buzz([20, 20, 40]); trauma(0.25);
+    sfx(countFromPause ? 'resume' : 'go'); buzz([20, 20, 40]); trauma(0.25);
+    if (!countFromPause) goNow();
+    countFromPause = false;
   }
 }
 
@@ -2456,6 +3188,24 @@ const SIM_HZ = 240, SIM_MAX = Math.ceil(0.05 * SIM_HZ);
 // rafP: the smoothed raw rAF interval. Auto and Lite throttle only real high-refresh screens (under 9.5 ms, so 120 Hz
 // and up) to about 60 fps with a budget; 90 Hz, 60 Hz and slower screens draw every frame they get
 let rafP = 16.7, prevRaf = 0, rafAcc = 0;
+// draw cost: a frozen frame (paused, a hit-stop, the countdown) is drawn once and then left alone until something changes;
+// under the cards, the shop or the result card the canvas redraws every 3rd frame; the title demo draws at 30 fps
+let drawKey = '', drawAcc = 0, drawN = 0;
+const CARDS_EL = $('cards');
+function drawFrame(dt, ts, inRace) {
+  drawAcc = Math.min(0.1, drawAcc + dt); drawN++;
+  if (ts === 0 && inRace) {
+    const key = `${race.paused ? 1 : 0}|${cv.width}x${cv.height}|${R.camY == null ? 0 : 1}|${race.over ? 1 : 0}`;
+    if (key === drawKey) { drawAcc = 0; return; }
+    drawKey = key;
+  } else {
+    drawKey = '';
+    const overlay = mode === 'result' || (mode === 'race' && !CARDS_EL.classList.contains('hide'));
+    if (overlay && drawN % 3) return;
+    if (!overlay && race.demo && drawAcc < 1 / 30 - 0.004) return;
+  }
+  R.draw(race, drawAcc, ts); drawAcc = 0;
+}
 function frame(now) {
   try {
     const iv = prevRaf ? now - prevRaf : 16.7; prevRaf = now;
@@ -2478,6 +3228,17 @@ function frameBody(now) {
   const inRace = !!race && mode === 'race' && !race.demo;
   const live = !(inRace && race.paused);
   if (live) clock += dt;
+  frozenRecent = Math.max(0, frozenRecent - dt);
+  // the finale's own timer (race clock), then the watchdog: a finished swim still on the race screen 3.5 s later goes to
+  // the result card no matter what (the birth has its own, longer one)
+  if (mode === 'race' && finHold && clock >= finHold.until) goResult(finHold.fin, finHold.o);
+  if (mode === 'race' && race && race.over && !race.demo && !birthOn) {
+    if (overAt < 0) overAt = clock;
+    else if (clock - overAt > 3.5) { overAt = -1; finHold = null; try { showResult(race.over); } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left */ } } }
+  } else if (birthOn) {
+    overAt = -1;
+    if (clock - birthOn.at > 9) { const b = birthOn; birthOn = null; try { showResult(b.o); } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left */ } } }
+  } else overAt = -1;
   // slow-mo: event hits, the first look at a hazard, and a crawl over the end of a zone when a rival is close or the combo is big.
   // The crawl has hysteresis: in at 200 px, out at 300 px (or 320 px past the line), held for at least 0.5 s.
   let want = 1;
@@ -2493,6 +3254,8 @@ function frameBody(now) {
     let target = want;
     if (freezeT > 0) { freezeT -= dt; target = 0.3; }
     else if (slowT > 0) { slowT -= dt; target = Math.min(target, 0.35); if (slowT <= 0 && !crawlOn) { try { A.slowmo(false); } catch (e) { /* ignore */ } } }
+    // the egg drill never crawls: taps must land, so the felt slowdown is the music, the zoom and the vignette
+    if (inRace && race.drill && !race.over) target = Math.max(target, 0.85);
     // ease in fast (a slow-mo hits within a few frames), ease out slower
     timeScale += (target - timeScale) * Math.min(1, dt * (target < timeScale ? 25 : 6));
   }
@@ -2512,17 +3275,19 @@ function frameBody(now) {
     }
     // fixed 240 Hz steps: up to 50 ms of sim a frame, so a 30 fps phone runs at full speed but a hitch never snowballs;
     // at most one step of remainder carries over
+    // the title demo only needs 60 Hz steps (nobody is steering it)
     if (!held && live) {
+      const hz = race.demo ? 60 : SIM_HZ;
       simAcc += dt * timeScale;
-      const n = Math.min(SIM_MAX, Math.floor(simAcc * SIM_HZ));
-      simAcc = clamp(simAcc - n / SIM_HZ, 0, 1 / SIM_HZ);
-      for (let i = 0; i < n; i++) race.step(1 / SIM_HZ);
+      const n = Math.min(Math.ceil(0.05 * hz), Math.floor(simAcc * hz));
+      simAcc = clamp(simAcc - n / hz, 0, 1 / hz);
+      for (let i = 0; i < n; i++) race.step(1 / hz);
     }
     if (race.demo && (race.over || race.pending)) { if (race.pending) race.choose(race.pending[0]); else demo(); }
     onEvents(); flushPasses(dt);
     if (inRace && live && !held && dashBuf > 0) { dashBuf -= dt; if (dashBuf <= 0) { dashBuf = 0; if (race.p.dashCd > 0.05) refuseDash(); } }
     if (mode === 'race') {
-      if (live) { tutTick(dt); ghostTick(dt); lowTick(dt); lessonTick(dt); hazTick(dt); quipTick(); rivalTick(); eggTick(); tellTick(); dashHoldTick(); }
+      if (live) { tutTick(dt); ghostTick(dt); lowTick(dt); lessonTick(dt); hazTick(dt); quipTick(); rivalTick(); draftTick(dt); eggTick(); tellTick(); dashHoldTick(); dashPressTick(); laterTick(); }
       ringApply();
       // no pause during the zone stinger and the deal (Escape is gated the same way)
       setC($('pauseBtn'), 'off', !!race.pending || revealT > 0);
@@ -2532,7 +3297,8 @@ function frameBody(now) {
         else { revealT -= dt; if (revealT <= 0) { revealT = 0; if (race.pending) dealCards(); } }
 
       } else if (!race.pending) revealT = 0;
-      if (pickT > 0) { pickT -= dt; if (pickT <= 0 && !race.pending && !race.paused) { show(null); govHold(3); } }
+      // the deal fades out, then the overlay goes; when a new deal is already pending (back to back), the stinger takes over
+      if (pickT > 0) { pickT -= dt; if (pickT <= 0 && !race.paused) { show(null); if (!race.pending) govHold(3); } }
       // low energy: a heartbeat every 2 beats, every beat when it is critical
       const p = race.p;
       if (live && !race.over && !race.drill && !race.pending && p.e < 25) {
@@ -2552,7 +3318,7 @@ function frameBody(now) {
     R.beat = A.pulse || 0; R.reduced = S.reduced;
     threatTick(live && mode === 'race');
     // paused: the world stands still (no particles, no camera drift)
-    R.draw(race, dt, held || !live ? 0 : timeScale);
+    drawFrame(dt, held || !live ? 0 : timeScale, inRace);
 
     if (mode === 'race' && !race.over) drawHud(dt, live);
   }
@@ -2572,9 +3338,9 @@ function tellTick() {
     said = true; sfx('tell', e.wall);
   }
 }
-addEventListener('resize', () => { R.resize(); R.textScale = textScaleNow(); measureHud(); measureBar(); if (H.combo) H.combo._sw = null; });
+addEventListener('resize', () => { R.resize(); R.textScale = textScaleNow(); measureHud(); measureBar(); if (H.combo) H.combo._sw = null; govReset(); govHold(3); drawKey = ''; });
 applyGfx();
-if (meta.runs >= 15 && !S.seenHaz.length) { S.seenHaz = Object.keys(HAZARD_INTRO); saveUI(); }
+if (meta.runs >= 15 && !S.seenHaz.length && !S.tutReplay) { S.seenHaz = Object.keys(HAZARD_INTRO); saveUI(); }
 syncMute();
 const bootAway = meta.lastSeen ? Date.now() - meta.lastSeen : 0;
 title();
