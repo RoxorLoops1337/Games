@@ -5,7 +5,7 @@ const VERSION = 'sc-v93';
 const CACHE = 'stacking-cats-' + VERSION;
 const PRECACHE = [
   './', 'index.html', 'manifest.webmanifest',
-  'main.js', 'sim.js', 'cats.js', 'relics.js', 'i18n.js', 'lang/da.js', 'lang/da_ui.js', 'lang/da_data.js', 'lang/da_story.js', 'lang/da_enemies.js', 'lang/zh.js', 'lang/zh_ui.js', 'lang/zh_data.js', 'lang/zh_story.js', 'audio.js', 'post.js', 'daily.js', 'savecode.js', 'kingdom_scene.js', 'kingdom_walk.js', 'kingdom_layout.js', 'kingdom_life.js', 'kingdom_world.js', 'kingdom_strips.js', 'kingdom_cat.js', 'kingdom_gait.js', 'kingdom_idle.js', 'kingdom_tail.js', 'kingdom_air.js', 'kingdom_input.js',
+  'main.js', 'sim.js', 'cats.js', 'relics.js', 'i18n.js', 'lang/da.js', 'lang/da_ui.js', 'lang/da_data.js', 'lang/da_story.js', 'lang/da_enemies.js', 'lang/zh.js', 'lang/zh_ui.js', 'lang/zh_data.js', 'lang/zh_story.js', 'lang/zh_names.js', 'audio.js', 'post.js', 'daily.js', 'savecode.js', 'kingdom_scene.js', 'kingdom_walk.js', 'kingdom_layout.js', 'kingdom_life.js', 'kingdom_world.js', 'kingdom_strips.js', 'kingdom_cat.js', 'kingdom_gait.js', 'kingdom_idle.js', 'kingdom_tail.js', 'kingdom_air.js', 'kingdom_input.js',
   'art_util.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'art_icons.js',
   'pwa.js', 'haptics.js', 'share.js', 'cosmetics.js', 'story.js', 'intro.js', 'meow_bank.js', 'meow_voice.js', 'art_relics.js', 'art_boxes.js', 'chest_fx.js', 'reveal_fx.js', 'meows.aff2147f.wav',
   'fonts/lilitaone-latin.woff2', 'fonts/baloo2-latin.woff2',

@@ -2937,8 +2937,8 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     if (hpBars) {
       const bx = cx - 142, by = feetY - 50, bw = 84;
       ctx.font = `400 ${window.innerHeight <= 400 ? 16 : 13}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
-      ctx.strokeText(d.name, bx, by - 4); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 4);
-      if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
+      { const nm = tr(d.name); ctx.strokeText(nm, bx, by - 4); ctx.fillStyle = "#fff"; ctx.fillText(nm, bx, by - 4); }
+      if (c.lvl > 1) { const nw = ctx.measureText(tr(d.name)).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
       const r = Math.min(1, Math.max(0, c.hp / c.max));
       const cb = save.opt.colorblind;
       const hc = r > 0.5 ? (cb ? ['#bfe4ff', '#4aa8ff'] : ['#b8ffd0', '#3fcf78']) : r > 0.25 ? ['#ffe9a0', '#f0a81a'] : (Math.sin(t * 14) > 0 ? (cb ? ['#ffd0a0', '#ff8a2a'] : ['#ffc0c0', '#ff5a5a']) : ['#fff0e0', '#ffd9b0']);
