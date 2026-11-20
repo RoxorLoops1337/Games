@@ -37,6 +37,8 @@ if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: SHOTS ? 2 : 1, hasTouch: true, isMobile: true });
 const page = await ctx.newPage(); const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
+// main.js catches a throwing frame (its freeze guard) and logs it with console.error, so those count as page errors too
+page.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
 await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 const shot = async (name) => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, name + '.png') }); };
 
@@ -140,10 +142,31 @@ ok(dna > 0, 'the swim paid DNA (' + dna + ')');
 await page.evaluate(() => { game.meta.dna += 500; });
 await page.tap('#resShopBtn'); await page.waitForTimeout(200);
 await shot('6_shop');
+// Assert: the shop marks where a habit unlocks a perk (content.js HABIT_PERKS: broccoli at 5) and names the next one
+const brocRow = await page.evaluate(() => { const r = document.querySelector('#shopList [data-row="broccoli"]'); return r ? { pk: r.querySelectorAll('.pips i.pk').length, np: (r.querySelector('.np') || {}).textContent || '' } : null; });
+ok(brocRow && brocRow.pk >= 1, 'the broccoli row marks its perk levels with gold pips (' + JSON.stringify(brocRow) + ')');
+ok(brocRow && /^NEXT PERK: /.test(brocRow.np) && !/a perk/.test(brocRow.np), 'and names its next perk ("' + (brocRow && brocRow.np) + '")');
 await page.tap('#shopList button[data-id="broccoli"]'); await page.waitForTimeout(150);
 ok(await page.evaluate(() => game.meta.habits.broccoli === 1), 'buying Dad eats broccoli works');
 ok(await page.evaluate(() => JSON.parse(localStorage.getItem('million_to_one_v1')).habits.broccoli === 1), 'and it is saved');
 ok(errs.length === 0, 'no page errors at all ' + errs.join(' | '));
+
+// Regression (the old win frame threw on an undefined fling factor): a win at the egg with rivals arrived draws for 1.6 s
+// Arrange: a fresh swim put straight into the duel, two named rivals at the egg
+await page.evaluate(() => { document.getElementById('shop').classList.add('hide'); });
+const winErrs = errs.length;
+const winSet = await page.evaluate(() => {
+  const r = game.race; if (!r || r.demo) return 'no race';
+  if (!r.drill && typeof r.startDrill === 'function') { try { r.startDrill(); } catch (e) { return 'startDrill threw: ' + e.message; } }
+  if (!r.drill) return 'no drill';
+  let n = 0; for (const a of r.agents) if (a.boss && n < 2) { a.alive = true; if (!a.arrived) r.arrive(a); n++; }
+  r.over = { reason: 'win' }; return n === 2 ? 'ok' : 'rivals: ' + n;
+});
+// Act: let the renderer draw the win for 1.6 s
+await page.waitForTimeout(1600);
+// Assert
+ok(winSet === 'ok' && await page.evaluate(() => game.R.duel.size >= 2), 'the forced win has two rivals in the duel (' + winSet + ')');
+ok(errs.length === winErrs, 'a forced win at the egg draws 1.6 s without a page error (' + winSet + ') ' + errs.slice(winErrs).join(' | '));
 
 await browser.close(); server.close(); clearTimeout(watchdog);
 finish();
