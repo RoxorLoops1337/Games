@@ -56,6 +56,10 @@ for (let i = 0; i < 20 && await page.isVisible('#intro'); i++) { await page.tap(
 await page.waitForTimeout(1500);
 ok(await page.evaluate(() => !game.race.demo && document.getElementById('hud').offsetParent !== null), 'the race starts with the HUD showing');
 await shot('2_start');
+// swim 1 shows one text at a time: a watcher notes any moment the coach strip and the lesson card are both on
+await page.evaluate(() => { window.__both = []; const co = document.getElementById('coach'), tu = document.getElementById('tut');
+  const chk = () => { if (co.classList.contains('on') && tu.classList.contains('on')) window.__both.push(co.textContent + ' / ' + tu.className); };
+  for (const el of [co, tu]) new MutationObserver(chk).observe(el, { attributes: true, attributeFilter: ['class'] }); });
 
 // a touch drag steers the swimmer
 const before = await page.evaluate(() => game.race.p.x);
@@ -82,6 +86,28 @@ ok(await page.evaluate(() => document.querySelectorAll('#cardRow .card').length 
 await page.tap('#cardRow .card');
 await page.waitForTimeout(400);
 ok(await page.evaluate(() => Object.keys(game.race.muts).length === 1 && !game.race.pending), 'tapping a card takes it and the swim goes on');
+// Assert: through swim 1's lessons so far the coach strip and the lesson card were never on screen together
+ok(await page.evaluate(() => window.__both.length === 0), 'swim 1 never shows the coach strip and a lesson card together ' + (await page.evaluate(() => window.__both.slice(0, 2).join(' | '))));
+
+// hit-stop replace: inside the 80 ms window a bigger hit takes over the running hold, a smaller one never does
+// Arrange: a 30 ms hold running
+const hsRes = await page.evaluate(() => { const h = game.hs, p = game.race.p; h.frozen = 0; h.hitStop(30, p.x, p.y, 'pop');
+  // Act: a smaller and then a much bigger hit in the same frame
+  h.hitStopRL(20, p.x, p.y, 'pop'); const small = h.hold ? h.hold.ms : -1; h.hitStopRL(90, p.x, p.y, 'bump'); return { small, big: h.hold ? h.hold.ms : -1, kind: h.hold ? h.hold.kind : '' }; });
+// Assert
+ok(hsRes.small === 30 && hsRes.big === 90 && hsRes.kind === 'bump', 'a bigger hit replaces the running hold, a smaller one does not (' + JSON.stringify(hsRes) + ')');
+await page.waitForTimeout(300);
+
+// DASH from the resting thumb: the steering thumb lifts on the DASH button and taps it at once: that tap dashes
+// Arrange: a full tank, no cooldown, the thumb steering towards the button
+const db = await page.evaluate(() => { const r = game.race; r.p.e = r.p.maxE; r.p.dashCd = 0; r.ents = []; const b = document.getElementById('dashBtn').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+await touch('touchStart', db.x - 120, db.y - 40);
+for (let k = 1; k <= 4; k++) { await touch('touchMove', db.x - 120 + k * 30, db.y - 40 + k * 10); await page.waitForTimeout(16); }
+// Act: lift there, and press and release DASH within the resting window
+await touch('touchEnd', db.x, db.y); await touch('touchStart', db.x, db.y); await page.waitForTimeout(60); await touch('touchEnd', db.x, db.y);
+await page.waitForTimeout(120);
+// Assert
+ok(await page.evaluate(() => game.race.p.dashCd > 0 || game.race.p.dashT > 0), 'a DASH tap from the resting steering thumb dashes');
 
 // a hit-stop lets go: after a bonk the impact frame is gone by 0.25 s and the flash by 0.4 s
 await page.evaluate(() => { const r = game.race, p = r.p; r.emit('bonk', { x: p.x, y: p.y + 20 }); });
@@ -169,6 +195,101 @@ await page.waitForTimeout(1600);
 // Assert
 ok(winSet === 'ok' && await page.evaluate(() => game.R.duel.size >= 2), 'the forced win has two rivals in the duel (' + winSet + ')');
 ok(errs.length === winErrs, 'a forced win at the egg draws 1.6 s without a page error (' + winSet + ') ' + errs.slice(winErrs).join(' | '));
+
+// ------------------------------------------------------------------ a returning player: the welcome card, then a daily swim
+// Arrange: a save that last played 9 hours ago with a factory, swim 6, the lessons done (written before the page boots)
+await page.close();
+const p2 = await ctx.newPage(); p2.on('pageerror', (e) => errs.push(e.message));
+p2.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
+await p2.addInitScript(() => {
+  if (sessionStorage.getItem('mtoArranged')) return; sessionStorage.setItem('mtoArranged', '1');
+  const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}');
+  Object.assign(m, { runs: 6, introSeen: true, lastSeen: Date.now() - 9 * 3600000, bank: 0 }); m.habits = Object.assign({}, m.habits, { factory: 1 });
+  localStorage.setItem('million_to_one_v1', JSON.stringify(m));
+  const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; u.bestHead = 9; localStorage.setItem('million_to_one_ui', JSON.stringify(u));
+});
+const errs2 = errs.length;
+// Act
+await p2.goto(URL);
+await p2.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+await p2.waitForTimeout(400);
+// Assert
+ok(await p2.isVisible('#welcome'), 'coming back after 9 hours shows the welcome card');
+const shot2 = async (name) => { if (SHOTS) await p2.screenshot({ path: path.join(SHOTS, name + '.png') }); };
+await shot2('7_welcome');
+await p2.tap('#wbClose'); await p2.waitForTimeout(200);
+// Arrange: today's daily already swum once, so this is attempt 2
+await p2.evaluate(async () => { const C = await import('./core.js'); const m = game.meta; m.dailyDay = C.dailySeed(); m.dailyRuns = 1; m.dailyLastDay = C.dailySeed(); m.dailyStreak = Math.max(1, m.dailyStreak | 0); m.streakFreeze = 1; });
+await p2.tap('#dailyBtn'); await p2.waitForTimeout(500);
+ok(await p2.evaluate(() => !!game.race && !game.race.demo && game.race.daily != null), 'the Daily button starts a daily swim');
+// Act: a habit perk fires mid-swim (its pop), then straight to the egg with a FRENZY tier and a combo behind him
+await p2.evaluate(async () => { const K = await import('./content.js'); const r = game.race, p = r.p; const P = Array.isArray(K.HABIT_PERKS) ? K.HABIT_PERKS[0] : null; if (P) r.emit('habitPerk', { id: P.id, perk: P.perk, x: p.x, y: p.y }); });
+await p2.waitForTimeout(300); await shot2('8_perk_pop');
+await p2.evaluate(() => { const r = game.race, p = r.p; if (r.pending) r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); p.bestTier = 2; p.bestCombo = 40; p.y = 82500; r.genY = p.y + 300; r.ents = []; p.e = p.maxE; p.shield = 9; p.side = r.eggSide; p.x = r.eggSide < 0 ? 150 : 250; });
+await p2.waitForFunction(() => !!game.race.drill, null, { timeout: 8000 }).catch(() => {});
+await p2.waitForTimeout(900); await shot2('9_head_ledger');
+ok(await p2.evaluate(() => !!game.race.drill), 'the daily swim reaches the egg drill');
+// Act: a rival takes the egg (a lost duel)
+await p2.evaluate(() => { const r = game.race; if (r.pending) r.choose(r.pending[0]); r.end('late'); });
+await p2.waitForFunction(() => !document.getElementById('result').classList.contains('hide'), null, { timeout: 8000 }).catch(() => {});
+if (SHOTS) await p2.waitForTimeout(2500);
+await shot2('10_duel_result');
+// Assert: the post-mortem compares this head start with the best one, and the daily says what this attempt pays
+const duelT = await p2.evaluate(() => (document.getElementById('resDuel') || {}).textContent || '');
+ok(/best run brought 9\.0s/.test(duelT), 'a lost duel compares the head start with the best one ("' + duelT + '")');
+const attT = await p2.evaluate(() => { const el = document.getElementById('resAttempt'); return el && !el.classList.contains('hide') ? el.textContent : ''; });
+ok(/pay/.test(attT), 'the daily result says what this attempt pays ("' + attT + '")');
+ok(errs.length === errs2, 'the returning player pass runs without page errors ' + errs.slice(errs2).join(' | '));
+
+
+// ---- round 2: the deal survives the tab hiding, a palm never dashes, a held freeze keeps the streak saveable ----
+// Arrange: a returning player (tutorial done) on a fresh page
+const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+const p3 = await ctx3.newPage(); const errs3 = [];
+p3.on('pageerror', (e) => errs3.push(e.message));
+p3.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errs3.push('console: ' + m.text()); });
+await p3.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+await p3.goto(URL);
+await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+await p3.evaluate(() => { const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; localStorage.setItem('million_to_one_ui', JSON.stringify(u)); const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}'); Object.assign(m, { runs: 5, introSeen: true }); localStorage.setItem('million_to_one_v1', JSON.stringify(m)); });
+await p3.reload(); await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+await p3.tap('#playBtn'); await p3.waitForFunction(() => game.race && !game.race.demo && game.race.t > 1, null, { timeout: 15000 });
+await p3.evaluate(() => { const r = game.race; r.p.y = 8950; r.genY = 9300; r.ents = []; r.p.e = r.p.maxE; });
+await p3.waitForFunction(() => !document.getElementById('cards').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
+// Act: the tab hides while the cards are up
+const setHidden = (h) => p3.evaluate((h) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h }); Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') }); document.dispatchEvent(new Event('visibilitychange')); }, h);
+await setHidden(true);
+const openPaused = () => p3.evaluate(() => { const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}'); return !!(m.openRun && m.openRun.paused); });
+// Assert
+ok(await openPaused() === true, 'hiding the tab on a deal saves the open swim as paused');
+await setHidden(false);
+ok(await openPaused() === false, 'coming back to the tab clears the paused mark');
+await p3.waitForTimeout(900);
+await p3.tap('#cardRow .card'); await p3.waitForTimeout(500);
+// Arrange: count every time the dash input goes on
+const cdp3 = await ctx3.newCDPSession(p3);
+const tp3 = (type, pts) => cdp3.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+await p3.evaluate(() => { const r = game.race; r.p.e = r.p.maxE; r.p.dashCd = 0; r.ents = []; window.__d = 0; let v = r.input.dash; Object.defineProperty(r.input, 'dash', { configurable: true, get: () => v, set: (x) => { if (x) window.__d++; v = x; } }); });
+const PALM = { x: 60, y: 700, radiusX: 30, radiusY: 30, id: 1 }, FB = (x) => ({ x, y: 600, id: 2 });
+// Act: a palm rests (A), a finger drags (B), lifts, re-touches and drags back
+await tp3('touchStart', [PALM]); await p3.waitForTimeout(50);
+await tp3('touchStart', [PALM, FB(200)]); for (let k = 1; k <= 6; k++) { await tp3('touchMove', [PALM, FB(200 + k * 10)]); await p3.waitForTimeout(20); }
+await tp3('touchEnd', [PALM]); await p3.waitForTimeout(80);
+await tp3('touchStart', [PALM, FB(250)]); for (let k = 1; k <= 6; k++) { await tp3('touchMove', [PALM, FB(250 - k * 15)]); await p3.waitForTimeout(20); }
+const palm = await p3.evaluate(() => ({ d: window.__d, tx: game.race.input.tx }));
+await tp3('touchEnd', []);
+// Assert
+ok(palm.d === 0, 'a resting palm plus a dragging finger never dashes (' + JSON.stringify(palm) + ')');
+// Arrange: a 4-day streak, the daily last swum 2 days ago, one freeze held
+await p3.evaluate(async () => { const C = await import('./core.js'); const m = game.meta, t = C.dailySeed(); m.dailyStreak = 4; m.dailyLastDay = t - 2; m.dailyLastAt = Date.now() - 50 * 3600000; m.dailyDay = t - 2; m.streakFreeze = 1; m.runs = 5; localStorage.setItem('million_to_one_v1', JSON.stringify(m)); });
+// Act
+await p3.reload(); await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 }); await p3.waitForTimeout(400);
+const frz = await p3.evaluate(() => ({ t: document.getElementById('dailyBtn').textContent, p: document.getElementById('dailyBtn').classList.contains('pulse'), lost: game.settings.streakLostDay, ice: !!document.querySelector('#dailyBtn .dfrz.save') }));
+// Assert
+ok(frz.p && frz.lost === -1 && frz.ice && /4-day/.test(frz.t) && !/\{n\}/.test(frz.t), 'a 2-day gap with a freeze held stays saveable on the title ' + JSON.stringify(frz));
+if (SHOTS) await p3.screenshot({ path: path.join(SHOTS, '11_title_freeze.png') });
+ok(errs3.length === 0, 'the round 2 pass runs without page errors ' + errs3.join(' | '));
+await ctx3.close();
 
 await browser.close(); server.close(); clearTimeout(watchdog);
 finish();
