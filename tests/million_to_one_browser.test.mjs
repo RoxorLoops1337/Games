@@ -120,7 +120,7 @@ ok(await page.evaluate(() => !window.__tutCls.some((c) => /\bstep-cash\b/.test(c
 
 
 // Act: give up, see the result, buy a habit
-await page.evaluate(() => { const r = game.race; r.over = null; r.end('energy'); });
+await page.evaluate(() => { const r = game.race; r.over = null; if (typeof r.remaining === 'function') { r.p.y += r.remaining(); } r.end('energy'); });
 await page.waitForFunction(() => !document.getElementById('result').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
 ok(await page.isVisible('#result'), 'the end of a swim shows the result');
 if (SHOTS) await page.waitForTimeout(3200); // let the rank fall and the DNA receipt count up
@@ -128,6 +128,8 @@ await shot('5_result');
 // Assert: an energy death right at the egg never reads "0.0 cm from the egg" (it says Kevin was at the egg)
 const resTipT = await page.evaluate(() => (document.getElementById('resTip') || {}).textContent || '');
 ok(!/(^|[^\d.])0\.0 cm/.test(resTipT), 'a GAS death at the egg never says 0.0 cm ("' + resTipT + '")');
+ok(!/(^|[^\d.])0\.0+ cm/.test(await page.evaluate(() => (document.querySelector('#resEgg span') || {}).textContent || '')), 'the egg bar never says Kevin was 0.00 cm short of the egg');
+ok(!/DASH/.test(await page.evaluate(() => (document.getElementById('resWhy') || {}).textContent || '')), 'a GAS death at the egg never blames DASH');
 // Assert: the egg-bar caption fits one phone line, and the retry button is in the first viewport
 const cap = await page.evaluate(() => { const sp = document.querySelector('#resEgg span'); const c = sp.cloneNode(true); c.querySelectorAll('i').forEach((i) => i.remove()); return c.textContent.trim(); });
 const capMax = /^[\d.]+ cm short/.test(cap) ? 34 : 48; // the plain gap line 34, a SHORT_BY joke 48 (its writer limit)

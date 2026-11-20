@@ -212,6 +212,8 @@ body.racing #toast.on{transform:translate(-50%,0)}
 #count{position:absolute;left:0;right:0;top:40%;text-align:center;pointer-events:none;font-size:84px;font-weight:800;line-height:1;color:#fff;text-shadow:0 6px 0 var(--ink),0 0 40px var(--pink);opacity:0}
 #count.on{animation:cnt .4s cubic-bezier(.2,1.6,.4,1) forwards}
 #count.go{color:var(--gold);text-shadow:0 6px 0 var(--ink),0 0 40px var(--gold)}
+/* swim 1's GO is a short line (K.FIRST_GO_LINE): a size down so it fits a phone */
+#count.go.line{font-size:clamp(34px,11vw,48px);padding:0 20px;line-height:1.05}
 @keyframes cnt{0%{opacity:0;transform:scale(2.2)}40%{opacity:1;transform:scale(1)}100%{opacity:.9}}
 /* the tutorial card sits under the HUD at every portrait size; the coach strip steps below it while it shows */
 body.egg #coach{display:none}
@@ -263,7 +265,7 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 /* the egg: a race to drill in, you vs the best rival */
 #drillUI{position:absolute;left:50%;top:auto;bottom:calc(var(--safeB) + 116px);
-transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;pointer-events:none;background:rgba(20,2,18,.7);border-radius:16px;padding:6px 12px 8px;border:2px solid rgba(92,225,255,.4)}
+transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;pointer-events:none;background:rgba(20,2,18,.9);border-radius:16px;padding:6px 12px 8px;border:2px solid rgba(92,225,255,.4)}
 #drillUI.claim{border-color:#ff3d6e}
 #drillUI.claim::before{content:"";position:absolute;inset:-3px;border-radius:18px;box-shadow:0 0 16px 2px rgba(255,31,74,.8);opacity:0;animation:redpulse .8s ease-in-out infinite;pointer-events:none}
 #drillUI .t{font-size:30px;font-weight:800;color:var(--sky);text-shadow:0 3px 0 var(--ink);animation:pulse .36s infinite alternate;line-height:1.05}
@@ -272,6 +274,8 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #drillUI .cd small{display:inline-block;font-size:11px;letter-spacing:.12em;margin-right:6px;vertical-align:.6em;color:var(--cream)}
 #drillUI .cd b{font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--gold);text-shadow:0 2px 0 var(--ink)}
 #drillUI .cd b.hot{color:#ff3d6e}
+/* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
+#drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
 #drillUI .row b{width:62px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #drillUI .row .bb{flex:1;height:10px;border-radius:6px;background:rgba(0,0,0,.5);overflow:hidden}
@@ -412,11 +416,11 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resMutStrip span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;font-size:17px;line-height:1;border-radius:8px;background:rgba(255,255,255,.08)}
 #resMutStrip span.sy{box-shadow:0 0 0 1.5px #d9b8ff inset}
 @media (max-height:900px) and (orientation:portrait){#resMutStrip{display:flex}#resMutStrip.none{display:none}}
-/* the first death: the punchline, the rank, how far, the DNA, one tip and SWIM AGAIN; nothing else */
+/* the first death (the punchline on up to 2 lines): the punchline, the rank, how far, the DNA, one tip and SWIM AGAIN; nothing else */
 #result.first #resRankLine,#result.first #resLadder,#result.first #resChips,#result.first #resReceipt,#result.first #resSyn,#result.first #shareBtn,
 #result.first #resUp,#result.first #resGap,#result.first #resGloat,#result.first #resNext,#result.first #resGoal,#result.first #resMuts,#result.first #resStats,
 #result.first #resMutStrip,#result.first #resGrudge,#result.first #resBest{display:none!important}
-#result.first #resWhy{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+#result.first #resWhy{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #result.first #resActions{position:static;background:none;width:100%;margin:10px 0 0;padding:0}
 #result.first::before{flex-grow:.45;margin:0}#result.first::after{flex-grow:1;margin:0}
 /* every result sits a little high: SWIM AGAIN lands in the upper part of a tall phone, under the thumb */
@@ -436,6 +440,15 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resReceipt div b{color:#fff}
 #resReceipt div.neg b{color:#ff8b9b}
 #resDna{text-align:center;font-size:24px;font-weight:800;color:var(--mint);margin:2px 0 4px;font-variant-numeric:tabular-nums}
+/* the first result: what the lessons paid, what DNA buys, a warm tail */
+#resLessons{text-align:center;max-width:330px;margin:0 auto 4px;line-height:1.25}
+#resLessons b{display:block;font-size:15px;font-weight:800;color:var(--mint)}
+#resLessons small{display:block;font-size:13px;font-weight:700;color:var(--cream);margin-top:2px}
+#resLessons small.tl{color:var(--dim);font-weight:600}
+/* a win's margin stamp, in the beaten rival's colour */
+#resMargin{text-align:center;font-size:17px;font-weight:800;letter-spacing:.03em;color:var(--c,var(--gold));text-shadow:0 3px 0 var(--ink);margin:4px auto 0;max-width:340px;line-height:1.15;animation:rec .8s cubic-bezier(.2,1.8,.4,1)}
+#resMargin .pf{display:block;width:max-content;margin:3px auto 0;font-size:12px;letter-spacing:.08em;color:#3a2000;background:var(--gold);border-radius:8px;padding:1px 8px;text-shadow:none}
+body.reduced #resMargin{animation:none}
 #resUp{display:flex;align-items:center;gap:10px;width:100%;max-width:320px;margin:2px auto 4px;background:var(--card);border:2px solid #5a2050;border-radius:14px;padding:6px 8px 6px 10px;font-weight:700;font-size:13px;line-height:1.15}
 #resUp .ic{font-size:26px;flex:none}
 #resUp .tx{flex:1;min-width:0}
@@ -489,6 +502,12 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #introTxt.in{animation:itin .4s cubic-bezier(.2,1.5,.4,1)}
 @keyframes itin{0%{opacity:0;transform:translateY(16px) scale(.94)}}
 #introTxt.big{font-size:56px;color:var(--pink);text-shadow:0 0 30px var(--pink)}
+/* a big line that is a sentence ('...Dead last.') a size down, so it never runs off a phone */
+#introTxt.big.long{font-size:34px;line-height:1.1}
+/* the opening's last line over the countdown: no dim, touch-through, under the HUD, no hint or Skip */
+#intro.under{background:none;pointer-events:none;justify-content:flex-start;padding-top:calc(var(--hudB) + 16px)}
+#intro.under #introHint,#intro.under #introSkip{display:none}
+#intro.under #introTxt{min-height:0;animation:none}
 #introHint{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 20px);color:var(--dim);font-weight:700;font-size:14px;pointer-events:none;opacity:0;transition:opacity .4s}
 #introHint.pulse{opacity:1;animation:tapcue 1.1s ease-in-out infinite}
 @keyframes tapcue{50%{opacity:.35;transform:scale(.94)}}
@@ -593,9 +612,10 @@ body.reduced #tutTarget.swipe::before{translate:0 0}
 @media (max-width:400px){#dist{font-size:12px}#dist b{font-size:19px}#rankTick{font-size:14px;margin-left:6px}}
 /* narrow phones and landscape: the +places ticker tucks under the number (over the swimmers-alive line, which steps aside) */
 #rankBox{position:relative}
+/* narrow phones: the +places ticker has its own spot at the right end of the label row (above the number), so it never
+   sits on the swimmers-alive line, not even while it fades */
 @media (max-width:400px){
-  #rankTick{position:absolute;left:0;top:100%;margin:2px 0 0;font-size:13px}
-  #rankCol:has(#rankTick.on) #alive{opacity:0}
+  #rankTick{position:absolute;left:auto;right:0;top:auto;bottom:100%;margin:0 0 3px;font-size:13px}
 }
 @media (orientation:landscape) and (max-height:520px){
   #rankBox{flex-wrap:wrap}
@@ -668,10 +688,20 @@ body.reduced #tutTarget.swipe::before{translate:0 0}
   #tut .ts{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   #tut.on{transform:none}
   body.lefty #tut{right:auto;left:calc(var(--safeL) + 6px)}
-  #combo{left:0;right:auto;width:calc(50% - min(280px,37vh));bottom:calc(var(--safeB) + 16px);padding-left:var(--safeL)}
-  body.lefty #combo{left:auto;right:0;padding-left:0;padding-right:var(--safeR)}
-  #drillUI{top:auto;bottom:calc(var(--safeB) + 12px);left:calc(var(--safeL) + 6px);width:calc(50% - min(280px,37vh) - 12px);transform:none}
-  body.lefty #drillUI{left:auto;right:calc(var(--safeR) + 6px)}
+  /* the combo strip and its CASH chip sit in the DASH gutter, just above the button: the thumb that dashes cashes, and the
+     steering thumb never lands on CASH when it re-grips */
+  #combo{left:auto;right:0;width:calc(50% - min(280px,37vh));bottom:calc(var(--safeB) + 24px + 78px + 16px);padding-right:var(--safeR)}
+  body.lefty #combo{right:auto;left:0;padding-right:0;padding-left:var(--safeL)}
+  /* the lesson card at the top of the same gutter keeps clear of the strip while it shows */
+  body.comboOn #tut,body.comboOn #tut.step-drill{max-height:calc(100% - var(--safeT) - var(--safeB) - 200px)}
+  /* the egg panel: the top of the DASH gutter (the HUD gutter keeps the gas bar and the combo), the countdown stacked */
+  #drillUI{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,37vh) - 12px);transform:none;padding:4px 8px 6px}
+  body.lefty #drillUI{left:calc(var(--safeL) + 6px);right:auto}
+  #drillUI .t{font-size:20px}
+  #drillUI .cd{white-space:normal}
+  #drillUI .cd small{display:block;margin:0;vertical-align:0}
+  #drillUI .cd b{font-size:22px}
+  #drillUI .row b{width:48px}
   #banner{top:22%}
   #banner.top,body.egg #banner.top{top:calc(var(--safeT) + 40px)}
   body.threat #tut.on{opacity:1}
@@ -735,6 +765,8 @@ body.reduced #tutTarget.swipe::before{translate:0 0}
   /* a milestone still shows: over the rank number instead of in its own row */
   #rankCol{position:relative}
   #rankRow.ms #rankLbl{display:block;position:absolute;left:5px;bottom:100%;margin-bottom:1px}
+  /* no label row to sit in: the +places ticker goes back next to the number */
+  #rankTick{position:static;margin:0 0 0 6px}
   #rankRow{height:42px}
   #prog{margin-top:13px}
   #energyRow{margin-top:11px}
@@ -784,7 +816,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
 #drillUI .rate.max span{opacity:1}
 #drillUI.tell{border-color:var(--gold)}
 #drillUI.tell .t{color:var(--gold);animation:pulse .36s infinite alternate}
-@media (orientation:landscape) and (max-height:520px){#drillUI{bottom:calc(var(--safeB) + 12px)}}
+
 /* cards: a card that completes a MASHUP gets a gold pulse outline */
 .card.mash{outline:3px solid rgba(255,215,92,0);outline-offset:2px;animation:deal .5s cubic-bezier(.2,1.4,.4,1) backwards,mashp 1.6s ease-in-out .6s infinite}
 .card.mash.r3{animation:dealL .7s cubic-bezier(.2,1.4,.4,1) backwards,mashp 1.6s ease-in-out .8s infinite}
@@ -809,6 +841,51 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
 #dailyBtn .dmed{display:flex;justify-content:center;gap:6px;margin:3px 0 1px}
 #dailyBtn .dmed i{width:20px;height:20px;border-radius:50%;font-style:normal;font-size:14px;line-height:20px;background:rgba(58,32,0,.18);box-shadow:inset 0 0 0 2px rgba(58,32,0,.25)}
 #dailyBtn .dmed i.on{background:#fff4f8;box-shadow:none}
+/* ---------- the egg finale: the HUD folds down to the rank, the bar and the gas (90 px or less at 390x844) ---------- */
+body.egg #shields,body.egg #dnaHud,body.egg #pace,body.egg #mutRow,body.egg #rankLbl,body.egg #goalPill,body.egg #toEgg,body.egg #zoneName,body.egg #dist,body.egg #alive{display:none!important}
+body.egg #rankRow{height:auto}
+body.egg #rank{font-size:26px}
+body.egg #prog{margin-top:8px}
+body.egg #energyRow{margin-top:8px}
+body.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.45),rgba(20,4,20,.45) 70%,rgba(20,4,20,0))}
+/* swim 1's lesson card sits centred right under the HUD (portrait), off the thumbs and the tube ahead */
+@media (orientation:portrait),(min-height:521px){
+  body.racing.tutHud #tut{top:calc(var(--hudB) + 8px);bottom:auto;left:50%;right:auto;transform:translate(-50%,-10px)}
+  body.racing.tutHud #tut.on{transform:translate(-50%,0)}
+}
+/* while racing the coach strip is ONE line */
+body.racing #coach{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* a banner is up: the lesson card dims and drops its second line (two text surfaces at most) */
+body.bnr #tut.on{opacity:.35}
+body.bnr #tut .ts{display:none!important}
+/* the pot's trick multiplier */
+#combo .ptm{font-size:11px;font-weight:800;line-height:1;letter-spacing:.04em;color:var(--gold);text-shadow:0 2px 0 var(--ink);font-variant-numeric:tabular-nums}
+body.hud1 #combo .ptm,body.hud2 #combo .ptm{display:none!important}
+/* result: the bounty stamp (the record stamp's style), the rival's line under the rematch, the near-record pull */
+#resBounty{text-align:center;font-size:20px;font-weight:800;color:var(--gold);text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.7);margin:4px auto 0;max-width:330px;line-height:1.1;animation:rec .8s cubic-bezier(.2,1.8,.4,1)}
+#resBounty small{display:block;font-size:13px;color:var(--cream);text-shadow:none;font-weight:700;margin-top:2px}
+#resBounty small.q{font-style:italic;color:var(--dim);font-weight:600}
+#resRival{text-align:center;font-size:12px;font-style:italic;font-weight:700;color:var(--c,#ff8b9b);max-width:330px;margin:-2px auto 4px;line-height:1.2;text-wrap:balance}
+.badge.near{background:rgba(255,92,140,.2);color:#ff8bb0;box-shadow:0 0 0 1.5px #ff5c8a inset}
+/* the first result: SWIM AGAIN lands lower, in the thumb zone */
+#result.first::before{flex-grow:1}#result.first::after{flex-grow:.35}
+#result.first{justify-content:safe center}
+#result.first #againBtn{min-height:68px}
+/* the first result with Dad's pick affordable: spending is the primary move, the rematch is second */
+#result.spend #resShopBtn{font-size:22px;min-height:60px}
+#result.spend #againBtn{min-height:48px;font-size:17px}
+#result.spend #againBtn.breathe{animation:none}
+/* shop: the first-visit caption, Dad's pick pulsing, the Grandad levels (gold), the one-time ribbon */
+#shopCap{font-size:15px;font-weight:800;color:var(--gold);text-align:center;max-width:330px;margin:0 auto 6px;line-height:1.15;text-shadow:0 2px 0 var(--ink);animation:land .5s cubic-bezier(.2,1.8,.4,1)}
+.hab button.pulse{animation:buyPulse 1.4s ease-in-out infinite}
+@keyframes buyPulse{50%{box-shadow:0 4px 0 #136b3a,0 0 0 4px rgba(255,215,92,.85),0 0 18px rgba(255,215,92,.8)}}
+body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
+.hab .pips .gd{margin-left:5px;color:var(--gold);letter-spacing:0;font-weight:800;text-shadow:0 0 6px rgba(255,215,92,.5)}
+.hab .gdNew{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;line-height:14px;padding:0 6px;border-radius:7px;background:var(--gold);color:#3a2000;margin-bottom:2px;animation:land .5s cubic-bezier(.2,1.8,.4,1)}
+#shopBack.swim{background:linear-gradient(#ffe07a,#f0b02c);box-shadow:0 5px 0 #9a6410;color:#3a2000;text-shadow:none;font-size:22px}
+/* the title opens up as the player goes */
+#title.noDaily #dailyBtn,#title.noBank #bankBox,#title.noAlbum #albumBtn,#title.noStats #titleStats{display:none!important}
+#bankBox,#titleStats{position:relative}
 </style>
 </head>
 <body>
@@ -825,7 +902,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
-  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
+  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="m"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="ptm hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
   <div id="tutTarget" class="hide"><i class="trail"></i></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
@@ -879,11 +956,13 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div class="resL">
     <div id="resTitle"></div>
     <div id="resWhy"></div>
+    <div id="resMargin" class="hide"></div>
     <div id="resRankLine"></div>
     <div id="resRankLbl">FINAL PLACE</div>
     <div id="resRank"></div>
     <div id="resBest" class="badge hide"></div>
     <div id="resRecord" class="hide">NEW RECORD! 🏆</div>
+    <div id="resBounty" class="hide"></div>
     <div id="resMedal" class="hide"></div>
     <div id="resGap" class="hide"></div>
     <div id="resGloat" class="hide"></div>
@@ -900,6 +979,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <div class="stats" id="resStats"></div>
     <div id="resReceipt"></div>
     <div id="resDna"></div>
+    <div id="resLessons" class="hide"></div>
     <div id="resPep" class="hide"></div>
     <div id="resUp" class="hide"></div>
     <div id="resSyn"></div>
@@ -908,6 +988,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
       <div id="resTip"></div>
       <div id="resGoal" class="hide"></div>
       <button class="btn" id="againBtn">SWIM AGAIN 💦</button>
+      <div id="resRival" class="hide"></div>
       <div class="row3">
         <button class="btn gold" id="shareBtn">Brag 📋</button>
         <button class="btn alt" id="resShopBtn">Habits 🥦</button>
@@ -918,6 +999,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
   </div>
 
   <div id="shop" class="ov hide">
+    <div id="shopCap" class="hide"></div>
     <h2>Dad's Habits</h2>
     <div class="sub" style="margin:4px auto">Healthy dad, faster swimmers. These last forever.</div>
     <div id="dnaTop"></div>
@@ -946,6 +1028,7 @@ body.hudIn .rv,body.hudIn #dist{animation:hudin .4s cubic-bezier(.2,1.8,.4,1)}
     <h2>Settings</h2>
     <div class="setRow"><span>Music 🎶<small>Coach Gonad's beatbox band</small></span><span class="rt"><input type="range" id="setMusicVol" min="0" max="1" step="0.05" aria-label="Music volume"><label class="ck"><input type="checkbox" id="setMusic" aria-label="Music on"></label></span></div>
     <div class="setRow"><span>Sound effects 🔊<small>Splats, pops and boings</small></span><span class="rt"><input type="range" id="setSfxVol" min="0" max="1" step="0.05" aria-label="Sound volume"><label class="ck"><input type="checkbox" id="setSfx" aria-label="Sound effects on"></label></span></div>
+    <label class="setRow"><span>Mono audio 🎧<small>One earbud: every sound in both ears</small></span><input type="checkbox" id="setMono" aria-label="Mono audio (one earbud)"></label>
     <label class="setRow" id="setHapticsRow"><span>Haptics 📳<small>Buzz on dashes, hits and FRENZY</small></span><input type="checkbox" id="setHaptics"></label>
     <label class="setRow"><span>Reduced motion 🐢<small>Less shake, flash and slow-mo</small></span><input type="checkbox" id="setReduced"></label>
     <div class="setRow" id="setSensRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
