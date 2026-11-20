@@ -64,7 +64,7 @@ export const bankDna = (n, style, clutch = 0, trick = 0) => bankBase(n) * styleM
 // TIMEOUT_BANK (x1 with Echo Chamber or Elephant Brain), so cashing out on purpose is the far better play.
 export const finisherMult = (style) => (style >= 5 ? 2.0 : style >= 4 ? 1.6 : 1.3);
 export const TIMEOUT_BANK = 0.6;
-export const FINISHER_BLAST_AT = 25;      // a finisher on a bank this big also blasts (pops Big Macros, shoves rivals)
+export const FINISHER_BLAST_AT = 18;      // a finisher on a bank this big also blasts (pops Big Macros, shoves rivals)
 export const finisherBlastR = (bank) => 120 + 2 * Math.min(Math.max(0, bank), 100);
 export const finisherSeed = (bank) => Math.min(8, Math.floor(0.1 * Math.max(0, bank)));   // links the next chain starts with
 // combo timer refill for the nth link of the same kind in a row (anti-spam)
@@ -170,8 +170,17 @@ export const eventPlan = (meta) => {
 export const EVENT_LEN = 3200;
 export const DAILY_LIGHT = 0.5;      // the daily rule outside the zones it suits runs at half strength
 
-// Daily race: the day number (UTC) is the seed, so everybody gets the same egg side and layout.
-export const dailySeed = (date = new Date()) => Math.floor(date.getTime() / 86400000);
+// Daily race: the player's LOCAL calendar day number is the seed (a new tube at local midnight, not at UTC midnight:
+// New York no longer gets tomorrow's tube at 19:00), so everybody gets the same egg side and layout on the same date.
+export const dailySeed = (d = new Date()) => Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+// the local day number of a wall-clock time in ms
+export const localDay = (ms) => dailySeed(new Date(ms));
+// when the next daily tube opens (ms): the next local midnight after now (the UI's 'next tube in' countdown)
+export const nextDailyAt = (now = Date.now()) => {
+  const d = new Date(now); d.setHours(24, 0, 0, 0); return d.getTime();
+};
+// a wall-clock time inside local day 'day' (its local noon): an old or test daily's clock
+export const dayNoon = (day) => { const t = day * 86400000 + 43200000; return t + new Date(t).getTimezoneOffset() * 60000; };
 export function hashSeed(n) { let h = (n | 0) ^ 0x9E3779B9; h = Math.imul(h ^ (h >>> 16), 0x85EBCA6B); h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35); return (h ^ (h >>> 16)) >>> 0; }
 // the rule a daily runs under (an EVENT_ORDER id): the menu can show it before the race exists
 export const dailyRule = (day) => EVENT_ORDER[hashSeed(Math.floor(day)) % EVENT_ORDER.length];
@@ -265,7 +274,7 @@ export const GRANDAD_N = 10;
 export const grandadLevels = (gen) => { const g = Math.max(0, Math.floor(gen || 0)); return g <= GRANDAD_N ? g : GRANDAD_N + Math.floor((g - GRANDAD_N) / 2); };
 const GRANDAD = Object.keys(GRANDAD_FX);
 export const GRANDAD_BROCCOLI = GRANDAD_FX.broccoli;
-export const WATER_DRAIN = 0.01;     // drain per water level, grandad ones included (a bigger tank is a thirstier tail)
+export const WATER_DRAIN = 0.01;     // drain per normal water level (a bigger tank is a thirstier tail); grandad water levels are free
 // a habit's total effect at level l: HABIT_FX per normal level, GRANDAD_FX per grandad level
 export const habitFx = (id, l) => {
   l = Math.max(0, l || 0); const n = HABITS[id].max, gl = Math.max(0, l - n);
@@ -276,11 +285,11 @@ export const broccoliFx = (l) => habitFx('broccoli', l);
 // career is harder (speed, drain, hazards keep climbing) so it also pays more
 export const genFactor = (gen) => { const g = Math.max(0, gen || 0); return 1 + 0.15 * Math.min(g, 10) + 0.05 * clamp(g - 10, 0, 20); };
 export const META_VER = 2;     // 2: the hero is Gen 1, so saved babies moved up one generation
-// how much faster each generation makes the field: +2.5%/gen for gens 1..4, +1.8%/gen to gen 10, +0.6%/gen to gen 30
-// (about the old total by gen 10, with no wall at gen 4)
-export const genSpeed = (gen) => { const g = clamp(Math.floor(gen || 0), 0, 30); return 1 + 0.025 * Math.min(g, 4) + 0.018 * clamp(g - 4, 0, 6) + 0.006 * Math.max(0, g - 10); };
-// named rivals get +0.5%/gen on top (to gen 20)
-export const bossGenSpeed = (gen) => genSpeed(gen) + 0.005 * clamp(Math.floor(gen || 0), 0, 20);
+// how much faster each generation makes the field: +3.2%/gen for gens 1..4, +1.4%/gen to gen 10, +0.6%/gen to gen 30
+// (the climb comes early, while the habits are cheap; about the old total by gen 10, so no cliff past it)
+export const genSpeed = (gen) => { const g = clamp(Math.floor(gen || 0), 0, 30); return 1 + 0.032 * Math.min(g, 4) + 0.014 * clamp(g - 4, 0, 6) + 0.006 * Math.max(0, g - 10); };
+// named rivals get +0.3%/gen on top (to gen 20)
+export const bossGenSpeed = (gen) => genSpeed(gen) + 0.003 * clamp(Math.floor(gen || 0), 0, 20);
 // the tube's hazard steps: one a generation from gen 2, up to HZ_CAP (never in the daily). Steps past 8 add 4% each.
 export const HZ_CAP = 14;
 // new READS with the hazard steps (never in the daily: its hzGen is 0): from step 2 sliding goo gates, from 4 Big Macro
@@ -294,8 +303,10 @@ export const hzGenOf = (gen) => clamp(Math.floor(gen || 0) - 1, 0, HZ_CAP);
 export const HZ_CAREER_FROM = 6, HZ_CAREER_EVERY = 5, HZ_CAREER_MAX = 3;
 export const hzCareer = (meta) => clamp(Math.floor((normRunsOf(meta) - HZ_CAREER_FROM) / HZ_CAREER_EVERY), 0, HZ_CAREER_MAX);
 export const hzMul = (hg, per) => 1 + per * Math.min(hg, 8) + 0.04 * Math.max(0, hg - 8);
-// the fruit thins out with the hazard steps (x0.74 at 6 steps, x0.54 at the cap of 14: grandad berries meet less fruit)
-export const fruitMulOf = (hg) => 1 / (1 + 0.06 * hg);
+// the fruit thins out with the hazard steps, to x0.74 at 6 steps and no further (past that the late career ran dry in
+// the Acid Lagoon and the Sea: half the gen 10+ losses were energy deaths)
+export const FRUIT_HZ_MAX = 6;
+export const fruitMulOf = (hg) => 1 / (1 + 0.06 * Math.min(hg, FRUIT_HZ_MAX));
 // energy drain per generation: +4%/gen for gens 1..4, +4.5%/gen to gen 10 (+43%), then +1%/gen to +53% at gen 20 (the grandad water, berries and
 // the dash refund fill the tank late in a career: the tank still matters)
 export const genDrain = (gen) => { const g = clamp(Math.floor(gen || 0), 0, 20); return 1 + 0.04 * Math.min(g, 4) + 0.045 * clamp(g - 4, 0, 6) + 0.01 * Math.max(0, g - 10); };
@@ -308,12 +319,13 @@ export const rookieFactor = (meta, daily) => { const n = normRunsOf(meta); retur
 // the named rivals take longer to reach the egg on the first four runs (never in the daily). (Runs 2-4 a little more
 // than before the event ramp: with fewer race events a rookie swims a little slower, and more claims got in before he
 // even reached the egg: over 8 careers runs 2-12 went from 15 to 18 of 88 such losses; with this, 11)
-export const ROOKIE_BOSS = [1.17, 1.15, 1.11, 1.06];
+// (retuned for the 5 taps/s duel and the bigger head start: the first win lands on run 3 to 5 for 3 and 6 taps/s bots)
+export const ROOKIE_BOSS = [1.17, 1.15, 1.08, 1.03];
 // and their finale sprinters drill faster by ROOKIE_SPRINT times that extra time (x1.6 on run 1): a photo finish.
 // A sprinter that gets there after Kevin started drilling uses ROOKIE_SPRINT_LATE (x1.77 on run 1): with no race events
 // and wider goo gates a rookie reaches the egg sooner (at 3.5 for everybody 8 in 96 fresh saves won run 1), and a
 // bigger boost for the early ones too would finish them before Kevin even got there
-export const ROOKIE_SPRINT = 3.5, ROOKIE_SPRINT_LATE = 4.5;
+export const ROOKIE_SPRINT = 3.2, ROOKIE_SPRINT_LATE = 4;
 export const rookieBossT = (meta, daily) => { const n = normRunsOf(meta); return daily == null && n < ROOKIE_BOSS.length ? ROOKIE_BOSS[n] : 1; };
 // every 'late' loss before you even reached the egg (and every 'So near!' energy loss) slows the named rivals by
 // RACE_LOSS_T (up to RACE_LOSS_N of them), never in the daily.
@@ -326,11 +338,16 @@ export const raceLossT = (meta, daily) => (daily == null ? 1 + RACE_LOSS_T * cla
 export const FRESH_GEN = 0.1;
 export const freshGenT = (meta, daily) => { const n = Math.floor((meta && meta.sinceWin) ?? 99); return daily == null && meta && (meta.gen || 0) > 0 && n < 2 && !((meta.lastWinStreak || 0) >= 2) ? 1 + FRESH_GEN * (n ? 0.5 : 1) : 1; };
 export const freshGenActive = (meta) => freshGenT(meta, null) > 1;
-// the losing-streak cushion: from the 5th normal loss in a row (meta.sinceWin, counted only on normal runs; a save that
-// never won counts its normal runs) the named rivals take PEP_STEP longer per loss past 4, up to PEP_MAX (never in the daily)
-export const PEP_FROM = 5, PEP_STEP = 0.03, PEP_N = 4;
+// the losing-streak cushion: from the PEP_FROM-th normal loss in a row (meta.sinceWin, counted only on normal runs; a
+// save that never won counts its normal runs) one step a loss, up to PEP_N steps (never in the daily). Each step: the
+// named rivals take PEP_STEP longer to swim, Kevin drills PEP_DRILL faster, and a rival already drilling when he gets to
+// the egg is held PEP_CAP lower. (Most late-career losses were egg duels and the egg-loss boost halves on every podium,
+// so it never stacked: 6-7 losses in a row past gen 10. With this, over 8 careers at most 5.)
+export const PEP_FROM = 3, PEP_STEP = 0.04, PEP_N = 4, PEP_DRILL = 0.15, PEP_CAP = 0.08;
 export const lossRunOf = (meta) => Math.min(Math.floor((meta && meta.sinceWin) ?? 0), normRunsOf(meta));
-export const pepT = (meta, daily) => { const n = lossRunOf(meta); return daily == null && meta && n >= PEP_FROM ? 1 + PEP_STEP * Math.min(n - PEP_FROM + 1, PEP_N) : 1; };
+export const pepSteps = (meta, daily) => { const n = lossRunOf(meta); return daily == null && meta && n >= PEP_FROM ? Math.min(n - PEP_FROM + 1, PEP_N) : 0; };
+export const pepT = (meta, daily) => 1 + PEP_STEP * pepSteps(meta, daily);
+export const pepDrill = (meta, daily) => 1 + PEP_DRILL * pepSteps(meta, daily);
 // all the catch-up cushions on the named rivals' time together (rookie, race losses, a fresh generation, the losing
 // streak) never stack past BOSS_T_MAX
 export const BOSS_T_MAX = 1.25;
@@ -355,10 +372,10 @@ export const WIN_BONUS = 150;
 export const placePay = (rank) => 70 * Math.pow(clamp(Math.log10(TOTAL_SWIMMERS / Math.max(1, rank)) / 6, 0, 1), 1.5);
 // the rivals' signature moves at the egg (see Race.stepMove)
 export const MAX_ARRIVED = 2;
-// the egg drill: DRILL_BASE a second on its own, DRILL_TAP a tap (up to 8 taps a second), plus a head start from the
-// race (headStart, up to DRILL_HEAD_MAX). The rivals already drilling when you arrive are held: the first to arrive at
+// the egg drill: DRILL_BASE a second on its own, DRILL_TAP a tap (up to DRILL_TAPS_MAX taps a second: the duel is
+// won by the race you swam, not by finger speed), plus a head start from the race (headStart, up to DRILL_HEAD_MAX). The rivals already drilling when you arrive are held: the first to arrive at
 // DRILL_ARRIVED_CAP of its need, the next ones at DRILL_ARRIVED_CAP2, so a duel is a fight, not a 2-second blowout.
-export const DRILL_BASE = 0.42, DRILL_TAP = 0.05, DRILL_HEAD_MAX = 1.5, DRILL_ARRIVED_CAP = 0.80, DRILL_ARRIVED_CAP2 = 0.72;
+export const DRILL_BASE = 0.42, DRILL_TAP = 0.065, DRILL_TAPS_MAX = 5, DRILL_HEAD_MAX = 2.4, DRILL_ARRIVED_CAP = 0.80, DRILL_ARRIVED_CAP2 = 0.72;
 // LAST GASP: while Kevin's drill fraction is more than LAST_GASP behind the leading rival's, that rival drills at
 // x LAST_GASP_K: a lost duel is lost in the last quarter, never in a walkover. Only a rival that was already drilling
 // when Kevin arrived (the walkovers came from those): one that arrives with or after him needs exactly his drill from 0
@@ -369,16 +386,32 @@ export const LAST_GASP = 0.25, LAST_GASP_K = 0.6;
 export const PRE_MOVE_AT = { byTheBook: 0.9, stuntDive: 1.6, hairCheck: 2.2, maxRep: 1.2, sorry: 0.8 };
 // no two tells at the egg start within TELL_GAP s of each other: a second one waits its turn (and its hit waits with it)
 export const TELL_GAP = 1.0;
+// DASH POP: a Big Macro touched while dashing, within the first DASH_POP_T s of the dash, pops (a 'pop' link, as a
+// Spiky pop) for DASH_POP_COST energy instead of the normal hit: every build can pop, so every trick is open to it
+export const DASH_POP_T = 0.3, DASH_POP_COST = 8;
+// pulse acid breathes between PULSE_MIN and PULSE_MAX of its r0 on a smooth cosine (no 0.14 s jump): the art's dashed
+// ring at r0 * PULSE_MAX is the true maximum. A rim that swells over Kevin (he did not swim in, it grew onto him: e.swellT)
+// never burns for SWELL_SPARE s, nor while he stays in the breathing band outside its PULSE_MIN core; untouched it pays a
+// near miss instead
+export const PULSE_MIN = 0.8, PULSE_MAX = 1.05, SWELL_SPARE = 0.12;
+export const pulseR = (r0, phase) => r0 * (PULSE_MIN + (PULSE_MAX - PULSE_MIN) * (0.5 - 0.5 * Math.cos(phase * TAU)));
+// Big Macros in a narrow tube are smaller and slower (x kW = h / WBC_NARROW_H, 0.72..1); under WBC_TWIN_NARROW half
+// width the twins come half as often and 180 apart (120 in open water)
+export const WBC_NARROW_H = 170, WBC_TWIN_NARROW = 140;
+export const wbcK = (h) => clamp(h / WBC_NARROW_H, 0.72, 1);
 // (a rookie run keeps the head start under DRILL_HEAD_ROOKIE: the first races are about seeing the egg, not winning it)
 export const DRILL_HEAD_ROOKIE = 1.0;
+// the head start the race pays into the duel: HEAD_E x the tank left, HEAD_TIER a best FRENZY tier, HEAD_COMBO a link of
+// the best chain (to 100), HEAD_BOSS a named rival passed on the way (p.bossPasses, up to HEAD_BOSS_CAP)
+export const HEAD_E = 0.45, HEAD_TIER = 0.18, HEAD_COMBO = 0.01, HEAD_BOSS = 0.2, HEAD_BOSS_CAP = 0.6;
 // the named rivals train too: they drill faster as your career goes on (the share of RIVAL_TRAIN_RUNS normal runs
-// played), up to x1.47 at gen 0, x1.40 at gen 4, x1.42 at gen 12 and x1.27 from gen 20 (RIVAL_TRAIN, straight lines
-// between those generations; the faster field carries more of the pressure later). A new player meets them at x1.
+// played), up to x1.47 to gen 4, x1.36 at gen 12 and x1.27 from gen 20 (RIVAL_TRAIN, straight lines between those
+// generations: the early career carries the pressure, so there is no cliff past gen 12). A new player meets them at x1.
 // (retuned with the LAST GASP and the lower arrival caps, which help Kevin: over 48 seeds a maxed 6-taps/s bot wins
 // about 70% / 60% / 48% / 38% at gen 0 / 4 / 12 / 20)
 // (habitShare is kept for the shop and the result screen; it no longer feeds the rivals)
 export const habitShare = (meta) => { let n = 0, t = 0; for (const id of HABIT_ORDER) { if (id === 'gps') continue; t += HABITS[id].max; n += Math.min(HABITS[id].max, (meta && meta.habits && meta.habits[id]) || 0); } return t ? n / t : 0; };
-export const RIVAL_TRAIN = [[0, 0.47], [4, 0.4], [12, 0.42], [20, 0.27]];
+export const RIVAL_TRAIN = [[0, 0.47], [4, 0.47], [12, 0.36], [20, 0.27]];
 export const rivalTrain = (gen) => {
   const g = Math.max(0, Math.floor(gen || 0)), T = RIVAL_TRAIN;
   for (let i = 1; i < T.length; i++) if (g <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (g - T[i - 1][0]) / (T[i][0] - T[i - 1][0]));
@@ -469,7 +502,7 @@ export function habitEffect(id, l, meta) {
   const pct = (v) => Math.round(v * 100) + '%';
   switch (id) {
     case 'broccoli': return { label: '+' + (Math.round(broccoliFx(l) * 1000) / 10) + '% swim speed', value: broccoliFx(l) };
-    case 'water':    { const v = habitFx('water', l); return { label: '+' + v + ' max energy, +' + Math.round(WATER_DRAIN * l * 100) + '% drain', value: v }; }
+    case 'water':    { const v = habitFx('water', l); return { label: '+' + v + ' max energy, +' + Math.round(WATER_DRAIN * Math.min(l, HABITS.water.max) * 100) + '% drain', value: v }; }
     case 'sleep':    { const v = 1 - Math.pow(1 - HABIT_FX.sleep, l); return { label: '-' + pct(v) + ' energy drain', value: v }; }
     case 'jeans':    return { label: 'Start ' + HABIT_FX.jeans * l + ' µm further up', value: HABIT_FX.jeans * l };
     case 'berries':  { const v = habitFx('berries', l); return { label: '+' + (Math.round(v * 1000) / 10) + '% energy from fruit', value: v }; }
@@ -536,14 +569,15 @@ export function nextGoal(meta, over) {
   return g;
 }
 // ------------------------------------------------------------------ the daily streak
-// Time based, so a late-night daily followed by an early-morning one two calendar days later still counts:
-// the streak lives on the next UTC day, or two days later when under 36 h have passed since the last counted daily.
+// By the local calendar day (dailySeed): the streak lives on the next local day. The 36 h grace (two days later when
+// under STREAK_GAP_MS have passed since the last counted daily) is only a cushion for DST and travel.
+// (a save from before the local-day switch stored UTC days, at most one off: a last day of tomorrow counts as alive)
 export const STREAK_GAP_MS = 36 * 3600000;
 export function streakAlive(meta, now) {
   if (!meta || !isFinite(now)) return false;
-  const day = Math.floor(now / 86400000), last = meta.dailyLastDay, at = +meta.dailyLastAt || 0;
+  const day = localDay(now), last = meta.dailyLastDay, at = +meta.dailyLastAt || 0;
   if (!(last >= 0)) return false;
-  if (last === day || last === day - 1) return true;
+  if (last === day || last === day - 1 || last === day + 1) return true;
   return last === day - 2 && at > 0 && now - at < STREAK_GAP_MS;
 }
 // the bonus a counted daily pays on day n of a streak (every 7th day pays triple)
@@ -605,11 +639,11 @@ export class Race {
       D0, dashN: 0, draftN: 0, z0Key: '', draftT: D0, passSide: 0, passT: D0, passX: D0, slingOK: false, draftHold: D0, draft: D0, comeback: 0, side: 0, stuck: D0,
       inv: D0, acid: D0, wing: 0, second: 0, overtakes: 0, heading: D0, swatT: D0, swatDir: 0, current: 0, sameRun: 0, lastKind: '', clutch: D0, couchT: D0, acidT:
       D0, zoneBonks: 0, lastHit: '', frenzyTier: 0, swatSafe: D0, actT: D0, lastTx: null, lastOff: null, passRun: 0, seq: [], trickMult: D0, trickChain: {},
-      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0 };
+      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0 };
     p.x = VIEW_W / 2; p.y = startY; p.vx = 0; p.vy = 0; p.e = maxE; p.maxE = maxE; p.dashT = 0; p.dashCd = 0; p.frenzyT = 0; p.combo = 0; p.comboT = 0; p.comboMax
       = 2.2; p.fzPen = 0; p.fzPts = 0; p.mult = 1; p.bestCombo = 0; p.bestComboLate = 0; p.bank = 0; p.draftT = -9; p.passT = -9; p.passX = 0; p.draftHold = 0;
       p.draft = 0; p.stuck = 0; p.inv = 0; p.acid = 0; p.heading = 0; p.swatT = 0; p.clutch = 0; p.couchT = 0; p.acidT = -99; p.swatSafe = 0; p.actT = IDLE_T;
-      p.trickMult = 0; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99;
+      p.trickMult = 0; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99; p.dashAt = -99;
     this.startY = startY; this.prevPY = startY;
     this.dnaRun = 0; this.dnaBank = 0; this.dnaBonus = 0; this.zoneReached = 0; this.cleared = 0; this.ciliaN = 0;
     this.ents = []; this.genY = Math.ceil((startY + 300) / 100) * 100;   // rows on a fixed 100 grid (same daily layout for everyone)
@@ -711,7 +745,7 @@ export class Race {
     s.speed = 445 * (1 + broccoliFx(lv(M, 'broccoli'))) * (1 + 0.1 * Math.min(m.turbo || 0, MUTATIONS.turbo.max)) * (1 + 0.04 * (m.bloom ? this.cleared : 0)) * (syn.comeback && this.p.comeback ? 1.1 : 1);
     // every generation drains a little faster (+3% a generation to gen 10), and a bigger tank is a thirstier tail
     // (+1.5% per water level): the tank always matters
-    s.drain = 4.3 * Math.pow(1 - HABIT_FX.sleep, lv(M, 'sleep')) * Math.pow(0.82, m.eco || 0) * genDrain(this.gen) * (1 + WATER_DRAIN * lv(M, 'water'));
+    s.drain = 4.3 * Math.pow(1 - HABIT_FX.sleep, lv(M, 'sleep')) * Math.pow(0.82, m.eco || 0) * genDrain(this.gen) * (1 + WATER_DRAIN * Math.min(lv(M, 'water'), HABITS.water.max));
     s.draft = 0.2 * (1 + 0.6 * (m.draft || 0)) * (1 + habitFx('walk', lv(M, 'walk')));
     s.sugar = 6 * (1 + habitFx('berries', lv(M, 'berries'))) * (1 + 0.5 * (m.sweet || 0));
     s.magnet = 34 + 45 * (m.magnet || 0);
@@ -959,7 +993,7 @@ export class Race {
         const underMac = (e) => { const wy = this.lastWbcY[side], wx = this.lastWbcX[side]; return wy != null && Math.abs(e.y - wy) < 220 && Math.abs(e.x - wx) < e.r + 50; };
         if (hz.acid && rng() < 0.2 * hz.acid * hzA) {
           const e = { t: 'acid', x: rx(), y: y + rng() * 100, r: Math.min(26 + rng() * 40, blob), seed: rng() * 9 };
-          if (hg >= HZ_NEW.pulse && rng() < 0.5) { e.pulse = 1; e.r0 = e.r; }
+          if (hg >= HZ_NEW.pulse && rng() < 0.5) { e.pulse = 1; e.r0 = e.r; e.swellT = null; }
           if (!nearGate && poolsOK && !forkBand(e) && !underMac(e)) { this.puddles.push({ x: e.x, y, r: e.r, side }); if (hostile) { this.ents.push(e); if (e.pulse) this.hzNew('pulse', e); } }
         }
         if (hz.alkali && rng() < 0.06 * hz.alkali) this.ents.push({ t: 'alkali', x: rx(), y: y + 50, r: 11 });
@@ -979,7 +1013,8 @@ export class Race {
           if (hostile) { this.ents.push(e); if (e.slide) this.hzNew('slide', e); }
         }
         if (wbcP && rng() < wbcP) {
-          const e = { t: 'wbc', x: rx(), y: y + 50, r: 22 + rng() * 8, vx: 0, vy: 0, hunt: 0, eat: 0, ph: rng() * 6, spot: 0, side };
+          const kW = wbcK(ch.h), narrow = ch.h < WBC_TWIN_NARROW;
+          const e = { t: 'wbc', x: rx(), y: y + 50, r: (22 + rng() * 8) * kW, vx: 0, vy: 0, hunt: 0, eat: 0, ph: rng() * 6, spot: 0, side, kW };
           // never parked on a puddle from the last two rows: up to 3 re-rolls of x
           const onPuddle = () => this.puddles.some((q) => q.side === side && Math.abs(q.x - e.x) < q.r + 50);
           for (let k = 0; k < 3 && onPuddle(); k++) e.x = rx();
@@ -988,11 +1023,11 @@ export class Race {
           // (the rolls above are always drawn, so the daily layout stays the same for everybody)
           const last = this.lastWbcY[side], gap = 380 - 140 * kStamp;
           const spaced = !(last != null && Math.abs(e.y - last) < gap) && !this.ciliaYs.some((c) => c.side === side && Math.abs(c.y - e.y) < 300);
-          const twin = hg >= HZ_NEW.twins && rng() < 0.25;
+          const twin = hg >= HZ_NEW.twins && rng() < (narrow ? 0.12 : 0.25);
           if (spaced && dry && !gateHere) {
             this.lastWbcY[side] = e.y; this.lastWbcX[side] = e.x; if (hostile) this.ents.push(e);
-            // twins: a mirrored second cell 120 lower (never on a gate row, a puddle or within 300 of a wall hair)
-            const ty = e.y - 120, tw = { ...e, x: clamp(2 * ch.c - e.x, bl, br), y: ty, ph: e.ph + 1.5, twin: 1 };
+            // twins: a mirrored second cell 120 lower, 180 in a narrow tube (never on a gate row, a puddle or within 300 of a wall hair)
+            const ty = e.y - (narrow ? 180 : 120), tw = { ...e, x: clamp(2 * ch.c - e.x, bl, br), y: ty, ph: e.ph + 1.5, twin: 1 };
             const tRow = Math.floor(ty / 100) * 100;
             if (twin && hostile && ty >= this.calmY && ty >= p.y + 450 && !this.gateRow(tRow) && !this.gateRow(tRow - 100) && !this.gateRow(tRow + 100)
               && !this.ciliaYs.some((c) => c.side === side && Math.abs(c.y - ty) < 300) && !this.puddles.some((q) => q.side === side && Math.abs(q.x - tw.x) < q.r + 50)) {
@@ -1112,7 +1147,7 @@ export class Race {
     if (this.input.dash && p.dashCd <= 0 && (p.e > s.dashCost || nitro || jet)) {
       p.dashT = (jet ? 0.85 : 0.55) * s.dashLen; p.dashCd = s.dashCd; if (!nitro && !jet) p.e -= s.dashCost;
       if (this.syn.afterburner && p.frenzyT > 0) p.frenzyT = Math.min(p.frenzyT + 0.3, s.frenzyLen * 2);
-      p.actT = 0; p.slingOK = true; p.dashN++; p.dashRefund = 0;
+      p.actT = 0; p.slingOK = true; p.dashN++; p.dashRefund = 0; p.dashAt = this.t;
       // (free: a Nitro or Jetstream dash that cost no GAS, so the HUD never shows a GAS chip for it)
       this.emit('dash', { jet, free: !!(nitro || jet) });
     }
@@ -1212,7 +1247,10 @@ export class Race {
       if (e.t === 'acid' || e.t === 'goo') {
         // near misses pay on the way OUT: brushed the edge, never touched the middle
         const d = Math.hypot(e.x - p.x, (e.y - p.y) * 1.3);
-        if (d < e.r) {
+        // a pulse rim that swelled onto Kevin spares him (SWELL_SPARE s, or while he stays outside its core)
+        if (d < e.r && e.pulse && e.swellT != null && (this.t - e.swellT < SWELL_SPARE || d >= e.r0 * PULSE_MIN)) {
+          if (!e.touched && !e.paid) { e.paid = 1; this.nearMiss(e.x, e.y); }
+        } else if (d < e.r) {
           if (e.t === 'acid') inAcid = true; else inGoo = true; e.touched = 1;
           if (this.syn.hazmat && !e.paid) { e.paid = 1; this.nearMiss(e.x, e.y); }   // Hazmat: a touch is a near miss
         }
@@ -1549,6 +1587,7 @@ export class Race {
     const p = this.p, s = this.s, n = p.combo;
     if (p.frenzyT > 0 && n > 0 && (p.tier >= FRENZY_TIERS.length || this.muts.nitro)) return;   // GOD MODE and Nitro shrug it off
     if (p.seq) p.seq.length = 0;          // a smashed chain breaks the trick in progress too
+    p.trickStreak = 0; p.lastTrick = ''; p.lastTrickT = D0;     // and the TRICK STREAK: a hit is never part of a streak
     if (n <= 0) return;
     const keep = Math.floor(n * 0.25 * (1 + s.keep));
     p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickChain = {};
@@ -1562,6 +1601,7 @@ export class Race {
     const p = this.p, n = p.combo;
     p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickChain = {};
     if (p.seq) p.seq.length = 0;
+    p.trickStreak = 0; p.lastTrick = ''; p.lastTrickT = D0;
     if (n <= 0) return;
     p.fzPen = 0; p.combo = 0; p.comboT = 0; p.comboMax = this.s.combo;
     this.resetTier(0);
@@ -1614,8 +1654,8 @@ export class Race {
   }
   // the player's drill: the base plus 0.15 per generation (to gen 8)
   playerNeed() { return EGG_DRILL + 0.15 * Math.min(this.gen, 8); }
-  // +8% drill speed per egg lost in a row (cap +40%)
-  eggBoost() { return eggBoostOf(this.meta); }
+  // +8% drill speed per egg lost in a row (eggBoostOf), times the losing-streak cushion (pepDrill)
+  eggBoost() { return eggBoostOf(this.meta) * pepDrill(this.meta, this.daily); }
   arrivedBosses() { let n = 0; for (const b of this.agents) if (b.boss && b.alive && b.arrived) n++; return n; }
   arrive(a) {
     if (a.boss) a.eggSide = this.arrivedBosses() % 2 ? 1 : -1;     // the first to arrive takes the left, the second the right
@@ -1753,7 +1793,7 @@ export class Race {
           if (p.dashT > 0 && p.dashRefund < DASH_REFUND_CAP) { const g = Math.min(DASH_REFUND, DASH_REFUND_CAP - p.dashRefund); p.dashRefund += g; p.e += g; }
           if (a.boss) {   // a named rival: 3 links and a +4 DNA bounty the first time, 1 link for every re-pass after that
             a.passT = 0.8;
-            if (!a.passedOnce) { a.passedOnce = 1; if (active) this.addCombo('rival', ax, a.y, 3 * hound); this.dnaRun += 4; this.dnaBonus += 4; }
+            if (!a.passedOnce) { a.passedOnce = 1; p.bossPasses++; if (active) this.addCombo('rival', ax, a.y, 3 * hound); this.dnaRun += 4; this.dnaBonus += 4; }
             else if (active) this.addCombo('rival', ax, a.y, hound);
           }
           // a pass always moves you up, but it only links the chain while you are playing (p.actT < IDLE_T).
@@ -1823,10 +1863,15 @@ export class Race {
     const dnaMul = (1 + (comboMult(p.combo) - 1) * 0.5) * (tier >= 5 ? 1.5 : 1);
     let snack = null, curs = null;
     // pulsing puddles (hazard step 6+) breathe on the zone's beat
-    const beatK = Math.max(0, Math.sin(((this.t * (ZONES[zoneIndex(p.y)].beat || 120) / 60) % 1) * TAU));
+    const phase = (this.t * (ZONES[zoneIndex(p.y)].beat || 120) / 60) % 1;
     for (const e of this.ents) {
       if (e.dead) continue;
-      if (e.pulse) e.r = e.r0 * (0.75 + 0.35 * beatK);
+      if (e.pulse) {
+        const r1 = e.r, dk = Math.hypot(e.x - p.x, (e.y - p.y) * 1.3);
+        e.r = pulseR(e.r0, phase);
+        if (r1 <= dk && dk < e.r) e.swellT = this.t;          // the growing rim passed over Kevin
+        else if (dk >= e.r) e.swellT = null;                  // out of it: the next time is a new swell
+      }
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
       if (e.t === 'sugar' || e.t === 'dna' || e.t === 'shield' || e.t === 'alkali') {
         if (d < magnet + e.r) { const k = Math.min(1, dt * 9); e.x -= dx * k; e.y -= dy * k * 0.7; }
@@ -1860,7 +1905,7 @@ export class Race {
           }
         }
         if (was < 0.5 && e.hunt >= 0.5) this.emit('lockon', { x: e.x, y: e.y });
-        const spd = 190 * e.hunt, slow = e.eat > 0 ? 0.15 : 1;                    // mid-snack it barely moves
+        const spd = 190 * (e.kW || 1) * e.hunt, slow = e.eat > 0 ? 0.15 : 1;                    // mid-snack it barely moves
         e.vx += ((dx < 0 ? 1 : -1) * spd - e.vx) * Math.min(1, dt * 3);
         e.vy += ((dy > 0 ? -spd * 0.6 : 0) - e.vy) * Math.min(1, dt * 2);
         e.x += (e.vx * dt + Math.sin(e.ph * 2) * 10 * dt) * slow; e.y += e.vy * dt * slow;
@@ -1883,6 +1928,10 @@ export class Race {
           if (nitro || p.inv > 0) { if (nitro) { e.dead = 1; this.emit('pop', { x: e.x, y: e.y }); this.addCombo('pop', e.x, e.y); } e.eat = Math.max(0, e.eat - dt); continue; }
           // a wall hair just swatted you into it: the swat bonks the cell away, no bite (0.35 s window)
           if (p.swatSafe > 0) { if (!(e.cool > 0)) this.emit('swatBonk', { x: e.x, y: e.y }); e.vx = -p.swatDir * 300; e.cool = 1.5; e.hunt = 0; e.eat = Math.max(0, e.eat - dt); continue; }
+          // DASH POP: the nose of a fresh dash pops it (no Spiky needed), for DASH_POP_COST energy
+          if (!this.muts.spiky && p.dashT > 0 && this.t - p.dashAt <= DASH_POP_T + 1e-9) {
+            e.dead = 1; p.e -= DASH_POP_COST; this.emit('pop', { x: e.x, y: e.y }); this.addCombo('pop', e.x, e.y); continue;
+          }
           e.dead = 1; this.emit('pop', { x: e.x, y: e.y });
           if (this.muts.spiky) { p.e += 10; this.addCombo('pop', e.x, e.y); if (this.syn.porcupine) this.blast(e.x, e.y, 140, 'porcupine'); }
           else if (p.wing > 0) { p.wing--; p.inv = 1; this.emit('wingHit', { x: e.x, y: e.y }); this.breakCombo('wingHit', e.x, e.y); }
@@ -1930,7 +1979,11 @@ export class Race {
   // ---------------------------------------------------------------- the egg: a tug of war
   // the head start you bring from the race: your energy left and the best FRENZY tier you reached
   // and your best chain: a great chain carries into the finale
-  headStart() { const p = this.p; return Math.min(this.rookie ? DRILL_HEAD_ROOKIE : DRILL_HEAD_MAX, this.playerNeed(), 0.45 * clamp(p.e / Math.max(1, p.maxE), 0, 1) + 0.12 * (p.bestTier || 0) + 0.006 * Math.min(p.bestCombo || 0, 100)); }
+  headStart() {
+    const p = this.p;
+    const h = HEAD_E * clamp(p.e / Math.max(1, p.maxE), 0, 1) + HEAD_TIER * (p.bestTier || 0) + HEAD_COMBO * Math.min(p.bestCombo || 0, 100) + Math.min(HEAD_BOSS_CAP, HEAD_BOSS * (p.bossPasses || 0));
+    return Math.min(this.rookie ? DRILL_HEAD_ROOKIE : DRILL_HEAD_MAX, this.playerNeed(), h);
+  }
   startDrill() {
     const head = this.headStart();
     this.drill = { t0: this.t, me: head, head, need: this.playerNeed(), tok: 2, lead: null, tellT: -Infinity, gasp: null };
@@ -1938,7 +1991,7 @@ export class Race {
     // the rest at DRILL_ARRIVED_CAP2), and each pulls its move on the duel clock (PRE_MOVE_AT): the tug of war is yours to win
     const pre = this.agents.filter((a) => a.boss && a.alive && a.arrived).sort((a, b) => a.arrivedT - b.arrivedT);
     pre.forEach((a, j) => {
-      a.drill = Math.min(a.drill, (j ? DRILL_ARRIVED_CAP2 : DRILL_ARRIVED_CAP) * a.need);
+      a.drill = Math.min(a.drill, ((j ? DRILL_ARRIVED_CAP2 : DRILL_ARRIVED_CAP) - PEP_CAP * pepSteps(this.meta, this.daily)) * a.need);
       const mv = this.moveState(a), at = PRE_MOVE_AT[a.boss.move];
       if (at == null) return;
       mv.pre = true; mv.at = at;
@@ -1965,8 +2018,8 @@ export class Race {
   stepDrillSim(dt) {
     if (!(dt > 0) || dt > 0.25) return;
     const d = this.drill, p = this.p;
-    // taps count up to 8 a second (a small token bucket), each +0.07 and a shove on every arrived rival
-    d.tok = Math.min(2, d.tok + 8 * dt);
+    // taps count up to DRILL_TAPS_MAX a second (a small token bucket), each +DRILL_TAP and a shove on every arrived rival
+    d.tok = Math.min(2, d.tok + DRILL_TAPS_MAX * dt);
     const raw = Math.max(0, Math.floor(this.input.tap || 0)), taps = Math.min(raw, Math.floor(d.tok));
     d.tok -= taps;
     const boost = this.eggBoost();
@@ -2126,9 +2179,22 @@ export class Race {
   }
 
   // ---------------------------------------------------------------- end of run
+  // end() is a transaction: a throw anywhere inside it puts the save (and the race's own end fields) back exactly as
+  // they were and clears this.ending, so main.js's recovery (end('crash')) applies the meta changes once, never twice
   end(reason) {
     if (this.over || this.ending) return;
     this.ending = true;            // atomic: nothing that end() triggers can end the race a second time
+    const M = this.meta, snap = JSON.stringify(M), won = this.won, rank = this.rank, dnaRun = this.dnaRun, dnaBank = this.dnaBank, nEv = this.events.length;
+    try { this.settle(reason); }
+    catch (err) {
+      for (const k of Object.keys(M)) delete M[k];
+      Object.assign(M, JSON.parse(snap));
+      this.won = won; this.rank = rank; this.dnaRun = dnaRun; this.dnaBank = dnaBank; this.over = null; this.events.length = Math.min(this.events.length, nEv);
+      this.ending = false;
+      throw err;
+    }
+  }
+  settle(reason) {
     const p = this.p, M = this.meta, s = this.s;
     this.won = reason === 'win';
     if (this.won) this.rank = 1;
@@ -2219,9 +2285,9 @@ export class Race {
     if (this.daily != null && counted) {
       if (M.dailyDay !== this.daily) {
         // the clock: opts.now, else now if this daily is today's, else the daily's own noon (old or test days)
-        const real = Date.now(), now = this.now != null ? this.now : dailySeed(new Date(real)) === this.daily ? real : this.daily * 86400000 + 43200000;
+        const real = Date.now(), now = this.now != null ? this.now : localDay(real) === this.daily ? real : dayNoon(this.daily);
         M.dailyDay = this.daily; M.dailyBest = TOTAL_SWIMMERS; M.dailyRuns = 0; M.dailyMedal = 0;
-        streak = M.dailyLastDay < this.daily && streakAlive(M, now) ? streak + 1 : 1;
+        streak = M.dailyLastDay !== this.daily && streakAlive(M, now) ? streak + 1 : 1;
         M.dailyStreak = streak; M.dailyLastDay = this.daily; M.dailyLastAt = now; M.bestStreak = Math.max(M.bestStreak || 0, streak);
         dailyBonus = dailyBonusFor(streak, this.gen);
       }

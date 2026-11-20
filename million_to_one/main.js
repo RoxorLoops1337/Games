@@ -43,6 +43,8 @@ const ZONE_LINES_SHORT = K.ZONE_LINES_SHORT || null, UI_LINES = K.UI_LINES || {}
 const TUT_TEXT_GENTLE = K.TUT_TEXT_GENTLE || '', TUT_PRAISE = K.TUT_PRAISE || {}, FIRST_SWIM_LAUNCH = K.FIRST_SWIM_LAUNCH || COACH_SHORT.launch || '';
 const CASH_HINT = K.CASH_HINT || 'Swipe DOWN to cash it in!', BREAK_POT_LINES = K.BREAK_POT_LINES || BREAK_LINES, MILESTONE_LINES = K.MILESTONE_LINES || {};
 const EVENT_SHORT = K.EVENT_SHORT || {}, SYNERGY_SHORT = K.SYNERGY_SHORT || {}, COACH_SHORT_MORE = K.COACH_SHORT_MORE || {}, NEAR_MISS_BY_GAP = K.NEAR_MISS_BY_GAP || null;
+const REMATCH_NEAR_CM = K.REMATCH_NEAR_CM || [], REMATCH_PROMISE = K.REMATCH_PROMISE || {}, WIN_MARGIN_LINES = K.WIN_MARGIN_LINES || {};
+const FIRST_GO_LINE = K.FIRST_GO_LINE || 'GO!', FIRST_DEATH_TAIL = K.FIRST_DEATH_TAIL || '', TUT_DNA_EXPLAIN = K.TUT_DNA_EXPLAIN || 'DNA buys Dad better habits. Better Dad, faster Kevin!';
 const GEN_INTROS_ENDLESS = K.GEN_INTROS_ENDLESS || [], FINALE_LINES = K.FINALE_LINES || [], DYNASTY_STAMP = K.DYNASTY_STAMP || '', MUT_FLAVOR = K.MUT_FLAVOR || {};
 const reactsOf = (name) => RIVAL_REACTS[name] || RIVAL_REACTS[first(name)] || Object.keys(RIVAL_REACTS).reduce((o, k) => o || (first(k) === first(name) ? RIVAL_REACTS[k] : null), null) || {};
 const byFirst = (tbl, name) => (tbl[name] != null ? tbl[name] : Object.keys(tbl).reduce((o, k) => (o != null ? o : first(k) === first(name) ? tbl[k] : null), null));
@@ -130,7 +132,9 @@ function silentHint() {
 const muffle = (on) => { try { A.setMuffle(on); } catch (e) { /* optional */ } };
 // win, lose, frenzy and comboBreak also change the music (key, tempo, a dry beat), so they reach audio.js even with
 // sound effects off: setSfxMuted already silences the sfx bus there.
-const SFX_STATEFUL = new Set(['win', 'lose', 'frenzy', 'comboBreak', 'comboMilestone', 'comboLow', 'finale', 'backflow', 'trick', 'trickStreak']);
+// (comboBank to dnaTick hold song state too: the key lift, the egg duel bar, the pass and DNA counters; the fx bus plays them at gain 0)
+const SFX_STATEFUL = new Set(['win', 'lose', 'frenzy', 'comboBreak', 'comboMilestone', 'comboLow', 'finale', 'backflow', 'trick', 'trickStreak',
+  'comboBank', 'comboEnd', 'finisher', 'drillLead', 'eggClaim', 'rivalTell', 'synergy', 'pass', 'dnaTick']);
 const sfx = (n, k) => { if (S.sfx || (SFX_STATEFUL.has(n) && A.setSfxMuted)) { try { A.sfx(n, k); } catch (e) { /* never let a sound break a frame */ } } };
 function menuMusic() { if (A.on) A.intensity = 0.3; setTension(0); slowmoReset(); }
 // drop every slow-mo state at once (pause, menus): no tape stop, no swell
@@ -180,7 +184,7 @@ window.game = { get race() { return race; }, get meta() { return meta; }, get se
 function demo() { race = new Race(newMeta(), Math.random, { autopilot: true }); race.demo = true; R.camY = null; }
 
 const OVERLAYS = ['title', 'intro', 'cards', 'result', 'shop', 'album', 'pause', 'settings', 'welcome'];
-function show(id) { if (id !== 'title' && R.titleHero) R.titleHero(false); for (const o of OVERLAYS) $(o).classList.toggle('hide', o !== id); if (id !== 'cards') $('cards').classList.remove('out'); $('ver').classList.toggle('hide', id !== 'title'); }
+function show(id) { if (id !== 'title' && R.titleHero) R.titleHero(false); $('intro').classList.remove('under'); for (const o of OVERLAYS) $(o).classList.toggle('hide', o !== id); if (id !== 'cards') $('cards').classList.remove('out'); $('ver').classList.toggle('hide', id !== 'title'); }
 function hud(on) {
   for (const id of ['hud', 'dashBtn', 'pauseBtn']) $(id).classList.toggle('hide', !on);
   // body.racing re-anchors the hint and the toast under the HUD; body.egg hides the coach strip under the egg panel
@@ -394,7 +398,8 @@ function title() {
     const pos = alive && n > 0 ? ((n - 1) % 7) + 1 : 0;
     const pips = Array.from({ length: 7 }, (_, i) => `<i class="${i < pos ? 'on' : ''}${i === 6 ? ' x3' : ''}"${i === 6 ? ' title="Day 7 pays x3"' : ''}></i>`).join('');
     const bonus = typeof C.dailyBonusFor === 'function' ? C.dailyBonusFor(done ? n + 1 : alive ? n + 1 : 1, meta.gen) : 0;
-    const left = (today + 1) * 86400000 - now;
+    // the next tube opens at local midnight (the daily runs on local days)
+    const left = Math.max(0, new Date().setHours(24, 0, 0, 0) - now);
     const nxt = (bonus > 0 ? `${done ? 'Tomorrow' : 'Today'}: +${fmt(bonus)} DNA` : '') + (done ? `${bonus > 0 ? ' · ' : ''}next tube in ${hm(left / 3600000)}` : '');
     const rule = dailyRuleShort(today), tier = dailyMedalToday(today);
     const medals = [1, 2, 3].map((m) => `<i class="m${m}${tier >= m ? ' on' : ''}">${tier >= m ? MEDAL_IC[m] : ''}</i>`).join('');
@@ -461,25 +466,42 @@ $('wbClose').onclick = () => title();
 let introTO = 0;
 function intro(done, lines = INTRO) {
   mode = 'intro'; show('intro'); let i = 0; setC($('introHint'), 'pulse', false);
+  // the opening story (swim 1): about 1 s a line, the last one stays up over the countdown, and any touch means go now
+  const opening = lines === INTRO;
   const L = lines.map((l) => (typeof l === 'string' ? { t: l } : l));
-  const end = () => { clearTimeout(introTO); $('intro').onclick = null; $('introSkip').onclick = null; if (lines === INTRO) meta.introSeen = true; save(); done(); };
+  let ended = false;
+  const end = () => {
+    if (ended) return; ended = true;
+    clearTimeout(introTO); $('intro').onclick = null; $('intro').onpointerdown = null; $('introSkip').onclick = null;
+    if (opening) meta.introSeen = true; save(); done();
+  };
   const next = () => {
     clearTimeout(introTO);
     // the story waits while the tab is hidden: nobody misses a line, and the swim never starts in the background
     if (document.hidden) { introTO = setTimeout(next, 500); return; }
     if (i >= L.length) return end();
     const ln = L[i++], t = String(ln.t || ''), el = $('introTxt');
-    el.textContent = t; el.classList.toggle('big', t === 'SWIM.' || t === 'Dead last.' || t === 'NEW GENERATION');
+    const last = opening && i === L.length;
+    // big: the 'Dead last.' beat, the opening's last line and the NEW GENERATION stamp (a long one a size down)
+    const big = t === 'NEW GENERATION' || /Dead last\.$/.test(t) || last;
+    el.textContent = t; el.classList.toggle('big', big); el.classList.toggle('long', big && t.length > 16);
     el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
     sfx('tap', i / L.length);
     if (ln.onShow) { try { ln.onShow(); } catch (e) { /* the story goes on */ } }
     // from the second line on, a pulsing "tap" says the story can be hurried along (a tap-only line always says so)
-    setC($('introHint'), 'pulse', i >= 2 || !!ln.tap);
-    if (!ln.tap) introTO = setTimeout(next, t.length <= 16 ? 800 : t.length <= 40 ? 1300 : 2000);
+    setC($('introHint'), 'pulse', !opening && (i >= 2 || !!ln.tap));
+    // the opening's last line: the swim starts now, its countdown running under this line
+    if (last) { introUnder(end); return; }
+    if (!ln.tap) introTO = setTimeout(next, opening ? 1000 : t.length <= 16 ? 800 : t.length <= 40 ? 1300 : 2000);
   };
-  $('intro').onclick = next;
+  if (opening) {
+    // a tap or the start of a drag: straight to GO, and a drag keeps steering from where it started
+    $('intro').onclick = null;
+    $('intro').onpointerdown = (e) => { if (ended) return; end(); countGoNow(); gripFromStory(e); };
+  } else { $('intro').onpointerdown = null; $('intro').onclick = next; }
   $('introSkip').onclick = (e) => {
     e.stopPropagation();
+    if (opening) { end(); countGoNow(); return; }
     const cur = L[i - 1];
     let j = i;
     if (cur && cur.sticky) {
@@ -491,6 +513,24 @@ function intro(done, lines = INTRO) {
     i = j; next();
   };
   next();
+}
+// the opening's last line stays on screen (touch-through, under the HUD) while the countdown runs; GO takes it away
+function introUnder(end) {
+  end();
+  if (mode !== 'race' || !(countT > 0)) return;
+  const el = $('intro'); el.classList.remove('hide'); el.classList.add('under');
+}
+function introUnderOff() { const el = $('intro'); if (el.classList.contains('under')) { el.classList.remove('under'); el.classList.add('hide'); } }
+// a touch during the opening countdown (or the story) is a ready thumb: the count goes straight to GO
+function countGoNow() { if (mode === 'race' && countT > 0 && !countFromPause) countT = Math.min(countT, 0.001); }
+// the touch that ended the story becomes the steering finger (its drag carries on into the swim)
+function gripFromStory(e) {
+  if (!e || mode !== 'race' || !race || playBlocked() || race.drill || drag) return;
+  if (e.target && e.target.closest && e.target.closest('button')) return;
+  if (e.pointerType === 'touch') touchUsed = true;
+  fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  drag = newDrag(e.pointerId, e.clientX, e.clientY, performance.now(), {}, gripOff(holdOff)); holdOff = null;
+  try { APP.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
 }
 // a story block as lines: the first starts a chapter; a sticky block (a finale) ends on a tap-only line that marks it seen
 function chapter(lines, o = {}) {
@@ -531,6 +571,8 @@ function genStory() {
     }
     // a finale that was never seen (a save that jumped past generation 10) still plays first, once
     if (gn > 10) out.push(...finale());
+    // the same rescue for Act 2's finale: a save past generation 19 that never saw it hears it before the endless chapter
+    if (gn > 19 && S.finaleSeen && !S.act2Seen && A2F.length) out.push(...chapter(A2F.map((l) => fillLine(l, v)), { sticky: true, seen: 'act2Seen' }));
     const ch = fl(gi);
     if (gn >= 11 && gn <= 18) { const c = CL.find((x) => Array.isArray(x) && x[0] === gn); if (c) ch.push(fillLine(c[1], v)); }
     out.push(...chapter(ch));
@@ -544,7 +586,8 @@ let launchAt = -1e9;
 function launch(opts) {
   const nowMs = performance.now(); if (nowMs - launchAt < 300) return; launchAt = nowMs;
   const gs = genStory();
-  if (gs) { S.genIntroSeen = meta.gen; saveUI(); intro(() => start(opts), gs); }
+  // the story counts as seen once it has played to the end: an app killed mid-story hears it again
+  if (gs) { const g = meta.gen; intro(() => { S.genIntroSeen = g; saveUI(); start(opts); }, gs); }
   else start(opts);
 }
 // saves from before these flags: do not replay what the player has effectively seen
@@ -567,11 +610,11 @@ function start(opts) {
   R.camY = null; R.parts = []; R.pops = []; if (R.rings) R.rings = [];
   kevinN = kevinNo(); firstSwim = meta.runs === 0; raceT0 = clock;
   shownRank = race.rank; prevBest = meta.best; prevBestCombo = meta.bestCombo || 0;
-  stopT = 0; hitHold = null; freezeT = 0; slowT = 0; timeScale = 1; dashBuf = 0; heartAcc = 0; lastShout = 0; lastSlowAt = -99; lastBubble = -99;
+  stopT = 0; hitHold = null; trickStreakPend = null; freezeT = 0; slowT = 0; timeScale = 1; dashBuf = 0; heartAcc = 0; lastShout = 0; lastSlowAt = -99; lastBubble = -99;
   passedOnce = new Set(); rivalIntro = RIVALS.map(() => false); eggClaimed = false; eggOn = false; rivalF = 0; rivalK = -1; drillN = 0; quip = { zi: -1, done: 0 };
   nemAtStart = nemesisOf();
   simAcc = 0; coreHas = {}; shoveAt = {}; bonkN = 0; lowDone = false; lowRingT = 0; hazT = 0; hazSlowT = 0; hazAt = -99; crawlOn = false; threatSaid = false; leadSaid = 0;
-  tut = null; frenzyCoachPend = false; clearInput(); resetHud(); draftK = -1; draftT = 0; draftSaid = new Set(); draftZone = -1;
+  tut = null; lessonDna = 0; frenzyCoachPend = false; clearInput(); resetHud(); draftK = -1; draftT = 0; draftSaid = new Set(); draftZone = -1;
   crawlN = 0; crawlAt = -99; nearAt = []; kevLeadFx = false; kindPopT = -9; fruitN = 0; paceSaid = false; paceV = null; vEma = 0; tierTagSaid = false;
   lessonEnd(); cashLast = -99; wallSide = 0; goalHit = false; hazPend = null;
   overAt = -1; finHold = null; birthOn = null; endPot = null; lastDashAt = -99; frozenRecent = 0; finPopUntil = -99; laterQ = []; comboSeenAt = -1; comboIntroDone = false; threatOnB = false; intenseOn = false;
@@ -607,7 +650,7 @@ function start(opts) {
   // swim 1: the minimap pips, the name tags and the distance text wait until the lesson is over
   setC(document.body, 'tutHud', false); setC(document.body, 'hudIn', false); setC(document.body, 'noTick', false);
   // swim 1 shows no pot, gap, recipe chips, multiplier or CASH; swim 2 keeps the pot and CASH back until the cash lesson
-  setC(document.body, 'hud1', firstSwim); setC(document.body, 'hud2', !firstSwim && !S.cashDone && !(S.cashN | 0));
+  setC(document.body, 'hud1', firstSwim); setC(document.body, 'hud2', meta.runs === 1 && !S.cashDone && !(S.cashN | 0));
   dashN = 0; gasBurn = 0; lowGasSaid = false; lowGasRingT = 0; steveSorrySaid = false; tellSide = 0; tellCol = '';
   trickTease = null; trickFlash = null;
   // Coach's look grows with the story (clues heard, the finale, Act 2) and he escorts generation 9
@@ -866,7 +909,8 @@ function zoneArrive(zi, o) {
   if (race && !race.demo && Array.isArray(lines) && lines.length && !S.zoneFirst.includes(z.id)) {
     if (!o.noHold && $('tut').classList.contains('on')) { zfPend = { zi, o, at: clock }; return; }
     S.zoneFirst.push(z.id); saveUI();
-    lines.slice(0, 3).forEach((l, i) => callout('zone', i ? { t: o.t, z: o.z, c: l, sec: 1.4, keep: true } : Object.assign({}, o, { c: l, sec: 1.4, keep: true })));
+    // swim 1: the Acid Lagoon's story is one beat (its hazard look and the lesson cards have the screen)
+    lines.slice(0, firstSwim && z.id === 'acid' ? 1 : 3).forEach((l, i) => callout('zone', i ? { t: o.t, z: o.z, c: l, sec: 1.4, keep: true } : Object.assign({}, o, { c: l, sec: 1.4, keep: true })));
     return;
   }
   callout('zone', o);
@@ -894,13 +938,13 @@ const TUT_ALL = {
   dash: { id: 'dash', ic: '⚡', to: 5, d: { t: 'Tap DASH for a burst!', s: 'Or tap with your other thumb.' } },
   fruit: { id: 'fruit', ic: '🍓', to: 5, d: { t: 'Grab the fruit sugar', s: 'Fruit is energy. Eat fruit.' } },
   combo: { id: 'combo', ic: '🔥', to: 5, d: { t: 'Pass 3 in a row', s: 'Chain passes for a COMBO.' } },
-  cash: { id: 'cash', ic: '👇', to: 6, d: { t: 'Swipe DOWN to cash in!', s: 'Bank it before you bonk.' } },
+  cash: { id: 'cash', ic: '👇', to: 6, d: { t: 'Tap CASH to bank your combo!', s: 'Bank it before you bonk.' } },
   draft: { id: 'draft', ic: '💨', to: 4, d: { t: 'Tuck in BEHIND a rival', s: 'Free speed. Rude, but fast.' } },
 };
 // swim 1 learns what keeps Kevin alive (steer, dash, fruit is GAS); drafting is swim 2's redo lesson, cashing in waits
 // for swim 2's lesson card
 // swim 1's clocks are shorter: sims reach zone 2 at 14 to 17 s, and the whole lesson has to fit in the Launch Tube
-const TUT_FIRST_TO = { steer: 4, dash: 3.5, fruit: 3.5 };
+const TUT_FIRST_TO = { steer: 5, dash: 3.5, fruit: 3.5 };
 const TUT_FIRST = ['steer', 'dash', 'fruit'].map((id) => Object.assign({}, TUT_ALL[id], { to: TUT_FIRST_TO[id] }));
 // the dash card's wait for a lined-up swimmer: 1 s on swim 1, 2 s on a replay
 const tutDashCap = () => (firstSwim ? 1 : 2);
@@ -919,7 +963,8 @@ function tutStart() {
   const sk = S.tutSkipped || [];
   if (S.tutTries > 0 && sk.length) for (const x of TUT_STEPS) if (!sk.includes(x.id)) tut.st[x.id] = 'pre';
 }
-// steering counts once the finger has travelled 180 px and changed direction at least once
+// steering counts once the finger has travelled 120 px (no change of direction needed)
+const STEER_CREDIT = 120;
 function tutSteer(dx) {
   lessonSteer(dx);
   if (!tut || !tut.on) return;
@@ -961,7 +1006,8 @@ function tutNext() {
   if (st.id === 'draft') tut.draftT = 0;
   if (st.id === 'cash') tut.cashSlow = false;
   el.querySelector('.ic').textContent = st.ic; el.querySelector('.tt').textContent = tx.t; el.querySelector('.ts').textContent = tx.s || '';
-  el.querySelector('.tt').dataset.praise = (TUT_PRAISE[st.id] || 'NICE!') + ' +' + TUT_DNA + ' DNA';
+  // swim 1 praises without the number: its lessons' DNA is counted once, on the result card
+  el.querySelector('.tt').dataset.praise = (TUT_PRAISE[st.id] || 'NICE!') + (firstSwim ? '' : ' +' + TUT_DNA + ' DNA');
   el.querySelector('.dots').innerHTML = tutDots();
   el.className = 'on step-' + st.id;
   $('dashBtn').classList.toggle('nudge', st.id === 'dash');
@@ -970,16 +1016,18 @@ function tutMark(id) {
   if (!tut || !tut.on || tut.st[id] || !tut.shown[id] || !race || race.demo) return;
   tut.st[id] = 'ok';
   meta.dna += TUT_DNA;
-  R.pop(race.p.x, race.p.y + 70, '+' + TUT_DNA + ' DNA', '#7dffb0', 18, 1.2); sfx('pick'); buzz(12);
+  // swim 1 keeps the swim clean: no +DNA pop and no DNA talk (the result card counts the lessons' DNA and says what it is for)
+  if (firstSwim) lessonDna += TUT_DNA;
+  else R.pop(race.p.x, race.p.y + 70, '+' + TUT_DNA + ' DNA', '#7dffb0', 18, 1.2);
+  sfx('pick'); buzz(12);
   const cur = TUT_STEPS[tut.i] && TUT_STEPS[tut.i].id === id;
-  // the first swim: the steer praise also says what the whole thing is for (the goal rides on the card's second line)
-  const goal = id === 'steer' && firstSwim && cur;
-  if (cur) { tut.okT = goal ? 0.8 : 0.7; $('tut').classList.add('ok'); $('dashBtn').classList.remove('nudge'); }
-  if (goal) { $('tut').querySelector('.ts').textContent = K.FIRST_SWIM_GOAL || 'Pass them all. Reach the egg.'; $('tut').classList.add('goal'); }
+  if (cur) { tut.okT = 0.7; $('tut').classList.add('ok'); $('dashBtn').classList.remove('nudge'); }
   if (id === 'steer') setC(document.body, 'noTick', false);
   $('tut').querySelector('.dots').innerHTML = tutDots();
-  dnaExplain();
+  if (!firstSwim) dnaExplain();
 }
+// swim 1: the DNA its lessons paid, shown once on its result card
+let lessonDna = 0;
 // the first DNA praise ever: what DNA is for, once
 function dnaExplain() {
   if (S.dnaExplained) return;
@@ -1000,7 +1048,8 @@ function tutFinish() {
     else if (tut.shown[st.id]) skipped.push(st.id);
     else { tut.st[st.id] = 'pre'; unseen.push(st.id); }
   }
-  const missed = skipped.concat(unseen);
+  // a thumb that clearly steered (60+ px) never gets the steer lesson again, whatever its card did
+  const missed = skipped.concat(unseen).filter((id) => !(id === 'steer' && tut.steer > 60));
   // swim 1 never teaches drafting: it comes back on swim 2 as a redo lesson card
   S.tutSkipped = firstSwim && !missed.includes('draft') ? missed.concat('draft') : missed;
   if (missed.length && (skipped.length >= 2 || unseen.length)) { S.tutTries = (S.tutTries || 0) + 1; S.tutDone = S.tutTries >= 2; }
@@ -1041,13 +1090,13 @@ function lessonShow(id, ic, tx, sec) {
   return true;
 }
 function lessonEnd() { if (!lesson) return; lesson = null; if (!(tut && tut.on)) tutHide(); }
-// steering during a replayed steer lesson (the same rule as the tutorial: 180 px and one change of direction)
+// steering during a replayed steer lesson (the same rule as the tutorial: 120 px of travel)
 function lessonSteer(dx) {
   if (!lesson || !lesson.redo || lesson.id !== 'steer') return;
   lesson.steer += Math.abs(dx); const sg = Math.sign(dx);
   if (sg && Math.abs(dx) >= 2) { if (lesson.lastDir && sg !== lesson.lastDir) lesson.dirs++; lesson.lastDir = sg; }
 }
-// the cash lesson: the first pots worth cashing (bank 12+) slow the swim a beat and show how; up to 3 times, 20 s apart
+// the cash lesson: the first pots worth cashing (bank 10+, when the CASH chip shows) slow the swim a beat and show how; up to 3 times, 20 s apart
 let cashLast = -99, lessonSlowT = 0;
 const CASH_TXT = () => {
   const x = TUT_TEXT.cash || { t: 'Swipe DOWN to cash in!', s: 'Bank it before you bonk.' };
@@ -1076,7 +1125,7 @@ function lessonTick(dt) {
     else if (lesson.redo) {
       // a replayed step: its ring and its check, the same as in the tutorial
       if (lesson.id === 'fruit') { const f = nearestFruit(700); if (f) ringAsk(f.x, f.y, 'fruit!'); }
-      else if (lesson.id === 'steer' && lesson.steer > 180 && lesson.dirs > 0) { lessonDone('steer'); return; }
+      else if (lesson.id === 'steer' && lesson.steer > STEER_CREDIT) { lessonDone('steer'); return; }
       else if (lesson.id === 'combo') { lesson.combo0 = Math.min(lesson.combo0, Math.floor(p.combo)); if (p.combo >= lesson.combo0 + 3) { lessonDone('combo'); return; } }
       else if (lesson.id === 'draft') {
         if (p.draft > 0.08) { lesson.draftT += dt; if (lesson.draftT > 0.6) { lessonDone('draft'); return; } }
@@ -1091,7 +1140,7 @@ function lessonTick(dt) {
   }
   if (tutQ.length && !(tut && tut.on) && !race.drill && !race.pending && !eggOn && countT <= 0 && !bannerUp() && !(coachT > 0 && coachPri >= 1) && !(firstSwim && acidUnseenAhead(p))) { const c = tutQ.shift(); if (lessonShow(c.id, c.ic, { t: c.t, s: c.s }, c.sec)) return; }
   if (redoTick(p)) return;
-  if ((meta.runs | 0) < 1 || S.cashDone || (S.cashN | 0) >= 3 || clock - cashLast < 20 || p.bank < 12 || race.drill || race.pending || countT > 0 || eggOn || race.autopilot) return;
+  if ((meta.runs | 0) < 1 || S.cashDone || (S.cashN | 0) >= 3 || clock - cashLast < 20 || p.bank < 10 || race.drill || race.pending || countT > 0 || eggOn || race.autopilot) return;
   if (!lessonShow('cash', touchUsed ? '👆' : '👇', CASH_TXT(), 3.2)) return;
   cashLast = clock; S.cashN = (S.cashN | 0) + 1; saveUI();
   if (!S.reduced) lessonSlowT = 1;
@@ -1188,7 +1237,7 @@ function tutTick(dt) {
   // the first swim starts once its zone banner has had its moment; a replay waits for the zone banner to clear
   if (tut.i === -1) { if (launchBusy() || (!firstSwim && bannerUp())) return; tutNext(); if (!tut.on || tut.i < 0) return; }
   const p = race.p, st = TUT_STEPS[tut.i], cur = st && tut.okT <= 0 ? st.id : '';
-  if (tut.steer > 180 && tut.dirs > 0) tutMark('steer');
+  if (tut.steer > STEER_CREDIT) tutMark('steer');
   if (tut.shown.combo) { tut.combo0 = Math.min(tut.combo0, Math.floor(p.combo)); if (p.combo >= tut.combo0 + 3) tutMark('combo'); }
   // drafting only counts while its card is up
   if (cur === 'draft' && p.draft > 0.08) { tut.draftT += dt; if (tut.draftT > 0.6) tutMark('draft'); }
@@ -1336,7 +1385,7 @@ function hazTick(dt) {
 const keys = {};
 const keyName = (k) => (k && k.length === 1 ? k.toLowerCase() : k);
 const SKIP_GUARD_MS = 450;
-let drag = null, lastSteerUpAt = -1e9, lastDown = 0, lastTapX = 0, lastTapY = 0, dashBuf = 0, lastDrillTap = 0, drillN = 0, holdOff = null, wallSide = 0;
+let drag = null, lastSteerUpAt = -1e9, lastSteerUpX = 0, lastSteerUpY = 0, lastDown = 0, lastTapX = 0, lastTapY = 0, dashBuf = 0, lastDrillTap = 0, drillN = 0, holdOff = null, wallSide = 0;
 // every finger on the play area (not on buttons): when the steering thumb lifts, another one still down takes over
 const fingers = new Map();
 function clearInput() {
@@ -1344,6 +1393,13 @@ function clearInput() {
   for (const k of Object.keys(keys)) keys[k] = 0;
   dashPress = null;
   if (race) { race.input.tx = null; race.input.dash = false; race.input.tap = 0; race.input.touch = false; race.input.dir = 0; race.input.finger = false; }
+}
+// a lost pointerup leaves a phantom steering finger (every later touch dashed, steering gone until a pause): a new primary
+// touch means no other touch is on the glass, so a drag held by another pointer is a ghost. Kevin keeps its lane.
+function dropPhantom(e) {
+  if (!drag || e.pointerId === drag.id || !e.isPrimary) return;
+  holdOff = drag.off; fingers.clear(); drag = null;
+  if (race) race.input.finger = false;
 }
 const toWorldX = (clientX) => { const r = cv.getBoundingClientRect(); return (clientX - r.left) / r.width * VIEW_W; };
 const playBlocked = () => !race || mode !== 'race' || race.paused || race.pending || race.over;
@@ -1449,6 +1505,7 @@ APP.addEventListener('pointerdown', (e) => {
   // the OS back swipe: only iOS Safari (in the browser, not added to the home screen) owns a strip, 12 px on the left.
   // The right edge always plays.
   if (IOS_BACK && e.clientX < 12) return;
+  dropPhantom(e);
   fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (e.pointerType === 'touch') touchUsed = true;
   // a second thumb: dash (or drill) without stealing the steering finger
@@ -1466,6 +1523,8 @@ APP.addEventListener('pointerdown', (e) => {
   if (nearBottom(e.clientY)) { drag.flArmed = false; drag.flLock = 'edge'; }
   steerTick();
   if (race.autopilot) { race.autopilot = false; hint(UIL('autopilotOff', 'Autopilot off. You are driving!'), 2, 1); }
+  // the opening count: a thumb on the glass means ready, so it goes now
+  countGoNow();
 });
 // one-thumb flick dash: the finger went up 45+ px in the last 120 ms at 700+ px/s, mostly straight (|dx| < 0.6 |dy|).
 // It re-arms once the finger slows under 200 px/s or comes back down 20 px; the steering freezes while the flick runs
@@ -1506,6 +1565,8 @@ function flickTick(d, x, y, t) {
 }
 APP.addEventListener('pointermove', (e) => {
   const f = fingers.get(e.pointerId); if (f) { f.x = e.clientX; f.y = e.clientY; }
+  // no steering finger (the backstop dropped a ghost): a finger still on the glass that moves takes over
+  if (!drag && f && race && mode === 'race' && !playBlocked() && !race.drill) { drag = newDrag(e.pointerId, e.clientX, e.clientY, performance.now(), { flick: true, dashed: true }, gripOff(holdOff)); holdOff = null; }
   if (!drag || e.pointerId !== drag.id || !race) return;
   const w = cv.getBoundingClientRect().width || 1;
   // every sample the browser coalesced into this event (a 120 Hz finger on a 60 Hz frame), in order
@@ -1540,15 +1601,19 @@ const up = (e) => {
   const now = performance.now(), d = drag;
   drag = null;
   if (race) race.input.finger = false;
-  // a steering thumb that just lifted: a DASH press right after it is the same thumb landing, not a dash (dashBtn)
-  if (!d.fromDash) lastSteerUpAt = now;
-  // thumb handoff: another finger is still on the glass, it steers on from the lane this one held
+  // a steering thumb that just lifted: a DASH (or CASH) press right after it is the same thumb landing, not a press
+  if (!d.fromDash) { lastSteerUpAt = now; lastSteerUpX = e.clientX; lastSteerUpY = e.clientY; }
+  // thumb handoff: another finger is still on the glass, it steers on from the lane this one held. A finger the browser
+  // no longer knows (the capture throws) is a ghost: it is dropped and this is a normal lift
   if (race && mode === 'race' && !playBlocked() && !race.drill && fingers.size) {
     const [id, f] = fingers.entries().next().value;
-    drag = newDrag(id, f.x, f.y, now, { flick: true, dashed: true }, gripOff(d.off));
-    try { APP.setPointerCapture(id); } catch (err) { /* already released */ }
-    steerTick();
-    return;
+    let ok = true;
+    try { APP.setPointerCapture(id); } catch (err) { ok = false; fingers.delete(id); }
+    if (ok) {
+      drag = newDrag(id, f.x, f.y, now, { flick: true, dashed: true }, gripOff(d.off));
+      steerTick();
+      return;
+    }
   }
   if (race) { race.input.tx = null; race.input.touch = false; if (!race.drill) holdOff = d.off; }
   // a quick, still touch is a tap: the next touch soon after (and close by) dashes
@@ -1646,6 +1711,7 @@ function dashPressTick() {
 }
 $('dashBtn').addEventListener('pointerdown', (e) => {
   e.stopPropagation(); unlock();
+  dropPhantom(e);
   if (playBlocked() || countT > 0) return;
   if (race.drill) { drillTap(e.pointerId, e.clientX < innerWidth / 2 ? -1 : 1); return; }
   const instant = !!drag || landscape(), resting = !drag && !landscape() && performance.now() - lastSteerUpAt < DASH_REST_MS;
@@ -1678,7 +1744,7 @@ function pause() {
   // a pause wipes every timed state: the countdown restarts on resume, slow-mo and the crawl start over
   countT = 0; goT = 0; lastCount = 0; $('count').className = ''; crawlOn = false; hazSlowT = 0; lessonSlowT = 0; dashHoldEnd();
   // a hit-stop or a sim remainder never carries across a pause
-  stopT = 0; simAcc = 0; hitHold = null;
+  stopT = 0; simAcc = 0; hitHold = null; trickStreakPend = null;
   setT($('pauseTip'), pickLine(TIPS)); quitDisarm();
   show('pause'); muffle(true); slowmoReset();
 }
@@ -2073,10 +2139,17 @@ function passedBy(k) {
 function comboBreakFx(n, ringDone, potLost) {
   const p = race.p;
   if (R.comboBreak && !ringDone) R.comboBreak(p.x, p.y, n);
-  sfx('comboBreak');
+  // n: the combo that was lost (audio scales the shatter by it)
+  sfx('comboBreak', n);
   // a lost pot already said its line
   if (!potLost) R.pop(p.x, p.y + 70, (pickLine(BREAK_LINES) || 'COMBO DROPPED') + (n >= 10 ? ` (${n})` : ''), '#ff8bb0', 18);
-  if (n >= 10) buzz(15);
+  // a big chain lost lands like a hit: a hold, a shake and the camera pulling back, all growing with what was lost
+  if (n >= 10) {
+    hitStop(clamp(20 + 1.2 * n, 30, 80), p.x, p.y, 'break');
+    trauma(Math.min(0.45, 0.1 + 0.012 * n));
+    if (R.zoomPull) R.zoomPull(0.03 + 0.0015 * Math.min(n, 40));
+    buzz(n >= 20 ? [30, 40, 60] : 15);
+  }
 }
 let evErrs = 0;
 function onEvents() {
@@ -2115,7 +2188,10 @@ function onEvent(ev, p) {
         // a dash that passes someone, in the first lessons: ZOOM PAST! (+2 DNA, once a dash)
         if (clock - lastDashAt < 0.4 && zoomPastAt !== lastDashAt && (firstSwim || (tut && tut.on)) && !race.demo) {
           zoomPastAt = lastDashAt; meta.dna += 2;
-          R.pop(p.x, p.y + 80, (POP_LINES.zoomPast && pickLine(POP_LINES.zoomPast)) || 'ZOOM PAST! +2 DNA', '#8cdcff', 18, 1.1); buzz(10);
+          // swim 1: the burst and the buzz, no text (one thing to read at a time)
+          if (firstSwim) { lessonDna += 2; R.burst(p.x, p.y + 30, '#8cdcff', 10, 160, 0.4, 2.5); }
+          else R.pop(p.x, p.y + 80, (POP_LINES.zoomPast && pickLine(POP_LINES.zoomPast)) || 'ZOOM PAST! +2 DNA', '#8cdcff', 18, 1.1);
+          buzz(10);
         }
         if (ev.boss) {
           const k = rivalIndex(ev), name = ev.boss;
@@ -2203,7 +2279,6 @@ function onEvent(ev, p) {
         else if (!bankedNow) {
           if (R.comboBreak) R.comboBreak(ev.x != null ? ev.x : p.x, ev.y != null ? ev.y : p.y, n);
           comboBreakFx(n, true, potLost);
-          if (n >= 25) { hitStop(45); trauma(0.25); }
         }
         break;
       }
@@ -2372,7 +2447,10 @@ function onEvent(ev, p) {
         callout('event', { t: POP('backflow', 'WRONG WAY!'), z: 'BACKFLOW', sec: 1.6 }); buzz([20, 20]);
         break;
       case 'zone':
-        crawlEnd();
+        // a zone crossed with no deal: the crawl lands its payoff (a punch, a shake, a named hold); no crawl ran, a lighter
+        // punch still marks the line. A deal has the card stinger for that
+        if (ev.draft === false) { if (crawlOn) crawlEnd(true); else { if (R.zoomPunch) R.zoomPunch(0.06); trauma(0.15); } }
+        else crawlEnd();
         if (ev.draft === false) {
           const z = ZONES[ev.zi] || ZONES[ZONES.length - 1];
           if (ev.zi >= tutEndZone()) tutFinish();
@@ -2461,8 +2539,11 @@ function onEvent(ev, p) {
         // n is the streak after the first trick: 1 is two tricks back to back (the pool's 2)
         const pool = TS[Math.min(n + 1, 4)] || TS[Math.min(n, 4)] || ['TRICK STREAK!'];
         const l = pickLine(pool) || 'TRICK STREAK!';
-        hitStop(120 + 40 * Math.min(n, 4), null, null, 'trick', true);
-        later(0.45, () => { if (race && !race.over) { R.pop(VIEW_W / 2, race.p.y + 215, l + (ev.mult > 1 ? ' x' + Math.round(ev.mult * 10) / 10 : ''), '#ff5cd2', 30 + 2 * Math.min(n, 4), 1.4); sfx('trickStreak', n); } });
+        // the trick's hold stretched to 90 + 20 per streak step (max, never a second hold on top); the pop and the sting
+        // land on its release (hitRelease), or at once when no hold runs (reduced motion)
+        hitStop(90 + 20 * Math.min(n, 4), null, null, 'trick', true);
+        const go = () => { if (race && !race.over) { R.pop(VIEW_W / 2, race.p.y + 215, l + (ev.mult > 1 ? ' x' + Math.round(ev.mult * 10) / 10 : ''), '#ff5cd2', 30 + 2 * Math.min(n, 4), 1.4); sfx('trickStreak', n); } };
+        if (hitHold && hitHold.kind === 'trick' && stopT > 0) trickStreakPend = go; else go();
         trauma(0.25 + 0.05 * Math.min(n, 4)); buzz([20, 20, 30, 20, 50]);
         break;
       }
@@ -2475,7 +2556,8 @@ function onEvent(ev, p) {
 }
 function trickFx(ev, p) {
   const TT = C.TRICK_TEXT || K.TRICK_TEXT || {}, t = TT[ev.id], name = (t && t.name) || String(ev.id || 'TRICK').toUpperCase();
-  hitStop(120, null, null, 'trick'); if (R.zoomPunch) R.zoomPunch(0.05);
+  // a fixed 90 ms hold that always lands (a streak in the same beat stretches this one, it never stacks a second)
+  hitStop(90, null, null, 'trick', true); if (R.zoomPunch) R.zoomPunch(0.05);
   // its 3 chips flash gold on the strip first, then the name lands
   const kinds = Array.isArray(ev.kinds) && ev.kinds.length ? ev.kinds : null;
   if (kinds) trickFlash = { kinds, until: clock + 0.5 };
@@ -2705,8 +2787,37 @@ function finishSkip() {
   if (!finHold || clock < finHold.ready || performance.now() < finHold.readyMs) return false;
   const h = finHold; goResult(h.fin, h.o); return true;
 }
+// a win names who it beat: the arrived boss furthest into their drill (else the named rival nearest the egg on Kevin's
+// side), the seconds they still needed (as core counts them), a stamp line from K.WIN_MARGIN_LINES in their colour.
+// Worked out once per finished swim (o._margin)
+function winMargin(o) {
+  if (!o || o.reason !== 'win' || !race) return null;
+  if (o._margin !== undefined) return o._margin;
+  o._margin = null;
+  let best = null, bf = -1;
+  for (const a of race.agents) if (a && a.boss && a.alive && a.arrived) { const f = (a.drill || 0) / (a.need || 1); if (f > bf) { bf = f; best = a; } }
+  let sec = NaN;
+  if (best) {
+    if (Number.isFinite(best.need) && Number.isFinite(best.drill)) { let r = 1; try { r = typeof race.drillRate === 'function' ? race.drillRate(best) : 1; } catch (e) { r = 1; } sec = Math.max(0, best.need - best.drill) / Math.max(0.01, r); }
+  } else {
+    for (const a of race.agents) { if (!a || !a.boss || !a.alive || a.arrived) continue; if (race.eggSide && a.side && a.side !== race.eggSide) continue; if (!best || a.y > best.y) best = a; }
+    if (best) sec = Math.max(0, RACE_LEN - 70 - best.y) / Math.max(1, (race.s && race.s.speed) || 400);
+  }
+  if (!best) return null;
+  if (!Number.isFinite(sec)) sec = Number.isFinite(o.gapSec) ? o.gapSec : NaN;
+  if (!Number.isFinite(sec)) return null;
+  sec = Math.round(sec * 10) / 10;
+  const b = sec < 0.5 ? 'hair' : sec < 1.5 ? 'tail' : 'clear', pool = WIN_MARGIN_LINES[b];
+  const name = first(best.boss.name).toUpperCase();
+  const t = fillLine(pickLine(Array.isArray(pool) && pool.length ? pool : ['{s} S AHEAD OF {name}']), { name, s: sec.toFixed(1) });
+  if (!t) return null;
+  o._margin = { t, sec, photo: sec < 0.5, col: best.boss.col || '#ffd75c', name };
+  return o._margin;
+}
 function finish(o) {
-  const fin = race, win = o.reason === 'win', stolen = o.reason === 'late' && !!race.drill;
+  // a steal: the egg went while Kevin drilled, or before he even got there (race.eggTaken). Both hold 2.4 s (art pans to
+  // the egg when he never arrived)
+  const fin = race, win = o.reason === 'win', stolen = o.reason === 'late' && (!!race.drill || !!race.eggTaken);
   // eaten by a Big Macro or starved in the wrong tube: a beat longer, so the NOM lands before the card
   const gulp = o.reason === 'wbc' || o.reason === 'wrong';
   const soft = o.reason === 'quit' || o.reason === 'crash';
@@ -2735,6 +2846,16 @@ function finish(o) {
       coClear();
       callout('drill', { t: line, z: 'THE EGG', col: win ? '#7dffb0' : th ? th.col : '#ff5c7a', red: !win, sec: win ? 1.4 : 1.7 });
       eggFinaleLines(win, th);
+      // (the finale's banners never time out: the HUD loop is off once the swim is over, so a later beat replaces the last)
+      const still = () => race === fin && mode === 'race' && !!finHold && finHold.fin === fin;
+      // stolen before Kevin got there: how far away he still was, in the thief's colour, with the thief's claim sting
+      if (stolen && !race.drill && Number.isFinite(+o.gapSec) && +o.gapSec > 0) {
+        const tk = th ? RIVALS.findIndex((r) => r.name === th.name || first(r.name) === first(th.name)) : -1;
+        later(0.6, () => { if (!still()) return; coEnd(); callout('drill', { t: `${(+o.gapSec).toFixed(1)}s AWAY`, z: th ? `${first(th.name)} got in first`.toUpperCase() : 'THE EGG', zKeep: true, col: th ? th.col : '#ff5c7a', red: true, sec: 1.6 }); sfx('eggClaim', tk >= 0 ? tk : undefined); });
+      }
+      // a win names who it beat, in their colour (a photo finish says so)
+      const wm = win ? winMargin(o) : null;
+      if (wm) later(0.9, () => { if (!still()) return; coEnd(); callout('drill', { t: wm.t, z: wm.photo ? 'PHOTO FINISH' : 'THE EGG', zKeep: true, col: wm.col, sec: 1.8 }); if (wm.photo) buzz([15, 25, 15]); });
     }
     // the win flash must never lose to the 0.5 s flash limiter (a lead-change flash just before it)
     if (win) { R.lastFlashT = -9; R.flash = 1; R.flashCol = 'rgba(255,240,200,0.9)'; for (let i = 0; i < 6; i++) R.burst(race.p.x, race.p.y + 150, ['#ffd75c', '#ff5c8a', '#5ce1ff'][i % 3], 30, 400, 1.4, 5); if (R.confetti) R.confetti(); }
@@ -2898,19 +3019,27 @@ function soCloseLine() {
   }
   return '';
 }
-function rematchLabel(o, by, close, g) {
+// the rematch button, by the card's one story (x: { by, close, g, kind, cause, named, firstRes, byK, cm, pk })
+function rematchLabel(o, x) {
+  const pk = x.pk || pickLine, by = x.by, g = x.g, death = x.kind === 'death' || x.kind === 'eggGas';
   // a win sends the next generation ('GEN 4 GO!')
-  if (o.reason === 'win' && Array.isArray(REMATCH_LINES.win) && REMATCH_LINES.win.length) { const l = fillLine(pickLine(REMATCH_LINES.win), { gen: (meta.gen | 0) + 1 }); if (l) return l; }
-  // beaten by under a second, or a close one with a named foe: call them out ('GET STEVE! 0.4 S')
-  if (o.reason !== 'win' && by && g && (g.sec < 1 || close) && Array.isArray(K.REMATCH_CLOSE_FOE) && K.REMATCH_CLOSE_FOE.length) {
-    const l = fillLine(pickLine(K.REMATCH_CLOSE_FOE), { name: first(by).toUpperCase(), sec: g.sec.toFixed(1) });
+  if (x.kind === 'win' && Array.isArray(REMATCH_LINES.win) && REMATCH_LINES.win.length) { const l = fillLine(pk(REMATCH_LINES.win), { gen: (meta.gen | 0) + 1 }); if (l) return l; }
+  // ran out a few centimetres short: the distance itself ('0.05 CM. GO GET IT')
+  if (death && x.cm < 0.5 && REMATCH_NEAR_CM.length) { const l = fillLine(pk(REMATCH_NEAR_CM), { cm: Math.max(0.01, x.cm).toFixed(x.cm < 1 ? 2 : 1) }); if (l) return l; }
+  // beaten by under a second, or a close one with the rival named on the card: call them out ('GET STEVE! 0.4 S')
+  if (x.named && by && g && (g.sec < 1 || x.close) && Array.isArray(K.REMATCH_CLOSE_FOE) && K.REMATCH_CLOSE_FOE.length) {
+    const l = fillLine(pk(K.REMATCH_CLOSE_FOE), { name: first(by).toUpperCase(), sec: g.sec.toFixed(1) });
     if (l) return l;
   }
-  if (o.reason !== 'win' && by) { const l = byFirst(REMATCH_LINES, by); if (Array.isArray(l) && l.length) return pickLine(l); }
-  if (close && REMATCH_LINES.close) return pickLine(REMATCH_LINES.close);
-  const bc = o.reason !== 'win' && K.REMATCH_BY_CAUSE ? K.REMATCH_BY_CAUSE[o.uiCause] : null;
-  if (Array.isArray(bc) && bc.length) return pickLine(bc) + ' 💦';
-  return pickLine(REMATCH_LINES.default) || 'SWIM AGAIN 💦';
+  const pr = REMATCH_PROMISE[x.kind === 'soft' ? o.reason : x.cause];
+  // the first result, or nobody to come back for: a promise about what ended it ('FRUIT THIS TIME')
+  if ((x.firstRes || x.byK < 0) && Array.isArray(pr) && pr.length) { const l = pk(pr); if (l) return l; }
+  if (x.named && by) { const l = byFirst(REMATCH_LINES, by); if (Array.isArray(l) && l.length) return pk(l); }
+  if (x.close && REMATCH_LINES.close && x.kind === 'raced') return pk(REMATCH_LINES.close);
+  if (Array.isArray(pr) && pr.length) { const l = pk(pr); if (l) return l; }
+  const bc = x.kind !== 'win' && K.REMATCH_BY_CAUSE ? K.REMATCH_BY_CAUSE[x.cause] : null;
+  if (Array.isArray(bc) && bc.length) return pk(bc) + ' 💦';
+  return pk(REMATCH_LINES.default) || 'SWIM AGAIN 💦';
 }
 // what the newest generation added past the habits' max: {d levels, on n habits}
 function grandadGain() {
@@ -2968,34 +3097,50 @@ function showResult(o) {
   // raced: a real lost race (the egg went to someone else, or a rival really got there first). Only then is it a photo
   // finish, a 'beat you by', a gloat about a tight one. A death is a death: title, why, tip and Dad's Pick name its cause
   const arrivedFirst = !!race.eggTaken || race.agents.some((a) => a && a.alive && a.arrived && a.boss);
-  const raced = !win && !soft && !eggGas && (reason === 'late' || arrivedFirst);
+  const raced = !win && !soft && !eggGas && (reason === 'late' || arrivedFirst || drilled);
+  // ONE story per card: the title pool, the why pool, the caption's unit (s or cm), the first-death lesson and Dad's Pick
+  // all come from this kind and nothing else ('eggGas': out of GAS or fizzed in the egg zone, a death, never a lost race)
+  const kind = win ? 'win' : soft ? 'soft' : eggGas ? 'eggGas' : raced ? 'raced' : 'death';
+  o.uiKind = kind;
+  // a lost race is always about the egg ('late'): its lesson, its tip and Dad's Pick
+  if (kind === 'raced') cause = 'late';
+  o.uiCause = cause;
   // the first swims never hear "again" (nobody has failed at anything yet)
   const pk = (a) => pickLine((meta.runs | 0) <= 1 && Array.isArray(a) ? a.filter((l) => !/again/i.test(String(l))) : a);
   // headline and the why
-  let tt, why, near = false;
-  if (win) { tt = "IT'S A BABY! 🍼"; why = topK >= 0 ? linesOf(RIVALS[topK].name).loseEgg || pickLine(WIN_LINES) : pickLine(WIN_LINES); }
-  else if (by && raced) { tt = `${first(by).toUpperCase()} GOT THERE FIRST`; why = pk(byFirst(K.RIVAL_STEAL_WHY || {}, by) || []) || linesOf(by).stealEgg || pk(DEATH_LINES.late); }
-  else if (reason === 'crash') { tt = pickLine(RESULT_TITLES.crash) || 'TUBE HICCUP'; why = K.CRASH_LINE || 'The tube hiccupped. Kevin keeps the DNA.'; }
-  else if (reason === 'quit') { tt = pickLine(RESULT_TITLES.quit) || 'BREAK TIME'; why = pk(DEATH_LINES.quit) || 'Kevin is taking a little break.'; if (o.counted === false) why += ' Too short to count: no daily, no rival record.'; }
-  else if (eggGas) { tt = pk(RESULT_TITLES.energy) || 'OUT OF GAS'; why = pk(DEATH_LINES.energyEgg) || pk(DEATH_LINES.energy); }
-  else if ((o.zone | 0) >= 6 && raced) { tt = pk(RESULT_TITLES.close) || 'SO. CLOSE.'; why = null; }
-  else { tt = pk(RESULT_TITLES[cause]) || pk(RESULT_TITLES[reason]) || pk(LOSE_TITLES); why = null; }
-  if (!why) {
-    // a lost race gets a near-miss line that points at the next swim; a death gets its cause's line
-    // the near-miss lines are for a lost egg only (reason 'late'): never for a death that happened near a rival
-    const lateRace = raced && reason === 'late';
-    const bucket = lateRace && g ? (g.sec < 0.3 ? 'hair' : g.sec < 1 ? 'tail' : g.sec < 3 ? 'length' : '') : '';
-    const egg = cause === 'energy' && (o.zone | 0) >= 5 && Array.isArray(DEATH_LINES.energyEgg) && DEATH_LINES.energyEgg.length;
-    if (bucket && NEAR_MISS_BY_GAP && Array.isArray(NEAR_MISS_BY_GAP[bucket]) && NEAR_MISS_BY_GAP[bucket].length) { why = pk(NEAR_MISS_BY_GAP[bucket]); near = true; }
-    else if (lateRace && o.rank <= 10 && NEAR_MISS_LINES.length) { why = pk(NEAR_MISS_LINES); near = true; }
-    // out of GAS with the egg in sight gets its own lines
-    else if (egg) why = pk(DEATH_LINES.energyEgg);
-    else why = pk(DEATH_LINES[cause] || DEATH_LINES[reason] || DEATH_LINES.energy);
-    // a death (not a lost race): 40% of the time from swim 3 on, a joke about the zone it happened in
+  let tt, why = null, near = false;
+  if (kind === 'win') { tt = "IT'S A BABY! 🍼"; why = topK >= 0 ? linesOf(RIVALS[topK].name).loseEgg || pickLine(WIN_LINES) : pickLine(WIN_LINES); }
+  else if (kind === 'soft') {
+    if (reason === 'crash') { tt = pk(RESULT_TITLES.crash) || 'TUBE HICCUP'; why = K.CRASH_LINE || 'The tube hiccupped. Kevin keeps the DNA.'; }
+    else { tt = pk(RESULT_TITLES.quit) || 'BREAK TIME'; why = pk(DEATH_LINES.quit) || 'Kevin is taking a little break.'; if (o.counted === false) why += ' Too short to count: no daily, no rival record.'; }
+  } else if (kind === 'eggGas') {
+    // out of GAS at the egg: the energy titles and the egg's own GAS lines, never a near-miss by gap
+    tt = pk(RESULT_TITLES.energy) || 'OUT OF GAS';
+    why = pk(DEATH_LINES.energyEgg) || pk(DEATH_LINES.energy);
+  } else if (kind === 'raced') {
+    if (by) { tt = `${first(by).toUpperCase()} GOT THERE FIRST`; why = pk(byFirst(K.RIVAL_STEAL_WHY || {}, by) || []) || linesOf(by).stealEgg || null; }
+    else tt = (o.zone | 0) >= 6 ? pk(RESULT_TITLES.close) || 'SO. CLOSE.' : pk(RESULT_TITLES.late) || pk(LOSE_TITLES);
+    if (!why) {
+      // a lost race gets a near-miss line that points at the next swim (by how far behind the winner)
+      const bucket = g ? (g.sec < 0.3 ? 'hair' : g.sec < 1 ? 'tail' : g.sec < 3 ? 'length' : '') : '';
+      if (bucket && NEAR_MISS_BY_GAP && Array.isArray(NEAR_MISS_BY_GAP[bucket]) && NEAR_MISS_BY_GAP[bucket].length) { why = pk(NEAR_MISS_BY_GAP[bucket]); near = true; }
+      else if (o.rank <= 10 && NEAR_MISS_LINES.length) { why = pk(NEAR_MISS_LINES); near = true; }
+      else why = pk(DEATH_LINES.late);
+    }
+  } else {
+    // a death: its cause's title and line; from swim 3 on, 40% of the time a joke about the zone it happened in
+    tt = pk(RESULT_TITLES[cause]) || pk(RESULT_TITLES[reason]) || pk(LOSE_TITLES);
+    why = pk(DEATH_LINES[cause] || DEATH_LINES[reason] || DEATH_LINES.energy);
     const dz = DEATH_BY_ZONE[z.id];
-    if (!near && !raced && !soft && !eggGas && (meta.runs | 0) >= 2 && Array.isArray(dz) && dz.length && Math.random() < 0.4) why = pk(dz) || why;
+    if ((meta.runs | 0) >= 2 && Array.isArray(dz) && dz.length && Math.random() < 0.4) why = pk(dz) || why;
   }
   $('resTitle').textContent = tt; $('resWhy').textContent = chadFix(why || '');
+  // a win's margin stamp: who it beat and by how much, in their colour ('PHOTO FINISH' under half a second)
+  { const el = $('resMargin'), wm = kind === 'win' ? winMargin(o) : null;
+    if (el) {
+      if (wm) { el.innerHTML = `${esc(wm.t)}${wm.photo ? '<span class="pf">PHOTO FINISH</span>' : ''}`; el.style.setProperty('--c', wm.col); el.classList.remove('hide'); }
+      else el.classList.add('hide');
+    } }
   // the first death: one title, one line, the rank, the egg bar, the DNA, one tip and SWIM AGAIN (nothing else)
   const firstRes = (meta.runs | 0) <= 1;
   setC($('result'), 'first', firstRes);
@@ -3128,6 +3273,16 @@ function showResult(o) {
     const n = Array.isArray(mt) ? mt.length : mt && typeof mt === 'object' ? Object.keys(mt).filter((k) => mt[k]).length : 0;
     if (tot && !firstRes) $('resReceipt').insertAdjacentHTML('beforeend', `<div class="on trk"><span>Tricks found</span><b>${Math.min(n, tot)}/${tot}</b></div>`); }
   $('resDna').textContent = '+0 DNA 🧬';
+  // the first result: what the lessons paid, what DNA is for, and a warm tail (DNA was never explained mid-swim)
+  { const el = $('resLessons');
+    if (el) {
+      const on = firstRes && firstSwim;
+      if (on) {
+        el.innerHTML = `${lessonDna > 0 ? `<b>Lessons +${fmt(lessonDna)} DNA</b>` : ''}<small>${esc(TUT_DNA_EXPLAIN)}</small>${!win && FIRST_DEATH_TAIL ? `<small class="tl">${esc(FIRST_DEATH_TAIL)}</small>` : ''}`;
+        if (!S.dnaExplained) { S.dnaExplained = true; saveUI(); }
+      }
+      setC(el, 'hide', !on);
+    } }
   // a near miss on the record (under 15% of this rank off it) pulls: '{n} places off your best', in pink
   const offBest = !rec && !firstRec && meta.best < TOTAL_SWIMMERS ? o.rank - meta.best : 0, nearRec = offBest > 0 && offBest < 0.15 * o.rank;
   $('resBest').textContent = rec ? (firstRec ? 'FIRST RECORD!' : `old best #${fmt(prevBest)}`)
@@ -3144,11 +3299,13 @@ function showResult(o) {
   const cmLeft = (race.remaining() / PX_PER_CM).toFixed(1);
   // right at the egg (0.0 cm to go) it says so instead of a zero distance
   // (from where Kevin really was: the zone index in o can lag behind his position)
-  const fdEgg = cause === 'energy' && (eggGas || (o.zone | 0) >= 5 || zoneIndex(race.p.y) >= 5) && FIRST_DEATH.energyEgg;
-  const fdKey = fdEgg ? (+cmLeft < 0.1 && FIRST_DEATH.energyEggAt ? 'energyEggAt' : 'energyEgg') : cause;
-  let big = !win && (firstRes || (meta.runs === 1 && !close && !(g && g.sec < 3))) && FIRST_DEATH[fdKey] ? fillLine(FIRST_DEATH[fdKey], { cm: cmLeft }) : '';
-  if (!win && firstSwim && reason === 'energy' && !fdEgg && dashN >= 2 && gasBurn > 0 && K.DASH_COST_TIP) big = fillLine(K.DASH_COST_TIP, { n: dashN, g: Math.round(gasBurn) });
-  let tip = win || soft ? '' : big || pk(TIP_BY_REASON[cause]) || pk(TIP_BY_REASON[reason]) || pk(TIPS);
+  // (the kind picks the key: a lost race is 'late', a crash 'crash', any death with Kevin in the egg zone the egg's GAS one)
+  const fdEgg = (kind === 'eggGas' || (kind === 'death' && race.p.y >= eggY)) && !!FIRST_DEATH.energyEgg;
+  const fdKey = kind === 'soft' ? reason : kind === 'raced' ? 'late' : fdEgg ? (+cmLeft < 0.1 && FIRST_DEATH.energyEggAt ? 'energyEggAt' : 'energyEgg') : cause;
+  const lessonOk = kind !== 'win' && !(kind === 'soft' && reason !== 'crash');
+  let big = lessonOk && (firstRes || (meta.runs === 1 && !close && !(g && g.sec < 3))) && FIRST_DEATH[fdKey] ? fillLine(FIRST_DEATH[fdKey], { cm: cmLeft }) : '';
+  if (kind === 'death' && firstSwim && reason === 'energy' && !fdEgg && dashN >= 2 && gasBurn > 0 && K.DASH_COST_TIP) big = fillLine(K.DASH_COST_TIP, { n: dashN, g: Math.round(gasBurn) });
+  let tip = !lessonOk ? '' : kind === 'soft' ? big || pk(TIP_BY_REASON.crash) || '' : big || pk(TIP_BY_REASON[cause]) || pk(TIP_BY_REASON[reason]) || pk(TIPS);
   // the egg drill pumped Kevin's arms: next time drills faster
   if (!tip && !win && reason === 'late' && typeof C.eggBoostPct === 'function' && K.RESULT_HELP_LINES && K.RESULT_HELP_LINES.eggBoost) {
     try { const pc = Math.round(+C.eggBoostPct(meta) || 0); if (pc > 0) tip = fillLine(K.RESULT_HELP_LINES.eggBoost, { pct: pc }); } catch (e) { /* optional */ }
@@ -3187,18 +3344,21 @@ function showResult(o) {
   }
   setT($('resGoal'), tmr); setC($('resGoal'), 'hide', !tmr);
   // the rematch button names who you are coming back for, in their colour
-  const ab = $('againBtn'), rl = rematchLabel(o, foe, close, raced ? g : null);
+  // the rival is named on this card only on a lost race (the title, the gloat, the caption): only then does the
+  // rematch button call them out, wear their colour and introduce them
+  const named = kind === 'raced' && !!foe && byK >= 0;
+  const ab = $('againBtn'), rl = rematchLabel(o, { by: foe, close, g: raced ? g : null, kind, cause, named, firstRes, byK, cm: race.remaining() / PX_PER_CM, pk });
   ab.innerHTML = esc(rl) + (goal ? `<small>🎯 ${esc(goal)}</small>` : '');
   // the rematch names a rival Kevin never got introduced to this swim: who they are, in one small line under the button
-  { const rv = $('resRival'), rr = !win && byK >= 0 && !rivalIntro[byK] && RIVALS[byK] && RIVALS[byK].line ? RIVALS[byK].line : '';
+  { const rv = $('resRival'), rr = named && !rivalIntro[byK] && RIVALS[byK] && RIVALS[byK].line ? RIVALS[byK].line : '';
     if (rv) { setT(rv, rr); setC(rv, 'hide', !rr); if (rr) rv.style.setProperty('--c', RIVALS[byK].col); } }
   medalStamp(o);
   // short phones: the lesson and the tomorrow line leave the sticky bar (it keeps just the buttons)
   { const acts = $('resActions'), short = innerHeight <= 700;
     for (const id of ['resGoal', 'resTip']) { const el = $(id); if (short) { if (el.parentNode === acts) acts.parentNode.insertBefore(el, acts); } else if (el.parentNode !== acts) acts.insertBefore(el, acts.firstChild); } }
 
-  ab.style.setProperty('--rc', byK >= 0 && !win ? RIVALS[byK].col : '#ff3d6e');
-  ab.classList.toggle('rival', byK >= 0 && !win);
+  ab.style.setProperty('--rc', named ? RIVALS[byK].col : '#ff3d6e');
+  ab.classList.toggle('rival', named);
   // buttons wake up after a beat, so a panicked tap does not skip the screen
   resultReady = false; clearTimeout(resultTO);
   for (const id of ['againBtn', 'resShopBtn', 'resMenuBtn']) { const b = $(id); b.classList.remove('ready', 'breathe'); b.classList.add('wait'); }
@@ -3299,7 +3459,7 @@ function renderResUp() {
   const can = dad && meta.dna >= dad.cost ? dad : opts.find((x) => meta.dna >= x.cost), x = dad || can || opts[0], h = HABITS[x.id];
   const a = habEff(x.id, x.l), b = habEff(x.id, x.l + 1);
   const eff = a && b ? (x.l ? `${esc(a)} → ${esc(b)}` : 'Next: ' + esc(b)) : esc(h.desc);
-  const dl = DAD_PICK_LINES[cause === 'energy' && (o.zone | 0) >= 5 && DAD_PICK_LINES.energyEgg ? 'energyEgg' : cause] || DAD_PICK_LINES.generic || '';
+  const dl = DAD_PICK_LINES[o.uiKind === 'eggGas' && DAD_PICK_LINES.energyEgg ? 'energyEgg' : cause] || DAD_PICK_LINES.generic || '';
   const why = dad && x === dad ? `<div class="dp">DAD'S PICK${dl ? ' · ' + esc(dl) : ''}</div>` : '';
   const affordable = meta.dna >= x.cost;
   resPickShown = !!why; resPickCause = why ? cause : null;
@@ -3358,7 +3518,8 @@ async function share() {
   const tail = tierLine(SHARE_LINES, o.rank);
   const head = o.reason === 'win' ? 'I beat 999,999 swimmers and became a PERSON in Million To One.'
     : `I finished #${fmt(o.rank)} out of 1,000,000 swimmers in Million To One.`;
-  const text = o.daily != null ? dailyShareText(o) : `${head}${tail ? ' ' + tail : ''} (Kevin #${kevinN})`;
+  const wm = winMargin(o), mt = wm ? wm.t + (wm.photo ? ' (photo finish!)' : '') : '';
+  const text = o.daily != null ? dailyShareText(o) + (mt ? '\n' + mt : '') : `${head}${mt ? ' ' + mt : ''}${tail ? ' ' + tail : ''} (Kevin #${kevinN})`;
   buzz(10);
   if (navigator.share) {
     try { await navigator.share({ title: 'Million To One', text, url: SHARE_URL }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
@@ -3380,24 +3541,34 @@ $('resMenuBtn').onclick = () => { if (!resultReady) return; resultReady = false;
 
 // ------------------------------------------------------------------ shop, album, combo book
 let shopFrom = 'title';
+// the row order and Dad's Pick are fixed for the whole visit (worked out when the shop opens), so a buy never moves a row
+// under the next tap; each buy button also ignores a second tap within 200 ms
+let shopOrder = null, shopDad = null;
+const shopTapAt = {};
 function shop(from) {
-  shopFrom = from || shopFrom; show('shop');
+  if (from || !shopOrder) {
+    shopFrom = from || shopFrom;
+    // Dad's Pick first; then what you can afford (cheapest first), what you cannot yet, the locked ones, the maxed ones
+    shopDad = dadPickId();
+    const rows = HABIT_ORDER.map((id) => {
+      const l = lv(meta, id), mx = habMax(id), locked = HABITS[id].max > 0 && mx === 0, maxed = !locked && l >= mx, cost = habitCost(id, l);
+      return { id, locked, maxed, cost, can: !locked && !maxed && meta.dna >= cost };
+    });
+    const rank = (r) => (r.id === shopDad ? 0 : r.can ? 1 : !r.locked && !r.maxed ? 2 : r.locked ? 3 : 4);
+    rows.sort((a, b) => rank(a) - rank(b) || a.cost - b.cost);
+    shopOrder = rows.map((r) => r.id);
+  }
+  show('shop');
   $('dnaTop').textContent = `${fmt(meta.dna)} DNA 🧬`;
-  // Dad's Pick first and highlighted; then what you can afford (cheapest first), what you cannot yet, the locked ones, the maxed ones
-  const dad = dadPickId();
-  const rows = HABIT_ORDER.map((id) => {
-    const l = lv(meta, id), mx = habMax(id), locked = HABITS[id].max > 0 && mx === 0, maxed = !locked && l >= mx, cost = habitCost(id, l);
-    return { id, l, mx, locked, maxed, cost, can: !locked && !maxed && meta.dna >= cost };
-  });
-  const rank = (r) => (r.id === dad ? 0 : r.can ? 1 : !r.locked && !r.maxed ? 2 : r.locked ? 3 : 4);
-  rows.sort((a, b) => rank(a) - rank(b) || a.cost - b.cost);
+  const dad = shopDad;
   // the first visit before any purchase: Dad's pick pulses, with a caption that says what to do
   const firstShop = !S.firstBuy && !!dad && meta.dna >= habitCost(dad, lv(meta, dad));
   setT($('shopCap'), firstShop ? K.FIRST_SHOP_CAPTION || "Tap Dad's pick. It lasts forever." : ''); setC($('shopCap'), 'hide', !firstShop);
   // the first purchase ever is in: Back swims with it
   setT($('shopBack'), shopSwim ? 'SWIM WITH IT 💦' : 'Back'); setC($('shopBack'), 'swim', shopSwim);
   let gdNew = false;
-  $('shopList').innerHTML = rows.map(({ id, l, mx, locked, maxed, cost }) => {
+  $('shopList').innerHTML = shopOrder.map((id) => {
+    const l = lv(meta, id), mx = habMax(id), locked = HABITS[id].max > 0 && mx === 0, maxed = !locked && l >= mx, cost = habitCost(id, l);
     const h = HABITS[id];
     if (locked) return `<div class="hab locked"><div class="ic">${h.icon}</div><div><div class="nm">${esc(h.name)}</div><div class="lk">🔒 Unlocks at Generation 2</div><div class="ds">${esc(h.desc)}</div></div></div>`;
     const a = habEff(id, l), b = maxed ? null : habEff(id, l + 1);
@@ -3410,10 +3581,16 @@ function shop(from) {
     const rib = gm > 0 && l >= hm && gm > (S.gdSeen[id] | 0) ? '<div class="gdNew">NEW: Grandad level!</div>' : '';
     if (gm !== (S.gdSeen[id] | 0) && (l >= hm || gm < (S.gdSeen[id] | 0))) { S.gdSeen[id] = gm; gdNew = true; }
     const pulse = firstShop && id === dad ? ' pulse' : '';
-    return `<div class="hab${!maxed && meta.dna >= cost ? ' can' : ''}${pick ? ' pick' : ''}"><div class="ic">${h.icon}</div><div>${rib}${pick}<div class="nm">${esc(h.name)}</div>${q ? `<div class="qp">${esc(q)}</div>` : ''}${ef}<div class="pips">${'●'.repeat(nl)}${'○'.repeat(Math.max(0, hm - nl))}${gp}</div></div><button class="${pulse.trim()}" data-id="${id}" ${maxed || meta.dna < cost ? 'disabled' : ''}>${maxed ? 'MAX' : fmt(cost)}<small>${maxed ? '' : 'DNA'}</small></button></div>`;
+    return `<div class="hab${!maxed && meta.dna >= cost ? ' can' : ''}${pick ? ' pick' : ''}" data-row="${id}"><div class="ic">${h.icon}</div><div>${rib}${pick}<div class="nm">${esc(h.name)}</div>${q ? `<div class="qp">${esc(q)}</div>` : ''}${ef}<div class="pips">${'●'.repeat(nl)}${'○'.repeat(Math.max(0, hm - nl))}${gp}</div></div><button class="${pulse.trim()}" data-id="${id}" ${maxed || meta.dna < cost ? 'disabled' : ''}>${maxed ? 'MAX' : fmt(cost)}<small>${maxed ? '' : 'DNA'}</small></button></div>`;
   }).join('');
   if (gdNew) saveUI();
-  for (const b of $('shopList').querySelectorAll('button')) b.onclick = () => { if (buy(b.dataset.id)) shop(); };
+  for (const b of $('shopList').querySelectorAll('button')) b.onclick = () => {
+    const id = b.dataset.id, now = performance.now();
+    if (now - (shopTapAt[id] || -1e9) < 200) return;
+    shopTapAt[id] = now;
+    // the rows stay where they are: only their levels, prices and buttons change
+    if (buy(id)) shop();
+  };
 }
 $('shopBtn').onclick = () => shop('title');
 $('resShopBtn').onclick = () => { if (!resultReady) return; resultReady = false; shop('result'); };
@@ -3501,7 +3678,20 @@ const CB = $('cashBtn');
 CB.addEventListener('pointerdown', (e) => {
   e.stopPropagation(); e.preventDefault(); unlock();
   if (playBlocked()) return;
-  cashPress = { id: e.pointerId, t0: performance.now(), x0: e.clientX, y0: e.clientY };
+  dropPhantom(e);
+  const now = performance.now();
+  // the steering thumb landing back on the chip (within 250 ms and 60 px of where it lifted) re-grips: it steers, it
+  // never cashes. A press while another finger is down is a palm or a resting thumb: ignored
+  if (drag || fingers.size) return;
+  if (now - lastSteerUpAt < 250 && Math.hypot(e.clientX - lastSteerUpX, e.clientY - lastSteerUpY) < 60) {
+    if (race.drill) return;
+    drag = newDrag(e.pointerId, e.clientX, e.clientY, now, { flick: true, dashed: true }, gripOff(holdOff));
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY }); holdOff = null;
+    try { APP.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
+    steerTick();
+    return;
+  }
+  cashPress = { id: e.pointerId, t0: now, x0: e.clientX, y0: e.clientY };
   try { CB.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
 });
 CB.addEventListener('pointermove', (e) => {
@@ -4052,7 +4242,7 @@ function crawlEnd(crossed) {
   if (!crawlOn) return;
   crawlOn = false;
   if (slowT <= 0 && freezeT <= 0) { try { A.slowmo(false); } catch (e) { /* ignore */ } }
-  if (crossed) { if (R.zoomPunch) R.zoomPunch(0.12); trauma(0.3); hitStopRL(50); }
+  if (crossed) { if (R.zoomPunch) R.zoomPunch(0.12); trauma(0.3); const p = race && race.p; hitStopRL(60, p ? p.x : null, p ? p.y : null, 'zone'); }
 }
 
 // ------------------------------------------------------------------ 2, 1, GO (0.6 s a number)
@@ -4068,7 +4258,10 @@ function countTick(dt) {
     const n = Math.ceil(countT / 0.6);
     if (n !== lastCount) { lastCount = n; el.textContent = n; el.className = ''; void el.offsetWidth; el.className = 'on'; sfx('tap', 0.3 + (3 - n) * 0.2); buzz(10); }
   } else {
-    countT = 0; lastCount = 0; el.textContent = 'GO!'; el.className = ''; void el.offsetWidth; el.className = 'on go'; goT = 0.5;
+    // swim 1's GO is a line of its own (K.FIRST_GO_LINE), a size down
+    const goL = firstSwim && !countFromPause && FIRST_GO_LINE && FIRST_GO_LINE !== 'GO!' ? FIRST_GO_LINE : 'GO!';
+    countT = 0; lastCount = 0; el.textContent = goL; el.className = ''; void el.offsetWidth; el.className = 'on go' + (goL !== 'GO!' ? ' line' : ''); goT = goL !== 'GO!' ? 0.9 : 0.5;
+    introUnderOff();
     sfx(countFromPause ? 'resume' : 'go'); buzz([20, 20, 40]); trauma(0.25);
     // a no-op once the swim-1 banner went up; after a pause in the opening count it still goes up here
     goNow();
@@ -4169,6 +4362,8 @@ function frameBody(now) {
         race.input.dir = kd;
         if (kd) { race.input.touch = false; holdOff = null; race.input.tx = null; }
       }
+      // backstop: a steering finger that has not moved for 4 s while another finger is down is a ghost (a lost pointerup)
+      if (drag && fingers.size > 1 && performance.now() - drag.lt > 4000) { fingers.delete(drag.id); holdOff = drag.off; drag = null; race.input.finger = false; }
       steerTick(); holdTick(kd);
       // a slow-mo makes the same finger travel feel smaller: steering gets that much snappier (core reads input.steerK)
       race.input.steerK = race.drill || race.autopilot ? 1 : clamp(1 / Math.max(0.01, timeScale), 1, 2.2);
@@ -4188,7 +4383,9 @@ function frameBody(now) {
     onEvents(); flushPasses(dt);
     if (inRace && live && !held && dashBuf > 0 && !race.pending) { dashBuf -= dt; if (dashBuf <= 0) { dashBuf = 0; if (race.p.dashCd > 0.05) refuseDash(); } }
     if (mode === 'race') {
-      if (live) { try { tutTick(dt); ghostTick(dt); lowTick(dt); lessonTick(dt); hazTick(dt); quipTick(); rivalTick(); draftTick(dt); eggTick(); tellTick(); dashHoldTick(); dashPressTick(); laterTick(); coachCalmTick(); } catch (e) { bad = true; drawErr(e, 'simFault'); } }
+      // the lesson clocks only run with the sim: a card deal, the countdown or a hit-stop never eats a lesson's time
+      const simDt = held || race.pending ? 0 : dt;
+      if (live) { try { tutTick(simDt); ghostTick(dt); lowTick(simDt); lessonTick(simDt); hazTick(simDt); quipTick(); rivalTick(); draftTick(simDt); eggTick(); tellTick(); dashHoldTick(); dashPressTick(); laterTick(); coachCalmTick(); } catch (e) { bad = true; drawErr(e, 'simFault'); } }
       try { ringApply(); } catch (e) { bad = true; drawErr(e, 'simFault'); }
       // no pause during the zone stinger and the deal (Escape is gated the same way)
       setC($('pauseBtn'), 'off', !!race.pending || revealT > 0);
@@ -4202,12 +4399,15 @@ function frameBody(now) {
       if (pickT > 0) { pickT -= dt; if (pickT <= 0 && !race.paused) { show(null); if (!race.pending) govHold(3); } }
       // low energy: a heartbeat every 2 beats, every beat when it is critical
       const p = race.p;
-      if (live && !race.over && !race.drill && !race.pending && p.e < 25) {
-        heartAcc += dt; const iv = (p.e < 12 ? 1 : 2) * 60 / (A.bpm || 100);
-        if (heartAcc >= iv) { heartAcc = 0; sfx('lowE', p.e < 12 ? 1 : 0); }
-      } else heartAcc = 0;
+      // (both wait out a hold: a countdown or a hit-stop is not time running out)
+      if (!held) {
+        if (live && !race.over && !race.drill && !race.pending && p.e < 25) {
+          heartAcc += dt; const iv = (p.e < 12 ? 1 : 2) * 60 / (A.bpm || 100);
+          if (heartAcc >= iv) { heartAcc = 0; sfx('lowE', p.e < 12 ? 1 : 0); }
+        } else heartAcc = 0;
+      }
       // the combo clock is running out: a ticking that climbs (audio keeps it on the grid)
-      if (live && !race.over && !race.drill && !race.pending && p.combo >= 5) {
+      if (!held && live && !race.over && !race.drill && !race.pending && p.combo >= 5) {
         const f = p.comboT / (p.comboMax || 1);
         if (f < 0.25) sfx('comboLow', f);
       }
@@ -4257,9 +4457,13 @@ function drawFails(bad, inRace) {
   } catch (e) { console.error(e); try { title(); } catch (e2) { /* nothing left */ } }
 }
 // a hold just ended: a big one (60 ms+) comes back in slow-mo that the easer pulls up, and the hit's kick lands now
-const SLOW_BACK = new Set(['frenzy', 'milestone', 'shieldHit', 'second', 'kevin']);
+const SLOW_BACK = new Set(['frenzy', 'milestone', 'shieldHit', 'second', 'kevin', 'trick']);
+// a trick streak's pop and sting, waiting for the trick's hold to let go
+let trickStreakPend = null;
 function hitRelease() {
-  const h = hitHold; hitHold = null; stopT = 0; if (!h) return;
+  const h = hitHold; hitHold = null; stopT = 0;
+  if (trickStreakPend) { const f = trickStreakPend; trickStreakPend = null; f(); }
+  if (!h) return;
   if (h.ms >= 60 && race && !race.drill && !S.reduced) timeScale = Math.min(timeScale, SLOW_BACK.has(h.kind) ? 0.35 : 0.5);
   if (h.dx || h.dy) kick(h.dx, h.dy);
 }
@@ -4268,6 +4472,16 @@ function tellTick() {
   if (!race || race.over || race.drill || race.pending) return;
   const p = race.p; let said = false;
   for (const e of race.ents) {
+    // a goo gate's first 500 px ahead: a cue panned toward its nearest gap (a sliding gate has its own), once a gate
+    if (e.t === 'gate') {
+      if (e._gn || e.dead) continue;
+      const dy = e.y - p.y; if (dy <= 0 || dy > 500) continue;
+      if (e.side && p.side && e.side !== p.side) continue;
+      e._gn = true;
+      const gx = Array.isArray(e.gaps) && e.gaps.length ? e.gaps.reduce((a, g) => (Math.abs(g - p.x) < Math.abs(a - p.x) ? g : a), e.gaps[0]) : e.x;
+      sfx(e.slide ? 'gateNearSlide' : 'gateNear', clamp((gx - p.x) / 200, -1, 1));
+      continue;
+    }
     if (e.t !== 'cilia') continue;
     const st = e.state | 0, was = e._ps; e._ps = st;
     if (st !== 1 || was === 1 || was == null || said) continue;
