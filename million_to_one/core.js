@@ -762,7 +762,8 @@ export class Race {
 
     // drafting: tuck in behind a rival
     let target = null, bestD = 1e9;
-    for (const a of this.agents) {
+    // (stepAgents keeps the swimmers within 400 of you from the last step: nobody moves 300 in one step)
+    for (const a of this.nearA && Math.abs(p.y - this.nearY) < 200 ? this.nearA : this.agents) {
       if (!a.alive || a.arrived) continue;
       const dy = a.y - p.y; if (dy < 12 || dy > 95) continue;
       if (p.y >= FORK_Y0 && a.side !== p.side) continue;
@@ -1137,7 +1138,8 @@ export class Race {
     const hound = this.syn.bloodhound && this.zoneReached === FORK_I + 1 && p.side === this.eggSide ? 2 : 1;
     let rank = 1, alive = 1;
     const st = Math.sin(this.t * 1.7), ct = Math.cos(this.t * 1.7), n = (this.stepN = (this.stepN || 0) + 1);
-    const kdamp = Math.pow(0.1, dt), py = p.y;
+    const kdamp = Math.pow(0.1, dt), py = p.y, near = this.nearA = [];
+    this.nearY = py;
     for (let i = 0; i < this.agents.length; i++) {
       const a = this.agents[i];
       if (!a.alive) continue;
@@ -1148,6 +1150,7 @@ export class Race {
         if (this.drillAgent(a, dt)) { this.rank = this.computeRank(); this.eggTaken = a; return this.end('late'); }
         continue;
       }
+      if (a.y - py < 400 && py - a.y < 400) near.push(a);
       // far from the camera a swimmer only needs updating every 8th step (same distance, an eighth of the work)
       let adt = dt;
       if (!a.boss && (a.y - py > 1200 || py - a.y > 1200)) {
@@ -1239,6 +1242,7 @@ export class Race {
     const p = this.p, s = this.s, magnet = s.magnet * (tier >= 2 ? 2 : 1);
     // pickups ride half the chain multiplier (style is for links), GOD MODE doubles them
     const dnaMul = (1 + (comboMult(p.combo) - 1) * 0.5) * (tier >= 5 ? 2 : 1);
+    let snack = null;
     for (const e of this.ents) {
       if (e.dead) continue;
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
@@ -1271,7 +1275,12 @@ export class Race {
         e.vy += ((dy > 0 ? -spd * 0.6 : 0) - e.vy) * Math.min(1, dt * 2);
         e.x += (e.vx * dt + Math.sin(e.ph * 2) * 10 * dt) * slow; e.y += e.vy * dt * slow;
         // snack on rivals that swim through
-        for (const a of this.agents) if (a.alive && !a.arrived && !a.boss && Math.abs(a.y - e.y) < e.r && Math.abs(this.agentX(a) - e.x) < e.r) {
+        if (snack === null) {   // (once a step: only the swimmers inside the Big Macros' rows can be eaten)
+          let lo = Infinity, hi = -Infinity;
+          for (const w of this.ents) if (w.t === 'wbc' && !w.dead) { if (w.y - w.r < lo) lo = w.y - w.r; if (w.y + w.r > hi) hi = w.y + w.r; }
+          snack = []; for (const a of this.agents) if (a.alive && !a.arrived && !a.boss && a.y > lo - 10 && a.y < hi + 10) snack.push(a);
+        }
+        for (const a of snack) if (a.alive && Math.abs(a.y - e.y) < e.r && Math.abs(this.agentX(a) - e.x) < e.r) {
           this.killAgent(a, 'eaten');
           if (!(e.eat > 0)) e.hunt = Math.min(e.hunt, 0.3);
           e.eat = 0.9;

@@ -86,6 +86,7 @@ if (meta.runs > 0 && !S.tutDone && !S.tutTries) { S.tutDone = true; saveUI(); }
 
 function applyAudio() {
   try { A.setMuted(meta.muted); A.setMusicVol(S.mvol); A.setSfxVol(S.svol); A.setMusicMuted(!S.music); A.setSfxMuted(!S.sfx); } catch (e) { /* older audio */ }
+  try { if (A.setCalm) A.setCalm(!!S.reduced); } catch (e) { /* optional */ }
 }
 function unlock() {
   A.unlock();
@@ -94,7 +95,7 @@ function unlock() {
 const muffle = (on) => { try { A.setMuffle(on); } catch (e) { /* optional */ } };
 // win, lose, frenzy and comboBreak also change the music (key, tempo, a dry beat), so they reach audio.js even with
 // sound effects off: setSfxMuted already silences the sfx bus there.
-const SFX_STATEFUL = new Set(['win', 'lose', 'frenzy', 'comboBreak', 'comboMilestone', 'comboLow', 'finale']);
+const SFX_STATEFUL = new Set(['win', 'lose', 'frenzy', 'comboBreak', 'comboMilestone', 'comboLow', 'finale', 'backflow']);
 const sfx = (n, k) => { if (S.sfx || (SFX_STATEFUL.has(n) && A.setSfxMuted)) { try { A.sfx(n, k); } catch (e) { /* never let a sound break a frame */ } } };
 function menuMusic() { if (A.on) A.intensity = 0.3; setTension(0); slowmoReset(); }
 // drop every slow-mo state at once (pause, menus): no tape stop, no swell
@@ -1038,7 +1039,7 @@ $('setMusicVol').onchange = () => saveUI();
 $('setSfxVol').oninput = (e) => { S.svol = clamp(+e.target.value || 0, 0, 1); applyAudio(); };
 $('setSfxVol').onchange = () => { saveUI(); sfx('tap'); };
 $('setHaptics').onchange = (e) => { S.haptics = e.target.checked; saveUI(); buzz(25, true); };
-$('setReduced').onchange = (e) => { S.reduced = e.target.checked; S.redSet = true; saveUI(); document.body.classList.toggle('reduced', S.reduced); if (H.combo) H.combo._sw = null; };
+$('setReduced').onchange = (e) => { S.reduced = e.target.checked; S.redSet = true; saveUI(); document.body.classList.toggle('reduced', S.reduced); if (H.combo) H.combo._sw = null; try { if (A.setCalm) A.setCalm(S.reduced); } catch (err) { /* optional */ } };
 $('setLefty').onchange = (e) => { S.lefty = e.target.checked; saveUI(); document.body.classList.toggle('lefty', S.lefty); };
 for (const b of $('setSens').querySelectorAll('button')) b.onclick = () => { S.sens = +b.dataset.v; saveUI(); openSettings(settingsFrom); sfx('tap'); };
 for (const b of $('setGfx').querySelectorAll('button')) b.onclick = () => { S.gfx = b.dataset.v; saveUI(); applyGfx(); openSettings(settingsFrom); sfx('tap'); };
@@ -1075,8 +1076,8 @@ function partnerLines(id, plain) {
     if (typeof race.canOffer === 'function' && others.some((n) => !(race.muts[n] > 0) && !race.canOffer(n))) continue;
     const o = MUTATIONS[others[0]]; if (!o) continue;
     const isKnown = seen.includes(s.id);
-    if (plain) { fresh.push(`<div class="syn half">Pairs with ${o.icon} ${esc(o.name)} for a secret combo</div>`); continue; }
-    (isKnown ? known : fresh).push(`<div class="syn half">Pairs with ${o.icon} ${esc(o.name)} for ${isKnown ? s.icon + ' ' + esc(s.name) : 'a secret combo'}</div>`);
+    if (plain) { fresh.push(`<div class="syn half">Pairs with ${o.icon} ${esc(o.name)} for a secret mashup</div>`); continue; }
+    (isKnown ? known : fresh).push(`<div class="syn half">Pairs with ${o.icon} ${esc(o.name)} for ${isKnown ? s.icon + ' ' + esc(s.name) : 'a secret mashup'}</div>`);
   }
   return held.concat(fresh, known).slice(0, plain ? 1 : 2).join('');
 }
@@ -1400,7 +1401,7 @@ function onEvent(ev, p) {
         const n = (meta.synergiesSeen || []).length, tot = SYNERGIES.length;
         if (R.ring) R.ring(p.x, p.y, '#d9b8ff', 130, 0.6, 7);
         const sh = SYNERGY_SHORT[ev.id];
-        callout('synergy', { t: `${ev.icon || ''} ${ev.name || 'Synergy'}`, z: ev.fresh ? `NEW COMBO DISCOVERED ${n}/${tot}` : 'COMBO UNLOCKED', c: ev.desc || null, short: sh ? `${ev.icon || ''} ${sh}` : null, long: sh ? ev.desc || null : null, sec: 2.2 });
+        callout('synergy', { t: `${ev.icon || ''} ${ev.name || 'Synergy'}`, z: ev.fresh ? `NEW MASHUP DISCOVERED ${n}/${tot}` : 'MASHUP UNLOCKED', c: ev.desc || null, short: sh ? `${ev.icon || ''} ${sh}` : null, long: sh ? ev.desc || null : null, sec: 2.2 });
         sfx('synergy', ev.fresh); buzz([20, 40, 20, 40, 60]); mutSig = '';
         break;
       }
@@ -1451,7 +1452,8 @@ function onEvent(ev, p) {
       case 'lockon': sfx('lockon', clamp(((ev.x != null ? ev.x : p.x) - 200) / 200, -1, 1)); break;
       // a Big Macro spotted Kevin: a '!' over it and the lock-on knock, panned to where it is
       case 'spot': if (ev.x != null) R.pop(ev.x, ev.y + 40, '!', '#ff5c7a', 26, 0.7); sfx('lockon', clamp(((ev.x != null ? ev.x : p.x) - p.x) / 200, -1, 1)); break;
-      case 'spareBite': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'SPARE LIFE!', '#ffd75c', 18, 1.1); sfx('shield'); buzz([20, 30, 20]); break;
+      case 'spareBite': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'SPARE LIFE!', '#ffd75c', 18, 1.1); sfx('shield'); buzz([20, 30, 20]); if (Array.isArray(K.SPARE_BITE_LINES) && K.SPARE_BITE_LINES.length) coach(pickLine(K.SPARE_BITE_LINES), 2.6, 1); break;
+      case 'swatBonk': R.pop(ev.x != null ? ev.x : p.x, (ev.y != null ? ev.y : p.y) + 40, 'BONK!', '#7ae0ff', 20, 0.9); sfx('bonk'); buzz(12); break;
       case 'goalMet':
         goalHit = true; goalPill();
         callout('goal', { t: 'GOAL SMASHED!', z: '+' + fmt(ev.dna || 0) + ' 🧬', col: '#ffd75c', sec: 1.8 });
@@ -1702,7 +1704,7 @@ function soCloseLine() {
     if (miss.length !== 1 || miss.length === s.needs.length || !MUTATIONS[miss[0]]) continue;
     const m = MUTATIONS[miss[0]];
     const known = seen.includes(s.id), hintTxt = !known && SYNERGY_HINTS[s.id] ? ' ' + SYNERGY_HINTS[s.id] : '';
-    return fillLine(pickLine(SYNERGY_SO_CLOSE), { card: m.icon + ' ' + m.name, combo: known ? s.icon + ' ' + s.name : 'a secret combo' }) + hintTxt;
+    return fillLine(pickLine(SYNERGY_SO_CLOSE), { card: m.icon + ' ' + m.name, combo: known ? s.icon + ' ' + s.name : 'a secret mashup' }) + hintTxt;
   }
   return '';
 }
@@ -1720,7 +1722,7 @@ function babyCanvas(b, size) {
 const firstWord = (b) => (BABY_FIRST_WORDS.length ? BABY_FIRST_WORDS[((b.run | 0) * 7) % BABY_FIRST_WORDS.length] : '');
 let nemAtStart = null;
 // which cause a zone's own death jokes are about (the egg's only when you were drilling)
-const ZONE_HAZ = { acid: 'acid', sea: 'wbc', goo: 'bonk', fork: 'wrong', egg: 'late' };
+const ZONE_HAZ = { acid: 'acid', sea: 'wbc', goo: 'bonk', fork: 'wrong', rapids: 'energy', egg: 'late' };
 function showResult(o) {
   mode = 'result'; hud(false); menuMusic(); muffle(false); A.intensity = 0.3;
   const win = o.reason === 'win', z = ZONES[clamp(o.zone | 0, 0, ZONES.length - 1)], by = byName(o), reason = o.reason;
@@ -1987,7 +1989,7 @@ function album(tab) {
     $('albumList').innerHTML = `<div class="tree">${bs.map(node).join('')}<div class="node next"><i class="q">?</i><div class="nd"><div class="bn">???</div><div class="of">child of ${esc(nextOf)}</div><div class="tr">${bs.length ? 'Win again to meet them.' : 'No babies yet. Win a race to make one. The current record holder is Chad Thundertail, who has never won.'}</div></div></div></div>`;
     for (const sl of $('albumList').querySelectorAll('.slot')) sl.replaceWith(babyCanvas(bs[+sl.dataset.i], 64));
   } else {
-    $('albumH').textContent = CODEX_LINES.header || 'The Combo Book';
+    $('albumH').textContent = CODEX_LINES.header || 'The Mashup Book';
     $('albumSub').textContent = fillLine(!seen.length ? CODEX_LINES.none || 'Mix mutations to discover combos.' : seen.length >= tot ? CODEX_LINES.all || 'All found!' : CODEX_LINES.half || '{n} of {total} found.', { n: seen.length, total: tot });
     $('albumList').innerHTML = SYNERGIES.map((s) => {
       const got = seen.includes(s.id), nd = s.needs.map((n) => MUTATIONS[n] ? MUTATIONS[n].icon + ' ' + esc(MUTATIONS[n].name) : esc(n)).join(' + ');

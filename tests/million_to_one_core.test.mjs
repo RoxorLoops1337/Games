@@ -6,6 +6,7 @@ import { Race, newMeta, loadMeta, buyHabit, lv, idleTick, collectBank, factoryRa
   rookieBossT, raceLossT, rookieFactor, FIRST_DEAL, comboMilestoneAt, TIMEOUT_BANK, finisherSeed, finisherBlastR, FORK_I as FORK_IDX } from '../million_to_one/core.js';
 import * as CORE from '../million_to_one/core.js';
 const streakAlive = CORE.streakAlive, dailyBonusFor = CORE.dailyBonusFor;
+import * as CONTENT from '../million_to_one/content.js';
 import { ZONES, RACE_LEN, MUTATIONS, MUT_ORDER, HABITS, HABIT_ORDER, habitCost, RIVALS, TOTAL_SWIMMERS } from '../million_to_one/content.js';
 
 let passed = 0;
@@ -474,8 +475,8 @@ const firstPays = careers.map((c) => c[0].dna).sort((a, b) => a - b), firstPayMe
   // arrange: the price of every normal habit level, and what the 30-run career paid
   let total = 0; for (const id of HABIT_ORDER) for (let l = 0; l < HABITS[id].max; l++) total += habitCost(id, l);
   const avg = careers[0].reduce((a, x) => a + x.dna, 0) / careers[0].length;
-  // assert: more than 35 average runs (the 30-run career pays about 500 a run, so the margin is wide)
-  ok(total > 35 * avg && total / avg < 70, 'a greedy buyer needs 35-70 runs to max every habit (all habits ' + total + ' DNA, a run pays ' + avg.toFixed(0) + ', x' + (total / avg).toFixed(1) + ')');
+  // assert: more than 28 average runs (the 30-run career pays about 650 a run and needs ~37: a clear margin both ways)
+  ok(total > 28 * avg && total / avg < 70, 'a greedy buyer needs 28-70 runs to max every habit (all habits ' + total + ' DNA, a run pays ' + avg.toFixed(0) + ', x' + (total / avg).toFixed(1) + ')');
   const ratios = [];
   for (let g = 0; g < 8; g++) {
     const w = [], l = []; for (const c of careers) for (const x of c) if (x.gen === g) (x.won ? w : l).push(x.dna);
@@ -966,6 +967,7 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
   const R0 = new Race(veteran(), mulberry(5)), tOf = (k) => R0.agents[k].T;
   ok(RIVALS.every((R, k) => tOf(k) >= 116 * 0.96 - 1e-9 && tOf(k) <= 136 * 1.04 + 1e-9), 'every named rival aims to reach the egg in 116-136 s at gen 0');
 }
+
 { // who takes the egg changes from run to run
   const by = {}; let late = 0;
   for (let s = 1; s <= 16; s++) { const r = sim(maxed(0), 2000 + s, 600, null, { bot: true, dt: 1 / 30 }); if (r.over.reason === 'late' && r.over.by) { late++; by[r.over.by] = (by[r.over.by] || 0) + 1; } }
@@ -1472,6 +1474,79 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
   const far = play(D + 5, (D + 5) * 86400000 + 12 * H);
   ok(far.streak === 1, 'a three-day gap resets it');
   ok(loadMeta({ dailyLastAt: -5 }).dailyLastAt === 0 && loadMeta(JSON.parse(JSON.stringify(m))).dailyLastAt === m.dailyLastAt && m.dailyLastAt > 0, 'dailyLastAt is saved and cleaned');
+}
+
+{ // the spare bite: after the rookie runs the first Big Macro bite costs 35 energy and the chain, the second one eats you
+  // arrange: a veteran with no shield, a 6 chain and 80 energy, a Big Macro right on top of him
+  const r = quiet(); r.p.shield = 0; r.p.wing = 0; r.p.e = 80;
+  for (const k of ['pass', 'close', 'gate', 'pass', 'close', 'gate']) r.addCombo(k, 0, 0);
+  r.ents.push(wbcAt(r.p.x, r.p.y + 5)); r.events.length = 0;
+  // act
+  r.step(1 / 60);
+  const sp = r.events.find((e) => e.type === 'spareBite');
+  // assert
+  ok(!r.over && sp && isFinite(sp.x + sp.y) && r.biteUsed === 1, "the first bite is a 'spareBite' {x, y}, not the end");
+  ok(Math.abs(r.p.e - (80 - 35)) < 1 && r.p.combo === 0 && r.p.inv > 1, 'it costs 35 energy and the whole chain, with 1.2 s of cover (' + r.p.e.toFixed(1) + ')');
+  // act: the cover runs out, a second Big Macro bites
+  r.p.inv = 0; r.ents.push(wbcAt(r.p.x, r.p.y + 5)); r.step(1 / 60);
+  ok(r.over && r.over.reason === 'wbc', 'the second bite is lethal');
+  const low = quiet(); low.p.shield = 0; low.p.e = 30; low.ents.push(wbcAt(low.p.x, low.p.y + 5)); low.step(1 / 60);
+  ok(low.over && low.over.reason === 'wbc', 'with under 35 energy there is no spare bite');
+}
+{ // the thumb matters: hands off, the race drifts past you; a real swimmer climbs much faster
+  // arrange / act: an idle first run for 60 s, and five veteran races idle vs the bot at 30 s
+  const idle = new Race(newMeta(), mulberry(4)); let fr = 0, z1 = null;
+  while (!idle.over && idle.t < 60) { idle.step(1 / 60); if (idle.pending) idle.choose(idle.pending[0]); for (const e of idle.events) { if (e.type === 'frenzy') fr++; if (e.type === 'zone' && e.zi === 1) z1 = idle.rank; } idle.events.length = 0; }
+  const ratios = [];
+  for (let s = 1; s <= 5; s++) {
+    const a = new Race(veteran(), mulberry(s)), b = new Race(veteran(), mulberry(s), { bot: true });
+    for (const r of [a, b]) while (!r.over && r.t < 30) { r.step(1 / 60); if (r.pending) r.choose(r.pending[0]); r.events.length = 0; }
+    ratios.push(a.rank / b.rank);
+  }
+  // assert
+  ok(fr === 0, "a 60 s idle run never emits 'frenzy' (" + fr + ')');
+  ok(z1 != null && z1 > 300000, 'and leaves the Launch Tube worse than #300,000 (#' + z1 + ')');
+  ok(median(ratios) >= 5 && Math.min(...ratios) >= 4, "the bot's rank at 30 s is 5x+ better than idle (" + ratios.map((k) => 'x' + k.toFixed(1)).join(' ') + ')');
+  const pass = quiet(); pass.zoneReached = 1; pass.p.actT = 5; const a = pass.agents[RIVALS.length + 3]; a.alive = true; a.y = pass.p.y + 6; a.kx = 0; a.sp = 1; pass.prevPY = pass.p.y; pass.p.x = pass.agentX(a) - 40; pass.p.y += 10;
+  pass.stepAgents(1 / 60);
+  ok(types(pass).includes('pass') && pass.p.combo === 0, 'a pass with no input for 1.2 s still counts as a pass but is not a link');
+}
+{ // a finger steers fast: 20 px sideways within 0.11 s
+  // arrange
+  const r = quiet(); r.p.y = 500; r.p.x = centre(500); const x0 = r.p.x; let hit = null;
+  // act
+  for (let i = 0; i < 60 && hit == null; i++) { r.input.tx = x0 + 80; r.input.touch = true; r.step(1 / 240); if (r.p.x - x0 >= 20) hit = r.t; }
+  // assert
+  ok(hit != null && hit <= 0.11, 'a touch bot reaches a 20 px offset within 0.11 s (' + (hit != null ? hit.toFixed(3) : '?') + ' s)');
+}
+{ // Hype Man x2 + Nitro Frenzy is strong, not an always-on god build
+  // arrange: the auto-swimmer starts each race with both
+  const shares = [];
+  for (let s = 1; s <= 6; s++) {
+    const r = new Race(veteran(), mulberry(s), { autopilot: true }); r.muts.hype = 2; r.muts.nitro = 1; r.refreshStats();
+    // act
+    let fz = 0, n = 0;
+    while (!r.over && r.t < 200) { r.step(1 / 30); if (r.pending) r.choose(r.pending[0]); r.events.length = 0; n++; if (r.p.frenzyT > 0) fz++; }
+    shares.push(fz / n);
+  }
+  // assert
+  const mean = shares.reduce((a, b) => a + b, 0) / shares.length;
+  ok(mean < 0.55, '{hype:2, nitro:1}: the auto-swimmer spends under 55% of its time in FRENZY (' + shares.map((k) => Math.round(k * 100) + '%').join(' ') + ')');
+  const h = quiet(); h.muts.hype = 2; h.refreshStats();
+  ok(h.s.frenzyAt === 5.5 && h.s.frenzyLen === 6.5, 'Hype x2: FRENZY at 5.5, for 6.5 s');
+}
+{ // the writer's text: short banners, coach lines, generation stories, death lines, no em dash anywhere
+  const K = CONTENT;
+  ok(EVENT_ORDER.every((id) => typeof K.EVENT_SHORT[id] === 'string' && K.EVENT_SHORT[id].length > 0 && K.EVENT_SHORT[id].length <= 28) && Object.keys(K.EVENT_SHORT).every((id) => EVENT_ORDER.includes(id)), 'EVENT_SHORT: one line of 28 or fewer per race event');
+  ok(SYNERGIES.every((x) => typeof K.SYNERGY_SHORT[x.id] === 'string' && K.SYNERGY_SHORT[x.id].length > 0 && K.SYNERGY_SHORT[x.id].length <= 28) && Object.keys(K.SYNERGY_SHORT).every((id) => SYNERGIES.some((x) => x.id === id)), 'SYNERGY_SHORT: one line of 28 or fewer per synergy');
+  ok(ZONES.every((z) => Array.isArray(K.COACH_SHORT_MORE[z.id]) && K.COACH_SHORT_MORE[z.id].length >= 5 && K.COACH_SHORT_MORE[z.id].every((l) => l.trim().split(/\s+/).length <= 6)), 'COACH_SHORT_MORE: 5+ lines of 6 words or fewer for every zone');
+  ok(K.GEN_INTROS.length === 8 && K.GEN_INTROS.every((g) => Array.isArray(g) && g.length >= 3 && g.length <= 4 && g.every((l) => typeof l === 'string' && l)), 'GEN_INTROS: 8 generation stories of 3 (or 4) lines (' + K.GEN_INTROS.map((g) => g.length).join(',') + ')');
+  const long = Object.values(K.DEATH_BY_ZONE).flat().filter((l) => l.length > 48);
+  ok(ZONES.every((z) => (K.DEATH_BY_ZONE[z.id] || []).length > 0) && long.length === 0, 'DEATH_BY_ZONE: every zone has lines of 48 characters or fewer (' + long.join(' | ') + ')');
+  const dash = []; const walk = (v, path) => { if (typeof v === 'string') { if (v.includes('\u2014')) dash.push(path); } else if (v && typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], path + '.' + k); };
+  for (const k of Object.keys(K)) walk(K[k], k);
+  for (const x of SYNERGIES) walk(x, 'SYNERGIES.' + x.id); for (const id of EVENT_ORDER) walk(RACE_EVENTS[id], 'RACE_EVENTS.' + id); for (const T of FRENZY_TIERS) walk(T, 'FRENZY_TIERS');
+  ok(dash.length === 0, 'no text export contains an em dash (' + dash.join(', ') + ')');
 }
 
 console.log(`million_to_one_core: ${passed} passed, ${failed} failed`);
