@@ -272,9 +272,11 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 /* first swim: a big ghost finger swings along a 140 px arc over Kevin from GO until he has steered */
 #tutTarget .trail{display:none}
 #tutTarget.swipe{border-color:transparent;box-shadow:none;animation:none}
-#tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:140px;height:44px;margin:-2px 0 0 -70px;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
-#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 3px 0 var(--ink));animation:ghost 1.2s ease-in-out infinite alternate}
-@keyframes ghost{0%{translate:-70px 14px;rotate:-14deg}50%{translate:0 -6px;rotate:0deg}100%{translate:70px 14px;rotate:14deg}}
+#tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:140px;height:44px;margin:-2px 0 0 -70px;translate:calc(var(--sw,0px) * -1) 0;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
+#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 3px 0 var(--ink));rotate:var(--swr,0deg)}
+/* (main.js sways the ring itself, sin 3t x 70 px: the arc stays put under it, the finger tilts with the swing) */
+/* a ring on Kevin: its label goes to the far side */
+#tutTarget.flip::after{top:auto;bottom:calc(100% + 4px)}
 #toast{position:absolute;left:50%;bottom:calc(var(--safeB) + 24px);transform:translate(-50%,30px);opacity:0;background:#fff4f8;color:#4a1030;font-weight:800;padding:8px 14px;border-radius:14px;max-width:calc(100% - 32px);text-align:center;font-size:14px;pointer-events:none;transition:all .25s;z-index:5;box-shadow:0 4px 0 #9a3a60;word-break:break-word}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 /* the egg: a race to drill in, you vs the best rival */
@@ -291,7 +293,18 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
 #drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
-#drillUI .row b{width:62px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drillUI .row b{width:auto;min-width:48px;max-width:110px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the counter's taps so far, in the rival's colour, under the TAP LEFT / RIGHT prompt; each new one pops a +1 */
+#drillUI .cpips{display:flex;justify-content:center;gap:6px;margin:3px 0 1px}
+#drillUI .cpips i{position:relative;width:12px;height:12px;border-radius:50%;border:2px solid var(--pc,#ffd75c);background:transparent}
+#drillUI .cpips i.on{background:var(--pc,#ffd75c);box-shadow:0 0 8px var(--pc,#ffd75c)}
+#drillUI .cpips i.pop{animation:land .3s cubic-bezier(.2,1.8,.4,1)}
+#drillUI .cpips i.pop::after{content:"+1";position:absolute;left:50%;bottom:100%;transform:translateX(-50%);font-size:12px;font-weight:800;font-style:normal;color:var(--pc,#ffd75c);text-shadow:0 1px 0 var(--ink);animation:pipUp .6s ease-out forwards}
+@keyframes pipUp{from{opacity:1;translate:0 0}to{opacity:0;translate:0 -14px}}
+body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{animation:none}
+/* the duel rival is swimming under the panel: it steps up under the HUD */
+#drillUI{transition:transform .25s ease-out}
+#drillUI.up{transform:translate(-50%,var(--duY,0px))}
 #drillUI .row .bb{flex:1;height:10px;border-radius:6px;background:rgba(0,0,0,.5);overflow:hidden}
 #drillUI .row .bb i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(0)}
 #drillUI .you i{background:linear-gradient(90deg,#5ce1ff,#7dffb0)}
@@ -419,7 +432,25 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #resLadder .lfull{display:none;flex-wrap:wrap;justify-content:center;align-items:center;gap:3px}
 #resLadder.open .lfull{display:flex}
 #resPep{text-align:center;font-size:12px;font-weight:700;color:var(--dim);max-width:330px;margin:0 auto 4px;line-height:1.2}
-#resReceipt div.trk{margin-top:2px;padding-top:2px;border-top:1px dashed rgba(255,255,255,.15)}
+/* the 'Tricks found' row: a tap opens the TRICK BOOK */
+#resTricks{display:flex;align-items:center;gap:8px;width:100%;max-width:300px;min-height:44px;margin:0 auto 4px;padding:0 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1.5px dashed rgba(255,215,92,.4);font-size:14px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+#resTricks span{flex:1;text-align:left}
+#resTricks b{color:var(--gold)}
+#resTricks i{font-style:normal;font-size:18px;color:var(--gold)}
+#result.first #resTricks,#result.tight #resTricks{display:none!important}
+/* the TRICK BOOK */
+#tbList{width:100%;max-width:340px;margin:10px auto 0;display:flex;flex-direction:column;gap:8px}
+#tbList .tb{background:var(--card);border:2px solid #4a2050;border-radius:14px;padding:8px 12px;min-height:44px}
+#tbList .tb.got{border-color:rgba(255,215,92,.7)}
+#tbList .nm{font-size:16px;font-weight:800;color:var(--dim);letter-spacing:.04em;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+#tbList .tb.got .nm{color:var(--gold)}
+#tbList .nm small{font-size:12px;font-weight:800;color:var(--mint);letter-spacing:0;white-space:nowrap}
+#tbList .ch{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;font-size:12px;font-weight:800}
+#tbList .ch i{font-style:normal;padding:1px 7px;border-radius:8px;background:rgba(20,2,18,.6);border:1.5px solid currentColor}
+#tbList .ch i.q{color:#8f7388;border-style:dashed}
+#tbList .ch b{color:var(--dim)}
+#tbList .ht{margin-top:4px;font-size:13px;font-weight:700;color:var(--cream);line-height:1.25}
+#tbList .tb:not(.got) .ht{color:var(--dim);opacity:.7}
 #resEgg{width:100%;max-width:320px;margin:6px auto 0;font-size:12px;font-weight:700;color:var(--dim);text-align:center}
 #resEgg .bb{position:relative;height:10px;border-radius:6px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.12);margin-bottom:2px}
 #resEgg .bb i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:4px;background:linear-gradient(90deg,var(--pink),var(--gold));transform-origin:0 50%}
@@ -440,10 +471,10 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #result.first #resUp,#result.first #resGap,#result.first #resGloat,#result.first #resNext,#result.first #resGoal,#result.first #resMuts,#result.first #resStats,
 #result.first #resMutStrip,#result.first #resGrudge,#result.first #resBest{display:none!important}
 #result.first #resWhy{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-#result.first #resActions{position:static;background:none;width:100%;margin:10px 0 0;padding:0}
-#result.first::before{flex-grow:.45;margin:0}#result.first::after{flex-grow:1;margin:0}
-/* every result sits a little high: SWIM AGAIN lands in the upper part of a tall phone, under the thumb */
-#result::before{flex-grow:.45;margin:0}#result::after{flex-grow:1;margin:0}
+#result.first #resActions{position:static;background:none;width:100%;margin:auto 0 0;padding:10px 0 0}
+/* SWIM AGAIN (margin-top:auto) lands in the bottom thumb zone; the spare room splits between it and the top (two auto
+   margins), so a short card sits centred above the buttons. No flex-grow spacer may soak the room up */
+#result::before,#result.first::before{flex:0 0 0;margin:auto 0 0}#result::after,#result.first::after{flex:0 0 0;margin:0}
 #result.first #againBtn{min-height:60px;font-size:24px}
 /* a close raced loss: the title, one rival voice, the rank, the egg bar with one gap number, +DNA and the buttons */
 #result.tight #resRankLine,#result.tight #resLadder,#result.tight #resChips,#result.tight #resGrudge,#result.tight #resGap,#result.tight #resDynasty,
@@ -535,9 +566,9 @@ body.reduced #bankBox.ripe{box-shadow:0 0 0 2px var(--mint)}
 /* a big line that is a sentence ('...Dead last.') a size down, so it never runs off a phone */
 #introTxt.big.long{font-size:34px;line-height:1.1}
 /* the opening's last line over the countdown: no dim, touch-through, under the HUD, no hint or Skip */
-#intro.under{background:none;pointer-events:none;justify-content:flex-start;padding-top:calc(var(--hudB) + 16px)}
-#intro.under #introHint,#intro.under #introSkip{display:none}
-#intro.under #introTxt{min-height:0;animation:none}
+/* the opening's last line over the countdown: its own touch-through layer under the HUD */
+#introLast{position:absolute;left:0;right:0;top:0;z-index:4;display:flex;flex-direction:column;align-items:center;padding:calc(var(--hudB) + 16px) 18px 0;pointer-events:none}
+#introLast #introTxt{min-height:0;animation:none}
 #introHint{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 20px);color:var(--dim);font-weight:700;font-size:14px;pointer-events:none;opacity:0;transition:opacity .4s}
 #introHint.pulse{opacity:1;animation:tapcue 1.1s ease-in-out infinite}
 @keyframes tapcue{50%{opacity:.35;transform:scale(.94)}}
@@ -579,7 +610,9 @@ body.reduced #bankBox.ripe{box-shadow:0 0 0 2px var(--mint)}
 #resTip.big::before{content:"💡 ";font-size:.95em}
 #resSyn{text-align:center;color:#d9b8ff;font-size:13px;font-weight:800;max-width:330px;margin:4px auto 0;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #resSyn:empty,#resTip:empty,#resNext:empty,#resRankLine:empty{display:none}
-#resActions{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:6px -18px 0;padding:10px 18px calc(var(--safeB) + 12px);background:rgba(20,2,18,.97);flex:none}
+#resActions{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:auto -18px 0;padding:24px 18px calc(var(--safeB) + 12px);background:linear-gradient(rgba(20,2,18,0),rgba(20,2,18,.97) 24px);flex:none}
+/* the result is a column at least the screen tall: the content from the top, the buttons pushed into the bottom thumb zone */
+#result{min-height:100%}
 /* the lesson sits right above the goal and SWIM AGAIN: two lines at most */
 #resActions #resTip{font-size:13px;margin:0 auto 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;background:none}
 #resActions #resTip.big{font-size:14px;padding:0 4px}
@@ -609,6 +642,17 @@ body.reduced #resShopBtn.breathe{box-shadow:0 5px 0 #9a6410,0 0 0 3px #fff4f8}
 .facLine{text-align:center;font-size:13px;font-weight:700;color:var(--mint);max-width:330px;margin:4px auto 0;line-height:1.2;text-wrap:balance}
 #result.first #resFactory,#result.tight #resFactory,#result.first #resAttempt{display:none!important}
 #againBtn.rival{background:linear-gradient(#d42a5a,#a8123f);box-shadow:0 5px 0 #5c0822,0 0 0 3px var(--rc),0 0 22px var(--rc)}
+/* a close card: the rematch call is the button's big word (in the rival's colour on a dark face), SWIM AGAIN its small line */
+#againBtn.call{font-size:22px;letter-spacing:.02em}
+#againBtn.call .rl{display:block;line-height:1.1}
+#againBtn.call.rival{background:linear-gradient(#3a0a30,#22041c);box-shadow:0 5px 0 #0e010b,0 0 0 3px var(--rc),0 0 22px var(--rc)}
+#againBtn.call.rival .rl{color:var(--rc);text-shadow:0 2px 0 #0e010b}
+#resAgainGoal{text-align:center;color:var(--gold);font-size:13px;font-weight:800;line-height:1.15;max-width:330px;margin:2px auto 0;text-shadow:0 2px 0 var(--ink)}
+/* Dad's Pick: what that habit would have done for the swim just lost */
+#resUp .wh{margin-top:2px;font-size:12px;font-weight:800;color:var(--cream);line-height:1.2}
+#resUp .wh .egg{display:inline-block;margin-left:5px;padding:0 6px;border-radius:8px;background:var(--gold);color:#3a2000;font-size:11px;letter-spacing:.04em;vertical-align:1px}
+/* the spend card: the gold Habits button and 🏠 share the secondary row */
+.row3.spendRow #resShopBtn{font-size:18px;min-height:56px}
 canvas.face{position:static;inset:auto}
 .baby canvas.face{display:block;margin:0 auto 4px;border-radius:50%}
 .baby .fw,.tree .fw{font-size:14px;font-weight:800;color:#a8124f;line-height:1.2}
@@ -757,7 +801,8 @@ body.reduced .card .shine{display:none}
   #drillUI .cd{white-space:normal}
   #drillUI .cd small{display:block;margin:0;vertical-align:0}
   #drillUI .cd b{font-size:22px}
-  #drillUI .row b{width:48px}
+  #drillUI .row b{width:auto;min-width:40px;max-width:90px}
+  #drillUI.up{transform:none}
   #banner{top:22%}
   #banner.top,body.egg #banner.top{top:calc(var(--safeT) + 40px)}
   body.threat #tut.on{opacity:1}
@@ -971,6 +1016,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
   <div id="count"></div>
   <div id="drillUI" class="hide">
     <div class="t">TAP TAP TAP!</div>
+    <div class="cpips hide" aria-hidden="true"></div>
     <div class="cd"></div>
     <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div></div>
     <div class="row riv"><b>RIVAL</b><div class="bb"><i></i></div></div>
@@ -1004,6 +1050,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
   </div>
 
   <div id="intro" class="ov hide"><div id="introTxt"></div><div id="introHint">tap to continue</div><button id="introSkip">Skip ⏭</button></div>
+  <div id="introLast" class="hide" aria-live="polite"></div>
 
   <div id="cards" class="ov hide">
     <div class="sub" id="cardsSub" style="margin:0">ZONE CLEARED</div>
@@ -1042,6 +1089,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
     <div class="stats" id="resStats"></div>
     <div id="resReceipt"></div>
     <div id="resDna"></div>
+    <button id="resTricks" class="hide" aria-label="Open the trick book"></button>
     <div id="resLessons" class="hide"></div>
     <div id="resPep" class="hide"></div>
     <div id="resAttempt" class="hide"></div>
@@ -1057,6 +1105,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
         <button class="btn alt" id="resShopBtn">Habits 🥦</button>
         <button class="btn ghost" id="resMenuBtn" aria-label="Menu" title="Menu">🏠</button>
       </div>
+      <div id="resAgainGoal" class="hide"></div>
       <button class="btn" id="againBtn">SWIM AGAIN 💦</button>
       <div id="resRival" class="hide"></div>
     </div>
@@ -1066,7 +1115,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
   <div id="shop" class="ov hide">
     <div id="shopCap" class="hide"></div>
     <h2>Dad's Habits</h2>
-    <div class="sub" style="margin:4px auto">Healthy dad, faster swimmers. These last forever.</div>
+    <div class="sub" id="shopSub" style="margin:4px auto">Healthy dad, faster swimmers. These last forever.</div>
     <div id="dnaTop"></div>
     <div id="shopList"></div>
     <div class="foot"><div id="shopFactory" class="facLine hide"></div><button class="linkBtn hide" id="shopBackLink">Back</button><button class="btn" id="shopBack">Back</button></div>
@@ -1078,6 +1127,13 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
     <div class="sub" id="albumSub" style="margin:8px auto 0"></div>
     <div id="albumList"></div>
     <div class="foot"><button class="btn" id="albumBack">Back</button></div>
+  </div>
+
+  <div id="trickbook" class="ov hide">
+    <h2 id="tbH">TRICK BOOK</h2>
+    <div class="sub" id="tbSub" style="margin:6px auto 0"></div>
+    <div id="tbList"></div>
+    <div class="foot"><button class="btn" id="tbBack">Back</button></div>
   </div>
 
   <div id="pause" class="ov hide">

@@ -111,9 +111,11 @@ ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
 // Act: at the egg, a rival winds up a move (its tell line already names the speaker)
 const drillOn = await page.evaluate(() => !document.getElementById('drillUI').classList.contains('hide'));
 if (drillOn) {
-  await page.evaluate(() => game.race.emit('rivalMove', { phase: 'tell', k: 3, move: 'test' }));
+  // (a real rival can wind up its own move in the same 150 ms and take the strip over, so every text the strip shows
+  // after the emit is logged and Gunther's must be among them, named once)
+  await page.evaluate(() => { window.__epLog = []; const ep = document.querySelector('#drillUI .ep'); new MutationObserver(() => window.__epLog.push(ep.textContent || '')).observe(ep, { childList: true, characterData: true, subtree: true }); game.race.emit('rivalMove', { phase: 'tell', k: 3, move: 'test' }); });
   await page.waitForTimeout(150);
-  const epT = await page.evaluate(() => document.querySelector('#drillUI .ep').textContent);
+  const epT = await page.evaluate(() => [document.querySelector('#drillUI .ep').textContent, ...window.__epLog].find((t) => /^Gunther/.test(t)) || window.__epLog.join(' | ') || document.querySelector('#drillUI .ep').textContent);
   ok(/^Gunther: "/.test(epT) && !/^Gunther: Gunther:/.test(epT), 'a tell at the egg shows the speaker once ("' + epT + '")');
 }
 ok(drillOn, 'the last zone hop lands at the egg duel');

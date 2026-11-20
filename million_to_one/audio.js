@@ -7,10 +7,12 @@
 // intensity 0..2 (0.3 is the waiting-room groove for menus; 1.4 is the late-race L=2 groove; the
 // whistle lead and wah stabs are saved for FRENZY) and with the player's live combo (A.combo).
 //
-// Mix (tuned for phone speakers): the music bus gets a +3 dB lift at 250 Hz, +3 dB of presence at 2.5 kHz, a gentle
-// -2 dB top shelf and its own glue compressor, and only then the intensity gain (L0 0.85, L1 1, L2 1.12, FRENZY 1.3:
-// the race gets louder as it heats up; after the compressor, so the arc is really heard), times RACE_TRIM (0.7, -3 dB)
-// whenever the race groove plays (not the waiting room), so the rewards sit on top of it. Sound effects go through a
+// Mix (tuned for phone speakers): the music bus gets a +1.5 dB lift at 250 Hz, +5 dB of presence at 3 kHz (Q 0.8), a
+// gentle -2 dB top shelf and its own glue compressor, and only then the intensity gain (L0 0.85, L1 1, L2 1.12, FRENZY
+// 1.3: the race gets louder as it heats up; after the compressor, so the arc is really heard), times RACE_TRIM whenever
+// the race groove plays (not the waiting room): 0.85 / 0.75 / 0.7 for L0 / L1 / L2 and 0.7 in FRENZY (L0 0.72, L1
+// 0.75, L2 0.78, FRENZY 0.91 in all), so pressing SWIM barely dips from the waiting room's 0.85 (it used to fall to 0.6)
+// and the rewards still sit on top of the hot groove. Sound effects go through a
 // soft bus compressor whose automatic makeup gain (about +6 dB) is trimmed back by a 0.7 gain, so the combo blips cut
 // through the groove on a phone while stacked hits still leave the limiter some headroom, and the big stingers (frenzy,
 // egg, win, finisher, comboBreak, mixed 1.25x hotter) still stand out; both meet in a master gain (1.12: groove peaks
@@ -31,6 +33,11 @@
 // nodes, one 1s noise buffer is reused by every hiss, and the 16th-rate kit (hat, ts shaker, rim) plays 4
 // prebaked, prefiltered variants each (see _kit): a BufferSource and a Gain per hit, no filter.
 // setMono(true) centres every pan (one earbud) and lifts the cilia 'tell' about 3 dB.
+//
+// Muffle budget: the slow-mo lowpass (slp) sits under 5 kHz for at most about 4% of a race. A small slow only rounds the
+// top off (5 kHz), a big one (the first FRENZY, the egg drill) closes to 1400 Hz, an impact() dips to 4 kHz, and once the
+// filter has been under 5 kHz in the last 4 s (_shutAt) a small slow or an impact only ducks the volume. Every release
+// snaps back with a 12 ms time constant, and a 90 ms+ impact ends on a "snap" (see impact()).
 //
 // Slow-mo bends the sound effects too: while a slow runs every sfx is built at 0.85x pitch and speed
 // (0.72x in a big slow), easing back over 0.15 s when it ends; UI sounds never bend.
@@ -115,7 +122,19 @@ const CALM_TRIM = Math.pow(10, -0.6 * (-CALM_COMP.threshold * (1 - 1 / CALM_COMP
 const FX_TRIM = 0.7;                // the sfx bus trim after its compressor (see unlock)
 // the music's loudness per arrangement level (L0, L1, L2) and in FRENZY: a gain in front of the glue compressor
 export const INT_GAIN = [0.85, 1, 1.12], FRENZY_GAIN = 1.3;
-export const RACE_TRIM = 0.7;      // the race groove (anything but the waiting room) sits 3 dB lower, under the rewards
+// the race groove's trim (anything but the waiting room), indexed like INT_GAIN (L0, L1, L2); FRENZY uses the last one.
+// The race starts at 0.85 (no quieter than the menus once SWIM is pressed) and settles 3 dB down only when it is hot
+export const RACE_TRIM = [0.85, 0.75, 0.7];
+const MENU_TLP = { title: 7000, shop: 3200, result: 3200 };   // the waiting room's lowpass per menu (main.js sets A.menuKind)
+const TITLE_OPEN = 1.5;             // the title opens 3200 -> 7000 Hz over this long after unlock()
+const SHUT_F = 5000, SHUT_HOLD = 4; // the muffle budget: under SHUT_F is "closed"; after a closure, SHUT_HOLD s of volume-only dips
+const SLOW_SMALL_F = 5000, SLOW_BIG_F = 1400, IMPACT_F = 4000, REL_TC = 0.012;
+// the stem ladder's rungs: crossing each rolls a 1-beat snare fill into a crash (see _step). 45: off-beat claps and a pad
+// sidechain; 65: the bass doubles up an octave on the off-16ths through a filter opening over the bar; 100: an ad-lib chop
+// every 2 bars and +1.5 dB on the whole mix
+export const RUNGS = [10, 20, 30, 45, 65, 100];
+export const rungOf = (n) => { let r = 0; while (r < RUNGS.length && n >= RUNGS[r]) r++; return r; };
+const BOOST100 = Math.pow(10, 1.5 / 20);
 const AEOL = [0, 2, 3, 5, 7, 8, 10];
 const MUSIC_VOL = 0.5;
 const MASTER = 1.12;
@@ -167,7 +186,7 @@ const GAP = {
   synTease: 0.3, swat: 0.06, tell: 0.25, comboLow: 0.02, comboMilestone: 0.4, gateNear: 0.3, gateNearSlide: 0.3,
   fork: 0.5, backflow: 0.5, finale: 0.5, spot: 0.5,
   dnaTick: 0.03, rivalTell: 0.3, countered: 0.2, factory: 0.6, countTick: 0.04, medal: 0.4,
-  go: 0.3, resume: 0.3, wall: 0.12, trick: 0.3, domino: 0.1, whoosh: 0.15,
+  go: 0.3, resume: 0.3, lesson: 0.15, wall: 0.12, trick: 0.3, domino: 0.1, whoosh: 0.15,
   trickStreak: 0.3, overtaken: 0.5, gift: 0.1, bounty: 0.3,
   trickTease: 0.3, trickMiss: 0.3, draftOn: 0.06, slingReady: 0.25, goal: 0.4, pastBest: 0.4, grudge: 0.4,
 };
@@ -177,7 +196,7 @@ const PENTA12 = [0, 3, 5, 7, 10, 12];
 const TR_SOFT = [0.14, 0.12], TR_HARD = [0.2, 0.18];   // _transient's two noise ticks: default, and the link / pass
 // the prebaked kit voices (see _kit): the same filter, Q, attack and length the live hum() used for each
 const KIT = {
-  hat: { type: 'highpass', f: 8500, q: 0.7, a: 0.001, dur: 0.022 },
+  hat: { type: 'highpass', f: 7000, q: 0.7, a: 0.001, dur: 0.03 },
   ts: { type: 'highpass', f: 6000, q: 0.8, a: 0.004, dur: 0.13 },
   rim: { type: 'bandpass', f: 3800, q: 5, a: 0.001, dur: 0.02 },
 };
@@ -243,6 +262,8 @@ export class Audio {
     this._capUntil = -1;                       // calm mode: the sfx bus is capped 4 dB down until then (see _calmCap)
     this._calmComp = null; this._calmTrim = null; this._layPan = null;   // calm mode's master compressor and its trim, the ladder layers' panners
     this.mono = false; this._stage = 0; this._pans = []; this._xfeed = []; this._kits = null; this._kitI = 0;   // mono output, quality stage, static panners, prebaked hats
+    this._shutAt = -99; this._impFUntil = -1; this._slowOpen = false; this._unlockAt = -99; this._menuKind = undefined;   // muffle budget: slp last under 5 kHz until; unlock time; which menu
+    this._mixUp = false; this.padSc = null; this.bassHi = null; this.bassUp = null;   // rung 100's +1.5 dB, the pad sidechain, the bass octave filters
     this._dec = () => { this.live--; };
     this._dec3 = () => { this.live -= 3; };   // a say() voice counts as 3 sources (its formant filters cost too)
   }
@@ -308,8 +329,17 @@ export class Audio {
   }
   // the music's loudness for the current arrangement: L0 (and the menus) 0.85, L1 1, L2 1.12, any FRENZY tier 1.3
   _intGain() { const I = this._int; return this._ftier > 0 ? FRENZY_GAIN : INT_GAIN[I < 0.5 ? 0 : I < 1.3 ? 1 : 2]; }
-  // what the intensity gain node really plays: _intGain(), times RACE_TRIM while the race groove plays (not the menus)
-  _igainV() { return this._intGain() * (this._menu(this._int) ? 1 : RACE_TRIM); }
+  // what the intensity gain node really plays: _intGain(), times RACE_TRIM[level] while the race groove plays (not the
+  // menus; FRENZY takes the L2 trim, 0.7)
+  _igainV() {
+    if (this._menu(this._int)) return this._intGain();
+    const I = this._int, li = this._ftier > 0 ? 2 : I < 0.5 ? 0 : I < 1.3 ? 1 : 2;
+    return this._intGain() * RACE_TRIM[li];
+  }
+  // which waiting room plays: 'title' (lowpass about 7 kHz, opening up over 1.5 s after unlock), 'shop' or 'result'
+  // (3200 Hz). main.js sets it before menuMusic() sets intensity 0.3; undefined means 3200 Hz
+  get menuKind() { return this._menuKind; }
+  set menuKind(v) { const o = this._menuKind; this._menuKind = v; if (o !== v && this.ctx && this._menu(this._int)) this._applyTlp(); }
   // glide the intensity gain there (time constant 0.2 s); a call with nothing to change costs one compare
   _applyInt() {
     if (!this.ctx || !this.igain) return;
@@ -541,10 +571,10 @@ export class Audio {
     }
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext); if (!AC) return;
     let c; try { c = new AC(); } catch (e) { return; }
-    this.ctx = c;
+    this.ctx = c; this._unlockAt = c.currentTime;
     // master: gain, a 70 Hz highpass (a phone speaker cannot play below it, so that energy only eats
     // headroom and makes the limiter pump), then a soft-kneed limiter so a pile of hits never clips
-    this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : MASTER;
+    this.master = c.createGain(); this.master.gain.value = this._masterV();
     const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70; hp.Q.value = 0.7;
     const lim = c.createDynamicsCompressor();
     lim.threshold.value = -2; lim.knee.value = 4; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.15;
@@ -571,17 +601,17 @@ export class Audio {
     const ft = c.createGain(); ft.gain.value = FX_TRIM;
     this.fx.connect(fc); fc.connect(ft); ft.connect(this.master); this.fxComp = fc; this.fxTrim = ft;
     // music bus: gain (volume and ducking) -> micro duck -> muffle lp -> slowmo lp -> tension/menu lp
-    //            -> 250 Hz lift -> 2.5 kHz presence -> top shelf -> glue compressor -> trim -> intensity gain -> master
+    //            -> 250 Hz lift -> 3 kHz presence -> top shelf -> glue compressor -> trim -> intensity gain -> master
     this.music = c.createGain(); this.music.gain.value = this._mLevel();
     this.mduck = c.createGain(); this.mduck.gain.value = 1;
     // the whistled lead's own gain (see _whistle, _leadDip): a combo note can make room for the theme hook
     this.leadBus = c.createGain(); this.leadBus.gain.value = 1; this.leadBus.connect(this.music);
     const lp = (f) => { const b = c.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = f; b.Q.value = 0.6; return b; };
     this.mlp = lp(18000); this.slp = lp(18000); this.tlp = lp(18000);
-    // the lift sits at 250 Hz (the lowest band a phone speaker really plays) and a +3 dB presence band at 2.5 kHz
-    // carries the snares, hats and the choir's consonants
-    const peak = c.createBiquadFilter(); peak.type = 'peaking'; peak.frequency.value = 250; peak.Q.value = 0.9; peak.gain.value = 3;
-    const pres = c.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 2500; pres.Q.value = 1; pres.gain.value = 3;
+    // a gentle +1.5 dB lift at 250 Hz (the lowest band a phone speaker really plays) and a +5 dB presence band at 3 kHz
+    // (Q 0.8, about 2..5 kHz) that carries the snares, hats and the choir's consonants on a phone speaker
+    const peak = c.createBiquadFilter(); peak.type = 'peaking'; peak.frequency.value = 250; peak.Q.value = 0.9; peak.gain.value = 1.5;
+    const pres = c.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3000; pres.Q.value = 0.8; pres.gain.value = 5;
     const shelf = c.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 9000; shelf.gain.value = -2;
     // the intensity arc: L0 0.85, L1 1, L2 1.12, FRENZY 1.3 (times RACE_TRIM in the race), after the glue compressor so
     // it is heard as a real level change, not squashed back (see _applyInt)
@@ -641,7 +671,8 @@ export class Audio {
     for (const [b, pv] of [[this.padBank, -0.4], [this.padBankR, 0.4]]) {
       if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = this._panV(pv); b.out.connect(p); p.connect(this.padTrem); this._pans.push([p, pv]); } else b.out.connect(this.padTrem);
     }
-    this.padTrem.connect(this.music);
+    // rung 4 (combo 45+): the pads duck to 0.5 on every kick through this gain (see _step)
+    this.padSc = c.createGain(); this.padSc.gain.value = 1; this.padTrem.connect(this.padSc); this.padSc.connect(this.music);
     this.tremD = c.createGain(); this.tremD.gain.value = 0; this._trem = 0;
     const lfo = c.createOscillator(); lfo.frequency.value = 6; lfo.connect(this.tremD); this.tremD.connect(this.padTrem.gain); lfo.start();
     const ps = c.createGain(); ps.gain.value = 0.35; this.padBank.out.connect(ps); this.padBankR.out.connect(ps); ps.connect(this.echo);
@@ -657,6 +688,10 @@ export class Audio {
     sh.curve = curve; sh.oversample = '2x';
     const bo = c.createGain(); bo.gain.value = 0.7;
     this.bassLp.connect(sh); sh.connect(bo); bo.connect(this.music); this.shaper = sh;
+    // the bass's octave-up saw partial: its own fixed 1.2 kHz lowpass, past the bass filter, so a phone speaker hears the line
+    this.bassHi = c.createBiquadFilter(); this.bassHi.type = 'lowpass'; this.bassHi.frequency.value = 1200; this.bassHi.Q.value = 0.7; this.bassHi.connect(this.music);
+    // rung 5 (combo 65+): the off-16th octave bass, through a lowpass that opens 800 -> 3000 Hz over every bar (see _step)
+    this.bassUp = c.createBiquadFilter(); this.bassUp.type = 'lowpass'; this.bassUp.frequency.value = 800; this.bassUp.Q.value = 4; this.bassUp.connect(this.music);
     this._applyTlp(); this._applyTrem(); this._calmRoute();
     this._startClock();
   }
@@ -679,7 +714,15 @@ export class Audio {
   setSfxMuted(m) { this.sfxMuted = !!m; this.setSfxVol(this.sfxVol); }
   setMuted(m) {             // master mute: everything, internal stingers included
     this.muted = !!m;
-    if (this.master) { const t = this.ctx.currentTime; this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this.muted ? 0 : MASTER, t); }
+    if (this.master) { const t = this.ctx.currentTime; this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this._masterV(), t); }
+  }
+  // the master gain: MASTER, +1.5 dB while the combo sits on the top rung (100+), 0 when muted
+  _masterV() { return this.muted ? 0 : MASTER * (this._mixUp ? BOOST100 : 1); }
+  // rung 100's lift on and off at time t (a 50 ms glide, never a jump)
+  _boostTo(on, t) {
+    if (on === this._mixUp) return; this._mixUp = on;
+    if (!this.master || this.muted) return;
+    const g = this.master.gain; g.cancelScheduledValues(t); g.setTargetAtTime(this._masterV(), t, 0.05);
   }
   // app hidden / shown: stop the clock, and on return restart the grid so queued notes do not burst
   suspend() {
@@ -746,8 +789,8 @@ export class Audio {
     const p = c.createStereoPanner(); p.pan.value = v; p.connect(dest); return p;
   }
   _ftc(tc) { return this.calm ? Math.max(tc, 0.4 / 3) : tc; }   // filter time constant (3 tc is about the full move)
-  // bullet time. slowmo(on, big): every slow pulls the music behind a lowpass (time constant 0.03 s, so it
-  // never clicks). Only big ones (first FRENZY, egg drill start, zone-end crawl) also play a tape stop on
+  // bullet time. slowmo(on, big): a small slow rounds the music's top off (5 kHz lowpass, time constant 0.03 s, so it
+  // never clicks), or, when the filter was under 5 kHz in the last 4 s, only ducks it for 0.2 s (the muffle budget). Only big ones (first FRENZY, egg drill start, zone-end crawl) also play a tape stop on
   // the way in, bend the beat to a half-time kick, let the echo hang on, and come out with a reversed
   // swell that lands on the grid with a soft crash. Idempotent: repeat calls with the same value do
   // nothing, and a big call during a small slow upgrades it. slowmo(true) alone is a small slow.
@@ -758,9 +801,12 @@ export class Audio {
     const c = this.ctx, now = c.currentTime, t = now + 0.005, fx = this.fx;
     const wasBig = this._slowBig, play = !this.muted && c.state === 'running';
     if (on) {
+      // a small slow right after a closure keeps the filter open (_slowOpen) and only ducks the volume
+      if (!this._slowOn) this._slowOpen = !big && this._shut(now);
       this._slowOn = true; this._slowBig = this._slowBig || big; this._slow = this._slowBig;
       this._rate = this._slowBig ? 0.72 : 0.85; this._rateT0 = -9;
       this._slpTo(this._slowF(), 0.03);
+      if (this._slowOpen && !this._slowBig && !this.calm && now >= this._impUntil) { const g = this.mduck.gain; hold(g, now); g.setTargetAtTime(0.75, now, 0.01); g.setTargetAtTime(1, now + 0.2, REL_TC); this._mdUntil = Math.max(this._mdUntil, now + 0.2); }
       if (big && !wasBig) {
         this._setG(this.mfb.gain, 0.45); this._setG(this.mfb2.gain, 0.45);
         if (play) {           // tape stop: a saw and a hiss both sag from 900 to 120 Hz
@@ -772,9 +818,10 @@ export class Audio {
       return;
     }
     this._rateFrom = this._rateNow(now); this._rateT0 = now; this._rate = 1;   // the sfx bend eases back over 0.15 s
-    this._slowOn = false; this._slowBig = false; this._slow = false;
+    if (this._slowF() < SHUT_F) this._shutAt = Math.max(this._shutAt, now + 3 * REL_TC);   // a big slow was a closure: the budget's 4 s start now
+    this._slowOn = false; this._slowBig = false; this._slow = false; this._slowOpen = false;
     this._lkHold = Math.max(this._lkHold, now + 2.5);   // the beat lock only nudges for 2.5 s (see _lockStep)
-    this._slpTo(18000, 0.08);
+    this._slpTo(18000, REL_TC);
     if (!wasBig && !big) return;
     this._setG(this.mfb.gain, 0.33); this._setG(this.mfb2.gain, 0.33);
     if (!play) return;
@@ -797,13 +844,16 @@ export class Audio {
     const x = (now - this._rateT0) / 0.15;
     return x >= 0 && x < 1 ? this._rateFrom + (1 - this._rateFrom) * x : 1;
   }
-  _slowF() { return this._slowOn ? this._slpMin(this._slowBig ? 1400 : 2200) : 18000; }
+  // where the slow-mo lowpass sits: 1400 Hz in a big slow, 5 kHz in a small one (wide open when the budget says so)
+  _slowF() { return this._slowOn ? this._slpMin(this._slowBig ? SLOW_BIG_F : this._slowOpen ? 18000 : SLOW_SMALL_F) : 18000; }
+  // the muffle budget: true while the slow-mo lowpass is under 5 kHz, or was within the last 4 s
+  _shut(now) { return (this._slowOn && this._slowF() < SHUT_F) || now - this._shutAt < SHUT_HOLD; }
   // calm mode never closes the slow-mo lowpass below CALM_SLP (6 kHz)
   _slpMin(f) { return this.calm ? Math.max(CALM_SLP, f) : f; }
   // move the slowmo lowpass, unless an impact() is holding it; the impact's release then lands on _slowF()
   _slpTo(f, tc) {
     const now = this.ctx.currentTime, p = this.slp.frequency;
-    if (now < this._impUntil) { p.cancelScheduledValues(this._impUntil); p.setTargetAtTime(f, this._impUntil, 0.04); return; }
+    if (now < this._impFUntil) { p.cancelScheduledValues(this._impFUntil); p.setTargetAtTime(f, this._impFUntil, REL_TC); return; }
     p.cancelScheduledValues(now); p.setTargetAtTime(f, now, this._ftc(tc));
   }
   // calm mode: a stinger holds the sfx bus trim 4 dB down for len seconds (10 ms in, 0.1 s back out). A second stinger
@@ -817,8 +867,9 @@ export class Audio {
   // a broken 25+ chain: the slow-mo lowpass dips to f for dur, then back to where slow-mo wants it
   _slpDip(now, f, dur) {
     if (!this.ctx || !this.slp) return;
-    const p = this.slp.frequency;
-    hold(p, now); p.setTargetAtTime(this._slpMin(Math.min(f, this._slowF())), now, this._ftc(0.02)); p.setTargetAtTime(this._slowF(), now + dur, this._ftc(0.06));
+    const p = this.slp.frequency, to = this._slpMin(Math.min(f, this._slowF()));
+    hold(p, now); p.setTargetAtTime(to, now, this._ftc(0.02)); p.setTargetAtTime(this._slowF(), now + dur, this._ftc(0.06));
+    if (to < SHUT_F) this._shutAt = Math.max(this._shutAt, now + dur + 0.15);
   }
   // pause: drop every slow-mo state at once, no swell, no crash, no tape stop
   slowmoReset() {
@@ -830,34 +881,51 @@ export class Audio {
     // a reset that cuts a running slow or hit-stop short still gets the lock's 2.5 s no-snap window (see _lockStep)
     const tn = this.ctx ? this.ctx.currentTime : 0;
     this._lkHold = this.ctx && (this._slowOn || tn < this._impUntil) ? tn + 2.5 : -1;
-    this._slowOn = false; this._slowBig = false; this._slow = false; this._impUntil = -1;
+    this._slowOn = false; this._slowBig = false; this._slow = false; this._slowOpen = false; this._impUntil = -1; this._impFUntil = -1;
     this._rate = 1; this._rateFrom = 1; this._rateT0 = -9;
     if (!this.ctx) return; const now = this.ctx.currentTime;
     for (const [p, v] of [[this.slp.frequency, 18000], [this.mfb.gain, 0.33], [this.mfb2.gain, 0.33], [this.mduck.gain, 1]]) { p.cancelScheduledValues(now); p.setValueAtTime(v, now); }
     this._mdUntil = -1;
   }
-  // hit stop: the music gasps (micro duck to `depth`, lowpass to 2500 Hz) for `ms`, then breathes out
-  // (time constant 0.04), under a 40 ms sub thump
+  // hit stop: the music gasps (micro duck to `depth`, lowpass dip to 4 kHz) for `ms`, then snaps back (time constant
+  // 12 ms), under a 40 ms sub thump. Within 4 s of the last closure (the muffle budget) only the volume ducks. A 90 ms+
+  // hit-stop ends on a snap: a 25 ms bandpassed noise crack (2.8 kHz) and a quick 1 kHz -> 300 Hz chirp. Calm: nothing.
   impact(ms, depth = 0.5) {
     if (!this.ctx || !this.mduck || this.calm) return;
-    const c = this.ctx, now = c.currentTime, sec = Math.max(0.02, Math.min(0.5, (+ms || 0) / 1000)), end = now + sec;
+    const c = this.ctx, now = c.currentTime, msv = +ms || 0, sec = Math.max(0.02, Math.min(0.5, msv / 1000)), end = now + sec;
     const dv = Math.max(0.05, Math.min(1, +depth || 0.5));
-    const g = this.mduck.gain, f = this.slp.frequency;
-    g.cancelScheduledValues(now); g.setTargetAtTime(dv, now, 0.006); g.setTargetAtTime(1, end, 0.04);
+    const g = this.mduck.gain, f = this.slp.frequency, shut = this._shut(now);
+    g.cancelScheduledValues(now); g.setTargetAtTime(dv, now, 0.006); g.setTargetAtTime(1, end, REL_TC);
     this._mdUntil = Math.max(this._mdUntil, end); this._mdLast = now;
-    f.cancelScheduledValues(now); f.setTargetAtTime(this._slpMin(Math.min(2500, this._slowF())), now, 0.008); f.setTargetAtTime(this._slowF(), end, 0.04);
-    this._impUntil = end; this._lkHold = Math.max(this._lkHold, end + 2.5);   // no hard beat snap for 2.5 s after it
+    if (!shut) {
+      const to = this._slpMin(Math.min(IMPACT_F, this._slowF()));
+      f.cancelScheduledValues(now); f.setTargetAtTime(to, now, 0.008); f.setTargetAtTime(this._slowF(), end, REL_TC);
+      if (to < SHUT_F) this._shutAt = Math.max(this._shutAt, end + 3 * REL_TC);
+      this._impFUntil = end;
+    }                                                   // else the filter stays where slow-mo wants it
+    this._impUntil = end;
+    this._lkHold = Math.max(this._lkHold, end + 2.5);   // no hard beat snap for 2.5 s after it
     if (this.muted || c.state !== 'running') return;
     this.tone('sine', 90, 45, now + 0.003, 0.04, 0.35, this.fx, 0.002);
     this._thudUp(now + 0.003, 90, 45, 0.04, 0.35, this.fx);
+    if (msv >= 90 && !this.sfxMuted && this.sfxVol > 0) {   // the release snap, right where the world starts moving again
+      this.hum(end, 0.025, 0.16, 'bandpass', 2800, 1.2, this.fx, 0, 0.001);
+      this.tone('sine', 1000, 300, end, 0.05, 0.12, this.fx, 0.002, 0.04);
+    }
   }
   _menu(I) { return !this._rematch && I > 0.2 && I < 0.45; }   // the rematch groove is the race loop, whatever the intensity
+  // the tension / menu lowpass: tension above 0.5 closes it toward 1200 Hz, the rematch groove sits at 400 Hz, and the
+  // waiting room at MENU_TLP[menuKind] (the title brighter, about 7 kHz, opening up from 3200 Hz over the first 1.5 s
+  // after unlock; shop, result and an unknown menu 3200 Hz)
   _applyTlp() {
     if (!this.ctx) return;
     const T = this._tension, tc = T <= 0.5 ? 18000 : 18000 * Math.pow(1200 / 18000, (T - 0.5) / 0.5);
-    const lim = this._rematch && !this._rmOpen ? 400 : this._menu(this._int) ? 3200 : 18000;
-    const f = Math.min(tc, lim), t = this.ctx.currentTime;
-    this.tlp.frequency.cancelScheduledValues(t); this.tlp.frequency.setTargetAtTime(f, t, this._ftc(0.15));
+    const menu = this._menu(this._int), ml = MENU_TLP[this._menuKind] || 3200;
+    const lim = this._rematch && !this._rmOpen ? 400 : menu ? ml : 18000;
+    const f = Math.min(tc, lim), t = this.ctx.currentTime, p = this.tlp.frequency, open = this._unlockAt + TITLE_OPEN;
+    p.cancelScheduledValues(t);
+    if (menu && !this._rematch && f > 3200 && t < open - 0.1 && !this.calm) { p.setValueAtTime(3200, t); p.exponentialRampToValueAtTime(f, open); return; }
+    p.setTargetAtTime(f, t, this._ftc(0.15));
   }
   // drop the music for a moment so a big sound effect can shine
   // (no duck when sfx are off: there is nothing to make room for. Calm mode never ducks below 0.8.)
@@ -1118,8 +1186,8 @@ export class Audio {
   // music-bus hats and rims go through their panners (hats: side 0 = left on even 16ths, 1 = right on odd ones)
   _mpan(dest, side) { return dest === this.music && this.hatPan ? this.hatPan[side & 1] : dest; }
   rim(t, v = 1, dest = this.music) { this._kit('rim', t, 0.24 * v, dest === this.music && this.rimPan ? this.rimPan : dest); }
-  hat(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this._kit('hat', t, 0.15 * v, this._mpan(dest, side)); }
-  ts(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this._kit('ts', t, 0.12 * v, this._mpan(dest, side)); }
+  hat(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this._kit('hat', t, 0.24 * v, this._mpan(dest, side)); }
+  ts(t, v = 1, dest = this.music, side = this._hs) { if (this.live > this._cap - 8) return; if (t < this._hatDuck && dest === this.music) v *= 0.85; this._kit('ts', t, 0.192 * v, this._mpan(dest, side)); }
   // the 16th-rate kit voices (hat, the "ts" shaker, rim): 4 prebaked variants each, filtered and enveloped once at
   // unlock, so every hit is just a BufferSource and a Gain (no BiquadFilter per hit). Humanise detune and the
   // slow-mo bend map to playbackRate. Falls back to a live hum() before the bake or under a calm minimum attack.
@@ -1260,21 +1328,22 @@ export class Audio {
         const d = MENU_HOOK[hb][i >> 1];
         if (d !== null) { let f = 880 * st(this.key + PENTA[d]); while (f > 1500) f /= 2; this._whistle(t, f, spb * 1.7, null, 0.05); }
       }
-      this._cTier = 0;
+      this._cTier = 0; this._boostTo(false, t);
       return;
     }
     if (i === 0 && this._softIn) { this._softIn = false; if (this.crashBar !== bar) this.crash(t, 0.6); }
     // the egg duel's gasp: one beat of nothing at all, then a crash brings the band back
     if (this._gaspUntil > 0) {
-      if (t0 < this._gaspUntil - 0.002) { this._cTier = Math.min(3, Math.floor(cmb / 10)); if (i === 0) this._themeOn = false; return; }
+      if (t0 < this._gaspUntil - 0.002) { this._cTier = rungOf(cmb); if (i === 0) this._themeOn = false; return; }
       this._gaspUntil = -1; if (!(i === 0 && (this.crashBar === bar || this.crashNext))) this.crash(t, 0.8);
     }
-    // combo broken: one beat of dry kick, everything else holds its breath
-    if (t0 < this._dryUntil) { if (i % 4 === 0) this.B(t, 1.1); this._cTier = 0; this._rollAt = -1; return; }
-    // stem ladder: crossing combo 10, 20 or 30 rolls a 1-beat snare fill into a crash on the next beat
-    const ct = Math.min(3, Math.floor(cmb / 10));
+    // combo broken (or a FINISHER's drop): dry kick, everything else holds its breath
+    if (t0 < this._dryUntil) { if (i % 4 === 0) this.B(t, 1.1); this._cTier = 0; this._rollAt = -1; this._boostTo(false, t); return; }
+    // stem ladder: crossing a rung (combo 10, 20, 30, 45, 65, 100) rolls a 1-beat snare fill into a crash on the next beat
+    const ct = rungOf(cmb);
     if (ct > this._cTier && this._rollAt < 0) { this._rollAt = this.stepI + ((4 - (i & 3)) & 3); this._rollLen = 4; }
     this._cTier = ct;
+    this._boostTo(ct >= 6, t);   // rung 100: +1.5 dB on the whole mix
     if (i === 0) {
       if (this.crashBar === bar || this.crashNext) { this.crash(t, 1); this.crashNext = false; }
       this.curFill = -1;
@@ -1335,7 +1404,7 @@ export class Audio {
       if (i === 14) this.ts(t, 0.8);
     } else {
       // drums
-      if (KICK[L][bar & 1][i]) this.B(t, i === 0 ? 1 : 0.85);
+      if (KICK[L][bar & 1][i]) { this.B(t, i === 0 ? 1 : 0.85); if (ct >= 4) this._padPump(t); }
       else if (Z.sig === 'heart' && i % 4 === 0 && this._bedT() <= 0.02) this.B(t, 0.75);   // the egg: a heartbeat kick on every quarter (the tension bed replaces it)
       if (i === 4 || i === 12) this.Pf(t, 1);
       if (L >= 1 && (bar & 1) && i === 14) this.Kin(t, 0.8);
@@ -1353,11 +1422,13 @@ export class Audio {
       // stem ladder 1 (combo 6): hats double up into 32nds
       if (cmb >= 6) { if (L === 0 && (i & 1)) this.hat(t, 0.6); else if (i % 2 === 0) this.hat(t + spb * 0.5, 0.6, M, 1); }
       this._signature(Z.sig, t, i, bar, spb, L);
+      if (ct >= 4 && i % 4 === 2) this._clap(t, i === 6 || i === 14 ? 1 : 0.8);   // rung 45: off-beat clap stabs
     }
     // bass hum (stem ladder 2, combo 15: the busier bass line)
     if (!stop && !half) {
       const bl = cmb >= 15 ? Math.min(2, L + 1) : L;
       for (const [s, semi, len] of BASS[bl]) if (s === i) this._bass(t, root * st(semi), spb * len * 0.95, bl);
+      if (ct >= 5 && !this._slow) this._bassUp(t, i, root, spb);   // rung 65: the octave bass on the off-16ths
     } else if (half && i === 0) this._bass(t, root, spb * 7, 0);
     // choir pads on the downbeat in the zone's vowel (the 4th bar opens up), wah stabs on the offbeats in FRENZY
     if (i === 0 && this.curFill !== 2) {
@@ -1381,6 +1452,38 @@ export class Audio {
         this.say(t, [f], 'ah', i % 4 ? 'eh' : 'oh', spb * 1.3, 0.16, 0.05, 1, M, 0);
       }
     }
+    if (ct >= 6 && !stop && !this._slow && (bar & 1) === 1) this._adlib(t, i, spb);   // rung 100: an ad-lib chop every 2 bars
+  }
+  // rung 45: the pads duck to 0.5 on a kick and swell back (0.8 in calm mode, no pumping)
+  _padPump(t) {
+    if (!this.padSc) return;
+    const g = this.padSc.gain;
+    g.setTargetAtTime(this.calm ? 0.8 : 0.5, t, 0.004); g.setTargetAtTime(1, t + 0.04, 0.07);
+  }
+  // a mouth clap: three tight bandpassed noise bursts (the hands) and a short tail, low priority
+  _clap(t, v) {
+    if (this.live > this._cap - 8) return;
+    const M = this.music;
+    for (let j = 0; j < 3; j++) this.hum(t + j * 0.009, 0.006, 0.16 * v, 'bandpass', 1300 + 250 * j, 1.6, M, 0, 0.001, 0);
+    this.hum(t + 0.027, 0.07, 0.12 * v, 'bandpass', 1600, 1.2, M, 0, 0.002, 0);
+  }
+  // rung 65: the bass an octave up on every off-16th, through a lowpass that opens 800 -> 3000 Hz over the bar
+  _bassUp(t, i, root, spb) {
+    const lp = this.bassUp; if (!lp) return;
+    if (i === 0) { const p = lp.frequency; p.setValueAtTime(800, t); p.exponentialRampToValueAtTime(3000, t + 16 * spb - 0.01); }
+    if (!(i & 1) || this.live > this._cap) return;
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain(), d = spb * 0.8;
+    o.type = 'sawtooth'; o.frequency.value = root * 2;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(lp); this._go(o, t, t + d + 0.02);
+  }
+  // rung 100: a beatboxed ad-lib on odd bars: "yeah" on beat 3, chopped into a stutter "ya-ya" on its last 8th
+  _adlib(t, i, spb) {
+    if (i !== 8 && i !== 14 && i !== 15) return;
+    let f = 220 * st(this.key); while (f > 330) f /= 2;
+    const M = this.music;
+    if (i === 8) this.say(t, [f * 1.5], 'eh', 'ay', spb * 2.2, 0.14, 0.06, 0.92, M, 0);
+    else this.say(t, [f * (i === 14 ? 1.5 : 2)], 'ah', 'ah', spb * 0.7, 0.11, 0.02, 1, M, 0);
   }
   // one signature sound per zone, on top of the groove (all low priority, all on the music bus)
   _signature(sig, t, i, bar, spb, L) {
@@ -1409,6 +1512,14 @@ export class Audio {
     // the octave triangle also carries the old sub's level (a sine at f/2, 33..65 Hz, that no phone could play)
     const g2 = this._gain(0.35 + 0.06 / (L === 2 ? 0.16 : 0.14)); o.connect(g); o2.connect(g2); g2.connect(g); g.connect(lp);
     this._go(o, t, t + dur + 0.06); this._go(o2, t, t + dur + 0.06);
+    // the octave-up saw (0.35x the hum, 1.2 kHz lowpass, past the bass filter): the bass line a phone speaker can play
+    if (this.bassHi && this.live <= this._cap) {
+      const o3 = c.createOscillator(), g3 = c.createGain(), v3 = v * 0.35;
+      o3.type = 'sawtooth'; o3.frequency.value = f * 2;
+      g3.gain.setValueAtTime(0.0001, t); g3.gain.exponentialRampToValueAtTime(v3, t + 0.012);
+      g3.gain.setValueAtTime(v3, t + dur * 0.7); g3.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.04);
+      o3.connect(g3); g3.connect(this.bassHi); this._go(o3, t, t + dur + 0.06);
+    }
   }
   // hook: the theme's whistle (louder, a triangle partial an octave up at 0.25x, and on notes of 2+ sixteenths a
   // 5.5 Hz +-12 cent vibrato fading in after 0.12 s), so the theme is the loudest melodic moment of each zone
@@ -1621,7 +1732,8 @@ export class Audio {
   // rivalTell (k = rival index), countered, factory (k = 0..3 fill level), countTick (k = 0..1), medal (k = tier 1..3),
   // spot (k = { pan }: one gap per side), trick ({ id, first, kinds }), domino (k = chain length), whoosh ({ pan }). comboBank (k = grade, or { grade, cascade: true } for the whole coin run).
   // trickTease ({ step: 2, id }: two links of a trick in), trickMiss (its window lapsed), draftOn (a draft pick locks in),
-  // slingReady, goal (a goal reached), pastBest (swam past your best distance), grudge (k = the beaten grudge rival's index).
+  // lesson (k = 0.33 / 0.66 / 1: a tutorial step learned, a rising arpeggio that ends on the tonic at 1),
+// slingReady, goal (a goal reached), pastBest (swam past your best distance), grudge (k = the beaten grudge rival's index).
   // trickStreak (k = { n }: tricks back to back, n 1..; n >= 2 also lifts the key until the chain banks or breaks),
   // overtaken ({ k, pan }: a rival swims past you), gift (a free sugar), bounty (the bounty stamp), spareBite (the
   // spare life takes a bite), gateNear / gateNearSlide (k = pan -1..1: a gate coming up, a sliding one sings a fourth
@@ -1652,7 +1764,11 @@ export class Audio {
         if (n >= 25) this._slpDip(now, 900, 0.35);
         endCombo(); break;
       }
-      case 'finisher': endCombo(); break;
+      case 'finisher': {        // a drop: every stem but the kick cuts out for one beat, then a crash on the next downbeat
+        endCombo();
+        if (this.on) { this._dryUntil = Math.max(this._dryUntil, this._unsched(now) + 4 * (60 / this._bpm / 4)); this.crashNext = true; }
+        break;
+      }
       case 'comboEnd': endCombo(); break;
       case 'comboMilestone': if (!this._mlift) { this._mlift = 2; this._rekey(true); } break;
       // a streak of 2+ lifts the key like a combo milestone, until the chain banks or breaks (endCombo drops it)
@@ -1877,6 +1993,23 @@ export class Audio {
       case 'mutation': case 'pick': {
         const f = fold(kf(660), 900);
         this.tone('triangle', f, f * 1.5, t, 0.12, 0.28, fx); this.tone('sine', f * 2, 0, t + 0.08, 0.2, 0.1, fx); this.tone('sine', f * 3, 0, t + 0.12, 0.2, 0.05, this.fxEcho);
+        break;
+      }
+      case 'lesson': {          // a tutorial step learned (k 0.33 / 0.66 / 1): a bright 3-note rising arpeggio in key, about
+        // 180 ms, its root a third higher per step (A, C, E in A minor); the last step walks home to the tonic with a hat roll.
+        // Kept under 'mutation' (a 0.12 triangle against its 0.28)
+        const x = clamp01(k), step = x >= 0.95 ? 2 : x >= 0.5 ? 1 : 0;
+        const notes = step === 2 ? [7, 10, 12] : step === 1 ? [3, 7, 10] : [0, 3, 7];
+        let b = 440 * st(K); while (b > 620) b /= 2; while (b < 310) b *= 2;
+        notes.forEach((s, j) => {
+          const f = b * st(s), tj = t + j * 0.06, last = j === 2;
+          this.tone('triangle', f, 0, tj, last ? 0.09 : 0.05, 0.12, fx, 0.003);
+          this.tone('square', f * 2, 0, tj, 0.03, 0.022, fx, 0.002);   // the bright edge a phone speaker hears
+        });
+        if (step === 2) {
+          this.tone('sine', b * 4, 0, t + 0.12, 0.14, 0.025, this.fxEcho, 0.003);
+          for (let j = 0; j < 4; j++) this.hat(t + 0.12 + j * 0.03, 0.35 + 0.1 * j, fx, j & 1);
+        }
         break;
       }
       case 'cards': this.hum(t, 0.3, 0.25, 'bandpass', 300, 1.5, fx, 3000, 0.2); this.tone('sine', 300, 900, t, 0.25, 0.1, fx); break;
