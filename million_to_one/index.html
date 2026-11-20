@@ -258,7 +258,7 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 /* swim 1: the steer praise says what the swim is for on its second line */
 #tut.ok.goal .ts{display:block;color:var(--cream)}
 #tutTarget{position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px dashed var(--gold);pointer-events:none;animation:tgt 1s linear infinite;box-shadow:0 0 14px rgba(255,215,92,.6)}
-#tutTarget::after{content:attr(data-l);position:absolute;left:50%;top:calc(100% + 4px);transform:translateX(-50%);white-space:nowrap;font-size:14px;line-height:1.2;font-weight:800;color:var(--gold);background:rgba(20,2,18,.88);border-radius:10px;padding:1px 8px 2px;text-shadow:0 2px 0 var(--ink)}
+#tutTarget::after{content:attr(data-l);position:absolute;left:50%;top:calc(100% + 4px);transform:translateX(calc(-50% + var(--lx,0px)));white-space:nowrap;font-size:14px;line-height:1.2;font-weight:800;color:var(--gold);background:rgba(20,2,18,.88);border-radius:10px;padding:1px 8px 2px;text-shadow:0 2px 0 var(--ink)}
 #tutTarget[data-l=""]::after,#tutTarget:not([data-l])::after{display:none}
 /* a first look: red 'avoid!' for a danger, green 'grab!' for a pickup */
 #tutTarget.bad{border-color:#ff3d6e;box-shadow:0 0 14px rgba(255,61,110,.7)}
@@ -272,12 +272,16 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 #tutTarget.down::before{content:"👇";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:28px;line-height:1;animation:downcue .7s ease-in infinite;filter:drop-shadow(0 2px 0 var(--ink))}
 @keyframes downcue{0%{translate:0 -18px;opacity:0}30%{opacity:1}100%{translate:0 22px;opacity:0}}
 @keyframes tgt{0%{scale:1.15}50%{scale:.9}100%{scale:1.15}}
-/* first swim: a big ghost finger swings along a 140 px arc over Kevin from GO until he has steered */
-#tutTarget .trail{display:none}
+/* first swim: a big ghost finger swings along a 100 px arc below Kevin from GO until he has steered */
+#tutTarget .trail,#tutTarget .link{display:none}
+/* the ghost finger's faint dotted line from its fingertip up to Kevin (main.js sets --lk, --la) */
+#tutTarget.lnk .link{display:block;position:absolute;left:50%;top:50%;width:var(--lk,0px);height:0;margin-top:-12px;border-top:2px dotted rgba(255,255,255,.5);transform-origin:0 0;rotate:var(--la,-90deg);pointer-events:none;filter:drop-shadow(0 1px 0 rgba(20,2,18,.6))}
+/* swim 1's steer card sits just above the ghost finger (portrait; main.js sets --fgB) */
+body #tut.fg{bottom:var(--fgB,calc(var(--safeB) + 150px))}
 #tutTarget.swipe{border-color:transparent;box-shadow:none;animation:none}
-#tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:140px;height:44px;margin:-2px 0 0 -70px;translate:calc(var(--sw,0px) * -1) 0;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
+#tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:100px;height:36px;margin:-2px 0 0 -50px;translate:calc(var(--sw,0px) * -1) 0;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
 #tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 3px 0 var(--ink));rotate:var(--swr,0deg)}
-/* (main.js sways the ring itself, sin 3t x 70 px: the arc stays put under it, the finger tilts with the swing) */
+/* (main.js sways the ring itself, sin 3t x 50 px: the arc stays put under it, the finger tilts with the swing) */
 /* a ring on Kevin: its label goes to the far side */
 #tutTarget.flip::after{top:auto;bottom:calc(100% + 4px)}
 #toast{position:absolute;left:50%;bottom:calc(var(--safeB) + 24px);transform:translate(-50%,30px);opacity:0;background:#fff4f8;color:#4a1030;font-weight:800;padding:8px 14px;border-radius:14px;max-width:calc(100% - 32px);text-align:center;font-size:14px;pointer-events:none;transition:all .25s;z-index:5;box-shadow:0 4px 0 #9a3a60;word-break:break-word}
@@ -369,6 +373,8 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 @keyframes shine{0%{left:-60%}45%,100%{left:130%}}
 .card .syn{margin-top:3px;font-size:12px;font-weight:800;color:#d9b8ff;line-height:1.15}
 .card .syn.half{color:#b9a3d6;font-weight:700}
+.card .syn.capst{color:var(--gold)}
+.card .syn.capst small{display:block;font-weight:700;color:var(--cream);opacity:.85}
 .card .fl{font-size:12px;font-style:italic;font-weight:500;opacity:.75;line-height:1.15;margin-top:2px}
 #cards.nofl .card .fl{display:none}
 @media (max-height:640px){.card .fl{display:none}}
@@ -378,6 +384,12 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 .card .pb{display:inline-block;margin-left:6px;padding:0 5px;border-radius:6px;background:#8a4dff;color:#fff;font-size:12px;letter-spacing:.08em;line-height:14px;vertical-align:1px;box-shadow:0 0 8px rgba(160,110,255,.7)}
 .card .key{float:right;opacity:.7;font-size:12px;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 @media (hover:none){.card .key{display:none}}
+/* the first deal: Coach's pick breathes once the deal has landed (1.0 to 1.04, 0.6 s) */
+/* (the card's own box never moves, so a tap always lands: its contents swell and its glow breathes) */
+.card.cpk:not(.picked){animation:cpGlow .6s ease-in-out infinite alternate}
+.card.cpk:not(.picked)>:not(.shine){animation:cpPulse .6s ease-in-out infinite alternate}
+@keyframes cpPulse{from{scale:1}to{scale:1.04}}
+@keyframes cpGlow{to{box-shadow:0 5px 0 #12030f,0 0 0 2px rgba(125,255,176,.7),0 0 18px rgba(125,255,176,.55)}}
 .card.picked{animation:picked .3s ease-out forwards;z-index:2}
 @keyframes picked{to{transform:scale(1.12);filter:brightness(1.6);box-shadow:0 0 40px rgba(255,215,92,.9)}}
 #cards.out{opacity:0;transition:opacity .28s;pointer-events:none}
@@ -424,6 +436,9 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 /* streak freezes held: ice pips after the week */
 #dailyBtn .dfrz{display:flex;gap:3px;margin-left:6px}
 #dailyBtn .dpips .dfrz i{width:auto;height:9px;background:none;font-style:normal;font-size:11px;line-height:9px;color:#1d6f9a;text-shadow:0 0 4px rgba(255,255,255,.9)}
+/* a freeze that saves the streak today: the first ice pip shivers */
+#dailyBtn .dfrz.save i:first-child{display:inline-block;animation:frzShake 1.1s ease-in-out infinite;color:#0a4f7a}
+@keyframes frzShake{0%,60%,100%{transform:none}66%{transform:translateX(-1.5px) rotate(-12deg)}74%{transform:translateX(1.5px) rotate(10deg)}82%{transform:translateX(-1px) rotate(-6deg)}90%{transform:translateX(1px)}}
 .hab.frz .pips i.on{color:#5ce1ff}
 #dailyBtn .dnx{font-size:12px;opacity:.85}
 #resGap .nb{display:inline-block;margin-left:6px;background:var(--mint);color:#05301a;border-radius:8px;padding:0 6px;font-size:12px;vertical-align:2px}
@@ -490,6 +505,14 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 #result.tight #resBaby,#result.tight #resMuts,#result.tight #resMutStrip,#result.tight #resStats,#result.tight #resReceipt,#result.tight #resPep,
 #result.tight #resUp,#result.tight #resSyn,#result.tight #resNext,#result.tight #resTip,#result.tight #resGoal{display:none!important}
 #result.tight #resWhy:empty,#result.tight #resGloat:empty{display:none}
+#result.tight #resAttempt,#result.tight #resBest:not(.rec){display:none!important}
+/* a tight card: the medal is a small inline chip, not a stamp */
+#result.tight #resMedal:not(.hide){display:table;font-size:13px;padding:2px 10px;border-radius:10px;background:rgba(0,0,0,.35);margin:4px auto 0;animation:none;text-shadow:none}
+#result.tight #resMedal .md{display:inline;font-size:15px;margin-right:4px}
+#result.tight #resMedal small{display:none}
+/* the daily's reduced repeat, a small link under SWIM AGAIN */
+#dailyAgainLink{display:block;margin:6px auto 0;background:none;border:0;color:var(--dim);font-size:13px;font-weight:700;text-decoration:underline;min-height:32px;padding:4px 12px}
+#dailyAgainLink.hide{display:none}
 #resShopBtn small.pk{font-size:12px;margin-top:1px}
 #resReceipt{width:100%;max-width:300px;margin:6px auto 0;font-size:14px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}
 #resReceipt{overflow:hidden;max-height:400px;transition:max-height .3s ease,opacity .3s}
@@ -654,8 +677,8 @@ body.reduced #resShopBtn.breathe{box-shadow:0 5px 0 #9a6410,0 0 0 3px #fff4f8}
 /* a close card: the rematch call is the button's big word (in the rival's colour on a dark face), SWIM AGAIN its small line */
 #againBtn.call{font-size:22px;letter-spacing:.02em}
 #againBtn.call .rl{display:block;line-height:1.1}
-#againBtn.call.rival{background:linear-gradient(#3a0a30,#22041c);box-shadow:0 5px 0 #0e010b,0 0 0 3px var(--rc),0 0 22px var(--rc)}
-#againBtn.call.rival .rl{color:var(--rc);text-shadow:0 2px 0 #0e010b}
+#againBtn.call.rival{background:linear-gradient(#d42a5a,#a8123f);box-shadow:0 5px 0 #5c0822,0 0 0 3px var(--rc),0 0 22px var(--rc)}
+#againBtn.call.rival .rl{color:#fff;text-shadow:0 2px 0 #5c0822}
 #resAgainGoal{text-align:center;color:var(--gold);font-size:13px;font-weight:800;line-height:1.15;max-width:330px;margin:2px auto 0;text-shadow:0 2px 0 var(--ink)}
 /* Dad's Pick: what that habit would have done for the swim just lost */
 #resUp .wh{margin-top:2px;font-size:12px;font-weight:800;color:var(--cream);line-height:1.2}
@@ -908,8 +931,9 @@ body.threat #tut.on{opacity:.3}
 /* intense (combo 10+, FRENZY, or something hostile 600 px ahead): the screen calms down. The side text fades to .3 and the
    HUD's shade lightens; opacity only, so nothing changes size and --hudB holds still */
 #rankLbl,#alive,#toEgg,#zoneName,#mutRow,#energyRow .gas{transition:opacity .25s}
-body.intense #rankLbl,body.intense #alive,body.intense #zoneName,body.intense #toEgg,body.intense #energyRow .gas{opacity:.3}
-body.intense #mutRow:not(.peek){opacity:.3}
+/* (the GAS bar and the distance to the egg stay fully readable: they are what a busy moment needs) */
+body.intense #rankLbl,body.intense #alive,body.intense #zoneName{opacity:.6}
+body.intense #mutRow:not(.peek){opacity:.6}
 body.intense #hud{background:linear-gradient(180deg,rgba(20,4,20,.5),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
 body.intense.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.4),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
 @media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){
@@ -982,6 +1006,8 @@ body.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.45),rgba(20,4,20,.
 @media (orientation:portrait),(orientation:landscape) and (min-height:521px) and (max-aspect-ratio:1249/1000){
   body.racing.tutHud #tut{top:calc(var(--hudB) + 8px);bottom:auto;left:50%;right:auto;transform:translate(-50%,-10px)}
   body.racing.tutHud #tut.on{transform:translate(-50%,0)}
+  /* swim 1's steer card rides just above the ghost finger instead (main.js: --fgB, portrait only) */
+  body.racing.tutHud #tut.fg{top:auto;bottom:var(--fgB)}
 }
 /* while racing the coach strip is ONE line */
 body.racing #coach{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1001,6 +1027,10 @@ body.bnr #tut .ts{display:none!important}
 /* the first result with Dad's pick affordable: spending is the primary move, the rematch is second */
 #result.spend #resShopBtn{font-size:22px;min-height:60px}
 #result.spend #againBtn{min-height:68px;font-size:24px}
+/* until the first buy: Spend your DNA is the full-width primary (lowest), SWIM AGAIN a smaller secondary above it */
+#result.spend #resShopBtn.wide{display:block;width:100%;min-height:64px;font-size:22px;margin-top:6px}
+#result.spend #resShopBtn.wide small.pk{display:block;font-size:12px;font-weight:700;line-height:1.2;margin-top:2px;text-wrap:balance}
+#result.spend #againBtn.second{min-height:50px;font-size:19px;background:linear-gradient(#5a2a52,#3c1638);box-shadow:0 4px 0 #1c0618}
 /* the spend card: Habits is gold but a size under SWIM AGAIN, and 🏠 stays the small ghost icon beside it, so SWIM AGAIN
    is still the biggest, lowest target */
 #result.spend #resShopBtn,.row3.spendRow #resShopBtn{font-size:19px;min-height:56px}
@@ -1038,7 +1068,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
   </div>
   <div id="coach"></div>
   <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
-  <div id="tutTarget" class="hide"><i class="trail"></i></div>
+  <div id="tutTarget" class="hide"><i class="trail"></i><i class="link"></i></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
   <div id="count"></div>
@@ -1135,6 +1165,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
       </div>
       <div id="resAgainGoal" class="hide"></div>
       <button class="btn" id="againBtn">SWIM AGAIN 💦</button>
+      <button id="dailyAgainLink" class="hide" type="button"></button>
       <div id="resRival" class="hide"></div>
     </div>
     </div>

@@ -241,5 +241,55 @@ const attT = await p2.evaluate(() => { const el = document.getElementById('resAt
 ok(/pay/.test(attT), 'the daily result says what this attempt pays ("' + attT + '")');
 ok(errs.length === errs2, 'the returning player pass runs without page errors ' + errs.slice(errs2).join(' | '));
 
+
+// ---- round 2: the deal survives the tab hiding, a palm never dashes, a held freeze keeps the streak saveable ----
+// Arrange: a returning player (tutorial done) on a fresh page
+const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+const p3 = await ctx3.newPage(); const errs3 = [];
+p3.on('pageerror', (e) => errs3.push(e.message));
+p3.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errs3.push('console: ' + m.text()); });
+await p3.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+await p3.goto(URL);
+await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+await p3.evaluate(() => { const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; localStorage.setItem('million_to_one_ui', JSON.stringify(u)); const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}'); Object.assign(m, { runs: 5, introSeen: true }); localStorage.setItem('million_to_one_v1', JSON.stringify(m)); });
+await p3.reload(); await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+await p3.tap('#playBtn'); await p3.waitForFunction(() => game.race && !game.race.demo && game.race.t > 1, null, { timeout: 15000 });
+await p3.evaluate(() => { const r = game.race; r.p.y = 8950; r.genY = 9300; r.ents = []; r.p.e = r.p.maxE; });
+await p3.waitForFunction(() => !document.getElementById('cards').classList.contains('hide'), null, { timeout: 5000 }).catch(() => {});
+// Act: the tab hides while the cards are up
+const setHidden = (h) => p3.evaluate((h) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h }); Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') }); document.dispatchEvent(new Event('visibilitychange')); }, h);
+await setHidden(true);
+const openPaused = () => p3.evaluate(() => { const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}'); return !!(m.openRun && m.openRun.paused); });
+// Assert
+ok(await openPaused() === true, 'hiding the tab on a deal saves the open swim as paused');
+await setHidden(false);
+ok(await openPaused() === false, 'coming back to the tab clears the paused mark');
+await p3.waitForTimeout(900);
+await p3.tap('#cardRow .card'); await p3.waitForTimeout(500);
+// Arrange: count every time the dash input goes on
+const cdp3 = await ctx3.newCDPSession(p3);
+const tp3 = (type, pts) => cdp3.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+await p3.evaluate(() => { const r = game.race; r.p.e = r.p.maxE; r.p.dashCd = 0; r.ents = []; window.__d = 0; let v = r.input.dash; Object.defineProperty(r.input, 'dash', { configurable: true, get: () => v, set: (x) => { if (x) window.__d++; v = x; } }); });
+const PALM = { x: 60, y: 700, radiusX: 30, radiusY: 30, id: 1 }, FB = (x) => ({ x, y: 600, id: 2 });
+// Act: a palm rests (A), a finger drags (B), lifts, re-touches and drags back
+await tp3('touchStart', [PALM]); await p3.waitForTimeout(50);
+await tp3('touchStart', [PALM, FB(200)]); for (let k = 1; k <= 6; k++) { await tp3('touchMove', [PALM, FB(200 + k * 10)]); await p3.waitForTimeout(20); }
+await tp3('touchEnd', [PALM]); await p3.waitForTimeout(80);
+await tp3('touchStart', [PALM, FB(250)]); for (let k = 1; k <= 6; k++) { await tp3('touchMove', [PALM, FB(250 - k * 15)]); await p3.waitForTimeout(20); }
+const palm = await p3.evaluate(() => ({ d: window.__d, tx: game.race.input.tx }));
+await tp3('touchEnd', []);
+// Assert
+ok(palm.d === 0, 'a resting palm plus a dragging finger never dashes (' + JSON.stringify(palm) + ')');
+// Arrange: a 4-day streak, the daily last swum 2 days ago, one freeze held
+await p3.evaluate(async () => { const C = await import('./core.js'); const m = game.meta, t = C.dailySeed(); m.dailyStreak = 4; m.dailyLastDay = t - 2; m.dailyLastAt = Date.now() - 50 * 3600000; m.dailyDay = t - 2; m.streakFreeze = 1; m.runs = 5; localStorage.setItem('million_to_one_v1', JSON.stringify(m)); });
+// Act
+await p3.reload(); await p3.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 }); await p3.waitForTimeout(400);
+const frz = await p3.evaluate(() => ({ t: document.getElementById('dailyBtn').textContent, p: document.getElementById('dailyBtn').classList.contains('pulse'), lost: game.settings.streakLostDay, ice: !!document.querySelector('#dailyBtn .dfrz.save') }));
+// Assert
+ok(frz.p && frz.lost === -1 && frz.ice && /4-day/.test(frz.t) && !/\{n\}/.test(frz.t), 'a 2-day gap with a freeze held stays saveable on the title ' + JSON.stringify(frz));
+if (SHOTS) await p3.screenshot({ path: path.join(SHOTS, '11_title_freeze.png') });
+ok(errs3.length === 0, 'the round 2 pass runs without page errors ' + errs3.join(' | '));
+await ctx3.close();
+
 await browser.close(); server.close(); clearTimeout(watchdog);
 finish();
