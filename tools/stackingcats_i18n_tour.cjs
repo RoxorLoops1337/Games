@@ -5,8 +5,9 @@ const fs = require('fs');
 (async () => {
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 926, height: 428 } }); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.addInitScript((l) => { window.__tourLang = l; }, process.argv[3] || 'da');
   await p.goto('http://localhost:8765/stacking_cats/?cov=' + Date.now()); await p.waitForFunction(() => window.stackingCats && window.stackingCats.mode === 'title');
-  await p.evaluate(async () => { const c = window.stackingCats; c.save().seenIntro = true; c.save().name = 'Perf'; c.save().nameAsked = true; await c.setLangNow('da'); });
+  await p.evaluate(async () => { const c = window.stackingCats; c.save().seenIntro = true; c.save().name = 'Perf'; c.save().nameAsked = true; await c.setLangNow(window.__tourLang || 'da'); });
   const sh = async (label) => { await p.waitForTimeout(250); };
   const call = async (fn, ...a) => { try { await p.evaluate(([f, a]) => { const c = window.stackingCats; c.clearChoices(); return c.ui[f](...a.map((x) => (x === '$back' ? c.ui.showTitle : x))); }, [fn, a]); } catch (e) { errs.push(fn + ': ' + e.message); } await sh(fn); };
   for (const f of ['showTitle', 'showSettings', 'showHow', 'showDex', 'showRelics', 'showTrophies', 'showCollection', 'showKingdom', 'showDaily', 'showRanking', 'showDiffPicker', 'showWardrobe', 'showNamePrompt']) await call(f, '$back');

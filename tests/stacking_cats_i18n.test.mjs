@@ -69,4 +69,44 @@ await t('Danish covers the game data: every item, relic, snack, cat text, event,
   assert.deepEqual(miss, []);
   useDict('en', {});
 });
+// ---- the Chinese dictionary (same rules as the Danish one, plus: it has CJK characters and no Danish leftovers)
+await t('Auto picks Chinese for any Chinese browser language, and a chosen language always wins', () => {
+  assert.equal(resolveLang('auto', ['zh-CN', 'en']), 'zh');
+  assert.equal(resolveLang('auto', ['zh-Hant-TW']), 'zh');
+  assert.equal(resolveLang('auto', ['en-US', 'zh']), 'en');
+  assert.equal(resolveLang('zh', ['da']), 'zh');
+});
+const { default: ZH } = await import('../stacking_cats/lang/zh.js');
+await t('Chinese dictionary: covers every Danish key, no dashes, valid {n} references, real Chinese text', () => {
+  const missing = Object.keys(DA).filter((k) => !(k in ZH));
+  assert.deepEqual(missing.slice(0, 20), [], 'keys the Danish dictionary has and the Chinese one lacks');
+  for (const k of Object.keys(ZH)) {
+    const v = ZH[k];
+    assert.equal(typeof v, 'string', 'value of ' + k);
+    assert.ok(!/[\u2014\u2013]/.test(v), 'no em or en dash: ' + v);
+    const caps = (k.match(/\{\}|#/g) || []).length;
+    for (const m of v.matchAll(/\{(\d+)\}/g)) assert.ok(+m[1] >= 1 && +m[1] <= caps, `"${k}" -> "${v}": {${m[1]}} has no match in the key`);
+    if (/#/.test(v) && !/\{\d+\}/.test(v)) assert.ok(k.includes('#'), `"${k}" -> "${v}": a # in the value needs a # in the key`);
+    if (k.includes('{}') || k.includes('#')) assert.doesNotThrow(() => compile({ [k]: v }), k);
+    if (/[A-Za-z]{4,}/.test(v.replace(/\{\d+\}|<[^>]*>|&\w+;/g, '')) && !/[\u4E00-\u9FFF]/.test(v)) assert.equal(v, k, 'untranslated text in the Chinese dictionary: ' + k + ' -> ' + v);
+  }
+});
+await t('Chinese covers the game data: every item, relic, snack, cat text, event, trophy, building and wonder text has a translation', async () => {
+  const C = await import('../stacking_cats/cats.js'), R = await import('../stacking_cats/relics.js');
+  useDict('zh', ZH);
+  const miss = [];
+  const chk = (label, arr, fields) => { for (const o of arr) for (const f of fields) { const v = o[f]; if (typeof v === 'string' && v.length > 2 && tr(v) === v) miss.push(label + ' ' + o.id + '.' + f + ': ' + v); } };
+  chk('item', C.ITEMS, ['name', 'desc']); chk('relic', R.ALL_RELICS, ['name', 'desc']); chk('snack', C.SNACKS || [], ['name', 'desc']);
+  chk('cat', C.CATS, ['name', 'desc', 'role']); chk('event', C.EVENTS, ['name', 'desc']); chk('trophy', C.ACHIEVEMENTS, ['name', 'desc']);
+  chk('building', C.BUILDINGS, ['name']); chk('wonder', C.WONDERS, ['name', 'desc']); chk('synergy', Object.values(C.SYNERGIES), ['name']);
+  chk('enemy', Object.values(C.ENEMY_TYPES), ['name', 'hint']); chk('unlock', C.CATS.filter((c) => c.unlock).map((c) => ({ id: c.id, text: c.unlock.text })), ['text']);
+  assert.deepEqual(miss.slice(0, 20), []);
+  useDict('en', {});
+});
+await t('Chinese joins translated sentences without spaces and uses full width punctuation for Name: text', () => {
+  useDict('zh', compile ? { 'Play': '\u5F00\u59CB', 'You win.': '\u4F60\u8D62\u4E86\u3002', 'Try again!': '\u518D\u6765\u4E00\u6B21\uFF01' } : {});
+  assert.equal(tr('You win. Try again!'), '\u4F60\u8D62\u4E86\u3002\u518D\u6765\u4E00\u6B21\uFF01');
+  assert.equal(tr('Play: You win.'), '\u5F00\u59CB\uFF1A\u4F60\u8D62\u4E86\u3002');
+  useDict('en', {});
+});
 console.log(`${passed} i18n tests passed`);

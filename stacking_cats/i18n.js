@@ -6,8 +6,8 @@
 //   '{}'  in a key matches any text            'Best on {}: #'     -> 'Bedst paa {1}: {2}'
 //   '{n}' in a value is the nth match of the key, counting numbers and wildcards in order of appearance (matched text is translated too)
 // A text that is not found as a whole is tried sentence by sentence.
-export const LANGS = [['auto', 'Auto'], ['en', 'English'], ['da', 'Dansk']];
-export const SHOWN = ['en', 'da'];   // the languages with their own button
+export const LANGS = [['auto', 'Auto'], ['en', 'English'], ['da', 'Dansk'], ['zh', '\u4E2D\u6587']];
+export const SHOWN = ['en', 'da', 'zh'];   // the languages with their own button
 const NUM = '-?\\d+(?:[.,]\\d+)*';
 const NUM_RE = new RegExp(NUM, 'g');
 
@@ -15,11 +15,11 @@ let lang = 'en', loaded = new Set();
 export const missing = new Set();   // texts shown in another language that the dictionary did not know (for the coverage tool)
 export const getLang = () => lang;
 
-// 'auto' follows the browser: any Danish setting picks Danish, everything else English
+// 'auto' follows the browser: the first English, Danish or Chinese setting wins (Danish and Chinese in any variant), everything else English
 export function resolveLang(pref, navLangs) {
-  if (pref === 'en' || pref === 'da') return pref;
+  if (pref === 'en' || pref === 'da' || pref === 'zh') return pref;
   const list = navLangs || (typeof navigator !== 'undefined' ? (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en']) : ['en']);
-  for (const l of list) { const c = String(l || '').toLowerCase(); if (c.startsWith('da')) return 'da'; if (c.startsWith('en')) return 'en'; }
+  for (const l of list) { const c = String(l || '').toLowerCase(); if (c.startsWith('da')) return 'da'; if (c.startsWith('zh')) return 'zh'; if (c.startsWith('en')) return 'en'; }
   return 'en';
 }
 
@@ -44,6 +44,12 @@ export function compile(dict) {
   return { ex, wl };
 }
 
+// the little words that join translated parts differ per language (Chinese uses full width punctuation and no spaces between sentences)
+const JOIN = {
+  da: { sent: ' ', key: 'tast', and: ' og ', colon: ': ', comma: ', ' },
+  zh: { sent: '', key: '\u952E', and: '\u548C', colon: '\uFF1A', comma: '\uFF0C' },
+};
+const J = () => JOIN[lang] || JOIN.da;
 let cur = { ex: new Map(), wl: [] };
 const fill = (v, caps) => v.replace(/\{(\d+)\}/g, (m, i) => { const c = caps[+i - 1]; return c == null ? m : /^-?\d+(?:[.,]\d+)*$/.test(c) ? c : tr(c); });
 
@@ -93,8 +99,8 @@ function pieces(core) {
   let m = /^([^\p{L}\p{N}]+?)\s+(\p{L}.*)$/u.exec(core);
   if (m) { const r = lookupAny(m[2]); if (r != null) return m[1] + ' ' + r; }
   m = /^(.+?) \(key (\d+)\): (.+)$/.exec(core);
-  if (m) { const a = lookupAny(m[1]), b = lookupAny(m[3]); if (a != null || b != null) return (a != null ? a : m[1]) + ' (tast ' + m[2] + '): ' + (b != null ? b : m[3]); }
-  for (const [sep, outSep] of [[': ', ': '], [', ', ', '], [' \u00B7 ', ' \u00B7 '], [' and ', ' og ']]) {
+  if (m) { const a = lookupAny(m[1]), b = lookupAny(m[3]); if (a != null || b != null) return (a != null ? a : m[1]) + ' (' + J().key + ' ' + m[2] + '): ' + (b != null ? b : m[3]); }
+  for (const [sep, outSep] of [[': ', J().colon], [', ', J().comma], [' \u00B7 ', ' \u00B7 '], [' and ', J().and]]) {
     const i = core.indexOf(sep);
     if (i > 0) { const a = lookupAny(core.slice(0, i)), b = lookupAny(core.slice(i + sep.length)); if (a != null || b != null) return (a != null ? a : core.slice(0, i)) + outSep + (b != null ? b : core.slice(i + sep.length)); }
   }
@@ -113,7 +119,7 @@ function bySentence(core) {
     }
     if (!done) { const r = pieces(parts[i]); if (r != null) any = true; out.push(r != null ? r : parts[i]); i++; }
   }
-  return any ? out.join(' ') : null;
+  return any ? out.join(J().sent) : null;
 }
 // a part: as a whole, or by its own sentences
 function lookupAny(t) {

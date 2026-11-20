@@ -8,7 +8,7 @@ import { makeBackdrop, drawBackdrop, drawFront, freeBackdrop, enemySprite, nestS
 import { THEMES, CAT_BY_ID } from './cats.js';
 
 const W = 960, H = 540, GROUND = 440;
-const FONT = '"Lilita One", "Baloo 2", system-ui, sans-serif';
+const FONT = '"Lilita One", "Baloo 2", "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei", system-ui, sans-serif';
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const ease = (u) => { u = clamp(u); return u * u * (3 - 2 * u); };
 const outBack = (u) => { u = clamp(u); const c = 1.9; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
