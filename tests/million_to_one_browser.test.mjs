@@ -137,12 +137,16 @@ ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
 // Act: at the egg, a rival winds up a move (its tell line already names the speaker)
 const drillOn = await page.evaluate(() => !document.getElementById('drillUI').classList.contains('hide'));
 if (drillOn) {
-  // (a real rival can wind up its own move in the same 150 ms and take the strip over, so every text the strip shows
-  // after the emit is logged and Gunther's must be among them, named once)
-  await page.evaluate(() => { window.__epLog = []; const ep = document.querySelector('#drillUI .ep'); new MutationObserver(() => window.__epLog.push(ep.textContent || '')).observe(ep, { childList: true, characterData: true, subtree: true }); game.race.emit('rivalMove', { phase: 'tell', k: 3, move: 'test' }); });
+  // (a tell at the egg goes to Gunther's own duel bubble via R.duelSay, one bubble per rival; the bark already drops the
+  // speaker prefix, so the bubble text never starts with 'Gunther:' and never names him twice)
+  // (the duel bubbles belong to the drill itself: before it starts, in the claim beat, lines use the plain bubble)
+  await page.waitForFunction(() => !!game.race.drill && !game.race.over, null, { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => { window.__ds = []; const R = game.R, orig = R.duelSay.bind(R); R.duelSay = (k, t, d) => { window.__ds.push([k, String(t)]); return orig(k, t, d); }; game.race.emit('rivalMove', { phase: 'tell', k: 3, move: 'test' }); });
   await page.waitForTimeout(150);
-  const epT = await page.evaluate(() => [document.querySelector('#drillUI .ep').textContent, ...window.__epLog].find((t) => /^Gunther/.test(t)) || window.__epLog.join(' | ') || document.querySelector('#drillUI .ep').textContent);
-  ok(/^Gunther: "/.test(epT) && !/^Gunther: Gunther:/.test(epT), 'a tell at the egg shows the speaker once ("' + epT + '")');
+  const ds = await page.evaluate(() => window.__ds.filter((e) => e[0] === 3));
+  const dsT = ds.length ? ds[0][1] : '';
+  ok(ds.length >= 1 && dsT.length > 0 && !/^Gunther\s*:/.test(dsT), 'a tell at the egg puts Gunther\'s line in his duel bubble, speaker not repeated ("' + dsT + '")');
+  ok(await page.evaluate(() => game.R.duelBub && game.R.duelBub.size >= 1 && [...game.R.duelBub.values()].length <= 5), 'duel bubbles hold at most one per rival');
 }
 ok(drillOn, 'the last zone hop lands at the egg duel');
 ok(await page.evaluate(() => window.__epBad.length === 0), 'the egg panel never doubles a speaker name ' + (await page.evaluate(() => window.__epBad.join(' | '))));
@@ -204,7 +208,7 @@ p2.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource
 await p2.addInitScript(() => {
   if (sessionStorage.getItem('mtoArranged')) return; sessionStorage.setItem('mtoArranged', '1');
   const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}');
-  Object.assign(m, { runs: 6, introSeen: true, lastSeen: Date.now() - 9 * 3600000, bank: 0 }); m.habits = Object.assign({}, m.habits, { factory: 1 });
+  Object.assign(m, { runs: 6, normRuns: 6, introSeen: true, lastSeen: Date.now() - 9 * 3600000, bank: 0 }); m.habits = Object.assign({}, m.habits, { factory: 1 });
   localStorage.setItem('million_to_one_v1', JSON.stringify(m));
   const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; u.bestHead = 2.8; localStorage.setItem('million_to_one_ui', JSON.stringify(u));
 });
@@ -372,6 +376,33 @@ for (const [w, h] of [[360, 640], [320, 568], [640, 360], [568, 320]]) {
   });
   ok(!lay.dashCombo && !lay.dashTut && !lay.dashDrill && !lay.tutCombo && lay.banner && lay.coach && lay.dashIn, `${w}x${h}: the race HUD keeps DASH, the combo, the card and the banner apart ${JSON.stringify(lay)}`);
   await cx.close();
+}
+
+// round 1 render hooks: the flash safety cap, one duel bubble per rival, the 'think' pop style
+{
+  // arrange
+  const pg = await ctx.newPage(); pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL); await pg.waitForFunction(() => window.game && game.R, null, { timeout: 15000 });
+  // act
+  const rf = await pg.evaluate(() => {
+    const R = game.R, t0 = (R.time || 0) + 100; let acc = 0;
+    if (R._flashOn) R._flashOn.fill(-9);
+    for (let i = 0; i < 5; i++) { R.time = t0 + i * 0.1; R.lastFlashT = -9; R._flash = 0; R.flash = 1; if (!R.flashRej) acc++; }
+    const cnt = R.flashCount();
+    const a = game.race && game.race.agents ? game.race.agents.filter((q) => q && q !== game.race.p) : [];
+    const k1 = a[0] || 0, k2 = a[1] || 1;
+    if (R.duelBub) R.duelBub.clear();
+    R.duelSay(k1, 'one'); R.duelSay(k1, 'two'); const same = R.duelBub.size;
+    R.duelSay(k2, 'three'); const diff = R.duelBub.size; R.duelBub.clear();
+    R.pop(200, 200, 'hmm', '#fff4f8', 13, 1.6, 'think');
+    const pops = R.pops || R.popups || []; const last = pops[pops.length - 1];
+    return { acc, cnt, same, diff, think: !!(last && last.think) };
+  });
+  // assert
+  ok(rf.acc === 3 && rf.cnt === 3, 'the flash cap lets 3 flashes start in 1 s and refuses the rest, even with lastFlashT reset ' + JSON.stringify(rf));
+  ok(rf.same === 1 && rf.diff === 2, 'duelSay keeps one bubble per rival ' + JSON.stringify(rf));
+  ok(rf.think, "a 'think' pop is flagged think");
+  await pg.close();
 }
 
 await browser.close(); server.close(); clearTimeout(watchdog);

@@ -13,10 +13,11 @@
 // the race groove plays (not the waiting room): 0.85 / 0.75 / 0.7 for L0 / L1 / L2 and 0.7 in FRENZY (L0 0.72, L1
 // 0.75, L2 0.78, FRENZY 0.91 in all), so pressing SWIM barely dips from the waiting room's 0.85 (it used to fall to 0.6)
 // and the rewards still sit on top of the hot groove. Sound effects go through a
-// soft bus compressor whose automatic makeup gain (about +6 dB) is trimmed back by a 0.7 gain, so the combo blips cut
+// soft bus compressor whose automatic makeup gain (about +6 dB) is trimmed back by a 0.75 gain, so the combo blips cut
 // through the groove on a phone while stacked hits still leave the limiter some headroom, and the big stingers (frenzy,
-// egg, win, finisher, trick, trickStreak, mixed 1.25x hotter) still stand out (comboBreak is a failure: under a link); both meet in a master gain (1.12: groove peaks
-// near -4 dB, only the stingers touch the -2 dB limiter) and a brickwall-ish limiter with a soft clipper. The success
+// egg, win, finisher, trick, trickStreak, mixed 1.25x hotter) still stand out (comboBreak is a failure: under a link); both meet in a master gain (1.12: the L1
+// groove peaks near -4.7 dB with an RMS near -18 (the glue MC, a 14 dB crest, so a phone at a sane volume never gets blasted
+// by a stinger), only the stingers and FRENZY touch the -2 dB limiter) and a brickwall-ish limiter with a soft clipper. The success
 // sounds (link and pass tails, drill taps, close, thread) peak within about 4 dB of the music's 100 ms RMS and the
 // failures (bonk) sit at or under a link; the ladder gains weight as it climbs (see _tailVol, _layers). The volume
 // sliders are perceptual (gain = v * v). Only real hits (bonk, hit, bump,
@@ -80,10 +81,12 @@ const ZONE_FLAVOR = [
 const MENU_HOOK = [[4, 3, 2, 0, null, 2, 3, 5], [4, 3, 2, 0, null, null, 0, null]];   // pentatonic degrees on 8ths
 // the "Million To One" theme: a 4-bar hook in pentatonic degrees (PENTA index) on 16ths, call and answer.
 // Bars 1 and 3 are the call ("one in a mil-lion"), bar 2 answers up in the air on the 5th, bar 4 walks
-// home and resolves to degree 0. The menu whistles it every other 8-bar phrase, the race whistles it over
-// the first 4 bars of every zone, later phrases play seeded variations of it, the win fanfare quotes bar 1
+// home and resolves to degree 0. It is rationed so it stays special: the menu whistles it every 4th 8-bar phrase, the race
+// whistles it over the first 4 bars of the launch, the sea and the egg only (the other zones open with the answer bar
+// alone), later phrases play seeded variations of it, the win fanfare quotes bar 1
 // in brass and the lose sting starts it on a kazoo and gives up on the 4th note.
 const _ = null;
+const THEME_ZONES = [0, 3, 6];      // the zones whose first 4 bars whistle the whole theme (launch, sea, egg); see _step
 const THEME_CALL = [5, _, _, 4, _, _, 5, _, 7, _, 6, _, 5, _, _, _];
 export const THEME = [
   THEME_CALL,
@@ -125,7 +128,18 @@ const CALM_SLP = 6000;              // calm mode: the slow-mo / dip lowpass neve
 // the automatic makeup gain Web Audio adds (0.6 x the full-range gain reduction, here 12 dB, so 7.2 dB)
 const CALM_COMP = { threshold: -18, knee: 6, ratio: 3, attack: 0.005, release: 0.2 };
 const CALM_TRIM = Math.pow(10, -0.6 * (-CALM_COMP.threshold * (1 - 1 / CALM_COMP.ratio)) / 20);
-const FX_TRIM = 0.7;                // the sfx bus trim after its compressor (see unlock)
+// the sfx bus trim after its compressor (see unlock). 0.75 (was 0.7) since the louder glue (MC): a link(5)'s 100 ms RMS
+// measured 4.3 dB under the L1 groove's median 100 ms RMS at 0.7, 3.7 dB at 0.75 (the header's "within about 4 dB")
+const FX_TRIM = 0.75;
+// the music's glue compressor and its makeup trim. Phone loudness: the L1 groove used to peak at -4.9 dBFS with an RMS of
+// -22 (a 17 dB crest), so players turned the phone up and the stingers then blasted them. A lower threshold, a firmer
+// ratio and a fast attack bring the groove's RMS up toward -18 under the same -2 dB limiter ceiling
+const MC = { threshold: -22, knee: 6, ratio: 4, attack: 0.003, release: 0.15 }, MC_TRIM = 1.1;
+// lite (stage 2): the glue compressor's stand-in gain (the L1 groove's RMS about 1.5 dB under the compressed one; its
+// peaks meet the limiter instead), and the music lowpasses count as idle at LP_OPEN Hz or above, LP_HOLD s after their
+// last move (see _liteRoute)
+const MC_BYPASS = 1.6, LP_OPEN = 17900, LP_HOLD = 1.5;
+const KICK_BODY = 0.6;              // the kick body's level into its tanh shaper (see B(); the shaper adds the harmonics)
 // the music's loudness per arrangement level (L0, L1, L2) and in FRENZY: a gain in front of the glue compressor
 export const INT_GAIN = [0.85, 1, 1.12], FRENZY_GAIN = 1.3;
 // the race groove's trim (anything but the waiting room), indexed like INT_GAIN (L0, L1, L2); FRENZY uses the last one.
@@ -161,6 +175,8 @@ const CALM_DUCK = 0.8;
 const TS_HOLD = +TRICK_STREAK_T > 0 ? +TRICK_STREAK_T : 10, TS_STOP = 0.18;
 // the swim bed (A.speed 0..1): a bandpassed noise loop, 350 -> 1600 Hz and 0.015 -> 0.05 with speed, time constant 0.08 s
 const SWIM_F = [350, 1600], SWIM_G = [0.015, 0.05], SWIM_TC = 0.08;
+// the steering voice (A.steer): silent under STEER_MIN, STEER_G (-24 dB) at full speed, attack and release in s
+const STEER_MIN = 0.26, STEER_G = Math.pow(10, -24 / 20), STEER_A = 0.04, STEER_R = 0.16;
 // the Lunger's crouch, LUNGE_CROUCH in core.js: 'pounce' winds up for this long by default
 const POUNCE_DUR = 0.45;
 // rival voices for 'babble' and 'rivalOuch' (RIVALS index): base pitch, the two vowels it alternates, syllable length,
@@ -263,10 +279,10 @@ const GAP = {
   trickStreak: 0.3, overtaken: 0.5, gift: 0.1, bounty: 0.3,
   trickTease: 0.3, trickMiss: 0.3, draftOn: 0.06, slingReady: 0.25, goal: 0.4, pastBest: 0.4, grudge: 0.4,
   pounce: 0.15, babble: 0.35, rivalOuch: 0.3, dashReady: 0.3, count: 0.1, nudge: 0.3,
-  swerve: SWERVE_GAP, gooIn: 0.1, maxed: 0.3, tally: 0.02, quit: 0.5,
+  swerve: SWERVE_GAP, gooIn: 0.1, boop: 0.06, acidIn: 0.15, maxed: 0.3, tally: 0.02, quit: 0.5,
 };
 // sfx that get a little random detune (+-15 cents) and volume (+-12%) so repeats never sound like a machine gun
-const HUMAN = new Set(['sugar', 'dna', 'pop', 'bump', 'bonk', 'dash', 'dashPop']);
+const HUMAN = new Set(['sugar', 'dna', 'pop', 'bump', 'boop', 'bonk', 'dash', 'dashPop']);
 const PENTA12 = [0, 3, 5, 7, 10, 12];
 const TR_SOFT = [0.14, 0.12], TR_HARD = [0.2, 0.18];   // _transient's two noise ticks: default, and the link / pass
 // the prebaked kit voices (see _kit): the same filter, Q, attack and length the live hum() used for each
@@ -322,10 +338,11 @@ export class Audio {
     this._linkN = 0;                           // last combo link count
     this._keyNext = null; this._keyBar = -1; this._keyCrash = false; this._whoopBar = -1;   // pending key change (lands on a downbeat)
     this._fin = 0; this._rollLen = 4;          // finale tempo push (+bpm), length of the pending _rollAt roll in 16ths
-    this._themePend = true; this._themeAt = -99; this._varN = 0; this._themeOn = false;   // the theme's first bar, variation counter
+    this._themePend = true; this._themeAt = -99; this._varN = 0; this._themeOn = false; this._hookBar = 0;   // the theme's first bar, variation counter
     this.calm = false;                         // calm mode (reduced motion): no gasps, shallow ducks, slow filter moves
     this._thr = null; this._thrK = 0; this._thrPan = 0; this._slurpT = 0;   // proximity threat loop
-    this._acid = null; this._acidL = 0; this._crackT = 0;                  // acid sizzle loop
+    this._acid = null; this._acidL = 0; this._crackT = 0; this._acidLow = false;   // acid sizzle loop, GAS under 30% (see acidLow)
+    this._steer = null; this._steerL = 0; this._steerS = 0; this._steerP = 0;     // the steering voice (see steer)
     this._dnaN = 0; this._dnaT = -9;           // DNA streak: arpeggio root in pentatonic degrees
     this._loseV = -1; this._leadN = 0;         // last lose sting variant, drill lead retakes
     this._contest = false; this._hatDuck = -1; // contested drill, hats ducked under a lowE heartbeat until
@@ -593,10 +610,18 @@ export class Audio {
     n.ld.gain.setTargetAtTime(this.calm ? 0 : 70, now, 0.05); n.lp.frequency.setTargetAtTime(this.calm ? 240 : 250, now, 0.05);
     n.bd.gain.setTargetAtTime(this.calm ? 0 : 120, now, 0.05); n.fd.gain.setTargetAtTime(this.calm ? 0 : 0.35, now, 0.05);
   }
-  // 0..1: the player is in acid. A 3000 Hz bandpassed noise sizzle at 0.08 * level, and a crackle tick every
-  // 0.12 s from tick(). Same rules as threat(): built on first use, cheap every frame, never clicks, torn down
-  // after 1.5 s at 0.
+  // 0..1: the player is in acid, and how bad it is (old callers pass 0 or 1). A bandpassed noise sizzle and a crackle
+  // tick from tick(). Its level is 0.06 at a touch, rising with v to 0.08 at 1 (today's level); with A.acidLow (GAS under
+  // 30%) it rises to 0.12 instead, its band glides 3000 -> 4200 Hz and the crackle ticks every 0.06 s instead of 0.12.
+  // Same rules as threat(): built on first use, cheap every frame, never clicks, torn down after 1.5 s at 0.
   get acid() { return this._acidL; }
+  get acidLow() { return this._acidLow; }
+  set acidLow(b) {
+    b = !!b; if (b === this._acidLow) return;
+    this._acidLow = b;
+    if (this._acid && this.ctx) { const L = this._acidL; this._acidL = -1; this.acid = L; }   // re-level and re-tune now
+  }
+  _acidG(v) { return v > 0 ? 0.06 + v * (this._acidLow ? 0.06 : 0.02) : 0; }
   set acid(v) {
     v = this.muted || this.sfxMuted ? 0 : clamp01(v);
     if (!this.ctx) { this._acidL = v; return; }
@@ -607,9 +632,11 @@ export class Audio {
       const c = this.ctx, s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
       s.buffer = this._loopNoise(); s.loop = true; bp.type = 'bandpass'; bp.frequency.value = 3000; bp.Q.value = 1.4; g.gain.value = 0;
       s.connect(bp); bp.connect(g); g.connect(this.fx); s.start(0, Math.random() * LOOP_OFS);
-      this._acid = { g, src: [s], nodes: [bp, g] }; this._acidL = 0;
+      this._acid = { g, bp, f: 3000, src: [s], nodes: [bp, g] }; this._acidL = 0;
     }
-    if (Math.abs(v - this._acidL) > 0.004 || (v === 0 && this._acidL !== 0)) { this._acid.g.gain.setTargetAtTime(0.08 * v, now, 0.02); this._acidL = v; }
+    if (Math.abs(v - this._acidL) > 0.004 || (v === 0 && this._acidL !== 0)) { this._acid.g.gain.setTargetAtTime(this._acidG(v), now, 0.02); this._acidL = v; }
+    const F = this._acidLow ? 4200 : 3000;
+    if (this._acid.bp && this._acid.f !== F) { this._acid.bp.frequency.setTargetAtTime(F, now, 0.15); this._acid.f = F; }
     this._reapLoops(now);
   }
   // current(k, pan): the player rides a flow current. k 0..1 (0 = out of it), pan -1..1 (the current's direction).
@@ -664,6 +691,44 @@ export class Audio {
     s.connect(bp); bp.connect(g); g.connect(this.fx); s.start(0, Math.random() * LOOP_OFS);
     return { g, bp, src: [s], nodes: [bp, g] };
   }
+  // steer(speed01, pan): the steering voice (iPhones get no vibration buzz, so the sideways swim is heard instead). main.js
+  // calls it every frame with |vx| / 460 clamped to 0..1 and the sign of vx, and steer(0, 0) on pause and the result.
+  // A looped noise bed through a bandpass that rises 700 -> 1600 Hz with speed01 (Q 1.2), plus a faint beatbox "fff"
+  // (a 2.6 -> 4.4 kHz band whose pitch bends on a slow wobble). Silent under STEER_MIN, up to -24 dB at 1, panned pan * 0.5,
+  // a 40 ms attack and a 160 ms release, and it breathes under every groove kick (the music's sidechain, see B()).
+  // Built once on first use (when the voice cap has room) and kept; a call per frame costs a few compares. Silent when
+  // muted, with sound effects off, on the menus, the rematch groove and while muffled (the swim bed's rules)
+  steer(speed01, pan = 0) {
+    const sp = clamp01(speed01), pn = Math.max(-1, Math.min(1, +pan || 0));
+    if (!this.ctx) { this._steerS = sp; this._steerP = pn; return; }
+    const now = this.ctx.currentTime, x = sp <= STEER_MIN ? 0 : (sp - STEER_MIN) / (1 - STEER_MIN);
+    const L = this._swimOn() ? STEER_G * Math.pow(x, 1.5) : 0;
+    this._steerS = sp; this._steerP = pn;
+    if (!this._steer) { if (L <= 0 || this._busy(0)) return; this._steer = this._loopSteer(); }
+    const n = this._steer;
+    if (Math.abs(L - this._steerL) > 0.0004 || (L === 0 && this._steerL !== 0)) {
+      n.g.gain.cancelScheduledValues(now); n.g.gain.setTargetAtTime(L, now, L > this._steerL ? STEER_A / 3 : STEER_R / 3); this._steerL = L;
+    }
+    if (L <= 0) return;   // a silent bed keeps its last tone and pan: nothing to move
+    const F = 700 * Math.pow(1600 / 700, sp);
+    if (Math.abs(F - n.f) > n.f * 0.01) { n.bp.frequency.setTargetAtTime(F, now, 0.03); n.fff.frequency.setTargetAtTime(F * 2.75, now, 0.03); n.f = F; }
+    if (n.p && Math.abs(pn - n.pan) > 0.02) { n.p.pan.setTargetAtTime(this._panV(pn * 0.5), now, 0.03); n.pan = pn; }
+  }
+  _loopSteer() {
+    const c = this.ctx, s = c.createBufferSource(), bp = c.createBiquadFilter(), fff = c.createBiquadFilter(), fg = c.createGain(), g = c.createGain(), sc = c.createGain();
+    s.buffer = this._loopNoise(); s.loop = true;
+    bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 1.2;
+    fff.type = 'bandpass'; fff.frequency.value = 1925; fff.Q.value = 2.2; fg.gain.value = 0.35;   // the "fff", about 9 dB under the bed
+    const lfo = c.createOscillator(), ld = c.createGain(); lfo.frequency.value = 2.3; ld.gain.value = 60;   // +-60 cents: the bent pitch
+    lfo.connect(ld); ld.connect(fff.detune); lfo.start();
+    g.gain.value = 0; sc.gain.value = 1;
+    s.connect(bp); bp.connect(g); s.connect(fff); fff.connect(fg); fg.connect(g); g.connect(sc);
+    let p = null;
+    if (c.createStereoPanner) { p = c.createStereoPanner(); p.pan.value = 0; sc.connect(p); p.connect(this.fx); } else sc.connect(this.fx);
+    s.start(0, Math.random() * LOOP_OFS);
+    this._steerL = 0;
+    return { g, sc, bp, fff, p, f: 700, pan: 0 };
+  }
   // the noise a persistent loop plays: the wide 4 s stereo bake (the mono 1 s noiseBuf in mono output, or before the bake)
   _loopNoise() { return !this.mono && this.loopBuf ? this.loopBuf : this.noiseBuf; }
   // a loop whose level has sat at 0 for 1.5 s stops its sources and lets go of its nodes (called from the setters
@@ -697,7 +762,7 @@ export class Audio {
       this.tone('sine', 160, 90, t + 0.04, 0.08, 0.1 * k, this._thr.out, 0.004, 0, 0);
     }
     if (this._acid && this._acidL > 0.03 && now >= this._crackT) {   // a crackle tick
-      this._crackT = now + 0.12; const t = now + 0.005 + Math.random() * 0.03;
+      this._crackT = now + (this._acidLow ? 0.06 : 0.12); const t = now + 0.005 + Math.random() * 0.03;
       this.hum(t, 0.004, 0.06 * this._acidL + 0.02, 'bandpass', 2500 + Math.random() * 3500, 3, this.fx, 0, 0.0008, 0);
     }
   }
@@ -746,7 +811,7 @@ export class Audio {
       const x = i / (cn - 1) * 2 - 1, a = Math.abs(x);
       cc[i] = Math.sign(x) * (a <= knee ? a : knee + (ceil - knee) * Math.tanh((a - knee) / (ceil - knee)));
     }
-    clip.curve = cc; clip.oversample = '2x';
+    clip.curve = cc; clip.oversample = this._stage >= 1 ? 'none' : '2x'; this.clip = clip;
     this.master.connect(hp); hp.connect(lim); lim.connect(clip); clip.connect(c.destination); this.limiter = lim; this.hp = hp;
     // calm mode's gentle master compressor and its makeup trim: built now, patched in between master and hp only while
     // calm (see _calmRoute), so the normal chain stays exactly as it is
@@ -755,8 +820,8 @@ export class Audio {
     const ctr = c.createGain(); ctr.gain.value = CALM_TRIM; cc2.connect(ctr);
     this._calmComp = cc2; this._calmTrim = ctr; this._calmIn = false;
     // sound effects: own volume, then a soft bus compressor so stacked hits stay even. The compressor
-    // adds about +6 dB of automatic makeup gain, so a 0.7 trim after it keeps stacked hits off the limiter
-    // (0.7, not less: the combo blips have to cut through the music on a phone speaker)
+    // adds about +6 dB of automatic makeup gain, so a 0.75 trim (FX_TRIM) after it keeps stacked hits off the limiter
+    // (not less: the combo blips have to cut through the music on a phone speaker)
     this.fx = c.createGain(); this.fx.gain.value = this._fxLevel();
     const fc = c.createDynamicsCompressor();
     fc.threshold.value = -14; fc.knee.value = 6; fc.ratio.value = 4; fc.attack.value = 0.003; fc.release.value = 0.12;
@@ -779,11 +844,14 @@ export class Audio {
     // it is heard as a real level change, not squashed back (see _applyInt)
     this.igain = c.createGain(); this.igain.gain.value = this._igainV(); this._igTo = this.igain.gain.value;
     const mc = c.createDynamicsCompressor();
-    mc.threshold.value = -16; mc.knee.value = 6; mc.ratio.value = 3; mc.attack.value = 0.01; mc.release.value = 0.25;
+    mc.threshold.value = MC.threshold; mc.knee.value = MC.knee; mc.ratio.value = MC.ratio; mc.attack.value = MC.attack; mc.release.value = MC.release;
     this.music.connect(this.mduck); this.mduck.connect(this.mlp); this.mlp.connect(this.slp); this.slp.connect(this.tlp);
     this.tlp.connect(peak); peak.connect(pres); pres.connect(shelf); shelf.connect(mc); this.mcomp = mc;
     // the glue compressor's automatic makeup gain is about +8 dB: trim it back so the music alone stays clear of the limiter
-    const mt = c.createGain(); mt.gain.value = 0.8; mc.connect(mt); mt.connect(this.igain); this.igain.connect(this.master);
+    const mt = c.createGain(); mt.gain.value = MC_TRIM; mc.connect(mt); mt.connect(this.igain); this.igain.connect(this.master);
+    // lite (stage 2): the glue compressor's bypass, a plain gain standing in for its average level (see _liteRoute)
+    this._mcByG = c.createGain(); this._mcByG.gain.value = MC_BYPASS; this._mcByG.connect(this.igain);
+    this._mPeak = peak; this._mShelf = shelf; this._mcBy = false; this._lpOut = false; this._lpHold = -1; this._lpChk = -1;
     // a dotted-eighth echo, the beatboxer's favourite pedal: one for the music, one for the fx
     const mkEcho = (dest, fbv, wetv) => {
       const inp = c.createGain(), d = c.createDelay(1.5), dl = c.createBiquadFilter(), fb = c.createGain(), wet = c.createGain();
@@ -866,7 +934,7 @@ export class Audio {
     this.tsLp = c.createBiquadFilter(); this.tsLp.type = 'lowpass'; this.tsLp.frequency.value = 18000; this.tsLp.Q.value = 0.7;
     this.tsBus.connect(this.tsLp); this.tsLp.connect(this.music);
     this.tsBassLp = c.createBiquadFilter(); this.tsBassLp.type = 'lowpass'; this.tsBassLp.frequency.value = 1400; this.tsBassLp.Q.value = 0.8; this.tsBassLp.connect(this.tsBus);
-    this._applyTlp(); this._applyTrem(); this._calmRoute();
+    this._applyTlp(); this._applyTrem(); this._calmRoute(); this._liteRoute(c.currentTime);
   }
   // the scheduler's own clock: tick() every 40 ms, so the beat keeps its lookahead even when frames stall
   // (main.js still calls tick() every frame; tick() is idempotent, a second call in the same ms does nothing)
@@ -929,7 +997,7 @@ export class Audio {
   }
   // dull the music (pause menu, mutation cards). Optional: the game works without calling it.
   // A muffle (a card deal, pause) also tears the proximity loops down; they rebuild when main.js sets them again.
-  setMuffle(on) { this._muffled = !!on; if (!this.ctx) return; if (on) this._killLoops(); const t = this.ctx.currentTime; this.mlp.frequency.cancelScheduledValues(t); this.mlp.frequency.setTargetAtTime(on ? 650 : 18000, t, this._ftc(on ? 0.06 : 0.15)); }
+  setMuffle(on) { this._muffled = !!on; if (!this.ctx) return; this._lpWake(); if (on) this._killLoops(); const t = this.ctx.currentTime; this.mlp.frequency.cancelScheduledValues(t); this.mlp.frequency.setTargetAtTime(on ? 650 : 18000, t, this._ftc(on ? 0.06 : 0.15)); }
   // calm mode (main.js passes S.reduced): no hit-stop gasps or micro ducks, ducks never below 0.8, filter
   // moves take about 0.4 s, and the proximity growl is softer and steadier (see threat()). It tames peaks too: the
   // stingers (frenzy, second, win, the shield hit) play 4 dB lower, every heartbeat (the duel bed included) loses
@@ -946,9 +1014,50 @@ export class Audio {
   }
   // quality stage (main.js's 0 full, 1 reduced, 2 lite): the voice cap drops 48 / 36 / 28, and stage 2 (lite) also
   // sings say() vowels without their harmony voices. Safe before unlock() (it only sets numbers).
+  // From stage 1 the master's soft clipper runs without oversampling, and stage 2 also takes the music's glue compressor
+  // out (a plain gain stands in for it) and splices the three music lowpasses (muffle, slow-mo, tension) out of the chain
+  // while all three sit wide open at 18 kHz; any muffle, slow-mo, impact or tension move patches them back in first
+  // (_lpWake), the same hot swap as _calmRoute. The limiter always stays.
   setStage(st) {
     st = Math.max(0, Math.min(2, (+st || 0) | 0));
     this._stage = st; this._cap = CAP_STAGE[st]; this._lite = st >= 2;
+    if (this.clip) { try { this.clip.oversample = st >= 1 ? 'none' : '2x'; } catch (e) { /* ignore */ } }
+    if (this.ctx) this._liteRoute(this.ctx.currentTime);
+  }
+  // stage 2's routing (see setStage): the glue compressor in or out, and the idle lowpasses spliced out (mduck -> the
+  // 250 Hz lift directly) or back in. Disconnect first, as in _calmRoute: a browser that cannot disconnect one
+  // destination throws before anything changed, and the chain stays as it is
+  _liteRoute(now) {
+    if (!this._mPeak || !this.mduck) return;
+    const lite = this._stage >= 2;
+    if (lite !== this._mcBy) {
+      try {
+        if (lite) { this._mShelf.disconnect(this.mcomp); this._mShelf.connect(this._mcByG); }
+        else { this._mShelf.disconnect(this._mcByG); this._mShelf.connect(this.mcomp); }
+        this._mcBy = lite;
+      } catch (e) { /* keep the chain as it is */ }
+    }
+    const out = lite && this._lpIdle(now);
+    if (out !== this._lpOut) {
+      try {
+        if (out) { this.mduck.disconnect(this.mlp); this.mduck.connect(this._mPeak); }
+        else { this.mduck.disconnect(this._mPeak); this.mduck.connect(this.mlp); }
+        this._lpOut = out;
+      } catch (e) { /* keep the chain as it is */ }
+    }
+  }
+  // the three music lowpasses are idle: nothing wants them (no muffle, slow-mo, impact, tension, menu or rematch filter),
+  // the last move is LP_HOLD s old, and all three read wide open
+  _lpIdle(now) {
+    if (this._muffled || this._slowOn || this._impPend || now < this._impUntil || now < this._lpHold || this._rematch) return false;
+    for (const f of [this.mlp, this.slp, this.tlp]) if (!f || !(f.frequency.value >= LP_OPEN)) return false;
+    return true;
+  }
+  // a muffle, slow-mo, impact or tension / menu filter move is about to start: lowpasses back in now, kept LP_HOLD s
+  _lpWake() {
+    if (!this.ctx) return;
+    this._lpHold = this.ctx.currentTime + LP_HOLD;
+    if (this._lpOut) this._liteRoute(this.ctx.currentTime);
   }
   // the old switch, kept as an alias: setLite(true) is stage 2; setLite(false) leaves a stage 1 alone
   setLite(on) { if (on) this.setStage(2); else if (this._stage >= 2) this.setStage(0); }
@@ -962,6 +1071,7 @@ export class Audio {
     for (const x of this._xfeed || []) { x.gain.cancelScheduledValues(now); x.gain.setValueAtTime(this.mono ? 1 : 0.33, now); }
     if (this._thr && this._thr.p) this._thr.p.pan.setTargetAtTime(this._panV(this._thrPan), now, 0.02);
     if (this._cur && this._cur.p) this._cur.p.pan.setTargetAtTime(this._panV(this._curPan * 0.6), now, 0.05);
+    if (this._steer && this._steer.p) this._steer.p.pan.setTargetAtTime(this._panV(this._steer.pan * 0.5), now, 0.03);
   }
   _panV(v) { return this.mono ? 0 : v; }
   // calm on: master -> calm compressor -> trim -> hp; calm off: master -> hp, exactly as unlock() built it
@@ -1044,6 +1154,7 @@ export class Audio {
   _slpMin(f) { return this.calm ? Math.max(CALM_SLP, f) : f; }
   // move the slowmo lowpass, unless an impact() is holding it; the impact's release then lands on _slowF()
   _slpTo(f, tc) {
+    this._lpWake();
     const now = this.ctx.currentTime, p = this.slp.frequency;
     if (now < this._impFUntil) { p.cancelScheduledValues(this._impFUntil); p.setTargetAtTime(f, this._impFUntil, REL_TC); return; }
     p.cancelScheduledValues(now); p.setTargetAtTime(f, now, this._ftc(tc));
@@ -1059,6 +1170,7 @@ export class Audio {
   // a broken 25+ chain: the slow-mo lowpass dips to f for dur, then back to where slow-mo wants it
   _slpDip(now, f, dur) {
     if (!this.ctx || !this.slp) return;
+    this._lpWake();
     const p = this.slp.frequency, to = this._slpMin(Math.min(f, this._slowF()));
     hold(p, now); p.setTargetAtTime(to, now, this._ftc(0.02)); p.setTargetAtTime(this._slowF(), now + dur, this._ftc(0.06));
     if (to < SHUT_F) this._shutAt = Math.max(this._shutAt, now + dur + 0.15);
@@ -1091,6 +1203,7 @@ export class Audio {
     const c = this.ctx, now = c.currentTime, msv = +ms || 0, sec = Math.max(0.02, Math.min(0.5, msv / 1000)), end = now + sec, safe = end + IMP_SAFE;
     const dv = Math.max(0.05, Math.min(1, +depth || 0.5));
     const g = this.mduck.gain, f = this.slp.frequency, shut = this._shut(now);
+    this._lpWake();
     if (!this._impPend) { this._lkHoldPre = this._lkHold; this._shutPre = this._shutAt; }   // what the release falls back to
     g.cancelScheduledValues(now); g.setTargetAtTime(dv, now, 0.006); g.setTargetAtTime(1, safe, REL_TC);
     this._mdUntil = Math.max(this._mdUntil, safe); this._mdLast = now;
@@ -1140,6 +1253,7 @@ export class Audio {
     const menu = this._menu(this._int), win = menu && this._winRoom(), ml = win ? WIN_TLP : MENU_TLP[this._menuKind] || 3200;
     const lim = this._rematch && !this._rmOpen ? 400 : menu ? ml : 18000;
     const f = Math.min(tc, lim), t = this.ctx.currentTime, p = this.tlp.frequency, open = this._unlockAt + TITLE_OPEN;
+    if (f < LP_OPEN || !(p.value >= LP_OPEN)) this._lpWake();   // closing (or not yet open): the lowpasses belong in the chain
     if (win && f > 3200 && t < this._outAt + WIN_OPEN) {   // a win: 3200 Hz until the fanfare's last chord, then open over WIN_OPEN s
       if (this._winGlide === this._outAt) return;          // already gliding there (a repeat call must not restart it)
       this._winGlide = this._outAt;
@@ -1191,7 +1305,7 @@ export class Audio {
     this._zone = 0; this._zoneBar = (this.stepI >> 4) + 1; this._fin = 0;
     this._keyNext = null; this._keyCrash = false; this._whoopBar = -1; this._themePend = true; this._themeAt = -99;
     this._tlift = 0; this._tliftPend = false; this._tliftEnd = -1; this._streakReset();
-    this._lastPassN = -1; this._elift = 0; this._eggHit = -1; this._kevPass = 0;
+    this._lastPassN = -1; this._elift = 0; this._eggHit = -1; this._kevPass = 0; this._acidLow = false;
     const seeded = seed !== undefined && seed !== null && seed !== '' && Number.isFinite(+seed), sv = seeded ? Math.abs(+seed | 0) : 0;
     this._varN = seeded ? sv % 1000000 : (Math.random() * 1e6) | 0;
     this.fillN = seeded ? (sv >>> 3) % FILLS.length : this.fillN + Math.floor(Math.random() * 5);
@@ -1228,7 +1342,7 @@ export class Audio {
   _rematchOpen(now) {
     const spb = 60 / this._bpm / 4;
     let q = this._grid(now, 4); while (q < now + 0.6) q += 4 * spb;
-    this._rmOpen = true;
+    this._rmOpen = true; this._lpWake();
     const p = this.tlp.frequency, f = this._tension > 0.5 ? 18000 * Math.pow(1200 / 18000, (this._tension - 0.5) / 0.5) : 18000;
     p.cancelScheduledValues(now); p.setValueAtTime(400, now); p.setValueAtTime(400, q - 0.6); p.exponentialRampToValueAtTime(f, q);
     return q;
@@ -1391,10 +1505,13 @@ export class Audio {
   // harmonics (200..400 Hz) carry the kick on a phone speaker, a 330 Hz triangle knock and a lip click
   B(t, v = 1, dest = this.music) {
     this.tone('sine', 185, 46, t, 0.22, 0.35 * v, dest, 0.002, 0.09);
-    this.tone('sine', 160, 95, t, 0.12, 0.75 * v, this._shaped(dest), 0.002, 0.09);
+    this.tone('sine', 160, 95, t, 0.12, KICK_BODY * v, this._shaped(dest), 0.002, 0.09);
     this.tone('triangle', 330, 190, t, 0.06, 0.22 * v, dest, 0.002, 0.04);
     this.hum(t, 0.008, 0.35 * v, 'bandpass', 1200, 1.2, dest, 0, 0.001);
     this._kicks[this._kickI] = t; this._kickI = (this._kickI + 1) & 7;
+    if (this._steer && this._steerL > 0 && dest === this.music) {   // the steering voice breathes under the groove's kick
+      const g = this._steer.sc.gain; g.setTargetAtTime(this.calm ? 0.8 : 0.5, t, 0.004); g.setTargetAtTime(1, t + 0.05, 0.08);
+    }
   }
   Pf(t, v = 1, dest = this.music) {        // the classic "Pf" snare
     this.hum(t, 0.13, 0.5 * v, 'bandpass', 2100, 0.7, dest);
@@ -1499,8 +1616,10 @@ export class Audio {
     }
     if (!silent) this._loops(now);
     if (this._swim) this._swimApply(now);   // a menu, the muffle or a mute silences the bed even when main.js stops setting speed
+    if (this._steer && this._steerL > 0 && !this._swimOn()) this.steer(0, this._steerP);   // the same for the steering voice
     if (this._tsLvl && silent && now > this._tsUntil) this._streakReset();   // muted past its hold: no stale tape stop later
     if (this._thr || this._cur || this._acid || this._swim) this._reapLoops(now);
+    if (this._stage >= 2 && now >= this._lpChk) { this._lpChk = now + 0.25; this._liteRoute(now); }   // lite: splice idle lowpasses out
   }
   // the tension level the heartbeat bed plays at (never below 0.6 in a contested drill); 0.02 or less: no bed
   _bedT() { return this._contest ? Math.max(0.6, this._tension) : this._tension; }
@@ -1572,11 +1691,11 @@ export class Audio {
         this._padVowel(v, t, 0.25);
         chord.forEach((s, j) => { let f = 220 * st(this.key + s); while (f > 420) f /= 2; while (f < 190) f *= 2; this._pad(f, t, spb * 16 * 0.98, 0.02, 0.2, j); });
       }
-      // even 8-bar phrases: the theme (bars 0..3); odd ones: the old 2-bar waiting-room hook
+      // every 4th 8-bar phrase: the theme (bars 0..3); odd ones: the old 2-bar waiting-room hook; the rest stay open
       const hb = bar & 7;
-      if (((bar >> 3) & 1) === 0) {
+      if (((bar >> 3) & 3) === 0) {
         if (hb < 4 && THEME[hb][i] !== null) this._whistle(t, themeBase(this.key) * st(PENTA[THEME[hb][i]]), spb * (THEME_LEN[hb][i] - 0.3), null, 0.05);
-      } else if (hb < 2 && i % 2 === 0) {
+      } else if (((bar >> 3) & 1) === 1 && hb < 2 && i % 2 === 0) {
         const d = MENU_HOOK[hb][i >> 1];
         if (d !== null) this._whistle(t, themeBase(this.key, 1500, HOOK_HI) * st(PENTA[d]), spb * 1.7, null, 0.05);
       }
@@ -1604,13 +1723,15 @@ export class Audio {
         if (this.fillBar === bar) this.barBase = bar + 1;
         this.crashBar = bar + 1; this.fillBar = -1;
       }
-      // the theme over the first 4 bars of every zone (from the first phrase start after the zone began),
+      // the theme is rationed so it stays special: the full 4 bars open only the launch, the sea and the egg (THEME_ZONES,
+      // from the first phrase start after the zone began); every other zone opens with the answer bar alone (THEME[1]),
       // then seeded variations of it, a new one every phrase
       if (pb === 0 && this._themePend) { this._themePend = false; this._themeAt = bar; }
-      const tb = bar - this._themeAt;
-      this._themeOn = tb >= 0 && tb < 4;
-      if (this._themeOn) { this.motif = THEME[tb]; this._hatDuck = Math.max(this._hatDuck, t0 + 16 * spb - 0.005); }   // the hats sit back under the hook
-      else if (pb === 0 || !this.motif || tb === 4) this._newMotif();
+      const tb = bar - this._themeAt, full = THEME_ZONES.includes(this._zone);
+      this._themeOn = Audio.hookBar(this._zone, tb) >= 0;
+      this._hookBar = full ? tb : 1;
+      if (this._themeOn) { this.motif = THEME[this._hookBar]; this._hatDuck = Math.max(this._hatDuck, t0 + 16 * spb - 0.005); }   // the hats sit back under the hook
+      else if (pb === 0 || !this.motif || tb === 4 || (!full && tb === 1)) this._newMotif();
       if (this._drillOn && this._duelK !== null && !this._slow) this._duelBar(t, spb);
     }
     // the B section: odd 8-bar phrases outside FRENZY (and outside the theme and the egg duel) pluck the phrase's
@@ -1697,7 +1818,7 @@ export class Audio {
     if (!stop && this.motif && this.motif[i] !== null) {
       // one octave for the whole line: the theme's own (degree 7 under 1500 Hz), a variation's from its own top degree
       const s = PENTA[this.motif[i]], hi = this._motifHi();
-      const tl = this._themeOn ? THEME_LEN[bar - this._themeAt] : null;
+      const tl = this._themeOn ? THEME_LEN[this._hookBar] : null;
       if (tl) { const ln = tl[i]; this._whistle(t, themeBase(this.key) * st(s), spb * (ln - 0.3), s, 0.08, true, ln >= 2); }
       else if (fz && L === 2) this._whistle(t, themeBase(this.key, 1500, hi) * st(s), spb * 1.7, s);
       if (bNote && !stop) this._pluck(t, themeBase(this.key, 1100, hi) * st(s), 0.05, M, 0);
@@ -2003,6 +2124,50 @@ export class Audio {
     }
     return { themeShape, winShape };
   }
+  // which THEME bar the race whistles in zone z, tb bars after the zone's theme start: -1 for none. The launch, the sea
+  // and the egg (THEME_ZONES) get all 4 bars; every other zone opens with the answer bar (1) alone
+  static hookBar(z, tb) { return THEME_ZONES.includes(z) ? (tb >= 0 && tb < 4 ? tb : -1) : tb === 0 ? 1 : -1; }
+  // round 3's audio rules, on a recording stand-in for an AudioContext (node, no audio). Returns:
+  //   boop / acidIn: oscillators built (> 0), and nothing at all when muted (mutedSilent)
+  //   comboEndLen: the triangle's glide length for n 5, 15 and 40 (0.25, 0.4, 0.6); comboEndKazoo: sawtooth voices for
+  //     n 15 and 40 (0 and > 0: only 30+ gets the kazoo); comboEndBare: a bare comboEnd() does not throw
+  //   dnaOctave: the second square note over the first for a streak step 0 and step 3 (under 2x, then over 2x)
+  //   hooks: hookBar for zones 0..6 at tb 0, 1, 2 (full theme in 0, 3, 6, the answer bar alone elsewhere)
+  //   acidG: the sizzle's level for [v 1, v 1 with acidLow, a touch] ([0.08, 0.12, ~0.06]); acidLowF: its band with acidLow
+  //   steer: { mutedNone, slowNone, built, rebuilt }: nothing built when muted or under STEER_MIN, one bed at full speed,
+  //     and no new source on 30 more calls
+  static _round3Facts() {
+    const oscs = [], srcs = [], filt = [];
+    const param = (v) => ({ value: v, ev: [], setValueAtTime(x, t) { this.ev.push([t, x]); }, exponentialRampToValueAtTime(x, t) { this.ev.push([t, x]); },
+      linearRampToValueAtTime(x, t) { this.ev.push([t, x]); }, setTargetAtTime(x, t) { this.ev.push([t, x]); this.value = x; }, cancelScheduledValues() {}, cancelAndHoldAtTime() {} });
+    const node = () => ({ connect() {}, disconnect() {}, start() {}, stop() {}, gain: param(1), frequency: param(440), Q: param(1), detune: param(0), playbackRate: param(1), pan: param(0), type: '' });
+    const ctx = { currentTime: 1, state: 'running', sampleRate: 44100, createGain: node, createStereoPanner: node,
+      createBiquadFilter: () => { const f = node(); filt.push(f); return f; }, createBufferSource: () => { const b = node(); srcs.push(b); return b; },
+      createOscillator: () => { const o = node(); oscs.push(o); return o; } };
+    const mk = () => { const a = new Audio(); a._hasSession = () => false; a.ctx = ctx; a._cap = 1e9; a.fx = node(); a.fxEcho = node(); a.music = node(); a.tlp = node(); a.mlp = node(); a.slp = node(); a.mduck = node(); a.echo = node(); return a; };
+    const run = (a, name, k) => { ctx.currentTime += 1; oscs.length = 0; srcs.length = 0; a.sfx(name, k); return { o: oscs.slice(), s: srcs.length }; };
+    const a = mk();
+    const boop = run(a, 'boop').o.length, acidIn = run(a, 'acidIn').o.length;
+    const mu = mk(); mu.muted = true; const ms = run(mu, 'boop'), ma = run(mu, 'acidIn');
+    const mutedSilent = ms.o.length + ms.s + ma.o.length + ma.s === 0;
+    const comboEndLen = [], comboEndKazoo = [];
+    for (const n of [5, 15, 40]) {
+      a._passF = a._scaleF(n, 440); const o = run(a, 'comboEnd', { n }).o, tri = o.find((x) => x.type === 'triangle');
+      comboEndLen.push(tri ? Math.round(100 * (tri.frequency.ev[1][0] - tri.frequency.ev[0][0])) / 100 : 0);
+      if (n > 5) comboEndKazoo.push(o.filter((x) => x.type === 'sawtooth').length);
+    }
+    let comboEndBare = true; try { run(a, 'comboEnd'); run(a, 'boop'); run(a, 'acidIn'); } catch (e) { comboEndBare = false; }
+    const dnaOctave = [0, 3].map((n) => { const d = mk(); d._dnaN = n - 1; d._dnaT = ctx.currentTime + 1; if (n === 0) d._dnaT = -9; const sq = run(d, 'dna').o.filter((x) => x.type === 'square'); return sq.length === 2 ? Math.round(100 * sq[1].frequency.ev[0][1] / sq[0].frequency.ev[0][1]) / 100 : 0; });
+    const hooks = [0, 1, 2, 3, 4, 5, 6].map((z) => [0, 1, 2].map((tb) => Audio.hookBar(z, tb)));
+    const ac = mk(), acidG = [ac._acidG(1)]; ac.acidLow = true; acidG.push(ac._acidG(1)); ac.acidLow = false; acidG.push(Math.round(1000 * ac._acidG(0.01)) / 1000);
+    const al = mk(); al.acid = 1; al.acidLow = true; const acidLowF = al._acid ? al._acid.f : 0;
+    const sm = mk(); sm.on = true; sm._int = 1; sm.muted = true; srcs.length = 0; sm.steer(1, 1); const mutedNone = srcs.length === 0 && !sm._steer;
+    const ss = mk(); ss.on = true; ss._int = 1; srcs.length = 0; ss.steer(0.2, 1); const slowNone = srcs.length === 0 && !ss._steer;
+    ss.steer(1, 1); const built = srcs.length;
+    for (let j = 0; j < 30; j++) { ctx.currentTime += 0.016; ss.steer(j / 30, j & 1 ? 1 : -1); }
+    const rebuilt = srcs.length - built;
+    return { boop, acidIn, mutedSilent, comboEndLen, comboEndKazoo, comboEndBare, dnaOctave, hooks, acidG, acidLowF, steer: { mutedNone, slowNone, built, rebuilt } };
+  }
   // this round's cue rules, on a recording stand-in for an AudioContext (node, no audio). Returns:
   //   popChain: [_popN after pop(3), then a bare pop 0.5 s later, then one 0.75 s later, then pop({ chain: 1 })] = [2, 3, 0, 0]
   //   maxed: brass saws for { capstone: true }, for { id } (0: a two-note coin sting, squares), and for no argument
@@ -2296,7 +2461,7 @@ export class Audio {
   // names: pass (k = combo), link ({ n, kind }), sugar, dna, shield, alkali/fizz, dash, bonk, bump, hit,
   // clang, pop, chomp, frenzy (k = tier), frenzyEnd, second, zone, egg, pick, cards, reroll, drill (k = taps),
   // win (k = rival index when you beat a drilling rival), lose, tap (k = 0..1), buy, combo (k = combo),
-  // comboEnd (k = combo), comboBreak (k = the combo it destroyed: <10 a scratch, 10+ a falling run and a dry beat,
+  // comboEnd (k = combo, or { n }: longer and lower for a bigger chain), comboBreak (k = the combo it destroyed: <10 a scratch, 10+ a falling run and a dry beat,
   // 25+ a longer run, a 900 Hz dip and a dry bar), comboBank (k = grade 0..4), boss (k = rival index), bossTaunt (k),
   // eggClaim, drillShove, surf, heart, mutation, synergy (k = fresh), close, thread, blast (k = count),
   // record, legendary, milestone, event, lowE, lockon (k = pan -1..1), land, clutch, finisher (k = grade 0..4),
@@ -2319,6 +2484,7 @@ export class Audio {
   // rivalOuch (k = rival index), dashReady (the dash is charged), quit (a quit or a sim fault: a tape stop and one soft pluck,
   // never a jeer), swerve ({ pan, v }: a quick steer, rate-limited here), gooIn ({ surf }: into the goo), maxed ({ id,
   // capstone }: a mutation maxed out; only a capstone gets the brass), tally ({ i, n }: one cash-in multiplier step).
+  // boop (bumping a dozing popcorn Macro: a soft boing under a bump), acidIn (the first touch of an acid puddle: a "tss").
   // record is the true NEW RECORD only. While a win/lose stinger rings, record and medal answer it (see _outAnswer).
   // A medal within 0.5 s of a record plays 0.5 s after the record instead of on top of it.
   sfx(name, k) {
@@ -2498,11 +2664,14 @@ export class Audio {
       }
       case 'dna': {             // coin arpeggio in key; a streak walks its root up the pentatonic
         let b0 = 440 * st(K); while (b0 > 880) b0 /= 2;
-        const n = this._dnaN, b = b0 * st(pen(n)), b2 = b0 * st(pen(n + 2));
-        this.tone('square', b, 0, t, 0.05, 0.09, fx, 0.002);
-        this.tone('square', b2, 0, t + 0.055, 0.22, 0.09, fx, 0.002);
-        this.tone('sine', b * 2, 0, t + 0.11, 0.18, 0.06, fx);
-        this.tone('sine', b2 * 2, 0, t + 0.15, 0.25, 0.04, this.fxEcho);
+        // a 5 kHz "chink" on top as the transient; from the 4th of a streak the second note jumps an octave, above the pads
+        // (the bass's octave saw and the pads live in 440..880 Hz, where the coin used to hide)
+        const n = this._dnaN, b = b0 * st(pen(n)), b2 = b0 * st(pen(n + 2)) * (n >= 3 ? 2 : 1);
+        this.hum(t, 0.006, 0.08, 'highpass', 5000, 0.7, fx, 0, 0.001);
+        this.tone('square', b, 0, t, 0.05, 0.14, fx, 0.002);
+        this.tone('square', b2, 0, t + 0.055, 0.22, 0.14, fx, 0.002);
+        this.tone('sine', b * 2, 0, t + 0.11, 0.18, 0.09, fx);
+        this.tone('sine', b2 * 2, 0, t + 0.15, 0.25, 0.06, this.fxEcho);
         break;
       }
       case 'shield': {          // shiny up arpeggio with a metallic ping
@@ -2522,17 +2691,29 @@ export class Audio {
         this.hum(t, 0.03, 0.3, 'bandpass', 1200, 1, fx);
         break;
       case 'bonk': {            // squelchy goo: a resonant filter sliding down and a wobbling plop
-        // a failure: never louder than a link (0.36 / 0.34, about 1 dB under it, so the +-12% humanise stays under too)
-        this.hum(t, 0.28, 0.36, 'bandpass', 1500, 7, fx, 170, 0.004, 1, DUCK);
-        const o = this.tone('sine', 280, 0, t, 0.26, 0.34, fx, 0.003);
-        if (o) this._wob(o, t, 280, [[150, 0.05], [210, 0.09], [110, 0.15], [130, 0.19], [55, 0.26]]);
-        this.say(t + 0.02, [150], 'oo', 'uh', 0.18, 0.1, 0.1, 0.7);
+        // a failure: never louder than a link. Short (0.2 s) and the low plop (the RMS) light: in headless Chromium its RMS
+        // sits within 1 dB of a link(5)'s and its peak about 3.5 dB under (it rang 0.28 s and measured 5..7 dB hotter)
+        this.hum(t, 0.2, 0.34, 'bandpass', 1500, 7, fx, 170, 0.004, 1, DUCK);
+        const o = this.tone('sine', 280, 0, t, 0.2, 0.18, fx, 0.003);
+        if (o) this._wob(o, t, 280, [[150, 0.04], [210, 0.07], [110, 0.12], [130, 0.15], [55, 0.2]]);
+        this.say(t + 0.02, [150], 'oo', 'uh', 0.18, 0.06, 0.1, 0.7);
         break;
       }
       case 'bump': {            // springy boing off a rival
         const o = this.tone('sine', 220, 0, t, 0.22, 0.3, fx, 0.003, 0, 1, DUCK);
         if (o) this._wob(o, t, 220, [[480, 0.04], [300, 0.1], [380, 0.14], [260, 0.22]]);
         this.hum(t, 0.03, 0.2, 'lowpass', 1200, 1, fx);
+        break;
+      }
+      case 'boop': {            // bumped a dozing popcorn Macro: a soft rubbery boing, 300 -> 520 Hz with a little wobble, under a bump
+        const o = this.tone('sine', 300, 520, t, 0.12, 0.22, fx, 0.004);
+        if (o) this._wob(o, t, 300, [[460, 0.03], [400, 0.055], [540, 0.085], [520, 0.12]]);
+        this.hum(t, 0.015, 0.08, 'lowpass', 1500, 1, fx);
+        break;
+      }
+      case 'acidIn': {          // the first touch of an acid puddle: a bright 90 ms "tss" (4.5 kHz noise) over a 600 -> 200 Hz sine drop
+        this.hum(t, 0.09, 0.18, 'bandpass', 4500, 1.6, fx, 3200, 0.002);
+        this.tone('sine', 600, 200, t, 0.09, 0.18, fx, 0.003);
         break;
       }
       case 'hit':               // something big hit your shield: clang plus a thud (and Kevin's "oof")
@@ -2906,9 +3087,16 @@ export class Audio {
         // the run's base) down to two pentatonic degrees under the chain's first note in 0.3 s, a triangle with a lip "pff"
         const n = Math.max(0, numArg(k, 'n')), b0 = this._runBase(0, 440, K) * st(K), f0 = this._passF > 0 ? this._passF : b0;
         let fE = b0 * st(penD(-2)); while (fE >= f0 * 0.94) fE /= 2;   // always a fall, whatever octave the chain ended in
-        const v = n >= 25 ? 0.12 : n >= 10 ? 0.09 : 0.05;
+        // the bigger the chain, the longer and lower the deflate: under 10 a 0.25 s slide, 10..29 0.4 s and an octave lower
+        // at the end, 30+ 0.6 s and a deflating kazoo "pfft" when it runs out of air
+        const v = n >= 25 ? 0.12 : n >= 10 ? 0.09 : 0.05, len = n >= 30 ? 0.6 : n >= 10 ? 0.4 : 0.25;
+        if (n >= 10 && fE / 2 >= 140) fE /= 2;   // lower, but never under what a phone speaker still plays
         this.hum(t, 0.03, 0.5 * v + 0.04, 'bandpass', 1200, 1.5, fx, 0, 0.002);
-        this.tone('triangle', f0, fE, t, 0.36, v, fx, 0.006, 0.3);
+        this.tone('triangle', f0, fE, t, len + 0.06, v, fx, 0.006, len);
+        if (n >= 30) {
+          this.say(t + len * 0.45, [fE * 2, fE * 2.01], 'ee', 'oo', len * 0.6, 0.03, len * 0.5, 0.6, fx, 0);
+          this.hum(t + len + 0.02, 0.1, 0.08, 'bandpass', 900, 1.2, fx, 300, 0.008);
+        }
         break;
       }
       case 'comboBreak': {      // a record scratch; a 10+ chain also falls down the ladder it climbed (see _breakRun)
