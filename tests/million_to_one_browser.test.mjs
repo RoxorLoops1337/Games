@@ -90,12 +90,12 @@ ok(await page.evaluate(() => Object.keys(game.race.muts).length === 1 && !game.r
 ok(await page.evaluate(() => window.__both.length === 0), 'swim 1 never shows the coach strip and a lesson card together ' + (await page.evaluate(() => window.__both.slice(0, 2).join(' | '))));
 
 // hit-stop replace: inside the 80 ms window a bigger hit takes over the running hold, a smaller one never does
-// Arrange: a 30 ms hold running
-const hsRes = await page.evaluate(() => { const h = game.hs, p = game.race.p; h.frozen = 0; h.hitStop(30, p.x, p.y, 'pop');
+// Arrange: a 50 ms hold running (holds under 45 ms are zoom punches, not holds)
+const hsRes = await page.evaluate(() => { const h = game.hs, p = game.race.p; h.frozen = 0; h.hitStop(50, p.x, p.y, 'pop');
   // Act: a smaller and then a much bigger hit in the same frame
   h.hitStopRL(20, p.x, p.y, 'pop'); const small = h.hold ? h.hold.ms : -1; h.hitStopRL(90, p.x, p.y, 'bump'); return { small, big: h.hold ? h.hold.ms : -1, kind: h.hold ? h.hold.kind : '' }; });
 // Assert
-ok(hsRes.small === 30 && hsRes.big === 90 && hsRes.kind === 'bump', 'a bigger hit replaces the running hold, a smaller one does not (' + JSON.stringify(hsRes) + ')');
+ok(hsRes.small === 50 && hsRes.big === 90 && hsRes.kind === 'bump', 'a bigger hit replaces the running hold, a smaller one does not (' + JSON.stringify(hsRes) + ')');
 await page.waitForTimeout(300);
 
 // DASH from the resting thumb: the steering thumb lifts on the DASH button and taps it at once: that tap dashes
@@ -126,9 +126,9 @@ await page.evaluate(() => { window.__epBad = []; const ep = document.querySelect
 // every zone draws without errors (keep the swimmer alive while we skip around)
 const ZY = [4000, 16000, 30000, 46000, 61500, 70000, 82500];
 for (const y of ZY) {
-  await page.evaluate((y) => { const r = game.race; if (r.pending) r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); r.p.y = y; r.genY = y + 300; r.ents = r.ents.filter((e) => e.y > y); r.p.e = r.p.maxE; r.p.shield = 9; if (y > 60000 && !r.p.side) r.p.side = r.eggSide; r.p.x = (y > 59400 ? (r.eggSide < 0 ? 150 : 250) : 200); }, y);
+  await page.evaluate((y) => { const r = game.race; if (r.pending) r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); document.body.classList.remove('cardsUp'); r.p.y = y; r.genY = y + 300; r.ents = r.ents.filter((e) => e.y > y); r.p.e = r.p.maxE; r.p.shield = 9; if (y > 60000 && !r.p.side) r.p.side = r.eggSide; r.p.x = (y > 59400 ? (r.eggSide < 0 ? 150 : 250) : 200); }, y);
   await page.waitForTimeout(1600);
-  await page.evaluate(() => { const r = game.race; if (r.pending) { r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); } r.p.e = r.p.maxE; });
+  await page.evaluate(() => { const r = game.race; if (r.pending) { r.choose(r.pending[0]); document.getElementById('cards').classList.add('hide'); } document.body.classList.remove('cardsUp'); r.p.e = r.p.maxE; });
   await page.waitForTimeout(600);
   await page.evaluate(() => document.getElementById('banner').classList.remove('on')); // the shot shows the zone, not a banner
   await shot('4_zone_' + y);
@@ -172,7 +172,7 @@ ok(await page.evaluate(() => { const b = document.getElementById('againBtn').get
 const dna = await page.evaluate(() => game.meta.dna);
 ok(dna > 0, 'the swim paid DNA (' + dna + ')');
 await page.evaluate(() => { game.meta.dna += 500; });
-await page.tap('#resShopBtn'); await page.waitForTimeout(200);
+await page.tap((await page.isVisible('#resSeeAll')) ? '#resSeeAll' : '#resShopBtn'); await page.waitForTimeout(200);
 await shot('6_shop');
 // Assert: the shop marks where a habit unlocks a perk (content.js HABIT_PERKS: broccoli at 5) and names the next one
 const brocRow = await page.evaluate(() => { const r = document.querySelector('#shopList [data-row="broccoli"]'); return r ? { pk: r.querySelectorAll('.pips i.pk').length, np: (r.querySelector('.np') || {}).textContent || '' } : null; });
@@ -402,6 +402,33 @@ for (const [w, h] of [[360, 640], [320, 568], [640, 360], [568, 320]]) {
   ok(rf.acc === 3 && rf.cnt === 3, 'the flash cap lets 3 flashes start in 1 s and refuses the rest, even with lastFlashT reset ' + JSON.stringify(rf));
   ok(rf.same === 1 && rf.diff === 2, 'duelSay keeps one bubble per rival ' + JSON.stringify(rf));
   ok(rf.think, "a 'think' pop is flagged think");
+  await pg.close();
+}
+
+// round 2 hooks: Act 4 plays in the live story with no raw placeholders, the wall hit and the photo finish
+{
+  // arrange
+  const pg = await ctx.newPage(); pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL); await pg.waitForFunction(() => window.game && game.R, null, { timeout: 15000 });
+  // act
+  const st = await pg.evaluate(() => {
+    const m = game.meta, g0 = m.gen, S = game.settings, seen = S.act4Seen, gis = S.genIntroSeen, b0 = m.babies;
+    m.babies = (b0 || []).concat([{ name: 'Kevin Jr', run: 0 }]); S.genIntroSeen = 0;
+    const at = (g) => { m.gen = g - 1; return game.story(); };
+    const g31 = at(31), g39 = at(39), g41 = at(41), g30 = at(30);
+    m.gen = g0; S.act4Seen = seen; S.genIntroSeen = gis; m.babies = b0;
+    const raw = [g30, g31, g39, g41].flat().filter((t) => /\{\w+\}/.test(t));
+    return { g31: g31.join(' | '), g39n: g39.length, g41: g41.join(' | '), g30: g30.join(' | '), raw };
+  });
+  const rh = await pg.evaluate(() => {
+    const R = game.R; R.wallHit(-1, 0.9); const wt = R.wHit ? R.wHit.t : -1;
+    const r = game.race; R.photoFinish(r, r.p, 'Brock', 0.23); return { wt, pf: R.pf ? R.pf.txt : null };
+  });
+  // assert
+  ok(st.g31.includes('The Kevins listen to the Macros'), 'generation 31 plays Act 4 chapter 1 (' + st.g31.slice(0, 120) + ')');
+  ok(st.g39n >= 6, 'generation 39 plays the Act 4 finale (' + st.g39n + ' lines)');
+  ok(st.raw.length === 0, 'no story line shows a raw {placeholder} ' + JSON.stringify(st.raw));
+  ok(Math.abs(rh.wt - 0.18) < 1e-6 && rh.pf === '0.23s', 'R.wallHit opens its 0.18 s hit and R.photoFinish labels the margin ' + JSON.stringify(rh));
   await pg.close();
 }
 

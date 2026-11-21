@@ -1170,6 +1170,116 @@ body.intense #mutRow:not(.peek){visibility:hidden}
 body.intense #combo .in{background:rgba(20,2,18,.85)}
 /* a threat ahead: the coach strip steps under the threat chevrons (portrait) */
 @media (orientation:portrait){body.threat #coach{top:calc(var(--hudB) + 52px)}}
+/* ---------- ui round 2: HUD layout and readability ---------- */
+/* 280 to 330 px wide: the rank shrinks with the room left after the pause button (52) and the distance (70) */
+#rankCol{min-width:0}
+@media (max-width:330px){
+  /* (5.8, not 5.4: the system fallback font is wider than Baloo, and the rank must clear the distance either way) */
+  #rank{font-size:clamp(19px,calc((100cqw - 52px - 70px) / 5.8),34px)}
+  #dist b{font-size:17px}
+  #rankRow{gap:4px}
+}
+/* the HUD never leaves the screen: the GAS row shrinks its bar, never pushes GAS or the DNA chip off an edge, and no
+   shake or pop moves #hud itself (main.js measureHud clamps it too: .hudClamp) */
+#hud{max-width:100%;transform:none!important;translate:none!important}
+#energyRow{min-width:0;max-width:100%}
+#ebar{min-width:min(60%,120px);flex:1 1 40px}
+#energyRow>span{flex:none}
+#hud.hudClamp #ebar,#hud.hudClamp #shields,#hud.hudClamp #mutRow span{animation:none!important}
+#hud.hudClamp #energyRow{overflow:hidden}
+/* a bright zone: the side text keeps .62 while intense, over a stronger scrim, and the small labels get an ink edge */
+body.bright.intense #rankLbl,body.bright.intense #alive,body.bright.intense #toEgg,body.bright.intense #zoneName,body.bright.intense #dnaHud{opacity:.62}
+body.bright.intense #hud::before{opacity:1;background:linear-gradient(180deg,rgba(20,2,18,.8),rgba(20,2,18,.45) 75%,rgba(20,2,18,0))}
+body.reduced.intense #rankLbl,body.reduced.intense #alive,body.reduced.intense #toEgg,body.reduced.intense #zoneName,body.reduced.intense #dnaHud,
+body.reduced.intense #shields:not(.flash):not(.lost){opacity:.6}
+body.reduced.intense #goalPill{opacity:.7}
+body.bright #toEgg,body.bright #zoneName{-webkit-text-stroke:2px var(--ink);paint-order:stroke fill}
+/* the duel panel: room under the rival bar before THE EGG's line */
+#drillUI .row.riv~.ep{margin-top:8px}
+/* the cards are up: they own the screen (the HUD comes back as they fly out) */
+body.cardsUp #hud{visibility:hidden}
+#cardsSub .nw{white-space:nowrap}
+/* a SWIM AGAIN tap while the buttons still wait is queued: the button takes the tap, squishes and says GET READY... */
+#againBtn.wait{pointer-events:auto}
+#againBtn.queued{opacity:.85;filter:none}
+#againBtn.queued small:not(.gr){display:none}
+#againBtn small.gr{display:block;font-size:12px;letter-spacing:.08em}
+/* ---------- the big number, out from under the thumb: the combo strip sits under the HUD (portrait); the coach strip,
+   a top banner and swim 1's card step below it while a combo is live (--comboH, main.js measureHud) ---------- */
+@media (orientation:portrait),(orientation:landscape) and (min-height:521px) and (max-aspect-ratio:1249/1000){
+  #combo{top:calc(var(--hudB) + 40px);bottom:auto}
+  body.comboOn #coach,body.comboOn.threat #coach{top:calc(var(--hudB) + 46px + var(--comboH,64px))}
+  body.comboOn #banner.top,body.comboOn #banner.kclr,body.comboOn.egg #banner.top{top:calc(var(--hudB) + 48px + var(--comboH,64px))}
+  body.comboOn #banner.top.clr{top:calc(var(--hudB) + 64px + var(--comboH,64px))}
+  body.racing.swim1.swim1.swim1.comboOn #tut:not(.fg){top:calc(var(--hudB) + 46px + var(--comboH,64px))}
+}
+#combo .in,#combo .potRow{transform-origin:50% 0}
+#combo .n{transform-origin:50% 60%}
+/* CASH shows the real multiplier: pink from x5, a gold rainbow from x10; the term that just rose names itself under it */
+#cashBtn .cv{display:inline-block;font-weight:800}
+#cashBtn .mt{position:absolute;left:50%;top:calc(100% + 2px);transform:translateX(-50%);font-style:normal;font-size:12px;font-weight:800;letter-spacing:.04em;line-height:1;white-space:nowrap;color:var(--gold);text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink);opacity:0;transition:opacity .15s;pointer-events:none}
+#cashBtn .mt.on{opacity:1}
+#cashBtn.m5{background:linear-gradient(#ff9ad0,#ff4fa8);color:#3a0020;box-shadow:0 3px 0 #8c1a52}
+#cashBtn.m10{background:linear-gradient(90deg,#ffe07a,#ffb3e6,#b8f4ff,#ffe07a);color:#3a2000;box-shadow:0 3px 0 #9a6410,0 0 12px rgba(255,215,92,.8)}
+/* the glow pulses only when it matters: the timer is in its last 35% or the pot just crossed a grade */
+#cashBtn::after{animation:none;opacity:0}
+#cashBtn.cashHot::after{animation:glowp .7s ease-in-out infinite alternate}
+body.reduced #cashBtn.cashHot::after{animation:none;opacity:.75}
+body.reduced #cashBtn:not(.cashHot)::after{opacity:0}
+/* FRENZY: the word steps aside, the tier and its multiplier are gold with an ink edge, the bar and its pips one line */
+#combo.fz .w{display:none!important}
+#combo.fz .ft{font-size:20px;color:var(--gold);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill}
+#combo.fz .barW{display:flex;align-items:center}
+/* ---------- swim 1 and the first deal ---------- */
+#cardsLine small.tz{display:block;font-size:13px;font-weight:700;opacity:.85;margin-top:2px;line-height:1.2}
+/* Coach's pick on the first deal: a 5 s ring sweeps round it, then it takes itself */
+.card.auto::after{content:"";position:absolute;inset:0;border-radius:15px;border:3px solid var(--mint);pointer-events:none;animation:autoRing var(--autoT,5s) linear forwards}
+@keyframes autoRing{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.card.picked::after{display:none}
+body.reduced .card.auto::after{animation:none;opacity:.8}
+/* a threat ahead on swim 1: the lesson card moves low (above DASH) and drops its second line, and its clock waits */
+@media (orientation:portrait),(orientation:landscape) and (min-height:521px) and (max-aspect-ratio:1249/1000){
+  body.racing.swim1.swim1.swim1.threat #tut.on:not(.fg){top:auto;bottom:calc(var(--padBot,180px) + 8px);transform:translate(-50%,0)}
+}
+body.racing.swim1.threat #tut .ts{display:none!important}
+/* ---------- the result card and the shop loop ---------- */
+/* the slim next-habit row: icon, name, X / Y DNA and a 7 px mint bar, 44 px at most */
+#resUp.slim{max-height:44px;min-height:0;padding:4px 10px;gap:8px;overflow:hidden}
+#resUp.slim .ic{font-size:20px}
+#resUp.slim .sl{display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden;font-size:12px;line-height:1.1}
+#resUp.slim .sl b{display:inline;font-size:14px;flex:none}
+#resUp.slim .sl span{color:var(--dim);font-weight:800;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+#resUp.slim .bb{height:7px;margin-top:3px}
+/* Brag with nothing to brag about: a quiet icon */
+.row3 #shareBtn.icon{flex:0 0 52px;width:52px;padding:8px 0;font-size:20px}
+/* the first death's warm tail, under its lesson */
+#resTail{text-align:center;font-size:12px;font-style:italic;font-weight:600;color:var(--dim);max-width:330px;margin:2px auto 0;line-height:1.2;text-wrap:balance}
+#resSeeAll{font-size:13px;min-height:40px;margin-top:2px}
+#resSeeAll.wait{pointer-events:none;opacity:.55}
+/* short screens: Dad's Pick docked above the buttons is compact (one subline, no Tricks row) */
+#result.upDock #resTricks{display:none!important}
+#result.upDock #resUp{padding-top:3px;padding-bottom:3px}
+#result.upDock #resUp .tx small,#result.upDock #resUp .dp{display:none}
+#result.upDock #resUp .wh{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-height:600px){#againBtn small+small{display:none}}
+/* PERK UNLOCKED: a gold card that lands for 1.6 s */
+#perkCard{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;pointer-events:auto;background:radial-gradient(circle,rgba(255,215,92,.35),rgba(20,2,18,.6) 70%)}
+#perkCard .pk{text-align:center;max-width:300px;padding:14px 18px;border-radius:18px;background:var(--card);border:3px solid var(--gold);box-shadow:0 0 30px rgba(255,215,92,.7),0 6px 0 #12030f}
+#perkCard .k{font-size:13px;font-weight:800;letter-spacing:.14em;color:var(--gold)}
+#perkCard b{display:block;font-size:26px;font-weight:800;color:#fff;line-height:1.05;text-shadow:0 3px 0 var(--ink)}
+#perkCard small{display:block;font-size:14px;font-weight:700;color:var(--cream);margin-top:4px;line-height:1.2}
+#perkCard.on .pk{animation:perkIn .5s cubic-bezier(.2,1.8,.4,1)}
+@keyframes perkIn{0%{transform:scale(.3) rotate(-8deg);opacity:0}}
+body.reduced #perkCard.on .pk{animation:none}
+/* ---------- story and family ---------- */
+.tabs button{padding:0 4px;font-size:14px}
+.cx.st{position:relative}
+.cx.st>div:nth-child(2){flex:1;min-width:0}
+.cx.st .ds{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cx.st.clue{border-style:dashed}
+.cx.st button.rp{flex:none;width:44px;height:44px;border-radius:50%;background:var(--gold);color:#3a2000;font-size:18px;font-weight:800;box-shadow:0 3px 0 #9a6410}
+.cx.st.locked{opacity:.65;border-style:dashed}
+#resTease{text-align:center;font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--gold);max-width:330px;margin:2px auto 0;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -1187,7 +1297,7 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
-  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo">CASH</button></div></div>
+  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo"><b class="cv">CASH</b><i class="mt"></i></button></div></div>
   <div id="tutTarget" class="hide"><i class="trail"></i><i class="link"></i></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
@@ -1279,6 +1389,7 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
     <div id="resFactory" class="facLine hide"></div>
     <div id="resActions">
       <div id="resTip"></div>
+      <div id="resTail" class="hide"></div>
       <div id="resGoal" class="hide"></div>
       <div class="row3">
         <button class="btn gold" id="shareBtn">Brag 📋</button>
@@ -1288,7 +1399,9 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
       <div id="resAgainGoal" class="hide"></div>
       <button class="btn" id="againBtn">SWIM AGAIN 💦</button>
       <button id="dailyAgainLink" class="hide" type="button"></button>
+      <button id="resSeeAll" class="linkBtn hide" type="button">See all habits</button>
       <div id="resRival" class="hide"></div>
+      <div id="resTease" class="hide"></div>
     </div>
     </div>
   </div>
@@ -1304,7 +1417,7 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
 
   <div id="album" class="ov hide">
     <h2 id="albumH">Baby Album</h2>
-    <div class="tabs"><button id="tabBabies" class="on">Babies 👶</button><button id="tabCombos">Mashups</button></div>
+    <div class="tabs"><button id="tabBabies" class="on">Babies 👶</button><button id="tabCombos">Mashups</button><button id="tabStory">Story 📖</button></div>
     <div class="sub" id="albumSub" style="margin:8px auto 0"></div>
     <div id="albumList"></div>
     <div class="foot"><button class="btn" id="albumBack">Back</button></div>
@@ -1336,6 +1449,7 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
     <div class="setRow"><span>Music 🎶<small>Coach Gonad's beatbox band</small></span><span class="rt"><input type="range" id="setMusicVol" min="0" max="1" step="0.05" aria-label="Music volume"><label class="ck"><input type="checkbox" id="setMusic" aria-label="Music on"></label></span></div>
     <div class="setRow"><span>Sound effects 🔊<small>Splats, pops and boings</small></span><span class="rt"><input type="range" id="setSfxVol" min="0" max="1" step="0.05" aria-label="Sound volume"><label class="ck"><input type="checkbox" id="setSfx" aria-label="Sound effects on"></label></span></div>
     <label class="setRow"><span>Mono audio 🎧<small>One earbud: every sound in both ears</small></span><input type="checkbox" id="setMono" aria-label="Mono audio (one earbud)"></label>
+    <label class="setRow"><span>Gentle sound 🪶<small>Softer highs, no sharp stings</small></span><input type="checkbox" id="setGentle" aria-label="Gentle sound"></label>
     <label class="setRow hide" id="setMixRow"><span>Play over my music 🎵<small>Your own music keeps playing; the band stays quiet</small></span><input type="checkbox" id="setMix" aria-label="Play over my music"></label>
     <label class="setRow" id="setHapticsRow"><span>Haptics 📳<small>Buzz on dashes, hits and FRENZY</small></span><input type="checkbox" id="setHaptics"></label>
     <label class="setRow"><span>Reduced motion 🐢<small>Less shake, flash and slow-mo</small></span><input type="checkbox" id="setReduced"></label>
@@ -1358,6 +1472,7 @@ body.intense #combo .in{background:rgba(20,2,18,.85)}
     <button class="btn alt" id="wbClose">Later</button>
   </div>
   <div id="staleBar" class="hide" role="alert"><span>Kevin is swimming in another tab</span><button id="staleBtn" type="button">Play here</button></div>
+  <div id="perkCard" class="hide" role="status" aria-live="polite"></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="ver">v0.3 test build</div>
 </div>
