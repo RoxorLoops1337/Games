@@ -206,7 +206,7 @@ await p2.addInitScript(() => {
   const m = JSON.parse(localStorage.getItem('million_to_one_v1') || '{}');
   Object.assign(m, { runs: 6, introSeen: true, lastSeen: Date.now() - 9 * 3600000, bank: 0 }); m.habits = Object.assign({}, m.habits, { factory: 1 });
   localStorage.setItem('million_to_one_v1', JSON.stringify(m));
-  const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; u.bestHead = 9; localStorage.setItem('million_to_one_ui', JSON.stringify(u));
+  const u = JSON.parse(localStorage.getItem('million_to_one_ui') || '{}'); u.tutDone = true; u.bestHead = 2.8; localStorage.setItem('million_to_one_ui', JSON.stringify(u));
 });
 const errs2 = errs.length;
 // Act
@@ -234,11 +234,15 @@ await p2.evaluate(() => { const r = game.race; if (r.pending) r.choose(r.pending
 await p2.waitForFunction(() => !document.getElementById('result').classList.contains('hide'), null, { timeout: 8000 }).catch(() => {});
 if (SHOTS) await p2.waitForTimeout(2500);
 await shot2('10_duel_result');
-// Assert: the post-mortem compares this head start with the best one, and the daily says what this attempt pays
-const duelT = await p2.evaluate(() => (document.getElementById('resDuel') || {}).textContent || '');
-ok(/best run brought 9\.0s/.test(duelT), 'a lost duel compares the head start with the best one ("' + duelT + '")');
-const attT = await p2.evaluate(() => { const el = document.getElementById('resAttempt'); return el && !el.classList.contains('hide') ? el.textContent : ''; });
-ok(/pay/.test(attT), 'the daily result says what this attempt pays ("' + attT + '")');
+// Assert: a tight loss card's one-row Dad's Pick keeps every visible line inside its 56 px row
+const tightRow = await p2.evaluate(() => { const res = document.getElementById('result'), up = document.getElementById('resUp'); if (!res.classList.contains('tightUp') || !up) return { on: false, out: [] }; const b = up.getBoundingClientRect(); const out = [...up.querySelectorAll('.tx > *')].filter((e) => e.getClientRects().length).map((e) => [e.className || e.tagName, e.getBoundingClientRect()]).filter(([, r]) => r.top < b.top - 1 || r.bottom > b.bottom + 1).map(([n, r]) => n + ' ' + Math.round(r.top - b.top) + '..' + Math.round(r.bottom - b.top)); return { on: true, h: Math.round(b.height), out }; });
+ok(tightRow.out.length === 0, 'the tight-loss Dad\'s Pick row fits its lines ' + JSON.stringify(tightRow));
+// Assert: the chip row carries the head start (and the best one when this fell short of it) and the attempt's pay
+const chipT = await p2.evaluate(() => (document.getElementById('resChips') || {}).textContent || '');
+const headNow = await p2.evaluate(() => { const d = game.race && game.race.drill; return d && Number.isFinite(+d.head) ? +d.head : null; });
+ok(/Head start \+\d+\.\ds/.test(chipT), 'a lost duel puts its head start on the chip row ("' + chipT + '")');
+ok(headNow == null || headNow >= 2.75 || /Best 2\.8s/.test(chipT), 'and the best head start when this one fell short (now ' + headNow + ', "' + chipT + '")');
+ok(/Attempt 2 · [^·]*pay/.test(chipT), 'the daily result says what this attempt pays on the chip row ("' + chipT + '")');
 ok(errs.length === errs2, 'the returning player pass runs without page errors ' + errs.slice(errs2).join(' | '));
 
 
@@ -270,7 +274,7 @@ await p3.tap('#cardRow .card'); await p3.waitForTimeout(500);
 const cdp3 = await ctx3.newCDPSession(p3);
 const tp3 = (type, pts) => cdp3.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
 await p3.evaluate(() => { const r = game.race; r.p.e = r.p.maxE; r.p.dashCd = 0; r.ents = []; window.__d = 0; let v = r.input.dash; Object.defineProperty(r.input, 'dash', { configurable: true, get: () => v, set: (x) => { if (x) window.__d++; v = x; } }); });
-const PALM = { x: 60, y: 700, radiusX: 30, radiusY: 30, id: 1 }, FB = (x) => ({ x, y: 600, id: 2 });
+const PALM = { x: 60, y: 700, radiusX: 40, radiusY: 40, id: 1 }, FB = (x) => ({ x, y: 600, id: 2 });
 // Act: a palm rests (A), a finger drags (B), lifts, re-touches and drags back
 await tp3('touchStart', [PALM]); await p3.waitForTimeout(50);
 await tp3('touchStart', [PALM, FB(200)]); for (let k = 1; k <= 6; k++) { await tp3('touchMove', [PALM, FB(200 + k * 10)]); await p3.waitForTimeout(20); }
@@ -290,6 +294,85 @@ ok(frz.p && frz.lost === -1 && frz.ice && /4-day/.test(frz.t) && !/\{n\}/.test(f
 if (SHOTS) await p3.screenshot({ path: path.join(SHOTS, '11_title_freeze.png') });
 ok(errs3.length === 0, 'the round 2 pass runs without page errors ' + errs3.join(' | '));
 await ctx3.close();
+
+// ---- round 3: seeded saves (Act 2's loss clue, Act 3's opening) and the phone layout loop ----
+// Arrange: a generation-10 save, 20 swims, Act 2 begun 10 swims ago, Coach's clues all heard
+{
+  const ctx4 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  const p4 = await ctx4.newPage(); const errs4 = [];
+  p4.on('pageerror', (e) => errs4.push(e.message));
+  await p4.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await p4.addInitScript(() => {
+    if (sessionStorage.getItem('mto4')) return; sessionStorage.setItem('mto4', '1');
+    localStorage.setItem('million_to_one_v1', JSON.stringify({ runs: 20, introSeen: true, gen: 10, wins: 10 }));
+    localStorage.setItem('million_to_one_ui', JSON.stringify({ tutDone: true, finaleSeen: true, genIntroSeen: 10, revealSeen: true, act2From: 10, clues: [3, 8, 15, 20, 25, 40, 50, 60, 90] }));
+  });
+  await p4.goto(URL); await p4.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+  // Act: a swim that ends in a loss
+  await p4.evaluate(() => { const w = document.getElementById('welcome'); if (w) w.classList.add('hide'); });
+  await p4.tap('#playBtn'); await p4.waitForFunction(() => game.race && !game.race.demo && game.race.t > 0.5, null, { timeout: 15000 });
+  await p4.evaluate(() => { const r = game.race; r.p.y = 20000; r.end('energy'); });
+  await p4.waitForFunction(() => !document.getElementById('result').classList.contains('hide'), null, { timeout: 8000 }).catch(() => {});
+  // Assert: the saga slot carries an Act 2 loss clue
+  const nextT = await p4.evaluate(() => document.getElementById('resNext').textContent || '');
+  const a2 = await p4.evaluate(async () => { const K = await import('./content.js'); return (K.ACT2_LOSS_CLUES || []).map((x) => x[1]); });
+  ok(a2.some((l) => nextT.includes(l)), 'a generation-10 loss shows an Act 2 loss clue ("' + nextT + '")');
+  ok(errs4.length === 0, 'the seeded Act 2 save runs without page errors ' + errs4.join(' | '));
+  await ctx4.close();
+}
+// Arrange/Act: an Act 3 save (generation 20 next) starts a swim: the story plays GEN20_INTRO
+{
+  const ctx5 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  const p5 = await ctx5.newPage();
+  await p5.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await p5.addInitScript(() => {
+    if (sessionStorage.getItem('mto5')) return; sessionStorage.setItem('mto5', '1');
+    localStorage.setItem('million_to_one_v1', JSON.stringify({ runs: 40, introSeen: true, gen: 19, wins: 19, babies: Array.from({ length: 19 }, (_, i) => ({ name: 'Kev ' + (i + 1), run: i + 1 })) }));
+    localStorage.setItem('million_to_one_ui', JSON.stringify({ tutDone: true, finaleSeen: true, act2Seen: true, genIntroSeen: 18, revealSeen: true }));
+  });
+  await p5.goto(URL); await p5.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+  await p5.evaluate(() => { const w = document.getElementById('welcome'); if (w) w.classList.add('hide'); });
+  await p5.tap('#playBtn'); await p5.waitForTimeout(300);
+  const seen = []; for (let i = 0; i < 14 && await p5.isVisible('#intro'); i++) { seen.push(await p5.evaluate(() => document.getElementById('introTxt').textContent)); await p5.tap('#intro'); await p5.waitForTimeout(120); }
+  const g20 = await p5.evaluate(async () => { const K = await import('./content.js'); return K.GEN20_INTRO || []; });
+  // Assert
+  ok(!g20.length || seen.some((t) => g20.includes(t)), 'generation 20 opens Act 3 with its intro (' + seen.slice(0, 6).join(' / ') + ')');
+  await ctx5.close();
+}
+// The layout loop: four small phones (portrait and landscape), DPR 1
+for (const [w, h] of [[360, 640], [320, 568], [640, 360], [568, 320]]) {
+  const cx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  const pg = await cx.newPage();
+  await pg.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await pg.addInitScript(() => { if (sessionStorage.getItem('mtoL')) return; sessionStorage.setItem('mtoL', '1');
+    localStorage.setItem('million_to_one_v1', JSON.stringify({ runs: 6, introSeen: true })); localStorage.setItem('million_to_one_ui', JSON.stringify({ tutDone: true, revealSeen: true })); });
+  await pg.goto(URL); await pg.waitForFunction(() => window.game && game.race && game.race.demo, null, { timeout: 15000 });
+  await pg.evaluate(() => { const wl = document.getElementById('welcome'); if (wl) wl.classList.add('hide'); });
+  await pg.waitForTimeout(300);
+  // Assert: every visible title button is 44 px (or padded to it by a ::before) and on screen; SWIM needs no scroll
+  const tb = await pg.evaluate(() => { const bad = []; for (const b of document.querySelectorAll('#title button, #title .toggle:not(.hide)')) { const r = b.getBoundingClientRect(); if (!r.width || getComputedStyle(b).visibility === 'hidden') continue;
+    const pad = getComputedStyle(b, '::before'); const ph = pad && pad.content !== 'none' ? parseFloat(pad.height) || 0 : 0;
+    if (Math.max(r.height, ph) < 43.5 || r.left < -1 || r.right > innerWidth + 1 || r.top < -1 || r.bottom > innerHeight + 1) bad.push((b.id || b.className) + ' ' + Math.round(r.height) + '@' + Math.round(r.top)); } return bad; });
+  ok(tb.length === 0, `${w}x${h}: title buttons are 44 px and on screen (${tb.join(', ')})`);
+  // Act: a swim with a combo and a banner up
+  await pg.tap('#playBtn'); await pg.waitForFunction(() => game.race && !game.race.demo && game.race.t > 1, null, { timeout: 15000 });
+  await pg.evaluate(() => { const r = game.race; r.p.combo = 12; r.p.comboT = 5; });
+  await pg.waitForTimeout(500);
+  // Assert: DASH never sits on the combo strip, the lesson card or the drill panel; the banner title never overflows;
+  // the coach strip is 2 lines at most
+  const lay = await pg.evaluate(() => {
+    const vis = (id) => { const e = document.getElementById(id); if (!e) return null; const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.05 || e.classList.contains('hide')) return null; const r = e.getBoundingClientRect(); return r.width ? r : null; };
+    const inner = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width ? r : null; };
+    const hit = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const d = vis('dashBtn'), co = vis('combo') ? inner('#combo .in') : null, tu = vis('tut'), dr = vis('drillUI');
+    const bt = document.querySelector('#banner .t'), c = document.getElementById('coach');
+    const lh = parseFloat(getComputedStyle(c).lineHeight) || 16;
+    return { dashCombo: hit(d, co), dashTut: hit(d, tu), dashDrill: hit(d, dr), tutCombo: hit(tu, co), banner: !bt || bt.scrollWidth <= bt.clientWidth + 1, coach: c.offsetHeight <= 2 * lh + 14,
+      dashIn: !!d && d.left >= 0 && d.right <= innerWidth && d.bottom <= innerHeight };
+  });
+  ok(!lay.dashCombo && !lay.dashTut && !lay.dashDrill && !lay.tutCombo && lay.banner && lay.coach && lay.dashIn, `${w}x${h}: the race HUD keeps DASH, the combo, the card and the banner apart ${JSON.stringify(lay)}`);
+  await cx.close();
+}
 
 await browser.close(); server.close(); clearTimeout(watchdog);
 finish();

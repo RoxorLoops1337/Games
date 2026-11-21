@@ -117,10 +117,12 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 #combo .pot.broke{color:#ff3d6e;text-decoration:line-through 3px;animation:potbreak .3s ease-out}
 @keyframes potbreak{0%{transform:scale(1.3)}40%{transform:translateX(-4px)}70%{transform:translateX(4px)}}
 /* CASH: a 44x44 hit area round the chip (::before); it glows instead of growing, so it never jumps under the thumb */
-#cashBtn{position:relative;pointer-events:auto;min-height:36px;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:800;letter-spacing:.04em;line-height:1;background:linear-gradient(#ffe07a,#f0b02c);color:#3a2000;box-shadow:0 3px 0 #9a6410;touch-action:none}
+#cashBtn{position:relative;pointer-events:auto;min-height:40px;padding:2px 12px;border-radius:10px;font-size:12px;font-weight:800;letter-spacing:.04em;line-height:1;background:linear-gradient(#ffe07a,#f0b02c);color:#3a2000;box-shadow:0 3px 0 #9a6410;touch-action:none}
 #cashBtn::after{content:"";position:absolute;inset:0;border-radius:10px;box-shadow:0 0 16px 2px rgba(255,215,92,.9);opacity:0;animation:glowp .7s ease-in-out infinite alternate;pointer-events:none}
 @keyframes glowp{to{opacity:1}}
-#cashBtn::before{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%)}
+/* the hit area: 8 px each side and 6 px above and below the 40 px chip (52 px tall); at 320 to 400 px wide the strip sits
+   118 px over the safe bottom and DASH tops out at 106, so the area never reaches DASH */
+#cashBtn::before{content:'';position:absolute;left:-8px;right:-8px;top:-6px;bottom:-6px}
 #combo.flash .in{animation:cflash .35s ease-out}
 @keyframes cflash{0%{filter:brightness(2.5)}}
 #combo .n{display:inline-block;font-size:34px;font-weight:800;line-height:1;color:var(--gold);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,215,92,.6)}
@@ -197,7 +199,7 @@ body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + 14px)}
 body.racing #hint{top:calc(var(--hudB) + 100px);bottom:auto}
 body.racing #toast{top:calc(var(--hudB) + 8px);bottom:auto;transform:translate(-50%,-20px)}
 body.racing #toast.on{transform:translate(-50%,0)}
-#banner{position:absolute;left:0;right:0;top:max(20%,calc(var(--hudB) + 50px));text-align:center;pointer-events:none;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.6,.4,1);padding:0 16px}
+#banner{position:absolute;left:0;right:0;top:max(20%,calc(var(--hudB) + 50px));text-align:center;pointer-events:none;opacity:0;transform:scale(.6);transition:opacity .35s,transform .35s cubic-bezier(.2,1.6,.4,1);padding:0 16px}
 /* in the egg zone, at a drill or a claim: right under the HUD (or under the egg panel), no box, small */
 #banner.top,body.egg #banner.top{top:calc(var(--hudB) + 34px)}
 #banner.top .bk{background:rgba(20,2,18,.55);padding:2px 10px 4px;border-radius:12px}
@@ -215,6 +217,8 @@ body.racing #toast.on{transform:translate(-50%,0)}
 /* a mid-swim MASHUP: one compact line under the HUD */
 #banner.compact .t{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ead9ff;text-shadow:0 2px 0 var(--ink),0 0 14px #b07bff}
 #banner.compact .bk{padding:2px 10px 3px}
+/* both slots would cover Kevin: one line under the HUD for 1.2 s at most (main.js sets .kclr) */
+#banner.kclr,body.egg #banner.kclr{top:calc(var(--hudB) + 34px);bottom:auto}
 #banner .c{font-size:14px;color:var(--cream);max-width:min(330px,100%);margin:4px auto 0;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #banner.red .t{color:var(--bc,#ff5c7a);text-shadow:0 3px 0 var(--ink),0 0 22px #ff1f4a}
 #banner.red .z{color:#ff8b9b}
@@ -511,7 +515,7 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 #result.tight #resMedal .md{display:inline;font-size:15px;margin-right:4px}
 #result.tight #resMedal small{display:none}
 /* the daily's reduced repeat, a small link under SWIM AGAIN */
-#dailyAgainLink{display:block;margin:6px auto 0;background:none;border:0;color:var(--dim);font-size:13px;font-weight:700;text-decoration:underline;min-height:32px;padding:4px 12px}
+#dailyAgainLink{display:block;margin:6px auto 0;background:none;border:0;color:var(--dim);font-size:13px;font-weight:700;text-decoration:underline;min-height:44px;padding:4px 12px}
 #dailyAgainLink.hide{display:none}
 #resShopBtn small.pk{font-size:12px;margin-top:1px}
 #resReceipt{width:100%;max-width:300px;margin:6px auto 0;font-size:14px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums}
@@ -525,6 +529,13 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 /* the first result: what the lessons paid, what DNA buys, a warm tail */
 #resLessons{text-align:center;max-width:330px;margin:0 auto 4px;line-height:1.25}
 #resLessons b{display:block;font-size:15px;font-weight:800;color:var(--mint)}
+/* swim 1's 'Lessons learned +N DNA': one receipt-style row */
+#resLessons:has(>span){display:flex;justify-content:space-between;align-items:baseline;width:100%;max-width:300px;font-size:14px;font-weight:700;color:var(--dim)}
+#resLessons>span+b{display:inline;color:var(--mint)}
+#resDna.pulse{animation:land .45s cubic-bezier(.2,1.8,.4,1)}
+#resReceipt div small.rcap{display:block;font-size:11px;font-weight:700;color:var(--dim);text-shadow:none;line-height:1.2}
+#resReceipt div.firstBaby{font-size:17px;font-weight:800;color:var(--gold);text-shadow:0 2px 0 var(--ink),0 0 12px rgba(255,215,92,.6)}
+#resReceipt div.firstBaby b{color:var(--gold)}
 #resLessons small{display:block;font-size:13px;font-weight:700;color:var(--cream);margin-top:2px}
 #resLessons small.tl{color:var(--dim);font-weight:600}
 /* a win's margin stamp, in the beaten rival's colour */
@@ -571,7 +582,14 @@ body.reduced #resMargin{animation:none}
 .hab .pips i.pk{color:var(--gold);text-shadow:0 0 6px rgba(255,215,92,.8);border-radius:50%;box-shadow:0 0 0 1.5px rgba(255,215,92,.7)}
 .hab .np{font-size:12px;font-weight:800;color:var(--gold);line-height:1.15;margin-top:1px}
 /* the small plain Back above SWIM WITH IT */
-.linkBtn{display:block;margin:0 auto 2px;min-height:36px;padding:4px 16px;font-size:14px;font-weight:700;color:var(--dim);text-decoration:underline;text-underline-offset:3px}
+/* a second tab: it never writes the save until the player takes it over */
+#staleBar{position:absolute;z-index:30;left:50%;top:calc(var(--safeT) + 10px);transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:6px 6px 6px 14px;border-radius:14px;background:#fff4f8;color:#4a1030;font-weight:800;font-size:14px;box-shadow:0 4px 0 #9a3a60;pointer-events:auto}
+#staleBar.hide{display:none}
+#staleBar button{min-height:44px;padding:0 14px;border-radius:12px;background:var(--pink,#ff3d6e);color:#fff;font-weight:800;font-size:14px;white-space:nowrap}
+.cardRow.lockShake{animation:lockShake .3s ease-out}
+@keyframes lockShake{20%{transform:translateX(-7px)}45%{transform:translateX(6px)}70%{transform:translateX(-3px)}}
+body.reduced .cardRow.lockShake{animation:none}
+.linkBtn{display:block;margin:0 auto 2px;min-height:44px;padding:4px 16px;font-size:14px;font-weight:700;color:var(--dim);text-decoration:underline;text-underline-offset:3px}
 #shop .foot .facLine{margin:0 auto 4px}
 /* Dad's factory past 60%: the box glows and breathes */
 #bankBox.ripe{animation:bankRipe 1.8s ease-in-out infinite}
@@ -871,8 +889,8 @@ body.reduced .card .shine{display:none}
   #title .stats{margin:2px 0 6px;flex-wrap:nowrap;gap:4px}#title .stat{padding:2px 5px;font-size:12px}#title .stat b{font-size:14px}
   #title #bankBox{margin:2px auto 0;padding:4px 10px 5px}
   #title #bankBox .bb{margin:3px 0 2px}
-  #title .toggle{min-height:36px;margin:0}
-  #title .btn{max-width:280px;min-height:42px;margin:4px auto;padding:7px 12px;font-size:17px}
+  #title .toggle{min-height:44px;margin:0}
+  #title .btn{max-width:280px;min-height:44px;margin:4px auto;padding:7px 12px;font-size:17px}
   #title .btn small{font-size:12px}
   #title #dailyBtn .dpips{margin:2px 0 0}#title #dailyBtn .dmed{margin:2px 0 0}
   #title.fresh{grid-template-columns:minmax(0,280px) minmax(0,280px)}
@@ -888,7 +906,7 @@ body.reduced .card .shine{display:none}
 /* very short landscape (568x320): the reroll button still fits under the cards, and the title's buttons all fit */
 @media (orientation:landscape) and (max-height:340px){
   #title #dailyBtn .dnx{display:none}
-  #title .btn{min-height:40px;margin:3px auto;padding:6px 12px}
+  #title .btn{min-height:44px;margin:2px auto;padding:5px 12px}
   .cardRow{margin:4px auto 2px}
   #cards h2{font-size:20px}
 }
@@ -930,10 +948,11 @@ body.reduced .card .shine{display:none}
 body.threat #tut.on{opacity:.3}
 /* intense (combo 10+, FRENZY, or something hostile 600 px ahead): the screen calms down. The side text fades to .3 and the
    HUD's shade lightens; opacity only, so nothing changes size and --hudB holds still */
-#rankLbl,#alive,#toEgg,#zoneName,#mutRow,#energyRow .gas{transition:opacity .25s}
+#rankLbl,#alive,#toEgg,#zoneName,#mutRow,#energyRow .gas,#shields,#dnaHud,#goalPill{transition:opacity .25s}
 /* (the GAS bar and the distance to the egg stay fully readable: they are what a busy moment needs) */
-body.intense #rankLbl,body.intense #alive,body.intense #zoneName{opacity:.6}
-body.intense #mutRow:not(.peek){opacity:.6}
+body.intense #rankLbl,body.intense #alive,body.intense #toEgg,body.intense #zoneName,body.intense #mutRow:not(.peek),
+body.intense #shields:not(.flash):not(.lost),body.intense #dnaHud{opacity:.28}
+body.intense #goalPill{opacity:.4}
 body.intense #hud{background:linear-gradient(180deg,rgba(20,4,20,.5),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
 body.intense.egg #hud{background:linear-gradient(180deg,rgba(20,4,20,.4),rgba(20,4,20,.3) 70%,rgba(20,4,20,0))}
 @media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){
@@ -1050,6 +1069,73 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
 /* the title opens up as the player goes */
 #title.noDaily #dailyBtn,#title.noBank #bankBox,#title.noAlbum #albumBtn,#title.noStats #titleStats{display:none!important}
 #bankBox,#titleStats{position:relative}
+/* ---------- ui round: readability and layout fixes ---------- */
+/* the swim-1 DASH step: the card sits right above the DASH button with an arrow pointing at it (mirrored for lefties) */
+#tut.step-dash{right:calc(var(--safeR) + 12px);left:auto;bottom:calc(var(--safeB) + 150px);width:min(250px,calc(100% - 24px - var(--safeL) - var(--safeR)));overflow:visible}
+#tut.step-dash::after{content:"";position:absolute;right:33px;top:100%;width:0;height:0;border:8px solid transparent;border-top:12px solid rgba(255,215,92,.85);border-bottom:0;animation:dashArrow .7s ease-in-out infinite alternate}
+#tut.step-dash .bar{border-radius:0 0 20px 20px}
+body.lefty #tut.step-dash{left:calc(var(--safeL) + 12px);right:auto}
+body.lefty #tut.step-dash::after{right:auto;left:33px}
+@keyframes dashArrow{to{translate:0 5px}}
+body.reduced #tut.step-dash::after{animation:none}
+@media (orientation:portrait),(orientation:landscape) and (min-height:521px) and (max-aspect-ratio:1249/1000){
+  body.racing.tutHud #tut.step-dash{top:auto;bottom:calc(var(--safeB) + 150px);left:auto;right:calc(var(--safeR) + 12px);transform:translate(0,14px)}
+  body.racing.tutHud #tut.step-dash.on{transform:none}
+  body.racing.tutHud.lefty #tut.step-dash{left:calc(var(--safeL) + 12px);right:auto}
+  /* swim 1's steer card (over the ghost finger) sits to the right, so the dotted line up to Kevin stays clear */
+  body.racing.tutHud #tut.fg,body.racing.tutHud #tut.fg.on{left:auto;right:calc(var(--safeR) + 10px);transform:none;width:min(56%,240px)}
+}
+body.comboOn #tut.step-dash,body.racing.tutHud.comboOn #tut.step-dash{bottom:calc(var(--padBot,180px) + 8px)}
+/* a guide ring near the bottom: its label goes above it */
+#tutTarget.up::after{top:auto;bottom:calc(100% + 4px)}
+/* the progress bar: your dot is always on top of the rival pips and tags */
+#me{z-index:2}
+/* a rival behind you: only the dot fades; its name tag stays readable in cream, edged in the rival's colour */
+.rv.behind:not(.dead){opacity:1}
+.rv .dot{transition:opacity .3s}
+.rv.behind .dot{opacity:.5}
+/* (an underline in the rival's colour: a left border on the rounded tag read as a stray '(' before the name) */
+.rv.behind:not(.taunt) .tag{color:var(--cream)!important;opacity:.85;box-shadow:inset 0 -2px 0 var(--rc,#fff4f8)}
+/* a coach line that will not fit on one line: two smaller lines */
+body.racing:not(.egg) #coach.two,#coach.two{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:clip;font-size:12px;line-height:1.15}
+body.egg #coach.two{display:none}
+/* a MASHUP: icon and name on the line, its rule under it */
+/* the duel panel's small line: plain, cream, readable */
+#drillUI .ep{font-size:13px;font-style:normal;color:var(--cream);opacity:.85}
+/* a gold tick for every rival move countered */
+#drillUI .ctk{display:flex;justify-content:center;gap:3px;margin:2px 0 0;font-size:12px;font-weight:800;line-height:1;color:var(--gold);text-shadow:0 1px 0 var(--ink)}
+#drillUI .ctk:empty{display:none}
+#drillUI .ctk i{font-style:normal;animation:land .3s cubic-bezier(.2,1.8,.4,1)}
+body.reduced #drillUI .ctk i{animation:none}
+#resDuel small.mv{color:var(--gold)}
+#banner.syn .c{display:-webkit-box;font-size:13px;line-height:1.15;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* ---------- swim 1: one place to look. Every #tut card (the steps and the lesson cards such as comboIntro) sits centred
+   right under the HUD and slides down into place; only the steer step rides over the ghost finger (.fg) ---------- */
+@media (orientation:portrait),(orientation:landscape) and (min-height:521px) and (max-aspect-ratio:1249/1000){
+  body.racing.swim1.swim1.swim1 #tut:not(.fg){top:calc(var(--hudB) + 8px);bottom:auto;left:50%;right:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));transform:translate(-50%,-14px)}
+  body.racing.swim1.swim1.swim1 #tut.on:not(.fg){transform:translate(-50%,0)}
+  body.racing.swim1 #tut.step-dash::after{display:none}
+}
+/* the lesson card stays readable: never under .85 over a threat or a banner, solid behind its text */
+#tut{background:rgba(20,2,18,.92)}
+body.threat #tut.on,body.bnr #tut.on{opacity:.85}
+body.reduced #tut.on{opacity:1}
+body.intense #goalPill{opacity:.7}
+/* the spend card's row (Spend your DNA beside 🏠, under SWIM AGAIN): Brag waits for a later card */
+#result.spend .row3.spendRow #shareBtn{display:none}
+#result.spend .row3.spendRow #resShopBtn.wide{flex:1 1 auto;width:auto;margin:7px 0}
+/* a tight loss with Dad's Pick affordable: the pick stays as ONE 56 px row (name and BUY) */
+#result.tight.tightUp #resUp{display:flex!important;height:56px;min-height:56px;padding-top:4px;padding-bottom:4px;overflow:hidden}
+#result.tight.tightUp #resUp .tx small,#result.tight.tightUp #resUp .wh,#result.tight.tightUp #resUp .bb{display:none}
+#result.tight.tightUp #resUp .tx b,#result.tight.tightUp #resUp .dp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the next goal's flavour line */
+small.gfl{display:block;font-size:11px;font-weight:600;font-style:italic;opacity:.8;margin-top:1px}
+body.intense #mutRow:not(.peek){visibility:hidden}
+/* FRENZY: the style pips step aside unless they are what holds the next tier back (.lock) */
+#combo.fz .pips:not(.lock){visibility:hidden}
+body.intense #combo .in{background:rgba(20,2,18,.85)}
+/* a threat ahead: the coach strip steps under the threat chevrons (portrait) */
+@media (orientation:portrait){body.threat #coach{top:calc(var(--hudB) + 52px)}}
 </style>
 </head>
 <body>
@@ -1209,6 +1295,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
     <div class="setRow"><span>Music 🎶<small>Coach Gonad's beatbox band</small></span><span class="rt"><input type="range" id="setMusicVol" min="0" max="1" step="0.05" aria-label="Music volume"><label class="ck"><input type="checkbox" id="setMusic" aria-label="Music on"></label></span></div>
     <div class="setRow"><span>Sound effects 🔊<small>Splats, pops and boings</small></span><span class="rt"><input type="range" id="setSfxVol" min="0" max="1" step="0.05" aria-label="Sound volume"><label class="ck"><input type="checkbox" id="setSfx" aria-label="Sound effects on"></label></span></div>
     <label class="setRow"><span>Mono audio 🎧<small>One earbud: every sound in both ears</small></span><input type="checkbox" id="setMono" aria-label="Mono audio (one earbud)"></label>
+    <label class="setRow hide" id="setMixRow"><span>Play over my music 🎵<small>Your own music keeps playing; the band stays quiet</small></span><input type="checkbox" id="setMix" aria-label="Play over my music"></label>
     <label class="setRow" id="setHapticsRow"><span>Haptics 📳<small>Buzz on dashes, hits and FRENZY</small></span><input type="checkbox" id="setHaptics"></label>
     <label class="setRow"><span>Reduced motion 🐢<small>Less shake, flash and slow-mo</small></span><input type="checkbox" id="setReduced"></label>
     <div class="setRow" id="setSensRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
@@ -1228,6 +1315,7 @@ body.reduced .hab button.pulse{box-shadow:0 4px 0 #136b3a,0 0 0 3px var(--gold)}
     <button class="btn hide" id="wbShop"></button>
     <button class="btn alt" id="wbClose">Later</button>
   </div>
+  <div id="staleBar" class="hide" role="alert"><span>Kevin is swimming in another tab</span><button id="staleBtn" type="button">Play here</button></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="ver">v0.3 test build</div>
 </div>
