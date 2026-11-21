@@ -41,7 +41,7 @@ export const RACE_LEN = ZONES.reduce((s, z) => s + z.len, 0);
 
 // rarity: 1 common, 2 rare, 3 legendary. max: how many times it can be taken.
 export const MUTATIONS = {
-  turbo:   { name: 'Turbo Tail',       icon: '🌀', r: 1, max: 3, speed: 0.07, desc: '+7% swim speed.' },
+  turbo:   { name: 'Turbo Tail',       icon: '🌀', r: 1, max: 3, speed: 0.1, desc: '+10% swim speed.' },
   tank:    { name: 'Big Fructose Tank', icon: '🛢️', r: 1, max: 4, desc: '+30 max GAS and a full refill.' },
   helmet:  { name: 'Helmet Head',      icon: '⛑️', r: 1, max: 3, desc: '+1 shield. Bonk!' },
   draft:   { name: 'Slipstream Pro',   icon: '💨', r: 1, max: 3, desc: 'Drafting is 60% stronger and refills GAS.' },
@@ -111,11 +111,11 @@ export const habitCost = (id, lv) => {
 // move: the signature move each one pulls at the egg (core.js stepDrill emits rivalMove {k, move, phase}).
 // drill: drilling speed at the egg, tuned with the move (Chad drills fastest because his hair check is a gift).
 export const RIVALS = [
-  { name: 'Steve', move: 'sorry', sp: 0.96, smart: 0.6, drill: 0.9, col: '#9ad0ff', line: 'Steve is just happy to be here. Steve waved at a wall earlier.' },
-  { name: 'Brock', move: 'maxRep', sp: 1.08, smart: 0.65, drill: 1.2, col: '#ffb36b', line: 'Brock lifts. Brock writes poems about lifting. Brock is 60% Gerald, his protein shake.' },
-  { name: 'Tiffany', move: 'byTheBook', sp: 1.17, smart: 0.85, drill: 1.15, col: '#ff8be0', line: 'Tiffany has read every book about eggs. With a highlighter.' },
-  { name: 'Gunther', move: 'stuntDive', sp: 0.98, smart: 0.7, drill: 1.1, col: '#b6ff5c', line: 'Gunther does his own stunts. His cameraman Dieter does his own crying.' },
-  { name: 'Chad Thundertail', move: 'hairCheck', sp: 0.99, smart: 0.45, drill: 1.45, col: '#ffd75c', line: "Chad has won this race 0 times. Chad thinks it's 1000." },
+  { name: 'Steve', move: 'sorry', sp: 0.96, smart: 0.6, drill: 1.1, col: '#9ad0ff', line: 'Steve is just happy to be here. Steve waved at a wall earlier.' },
+  { name: 'Brock', move: 'maxRep', sp: 1.08, smart: 0.65, drill: 1.22, col: '#ffb36b', line: 'Brock lifts. Brock writes poems about lifting. Brock is 60% Gerald, his protein shake.' },
+  { name: 'Tiffany', move: 'byTheBook', sp: 1.17, smart: 0.85, drill: 1.05, col: '#ff8be0', line: 'Tiffany has read every book about eggs. With a highlighter.' },
+  { name: 'Gunther', move: 'stuntDive', sp: 0.98, smart: 0.7, drill: 1.18, col: '#b6ff5c', line: 'Gunther does his own stunts. His cameraman Dieter does his own crying.' },
+  { name: 'Chad Thundertail', move: 'hairCheck', sp: 0.99, smart: 0.45, drill: 1.5, col: '#ffd75c', line: "Chad has won this race 0 times. Chad thinks it's 1000." },
 ];
 
 export const COMBO_WORDS = [
@@ -716,8 +716,7 @@ export const SYNERGY_HINTS = {
   hypeSquad:   'Every party needs your best friend back.',
   elephant:    'Never forget a combo. Not even a dropped one.',
   greased:     'Slip past danger and through slime. Zoom.',
-  domino:      'Start a pit, lower your horns. Every swimmer flattened feeds the fire.',
-  slot:        'Pull the lever while the party is on. Every coin buys more party.',
+  domino:      'Start a pit. Every swimmer you flatten feeds the fire.',
   reserveTank: 'Get back up with a FULL belly and a hard hat on.',
   jackpot:     'On fire? Every coin you grab rings the combo bell.',
   afterburner: 'Fast tail, quick twitch. Longer zooms that light the fuse.',
@@ -1272,10 +1271,8 @@ export const SYNERGY_SHORT = {
   couchPotato: 'Free drafting, free combo!',
   hazmat:      'Acid and goo = near misses!',
   bloodhound:  'Right tube: FRENZY, x2 pass!',
-  slot:        'FRENZY DNA adds FRENZY time!',
 };
 // Kept for anything that still reads the old separate export.
-export const SYNERGY_SHORT_SLOT = SYNERGY_SHORT.slot;
 // Extra zone-banner lines for Coach Gonad, 6 words or fewer. {n} is the Kevin number.
 export const COACH_SHORT_MORE = {
   launch: ['Kevin #{n}! Same tail, new you!', 'I once surfed a shark. Allegedly.', 'Back of the queue? I remember.', 'Wiggle first. I never explain.', 'Draft, pass, repeat. Then lunch.', 'Fresh legs! Well, fresh tail.', "Kevin #{n}, GO! I'll jog behind."],

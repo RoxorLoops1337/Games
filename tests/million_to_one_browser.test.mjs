@@ -135,6 +135,9 @@ for (const y of ZY) {
 }
 ok(errs.length === 0, 'no page errors across all zones ' + errs.join(' | '));
 // Act: at the egg, a rival winds up a move (its tell line already names the speaker)
+// (the swim from the last hop to the egg takes a variable time: wait for the duel panel itself, capped, not a fixed delay;
+// the tank is kept full meanwhile so the wait never ends on GAS)
+await page.waitForFunction(() => { const r = game.race; if (r && !r.over && !r.drill) r.p.e = r.p.maxE; return !document.getElementById('drillUI').classList.contains('hide') || !!(r && r.over); }, null, { timeout: 15000, polling: 100 }).catch(() => {});
 const drillOn = await page.evaluate(() => !document.getElementById('drillUI').classList.contains('hide'));
 if (drillOn) {
   // (a tell at the egg goes to Gunther's own duel bubble via R.duelSay, one bubble per rival; the bark already drops the
