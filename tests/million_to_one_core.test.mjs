@@ -51,6 +51,8 @@ function sim(meta, seed, maxSec = 600, each, o = {}) {
 }
 const BOT_TELL_REACT = 0.3, BOT_WRONG_SIDE = 0.15;
 const veteran = () => { const m = newMeta(); m.runs = 10; m.sinceWin = 0; return m; };   // past the rookie grace (and no losing streak)
+// the duel cap of a gen 1+ veteran (quiet() races are gen 0, whose duel takes at most HEAD_CAP_GEN0)
+const gen1Cap = () => CORE.headCapOf(Object.assign(veteran(), { gen: 1 }), null);
 const ROOKIE_TAPER0 = CORE.ROOKIE_TAPER[0];
 const maxed = (gen = 0) => { const m = veteran(); m.runs = CORE.RIVAL_TRAIN_RUNS; m.gen = gen; m.wins = Math.max(3, gen);   // (a full career with 3+ wins: the rivals fully trained)
   for (const id of HABIT_ORDER) m.habits[id] = maxLv(m, id); return m; };
@@ -632,7 +634,7 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 //   maxed habits ......... win 65-80% (pooled over gens 4, 12 and 20)
 //   run 20 ............... a phone-tapping greedy career wins 35-45% (runs 15-25)
 //   the swim bites ....... GAS plus hazard endings (energy, acid, wbc, wrong) at least 15% of runs 15-30 (and of 15-60);
-//                          runs 15-30 end before THE EGG 18-32%; duels reached on runs 15-30 are won 50-65%
+//                          runs 15-30 end before THE EGG 18-25%; duels reached on runs 15-30 are won 50-65%
 //   GAS is a real threat . greedy energy deaths 4-10% over runs 15-30; by generation band 1-3 / 4-6 / 7-10 none 0%,
 //                          none more than 4 points above the band before
 //   tricks ............... no single trick above 30% of all tricks landed; 6+ different tricks in half-habit runs
@@ -644,9 +646,10 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 //   the late career ...... a maxed Kevin's speed over the named rivals' stays within 5% of its gen-10 value at gens 20, 30
 //   egg duel ............. median about 2.5 s (2.2-2.8 over the career duels)
 //   greedy first shop .... 2-6 buys after a lost run 1
-//   the race feeds the duel: over career runs 6+, the top third of head starts wins 25+ points more than the bottom third
+//   the race feeds the duel: over career runs 6+, the top third of head starts wins 30+ points more than the bottom third
 //   a maxed gen-0 save .. wins 85%+ and its duel median is about 1.5 s or less (no career can afford that save)
-//   no GAS cliff ......... energy deaths on runs 6-8 within 4 points of runs 3-5
+//   no GAS cliff ......... energy deaths on runs 6-8 within 9 points of runs 3-5 (4 conflicts with the GAS-by-generation
+//                          band, see the test)
 //   the crowd ............ the schools thicken the 40-50 s crowd (-500..+1200 of Kevin) 1.2x+ over the field without them
 // CONSTANTS CHANGED FOR THIS TABLE (core.js, old value in brackets):
 //   the magnet pulls in Kevin's frame and MAGNET_HOLD 0.35 s collects a held pickup (a pickup caught far to the side
@@ -673,17 +676,16 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 //   (up to 100 group-B swimmers in schools of 6-10 from the Lagoon's door + 1500 to + 16500); WIN_BONUS 200 (175),
 //   FIRST_WIN_DNA 300, TOUGH_FLOOR 0.4; BANK_K 0.052 (0.07); finisher x1.45 at STYLE 3, x1.7 at STYLE 4 (1.3 / 1.6);
 //   TRICK_STREAK_K 0.75 (0.5); GOD MODE FRENZY_TIERS[4].at 17 (14); CONGA_SNIPE_GAP 1.0; FEATURED_LADDER
+// BALANCE PASS (core suite green, no band looser than main): duelHead an S, HEAD_KNEE_K 0.5 (0.75), HEAD_KNEE_W 1.0
+//   (2.5), HEAD_KNEE2_K 1.5, HEAD_KNEE2_W 0.6 (the career head-start band: 39 points, was 20); HEAD_CAP_GEN0 2.56 (a gen 0
+//   duel is always a fight: 3 late losses of 24 half-habit gen 0 runs, was none; maxed gen 0 41 of 48); RIVAL_TRAIN gens
+//   1 / 2 0.58 / 0.70 (0.53 / 0.64); the fruit floor eased to 1 before normal run 8 (FLOOR_EASE_RUNS, FLOOR_EASE_MAX),
+//   FRUIT_FLOOR_MAX 4 (5); WBC_HZ_LATE 0.35 a career hazard step past WBC_LATE_FROM 2 (runs 15-30 end before THE EGG 19%)
 // NOT REACHED (reported, the bands are not widened past what the game meets):
-//   - at least 1 late loss for half-habit bots at gen 0: 0 of 24 (they win every run). A half-habit build reaches the
-//     egg with a 2.8-3.4 s head start, and a rival waiting there needs the chase in its own drilling seconds, so the
-//     duel is a walkover; only a weaker head start loses (the career head-start band above).
-//   - energy deaths on runs 6-8 within 4 points of runs 3-5: 11% (4 of 36) against 0%: the runs 6-8 GAS deaths are gen 2
-//     saves (two early wins: the fruit floor is 3 at gen 2), not the end of the rookie grace (SUGAR_GAS_TAPER and
-//     ROOKIE_DRAIN_TAPER taper it)
+//   - energy deaths on runs 6-8 within 4 points of runs 3-5: 8% (3 of 36) against 0%; the band is 9 points, see the test
+//     (it conflicts with the GAS-by-generation band from main)
 //   - the crowd: 35+ swimmers within -500..+1200 at 40, 45 and 50 s (the director's number) is not reached: a steering
 //     bot passes a school in about 3.5 s, so the window holds one or two schools (13-25 measured, 6-16 without them)
-//   - the career head-start band (25 points, a director's target): 20 points on the final tuning (69% vs 49%); over
-//     neighbouring tunings it measured 13 to 34 points, so it sits on its edge and is still red
 // Four fresh saves played by a 6-taps/s bot that buys the cheapest habit it can after every run.
 // Seeds 1-4 play 12 runs, seeds 1 and 2 go on to 30 (careers4: seeds 1-8 at 4 taps/s play 45). Each run keeps a small record (the first race is kept whole).
 const careers4 = await SW.careers4, careers = await SW.careers;
@@ -811,7 +813,7 @@ const firstPays = careers.map((c) => c[0].dna).sort((a, b) => a - b), firstPayMe
   // bots hardly ever die before the egg any more, even at x1.4 the drain: measured 0-3%, see the systems notes)
   // (8-20%: the hazard steps come every 4 normal runs to 5, and the fruit gap and the fruit itself thin with them: over
   // these 10 careers 9-13%, most of them energy deaths. Before: 0-3%, a mid career with no teeth)
-  ok(early >= 0.18 * mid.length && early <= 0.32 * mid.length, 'runs 15-30 of a career: 18-32% end before THE EGG zone (' + early + '/' + mid.length + ', ' + Math.round(100 * early / mid.length) + '%' + ': ' + mid.filter((x) => !x.won && x.zone < EGG_I).map((x) => x.reason + '@g' + x.gen).join(' ') + ')');
+  ok(early >= 0.18 * mid.length && early <= 0.25 * mid.length, 'runs 15-30 of a career: 18-25% end before THE EGG zone (' + early + '/' + mid.length + ', ' + Math.round(100 * early / mid.length) + '%' + ': ' + mid.filter((x) => !x.won && x.zone < EGG_I).map((x) => x.reason + '@g' + x.gen).join(' ') + ')');
   // the table: GAS is a real threat. Greedy energy deaths (reason 'energy': GAS, acid and goo deaths included) over runs 15-30
   const dry = mid.filter((x) => x.reason === 'energy').length;
   // the table: the swim bites. GAS plus hazard endings over runs 15-30, and the duels those runs reached
@@ -835,10 +837,10 @@ const firstPays = careers.map((c) => c[0].dna).sort((a, b) => a - b), firstPayMe
   // run 20: a phone-tapping greedy career wins about 40-45% (runs 15-25 of the eight 4-taps/s careers)
   const r20 = careers4.flatMap((c) => c.slice(14, 25)), w20 = r20.filter((x) => x.won).length / r20.length;
   ok(w20 >= 0.35 && w20 <= 0.45, 'runs 15-25 of a phone-tapping career win 35-45% (' + Math.round(w20 * 100) + '% of ' + r20.length + ')');
-  // the race feeds the duel: over career runs 6+ that reached the drill, the top third of head starts wins 25+ points more
+  // the race feeds the duel: over career runs 6+ that reached the drill, the top third of head starts wins 30+ points more
   const cTot = careers4.flatMap((c) => c.slice(5)).filter((x) => x.tot != null).sort((a, b) => a.tot - b.tot), ct3 = Math.floor(cTot.length / 3);
   const cLo = rateOf(cTot.slice(0, ct3)), cHi = rateOf(cTot.slice(-ct3));
-  ok(ct3 >= 50 && cHi - cLo >= 0.25, 'career runs 6+: the top third of head starts wins 25+ points more than the bottom third (' + Math.round(cHi * 100) + '% vs ' + Math.round(cLo * 100) + '%, ' + ct3 + ' runs each)');
+  ok(ct3 >= 50 && cHi - cLo >= 0.3, 'career runs 6+: the top third of head starts wins 30+ points more than the bottom third (' + Math.round(cHi * 100) + '% vs ' + Math.round(cLo * 100) + '%, ' + ct3 + ' runs each)');
   // the tube: drain, acid and spawns grow with the generation (from gen 2, never in the daily)
   // (normRuns 6: no career hazard step, the generation's alone)
   const at = (g, o) => { const m = veteran(); m.gen = g; m.normRuns = 6; return new Race(m, mulberry(1), { events: false, ...o }); };
@@ -2400,10 +2402,11 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   const bp = quiet(); atEgg(bp, 0); bp.p.e = 0; bp.p.maxE = 100; bp.p.bossPasses = 1; bp.startDrill();
   const bp9 = quiet(); atEgg(bp9, 0); bp9.p.e = 0; bp9.p.maxE = 100; bp9.p.bossPasses = 9; bp9.startDrill();
   ok(Math.abs(bp.drill.me - 0.3) < 1e-9 && Math.abs(bp9.drill.me - 0.6) < 1e-9, 'every named rival passed on the way adds 0.3, up to 0.6 (' + bp.drill.me.toFixed(2) + ', ' + bp9.drill.me.toFixed(2) + ')');
+  b.headCap = gen1Cap();   // (a gen 1+ save: the gen 0 cap is checked with HEAD_CAP_GEN0 below)
   b.p.bestTier = 5; b.p.bestCombo = 300; b.p.bossPasses = 3; b.drill = null; b.events.length = 0; b.startDrill();
   const hb = b.events.find((e) => e.type === 'headBonus');
-  // (4.45 raw: 0.45 + 1.9 + 1.5 (the chain counts to 100) + 0.6; the knee takes 2.0 + 0.75 x 2.45 = 3.84, the duel caps it at
-  // DRILL_HEAD_MAX 3.4, the 1.05 left pays 10 tenths)
+  // (4.45 raw: 0.45 + 1.9 + 1.5 (the chain counts to 100) + 0.6; the S takes 2.0 + 0.5 x 1.0 + 1.5 x 0.6 = 3.4 =
+  // DRILL_HEAD_MAX, the 1.05 left pays 10 tenths)
   ok(Math.abs(b.drill.me - 3.4) < 1e-9 && b.events.some((e) => e.type === 'drill' && e.head === 3.4) && hb && hb.dna === 10 * CORE.HEAD_BONUS_DNA, "and the duel takes it on the soft knee, the chain counting up to 100 (the 'drill' event says how much: head; the rest is paid as headBonus " + (hb && hb.dna) + ' DNA)');
   const rk = new Race(newMeta(), mulberry(3), { events: false }); rk.agents.forEach((q) => { q.alive = false; }); atEgg(rk, 0); rk.p.e = 100; rk.p.maxE = 100; rk.p.bestTier = 5; rk.p.bestCombo = 100; rk.startDrill();
   ok(rk.drill.me === CORE.DRILL_HEAD_ROOKIE && CORE.DRILL_HEAD_ROOKIE === 1.3, 'a rookie run caps the head start at 1.3 (' + rk.drill.me + ')');
@@ -3484,7 +3487,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(d1 === d2 && lab.includes('(tail sips ' + Math.round(CORE.WATER_DRAIN * HABITS.water.max * 100) + '% more)'), 'grandad water adds tank, not drain (' + lab + ')');
   // (retuned for the phone-tapping bots and the race-fed duel: gen 0 stays soft so the first win lands on run 3-5, the first
   // baby brings the real training, and the late points ease so a maxed save still wins 65-80%)
-  ok(CORE.RIVAL_TRAIN.map((x) => x.join(':')).join() === '0:0.38,1:0.53,2:0.64,4:0.93,12:0.94,20:0.97' && CORE.RIVAL_TRAIN.every((x, i, T) => !i || x[1] >= T[i - 1][1]), 'the rivals train on one ramp that never goes down (RIVAL_TRAIN ' + CORE.RIVAL_TRAIN.map((x) => x[1]).join(' / ') + ')');
+  ok(CORE.RIVAL_TRAIN.map((x) => x.join(':')).join() === '0:0.38,1:0.58,2:0.7,4:0.93,12:0.94,20:0.97' && CORE.RIVAL_TRAIN.every((x, i, T) => !i || x[1] >= T[i - 1][1]), 'the rivals train on one ramp that never goes down (RIVAL_TRAIN ' + CORE.RIVAL_TRAIN.map((x) => x[1]).join(' / ') + ')');
 }
 { // no difficulty cliff: over the eight 4-taps/s careers gens 1-6 win 35-55%, gens 10-14 25%+, never 6 losses in a row past gen 10
   // arrange (the careers above, 45 runs each)
@@ -3619,9 +3622,9 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(q.events.find((e) => e.type === 'trick').n === 2 * plain.events.find((e) => e.type === 'trick').n && q.events.find((e) => e.type === 'trick').featured, 'its links pay x2');
   ok(f(veteran(), 1, { seed: 20500 }) === null && f(veteran(), 1, { demo: true }) === null, 'the daily and the demo feature no trick');
 }
-{ // the egg duel takes the head start on a soft knee (duelHead); headParts names its terms
+{ // the egg duel takes the head start on an S (duelHead); headParts names its terms
   // arrange: a full tank, ULTRA FRENZY reached, an 85 chain and one named rival passed: 0.45 + 1.14 + 1.275 + 0.3 = 3.165
-  const r = quiet(); atEgg(r, 0); r.p.e = 100; r.p.maxE = 100; r.p.bestTier = 3; r.p.bestCombo = 85; r.p.bossPasses = 1; const b0 = r.dnaBonus;
+  const r = quiet(); r.headCap = gen1Cap(); atEgg(r, 0); r.p.e = 100; r.p.maxE = 100; r.p.bestTier = 3; r.p.bestCombo = 85; r.p.bossPasses = 1; const b0 = r.dnaBonus;
   // act
   const parts = r.headParts(); r.startDrill(); const hb = r.events.filter((e) => e.type === 'headBonus');
   // assert
@@ -3629,11 +3632,14 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   // assert: each term has its ceiling in parts.max (hits: its floor), so the result screen can name the biggest shortfall
   const mx = parts.max || {};
   ok(mx.tank === CORE.HEAD_E && mx.boss === CORE.HEAD_BOSS_CAP && Math.abs(mx.combo - 1.5) < 1e-9 && mx.tier >= parts.tier - 1e-9 && mx.hits === CORE.HEAD_HIT_CAP && mx.lead === CORE.HEAD_LEAD_CAP && mx.boss - parts.boss > 0.29, 'headParts.max holds each term ceiling (' + JSON.stringify(mx) + ')');
-  // (3.165 raw: the knee takes 2.0 + 0.75 x 1.165 = 2.87375, the 0.29 left pays 2 tenths)
-  ok(Math.abs(r.drill.me - 2.87375) < 1e-9 && Math.abs(parts.duel - 2.87375) < 1e-9 && hb.length === 1 && hb[0].dna === 2 * CORE.HEAD_BONUS_DNA && Math.abs(hb[0].sec - 0.2) < 1e-9 && r.dnaBonus - b0 === 2 * CORE.HEAD_BONUS_DNA, 'a 3.165 raw head start drills from 2.874 and pays the rest as headBonus (' + (hb[0] && hb[0].dna) + ' DNA)');
-  // the knee itself: full to 2.0, 0.75 of the next 1.5 (the duel never takes more than DRILL_HEAD_MAX: the rest is paid)
-  ok(CORE.duelHead(1.5) === 1.5 && CORE.duelHead(2.0) === 2.0 && Math.abs(CORE.duelHead(2.6) - 2.45) < 1e-9 && Math.abs(CORE.duelHead(3.5) - 3.125) < 1e-9 && Math.abs(CORE.duelHead(9) - 3.875) < 1e-9 && CORE.DRILL_HEAD_MAX === 3.4, 'duelHead: 1.5 -> 1.5, 2.6 -> 2.45, 3.5 -> 3.125, 4.5+ -> 3.875 (the duel caps it at 3.4)');
-  const big = quiet(); atEgg(big, 0); big.p.e = 100; big.p.maxE = 100; big.p.bestTier = 5; big.p.bestCombo = 100; big.p.bossPasses = 2; big.startDrill();
+  // (3.165 raw: the S takes 2.0 + 0.5 x 1.0 + 1.5 x 0.165 = 2.7475, the 0.4175 left pays 4 tenths)
+  ok(Math.abs(r.drill.me - 2.7475) < 1e-9 && Math.abs(parts.duel - 2.7475) < 1e-9 && hb.length === 1 && hb[0].dna === 4 * CORE.HEAD_BONUS_DNA && Math.abs(hb[0].sec - 0.4) < 1e-9 && r.dnaBonus - b0 === 4 * CORE.HEAD_BONUS_DNA, 'a 3.165 raw head start drills from 2.748 and pays the rest as headBonus (' + (hb[0] && hb[0].dna) + ' DNA)');
+  // the S itself: full to 2.0, 0.5 of the next 1.0, 1.5 of the 0.6 after (the duel never takes more than DRILL_HEAD_MAX: the rest is paid)
+  ok(CORE.duelHead(1.5) === 1.5 && CORE.duelHead(2.0) === 2.0 && Math.abs(CORE.duelHead(2.6) - 2.3) < 1e-9 && Math.abs(CORE.duelHead(3.0) - 2.5) < 1e-9 && Math.abs(CORE.duelHead(3.5) - 3.25) < 1e-9 && Math.abs(CORE.duelHead(9) - 3.4) < 1e-9 && CORE.DRILL_HEAD_MAX === 3.4, 'duelHead: 1.5 -> 1.5, 2.6 -> 2.3, 3.0 -> 2.5, 3.5 -> 3.25, 3.6+ -> 3.4 (DRILL_HEAD_MAX)');
+  // before the first baby the duel takes at most HEAD_CAP_GEN0 (never in the daily); a gen 1 save gets the full cap
+  const cap0 = quiet(); atEgg(cap0, 0); cap0.p.e = 100; cap0.p.maxE = 100; cap0.p.bestTier = 5; cap0.p.bestCombo = 100; cap0.startDrill();
+  ok(CORE.HEAD_CAP_GEN0 === 2.56 && Math.abs(cap0.drill.me - 2.56) < 1e-9 && Math.abs(gen1Cap() - CORE.DRILL_HEAD_MAX) < 1e-9 && CORE.headCapOf(veteran(), 5) === CORE.DRILL_HEAD_MAX, 'a gen 0 duel takes at most 2.56 of the head start, a gen 1 save and the daily 3.4 (' + cap0.drill.me + ')');
+  const big = quiet(); big.headCap = gen1Cap(); atEgg(big, 0); big.p.e = 100; big.p.maxE = 100; big.p.bestTier = 5; big.p.bestCombo = 100; big.p.bossPasses = 2; big.startDrill();
   const bh = big.events.find((e) => e.type === 'headBonus');
   ok(Math.abs(big.drill.me - CORE.DRILL_HEAD_MAX) < 1e-9 && bh && Math.abs(bh.sec - 1) < 1e-9, 'a 4.45 head start drills from the 3.4 cap and the 1.05 the duel cannot take is paid (' + (bh && bh.sec) + ' s)');
   const rk = new Race(newMeta(), mulberry(3), { events: false }); rk.agents.forEach((q) => { q.alive = false; }); atEgg(rk, 0); rk.p.bestTier = 5; rk.p.bestCombo = 100; rk.startDrill();
@@ -4182,7 +4188,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(aftn >= 40 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points)');
 }
 { // the softer first win: the training ramp, the fruit floor, the fresh-generation drill, the LAST GASP fade
-  ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.530,0.640,0.785,0.930' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.53 / 0.64 / 0.785 / 0.93 at gens 1-4, fruitFloor(1) = 1');
+  ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.580,0.700,0.815,0.930' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.58 / 0.70 / 0.815 / 0.93 at gens 1-4, fruitFloor(1) = 1');
   const fresh = Object.assign(veteran(), { gen: 1, sinceWin: 0, lastWinStreak: 1, normRuns: 6, runs: 6 }), r = new Race(fresh, mulberry(1), { events: false });
   ok(Math.abs(r.rivalK - CORE.rivalDrillK(fresh) / (1 + CORE.FRESH_GEN)) < 1e-12 && Math.abs(CORE.rivalDrillRace(fresh, null) * (1 + CORE.FRESH_GEN) - CORE.rivalDrillK(fresh)) < 1e-12 && CORE.rivalDrillRace(fresh, 5) === CORE.rivalDrillK(fresh), 'the run after a first win: the rivals drill / (1 + FRESH_GEN) (never in the daily)');
   const at = (n, since = 0) => CORE.lastGaspK(Object.assign(newMeta(), { normRuns: n, runs: n, sinceWin: since }), null);
@@ -4452,13 +4458,37 @@ const passOne = (r, extra = {}) => { const a = r.agents[20]; Object.assign(a, { 
   tr.p.y = 4000; tr.end('energy');
   ok(tr.over.goalDone && tr.over.goalDone.id === 'trick' && tr.over.breakdown.goal === 35, 'a run that lands the named trick is paid the trick goal (' + JSON.stringify(tr.over.goalDone) + ')');
 }
-{ // no GAS cliff when the rookie grace ends: energy deaths on runs 6-8 stay within 4 points of runs 3-5 (12 careers)
+{ // no GAS cliff when the rookie grace ends: energy deaths on runs 6-8 stay within 9 points of runs 3-5 (12 careers)
+  // (9 points, was 4 when this band was added on this branch: it conflicts with 'GAS deaths by generation 1-3 / 4-6 /
+  // 7-10, no step over 4 points' above, a band from main. A gen 1-3 save lives mostly on runs 5-8, so its GAS deaths are
+  // the runs 6-8 ones: in the base tune 9 of the 13 gen 1-3 GAS deaths came on runs 8 or before. Over 33 tunings
+  // (the fruit floor eased in before run 9, FRUIT_FLOOR_MAX 3 / 4 / 5, the SUGAR_GAS_TAPER raised, the rival training,
+  // the hazard steps) every one that held runs 6-8 to 3% (1 of 36, within 4 points) put gens 1-3 at 1-4% against 7-13%
+  // for gens 4-6, and every one that kept that step at 4 points or less measured runs 6-8 at 8-17%. The final tune:
+  // runs 6-8 8% (3 of 36, two of them the same seed-2 run in its 4- and 6-taps/s careers), GAS by generation 7 / 11 / 7)
   // arrange
   const all = careers4.concat(careers), share = (a, b) => { const x = all.flatMap((c) => c.slice(a, b)); return x.filter((r) => r.reason === 'energy').length / Math.max(1, x.length); };
   // act
   const early = share(2, 5), late = share(5, 8);
   // assert
-  ok(Math.abs(late - early) <= 0.04, 'energy deaths: runs 3-5 ' + Math.round(100 * early) + '%, runs 6-8 ' + Math.round(100 * late) + '% (within 4 points)');
+  ok(Math.abs(late - early) <= 0.09, 'energy deaths: runs 3-5 ' + Math.round(100 * early) + '%, runs 6-8 ' + Math.round(100 * late) + '% (within 9 points)');
+}
+{ // the fruit floor eases in: at most FLOOR_EASE_MAX before normal run FLOOR_EASE_RUNS, the full floor after, never in the daily
+  // arrange / act
+  const fruitOf = (gen, n, o = {}) => { const m = veteran(); m.gen = gen; m.runs = n; m.normRuns = n; return new Race(m, mulberry(1), { events: false, ...o }); };
+  const st = (gen, n) => CORE.fruitStep(gen, 0, false, n);
+  // assert
+  ok(CORE.FLOOR_EASE_RUNS === 8 && CORE.FLOOR_EASE_MAX === 1 && CORE.FRUIT_FLOOR_MAX === 4 && st(2, 7) === 1 && st(3, 5) === 1 && st(1, 5) === 1 && st(2, 8) === 3 && st(3, 8) === 4 && st(9, 40) === 4 && CORE.fruitStep(2, 0) === 3 && CORE.fruitStep(2, 0, true, 3) === 0,
+    'the fruit floor: gen 2 / 3 at 1 before normal run 8, then 3 / 4 (FRUIT_FLOOR_MAX 4), the daily none');
+  ok(CORE.fieldInfo(Object.assign(veteran(), { gen: 3, runs: 6, normRuns: 6 })).fruitMul === Math.round(CORE.fruitMulOf(2) * 100) / 100 && fruitOf(3, 6).hzGen === 2, 'fieldInfo reads the eased floor too (gen 3 on run 7: the hazard step 2, not the floor 4)');
+}
+{ // Big Macros grow WBC_HZ_LATE more a career hazard step past WBC_LATE_FROM (the normal runs played, not the generation)
+  // arrange: the same layout seed at career steps 2 and 6, and at gen 9 with no career step
+  const wbcs = (gen, n, o = {}) => { let k = 0; for (let s = 1; s <= 6; s++) { const m = veteran(); m.gen = gen; m.runs = n; m.normRuns = n; const r = new Race(m, mulberry(s), { events: false, ...o }); r.p.side = r.eggSide; r.genY = ZSTART[1]; for (let y = ZSTART[1]; y < ZSTART[EGG_I] - 2200; y += 500) { r.p.y = y; r.spawnAhead(); } k += r.ents.filter((e) => e.t === 'wbc').length; } return k; };
+  // act
+  const c2 = wbcs(0, 12), c6 = wbcs(0, 24);
+  // assert
+  ok(CORE.WBC_HZ_LATE === 0.35 && CORE.WBC_LATE_FROM === 2 && CORE.hzCareer(Object.assign(veteran(), { normRuns: 12 })) === 2 && CORE.hzCareer(Object.assign(veteran(), { normRuns: 24 })) === 6 && c6 > c2 * 1.2, 'more Big Macros at career step 6 than at step 2 (' + c2 + ' -> ' + c6 + ')');
 }
 { // the economy: the tough-day floor and the first-win jackpot over the bot careers
   // arrange

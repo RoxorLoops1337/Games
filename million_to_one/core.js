@@ -396,6 +396,10 @@ export const HZ_CAP = 14;
 // the 0.1 every zone's hairs grow: the swim takes a bigger share of a mid career's losses (GAS plus hazard endings
 // 15%+ of runs 15-30), the egg duel a smaller one
 export const WBC_HZ = 0.25, RAPIDS_CILIA_HZ = 0.08;
+// and WBC_HZ_LATE more a career hazard step past WBC_LATE_FROM (hzCareer: the normal runs played, not the generation),
+// so the mid career swim keeps its teeth while a fast winner's tube is no harder for it (runs 15-30 ended 13-16% before
+// THE EGG on the race-fed duel without it; the table asks 18%+). Never in the daily
+export const WBC_HZ_LATE = 0.35, WBC_LATE_FROM = 2;
 // new READS with the hazard steps (never in the daily: its hzGen is 0): from step 2 sliding goo gates, from 4 Big Macro
 // twins, from 6 puddles that pulse on the beat, from 8 wall hairs in opposite pairs. The first of each a run meets
 // emits hzNew {id}.
@@ -435,9 +439,14 @@ export const fruitMulOf = (hg) => 1 / (1 + FRUIT_HZ_K * Math.min(hg, FRUIT_HZ_MA
 // (FRUIT_FLOOR 0 and FRUIT_FLOOR_K 1.75 steps a generation, to FRUIT_FLOOR_MAX 5: 1 / 3 / 5 at gens 1-3. The first baby's
 // tube is barely thinner than the rookie one, so a first win is no fruit cliff, and by gen 3 GAS is a threat again: greedy
 // GAS deaths about 8% / 7% / 10% over gens 1-3 / 4-6 / 7-10)
-export const FRUIT_FLOOR = 0, FRUIT_FLOOR_K = 1.75, FRUIT_FLOOR_MAX = 5;
+// (FRUIT_FLOOR_MAX 4 (5): with the floor eased in below, gens 4-6 ran dry 5+ points more often than gens 1-3)
+export const FRUIT_FLOOR = 0, FRUIT_FLOOR_K = 1.75, FRUIT_FLOOR_MAX = 4;
 export const fruitFloor = (gen) => { const g = Math.floor(gen || 0); return g >= 1 ? Math.min(FRUIT_FLOOR_MAX, Math.floor(FRUIT_FLOOR + FRUIT_FLOOR_K * g)) : 0; };
-export const fruitStep = (gen, hz, daily = false) => (daily ? 0 : Math.min(HZ_CAP, Math.max(Math.max(0, hz || 0), fruitFloor(gen))));
+// the floor eases in: before normal run FLOOR_EASE_RUNS (n, normRuns) it is at most FLOOR_EASE_MAX, so a save that wins
+// its way to gen 2 or 3 inside its first 8 runs meets no fruit cliff right after the rookie grace (a gen 2 floor of 3 on
+// runs 6-8 was a 24% GAS death rate)
+export const FLOOR_EASE_RUNS = 8, FLOOR_EASE_MAX = 1;
+export const fruitStep = (gen, hz, daily = false, n = Infinity) => (daily ? 0 : Math.min(HZ_CAP, Math.max(Math.max(0, hz || 0), n < FLOOR_EASE_RUNS ? Math.min(FLOOR_EASE_MAX, fruitFloor(gen)) : fruitFloor(gen))));
 // GAS drain per generation (GEN_DRAIN): +6%/gen for gens 1..4 (the first babies meet a thirstier tube), +0.5%/gen to gen
 // 10 (was 0.8%: with the leaner fruit, SUGAR_GAS, gens 7-10 ran dry 5 points more often than gens 4-6), then +1%/gen (was
 // +2%) to +47% at gen 30, where it freezes with the field and the shop (the grandad water, berries and the dash refund
@@ -512,7 +521,7 @@ export const eggBoostPct = (meta) => Math.round((eggBoostOf(meta) - 1) * 100);
 // (the hazard steps are the race's own: max(the generation step, the career step), so the result screen reads the real fruit)
 export const fieldInfo = (meta) => {
   const g = (meta && meta.gen) || 0, hz = Math.max(hzGenOf(g), hzCareer(meta));
-  return { speedPct: Math.round((genSpeed(g) - 1) * 1000) / 10, fruitMul: Math.round(fruitMulOf(fruitStep(g, hz)) * 100) / 100, hz, gen: g };
+  return { speedPct: Math.round((genSpeed(g) - 1) * 1000) / 10, fruitMul: Math.round(fruitMulOf(fruitStep(g, hz, false, normRunsOf(meta))) * 100) / 100, hz, gen: g };
 };
 // the long tail of the Rapids: a named rival more than BAND_D ahead of you there slows by 1 per BAND_W of lead,
 // to x BAND_MIN at most (a claim while you are still in the Rapids would be a chase you could never win)
@@ -596,7 +605,11 @@ export const DRILL_HEAD_ROOKIE = 1.3;
 // the full cap HEAD_RAMP_RUNS runs later (the end of the rookie runs was the real cliff: the first runs after a first win
 // came with a head start twice as big, and the 'harder' generation 1 won more than the rookie runs did). Never the daily
 export const HEAD_RAMP_FROM = 4, HEAD_RAMP_RUNS = 5;
-export const headCapOf = (meta, daily) => (daily != null ? DRILL_HEAD_MAX : lerp(DRILL_HEAD_ROOKIE, DRILL_HEAD_MAX, clamp((normRunsOf(meta) - HEAD_RAMP_FROM) / HEAD_RAMP_RUNS, 0, 1)));
+// before the first baby the duel takes at most HEAD_CAP_GEN0 (64% of the gen 0 drill): a gen 0 duel is always a fight,
+// so a half-habit save that never won is no sure thing at the egg (with the full 3.4 it won all 24 bot runs), and a
+// maxed gen 0 save still wins 85%+ (2.6 put it at 40 of 48, 2.48 at 38)
+export const HEAD_CAP_GEN0 = 2.56;
+export const headCapOf = (meta, daily) => (daily != null ? DRILL_HEAD_MAX : Math.min(Math.floor((meta && meta.gen) || 0) >= 1 ? DRILL_HEAD_MAX : HEAD_CAP_GEN0, lerp(DRILL_HEAD_ROOKIE, DRILL_HEAD_MAX, clamp((normRunsOf(meta) - HEAD_RAMP_FROM) / HEAD_RAMP_RUNS, 0, 1))));
 // Kevin's own drill grows PLAYER_NEED_GEN a generation (to gen 8); the rivals' training carries the rest of the climb
 // (0.09, was 0.06: the duel the combo top end feeds (GOD MODE was at 8 then) needs a little more drilling to stay a duel)
 export const PLAYER_NEED_GEN = 0.15;
@@ -604,8 +617,12 @@ export const PLAYER_NEED_GEN = 0.15;
 // tops out at 2.0 + 1.5 x 0.6 = 2.9 = DRILL_HEAD_MAX (duelHead; the knee came down from 2.1 when GOD MODE moved to 8: the
 // bigger chains and tiers would have made a built run a walkover). Mastery still counts at the egg, a maxed run is no
 // walkover. What the duel does not take is paid as HEAD_BONUS_DNA DNA a whole 0.1 s (headBonus {dna, sec} at the drill)
-export const HEAD_DUEL_MAX = 2.0, HEAD_KNEE_K = 0.75, HEAD_KNEE_W = 2.5, HEAD_BONUS_DNA = 10;
-export const duelHead = (total) => { const t = Math.max(0, +total || 0); return Math.min(t, HEAD_DUEL_MAX) + HEAD_KNEE_K * clamp(t - HEAD_DUEL_MAX, 0, HEAD_KNEE_W); };
+// (balance pass: an S, not a knee: HEAD_KNEE_K 0.5 (0.75) for HEAD_KNEE_W 1.0 (2.5), then HEAD_KNEE2_K 1.5 for HEAD_KNEE2_W
+// 0.6, so the duel takes 2.5 from a fair 3.0 race and the full 3.4 from a 3.6 one. A fair race gets a fair duel, a great
+// race pulls clear: over career runs 6+ the top third of head starts won only 20 points more than the bottom third on
+// the plain knee, 33-40 on this curve over the tunings near it)
+export const HEAD_DUEL_MAX = 2.0, HEAD_KNEE_K = 0.5, HEAD_KNEE_W = 1.0, HEAD_KNEE2_K = 1.5, HEAD_KNEE2_W = 0.6, HEAD_BONUS_DNA = 10;
+export const duelHead = (total) => { const t = Math.max(0, +total || 0); return Math.min(t, HEAD_DUEL_MAX) + HEAD_KNEE_K * clamp(t - HEAD_DUEL_MAX, 0, HEAD_KNEE_W) + HEAD_KNEE2_K * clamp(t - HEAD_DUEL_MAX - HEAD_KNEE_W, 0, HEAD_KNEE2_W); };
 // the head start the race pays into the duel: HEAD_E x the tank left, HEAD_TIER a best FRENZY tier, HEAD_COMBO a link of
 // the best chain (to HEAD_COMBO_CAP), HEAD_BOSS a named rival passed on the way (p.bossPasses, up to HEAD_BOSS_CAP),
 // HEAD_HIT a hit or bite taken (p.hits: goo bonks, shield, Wingman and rookie hits, the spare bite; down to HEAD_HIT_CAP)
@@ -630,7 +647,8 @@ export const habitShare = (meta) => { let n = 0, t = 0; for (const id of HABIT_O
 // (round 1: the race-fed duel (HEAD_TIER 0.38, the head-dependent hold, DRILL_HEAD_MAX 3.4) and the finale that no
 // longer puts a passed rival back in front made the duel easy, so gens 1-20 train harder: 0.53 / 0.64 / 0.93 / 0.94 /
 // 0.97 (were 0.45 / 0.58 / 0.70 / 0.80 / 0.88); gen 0 0.38 with RIVAL_TRAIN_POW 0.6 keeps the first win on runs 3-5)
-export const RIVAL_TRAIN = [[0, 0.38], [1, 0.53], [2, 0.64], [4, 0.93], [12, 0.94], [20, 0.97]];
+// (balance pass: gens 1 / 2 0.58 / 0.70 (0.53 / 0.64): the S-curve duel made the first babies' duels easier)
+export const RIVAL_TRAIN = [[0, 0.38], [1, 0.58], [2, 0.70], [4, 0.93], [12, 0.94], [20, 0.97]];
 export const rivalTrain = (gen) => {
   const g = Math.max(0, Math.floor(gen || 0)), T = RIVAL_TRAIN;
   for (let i = 1; i < T.length; i++) if (g <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (g - T[i - 1][0]) / (T[i][0] - T[i - 1][0]));
@@ -1506,7 +1524,7 @@ export class Race {
     seen[id] = 1; this.emit('hzNew', { id, x: e.x, y: e.y });
   }
   spawnAhead() {
-    const p = this.p, m = this.muts, hg = this.hzGen, fz = fruitStep(this.gen, hg, this.daily != null);
+    const p = this.p, m = this.muts, hg = this.hzGen, fz = fruitStep(this.gen, hg, this.daily != null, normRunsOf(this.meta));
     while (this.genY < p.y + 2200 && this.genY < RACE_LEN - 400) {
       const y = this.genY, zi = zoneIndex(y), z = ZONES[zi], hz = z.hazards;
       const step = 100; this.genY += step;
@@ -1522,7 +1540,7 @@ export class Race {
       const sugarP = (hz.sugar || 0) * 0.06 * (1 + 2 * kSugar) * fruitMulOf(fz) * (zi === 0 && this.rookie && !(this.meta.runs > 0) ? 1.4 : 1);
       const dnaP = 0.012 * (1 + 0.5 * (m.lucky || 0)) * (1 + 5 * kGold);
       // rookies meet a few fewer Big Macros (x0.82 on run 1, back to x1 after run 5)
-      const wbcP = ((hz.wbc || 0) * 0.05 + 0.07 * kStamp) * hzMul(hg, WBC_HZ) * (this.rookie ? 0.6 + 0.4 * this.rookie : 1);
+      const wbcP = ((hz.wbc || 0) * 0.05 + 0.07 * kStamp) * (hzMul(hg, WBC_HZ) + WBC_HZ_LATE * Math.max(0, (this.daily == null ? hzCareer(this.meta) : 0) - WBC_LATE_FROM)) * (this.rookie ? 0.6 + 0.4 * this.rookie : 1);
       // puddles: the Launch Tube has its first few only past its first 3500 and never on a rookie run; none at the Fork's
       // split (FORK_Y0 +/- 600), where you have a tube to pick
       const poolsOK = zi !== 0 || (y >= ZSTART[0] + 3500 && !this.rookie);
