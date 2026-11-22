@@ -273,7 +273,6 @@ const SW = {
   firstDuel: Promise.all([0, 6].map((o) => sweep('firstDuel', Array.from({ length: 6 }, (_, i) => 101 + o + i)))).then((h) => h.flat()),
   firsts: Promise.all([0, 22].map((o) => sweep('firsts', Array.from({ length: 22 }, (_, i) => 5 + o + i)))).then((h) => h.flat()),
   midMeta: Promise.all([0, 12].map((o) => sweep('midMeta', Array.from({ length: 12 }, (_, i) => 3001 + o + i)))).then((h) => h.flat()),
-  midMeta2: Promise.all([24, 36].map((o) => sweep('midMeta', Array.from({ length: 12 }, (_, i) => 3001 + o + i)))).then((h) => h.flat()),
   gen0: parts('maxed', 0, 500, 48),
   gen0b: parts('maxed', 0, 548, 48),   // (seeds 549-596: the GOD MODE band's second half)
   gen30: parts('maxed', 30, 600, 16, 2),
@@ -1854,8 +1853,7 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
 }
 { // mid-meta (every habit at half): a 'late' loss almost always happens at the egg itself
   let late = 0, pre = 0, wins = 0;
-  // (systems round 6: over 48 runs (24): the pre-round code lost exactly 1 of the 24, so the 'at least 1' floor was a coin toss)
-  for (const r of (await SW.midMeta).concat(await SW.midMeta2)) { if (r.won) wins++; if (r.reason === 'late') { late++; if (r.zone < EGG_I) pre++; } }
+  for (const r of await SW.midMeta) { if (r.won) wins++; if (r.reason === 'late') { late++; if (r.zone < EGG_I) pre++; } }
   // (the table: at least 1 late loss for half-habit bots at gen 0, GOD MODE is no free pass through the egg)
   ok(late > 0 && pre <= 0.15 * late, "fewer than 15% of mid-meta 'late' losses happen before THE EGG (" + pre + '/' + late + ', ' + wins + ' wins)');
 }
@@ -3432,8 +3430,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   // more often. 2.6-3.4 a run; 4+ and the full book follow from it: about 26% and 19 runs measured)
   const mean = per.reduce((a, b) => a + b, 0) / per.length;
   ok(mean >= 2.6 && mean <= 3.4, 'a greedy picker: 2.6-3.4 mashups a run (' + mean.toFixed(2) + ' over ' + per.length + ' runs)');
-  // (systems round 6: 38% (35%): 20 mashups, four more for the same deals to complete)
-  ok(per.filter((n) => n >= 4).length <= 0.38 * per.length, '4+ mashups in at most 38% of runs (' + Math.round(100 * per.filter((n) => n >= 4).length / per.length) + '%)');
+  ok(per.filter((n) => n >= 4).length <= 0.35 * per.length, '4+ mashups in at most 35% of runs (' + Math.round(100 * per.filter((n) => n >= 4).length / per.length) + '%)');
   ok(median(books) >= 12 && median(books) <= 30, 'a fresh save fills the mashup book in 12-30 runs (median ' + median(books) + ')');
   // one completer a deal after the first mashup ever
   const r = quiet(); r.meta.synergiesSeen = ['bulldozer']; give(r, 'ram', 'hype', 'magnet', 'draft');
@@ -4355,9 +4352,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   // act
   for (const c of cs) { const w = c.findIndex((x) => x.won); if (w < 0) continue; for (let i = Math.max(0, w - 2); i <= w; i++) { inc += c[i].won; incn++; } for (let i = w + 1; i <= w + 3 && i < c.length; i++) { aft += c[i].won; aftn++; } }
   // assert
-  // (systems round 6: a cliff is the runs after the win winning less; they may win up to 20 points more (15), since the
-  // career ramp's hostile changes now come one a run from run 4 to 12 instead of all on runs 6-8)
-  ok(aftn >= 40 && inc / incn - aft / aftn <= 0.15 && aft / aftn - inc / incn <= 0.2, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (no more than 15 points less, 20 more)');
+  ok(aftn >= 40 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points)');
 }
 { // the softer first win: the training ramp, the fruit floor, the fresh-generation drill, the LAST GASP fade
   ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.580,0.700,0.825,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.58 / 0.70 / 0.825 / 0.95 at gens 1-4, fruitFloor(1) = 1');
@@ -4483,10 +4478,9 @@ const passOne = (r, extra = {}) => { const a = r.agents[20]; Object.assign(a, { 
   ok(avg >= 6 && avg <= 8, 'half-habit bots average 6-8 tricks a run (' + avg.toFixed(1) + ')');
   ok(s2 >= M.length / 3, 'and a third of them reach TRICK STREAK 2 (' + s2 + '/' + M.length + ')');
   // (the director's table: maxed habits at gen 0 reach GOD MODE on 1 in 6 runs or more (8+ of 48), half-habit runs at most 15%)
-  // (systems round 6: over 96 runs, 1 in 8 or more (12+). The 8+ of 48 floor sat on its edge: the pre-round code measured
-  // 29 of 192 (15%, 8 of the first 48) with the cash-in spam fanning FRENZY, the fixed finisher 27 of 192 (14%, 7))
+  // (systems round 6: over 96 runs, still 1 in 6 or more (16+), the same rate on a sample twice as big)
   const m5 = M.filter((x) => x.tier >= 5).length, g96 = G96.filter((x) => x.tier >= 5).length;
-  ok(g96 >= 12 && G96.length === 96 && m5 <= 0.15 * M.length && A.every((x) => x.tier < 5), 'maxed habits at gen 0 reach GOD MODE on 12+ of 96 runs (' + g96 + ', ' + g5 + ' of the first 48), half-habit runs on 15% at most (' + m5 + '/' + M.length + '), no habits never (' + A.filter((x) => x.tier >= 5).length + '/' + A.length + ')');
+  ok(g96 >= 16 && G96.length === 96 && m5 <= 0.15 * M.length && A.every((x) => x.tier < 5), 'maxed habits at gen 0 reach GOD MODE on 16+ of 96 runs (' + g96 + ', ' + g5 + ' of the first 48), half-habit runs on 15% at most (' + m5 + '/' + M.length + '), no habits never (' + A.filter((x) => x.tier >= 5).length + '/' + A.length + ')');
   ok(CORE.FRENZY_TIERS[3].at === 5.5 && CORE.FRENZY_TIERS[4].at === 17 && CORE.FRENZY_TIER_ADD === 2 && CORE.STYLE_WINDOW === 7.5, 'HYPER at 5.5, GOD MODE at 17, a tier climbed mid FRENZY adds 2 s, a 7.5 s STYLE window');
 }
 { // a FINISHER keeps the STYLE: style 5, cash, then a pop inside 2 s is still STYLE 5+
