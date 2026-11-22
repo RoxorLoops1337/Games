@@ -19,7 +19,7 @@ const TAU = Math.PI * 2;
 const fin = Number.isFinite, ok = (v, f) => (Number.isFinite(v) ? v : f);   // (the NaN firewall's helpers)
 const D0 = -0;
 const P_DOUBLES = ['x', 'y', 'vx', 'vy', 'e', 'maxE', 'dashT', 'dashCd', 'frenzyT', 'combo', 'comboT', 'comboMax', 'fzPen', 'fzPts', 'mult', 'bestCombo', 'bestComboLate', 'bank',
-  'draftT', 'passT', 'passX', 'draftHold', 'draft', 'stuck', 'inv', 'acid', 'heading', 'swatT', 'clutch', 'couchT', 'acidT', 'swatSafe', 'actT', 'trickMult', 'trickCap', 'magT', 'dashRefund', 'lastTrickT', 'fzCarry', 'leadSec', 'capDraftT', 'goo', 'swatSlow', 'swerveT', 'txT', 'arrD', 'fanT', 'hitT'];     // a double zero: a field that starts with it is stored as a double from birth (no shape changes later)
+  'draftT', 'passT', 'passX', 'draftHold', 'draft', 'stuck', 'inv', 'acid', 'heading', 'swatT', 'clutch', 'couchT', 'acidT', 'swatSafe', 'actT', 'trickMult', 'trickCap', 'magT', 'dashRefund', 'lastTrickT', 'fzCarry', 'leadSec', 'capDraftT', 'goo', 'swatSlow', 'swerveT', 'txT', 'arrD', 'fanT', 'hitT', 'clutchAt'];     // a double zero: a field that starts with it is stored as a double from birth (no shape changes later)
 
 // ------------------------------------------------------------------ feature gates
 // FEATURES: round-2 mechanics whose balance effect is held back (false) because the balance bands did not hold with them
@@ -46,8 +46,14 @@ const P_DOUBLES = ['x', 'y', 'vx', 'vy', 'e', 'maxE', 'dashT', 'dashCd', 'frenzy
 // first win 5 of 8, runs 15-60 15%, maxed gen 0 83%, the half-habit chain median 123.5), tellPace (9 bands: maxed gens
 // 4-20 64%, runs 15-30 duels won 43%, the duel 2.82 s, a 14-run losing streak; and only 21 of 27 tells resolved) and
 // novelty (11 lines: the shop in 26.9 runs, runs 15-30 14% before THE EGG, runs 15-25 won 47%, the factory band) stay off
-export const FEATURES = { overclockSplit: false, duelFight: false, doorHold: false, winGate: true, rescue: true, movers: false, medley: false, buzzer: true,
-  overclockBoost: false, bountyKeep: true, photoGrade: true, headGas: false, lateSprint: false, draftLink: false, tellPace: false, novelty: false };
+// SYSTEMS ROUND 8 (over every band): ON now: medley (the streak also holds on a repeat whatever the gate says) and
+// overclockBoost, with OVERCLOCK_SPEED 0.02, OVERCLOCK_ADD 1.0 and MEDLEY_MULT_CAP 1.3 (at 0.03 / 1.5 / 1.5 a run paid 11%
+// more, the shop fell to 27.5 runs and GOD MODE came on 4 of 24 half-habit runs). Held back: tellPace, now with the FREEZE
+// in place of the DOOR HOLD (every move resolved, 26 of 26 non-Steve tells on SW.gen0, but runs 15-30 duels won 39%, runs
+// 15-25 33%, the career head-start split 16 points, a 14-run losing streak); duelFloor (DUEL_MIN_T; only measured
+// in the first pass, all of round 8 on at once: the career duel 5.7 s, the split 16 points; not yet alone); novelty (see HZ_NEW)
+export const FEATURES = { overclockSplit: false, duelFight: false, doorHold: false, winGate: true, rescue: true, movers: false, medley: true, buzzer: true,
+  overclockBoost: true, bountyKeep: true, photoGrade: true, headGas: false, lateSprint: false, draftLink: false, tellPace: false, novelty: false, duelFloor: false };
 
 // ------------------------------------------------------------------ combos, synergies, race events
 // DNA multiplier for the current combo chain: x1 at 0, +0.02 per link to x2 at combo 50, then +0.004 per link
@@ -65,8 +71,15 @@ export const STYLE_WINDOW = 7.5, PASS_STYLE_MAX = 1;
 // plain passes of that same dash or draft count Z0_PLOW each
 export const Z0_COMBO_MAX = 30, Z0_PLOW = 0.2;
 // SWIM 1 TEACHES BEFORE IT REWARDS (the first normal swim only, never the daily): its Launch Tube chain clamps at
-// Z0_COMBO_MAX_ROOKIE, and FRENZY cannot light before the first card offer (race.fzHold, cleared as 'offer' is emitted)
+// Z0_COMBO_MAX_ROOKIE, and FRENZY cannot light before the first card offer (race.fzHold, cleared FZ_HOLD_AFTER s after 'offer')
 export const Z0_COMBO_MAX_ROOKIE = 12;
+// (systems round 8: swim 1's first minute is calm. The FRENZY hold lasts FZ_HOLD_AFTER s past the first 'offer' (race.fzHoldT),
+// and on the first CALM_TIER_RUNS normal swims (never a daily) the tier cap is 1 before the Gate of Goo, 2 before the Fork
+// (tierCap). CLUTCH_CD: no 'clutch' event within CLUTCH_CD s of the last one (p.clutchAt); the link and the bank multiplier
+// growth are unchanged, only the fanfare waits. SWIM1_GIFTS: swim 1's gift trail [dy, dx off the racing line])
+// (the calm swims: CLUTCH_CD_CALM s between two, and none while swim 1 still holds FRENZY)
+export const FZ_HOLD_AFTER = 8, CALM_TIER_RUNS = 2, CLUTCH_CD = 10, CLUTCH_CD_CALM = 25;
+export const SWIM1_GIFTS = [[700, 55], [780, 55], [860, 55], [3200, -18], [5600, 18]];
 // combo bridges: the timer drains slower while you draft or dash; a fruit sugar or a DNA blob tops it up
 export const DRAFT_DRAIN = 0.4, DASH_DRAIN = 0.5, PICKUP_REFILL = 0.4;
 // a pickup is a trick step (SNACK) only when Kevin swam for it: it was within PICK_AIM px of his line when the magnet
@@ -113,7 +126,8 @@ export const bankGrade = (n) => { let g = 0; while (g < BANK_AT.length - 1 && n 
 // more often; the bank's base came down so a run pays about what it did and the shop still lasts a career)
 // (systems round 4: BANK_SOFT 100 (40): a big bank pays on the n^1.4 curve to 100 links, then the straight line; banks
 // under 40 pay as before)
-export const BANK_SOFT = 100, BANK_K = 0.052;
+// (systems round 8: BANK_K 0.049 (0.052): the medley, the overclock's DNA and the bigger head start paid 4% more a run)
+export const BANK_SOFT = 100, BANK_K = 0.049;
 export const BANK_AT_SOFT = BANK_K * Math.pow(BANK_SOFT, 1.4), BANK_SLOPE = 1.4 * BANK_K * Math.pow(BANK_SOFT, 0.4);
 export const bankBase = (n) => { n = Math.max(0, n || 0); return n <= BANK_SOFT ? BANK_K * Math.pow(n, 1.4) : BANK_AT_SOFT + BANK_SLOPE * (n - BANK_SOFT); };
 export const bankDna = (n, style, clutch = 0, trick = 0) => bankBase(n) * styleMult(style) * (1 + clamp(clutch || 0, 0, 0.5)) * (1 + clamp(trick || 0, 0, MEDLEY_MULT_CAP));
@@ -192,7 +206,8 @@ export const MEDLEY_AT = 3, MEDLEY_LINKS = 8, MEDLEY_LINKS_UP = 4, MEDLEY_GOD_OC
 // (systems round 7: a medley no longer lights or climbs FRENZY (MEDLEY_GOD_OC is unused, kept for old readers): it pays
 // its links, lets the bank's trick multiplier climb to MEDLEY_MULT_CAP until the chain is banked, and gives a running
 // FRENZY MEDLEY_FRENZY s, never past frenzyLen)
-export const MEDLEY_MULT_CAP = 1.5, MEDLEY_FRENZY = 2;
+// (systems round 8, the medley on: MEDLEY_MULT_CAP 1.3 (1.5), so a run pays about what it did)
+export const MEDLEY_MULT_CAP = 1.3, MEDLEY_FRENZY = 2;
 // the featured trick for a save and a layout seed: one it has not found (meta.tricks), else any. A recipe with a 'bump'
 // step is skipped unless the mutations held (muts) knock rivals about (ram or mosh): a race starts with none held
 // (the ones not yet landed FEATURED_FRESH times are taken easiest first, FEATURED_LADDER: the seed picks among the next
@@ -233,7 +248,8 @@ export const FRENZY_TIER_ADD = 2;
 // threshold is one stack (p.oc, up to OVERCLOCK_MAX): with FEATURES.overclockBoost +OVERCLOCK_ADD s of FRENZY (never past frenzyLen), +OVERCLOCK_SPEED
 // speed and x(1 + OVERCLOCK_DNA x p.oc) on every link's DNA. Emits overclock {n, x, y}; FRENZY ending, a smash or a lost
 // chain zero it. The road to GOD MODE (17x) has a beat every 2.5x
-export const OVERCLOCK_STEP = 2.5, OVERCLOCK_MAX = 4, OVERCLOCK_ADD = 1.5, OVERCLOCK_SPEED = 0.03, OVERCLOCK_DNA = 0.1;
+// (systems round 8, overclockBoost on: OVERCLOCK_SPEED 0.02 (0.03), OVERCLOCK_ADD 1.0 (1.5): GOD MODE stays rare)
+export const OVERCLOCK_STEP = 2.5, OVERCLOCK_MAX = 4, OVERCLOCK_ADD = 1.0, OVERCLOCK_SPEED = 0.02, OVERCLOCK_DNA = 0.1;
 export const FRENZY_TIERS = [
   { name: 'FRENZY!',       at: 1,   speed: 0.3,  desc: 'Faster and louder.' },
   { name: 'MEGA FRENZY!',  at: 2.5, speed: 0.36, desc: 'Pickups fly to you from twice as far.' },
@@ -333,7 +349,8 @@ export const eventPlan = (meta) => {
   const nr = normRunsOf(meta), gen = Math.floor((meta && meta.gen) || 0);
   if (nr < 1) return { n: 0, kinds: null };
   if (nr < 3) return { n: 1, kinds: FRIENDLY_EVENTS };
-  if (nr < 4) return { n: 2, kinds: FRIENDLY_EVENTS };
+  // (systems round 8: friendly only to nr 5 (was 3), the stampede from nr 6: the run 4-6 cliff came with it)
+  if (nr < 6) return { n: 2, kinds: FRIENDLY_EVENTS };
   if (nr < 7) return { n: 2, kinds: FRIENDLY_EVENTS.concat('stampede'), hostileMax: 1 };
   const all = nr < ESPRESSO_FROM ? EVENT_ORDER.filter((id) => id !== 'espresso') : null;
   return { n: gen >= 5 ? 4 : nr < 9 ? 2 : 3, kinds: all };
@@ -495,14 +512,24 @@ export const GRANDAD_FX2 = { broccoli: 0.008, water: 1, berries: 0.006, walk: 0.
 export const GRANDAD_N = 10;
 // (frozen at GRANDAD_MAX levels, gen 30: the shop stops scaling where the field does)
 export const GRANDAD_MAX = GRANDAD_N + 10;
-export const grandadLevels = (gen) => { const g = Math.max(0, Math.floor(gen || 0)); return Math.min(GRANDAD_MAX, g <= GRANDAD_N ? g : GRANDAD_N + Math.floor((g - GRANDAD_N) / 2)); };
+// GREAT-GRANDAD (systems round 8): past GRANDAD_MAX the five lines go on with no end: one level the generation the grandad
+// levels top out (GREAT_GRANDAD_GEN, gen 30), then one every GREAT_GRANDAD_EVERY generations, each worth GRANDAD_FX3 (priced
+// in content.js habitCost: the last grandad price x GREAT_GRANDAD_JUMP x GREAT_GRANDAD_GROW^(k - 1)), so a late shop always
+// has something to buy. (Measured on a 150-run greedy career: with no jump and the first level at gen 33 the shop was
+// shut on 65 runs and the wallet held 24 runs of pay; with GREAT_GRANDAD_JUMP 2, the gen-30 level and GRANDAD_STEP 0.05 it
+// is never shut)
+export const GREAT_GRANDAD_GEN = GRANDAD_N + 2 * (GRANDAD_MAX - GRANDAD_N), GREAT_GRANDAD_EVERY = 3;
+export const GRANDAD_FX3 = { broccoli: 0.003, water: 0.4, berries: 0.0025, walk: 0.006, beatbox: 0.02 };
+export const greatGrandadLevels = (gen) => { const g = Math.max(0, Math.floor(ok(+gen, 0))); return g >= GREAT_GRANDAD_GEN ? 1 + Math.floor((g - GREAT_GRANDAD_GEN) / GREAT_GRANDAD_EVERY) : 0; };
+export const grandadLevels = (gen) => { const g = Math.max(0, Math.floor(gen || 0)); return Math.min(GRANDAD_MAX, g <= GRANDAD_N ? g : GRANDAD_N + Math.floor((g - GRANDAD_N) / 2)) + greatGrandadLevels(g); };
 const GRANDAD = Object.keys(GRANDAD_FX);
 export const GRANDAD_BROCCOLI = GRANDAD_FX.broccoli;
 export const WATER_DRAIN = 0.01;     // drain per normal water level (a bigger tank is a thirstier tail); grandad water levels are free
 // a habit's total effect at level l: HABIT_FX per normal level, GRANDAD_FX per grandad level
 export const habitFx = (id, l) => {
   l = Math.max(0, l || 0); const n = HABITS[id].max, gl = Math.max(0, l - n);
-  return HABIT_FX[id] * Math.min(l, n) + (GRANDAD_FX[id] || 0) * Math.min(gl, GRANDAD_N) + (GRANDAD_FX2[id] || 0) * Math.max(0, gl - GRANDAD_N);
+  return HABIT_FX[id] * Math.min(l, n) + (GRANDAD_FX[id] || 0) * Math.min(gl, GRANDAD_N) + (GRANDAD_FX2[id] || 0) * clamp(gl - GRANDAD_N, 0, GRANDAD_MAX - GRANDAD_N)
+    + (GRANDAD_FX3[id] || 0) * Math.max(0, gl - GRANDAD_MAX);
 };
 export const broccoliFx = (l) => habitFx('broccoli', l);
 // DNA multiplier per generation: +0.15 a generation to gen 10 (x2.5), then +0.05 a generation to gen 30 (x3.5): a late
@@ -531,7 +558,9 @@ export const WBC_HZ = 0.25, RAPIDS_CILIA_HZ = 0.08;
 // (systems round 3: WBC_HZ_LATE 0.42 (0.35): on 24 careers runs 15-30 ended 17% before THE EGG against the 18-25% band)
 // (systems round 4: WBC_HZ_LATE 0.7 (0.42): the spare bite stays all career now, and with it runs 15-30 ended 14% before
 // THE EGG; the spacing (wbcGap) tightens with the density so the late tube's Big Macros are really there)
-export const WBC_HZ_LATE = 0.7, WBC_LATE_FROM = 2;
+// (systems round 8: WBC_HZ_LATE 0.8 (0.7): with the medley and the overclock on runs 15-30 ended 17.5% before THE EGG and
+// runs 15-60 14.8% on the swim)
+export const WBC_HZ_LATE = 0.8, WBC_LATE_FROM = 2;
 // (systems round 4: the Big Macro density of a row, hzMul(hg, WBC_HZ) plus the career term, never tops WBC_DENS_MAX: a
 // gen-1 save on run 30 swam a 5.5x tube)
 export const WBC_DENS_MAX = 4.0;
@@ -544,6 +573,11 @@ export const wbcDensity = (hg, career) => Math.min(WBC_DENS_MAX, hzMul(hg, WBC_H
 // new READS with the hazard steps (never in the daily: its hzGen is 0): from step 2 sliding goo gates, from 4 Big Macro
 // twins, from 6 puddles that pulse on the beat, from 8 wall hairs in opposite pairs, from 10 lungers, from 12 closing
 // gates. The first of each a run meets emits hzNew {id}.
+// (systems round 8 tried FEATURES.novelty on with HZ_NEW { slide 2, twins 4, lunge 6, pulse 8, pair 10, close 12 },
+// WBC_HZ_LATE 0.8 and HZ_CAREER_FROM 8: the bots got STRONGER, not weaker (the lungers' dodges and the pulse near misses
+// feed the chain): runs 15-25 won 53% (35-45), gens 1-6 63% (35-55), a run paid 1229 (the shop in 22.8 runs, 28-45),
+// GOD MODE on 7 of 24 half-habit runs (3 at most), runs 15-30 12% before THE EGG (18-25): 28 lines off. Held back with
+// this order; lungeCrouch is in for when it comes)
 export const HZ_NEW = { slide: 2, twins: 4, pulse: 6, pair: 8, lunge: 10, close: 12 };
 // LUNGERS (step HZ_NEW.lunge+): lungeShare(hg) of the Big Macros (less under WBC_TWIN_NARROW). After the spot wind-up,
 // with Kevin LUNGE_DY_MIN..LUNGE_DY_MAX below, one crouches LUNGE_CROUCH s (e.crouch counts down; a second 'spot' is the
@@ -577,7 +611,11 @@ export const closeShareN = (hn) => (hn < HZ_NEW.close ? 0 : hn >= HZ_NEW.close +
 // let lungers pounce on more late runs and cost the strong ones arrival time; 60 still crouches 20 of 20 at 445 u/s)
 export const LUNGE_SIGHT_PAD = 60;
 export const lungerSight = (vy) => { vy = Math.max(0, vy || 0); return Math.max(wbcSight(vy), LUNGE_DY_MAX + LUNGE_LEAD * vy + LUNGE_SIGHT_PAD + vy * wbcWindup(vy)); };
-export const lungeAim = (py, vy) => py + Math.max(0, vy || 0) * (LUNGE_CROUCH + LUNGE_AIM_T);
+export const lungeAim = (py, vy, crouch = LUNGE_CROUCH) => py + Math.max(0, vy || 0) * (crouch + LUNGE_AIM_T);
+// (FEATURES.novelty: on its first LUNGE_EASY_STEPS novelty steps (hn under HZ_NEW.lunge + 2 x LUNGE_EASY_STEPS) a lunger
+// crouches LUNGE_EASY_CROUCH s longer: a longer tell the first runs a save meets them; lungeCrouch)
+export const LUNGE_EASY_CROUCH = 0.12, LUNGE_EASY_STEPS = 2;
+export const lungeCrouch = (nv, hn) => LUNGE_CROUCH + (nv > 0 && hn < HZ_NEW.lunge + 2 * LUNGE_EASY_STEPS ? LUNGE_EASY_CROUCH : 0);
 // CLOSING GATES (step HZ_NEW.close+): half the goo gates (e.close = 1) breathe their gap on a CLOSE_T s sine from gw down to
 // max(CLOSE_MIN, gw - CLOSE_BY), never under CLOSE_MIN
 export const CLOSE_T = 1.6, CLOSE_BY = 22, CLOSE_MIN = 62;
@@ -632,8 +670,12 @@ export const fruitMulOf = (hg) => 1 / (1 + FRUIT_HZ_K * Math.min(hg, FRUIT_HZ_MA
 // tube is barely thinner than the rookie one, so a first win is no fruit cliff, and by gen 3 GAS is a threat again: greedy
 // GAS deaths about 8% / 7% / 10% over gens 1-3 / 4-6 / 7-10)
 // (FRUIT_FLOOR_MAX 4 (5): with the floor eased in below, gens 4-6 ran dry 5+ points more often than gens 1-3)
-export const FRUIT_FLOOR = 0, FRUIT_FLOOR_K = 1.75, FRUIT_FLOOR_MAX = 4;
-export const fruitFloor = (gen) => { const g = Math.floor(gen || 0); return g >= 1 ? Math.min(FRUIT_FLOOR_MAX, Math.floor(FRUIT_FLOOR + FRUIT_FLOOR_K * g)) : 0; };
+// (FRUIT_FLOOR_FROM: the first generation with a floor. Systems round 8 tried the floor from gen 2 with FRUIT_FLOOR -0.75 and
+// FLOOR_EASE_MAX 1: gens 1-3 ran dry on 3-4% of their runs against 8-9% for gens 4-6 (FRUIT_FLOOR_MAX 4: 4.4 / 9.2 / 8.6;
+// 3: 3.1-3.6 / 7.4-7.9 / 10.9-11.0), over the 4-point GAS-by-generation band, and with FRUIT_FLOOR_MAX 3 the career
+// head-start split fell to 25-26 points; the runs 6-8 energy band it was for already held at 0-1% either way. Held back)
+export const FRUIT_FLOOR = 0, FRUIT_FLOOR_K = 1.75, FRUIT_FLOOR_MAX = 4, FRUIT_FLOOR_FROM = 1;
+export const fruitFloor = (gen) => { const g = Math.floor(gen || 0); return g >= FRUIT_FLOOR_FROM ? Math.min(FRUIT_FLOOR_MAX, Math.floor(FRUIT_FLOOR + FRUIT_FLOOR_K * g)) : 0; };
 // the floor eases in: before normal run FLOOR_EASE_RUNS (n, normRuns) it is at most FLOOR_EASE_MAX, so a save that wins
 // its way to gen 2 or 3 inside its first 8 runs meets no fruit cliff right after the rookie grace (a gen 2 floor of 3 on
 // runs 6-8 was a 24% GAS death rate)
@@ -697,7 +739,8 @@ export const raceLossT = (meta, daily) => (daily == null ? 1 + RACE_LOSS_T * cla
 // a new generation eases in: the first run after a real win gives the named rivals FRESH_GEN more time, the second half
 // that (meta.sinceWin; never in the daily, never at gen 0). Only after the first win of a streak: a second win in a
 // row (meta.lastWinStreak 2+) brings no cushion. The win still brings a faster field, just not a wall.
-export const FRESH_GEN = 0.04;
+// (systems round 8: 0.02 (0.04): the gen 1 training came down to 0.50, the first baby needs less cushion)
+export const FRESH_GEN = 0.02;
 export const freshGenT = (meta, daily) => { const n = Math.floor((meta && meta.sinceWin) ?? 99); return daily == null && meta && (meta.gen || 0) > 0 && n < 2 && !((meta.lastWinStreak || 0) >= 2) ? 1 + FRESH_GEN * (n ? 0.5 : 1) : 1; };
 export const freshGenActive = (meta) => freshGenT(meta, null) > 1;
 // the losing-streak cushion: from the PEP_FROM-th normal loss in a row (meta.sinceWin, counted only on normal runs; a
@@ -826,6 +869,13 @@ export const PRE_MOVE_AT_FIGHT = { sorry: 0.4, byTheBook: 0.5, maxRep: 0.6, stun
 // need less his head start at the full tap rate), and while a move window is open Kevin's drill holds at DOOR_HOLD of
 // his need (the DOOR HOLD), so each move ends 'hit' or 'countered' before he gets in
 export const TELL_PACE_MIN = 0.35, TELL_PACE_1 = 0.25, TELL_PACE_2 = 0.55;
+// (systems round 8: the DOOR HOLD is out of the tell pace. While a non-Steve move window is open (doorHeld) the duel
+// FREEZES: no drill accrues for Kevin or for any arrived rival, except the move's own effect (Tiffany's citation drills
+// at x BOOK_CITE_K, Brock's hit, Gunther's dive). Taps still count toward the counter tallies and still shove)
+// DUEL_MIN_T: the duel floor. headStart() keeps the duel head under need - DUEL_MIN_T x Kevin's full drill rate
+// (duelFullRate) and the full tap bucket, so even a perfect race drills DUEL_MIN_T s; what the floor keeps out is paid
+// through headBonus
+export const DUEL_MIN_T = 1.8;
 // (FEATURES.duelFight) a rival that arrives while Kevin already drills pulls its move LATE_MOVE_AT s after it gets there (not by its drill
 // fraction: a late arrival never got to 55% before the duel was over)
 export const LATE_MOVE_AT = 0.35;
@@ -908,7 +958,8 @@ export const HEAD_E_CAP = 160;
 export const HEAD_E_GAS = 0.3;   // (FEATURES.headGas: the tank term per 100 GAS)
 // (systems round 3: HEAD_TIER 0.40 (0.38), HEAD_COMBO 0.016 (0.015): on 24 careers (was 8) the career duels of runs 15-30
 // were won 44% against the 50-65% band and runs 15-25 33%; the maxed saves sit at the duel cap, so this lifts the careers)
-export const HEAD_E = 0.45, HEAD_TIER = 0.40, HEAD_COMBO = 0.016, HEAD_COMBO_CAP = 100, HEAD_BOSS = 0.3, HEAD_BOSS_CAP = 0.6;
+// (systems round 8: HEAD_TIER 0.42 (0.40): with the swim's teeth back (WBC_HZ_LATE 0.8) runs 15-30 won 48-50% of their duels)
+export const HEAD_E = 0.45, HEAD_TIER = 0.42, HEAD_COMBO = 0.016, HEAD_COMBO_CAP = 100, HEAD_BOSS = 0.3, HEAD_BOSS_CAP = 0.6;
 export const HEAD_HIT = -0.18, HEAD_HIT_CAP = -0.9, HEAD_LEAD = 0.15, HEAD_LEAD_CAP = 0.6;
 // the named rivals train too: they drill faster as your career goes on (the share of RIVAL_TRAIN_RUNS normal runs
 // played), x1.38 at gen 0, x1.58 / x1.70 / x1.93 at gens 1 / 2 / 4, x1.94 at gen 12 and x1.97 from gen 20 (RIVAL_TRAIN, straight lines
@@ -930,7 +981,8 @@ export const habitShare = (meta) => { let n = 0, t = 0; for (const id of HABIT_O
 // 0.97 (were 0.45 / 0.58 / 0.70 / 0.80 / 0.88); gen 0 0.38 with RIVAL_TRAIN_POW 0.6 keeps the first win on runs 3-5)
 // (balance pass: gens 1 / 2 0.58 / 0.70 (0.53 / 0.64): the S-curve duel made the first babies' duels easier)
 // (systems round 3: gens 4 / 12 0.95 / 0.95 (0.93 / 0.94), with the bigger head start above)
-export const RIVAL_TRAIN = [[0, 0.38], [1, 0.58], [2, 0.70], [4, 0.95], [12, 0.95], [20, 0.97]];
+// (systems round 8: gen 1 0.50 (0.58): the run 4-6 cliff)
+export const RIVAL_TRAIN = [[0, 0.38], [1, 0.50], [2, 0.70], [4, 0.95], [12, 0.95], [20, 0.97]];
 export const rivalTrain = (gen) => {
   const g = Math.max(0, Math.floor(gen || 0)), T = RIVAL_TRAIN;
   for (let i = 1; i < T.length; i++) if (g <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (g - T[i - 1][0]) / (T[i][0] - T[i - 1][0]));
@@ -1410,7 +1462,8 @@ export class Race {
     // the GAS a fruit gives and the drain factor before THE EGG: the rookie grace, then a taper (no cliff on run 6)
     this.sugarGas = sugarGasOf(meta, opts.seed != null && isFinite(opts.seed) ? opts.seed : null); this.drainK = drainTaperOf(meta, opts.seed != null && isFinite(opts.seed) ? opts.seed : null);
     this.firstNormal = !(opts.seed != null && isFinite(opts.seed)) && normRunsOf(meta) === 0;   // the very first normal swim
-    this.fzHold = this.firstNormal;     // (swim 1: no FRENZY before the first card offer)
+    this.fzHold = this.firstNormal; this.fzHoldT = -1;    // (swim 1: no FRENZY before the first card offer + FZ_HOLD_AFTER s)
+    this.calmTiers = !(opts.seed != null && isFinite(opts.seed)) && normRunsOf(meta) < CALM_TIER_RUNS;   // (tierCap)
     this.over = null; this.won = false; this.paused = false; this.biteBy = null;
     // the first swim's rank hold (ROOKIE_HOLD): dead last until the first real input, then the FIRST SURGE
     this.rankHold = this.firstNormal && this.rookie > 0; this.surgeAt = -1; this.surgeSent = false; this.spawnX = VIEW_W / 2;
@@ -1490,11 +1543,11 @@ export class Race {
       D0, dashN: 0, draftN: 0, draftLinkN: -1, z0Key: '', draftT: D0, passSide: 0, passT: D0, passX: D0, slingOK: false, draftHold: D0, draft: D0, comeback: 0, side: 0, stuck: D0,
       inv: D0, acid: D0, wing: 0, second: 0, overtakes: 0, heading: D0, swatT: D0, swatDir: 0, current: 0, sameRun: 0, lastKind: '', clutch: D0, couchT: D0, acidT:
       D0, zoneBonks: 0, lastHit: '', frenzyTier: 0, swatSafe: D0, actT: D0, lastTx: null, lastOff: null, passRun: 0, seq: [], trickMult: D0, trickCap: D0, trickChain: {},
-      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0, fzCarry: D0, hits: 0, leadSec: D0, capDraftT: D0, whipN: -1, goo: D0, swatSlow: D0, oc: 0, swerveT: D0, txT: D0, arrD: D0, fanT: D0, hitT: D0 };
+      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0, fzCarry: D0, hits: 0, leadSec: D0, capDraftT: D0, whipN: -1, goo: D0, swatSlow: D0, oc: 0, swerveT: D0, txT: D0, arrD: D0, fanT: D0, hitT: D0, clutchAt: D0 };
     p.x = VIEW_W / 2; p.y = startY; p.vx = 0; p.vy = 0; p.e = maxE; p.maxE = maxE; p.dashT = 0; p.dashCd = 0; p.frenzyT = 0; p.combo = 0; p.comboT = 0; p.comboMax
       = 2.2; p.fzPen = 0; p.fzPts = 0; p.mult = 1; p.bestCombo = 0; p.bestComboLate = 0; p.bank = 0; p.draftT = -9; p.passT = -9; p.passX = 0; p.draftHold = 0;
       p.draft = 0; p.stuck = 0; p.inv = 0; p.acid = 0; p.heading = 0; p.swatT = 0; p.clutch = 0; p.couchT = 0; p.acidT = -99; p.swatSafe = 0; p.actT = IDLE_T;
-      p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99; p.dashAt = -99; p.fzCarry = 0; p.leadSec = 0; p.capDraftT = 0; p.goo = 0; p.swatSlow = 0; p.swerveT = 0; p.txT = -99; p.arrD = 0; p.fanT = -99; p.hitT = -99;
+      p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99; p.dashAt = -99; p.fzCarry = 0; p.leadSec = 0; p.capDraftT = 0; p.goo = 0; p.swatSlow = 0; p.swerveT = 0; p.txT = -99; p.arrD = 0; p.fanT = -99; p.hitT = -99; p.clutchAt = -99;
     this.startY = startY; this.prevPY = startY;
     this.dnaRun = 0; this.dnaBank = 0; this.dnaBonus = 0; this.zoneReached = 0; this.cleared = 0; this.ciliaN = 0;
     this.ents = []; this.genY = Math.ceil((startY + 300) / 100) * 100;   // rows on a fixed 100 grid (same daily layout for everyone)
@@ -1597,7 +1650,8 @@ export class Race {
     this.puddles = [];       // recent acid / goo centres per side (the spawner keeps Big Macros off them)
     this.patches = this.popcornRows();   // one POPCORN PATCH a zone (its own seeded RNG: the rows' rolls never change)
     // the very first run: two fruit sugars right on the racing line in the Launch Tube
-    if (this.daily == null && !((meta.runs || 0) > 0)) for (const [dy, dx] of [[3200, -18], [5600, 18]]) this.ents.push({ t: 'sugar', x: centre(startY + dy) + dx, y: startY + dy, r: 9, gift: 1 });
+    // (systems round 8: and a trail of three at dy 700-860, 55 off the line: the first pickup comes in the first 2 s)
+    if (this.daily == null && !((meta.runs || 0) > 0)) for (const [dy, dx] of SWIM1_GIFTS) this.ents.push({ t: 'sugar', x: centre(startY + dy) + dx, y: startY + dy, r: 9, gift: 1 });
     // swim 1's 'NOPE!' moment: one dozing Big Macro in the Launch Tube (setpieceStep). (Not for the test bot, opts.bot:
     // the balance sims' careers branch chaotically on run 1's path, and a scripted one-off cell is not what they measure)
     if (this.daily == null && !((meta.runs || 0) > 0) && !this.bot && opts.setpiece !== false) {
@@ -1745,7 +1799,11 @@ export class Race {
   fzPoints() { return this.p.combo - this.p.fzPen + this.p.fzCarry; }
   tierOf(combo) { let t = 0; while (combo >= this.frenzyThreshold(t)) t++; return t; }
   // the tier you are allowed to reach: 1 in the Launch Tube, 3 before the Great Womb Sea, then all of them
-  tierCap() { return this.zoneReached === 0 ? 1 : this.zoneReached < 3 ? 3 : FRENZY_TIERS.length; }
+  // (the first CALM_TIER_RUNS normal swims: 1 before the Gate of Goo, 2 before the Fork)
+  tierCap() { const z = this.zoneReached; return this.calmTiers ? (z < 2 ? 1 : z < 4 ? 2 : FRENZY_TIERS.length) : z === 0 ? 1 : z < 3 ? 3 : FRENZY_TIERS.length; }
+  // swim 1's FRENZY hold: on until FZ_HOLD_AFTER s after the first offer (releaseFzHold starts that clock)
+  fzHeld() { if (this.fzHold && this.fzHoldT >= 0 && this.t >= this.fzHoldT) this.fzHold = false; return this.fzHold; }
+  releaseFzHold() { if (this.fzHold && this.fzHoldT < 0) this.fzHoldT = this.t + FZ_HOLD_AFTER; }
 
   computeRank() { let r = 1; const py = this.p.y; for (let _i_a = 0, _A_a = this.agents, a; _i_a < _A_a.length && ((a = _A_a[_i_a]), true); _i_a++) if (a.alive && (a.y > py || (a.arrived && this.drill && a.arrivedT < this.drill.t0))) r += a.arrived ? 1 : a.w; return Math.round(r); }
   computeAlive() { let n = 1; for (let _i_a = 0, _A_a = this.agents, a; _i_a < _A_a.length && ((a = _A_a[_i_a]), true); _i_a++) if (a.alive) n += a.arrived ? 1 : a.w; return Math.round(n); }
@@ -1889,7 +1947,7 @@ export class Race {
     if (!this.firstDealt && this.draftN === 1 && !mid && this.daily == null && !((this.meta.runs || 0) > 0)) {
       this.firstDealt = true;
       const picks = FIRST_DEAL.filter((id) => MUTATIONS[id] && (this.muts[id] || 0) < MUTATIONS[id].max);
-      if (picks.length === FIRST_DEAL.length) { this.pending = picks; this.fzHold = false; this.emit('offer', { picks, mid: false, draft: d, first: true }); return; }
+      if (picks.length === FIRST_DEAL.length) { this.pending = picks; this.releaseFzHold(); this.emit('offer', { picks, mid: false, draft: d, first: true }); return; }
     }
     this.firstDealt = true;
     const comp = this.completers();
@@ -1930,7 +1988,7 @@ export class Race {
     this.pending = picks;
     const o = { picks, mid, draft: d };
     if (golden) o.golden = true;
-    this.fzHold = false; this.emit('offer', o);
+    this.releaseFzHold(); this.emit('offer', o);
   }
   // a reroll deals a fresh hand (never the same cards while 3+ others are open) and does not count for the pity
   reroll() {
@@ -2663,12 +2721,12 @@ export class Race {
     // per-run fatigue: the same trick again this run pays less (trickFatigue), from the TRICK_TIRED-th no bank growth and
     // no FRENZY time
     const kRun = trickFatigue(run[T.id]), tired = run[T.id] >= TRICK_TIRED, k = (repeat ? 0.5 : 1) * kRun;
-    // TRICK STREAK: a different trick within TRICK_STREAK_T s of the last one climbs it, anything else resets it
-    // (FEATURES.medley: the same trick again inside the window HOLDS the streak: no climb, no reset; only a gap over
-    // TRICK_STREAK_T, breakCombo or loseCombo resets it)
+    // TRICK STREAK: a different trick within TRICK_STREAK_T s of the last one climbs it; the same trick again inside the
+    // window HOLDS it (no climb, no reset: systems round 8, whatever FEATURES.medley says); only a gap over TRICK_STREAK_T,
+    // breakCombo or loseCombo resets it
     const inTime = !!p.lastTrick && this.t - p.lastTrickT <= TRICK_STREAK_T, again = p.lastTrick === T.id;
     const climbed = inTime && !again;
-    p.trickStreak = climbed ? p.trickStreak + 1 : inTime && again && FEATURES.medley ? p.trickStreak : 0;
+    p.trickStreak = climbed ? p.trickStreak + 1 : inTime && again ? p.trickStreak : 0;
     p.lastTrick = T.id; p.lastTrickT = this.t;
     const sm = trickStreakMult(p.trickStreak);
     const featured = this.featuredTrick === T.id, medley = FEATURES.medley && climbed && p.trickStreak % MEDLEY_AT === 0, mk = medley ? p.trickStreak / MEDLEY_AT : 0;
@@ -2737,7 +2795,7 @@ export class Race {
     this.dnaRun += gain; this.dnaFromCombo += gain - LINK_DNA * n;
     const ce = this.emit('combo', { kind, n: Math.floor(p.combo), add: n, x, y, mult: p.mult, style: p.style, fresh, same: p.sameRun, clutch, passRun: p.passRun });
     if (extra) Object.assign(ce, extra);
-    if (clutch) this.emit('clutch', { x, y, n: Math.floor(p.combo), mult: p.clutch });
+    if (clutch && !this.fzHold && !(this.t - p.clutchAt < (this.calmTiers ? CLUTCH_CD_CALM : CLUTCH_CD))) { p.clutchAt = this.t; this.emit('clutch', { x, y, n: Math.floor(p.combo), mult: p.clutch }); }
     p.mileI = p.mileI || 0;
     if (!z0 && p.combo >= comboMilestoneAt(p.mileI)) {
       let top = 0, k = 0;
@@ -2745,7 +2803,7 @@ export class Race {
       this.emitMilestone(top, k, x, y);
     }
     const pts = this.fzPoints(); p.fzPts = pts;
-    if (this.fzHold) { this.overclock(x, y); return; }    // swim 1: FRENZY waits for the first card offer
+    if (this.fzHeld()) { this.overclock(x, y); return; }    // swim 1: FRENZY waits for the first card offer (+ FZ_HOLD_AFTER s)
     if (pts >= this.frenzyThreshold(p.fz)) {
       const first = p.frenzyT <= 0, oldTier = p.tier, T = FRENZY_TIERS;
       while (pts >= this.frenzyThreshold(p.fz)) p.fz++;
@@ -2819,7 +2877,7 @@ export class Race {
   }
   // light FRENZY right now (Comeback Kid, Bloodhound)
   igniteFrenzy(why) {
-    if (this.fzHold) return;
+    if (this.fzHeld()) return;
     const p = this.p, base = p.frenzyT > 0 ? p.tier : 0;
     p.frenzyT = Math.max(p.frenzyT, this.s.frenzyLen); p.tier = Math.max(p.tier, 1); p.fz = Math.max(p.fz, 1); p.bestTier = Math.max(p.bestTier, p.tier);
     p.frenzyTier = Math.max(p.frenzyTier || 0, p.tier);
@@ -3397,9 +3455,9 @@ export class Race {
               // further off at speed), aimed at where Kevin WILL be when it springs (lungeAim). The intercept must still be
               // LUNGE_FRONT in front of the cell (it never pounces from behind); otherwise it just hunts
               const vy = Math.max(0, p.vy || 0), lo = LUNGE_DY_MIN + LUNGE_LEAD * vy, hi = LUNGE_DY_MAX + LUNGE_LEAD * vy;
-              const ty = lungeAim(p.y, vy);
+              const cr = lungeCrouch(this.novelty, Math.max(this.hzGen, this.novelty || 0)), ty = lungeAim(p.y, vy, cr);
               if (dy >= lo && dy <= hi && e.y - ty >= LUNGE_FRONT && p.y >= this.startY + LUNGE_SAFE) {
-                e.lunged = 1; e.crouch = LUNGE_CROUCH; e.tx = p.x; e.ty = ty; this.emit('spot', { x: e.x, y: e.y, lunge: true, crouch: LUNGE_CROUCH });
+                e.lunged = 1; e.crouch = cr; e.tx = p.x; e.ty = ty; this.emit('spot', { x: e.x, y: e.y, lunge: true, crouch: cr });
               } else if (dy < lo) e.lunged = 1;      // (above the window it waits, crouch-ready; only past it unpounced does it give up and hunt)
             } else e.hunt = Math.min(1, e.hunt + dt * 2);
           }
@@ -3518,8 +3576,13 @@ export class Race {
   // and your best chain: a great chain carries into the finale
   headStart() {
     const h = this.headParts().total;
-    return Math.min(this.rookie ? DRILL_HEAD_ROOKIE : this.headCap, this.playerNeed(), this.rookie ? h : duelHead(h));
+    return Math.min(this.rookie ? DRILL_HEAD_ROOKIE : this.headCap, this.duelFloorCap(), this.rookie ? h : duelHead(h));
   }
+  // Kevin's full drill rate (DUEL_MIN_T): the base, FRENZY if it runs, DRILL_TAPS_MAX taps a second, times his egg boost
+  duelFullRate() { return (DRILL_BASE + (this.p.frenzyT > 0 ? DRILL_FRENZY : 0) + DRILL_TAPS_MAX * DRILL_TAP) * this.eggBoost(); }
+  // the most head start the duel takes so it still lasts DUEL_MIN_T s (never under 0, never over the need)
+  // (the tap bucket starts full: its DRILL_BUCKET taps land at once, so they come off too)
+  duelFloorCap() { const need = this.playerNeed(); if (!FEATURES.duelFloor) return need; return clamp(need - DUEL_MIN_T * this.duelFullRate() - DRILL_BUCKET * DRILL_TAP * this.eggBoost(), 0, need); }
   // the four terms of the head start (ui: the HUD chip and the post-mortem): tank, tier, combo, boss; total is their sum
   // (uncapped), cap the most the duel takes (the rest up to DRILL_HEAD_MAX is paid as DNA when the drill starts)
   // hits is negative (a hit taken costs head start), lead is what arriving clear of the named rivals is worth
@@ -3532,7 +3595,7 @@ export class Race {
     const hits = Math.max(HEAD_HIT_CAP, HEAD_HIT * (p.hits || 0)) || 0, lead = Math.min(HEAD_LEAD_CAP, HEAD_LEAD * Math.floor(Math.max(0, p.leadSec || 0)));
     const total = Math.max(0, tank + tier + combo + boss + hits + lead);
     return { tank, tier, combo, boss, hits, lead, total: Number.isFinite(total) ? total : 0, cap: Math.min(this.rookie ? DRILL_HEAD_ROOKIE : Math.min(HEAD_DUEL_MAX, this.headCap), this.playerNeed()),
-      duel: Number.isFinite(total) ? Math.min(this.rookie ? DRILL_HEAD_ROOKIE : this.headCap, this.playerNeed(), this.rookie ? total : duelHead(total)) : 0,
+      duel: Number.isFinite(total) ? Math.min(this.rookie ? DRILL_HEAD_ROOKIE : this.headCap, this.duelFloorCap(), this.rookie ? total : duelHead(total)) : 0,
       max: { tank: FEATURES.headGas ? HEAD_E_GAS * HEAD_E_CAP / 100 : HEAD_E, tier: HEAD_TIER * this.tierCap(), combo: HEAD_COMBO * HEAD_COMBO_CAP, boss: HEAD_BOSS_CAP, hits: HEAD_HIT_CAP, lead: HEAD_LEAD_CAP } };
   }
   // the whole seconds Kevin reaches the egg ahead of the first egg-side named rival (0 when one is already there):
@@ -3552,7 +3615,7 @@ export class Race {
   // (it used to pay only the knee's part: a gen 0 or ramp run lost everything between headCap and duelHead)
   // (never on a rookie run: its duel is a photo finish under DRILL_HEAD_ROOKIE, not a reward for a great race)
   headBonus() {
-    const tot = this.headParts().total, dh = duelHead(tot), cap = Math.min(this.headCap, DRILL_HEAD_MAX);
+    const tot = this.headParts().total, dh = duelHead(tot), cap = Math.min(this.headCap, DRILL_HEAD_MAX, this.duelFloorCap());
     const knee = this.rookie ? 0 : Math.max(0, tot - Math.min(dh, DRILL_HEAD_MAX)), capped = this.rookie ? 0 : Math.max(0, Math.min(dh, DRILL_HEAD_MAX) - Math.min(dh, cap));
     const kT = Math.floor(knee * 10 + 1e-6), cT = Math.floor(capped * 10 + 1e-6);
     return { dna: kT * HEAD_BONUS_DNA + cT * HEAD_CAP_DNA, sec: (kT + cT) / 10, capSec: cT / 10 };
@@ -3560,7 +3623,7 @@ export class Race {
   startDrill() {
     this.p.leadSec = this.leadAtEgg();
     const head = this.headStart(), hb = this.headBonus();
-    this.drill = { t0: this.t, me: head, head, need: this.playerNeed(), tok: DRILL_BUCKET, carry: 0, lead: null, tellT: -Infinity, gasp: null, held: 0 };
+    this.drill = { t0: this.t, me: head, head, need: this.playerNeed(), tok: DRILL_BUCKET, carry: 0, lead: null, tellT: -Infinity, gasp: null, held: 0, frozen: false, frozenT: 0 };
     // a race too good for the duel: what the knee does not take is paid as DNA instead (once, as the drill starts)
     if (hb.dna > 0) { this.dnaRun += hb.dna; this.dnaBonus += hb.dna; this.emit('headBonus', hb); }
     // the named rivals already drilling are held when you arrive (the first to arrive at DRILL_ARRIVED_CAP of its need,
@@ -3610,8 +3673,13 @@ export class Race {
     const fresh = Math.max(0, raw - Math.min(d.carry || 0, raw));
     d.tok -= taps;
     const boost = this.eggBoost();
-    d.me += (dt * (DRILL_BASE + (p.frenzyT > 0 ? DRILL_FRENZY : 0)) + taps * DRILL_TAP) * boost;
-    if (this.autopilot && !this.bot) d.me += dt * 0.3;
+    // (the tell pace's freeze: while a non-Steve move window is open no drill accrues, see DUEL_MIN_T)
+    const frz = FEATURES.tellPace && this.doorHeld();
+    d.frozen = frz; if (frz) d.frozenT += dt;      // (d.frozenT: the duel's frozen seconds, a move resolving)
+    if (!frz) {
+      d.me += (dt * (DRILL_BASE + (p.frenzyT > 0 ? DRILL_FRENZY : 0)) + taps * DRILL_TAP) * boost;
+      if (this.autopilot && !this.bot) d.me += dt * 0.3;
+    }
     if (raw) {
       this.emit('drillTap', { n: taps });
       const side = this.input.tapSide === -1 || this.input.tapSide === 1 ? this.input.tapSide : null;
@@ -3636,7 +3704,7 @@ export class Race {
       }
       if (a.boss) {
         const mv = this.moveState(a), book = a.boss.move === 'byTheBook';
-        if (!book) {   // Tiffany goes by the book: she never shoves
+        if (!book && !frz) {   // Tiffany goes by the book: she never shoves (and the freeze holds every shove)
           const was = a.shoveT == null ? 1.4 : a.shoveT;
           a.shoveT = was - dt;
           // Steve says sorry first: his shove is told MOVE_TELL s ahead
@@ -3651,11 +3719,12 @@ export class Race {
         this.stepMove(a, mv, dt);
         if (this.over) return;
         if (mv.stopT > 0 || mv.outT > 0) continue;      // not drilling right now (a counter, a stunt, a hair check)
-      }
+        if (frz && !(mv.citeT > 0)) continue;            // the freeze: only the move's own effect (a citation) drills
+      } else if (frz) continue;
       if (this.drillAgent(a, dt)) { this.rank = this.computeRank(); this.eggTaken = a; return this.end('late'); }
     }
     // the door hold: the drill past DOOR_HOLD waits in d.held and lands the moment the move resolves (Kevin slips in)
-    if ((FEATURES.doorHold || FEATURES.tellPace) && this.doorHeld()) { if (d.me > DOOR_HOLD * d.need) { d.held += d.me - DOOR_HOLD * d.need; d.me = DOOR_HOLD * d.need; } }
+    if (FEATURES.doorHold && !FEATURES.tellPace && this.doorHeld()) { if (d.me > DOOR_HOLD * d.need) { d.held += d.me - DOOR_HOLD * d.need; d.me = DOOR_HOLD * d.need; } }
     else if (d.held > 0) { d.me += d.held; d.held = 0; }
     if (d.me >= d.need) return this.end('win');
     this.drillLeader();
@@ -3779,6 +3848,9 @@ export class Race {
     if (move === 'maxRep' && mv.tellAt >= 0) mv.taps += hereRaw;                // taps on Brock's side in his wind-up count towards a block
     if (move === 'hairCheck' && mv.hairT > 0) mv.hairTaps += hereRaw;           // (counted here: a step with no counted tap still tallies)
     if (!taps) return;
+    // (the tell pace's freeze: a tap only tallies, it shoves nobody; Gunther's chips are his counter's own effect and stay)
+    const frozen = !!(this.drill && this.drill.frozen) && !(move === 'stuntDive' && mv.outT > 0);
+    if (frozen) return;
     if (move === 'stuntDive' && mv.outT > 0) {                                  // Gunther is out: taps on his side chip his drill instead
       if (!here) return;
       const take = Math.min(here * STUNT_CHIP, STUNT_CAP - mv.taken);

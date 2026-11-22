@@ -46,17 +46,18 @@ const CAUS_ACID = '#c8ff6a';                  // the Acid Lagoon's caustic net: 
 // baked in farSpr)
 // (gaps: gap * par >= about 600, so at most two landmarks share the screen)
 const FAR = { launch: { par: 0.18, al: 0.18, gap: 3300 }, acid: { par: 0.16, al: 0.42, gap: 3700 }, goo: { par: 0.17, al: 0.4, gap: 3500 },
-  sea: { par: 0.15, al: 0.5, gap: 3000 }, fork: { par: 0.2, al: 0.45, gap: 3000 }, rapids: { par: 0.18, al: 0.42, gap: 3300 } };
+  sea: { par: 0.15, al: 0.6, gap: 3000 }, fork: { par: 0.2, al: 0.45, gap: 3000 }, rapids: { par: 0.18, al: 0.42, gap: 3300 } };
 // each zone's mood light: a cached 4 x 256 vertical gradient (screen space, 4 columns left to right) filled over the
 // tube at 0.3 after the texture pass, blended by bt at the gates (THE EGG keeps her own light). Stops: [y, col, alpha]
 const MOOD = {
   launch: [[0, '#ff7aa8', 0], [0.55, '#ff7aa8', 0.12], [1, '#ff4d8a', 0.7]],   // a pink backlight (pulses on the beat)
   acid: [[0, '#c8ff6a', 0], [0.65, '#c8ff6a', 0], [0.85, '#b8ff4a', 0.55], [1, '#9dff3c', 0.95]],   // lime underglow, bottom 35%
-  goo: [[0, '#fff6e6', 0.95], [0.35, '#fbead0', 0.4], [0.7, '#fbead0', 0], [1, '#fbead0', 0]],   // a cool vanilla top light (gold is THE EGG's alone)
-  sea: [[0, '#14000a', 0.95], [0.25, '#3a0614', 0.6], [0.5, '#b0102c', 0.6], [0.8, '#7a0a20', 0.25], [1, '#7a0a20', 0]],   // dark top, crimson centre
+  goo: [[0, '#fff6e6', 0.55], [0.35, '#fbead0', 0.4], [0.7, '#fbead0', 0], [1, '#fbead0', 0]],   // a cool vanilla top light (gold is THE EGG's alone)
+  // the Sea in 3 value bands: a bright coral light near the top (0.15), a crimson centre, a deep plum floor
+  sea: [[0, '#ff9a7a', 0.12], [0.15, '#ff9a7a', 0.25], [0.3, '#d8303a', 0.25], [0.5, '#b0102c', 0.45], [0.72, '#5a0a34', 0.6], [1, '#2a0626', 0.9]],
   fork: [[0, '#1a2c66', 0.8], [0.5, '#2a3f80', 0.45], [1, '#1a2c66', 0.7]],   // cold (pink on the egg's branch: moodSpr)
   // the Sea's mood drifts over the zone from crimson (MOOD.sea) toward a magenta coral (seaB), in 8 baked steps
-  seaB: [[0, '#1a0012', 0.95], [0.25, '#4a0a2a', 0.6], [0.5, '#d0306a', 0.6], [0.8, '#a0204a', 0.25], [1, '#a0204a', 0]],
+  seaB: [[0, '#ffa0a8', 0.12], [0.15, '#ffa0a8', 0.25], [0.3, '#e04070', 0.25], [0.5, '#d0306a', 0.45], [0.72, '#5a0a40', 0.6], [1, '#2a0630', 0.9]],
   rapids: [[0, '#ffffff', 0], [0.12, '#ffffff', 0.7], [0.2, '#ffffff', 0], [0.45, '#ffffff', 0], [0.55, '#ffffff', 0.55], [0.63, '#ffffff', 0], [0.85, '#ffffff', 0], [0.92, '#ffffff', 0.6], [1, '#ffffff', 0]],   // shimmer bands (they drift)
 };
 const FAR_W = 300, FAR_H = 500, FAR_K = 1.4;
@@ -72,14 +73,14 @@ const LENS_PAD = 3;   // the baked Goo lenses' margin (logical units)
 // the Goo: a warm custard tube (lite) in a plum outside (deep), so the cream goo blobs and the dark slabs both read;
 // the Acid Lagoon: a deep bottle-green interior, so the lime puddles pop at more than 3:1;
 // the Launch Tube: pushed about 18 degrees toward violet (lite #8a2a8e), so it never reads like the red Sea
-TUBE_TINT.goo = ['#3a2440', '#e2c99a'];   // (lite a toastier custard: the cream blobs and white crowd read on it)
+TUBE_TINT.goo = ['#3a1838', '#f2c4d8'];   // (a rosy pink tube in a deep plum: the cream blobs and the slabs read apart from it, no cardboard)   // (lite a toastier custard: the cream blobs and white crowd read on it)
 //   // (a cool vanilla cream with caramel '#b8763a' accents: gold belongs to THE EGG)
 TUBE_TINT.acid = ['#0c2218', '#265e38'];   // (lifted: the lagoon read as a black hole round its puddles)
 TUBE_TINT.launch = ['#340c3e', '#8a2a8e'];
 // Tube Rapids: its lite 12% lighter, so the bright channel reads against the deeper flesh round it (DIM 0.42)
 // (readability pass: a brighter turquoise channel, '#18b4c4', against the deeper flesh round it, DIM 0.6)
 { const RZ = ZONES.find((z) => z.id === 'rapids'); if (RZ) TUBE_TINT.rapids = [RZ.col[0], '#18b4c4']; }
-const GOO_SHADOW = '#9c86b0', GOO_LINE = 'rgba(90,63,42,0.7)';   // the Goo blobs' lilac shadow; the 2 px '#5a3f2a' line at 0.7
+const GOO_SHADOW = '#9c86b0', GOO_LINE = '#c86a3a';   // the Goo blobs' lilac shadow; a caramel line
 // the Goo's wet look (paintPiece, gateDress, drawWallStyle): a white specular crescent on the upper left of a lobe
 // (radius 0.42 r, lineWidth 3 or less on a small lobe, alpha 0.6) and a 2 to 3 px dot; sx stretches it (the wobble)
 function gooShine(g, x, y, r, sx = 1) {
@@ -247,7 +248,7 @@ const brightCol = (col) => {
   return v;
 };
 const wallKey = (w) => ((w[0] | 0) << 16) | ((w[1] | 0) << 8) | (w[2] | 0);   // a colour's integer cache key
-const seaDep = (y) => 16 + 6 * Math.sin(y * TAU / 140);   // the Sea's rugae depth, 10..22
+const seaFold = (y, bk) => (12 + 2 * Math.sin(y * TAU / 140)) * (1 + 0.03 * bk);   // the Sea wall's fleshy fold, 10..14 px (+3% on the beat)
 const SHIELD_LBL = [];   // the shield count's 'x5' labels
 const SPRINT_COL = rgb('#ff5a3c');
 // per-kind shake: [base Hz, amplitude exponent, roll multiplier] (the default is 9 Hz, tr^1.3, 1: the old shake)
@@ -266,7 +267,7 @@ const EGG_I_R = ZONES.findIndex((z) => z.id === 'egg');
 const NRIV = Array.isArray(K.RIVALS) ? K.RIVALS.length : 5;   // the named rivals are race.agents[0 .. NRIV - 1]
 // every field drawPlayer's face code may set on its persistent options object (reset to undefined each frame)
 const KEV_RESET = ['dizzy', 'mouth', 'ouch', 'brow', 'star', 'happy', 'puff', 'blush', 'tired', 'shock', 'wink', 'headK', 'amp', 'curl', 'tw', 'tlen',
-  'sx', 'sy', 'lookY', 'crown', 'ko', 'tail', 'round', 'tipCol', 'shadesY', 'shadesR', 'shadesS', 'shadesOff', 'quiff', 'quiffK', 'cap', 'name', 'bob', 'nameCol', 'lbl', 'key', 'stripeN', 'lid', 'blushCol', 'heart', 'tiara', 'shadeCol', 'bib', 'bibFl', 'bibDown', 'mods', 'flapSide'];
+  'sx', 'sy', 'lookY', 'crown', 'ko', 'tail', 'round', 'tipCol', 'shadesY', 'shadesR', 'shadesS', 'shadesOff', 'quiff', 'quiffK', 'cap', 'name', 'bob', 'nameCol', 'lbl', 'key', 'stripeN', 'lid', 'blushCol', 'heart', 'tiara', 'shadeCol', 'bib', 'bibFl', 'bibDown', 'mods', 'flapSide', 'twinkle'];
 // in-race body mods: the mutations that change Kevin's own body (drawPlayer, scaled by the stack count)
 const BODY_MOD = new Set(['tank', 'turbo', 'ram', 'antacid', 'magnet', 'goo', 'echo']);
 // hazard readability: a dark outer outline and a cream top-left rim on every hazard
@@ -342,7 +343,7 @@ export class Renderer {
     this.passTI = NaN; this.zoneFaceD = NaN; this.gooWashH = NaN; this.wsGooK = NaN; this.wsGooH = NaN;
     this.youHold = NaN; this.net2K = NaN; this.seaRay2H = NaN; this.wsSeaK = NaN; this.rwK = NaN;
     this.eggTubeOn = NaN; this.fwGF = NaN; this.wsRapK = NaN; this.sunX = NaN; this.sunR = NaN; this.shaftH = NaN;
-    this.joltT = NaN;
+    this.joltT = NaN; this.popCh = NaN; this.popChT = NaN; this.cTier = 0; this.cTierN = 0;
     this.heroCv = undefined; this.bangSpr = undefined; this.race = undefined; this.ts = undefined;
     this.labelQ = undefined; this.beatOn = undefined; this.pvBeat = undefined; this.safeBack = undefined;
     this.worldM = undefined; this.wm = undefined; this.gooOn = undefined; this._wcO = undefined;
@@ -376,7 +377,7 @@ export class Renderer {
     this.wsSeaA = undefined; this.rcF = undefined; this.forkNK = undefined; this.forkNF = undefined;
     this.forkNB = undefined; this.forkDark = undefined; this.rwD = undefined; this.rwL = undefined;
     this.pieceJobs = undefined; this._dvL = undefined; this._dvR = undefined; this._dvY = undefined;
-    this.forkG = undefined; this.fsQ = undefined; this._fwL = undefined; this._fwG = undefined; this.bvig = undefined;
+    this.forkG = undefined; this.forkMouthG = undefined; this.shoalZ = -1; this.shoalC = ''; this.fsQ = undefined; this._fwL = undefined; this._fwG = undefined; this.bvig = undefined;
     this.wsRapA = undefined; this._wcK = undefined; this._wcS = undefined; this._cc = undefined;
     this._sun = undefined; this.shaftG = undefined; this.vsKO = undefined; this.vsRO = undefined;
     this.vsWC = undefined; this.eggB = undefined; this.eggBK = undefined; this.duelBub = undefined;
@@ -428,6 +429,10 @@ export class Renderer {
     // set by main.js (logical units): hudBottom (where the top HUD ends, default 110), bannerBox ({y0, y1} of a live
     // banner, or null), avoidRect ({x, y, w, h} of the DASH button, or null). Canvas text keeps out of all three.
     this.hudBottom = null; this.bannerBox = null; this.avoidRect = null;
+    this.comboShown = false;
+    // the pops' keep-out boxes (drawFx): the YOU tag (laid out before the pops), every name tag and every named rival
+    // seen this frame, as (x, y, w, h) centre boxes in one preallocated buffer
+    this.youKO = new Float32Array(4); this.youKOn = 0; this.koR = new Float32Array(4 * 48); this.koN = 0;   // set by main.js: true while the HUD's #combo counter is at opacity 1
     // read by main.js each frame: R.coachBandHit is true while any hazard, Big Macro, gate or pickup is drawn inside
     // the band where Coach's strip sits (hudB() to hudB() + 70 CSS px), so the UI fades #coach off it (reset every frame)
     this.coachBandHit = false; this.coachBox = null; this.claimL = null; this.f900 = null; this.dimZ = 0;
@@ -474,7 +479,7 @@ export class Renderer {
     this.chompT = 0; this.winkT = 0; this.nearT = 0; this.winT = 0; this.overSeen = null; this.shardsDone = false;
     this.dieT = 0; this.dieSeen = null; this.dieWbc = null; this.diePop = 0; this.linkT = 0;
     this.youT = 0; this.prevPend = null; this.prevRT = null; this.endT = 0; this.stealSaid = false; this.thiefXY = null;
-    this.eggCam = 0; this.eggBlinkAt = 0; this.eggBlinkT = -9; this.kPopT = -9; this.kBits = 0; this.lateCam = false; this.lateReady = false; this.lateFrom = null; this.lateOver = null;
+    this.eggCam = 0; this.eggBlinkAt = 0; this.eggBlinkT = -9; this.kPopT = -9; this.kBits = 0; this.kTier = 0; this.kTierT = -9; this.lateCam = false; this.lateReady = false; this.lateFrom = null; this.lateOver = null;
     this.ghosts = []; this.imp = null; this.books = []; this.wedge = null; this.vs = null; this.pvDashCd = null; this.dashRdyT = null; this.kThreatPop = null;
     this.oopsT = 0; this.oopsAt = -9; this.oopsKind = null; this.oopsId = 0;
     this.huffT = 0; this.wallT = 0; this.wallLast = -9; this.wallOn = false; this.dashAge = 9; this.headA = 0;
@@ -524,7 +529,11 @@ export class Renderer {
         vk: NaN, arch: NaN, vw: NaN, vsx: NaN, vsy: NaN, vtl: NaN, vam: NaN, vbt: NaN, hf: NaN, cl: NaN, cf: NaN, cz: NaN, lp: NaN, nd: NaN,
         rsp: NaN, swd: NaN, tfK: null, tfC: null, tiredK: NaN, bk: null, bub: null, bubT: NaN, sk: null, fq: NaN,
         // per swimmer: its blink period (bp, fixed) and this frame's far-head scale (fs, farS of its gap to Kevin)
-        bp: NaN, fs: NaN };
+        bp: NaN, fs: NaN,
+        // the combo fright (comboFright): when this rival's 1 s beat started (cbT) and the COMBO_WORDS threshold it answers (cbK)
+        cbT: -9, cbK: 0,
+        // its alpha step while it fades under the HUD (hq: 0..3, -1 clear of it; the batched fade band in drawAgents)
+        hq: -1 };
       this.aux.set(a, A);
     }
     return A;
@@ -625,6 +634,7 @@ export class Renderer {
   // lite; reduced motion keeps the counts and drops the spokes.
   popFx(x, y, chain = 1) {
     const ch = Math.max(1, chain | 0), lite = this.lite, cnt = (n) => (lite ? Math.ceil(n / 2) : n);
+    this.popCh = ch; this.popChT = this.time;   // (impactFrame's pop jolt grows with the chain step)
     const shard = (n, col, v0, v1) => {
       for (let i = 0; i < n; i++) {
         const d = i / n * TAU + Math.random() * 0.5, v = v0 + Math.random() * (v1 - v0);
@@ -806,7 +816,10 @@ export class Renderer {
     this.shakeAs(kind);
     this.hitDebris(kind, x, y, ang, p);
     // the jolt: the camera is knocked straight off the hit axis on the hit frame, and the spring brings it home
-    const J = { bonk: 7, bump: 5, shieldHit: 9, player: 12, death: 12 }[kind];
+    // (a pop: 3 px + 1 a chain step, at most 6; a blast: 6 + n, at most 12, n read back from its hold of 40 + 15 n ms)
+    const J = kind === 'pop' ? Math.min(6, 3 + ((this.time - this.popChT < 0.25 ? this.popCh : 1) - 1))
+      : kind === 'blast' ? Math.min(12, 6 + Math.max(1, Math.round((sec * 1000 - 40) / 15)))
+        : kind === 'bonk' ? 7 : kind === 'bump' ? 5 : kind === 'shieldHit' ? 9 : kind === 'player' || kind === 'death' ? 12 : 0;
     if (J) {
       const jl = this.reduced ? Math.min(2, J) : J;
       this.kx = clamp(-Math.cos(ang) * jl, -16, 16); this.ky = clamp(-Math.sin(ang) * jl, -16, 16);
@@ -1318,7 +1331,7 @@ export class Renderer {
     return q.p;
   }
   // inner tile strength per zone (the Sea gets a stronger floor so its folds read)
-  innerA(zi) { const id = ZONES[zi] && ZONES[zi].id; return id === 'sea' ? 0.38 : id === 'goo' ? 0.3 : id === 'rapids' ? 0.65 : 0.5; }   // (the Goo's custard needs its own light through)
+  innerA(zi) { const id = ZONES[zi] && ZONES[zi].id; return id === 'sea' ? 0.38 : id === 'goo' ? 0.45 : id === 'rapids' ? 0.65 : 0.5; }   // (the Goo's custard needs its own light through)
   // text painted once (shadow, outline, fill, highlight at 2x); kind 'sign' draws a rounded plate
   // canWait: the caller can skip a frame (pops), so a frame never paints more than BAKES_PER_FRAME new sprites
   text(text, col, size, kind = 'pop', canWait = false) {
@@ -2151,12 +2164,14 @@ export class Renderer {
       if (bw < 1) this.farOf(this.zi, 1 - bw);
       if (bw > 0) this.farOf(this.zi + 1, bw);
       this.drawPieces();
+      this.drawShoal(race);
       c.restore(); c.save();
     } else {
       for (let k2 = 0; k2 < np; k2++) for (let i = 0; i < TN[k2]; i += 2) { if (TL[k2][i] < lx) lx = TL[k2][i]; if (TR[k2][i] > rx) rx = TR[k2][i]; }
       c.beginPath(); c.rect(lx - 4, -40, Math.max(0, rx - lx + 8), this.H + 80); c.clip();
       this.drawSun(race, fillTube);
       this.drawPieces();
+      this.drawShoal(race);
     }
     c.lineJoin = 'round'; c.lineCap = 'butt';
     // the merged fat glow (bevel joins: the round ones cost the most on a 26 px stroke); stage 1 bakes its deep half
@@ -2251,6 +2266,55 @@ export class Renderer {
     }
   }
   // drawTube's far landmarks for zone zi at weight a (full quality draws them in the tube clip; drawNear skips them then)
+  // the million, still out there: a background shoal of up to 36 silhouette swimmers (16 on lite) at parallax 0.55,
+  // swimming at 0.6 to 0.9 of the crowd's pace (so Kevin visibly passes them), wiggling at 10 to 14 Hz, in the zone's
+  // mood colour 35% darker. Their number follows the HUD's place: n = round(36 * clamp((log10(place) - 2) / 4, 0, 1)),
+  // so the top 100 swim alone. Two batched passes (clear of the HUD at 0.19; in its 40 px band at half that), each one
+  // tail stroke and one head fill. Reduced motion: no drift, no wiggle. Nothing allocated a frame.
+  drawShoal(race) {
+    if (race.demo || race.over || race.drill) return;
+    const place = Math.max(1, +race.rank || 1), cap = this.lite ? 16 : 36;
+    const n = Math.min(cap, Math.round(36 * clamp((Math.log10(place) - 2) / 4, 0, 1)));
+    if (n <= 0) return;
+    const zi = this.bt > 0.5 && ZONES[this.zi + 1] ? this.zi + 1 : this.zi, z = ZONES[zi];
+    if (!z) return;
+    if (this.shoalZ !== zi) {
+      const M = MOOD[z.id], src = M ? M[Math.floor(M.length / 2)][1] : zcol(z)[1];
+      this.shoalZ = zi; this.shoalC = css(lerpC(rgb(src), [0, 0, 0], 0.35));
+    }
+    const c = this.ctx, H = this.H, cam = this.camY, red = this.reduced, t = red ? 0 : this.time, fb = this.agFb > 0 ? this.agFb : 430;
+    const LT = H + 80, hb = race.demo ? -1e9 : this.hudB();
+    // each swimmer once a frame into the kept buffer (x, y, angle, tail phase, band flag); the passes read it back
+    const SB = this.shoalB || (this.shoalB = new Float32Array(36 * 5));
+    let m = 0;
+    for (let i = 0; i < n; i++) {
+      const u0 = h1(i * 7.3 + 1.1) * LT / 0.55, v = fb * (0.6 + 0.3 * h1(i * 2.9 + 4.4));
+      const sy = ((H * 0.5 - (u0 + v * t - cam) * 0.55) % LT + LT) % LT - 40;
+      if (sy < hb || sy > H + 20) continue;
+      const j = m * 5;
+      SB[j] = VIEW_W * (0.08 + 0.84 * h1(i * 3.1 + 0.7)) + (red ? 0 : Math.sin(t * 0.4 + i * 1.3) * 10); SB[j + 1] = sy;
+      SB[j + 2] = (h1(i + 9.1) - 0.5) * 0.5; SB[j + 3] = red ? 0 : t * (10 + 4 * h1(i * 1.9 + 2.2)) * TAU + i; SB[j + 4] = sy < hb + 40 ? 1 : 0;
+      m++;
+    }
+    if (!m) return;
+    c.fillStyle = this.shoalC; c.strokeStyle = this.shoalC; c.lineWidth = 1.6; c.lineCap = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      let any = false;
+      c.beginPath();
+      for (let r = 0; r < m; r++) {
+        const j = r * 5; if (SB[j + 4] !== pass) continue;
+        const sx = SB[j], sy = SB[j + 1], ang = SB[j + 2];
+        this.tailQ(c, sx - Math.sin(ang) * 3, sy + Math.cos(ang) * 3, ang, 11, 2.2, SB[j + 3]);
+        any = true;
+      }
+      if (!any) continue;
+      c.globalAlpha = pass ? 0.09 : 0.19; c.stroke();
+      c.beginPath();
+      for (let r = 0; r < m; r++) { const j = r * 5; if (SB[j + 4] !== pass) continue; c.moveTo(SB[j] + 2, SB[j + 1]); c.ellipse(SB[j], SB[j + 1], 2, 3, SB[j + 2], 0, TAU); }
+      c.fill();
+    }
+    c.globalAlpha = 1;
+  }
   farOf(zi, a) { if (a > 0.01 && ZONES[zi] && FAR[ZONES[zi].id]) this.drawFar(zi, a); }
   // the two slivers between the rect clip's edges (xl, xr) and the outer walls, one polygon per side, filled with the
   // outside's own tile (the backdrop layer at parallax 0.35, the same pattern transform tileLayer draws it with) at 1
@@ -2348,7 +2412,7 @@ export class Renderer {
     const es = z.id === 'fork' ? (race.eggSide || 1) : 0, M = this.moodSpr(z.id, es, v);
     if (!M || !M.pat || !M.pat.setTransform) return;
     const c = this.ctx, red = this.reduced;
-    let al = 0.3 * w, f = 0;
+    let al = (z.id === 'sea' ? 0.5 : 0.3) * w, f = 0;   // (the Sea's 3 value bands need more weight to read)
     if (z.id === 'launch') al *= red ? 0.75 : 0.55 + 0.45 * clamp(+this.beat || 0, 0, 1);
     if (z.id === 'rapids' && !red) f = (this.time * 36) % this.H;
     const X = M.m; X.a = VIEW_W / 4; X.d = this.H / 256; X.e = 0; X.f = f; M.pat.setTransform(X);
@@ -2638,9 +2702,12 @@ export class Renderer {
         for (let i = 3; i < pn; i += 3) c.lineTo(PL[i], PL[i + 2]);
         for (let i = pn - 3; i >= 0; i -= 3) c.lineTo(PL[i + 1], PL[i + 2]);
         c.closePath();
-        if (egg) { c.fillStyle = 'rgba(255,170,110,1)'; c.globalAlpha = (race.muts && race.muts.nose ? 0.18 : 0.12) * warmK; c.fill(); this.eggTubeOn = this.frame; }
-        else {
-          c.fillStyle = '#2a2a38'; c.globalAlpha = 0.4; c.fill();   // (drained 40% toward a cold grey)
+        if (egg) {   // a pink haze at 0.25 (breathing a little), warmer with a good nose
+          c.fillStyle = '#ff8be0'; c.globalAlpha = (race.muts && race.muts.nose ? 0.3 : 0.25) * (0.85 + 0.15 * warmK); c.fill(); this.eggTubeOn = this.frame;
+        } else {
+          // graded 35% toward a cold '#2a2f3c' and then 25% darker, in ONE fill: 0.4875 x the floor + 0.2625 x the grey
+          // is 'rgb(22,24,31)' at 0.5125
+          c.fillStyle = 'rgb(22,24,31)'; c.globalAlpha = 0.5125; c.fill();
           const G = this._fwG || (this._fwG = nbuf()); G.n = 0; nbFit(G, pn).set(PL.subarray(0, pn)); G.n = pn;   // (greyed after the walls)
           this.fwGF = this.frame;
         }
@@ -2660,11 +2727,41 @@ export class Renderer {
       }
       c.fill(); c.globalAlpha = 1;
     }
-    // the wrong tube's mouth breathes out a cold blue-grey haze
+    // the egg branch's mouth: a '#ff8be0' gradient from the split 120 px up its tube (one cached -1..0 gradient)
+    // and, across the wrong branch's mouth, a crooked strip of hazard tape (no glow, no sparkles: it is a dead end)
     if (this.sides(race).length > 1) {
-      const wy = FORK_Y0 + 260, sy = this.sy(wy);
-      if (sy > -200 && sy < H + 200) { const ch = chan(wy, -es); this.dglow('#788cc8', ch.c, sy, ch.h * 1.15, 0.25); }
+      const sa = this.sy(FORK_Y0);
+      if (sa > -40 && sa - 120 < H + 40) {
+        if (!this.forkMouthG) { const g = c.createLinearGradient(0, 0, 0, -1); g.addColorStop(0, 'rgba(255,139,224,0.55)'); g.addColorStop(1, 'rgba(255,139,224,0)'); this.forkMouthG = g; }
+        c.beginPath();
+        for (let k = 0; k <= 4; k++) { const wy = FORK_Y0 + k * 30; k ? c.lineTo(this.wallX(wy, es, -1), this.sy(wy)) : c.moveTo(this.wallX(wy, es, -1), this.sy(wy)); }
+        for (let k = 4; k >= 0; k--) { const wy = FORK_Y0 + k * 30; c.lineTo(this.wallX(wy, es, 1), this.sy(wy)); }
+        c.closePath();
+        const m = this.wm; setXf(c, m, 0, sa, 0, 1, 120); c.fillStyle = this.forkMouthG; c.globalAlpha = 1; c.fill(); c.setTransform(m);
+      }
+      if (!(p.side && p.side === es && this.camY > FORK_END)) this.forkTape(-es, FORK_Y0 + 170);
     }
+  }
+  // a crooked strip of hazard tape across tube sd's mouth at world y wy: 11 px tall, sagging and tilted 0.1 rad,
+  // yellow with black stripes (3 calls: the band, the stripes, the ink outline)
+  forkTape(sd, wy) {
+    const c = this.ctx, xl = this.wallX(wy, sd, -1) + 2, xr = this.wallX(wy, sd, 1) - 2, sy = this.sy(wy);
+    if (sy < -40 || sy > this.H + 40 || !(xr - xl > 20)) return;
+    const len = xr - xl, tilt = 0.1 * sd, sag = this.reduced ? 6 : 6 + Math.sin(this.time * 1.3) * 1.5, hh = 5.5;
+    // a point on the tape's centre line at u (0..1): x = xl + len u, y = sy + (u - 0.5) len tilt + 4 sag u (1 - u)
+    const lt = len * tilt, s4 = sag * 4;
+    c.beginPath();
+    for (let i = 0; i <= 8; i++) { const u = i / 8, x = xl + len * u, y = sy + (u - 0.5) * lt + s4 * u * (1 - u) - hh; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    for (let i = 8; i >= 0; i--) { const u = i / 8; c.lineTo(xl + len * u, sy + (u - 0.5) * lt + s4 * u * (1 - u) + hh); }
+    c.closePath(); c.globalAlpha = 0.95; c.fillStyle = '#ffd75c'; c.fill();
+    c.globalAlpha = 0.9; c.strokeStyle = HZ_INK; c.lineWidth = 1.5; c.stroke();
+    c.beginPath();
+    for (let d = 0; d < len - 4; d += 14) {   // slanted stripes, 7 px wide
+      const u0 = d / len, u1 = Math.min(1, (d + 7) / len), u2 = Math.min(1, (d + 4) / len), u3 = Math.min(1, (d + 11) / len);
+      c.moveTo(xl + len * u0, sy + (u0 - 0.5) * lt + s4 * u0 * (1 - u0) + hh); c.lineTo(xl + len * u1, sy + (u1 - 0.5) * lt + s4 * u1 * (1 - u1) + hh);
+      c.lineTo(xl + len * u3, sy + (u3 - 0.5) * lt + s4 * u3 * (1 - u3) - hh); c.lineTo(xl + len * u2, sy + (u2 - 0.5) * lt + s4 * u2 * (1 - u2) - hh); c.closePath();
+    }
+    c.fillStyle = '#1a0616'; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1;
   }
   // drawForkSplit's queued signposts (this.fsQ, fsN of them this frame), drawn once the walls are down
   flushForkSigns() {
@@ -2735,6 +2832,18 @@ export class Renderer {
     if (u <= 0) return 0.08;
     return 0.08 + 0.92 * u * u * (3 - 2 * u);
   }
+  // the HUD band for pickups and world objects (drawEnts): a linear ramp from 0.25 at the HUD's edge to 1 at 40 px under
+  // it (0.08 once 20 px up under the HUD), so a fruit by the mutation chips never reads as one more chip; hbGlow says
+  // whether a glow or halo may draw (never inside the band)
+  hudBandA(sy) {
+    const hb = this.hfB;
+    if (hb == null) return 1;
+    const u = (sy - hb) / 40;
+    if (u >= 1) return 1;
+    if (u >= 0) return 0.25 + 0.75 * u;
+    return u <= -0.5 ? 0.08 : 0.25 + 0.34 * u;
+  }
+  hbGlow(sy) { return this.hfB == null || sy >= this.hfB + 40; }
   // a box (top y, height h, centre x, width w) moved clear of the HUD (12 CSS px gap) and any banner; null if it cannot fit
   clearTop(top, h, x, w) {
     top = Math.max(top, this.hudB() + 12 * this.cssK);
@@ -2775,6 +2884,33 @@ export class Renderer {
   }
   // wsAcid: the acid branch of drawWallStyle (its own method, so it optimizes on its own and inlines its helpers)
   wsAcid(race, a, wall, c, t, y0, y1, ps, sides, ns, red) {
+    // a corroded lime lip along each wall: 6 to 8 px of '#b6ff5c' at 0.8 with drip teeth hanging into the lane
+    // (one fill a side), its underside traced in '#3d7a3a' (one stroke a side), so the wall reads as more than a hairline
+    {
+      const ga = c.globalAlpha, yl0 = Math.floor(y0 / 13) * 13;
+      c.lineWidth = 2;
+      for (let si = 0; si < ns; si++) {
+        const side = sides[si], ye = this.wsEnd(side, ps, y1);
+        if (ye < yl0) continue;
+        for (let k = 0; k < 2; k++) {
+          const s = SGN[k];
+          c.beginPath();
+          for (let y = yl0; y <= ye + 13; y += 13) { const sy = this.sy(y), x = this.wallX(y, side, s); y === yl0 ? c.moveTo(x, sy) : c.lineTo(x, sy); }
+          for (let y = Math.floor((ye + 13 - yl0) / 13) * 13 + yl0; y >= yl0; y -= 13) {
+            const hv = h1(y * 0.29 + s * 1.7), d = 6 + 2 * hv + ((y / 13) % 3 === 0 && hv > 0.3 ? 4 + 5 * hv : 0);   // a drip tooth every 3rd step
+            c.lineTo(this.wallX(y, side, s) - s * d, this.sy(y));
+          }
+          c.closePath(); c.globalAlpha = ga * 0.8; c.fillStyle = '#b6ff5c'; c.fill();
+          c.beginPath();
+          for (let y = yl0; y <= ye + 13; y += 13) {
+            const hv = h1(y * 0.29 + s * 1.7), d = 6 + 2 * hv + ((y / 13) % 3 === 0 && hv > 0.3 ? 4 + 5 * hv : 0), x = this.wallX(y, side, s) - s * d, sy = this.sy(y);
+            y === yl0 ? c.moveTo(x, sy) : c.lineTo(x, sy);
+          }
+          c.globalAlpha = ga * 0.9; c.strokeStyle = '#3d7a3a'; c.stroke();
+        }
+      }
+      c.globalAlpha = ga;
+    }
     const ys = Math.ceil(y0 / 26) * 26;
     for (let pass = 0; pass < 2; pass++) {
       if (pass === 0) c.fillStyle = 'rgba(8,24,0,0.5)'; else { c.strokeStyle = 'rgba(200,255,120,0.35)'; c.lineWidth = 1; }
@@ -2866,6 +3002,7 @@ export class Renderer {
     // the Sea is wider than the screen: an off-screen wall is pinned to the screen edge so the folds always frame it
     const YB = this._ys || (this._ys = nbuf()), XB = this._xs || (this._xs = nbuf());
     if (this.wsSeaK !== wallKey(wall)) { this.wsSeaK = wallKey(wall); this.wsSeaA = css(wall, 0.7); }
+    const ga = c.globalAlpha, bk = red ? 0 : clamp(+this.beat || 0, 0, 1);
     for (let si = 0; si < ns; si++) {
       const side = sides[si], ye = this.wsEnd(side, ps, y1);
       for (let k = 0; k < 2; k++) {
@@ -2877,16 +3014,14 @@ export class Renderer {
         }
         const ys = YB.a, xs = XB.a, yn = YB.n;
         if (yn < 2) continue;
-        // a 12 px warm rim glow '#ff7a5c' at 0.35 just inside the wall line, so the lane's edge reads on the dim flesh
-        { const ga = c.globalAlpha; c.globalAlpha = ga * 0.35; c.strokeStyle = '#ff7a5c'; c.lineWidth = 12; c.beginPath();
-          for (let i = 0; i < yn; i++) { const yy = this.sy(ys[i]), xx = xs[i] - s * 6; i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }
-          c.stroke(); c.globalAlpha = ga; }
+        // a 10 to 14 px fleshy fold: a '#7a0a20' body (one fill) with a '#ff7a5c' rim along its lane edge (one stroke),
+        // breathing 3% on the beat
         c.beginPath();
         for (let i = 0; i < yn; i++) { const yy = this.sy(ys[i]); i ? c.lineTo(xs[i], yy) : c.moveTo(xs[i], yy); }
-        for (let i = yn - 1; i >= 0; i--) c.lineTo(xs[i] - s * (4 + seaDep(ys[i])), this.sy(ys[i]));
-        c.closePath(); c.fillStyle = 'rgba(70,0,12,0.45)'; c.fill();
-        c.strokeStyle = this.wsSeaA; c.lineWidth = 3; c.beginPath();
-        for (let i = 0; i < yn; i++) { const x = xs[i] - s * (4 + seaDep(ys[i])), yy = this.sy(ys[i]); i ? c.lineTo(x, yy) : c.moveTo(x, yy); }
+        for (let i = yn - 1; i >= 0; i--) c.lineTo(xs[i] - s * seaFold(ys[i], bk), this.sy(ys[i]));
+        c.closePath(); c.fillStyle = '#7a0a20'; c.globalAlpha = ga * 0.9; c.fill();
+        c.strokeStyle = '#ff7a5c'; c.lineWidth = 3; c.globalAlpha = ga; c.beginPath();
+        for (let i = 0; i < yn; i++) { const x = xs[i] - s * seaFold(ys[i], bk), yy = this.sy(ys[i]); i ? c.lineTo(x, yy) : c.moveTo(x, yy); }
         c.stroke();
       }
     }
@@ -3274,9 +3409,9 @@ export class Renderer {
         c.drawImage(cv, Q.x0 * K, Q.y0 * K, (Q.x1 - Q.x0) * K, (Q.y1 - Q.y0) * K, dx0, dy0, dw, dh);
         this.imgArea += this.clipArea(dx0, dy0, dw, dh);
       }
-      // the Big Macro's eye holes glow '#ff8a9c' at 0.5 and blink every 4 to 6 s (steady for reduced motion)
+      // the Big Macro's eye holes glow '#ff8a9c' at 0.5 and blink at 0.5 Hz (steady for reduced motion)
       if (sea) {
-        const per = 4 + 2 * h1(k * 1.37 + 5), u = ((t + 3.1 * h1(k + 9.2)) % per + per) % per;
+        const per = 2, u = ((t + 3.1 * h1(k + 9.2)) % per + per) % per;
         const lid = this.reduced || u > 0.22 ? 1 : Math.abs(1 - u / 0.11);
         if (lid > 0.08) {
           const ex = x0 + (FAR_W / 2) * sc, ey = y0 + (FAR_H / 2 - 40) * sc;
@@ -3334,16 +3469,42 @@ export class Renderer {
     const f = (z.beat || 96) / 60, n = NB(this.lite ? 3 : 7), bt = this.reduced ? 0 : clamp(+this.beat || 0, 0, 1);
     // a warm pink glow low in the tube, breathing with the beat
     this.dglow('#ff9ac0', VIEW_W / 2, this.H * 0.85, 240, a * (0.12 + 0.06 * bt));
-    const ringAt = (y, k, ga) => {
-      const wy = cam + this.H - y, ch = chan(wy, 0), ry = 14 + 6 * k;
-      c.globalAlpha = a * ga; c.fillStyle = 'rgba(255,120,170,0.05)'; c.beginPath(); c.ellipse(ch.c, y, ch.h * 0.98, ry, 0, 0, TAU); c.fill();
+    // the rings, batched (about 6 calls, was 32): each ring's (cx, y, rx, ry, core alpha) into a kept buffer, then ONE
+    // fill of all the ellipses, ONE 10 px halo stroke, the 3 px cores in 3 alpha buckets and ONE highlight path
+    const RB = this._lrB || (this._lrB = new Float32Array(5 * 8)), sw = this.reduced ? -1 : (t * f) % 1;
+    let rn = 0;
+    for (let i = 0; i <= n && rn < 8; i++) {
+      const sweep = i === n;
+      if (sweep && sw < 0) break;
+      const y = sweep ? -30 + sw * (this.H + 60) : pos(i + 60, 1, 0);
+      const k = sweep ? 1 - sw : this.reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t * f * TAU - i * 0.9), ga = sweep ? Math.sin(sw * Math.PI) : 1;
+      if (y < -40 || y > this.H + 40) continue;
+      const ch = chan(cam + this.H - y, 0), j = rn * 5;
+      RB[j] = ch.c; RB[j + 1] = y; RB[j + 2] = ch.h; RB[j + 3] = 14 + 6 * k; RB[j + 4] = (0.28 + 0.24 * k) * ga; rn++;
+    }
+    if (rn) {
+      c.beginPath();
+      for (let r = 0; r < rn; r++) { const j = r * 5, rx = RB[j + 2] * 0.98; c.moveTo(RB[j] + rx, RB[j + 1]); c.ellipse(RB[j], RB[j + 1], rx, RB[j + 3], 0, 0, TAU); }
+      c.globalAlpha = a; c.fillStyle = 'rgba(255,120,170,0.05)'; c.fill();
       c.strokeStyle = 'rgba(255,140,190,0.07)'; c.lineWidth = 10; c.stroke();   // the halo
-      c.globalAlpha = (0.28 + 0.24 * k) * a * ga; c.strokeStyle = 'rgb(255,140,190)'; c.lineWidth = 3; c.stroke();
-      c.globalAlpha = a * ga; c.strokeStyle = 'rgba(255,220,235,0.12)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(ch.c, y - 2, ch.h * 0.9, ry * 0.8, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
-    };
-    for (let i = 0; i < n; i++) ringAt(pos(i + 60, 1, 0), this.reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t * f * TAU - i * 0.9), 1);
-    // one ring sweeps down the screen on every beat (a squeeze pushing the swimmers along)
-    if (!this.reduced) { const u = (t * f) % 1; ringAt(-30 + u * (this.H + 60), 1 - u, Math.sin(u * Math.PI)); }
+      c.strokeStyle = 'rgb(255,140,190)'; c.lineWidth = 3;
+      for (let bk = 0; bk < 3; bk++) {   // the cores: alpha buckets 0..0.25, 0.25..0.4, 0.4+ (drawn at 0.2, 0.33, 0.47)
+        let any = false;
+        c.beginPath();
+        for (let r = 0; r < rn; r++) {
+          const j = r * 5, al = RB[j + 4], b = al < 0.25 ? 0 : al < 0.4 ? 1 : 2;
+          if (b !== bk || al < 0.02) continue;
+          const rx = RB[j + 2] * 0.98; c.moveTo(RB[j] + rx, RB[j + 1]); c.ellipse(RB[j], RB[j + 1], rx, RB[j + 3], 0, 0, TAU); any = true;
+        }
+        if (any) { c.globalAlpha = a * (bk === 0 ? 0.2 : bk === 1 ? 0.33 : 0.47); c.stroke(); }
+      }
+      c.beginPath();
+      for (let r = 0; r < rn; r++) {
+        const j = r * 5, rx = RB[j + 2] * 0.9, ry = RB[j + 3] * 0.8, y = RB[j + 1] - 2;
+        c.moveTo(RB[j] + Math.cos(Math.PI * 1.1) * rx, y + Math.sin(Math.PI * 1.1) * ry); c.ellipse(RB[j], y, rx, ry, 0, Math.PI * 1.1, Math.PI * 1.9);
+      }
+      c.globalAlpha = a; c.strokeStyle = 'rgba(255,220,235,0.12)'; c.lineWidth = 1.2; c.stroke();
+    }
     // pink speed streaks rushing past (24, 12 on lite)
     c.globalAlpha = a; c.strokeStyle = 'rgba(255,170,210,0.35)'; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath();
     for (let i = 0; i < NB(this.lite ? 12 : 24); i++) {
@@ -3386,7 +3547,13 @@ export class Renderer {
       }
       c.stroke(); c.globalAlpha = a;
     }
-    for (let i = 0; i < N(8); i++) this.dglow('#788cc8', X(i) + Math.sin(t * 0.7 + i) * 12, pos(i, 0.85, -10), 18 + h1(i) * 26, a * 0.16);
+    // (no ZGLOW sparkle in the wrong branch: past the split, the glows on its side of the divider are skipped)
+    const r0 = this.race, split = !!r0 && cam + this.H > FORK_Y0 && this.sides(r0).length > 1, dvx = split ? centre(Math.max(FORK_Y0, cam + this.H / 2)) : 0;
+    for (let i = 0; i < N(8); i++) {
+      const gx = X(i) + Math.sin(t * 0.7 + i) * 12;
+      if (split && (gx - dvx) * es < 0) continue;
+      this.dglow('#788cc8', gx, pos(i, 0.85, -10), 18 + h1(i) * 26, a * 0.16);
+    }
     for (let i = 20; i < 20 + N(12); i++) {
       const y = pos(i, 0.95, 26 + h1(i) * 20), up = (this.H - y) / this.H;
       const x = X(i) + es * up * 70 + Math.sin(t * 1.3 + i) * 8;
@@ -3697,7 +3864,7 @@ export class Renderer {
     }
     // the god rays and the swell bands: ONE half-resolution layer (seaLayer), repainted every 3rd frame
     if (!seaFold) this.seaLayer(a, pos);
-    // three god-ray wedges from the top ('#ffb08a' at 0.07): 60 to 90 px wide at the top, 160 where they fade out
+    // three god-ray wedges from the top ('#ffb08a' at 0.12): 90 to 120 px wide at the top, 160 where they fade out
     // (0.75 of the height), swaying at 0.08 Hz. Not on lite; counted through the fill budget.
     if (!this.lite) {
       const H = this.H, RH = H * 0.75, area = 3 * (75 + 160) / 2 * RH;
@@ -3707,9 +3874,9 @@ export class Renderer {
           g.addColorStop(0, 'rgba(255,176,138,1)'); g.addColorStop(0.55, 'rgba(255,176,138,0.45)'); g.addColorStop(1, 'rgba(255,176,138,0)'); this.seaGodG = g;
         }
         const red = this.reduced, m0 = this.wm;
-        c.fillStyle = this.seaGodG; c.globalAlpha = a * 0.07; c.beginPath();
+        c.fillStyle = this.seaGodG; c.globalAlpha = a * 0.12; c.beginPath();
         for (let i = 0; i < 3; i++) {
-          const w0 = 60 + 30 * h1(i * 4.7 + 1.3), sw = red ? 0 : Math.sin(t * 0.08 * TAU + i * 2.1) * 26, xt = VIEW_W * (0.22 + 0.28 * i) + (h1(i + 8.8) - 0.5) * 30;
+          const w0 = 90 + 30 * h1(i * 4.7 + 1.3), sw = red ? 0 : Math.sin(t * 0.08 * TAU + i * 2.1) * 26, xt = VIEW_W * (0.22 + 0.28 * i) + (h1(i + 8.8) - 0.5) * 30;
           c.moveTo(xt - w0 / 2, 0); c.lineTo(xt + w0 / 2, 0); c.lineTo(xt + sw + 80, RH); c.lineTo(xt + sw - 80, RH); c.closePath();
         }
         c.fill(); c.setTransform(m0); c.globalAlpha = a;
@@ -3924,7 +4091,7 @@ export class Renderer {
       if (!pat || !pat.setTransform) return false;
       pat.setTransform(M1); c.fillStyle = pat;
       // (the middle 60% of the width at 0.7: the lane reads calmer than the flanks)
-      const al = a * 0.1, xm0 = VIEW_W * 0.2, xm1 = VIEW_W * 0.8;
+      const al = a * 0.16, xm0 = VIEW_W * 0.2, xm1 = VIEW_W * 0.8;
       for (let bi = 0; bi < 3; bi++) {   // (a plain loop: no closure a frame)
         const y = bi === 0 ? 0 : bi === 1 ? H * 0.35 : H * 0.62, h = bi === 0 ? H * 0.35 : bi === 1 ? H * 0.27 : H * 0.28, k = bi === 0 ? 1 : bi === 1 ? 0.55 : 0.2;
         c.globalAlpha = al * k; c.fillRect(0, y, xm0, h); c.fillRect(xm1, y, VIEW_W - xm1, h);
@@ -3939,12 +4106,12 @@ export class Renderer {
     if (!pat || !pat.setTransform) return false;
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, W, Hp);
     g.setTransform(k, 0, 0, k, 0, 0);
-    pat.setTransform(M1); g.fillStyle = pat; g.globalAlpha = 0.1; g.fillRect(0, 0, VIEW_W, H * 0.9);
+    pat.setTransform(M1); g.fillStyle = pat; g.globalAlpha = 0.16; g.fillRect(0, 0, VIEW_W, H * 0.9);
     {
       const S2 = 1.6, u2 = cam * 0.85 + t * 7, oy2 = ((u2 % (512 * S2)) + 512 * S2) % (512 * S2), ox2 = ((-t * 5) % (256 * S2) + 256 * S2) % (256 * S2);
       const cs = Math.cos(0.3), sn = Math.sin(0.3), M2 = L.M2;
       M2.a = S2 * cs; M2.b = S2 * sn; M2.c = -S2 * sn; M2.d = S2 * cs; M2.e = VIEW_W / 2 - cs * ox2 - sn * oy2; M2.f = H / 2 - sn * ox2 + cs * oy2;
-      pat.setTransform(M2); g.fillStyle = pat; g.globalAlpha = 0.07 * this.net2K; g.fillRect(0, 0, VIEW_W, H * 0.9);
+      pat.setTransform(M2); g.fillStyle = pat; g.globalAlpha = 0.1 * this.net2K; g.fillRect(0, 0, VIEW_W, H * 0.9);
     }
     if (!L.fg || L.fH !== H) {
       L.fH = H; L.fg = g.createLinearGradient(0, 0, 0, H);
@@ -4125,10 +4292,10 @@ export class Renderer {
       switch (e.t) {
         case 'sugar': {
           const ci = Math.floor(Math.abs(e.x * 7 + e.y)) % FRUIT.length, col = FRUIT[ci], bob = Math.sin(t * 4 + e.y) * 2, yy = y + bob, r = e.r;
-          const fa = this.hudFade(yy);
+          const fa = this.hudBandA(yy);
           // the Great Womb Sea and the Launch Tube are fruit-coloured themselves: there the glow under it is cream
           const zd = ZONES[this.bt > 0.5 && ZONES[(this.zi | 0) + 1] ? (this.zi | 0) + 1 : this.zi | 0], pale = !!zd && (zd.id === 'sea' || zd.id === 'launch');
-          if (fa >= 0.2) { if (pale) this.dglow('#fff0dc', x, yy, r + 10, 0.35 * fa); else this.dglow(col, x, yy, r + 10, 0.5 * fa); }
+          if (this.hbGlow(yy)) { if (pale) this.dglow('#fff0dc', x, yy, r + 10, 0.35 * fa); else this.dglow(col, x, yy, r + 10, 0.5 * fa); }
           // a 2 px ink ring behind every fruit, so it never melts into the floor
           c.globalAlpha = fa * 0.55; c.strokeStyle = HZ_INK; c.lineWidth = 2; c.beginPath(); c.arc(x, yy, r + 1.5, 0, TAU); c.stroke();
           c.globalAlpha = fa;
@@ -4141,8 +4308,8 @@ export class Renderer {
           c.globalAlpha = 1;
           break; }
         case 'dna': {
-          const fa = this.hudFade(y);
-          if (fa >= 0.2) this.dglow('#ff5cd2', x, y, 26, (0.35 + 0.15 * Math.sin(t * 6)) * fa); c.globalAlpha = fa;
+          const fa = this.hudBandA(y);
+          if (this.hbGlow(y)) this.dglow('#ff5cd2', x, y, 26, (0.35 + 0.15 * Math.sin(t * 6)) * fa); c.globalAlpha = fa;
           c.lineCap = 'round';
           c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 1.4; c.beginPath();
           for (let i = 0; i <= 10; i += 2) { const yy = y - 14 + i * 2.8, s = Math.sin(t * 5 + i * 0.7) * 8; c.moveTo(x + s, yy); c.lineTo(x - s, yy); }
@@ -4152,8 +4319,8 @@ export class Renderer {
           c.globalAlpha = 1;
           break; }
         case 'shield': {
-          const b = Math.sin(t * 4 + e.y) * 2, r = e.r, fa = this.hudFade(y + b);
-          if (fa >= 0.2) this.dglow('#ffd75c', x, y + b, r + 14, 0.45 * fa); c.globalAlpha = fa;
+          const b = Math.sin(t * 4 + e.y) * 2, r = e.r, fa = this.hudBandA(y + b);
+          if (this.hbGlow(y + b)) this.dglow('#ffd75c', x, y + b, r + 14, 0.45 * fa); c.globalAlpha = fa;
           c.fillStyle = '#ffd75c'; c.beginPath(); c.arc(x, y + b + 2, r * 0.85, Math.PI, 0); c.lineTo(x + r, y + b + 4); c.lineTo(x - r, y + b + 4); c.closePath(); c.fill();
           c.strokeStyle = '#b07a10'; c.lineWidth = 1.5; c.stroke();
           c.fillStyle = '#ff3d6e'; c.fillRect(x - 1.5, y + b - r * 0.8, 3, r * 0.9);
@@ -4161,8 +4328,8 @@ export class Renderer {
           c.globalAlpha = 1;
           break; }
         case 'alkali': {
-          const r = e.r + Math.sin(t * 5 + e.y) * 1.5, fa = this.hudFade(y);
-          if (fa >= 0.2) this.dglow('#5cc8ff', x, y, r + 10, 0.4 * fa); c.globalAlpha = fa;
+          const r = e.r + Math.sin(t * 5 + e.y) * 1.5, fa = this.hudBandA(y);
+          if (this.hbGlow(y)) this.dglow('#5cc8ff', x, y, r + 10, 0.4 * fa); c.globalAlpha = fa;
           c.fillStyle = 'rgba(92,200,255,0.3)'; c.strokeStyle = '#9ae2ff'; c.lineWidth = 2;
           c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.stroke();
           c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.arc(x - r * 0.4, y - r * 0.4, 2.2, 0, TAU); c.fill();
@@ -4197,7 +4364,7 @@ export class Renderer {
             if (sx !== 1 || sy !== 1) { c.save(); c.translate(x, y); c.scale(sx, sy); c.translate(-x, -y); dropXf = true; }
           }
           const imm = acid && this.acidImm;   // (HYPER FRENZY: acid cannot touch him, so it stops shouting)
-          this.dglow(col, x, y, e.r * 1.35, imm ? 0.08 : acid ? 0.22 : 0.16);
+          if (this.hbGlow(y - e.r)) this.dglow(col, x, y, e.r * 1.35, imm ? 0.08 : acid ? 0.22 : 0.16);   // (no glow in the HUD band)
           c.fillStyle = hexA(col, acid ? 0.5 : 0.3);   // (acid: bright lime on the bottle-green floor)
           // a puddle hugging the wall (within e.r + 24 of it) would melt into the '#b6ff5c' wall: a hotter '#e6ff4a'
           // fill at 0.55, an 8 px ink outline on its wall-facing half and a 3 px dark gap stroke just outside that
@@ -4215,7 +4382,9 @@ export class Renderer {
           // core's hitbox (hypot(dx, dy * 1.3) < r); the hazard tape (and goo's rim) traces that hitbox exactly
           for (let i = 0; i < 16; i++) { const an = i / 16 * TAU, rr = e.r * (1.02 + 0.04 * (1 + Math.sin(an * 3 + seed + t * 2))); BX[i] = x + Math.cos(an) * rr; BY[i] = y + Math.sin(an) * rr * 0.78; }
           smoothBlob(c, 16);
-          c.strokeStyle = acid ? '#1a2a06' : HZ_INK; c.lineWidth = acid ? 6.6 : 6.2; c.stroke();   // the dark outer outline (2 px past the rim)
+          // the dark outer outline: 3 px of '#1a0616' at 0.9 past the rim (a 6 px stroke, its inner half under the fill),
+          // so acid and goo read by luminance as well as hue
+          { const ga = c.globalAlpha; c.globalAlpha = ga * 0.9; c.strokeStyle = '#1a0616'; c.lineWidth = 6; c.stroke(); c.globalAlpha = ga; }
           c.fill();
           c.beginPath(); c.ellipse(x, y, e.r, e.r / 1.3, 0, 0, TAU);   // the true hitbox
           if (imm) {   // harmless for now: a still grey dash at 0.35
@@ -5635,6 +5804,7 @@ export class Renderer {
     }
     const nVis = VB.n, nClose = CB.n;
     const T = this.time, jit = red ? 0 : 2.5, oopsOn = this.oopsT > 0 && !race.demo;
+    this.comboFright(race);
     // the close ones' display offsets: parting round a hot Kevin (12 px while within 90), the panic jitter, the coil
     for (let ci = 0; ci < nClose; ci++) {
       const a = close[ci], A = cA[ci];
@@ -5694,17 +5864,34 @@ export class Renderer {
         if (any) c.stroke();
       }
     }
-    if (nFade) {   // the crowd under the HUD: one tail each at its own fade
-      c.strokeStyle = '#ffffff'; c.lineWidth = 2;
+    // the crowd under the HUD (its 40 px fade band): batched, the fade quantized to 4 alpha steps ((s + 0.5) / 4):
+    // ONE tail stroke a step, and below one head fill and stroke per (step, colour pair), at most 12 buckets
+    // (FB: kept buckets, step * 3 + face pair; A.hq holds each swimmer's step for the heads and eyes)
+    const FB = this._fb || (this._fb = Array.from({ length: 12 }, obuf));
+    for (let i = 0; i < 12; i++) FB[i].n = 0;
+    if (nFade) {
       for (let vi = 0; vi < nVis; vi++) {
         const a = vis[vi];
         if (a.boss) continue;
         const A = vA[vi];
-        if (!(A.hf < 1)) continue;
-        const cl = !!A.cl, h = A.hd || 0, x = A.rx + (cl ? (A.kp || 0) + (A.jx || 0) : 0), y = H - (a.y + A.oy - cy), dy = Math.abs(a.y - p.y);
-        c.globalAlpha = A.hf * (dy < 300 ? 0.92 : 0.75) * (A.bh ? 0.7 : 1); c.beginPath();
-        c.lineWidth = 2 * (0.85 + 0.15 * (A.vw | 0));
-        this.tail(c, x - Math.sin(h) * 8, y + Math.cos(h) * 8, h, A.vtl || 32, (5.5 + ((a.face || 0) % 3) * 1.2) * (A.vam || 1), cl ? A.ph : A.tp, dy < 300 ? 7 : 5); c.stroke();
+        if (!(A.hf < 1)) { A.hq = -1; continue; }
+        const st = Math.min(3, Math.floor(A.hf * (A.bh ? 0.7 : 1) * 4));
+        A.hq = st;
+        const L = FB[st * 3 + ((((a.face || 0) % 6 + 6) % 6) >> 1)]; L.b[L.n] = A; L.a[L.n++] = a;
+      }
+      c.strokeStyle = '#ffffff'; c.lineWidth = 2;
+      for (let st = 0; st < 4; st++) {
+        let any = false;
+        c.beginPath();
+        for (let q = 0; q < 3; q++) {
+          const L = FB[st * 3 + q], LA = L.a, LX = L.b;
+          for (let li = 0; li < L.n; li++) {
+            const a = LA[li], A = LX[li], cl = !!A.cl, h = A.hd || 0, x = A.rx + (cl ? (A.kp || 0) + (A.jx || 0) : 0), y = H - (a.y + A.oy - cy);
+            this.tailQ(c, x - Math.sin(h) * 8, y + Math.cos(h) * 8, h, A.vtl || 32, (5.5 + ((a.face || 0) % 3) * 1.2) * (A.vam || 1), cl ? A.ph : A.tp);
+            any = true;
+          }
+        }
+        if (any) { c.globalAlpha = (st + 0.5) / 4 * 0.85; c.stroke(); }
       }
     }
     c.globalAlpha = 1; c.lineJoin = 'round';
@@ -5734,23 +5921,31 @@ export class Renderer {
       c.stroke();
     }
     c.globalAlpha = 1;
-    if (nFade) for (let vi = 0; vi < nVis; vi++) {   // their heads under the HUD, each at its own fade
-      const a = vis[vi];
-      if (a.boss) continue;
-      const A = vA[vi];
-      if (!(A.hf < 1) || (A.cl && A.cf >= 1)) continue;
-      const k = A.fs * A.vk, x = A.rx + (A.cl ? A.kp + A.jx : 0), y = H - (a.y + A.oy - cy), h = A.hd || 0;
-      c.globalAlpha = A.hf * (A.bh ? 0.7 : 1); c.fillStyle = CROWD[((a.face || 0) % 6 + 6) % 6]; c.beginPath(); c.ellipse(x, y, 7.5 * k * A.vsx, 10 * k * A.vsy, h, 0, TAU); c.fill();
+    if (nFade) {   // their heads under the HUD: one fill and one stroke per (alpha step, colour pair) bucket
       if (this.gooOn) { c.strokeStyle = GOO_RIM; c.lineWidth = 1.5; } else { c.strokeStyle = 'rgba(40,0,40,0.28)'; c.lineWidth = 1; }
-      c.stroke();
+      for (let fb = 0; fb < 12; fb++) {
+        const L = FB[fb], LA = L.a, LX = L.b;
+        let any = false;
+        c.beginPath();
+        for (let li = 0; li < L.n; li++) {
+          const a = LA[li], A = LX[li];
+          if (A.cl && A.cf >= 1) continue;
+          const k = A.fs * A.vk, x = A.rx + (A.cl ? A.kp + A.jx : 0), y = H - (a.y + A.oy - cy), h = A.hd || 0, rx = 7.5 * k * A.vsx;
+          c.moveTo(x + rx * Math.cos(h), y + rx * Math.sin(h)); c.ellipse(x, y, rx, 10 * k * A.vsy, h, 0, TAU); any = true;
+        }
+        if (!any) continue;
+        c.globalAlpha = ((fb / 3 | 0) + 0.5) / 4; c.fillStyle = CROWD[(fb % 3) * 2]; c.fill(); c.stroke();
+      }
     }
     c.globalAlpha = 1;
     // their plain faces: two eyes (a blink every 3.3 s) turned with the head, within 320
     // (every eye at full opacity goes into one rect path and one fill, the ones behind Kevin into a second at 0.7;
     // the ones fading under the HUD draw alone)
     c.fillStyle = '#2a1030';
+    let fStep = 0;
     for (let pass = 0; pass < 3; pass++) {
       if (pass < 2) { c.globalAlpha = pass ? 0.7 : 1; c.beginPath(); }
+      else { if (!nFade) break; c.globalAlpha = (fStep + 0.5) / 4; c.beginPath(); }
       let eyeAny = false;
       for (let vi = 0; vi < nVis; vi++) {
         const a = vis[vi];
@@ -5762,14 +5957,15 @@ export class Renderer {
         const k = A.fs * A.vk * A.vsy, y = H - (a.y + A.oy - cy), x = A.rx + (A.cl ? A.kp + A.jx : 0), h = A.hd || 0, ch = Math.cos(h) * k, sh = Math.sin(h) * k;
         const bp = A.bp;   // each swimmer blinks on its own period (2.6 to 4.8 s)
         const bl = ((t + a.ph * 3) % bp) < 0.12, ew = bl ? 2.4 * k : 1.6 * k, eh = bl ? 0.9 * k : 2.2 * k, ey = bl ? -1.55 : -1.4;
-        if (!full) { c.globalAlpha = A.hf * (A.bh ? 0.7 : 1); c.beginPath(); }
+        if (!full && A.hq !== fStep) continue;
         for (let s2 = -1; s2 <= 1; s2 += 2) {
           const lx = s2 * 1.8, cx = x + lx * ch - ey * sh, cy2 = y + lx * sh + ey * ch;
           c.rect(cx - ew / 2, cy2 - eh / 2, ew, eh);
         }
-        if (!full) c.fill(); else eyeAny = true;
+        eyeAny = true;
       }
-      if (pass < 2 && eyeAny) c.fill();
+      if (eyeAny) c.fill();
+      if (pass === 2 && fStep < 3 && nFade) { fStep++; pass--; }   // (the faded eyes: one fill per alpha step)
     }
     c.globalAlpha = 1;
     // the close ones: baked heads over their tails (fading out across 170..200)
@@ -6005,6 +6201,15 @@ export class Renderer {
         quiffK *= 1 + 0.35 * sp; ang += 0.25 * (red ? 1 : Math.sin(flick * Math.PI));
       }
       if (turn) ang += (x < p.x ? -1 : 1) * 0.9 * turn;
+      // the combo fright's body (comboFright): Brock's tremble (1.5 units at 24 Hz, Gerald with him), Chad's quiff
+      // sagging to 0.6, Steve's swoon (0.3 rad toward Kevin). Reduced motion: the faces only
+      const cbU = (T - A.cbT) / (fn === 'Steve' && A.cbK >= 10 && A.cbK !== 20 ? 0.4 : 1), cbOn = cbU >= 0 && cbU < 1 && !dq && !ov;
+      const cbMode = !cbOn ? 0 : A.cbK === 20 ? 1 : A.cbK >= 45 && fn === 'Chad' ? 2 : fn === 'Steve' ? 3 : 4;
+      if (cbMode && !red) {
+        if (cbMode === 1) x += 1.5 * RIVAL_SC * Math.sin(T * 24 * TAU);
+        else if (cbMode === 2) quiffK *= 0.6;
+        else if (cbMode === 3) ang += (p.x > x ? 1 : -1) * 0.3 * Math.sin(cbU * Math.PI);
+      }
       if (rollK >= 0) { const r = Math.cos(rollK * TAU); sx *= Math.abs(r) < 0.08 ? (r < 0 ? -0.08 : 0.08) : r; }
       if (flexK > 0) { sx *= 1 + 0.12 * flexK; sy *= 1 + 0.08 * flexK; }
       if (droop) { sy *= 1 - 0.1 * droop; sx *= 1 + 0.06 * droop; }
@@ -6050,6 +6255,12 @@ export class Renderer {
         else if (fn === 'Steve') { o.mouth = 'scared'; o.brow = 'worried'; o.shock = 1; o.look = 0; o.blink = false; o.happy = 0; }
         else if (fn === 'Tiffany') { o.mouth = 'smirk'; o.brow = 'angry'; o.look = fx; o.blink = false; }
         else if (fn === 'Gunther') { o.mouth = 'grin'; o.look = fx; }
+      }
+      if (cbMode && !o.dizzy) {   // the combo fright's face
+        const kl = p.x > x ? 1.2 : -1.2;
+        if (cbMode === 1 || cbMode === 4) { o.mouth = 'scared'; o.brow = 'worried'; o.look = kl; o.blink = false; o.happy = 0; }
+        else if (cbMode === 2) { o.mouth = 'smirk'; o.brow = 'worried'; o.look = kl; o.lid = 0.45; o.blink = false; o.happy = 0; }
+        else { o.happy = 1; o.blush = 1; o.mouth = 'grin'; o.brow = undefined; o.blink = false; }
       }
       if (win && rk >= 0) {
         o.dizzy = rk < 0.15 && knocked ? 1 : 0;
@@ -6239,6 +6450,7 @@ export class Renderer {
     F.g = this.frame;
     const fk = clamp((flexK - 0.2) / 0.3, 0, 1);
     let gx = 13, gy = 2 - 3 * fk, gr = 0;
+    if (A.cbK === 20 && T - A.cbT >= 0 && T - A.cbT < 1 && !red) gx += 1.2 * Math.sin(T * 24 * TAU + 1.3);   // (shaking with Brock)
     if (A.tiredK) {   // a sip every 1.4 s: up to the mouth, a tilt, back down
       const u = (T + a.ph * 3) % 1.4;
       if (u < 0.5) { const k = Math.sin(u / 0.5 * Math.PI); gx -= 6 * k; gy -= 5 * k; gr = -0.8 * k; }
@@ -6251,6 +6463,36 @@ export class Renderer {
     this.rrect(-4.4, -7.6, 8.8, 2.6, 1.1); c.fillStyle = '#ff7a2f'; c.fill(); c.stroke();
     c.fillStyle = '#2a1030'; c.beginPath(); c.arc(-1.6, -1.2, 0.85, 0, TAU); c.moveTo(2.45, -1.2); c.arc(1.6, -1.2, 0.85, 0, TAU); c.fill();
     c.setTransform(m);
+  }
+  // combos frighten the cast: this.cTier is the index of the highest COMBO_WORDS entry Kevin's combo has reached (-1
+  // under the first, reset at combo 0). Each time it rises, ONE named rival seen within 400 px gets a 1 s beat
+  // (A.cbT, A.cbK: the threshold): 20 goes to Brock (else the nearest) and trembles with 2 sweat drops; 45 and up to
+  // Chad (his quiff sags, a side-eye); from 10, Steve swoons for 0.4 s; anyone else picked just looks scared
+  comboFright(race) {
+    const p = race.p, combo = race.demo || race.over ? 0 : p.combo | 0, CW = K.COMBO_WORDS;
+    let ti = -1;
+    if (Array.isArray(CW)) for (let i = 0; i < CW.length; i++) if (combo >= CW[i][0]) ti = i;
+    if (combo <= 0) { this.cTier = -1; return; }
+    if (ti <= this.cTier) { if (ti < this.cTier) this.cTier = ti; return; }
+    this.cTier = ti;
+    const thr = CW[ti][0], want = thr === 20 ? 'Brock' : thr >= 45 ? 'Chad' : thr >= 10 ? 'Steve' : null;
+    if (!want) return;
+    const AG = race.agents, nr = Math.min(NRIV, AG.length);
+    let pick = null, pA = null, bd = 400, nm = null, nA = null;
+    for (let k = 0; k < nr; k++) {
+      const a = AG[k]; if (!a.alive || !a.boss) continue;
+      const A = this.aux.get(a); if (!A || !A.init || A.seen < this.frame - 1) continue;
+      const d = hyp(A.rx - p.x, a.y - p.y); if (d >= 400) continue;
+      if (A.fn === want || (A.fn == null && a.boss.name && a.boss.name.split(' ')[0] === want)) { pick = a; pA = A; }
+      if (d < bd) { bd = d; nm = a; nA = A; }
+    }
+    if (!pick) { pick = nm; pA = nA; }
+    if (!pick) return;
+    pA.cbT = this.time; pA.cbK = thr;
+    if (thr === 20 && !this.reduced) {   // 2 sweat drops off the trembling head
+      const hx = pA.rx, hy = pick.y + (pA.oy || 0) + 12;
+      for (let i = 0; i < 2; i++) { const sg = i ? 1 : -1; this.addP(3, hx + sg * 11, hy, sg * (30 + Math.random() * 30), 30 + Math.random() * 30, 0.6, '#bfe8ff', 2.4, 220); }
+    }
   }
   // the head scale of a face pop that started at popT: a backOut spring over 0.35 s (1 -> 1.35 -> 1.08), then 1.08
   // while the beat lasts and 1.0 at rest. Reduced motion: a plain 1.15x step for 0.35 s, no spring.
@@ -6888,6 +7130,11 @@ export class Renderer {
     // o.ink (Kevin and the named rivals, about 17 x 23 CSS px on a phone): bolder brows, pupils, mouth and eye whites
     // so the faces read at that size; the crowd keeps the thin version
     const look = o.look || 0, ink = '#1a0a1a', bold = !!o.ink, er = o.shock ? (bold ? 3.8 : 3.4) : bold ? 3.3 : 2.9, lw2 = bold ? 1.6 : 1.1;
+    // shades on (|shadesY| < 1): the lenses hide the eyes, so no whites or pupils (the lids and brows stay); shades
+    // lowered (shadesY >= 1, the peek gag): the whites are clipped to sit above the frame (its top edge plus the drop)
+    const shOn = acc.includes('shades') && !o.shadesOff, shY0 = o.shadesY || 0, shTop = bold ? -6.4 : -4.6;
+    const eyesHid = shOn && Math.abs(shY0) < 1, eyePeek = shOn && shY0 >= 1;
+    if (eyePeek) { c.save(); c.beginPath(); c.rect(-12, -16, 24, 16 + shTop + shY0); c.clip(); }
     for (let sx = -1; sx <= 1; sx += 2) {
       const ex = sx * 3.2, ey = -2.5;
       if (o.ouch) {   // squeezed shut: '>' on the left, '<' on the right (two 2.2 px strokes each)
@@ -6898,12 +7145,16 @@ export class Renderer {
       if (o.dizzy) { c.strokeStyle = ink; c.lineWidth = 1.1; c.beginPath(); c.arc(ex, ey, 2, ph * 0.4, ph * 0.4 + 4.5); c.stroke(); c.beginPath(); c.arc(ex, ey, 0.8, 0, TAU); c.stroke(); continue; }
       if (o.wink && sx === 1) { c.strokeStyle = ink; c.lineWidth = bold ? 1.6 : 1.3; c.beginPath(); c.arc(ex, ey + 0.8, 2.1, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); continue; }
       if (o.blink || o.happy) { c.strokeStyle = ink; c.lineWidth = lw2; c.beginPath(); if (o.happy) c.arc(ex, ey + 0.6, 2, Math.PI * 1.1, Math.PI * 1.9); else { c.moveTo(ex - 2.4, ey); c.lineTo(ex + 2.4, ey); } c.stroke(); continue; }
+      if (eyesHid) { /* behind the lenses */ }
+      else {
       c.fillStyle = '#fff'; c.beginPath(); c.arc(ex, ey, er, 0, TAU); c.fill();
       if (o.star) { c.fillStyle = o.star; star4(c, ex + look * 0.6, ey - 0.4, 2.4); }
       else if (o.heart) { c.fillStyle = '#ff5c8a'; heart(c, ex + look * 0.4, ey - 0.2, 1.15); }   // smitten: 2.4-unit hearts for pupils
       else {
         c.fillStyle = ink; c.beginPath(); c.arc(ex + look, ey - 0.7 + (o.lookY || 0), o.shock ? (bold ? 1.2 : 0.9) : o.mouth === 'scared' ? (bold ? 1.3 : 1) : bold ? 1.9 : 1.45, 0, TAU); c.fill();
         c.fillStyle = '#fff'; c.beginPath(); c.arc(ex + look - 0.5, ey - 1.3 + (o.lookY || 0), 0.5, 0, TAU); c.fill();
+      }
+      if (o.twinkle > 0) { c.fillStyle = '#ffffff'; star4(c, ex + 1.6, ey - 1.9, 1.2 * o.twinkle); }   // the 30+ combo's eye sparkle
       }
       if (o.lid > 0.02 && !o.tired) {   // a half-shut lid (the blink easing): the head colour over the top of the eye
         const lh = (er * 2 + 0.6) * o.lid, ly = ey - er - 0.3 + lh;
@@ -6914,14 +7165,9 @@ export class Renderer {
       if (o.tired) { c.fillStyle = col; c.beginPath(); c.arc(ex, ey, 3.1, Math.PI, TAU); c.fill(); c.strokeStyle = ink; c.lineWidth = 0.8; c.beginPath(); c.moveTo(ex - 3, ey); c.lineTo(ex + 3, ey); c.stroke(); }
       if (acc.includes('lashes')) { c.strokeStyle = ink; c.lineWidth = 0.8; c.beginPath(); c.moveTo(ex + sx * 2.4, ey - 1.8); c.lineTo(ex + sx * 3.8, ey - 3); c.moveTo(ex + sx * 1.2, ey - 2.8); c.lineTo(ex + sx * 1.9, ey - 4.3); c.stroke(); }
     }
-    if (o.brow) {
-      c.strokeStyle = ink; c.lineWidth = bold ? 1.7 : 1.1; c.lineCap = 'round'; c.beginPath();
-      const b0 = bold ? 0.8 : 1.2, b1 = bold ? 5.6 : 5;
-      for (let sx = -1; sx <= 1; sx += 2) { const inY = o.brow === 'angry' ? -5.2 : -7, outY = o.brow === 'angry' ? -6.8 : -5.6; c.moveTo(sx * b0, inY); c.lineTo(sx * b1, outY); }
-      c.stroke();
-    }
+    if (eyePeek) c.restore();
     if (acc.includes('glasses')) { gr = grow('glasses', 0, -2.5); c.strokeStyle = '#3a2a50'; c.lineWidth = 0.9; c.beginPath(); c.arc(-3.2, -2.5, 3.3, 0, TAU); c.moveTo(6.5, -2.5); c.arc(3.2, -2.5, 3.3, 0, TAU); c.moveTo(-0.1, -2.7); c.lineTo(0.1, -2.7); c.stroke(); if (gr) c.restore(); }
-    if (acc.includes('shades') && !o.shadesOff) {
+    if (shOn) {
       // o.shadesY / o.shadesR / o.shadesS: lift, tilt (round the left temple) and scale the shades (reactive shades)
       const shY = o.shadesY || 0, shR = o.shadesR || 0, shS = o.shadesS == null ? 1 : o.shadesS, shM = shY !== 0 || shR !== 0 || shS !== 1;
       if (shM) {
@@ -6929,9 +7175,19 @@ export class Renderer {
         if (shR) { c.translate(-6, -3); c.rotate(shR); c.translate(6, 3); }
         if (shS !== 1) { c.translate(0, -3); c.scale(shS, shS); c.translate(0, 3); }
       }
-      gr = grow('shades', 0, -3); c.fillStyle = o.shadeCol || '#141420'; c.beginPath(); c.moveTo(-7, -4.6); c.lineTo(7, -4.6); c.lineTo(6.2, -1.2); c.quadraticCurveTo(3.6, 0.6, 1, -1.6); c.lineTo(-1, -1.6); c.quadraticCurveTo(-3.6, 0.6, -6.2, -1.2); c.closePath(); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(-5.4, -4, 2, 0.9); c.fillRect(2, -4, 2, 0.9); if (gr) c.restore();
+      // the bold heads' eyes reach y -5.8, so their lenses start at -6.4 (the crowd's at -4.6)
+      const hb = bold ? -5.8 : -4;
+      gr = grow('shades', 0, -3); c.fillStyle = o.shadeCol || '#141420'; c.beginPath(); c.moveTo(-7, shTop); c.lineTo(7, shTop); c.lineTo(6.2, -1.2); c.quadraticCurveTo(3.6, 0.6, 1, -1.6); c.lineTo(-1, -1.6); c.quadraticCurveTo(-3.6, 0.6, -6.2, -1.2); c.closePath(); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(-5.4, hb, 2, 0.9); c.fillRect(2, hb, 2, 0.9); if (gr) c.restore();
       if (shM) c.restore();
+    }
+    // brows paint over the shades (a raised brow above the lenses). 'up': the cheeky resting brow (inner end high)
+    if (o.brow) {
+      c.strokeStyle = ink; c.lineWidth = bold ? 1.7 : 1.1; c.lineCap = 'round'; c.beginPath();
+      const b0 = bold ? 0.8 : 1.2, b1 = bold ? 5.6 : 5, bw = o.brow;
+      const inY = bw === 'angry' ? -5.2 : bw === 'up' ? -7.4 : -7, outY = bw === 'angry' ? -6.8 : bw === 'up' ? -6.6 : -5.6;
+      for (let sx = -1; sx <= 1; sx += 2) { c.moveTo(sx * b0, inY); c.lineTo(sx * b1, outY); }
+      c.stroke();
     }
     // mouth
     const m = o.mouth;
@@ -6941,6 +7197,7 @@ export class Renderer {
     else if (m === 'scared') { c.beginPath(); c.ellipse(0, 4, 2, o.shock ? 3 : 2.6, 0, 0, TAU); c.fill(); }
     else if (m === 'pant') { c.beginPath(); c.ellipse(0, 4.2, 2.4, 1.6 + 0.8 * Math.abs(Math.sin(ph * 0.3)), 0, 0, TAU); c.fill(); c.fillStyle = '#ff7a9a'; c.beginPath(); c.ellipse(0.6, 5.8, 1.4, 1.4, 0, 0, TAU); c.fill(); }
     else if (m === 'grit') { c.fillStyle = '#fff'; c.beginPath(); c.ellipse(0, 4, 3.2, 1.6, 0, 0, TAU); c.fill(); c.stroke(); c.beginPath(); c.moveTo(-3, 4); c.lineTo(3, 4); c.moveTo(-1, 2.6); c.lineTo(-1, 5.4); c.moveTo(1, 2.6); c.lineTo(1, 5.4); c.lineWidth = 0.6; c.stroke(); }
+    else if (m === 'smile') { c.beginPath(); c.arc(0, 2.6, 2.8, 0.12 * Math.PI, 0.88 * Math.PI); c.closePath(); c.fill(); c.fillStyle = '#ff7a9a'; c.beginPath(); c.ellipse(0.5, 4.3, 1.2, 0.7, 0, 0, TAU); c.fill(); }
     else if (m === 'smirk') { c.beginPath(); c.moveTo(-2.4, 4.2); c.quadraticCurveTo(0.5, 5, 3, 2.8); c.stroke(); }
     else if (m === 'wobble') { c.beginPath(); c.moveTo(-3, 4); for (let i = 1; i <= 6; i++) c.lineTo(-3 + i, 4 + (i % 2 ? -0.7 : 0.7)); c.stroke(); }
     else { c.beginPath(); c.moveTo(-2, 4); c.quadraticCurveTo(0, 4.8, 2, 4); c.stroke(); }
@@ -7162,7 +7419,9 @@ export class Renderer {
       for (let i = 0; i < 4; i++) { const an = a0 + i * Math.PI / 2, cs = Math.cos(an), sn = Math.sin(an); c.moveTo(x + cs * (R - 6), y + sn * (R - 6)); c.lineTo(x + cs * (R + 6), y + sn * (R + 6)); }
       c.globalAlpha = al; c.strokeStyle = HZ_INK; c.lineWidth = 4; c.stroke(); c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.stroke();
     }
-    // the count, from the pop-text sprite cache (one bake per new number, a frame may wait)
+    // the count, from the pop-text sprite cache (one bake per new number, a frame may wait). While the HUD's #combo
+    // counter is up (R.comboShown, set by main.js) the ring drops its number badge: one count on screen, not two
+    if (this.comboShown === true) { c.globalAlpha = 1; return; }
     const n = p.combo | 0;
     if (this.cmbN !== n || this.cmbC !== col.length || !this.cmbS || this.cmbS.dead) {
       const sp = this.text(String(n), low ? '#ff3d6e' : '#ffd75c', 12, 'pop', true);
@@ -7437,6 +7696,7 @@ export class Renderer {
     // one persistent options object (no garbage per frame): every field the face code below may set is reset first
     const o = this.kevO || (this.kevO = {});
     for (const k of KEV_RESET) o[k] = undefined;
+    o.mouth = 'smile'; o.brow = 'up';   // his resting face: a cheeky closed smile under one raised brow
     o.band = this.accBand; o.acc = this.accRest; o.accNew = this.accNew; o.accK = accK;
     // Kevin's copies of the rivals' props are his own: a pink cap (white dot), a pink tiara for the crown, pink lenses
     if (this.accRest.includes('cap')) o.cap = '#ff5c8a';
@@ -7470,6 +7730,10 @@ export class Renderer {
       if (!ov) for (let s = -1; s <= 1; s += 2) this.addP(0, p.x + s * 8, p.y + 14, s * 30, 70 + Math.random() * 30, 0.55, '#ffffff', 3.2);
     }
     const huff = this.huffT > 0 && !ov;
+    // the combo tier (0 none, 1: 1 to 5, 2: 6 to 14, 3: 15 to 29, 4: 30+); each step up pops his head (bit 64 below)
+    const cTier = combo >= 30 ? 4 : combo >= 15 ? 3 : combo >= 6 ? 2 : combo >= 1 ? 1 : 0;
+    if (cTier > (this.kTier | 0)) { this.kTierT = this.time; this.kPopT = this.time; }
+    this.kTier = cTier;
     // ouch: the 0.35 s after a hit (over FRENZY, a dash and the combo faces; under a bonk's daze and a death)
     const ouch = this.pHit > 0 && !stuck && !ov;
     if (stuck) { o.dizzy = 1; o.mouth = 'wobble'; }
@@ -7478,9 +7742,14 @@ export class Renderer {
     else if (huff) { o.mouth = 'grit'; o.brow = 'angry'; o.puff = red ? 1 : 0.8 + 0.2 * Math.sin(t * 20); o.blink = false; }
     else if (frenzy) { o.mouth = 'huge'; o.star = '#ffd75c'; o.blush = 1; }
     else if (dash) { o.mouth = 'grin'; o.brow = 'angry'; }
-    else if (combo > 5) { o.mouth = 'grin'; o.blush = 1; }
+    else if (cTier >= 2) {   // the combo ladder: 6 to 14 a grin, 15 to 29 a grin and a fierce brow, 30+ the huge laugh and starry eyes
+      if (cTier === 2) { o.mouth = 'grin'; o.blush = 1; }
+      else if (cTier === 3) { o.mouth = 'grin'; o.brow = 'angry'; }
+      else { o.mouth = 'huge'; o.blush = 1; const u = (t % 0.6) / 0.6; o.twinkle = red ? 1 : u < 0.4 ? Math.sin(u / 0.4 * Math.PI) : 0; }
+    }
     else if (low) { o.mouth = 'pant'; o.tired = 1; o.brow = 'worried'; }
     else if (race.drill) { o.mouth = 'grin'; o.happy = 1; o.blush = 1; }
+    else if (cTier === 1) { o.mouth = 'smile'; o.blush = 1; }
     // micro reactions on top (never over a bonk or a Big Mac in your face)
     if (!stuck && !danger && !huff && !ouch) {
       if (this.nearT > 0.35) { o.shock = 1; o.mouth = 'scared'; o.brow = 'worried'; o.star = undefined; o.happy = 0; o.blink = false; }
@@ -7554,7 +7823,7 @@ export class Renderer {
     }
     // readable faces: an ouch, a huff, a near miss, a wink or FRENZY coming on pops his head (popK)
     {
-      const bits = (ouch ? 1 : 0) | (huff ? 2 : 0) | (this.nearT > 0 ? 4 : 0) | (this.winkT > 0 ? 8 : 0) | (frenzy ? 16 : 0) | (zf ? 32 : 0);
+      const bits = (ouch ? 1 : 0) | (huff ? 2 : 0) | (this.nearT > 0 ? 4 : 0) | (this.winkT > 0 ? 8 : 0) | (frenzy ? 16 : 0) | (zf ? 32 : 0) | (cTier && this.time - this.kTierT < 0.35 ? 64 : 0);
       if (bits & ~(this.kBits | 0)) this.kPopT = this.time;
       this.kBits = bits;
       o.headK = this.popK(this.kPopT, bits !== 0 && !ov, this.time);
@@ -7940,9 +8209,13 @@ export class Renderer {
   // the YOU tag over Kevin; when another swimmer (or a named rival's long tail) hangs within 40 px above his head it
   // moves beside him (the side away from that swimmer), or below him when neither side fits on screen. A side spot or
   // the spot below never sits under the DASH button (R.avoidRect), and every placement joins labRects.
-  drawYou(race) {
+  // dr false: the layout only (where the tag will sit this frame, into this.youKO: x, y, w, h), so drawFx can keep its
+  // pops off the tag before drawYou(race) paints it over them
+  youBox(x, y, w, h) { const K = this.youKO; K[0] = x; K[1] = y; K[2] = w; K[3] = h; this.youKOn = 1; }
+  drawYou(race, dr = true) {
+    if (!dr) this.youKOn = 0;
     const go = this.goK(race) > 0 && !(this.youOff > 0) && !(this.headK > 0.5), a = go ? 1 : this.youA || 0;
-    if (a <= 0) return;
+    if (a <= 0 || !Number.isFinite(this.youX)) return;
     const c = this.ctx, x = this.youX, y = this.youY, b = this.reduced ? 0 : Math.sin(this.time * 8) * 3, AX = this.aux;
     let blk = 0;   // 0 clear, else the side the blocker is on (-1 left, 1 right)
     // a swimmer's head 10 to 66 px above him blocks; so does one up to 66 + its tail (a rival's 34 x 1.3 + 8, the
@@ -7967,6 +8240,7 @@ export class Renderer {
       // (at GO: pink letters on a 2 px dark outline, at full opacity)
       const s1 = go ? this.text('YOU', '#ff7ab0', 18, 'o2') : this.text('YOU', '#ffffff', 18), tuck = this.fingerUp();
       const ay0 = tuck ? 24 : 28, ay1 = tuck ? 33 : 40, ty = tuck ? y - ay1 - 1 - s1.h / 2 + b * 0.5 : y - 58 + b;
+      if (!dr) { this.youBox(x, (ty + y - ay0) / 2, Math.max(s1.w, 16) * 1.3, y - ay0 - ty + s1.h * 0.65); return; }
       c.globalAlpha = a; c.fillStyle = '#ff3d6e'; c.strokeStyle = HZ_INK; c.lineWidth = 2; c.lineJoin = 'round';
       c.beginPath(); c.moveTo(x, y - ay0 + b * (tuck ? 0.5 : 1)); c.lineTo(x - 8, y - ay1 + b * (tuck ? 0.5 : 1)); c.lineTo(x + 8, y - ay1 + b * (tuck ? 0.5 : 1)); c.closePath(); c.stroke(); c.fill();
       const dk = this.youDropT > 0 && this.youDropD > 0 ? this.youDropT / this.youDropD : 0, dsc = 1 + ((+this.youDropS || 1.6) - 1) * dk * dk;
@@ -7977,7 +8251,19 @@ export class Renderer {
     }
     if (hold && !blk) blk = x > VIEW_W / 2 ? 1 : -1;   // beside him, on the side toward the middle
     const s = this.text('YOU', '#ffffff', 14);
-    c.globalAlpha = a; c.fillStyle = '#ff3d6e'; c.beginPath();
+    if (dr) { c.globalAlpha = a; c.fillStyle = '#ff3d6e'; c.beginPath(); }
+    if (!dr) {   // the same choice as below, the box only
+      let sd = blk ? -blk : 0;
+      if (blk) {
+        const fits = (d) => x + d * (34 + s.w) <= VIEW_W - 4 && x + d * (34 + s.w) >= 4 && !this.underDash(x + d * (34 + s.w / 2), y - 4, s.w + 24, s.h);
+        if (!fits(sd)) sd = fits(blk) ? blk : 0;
+      }
+      if (!blk) this.youBox(x, y - 40 + b, s.w + 4, s.h + 14);
+      else if (sd) this.youBox(x + sd * (22 + 6 + s.w / 2), y - 4, s.w + 16, s.h + 4);
+      else if (this.underDash(x, y + 50 - b + 5, s.w, s.h + 20)) this.youBox(x, y - 40 + b, s.w + 4, s.h + 14);
+      else this.youBox(x, y + 54 - b, s.w + 4, s.h + 14);
+      return;
+    }
     if (!blk) {
       c.moveTo(x, y - 26 + b); c.lineTo(x - 7, y - 36 + b); c.lineTo(x + 7, y - 36 + b); c.closePath(); c.fill();
       c.drawImage(s.cv, x - s.w / 2, y - 46 + b - s.h / 2, s.w, s.h);
@@ -8287,6 +8573,8 @@ export class Renderer {
     // (the Gate of Goo's cream floor counts as bright too: its plates go darker, its words never dim over Kevin)
     const POPS = this.pops, red = this.reduced;
     let colX = null;   // the ledger / DNA column: the first such pop drawn this frame sets x, the rest line up under it
+    this.buildKO(race);
+    const kL = Math.max(2, wl), kR = Math.min(VIEW_W - 2, wr);
     for (let qi = 0; qi < POPS.length; qi++) {
       const q = POPS[qi];
       // only the oldest big pop is the headline; the rest wait (and do not age) behind it
@@ -8362,6 +8650,18 @@ export class Renderer {
           else if (this.popHits(x, upY, W, Hh) && fits && !this.popHits(sx, y, W, Hh)) x = sx;
           else y = this.popStack(x, upY, W, Hh);   // above, stacked over any pop already parked there
         }
+        // never on the YOU tag, a name tag or a named rival: pushed sideways past the box (its overlap + 8 px) toward
+        // the side with more room; when that is clipped by the walls or lands on another box, 28 px further from Kevin
+        if (!race.over && this.koN) {
+          let j = this.koHit(x, y, W, Hh);
+          for (let it = 0; it < 3 && j >= 0; it++) {
+            const K = this.koR, bx = K[j], bw = K[j + 2], roomL = bx - bw / 2 - kL, roomR = kR - (bx + bw / 2);
+            const nx = roomR >= roomL ? bx + (bw + W) / 2 + 8 : bx - (bw + W) / 2 - 8;   // (x + overlap + 8 on that side)
+            if (nx - W / 2 >= kL && nx + W / 2 <= kR && this.koHit(nx, y, W, Hh) < 0 && !this.popHits(nx, y, W, Hh) && !(Math.abs(nx - px) < 46 + W / 2 && y + Hh / 2 > py - 34 && y - Hh / 2 < py + 30)) { x = nx; j = -1; break; }
+            y += y < py ? -28 : 28;
+            j = this.koHit(x, y, W, Hh);
+          }
+        }
         // pushed up under the HUD: the OLDEST small pop gives way (gone next frame) instead of this one drawing over
         // the HUD; when this one is the oldest it goes now
         if (!race.over && y - Hh / 2 < popTop) {
@@ -8406,6 +8706,33 @@ export class Renderer {
   // drawFx's pop placement (placed: this._placed, (x, y, w, h) per drawn pop): two pops stack (h1 + h2) / 2 * 1.05 +
   // popGapK apart; popHits says a w x h pop at (x, y) would overlap one, popStack moves y up clear of every placed pop
   // (up to 4 passes, until nothing moves)
+  // this frame's keep-out boxes for the small pops (into this.koR, no allocation)
+  buildKO(race) {
+    const K = this.koR, cap = K.length; let n = 0;
+    this.drawYou(race, false);
+    if (this.youKOn) { K[0] = this.youKO[0]; K[1] = this.youKO[1]; K[2] = this.youKO[2]; K[3] = this.youKO[3]; n = 4; }
+    const LR = this.labRects, LN = this.labRN;
+    for (let i = 0; i < LN && n < cap; i++) {
+      const j = i * 4, x0 = LR[j], y0 = LR[j + 1], x1 = LR[j + 2], y1 = LR[j + 3];
+      if (!(x1 > x0) || !(y1 > y0)) continue;
+      K[n++] = (x0 + x1) / 2; K[n++] = (y0 + y1) / 2; K[n++] = x1 - x0; K[n++] = y1 - y0;
+    }
+    const SB = this.signBoxes;
+    for (let j = 0; j + 3 < SB.length && n < cap; j += 4) { K[n++] = SB[j]; K[n++] = SB[j + 1] + SB[j + 3] / 2; K[n++] = SB[j + 2]; K[n++] = SB[j + 3]; }
+    const VB = this._vis;
+    if (VB && !race.over) for (let i = 0; i < VB.n && n < cap; i++) {
+      const a = VB.a[i], A = VB.b[i];
+      if (!a || !a.boss || !A || A.seen !== this.frame) continue;
+      K[n++] = A.rx + (A.kp || 0); K[n++] = this.H - (a.y + (A.oy || 0) - this.camY) + 4; K[n++] = 30; K[n++] = 36;
+    }
+    this.koN = n;
+  }
+  // the keep-out box a w x h pop at (x, y) overlaps (its index in koR), or -1
+  koHit(x, y, w, h) {
+    const K = this.koR;
+    for (let j = 0; j < this.koN; j += 4) if (Math.abs(K[j] - x) < (K[j + 2] + w) / 2 && Math.abs(K[j + 1] - y) < (K[j + 3] + h) / 2) return j;
+    return -1;
+  }
   popHits(x, y, w, h) {
     const B = this._placed, L = B.a, g = this.popGapK;
     for (let j = 0; j < B.n; j += 4) if (Math.abs(L[j] - x) < (L[j + 2] + w) / 2 && Math.abs(L[j + 1] - y) < (L[j + 3] + h) / 2 * 1.05 + g) return true;
