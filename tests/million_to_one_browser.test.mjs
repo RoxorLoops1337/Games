@@ -446,6 +446,8 @@ for (const [w, h] of [[360, 640], [320, 568], [640, 360], [568, 320]]) {
     const raw = [g30, g31, g39, g41].flat().filter((t) => /\{\w+\}/.test(t));
     return { g31: g31.join(' | '), g39n: g39.length, g41: g41.join(' | '), g30: g30.join(' | '), raw };
   });
+  // (R.wallHit needs a live race with Kevin: under CPU load the page can still be setting it up, so wait for it)
+  await pg.waitForFunction(() => game.R && game.R.race && game.R.race.p && game.race, null, { timeout: 15000 }).catch(() => {});
   const rh = await pg.evaluate(() => {
     const R = game.R; R.wallHit(-1, 0.9); const wt = R.wHit ? R.wHit.t : -1;
     const r = game.race; R.photoFinish(r, r.p, 'Brock', 0.23); return { wt, pf: R.pf ? R.pf.txt : null };
