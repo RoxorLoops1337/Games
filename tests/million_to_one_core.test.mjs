@@ -102,6 +102,8 @@ const SWEEPS = {
     }
     return runs;
   },
+  // several careers in one worker (seeds, n runs at tap taps/s, stopping afterWin runs past the first win)
+  careers(seeds, n, tap, afterWin) { return seeds.map((seed) => SWEEPS.career(seed, n, tap, false, false, afterWin)); },
   // maxed 6-taps/s bots at generation gen, seeds base + s: who won, the lowest tank, the pay, the finale and the egg taker
   // (fam: a card family the picker takes whenever one is dealt (CARD_FAMILIES), 'random' a random card, else the first)
   maxed(gen, base, s0, n, fam = null) {
@@ -270,10 +272,10 @@ const SW = {
   // (45 runs: the career difficulty check needs gens 10-14; 24 careers, was 8: on 8 one reshuffle of the tubes moved the
   // career bands 5-10 points (a 12-career sample swung runs 15-25 from 30% to 36% on two seed sets of the same code))
   careers4: Promise.all(Array.from({ length: 24 }, (_, i) => sweep('career', 1 + i, 45, 4))),
-  // (the first-win band's extra careers: 40 fresh saves (seeds 501-520 at 4 taps/s, 601-620 at 6) played to 3 runs past
-  // the first win, at most 20 runs; with the other careers and the thumbs about 88 first wins (a rookie run costs about
-  // 0.85 s, so 96 more saves put the suite past 9 minutes))
-  firstWins: Promise.all([[501, 4], [601, 6]].flatMap(([s0, tap]) => Array.from({ length: 20 }, (_, i) => sweep('career', s0 + i, 20, tap, false, false, 3)))),
+  // (the first-win band's extra careers: 96 fresh saves (seeds 501-548 at 4 taps/s, 601-648 at 6) played to 3 runs past
+  // the first win, at most 20 runs, 12 saves a worker (a worker's start costs about as much as a short career); with the
+  // other careers and the thumbs about 144 first wins)
+  firstWins: Promise.all([[501, 4], [601, 6]].flatMap(([s0, tap]) => [0, 12, 24, 36].map((o) => sweep('careers', Array.from({ length: 12 }, (_, i) => s0 + o + i), 20, tap, 3)))).then((h) => h.flat()),
   dry: sweep('autoReasons', [301, 302, 303, 304, 305, 306]),
   autoTier: sweep('autoReasons', [3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008]),
   firstDuel: Promise.all([0, 6].map((o) => sweep('firstDuel', Array.from({ length: 6 }, (_, i) => 101 + o + i)))).then((h) => h.flat()),
@@ -4369,13 +4371,13 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
 { // the first win is no cliff: the 3 runs after a first win win within 15 points of the 3 runs ending with it
   // ((the 3 runs before a first win are losses by definition, so the window that ends with the win is the one compared)
   // arrange: every career sweep
-  // (systems round 7: plus the thumbs and SW.firstWins, 40 careers to 3 runs past the first win: on the 40 careers before
-  // the two rates were good to about 4.5 points, now about 3; the bound is the same)
+  // (systems round 7: plus the thumbs and SW.firstWins, 96 careers to 3 runs past the first win: on the 40 careers before
+  // the two rates were good to about 4.5 points, now about 2.4; the bound is the same)
   const taps = (await SW.taps).flat(), cs = careers4.concat(careers, taps, await SW.thumbs, await SW.firstWins); let inc = 0, incn = 0, aft = 0, aftn = 0;
   // act
   for (const c of cs) { const w = c.findIndex((x) => x.won); if (w < 0) continue; for (let i = Math.max(0, w - 2); i <= w; i++) { inc += c[i].won; incn++; } for (let i = w + 1; i <= w + 3 && i < c.length; i++) { aft += c[i].won; aftn++; } }
   // assert
-  ok(aftn >= 240 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points, ' + aftn + ' runs after)');
+  ok(aftn >= 400 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points, ' + aftn + ' runs after)');
 }
 { // the softer first win: the training ramp, the fruit floor, the fresh-generation drill, the LAST GASP fade
   ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.580,0.700,0.825,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.58 / 0.70 / 0.825 / 0.95 at gens 1-4, fruitFloor(1) = 1');
