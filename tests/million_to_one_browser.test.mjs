@@ -72,6 +72,21 @@ const after = await page.evaluate(() => game.race.p.x);
 await touch('touchEnd', 120, 600);
 ok(after < before - 15, `dragging left steers left (${before.toFixed(0)} -> ${after.toFixed(0)})`);
 ok(await page.evaluate(() => game.race.rank < 1000000), 'you are already overtaking');
+// a tight rank row (a 7-digit rank plus a long +places tick): the tick never covers the swimmers-alive line or the distance
+{ // arrange: the long rank and tick the 8_perk_pop shot showed, the row marked tight the way rankTight() does
+  const hit = await page.evaluate(() => {
+    const $ = (id) => document.getElementById(id), rr = $('rankRow'), tk = $('rankTick'), rk = $('rank');
+    const keep = [rk.textContent, tk.textContent, tk.className, rr.className];
+    rk.textContent = '#989,241'; tk.textContent = '+16.8k'; tk.classList.add('on'); rr.classList.add('tight');
+    // act: measure in the same task, before the HUD writes again
+    const a = tk.getBoundingClientRect(), al = $('alive').getBoundingClientRect(), ds = $('dist').getBoundingClientRect();
+    const meet = (b) => b.width > 0 && b.height > 0 && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    rk.textContent = keep[0]; tk.textContent = keep[1]; tk.className = keep[2]; rr.className = keep[3];
+    return { alive: meet(al), dist: meet(ds), h: a.height };
+  });
+  // assert
+  ok(hit.h > 0 && !hit.alive && !hit.dist, 'a tight rank row keeps the +places tick off the swimmers-alive line and the distance (' + JSON.stringify(hit) + ')');
+}
 
 // swim 1 never teaches cashing in: a watcher records every class #tut gets from here on
 await page.evaluate(() => { window.__tutCls = []; new MutationObserver(() => window.__tutCls.push(document.getElementById('tut').className)).observe(document.getElementById('tut'), { attributes: true, attributeFilter: ['class'] }); });
@@ -250,6 +265,13 @@ const headNow = await p2.evaluate(() => { const d = game.race && game.race.drill
 ok(/Head start \+\d+\.\ds/.test(chipT), 'a lost duel puts its head start on the chip row ("' + chipT + '")');
 ok(headNow == null || headNow >= 2.75 || /Best 2\.8s/.test(chipT), 'and the best head start when this one fell short (now ' + headNow + ', "' + chipT + '")');
 ok(/Attempt 2 · [^·]*pay/.test(chipT), 'the daily result says what this attempt pays on the chip row ("' + chipT + '")');
+// Assert: the result card shows one stamp at most (record, bounty, medal, grudge); the rest become toasts
+const stamps = await p2.evaluate(() => ['resRecord', 'resBounty', 'resMedal', 'resGrudge'].filter((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hide') && e.getClientRects().length > 0; }));
+ok(stamps.length <= 1, 'the result card shows at most one stamp (' + stamps.join() + ')');
+// Arrange / Act: the no-flash setting
+const nf = await p2.evaluate(() => { const b = document.getElementById('setNoFlash'), was = b.checked; b.checked = true; b.dispatchEvent(new Event('change')); const on = document.body.classList.contains('noFlash'); b.checked = false; b.dispatchEvent(new Event('change')); const off = !document.body.classList.contains('noFlash'); b.checked = was; b.dispatchEvent(new Event('change')); return { on, off }; });
+// Assert
+ok(nf.on && nf.off, 'the no-flash setting toggles body.noFlash ' + JSON.stringify(nf));
 ok(errs.length === errs2, 'the returning player pass runs without page errors ' + errs.slice(errs2).join(' | '));
 
 
@@ -274,9 +296,10 @@ const openPaused = () => p3.evaluate(() => { const m = JSON.parse(localStorage.g
 // Assert
 ok(await openPaused() === true, 'hiding the tab on a deal saves the open swim as paused');
 await setHidden(false);
-ok(await openPaused() === false, 'coming back to the tab clears the paused mark');
+ok(await openPaused() === true, 'coming back to the tab keeps the paused mark while the deal is still up');
 await p3.waitForTimeout(900);
 await p3.tap('#cardRow .card'); await p3.waitForTimeout(500);
+ok(await openPaused() === false, 'picking a card clears the paused mark');
 // Arrange: count every time the dash input goes on
 const cdp3 = await ctx3.newCDPSession(p3);
 const tp3 = (type, pts) => cdp3.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
@@ -423,6 +446,8 @@ for (const [w, h] of [[360, 640], [320, 568], [640, 360], [568, 320]]) {
     const raw = [g30, g31, g39, g41].flat().filter((t) => /\{\w+\}/.test(t));
     return { g31: g31.join(' | '), g39n: g39.length, g41: g41.join(' | '), g30: g30.join(' | '), raw };
   });
+  // (R.wallHit needs a live race with Kevin: under CPU load the page can still be setting it up, so wait for it)
+  await pg.waitForFunction(() => game.R && game.R.race && game.R.race.p && game.race, null, { timeout: 15000 }).catch(() => {});
   const rh = await pg.evaluate(() => {
     const R = game.R; R.wallHit(-1, 0.9); const wt = R.wHit ? R.wHit.t : -1;
     const r = game.race; R.photoFinish(r, r.p, 'Brock', 0.23); return { wt, pf: R.pf ? R.pf.txt : null };

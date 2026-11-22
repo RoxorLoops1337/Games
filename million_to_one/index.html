@@ -31,14 +31,14 @@ body.intense #pace.hot{animation:none}
 #rankCol{flex:1;min-width:0}
 #rankLbl{font-size:12px;letter-spacing:.14em;color:var(--hudInk);font-weight:700;line-height:1;transition:color .2s;text-shadow:0 1px 0 var(--ink),0 0 4px var(--ink),0 0 8px rgba(20,4,20,.9)}
 #rankRow.ms #rankLbl{position:relative;z-index:1;color:var(--gold);letter-spacing:.06em;font-size:14px;background:rgba(20,2,18,.8);border-radius:6px;padding:1px 5px 0;margin-left:-5px;width:max-content}
-#rank{font-size:clamp(22px,13cqw,40px);font-weight:800;line-height:.95;color:#fff;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,61,110,.6);transition:transform .08s;transform-origin:0 100%;font-variant-numeric:tabular-nums;white-space:nowrap}
+#rank{font-size:clamp(22px,min(13cqw,calc((100cqw - 52px - var(--distW,76px) - 16px) / 6)),40px);font-weight:800;line-height:.95;color:#fff;text-shadow:0 3px 0 var(--ink),0 0 18px rgba(255,61,110,.6);transition:transform .08s;transform-origin:0 100%;font-variant-numeric:tabular-nums;white-space:nowrap}
 #rank.bump{transform:scale(1.06)}
 #rankBox{transition:transform .08s;transform-origin:0 100%;margin-top:3px}
 /* the rank row never changes height mid-swim (so --hudB holds still): lines hide with visibility, not display */
 #rankRow{height:72px;overflow:visible}
 @media (max-width:400px){#rankRow{height:66px}}
 #mutRow{height:22px;flex-wrap:nowrap;overflow:hidden}
-#rankBox.jump{transform:scale(1.14)}
+#rankBox.jump{transform:scale(1.08)}
 #rankRow.ms #rank{animation:msflash 1.3s ease-out;transform-origin:0 0}
 @keyframes msflash{0%{transform:scale(1.15)}40%{transform:scale(1.06)}100%{transform:none}}
 #rankTick{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:clip;margin-left:8px;white-space:nowrap;font-size:16px;line-height:1;font-weight:800;color:var(--mint);text-shadow:0 2px 0 var(--ink),0 0 6px var(--ink);opacity:0;transform:translateY(4px);transition:opacity .25s,transform .25s}
@@ -211,6 +211,7 @@ body.reduced #combo .links i.ghost{opacity:.7}
 #pauseBtn{position:absolute;left:calc(var(--safeL) + 8px);top:calc(var(--safeT) + 8px);width:44px;height:44px;border-radius:12px;background:rgba(20,2,18,.6);border:2px solid rgba(255,255,255,.45);font-size:17px;pointer-events:auto;z-index:2}
 #pauseBtn.off{display:none}
 body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + 14px)}
+body.dashOff #dashBtn{display:none!important}
 #hint{position:absolute;left:0;right:0;bottom:calc(var(--safeB) + 162px);text-align:center;font-weight:700;font-size:15px;line-height:1.25;color:#fff;text-shadow:0 2px 0 var(--ink),0 0 6px var(--ink);pointer-events:none;transition:opacity .5s;padding:0 30px;opacity:0}
 /* while racing the hint and the toast sit under the HUD, never over Kevin */
 body.racing #hint{top:calc(var(--hudB) + 100px);bottom:auto}
@@ -254,7 +255,7 @@ body.egg #coach{display:none}
 body.egg #tut{visibility:hidden}
 #tut.lesson .dots{display:none}
 /* the tutorial: a compact one-line pill low on the screen, left of DASH (right of it for lefties), off Kevin and the tube ahead */
-#tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:72px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
+#tut{position:absolute;left:calc(var(--safeL) + 12px);bottom:calc(var(--safeB) + 150px);top:auto;width:min(340px,calc(100% - 24px - var(--safeL) - var(--safeR)));max-height:88px;min-height:44px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transform:translate(0,14px);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s cubic-bezier(.2,1.5,.4,1);background:rgba(20,2,18,.82);border:2px solid rgba(255,215,92,.6);border-radius:22px;padding:4px 30px 6px 40px}
 body.lefty #tut{left:auto;right:calc(var(--safeR) + 12px)}
 /* the combo strip is up: the pill steps above it */
 body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
@@ -266,7 +267,7 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 @keyframes swipe{0%,100%{transform:translateX(-5px) rotate(-10deg)}50%{transform:translateX(7px) rotate(10deg)}}
 /* two lines at most (the title may wrap once, the subtitle keeps one line); descenders clear the timer bar */
 #tut .tt{font-size:16px;font-weight:800;line-height:19px;color:var(--gold);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-#tut .ts{font-size:12px;font-weight:600;color:var(--cream);line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tut .ts{font-size:13px;font-weight:600;color:var(--cream);line-height:15px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 #tut.rg .ts{display:none}
 #tut .dots{position:absolute;right:9px;top:7px;display:flex;flex-direction:column;gap:2px}
 #tut .dots i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.25)}
@@ -301,7 +302,7 @@ body.comboOn #tut{bottom:calc(var(--padBot,180px) + 8px)}
 body #tut.fg{bottom:var(--fgB,calc(var(--safeB) + 150px))}
 #tutTarget.swipe{border-color:transparent;box-shadow:none;animation:none}
 #tutTarget.swipe .trail{display:block;position:absolute;left:50%;top:50%;width:100px;height:36px;margin:-2px 0 0 -50px;translate:calc(var(--sw,0px) * -1) 0;border:4px solid rgba(255,255,255,.45);border-color:rgba(255,255,255,.45) transparent transparent;border-radius:50%/100% 100% 0 0;pointer-events:none}
-#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 3px 0 var(--ink));rotate:var(--swr,0deg)}
+#tutTarget.swipe::before{content:"👆";position:absolute;left:50%;top:50%;margin:-14px 0 0 -28px;font-size:56px;line-height:1;opacity:.95;text-shadow:0 0 3px #fff;will-change:transform;rotate:var(--swr,0deg)}
 /* (main.js sways the ring itself, sin 3t x 50 px: the arc stays put under it, the finger tilts with the swing) */
 /* a ring on Kevin: its label goes to the far side */
 #tutTarget.flip::after{top:auto;bottom:calc(100% + 4px)}
@@ -320,6 +321,8 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 #drillUI .cd b.hot{color:#ff3d6e}
 /* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
 #drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
+/* the head start's ledger: one line under the timer, a term at a time (main.js headLedger) */
+#drillUI .hl{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mint);line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 var(--ink)}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
 #drillUI .row b{flex:none;width:78px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:clip}
 /* a long rival name drops a size instead of an ellipsis (main.js sets .long past 7 characters) */
@@ -786,9 +789,9 @@ body.reduced *,body.reduced *::before,body.reduced *::after{animation-duration:.
 body.reduced #rank.bump,body.reduced #rank.jump,body.reduced #banner,body.reduced #banner.on{transform:none}
 body.reduced #ebar.shake{animation:none}
 /* reduced motion: the blinkers become static marks, so the warning still reads */
-body.reduced #combo .bar.low i{background:#ff3d6e;box-shadow:0 0 0 1px #fff}
+body.reduced #combo .bar.low i{background:repeating-linear-gradient(-45deg,#ff3d6e 0 6px,#ff8b5c 6px 12px);box-shadow:0 0 0 1px #fff}
 body.reduced #pace.hot{background:#ff1f4a;color:#fff;border-color:#fff}
-body.reduced #efill.low{background:#ff3d6e;opacity:1}
+body.reduced #efill.low{opacity:1}
 body.reduced #drillUI.tell .t{color:var(--gold);text-decoration:underline 3px}
 body.reduced #drillUI.tell{box-shadow:0 0 0 3px var(--gold)}
 /* reduced motion: the cues that only lived in an animation stay on as static marks */
@@ -1067,7 +1070,6 @@ body.reduced #headRow.low b{text-decoration:underline 2px}
 /* ---------- the egg finale: the HUD folds down to the rank, the bar and the gas (90 px or less at 390x844) ---------- */
 body.egg #headRow,body.egg #shields,body.egg #dnaHud,body.egg #pace,body.egg #mutRow,body.egg #rankLbl,body.egg #goalPill,body.egg #toEgg,body.egg #zoneName,body.egg #dist,body.egg #alive{display:none!important}
 body.egg #rankRow{height:auto}
-body.egg #rank{font-size:26px}
 body.egg #prog{margin-top:8px}
 /* the folded rank row no longer pushes the bar below the pause button: the bar clears it on the left (#me and the rival
    dots are placed in px of the bar's own width, measured again when body.egg toggles) */
@@ -1109,7 +1111,8 @@ body.bnr #tut .ts{display:none!important}
 #result.spend #resMenuBtn,#result.first #resMenuBtn{flex:0 0 52px;width:52px;min-height:48px;font-size:20px;padding:8px 0}
 /* the first shop (no habit bought yet): Dad's pick is the full row, the others fold to name, effect and price */
 #shopList.firstShop .hab:not(.pick) .qp,#shopList.firstShop .hab:not(.pick) .pips,#shopList.firstShop .hab:not(.pick) .np{display:none}
-#shopList.firstShop .hab:not(.pick){opacity:.55;padding:5px 10px}
+#shopList.firstShop .hab:not(.pick){padding:5px 10px}
+#shopList.firstShop .hab:not(.pick) button{filter:saturate(.5);opacity:.8}
 #shopList.firstShop .hab:not(.pick) .ic{font-size:24px}
 /* shop: the first-visit caption, Dad's pick pulsing, the Grandad levels (gold), the one-time ribbon */
 #shopCap{font-size:15px;font-weight:800;color:var(--gold);text-align:center;max-width:330px;margin:0 auto 6px;line-height:1.15;text-shadow:0 2px 0 var(--ink);animation:land .5s cubic-bezier(.2,1.8,.4,1)}
@@ -1324,7 +1327,6 @@ body.reduced #perkCard.on .pk{animation:none}
 #ebar.shake #efill.low{animation:efshake .72s infinite,blink .4s infinite alternate}
 @keyframes efshake{0%,100%{translate:0 0}25%{translate:-3px 0}75%{translate:3px 0}}
 body.reduced #ebar.shake #efill{animation:none}
-body.reduced #ebar.shake #efill.low{animation:blink .4s infinite alternate}
 /* bright zones (Goo, the Fork...): the right-hand HUD text gets an ink edge and a soft plate */
 body.bright #dist{background:radial-gradient(closest-side,rgba(20,2,18,.6),rgba(20,2,18,0));border-radius:10px}
 body.bright #dist b{-webkit-text-stroke:3px var(--ink);paint-order:stroke fill}
@@ -1336,9 +1338,16 @@ body.intense #rankLbl,body.intense #alive,body.intense #toEgg,body.intense #zone
 body.intense #hud #shields:not(.flash):not(.lost){opacity:1}
 /* intense: the egg zone's compact HUD. The labels go, the rank is the one big number, the card chips fold into one '+N'
    chip that opens for 1.2 s (.peek). main.js holds intense for at least 1.5 s and slides the renderer's HUD bottom */
-body.intense #rankLbl,body.intense #alive,body.intense #toEgg,body.intense #zoneName{display:none}
-body.intense #rankRow{height:auto}
-body.intense #rank{font-size:clamp(28px,11.5vw,40px)}
+/* (visibility, never display: the rows keep their height, so --hudB never jumps when FRENZY starts) */
+body.intense #rankLbl,body.intense #alive,body.intense #toEgg,body.intense #zoneName{visibility:hidden;opacity:0}
+/* the rank grows with the HUD's own width (cqw), never the viewport's: in portrait it leaves room for the pause button
+   (52) and the distance (76), in the landscape gutter it fills the gutter minus its padding */
+body.egg #rank{font-size:clamp(20px,calc((100cqw - 52px - 76px) / 5.8),26px)}
+body.intense #rank{font-size:clamp(22px,min(calc((100cqw - 52px - 76px) / 5.8),calc((100cqw - 52px - var(--distW,76px) - 16px) / 6)),40px)}
+@media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){
+  body.egg #rank{font-size:clamp(18px,calc((100cqw - 24px) / 5.4),26px)}
+  body.intense #rank{font-size:clamp(20px,calc((100cqw - 24px) / 5.4),40px)}
+}
 body.intense #mutRow:not(.peek){visibility:visible;opacity:1;height:22px}
 body.intense #mutRow:not(.peek)>span{display:none}
 #mutRow::before{display:none}
@@ -1419,6 +1428,59 @@ body.resOn #toast.on{transform:translate(-50%,0)}
   #cards .card .ds{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   #cards #rerollBtn{position:absolute;top:calc(var(--safeT) + 8px);right:calc(var(--safeR) + 10px);margin:0;min-height:44px;height:44px;padding:0 14px;border-radius:22px;font-size:14px;z-index:2}
 }
+
+/* ---------- no flashing (S.noFlash, body.noFlash): the blinkers and pulses become the reduced-motion static stand-ins ---------- */
+body.noFlash #cashBtn.buzz{animation:none;outline:2px solid #fff4f8}
+body.noFlash #efill.low,body.noFlash #ebar.shake #efill.low{animation:none;opacity:1}
+body.noFlash #pace.hot{animation:none;background:#ff1f4a;color:#fff;border-color:#fff}
+body.noFlash #combo .gap.near{animation:none;text-decoration:underline 2px}
+body.noFlash #combo .bar.low i{animation:none;background:repeating-linear-gradient(-45deg,#ff3d6e 0 6px,#ff8b5c 6px 12px);box-shadow:0 0 0 1px #fff}
+body.noFlash #headRow.low b{animation:none;text-decoration:underline 2px}
+body.noFlash #drillUI .riv.hot .bb{animation:none}
+body.noFlash #drillUI .t{animation:none}
+body.noFlash #drillUI.tell .t{color:var(--gold);text-decoration:underline 3px}
+body.noFlash #combo.fz .n{animation:none;color:#fff1b0}
+/* a low bar is a shape too, not only a blink: a light outline round the GAS bar and the combo timer while low */
+body.reduced #ebar:has(#efill.low),body.noFlash #ebar:has(#efill.low),
+body.reduced #combo .barW:has(.bar.low),body.noFlash #combo .barW:has(.bar.low){outline:2px solid #fff4f8;outline-offset:1px}
+/* ---------- HUD stability ---------- */
+/* the card chips' row keeps its 22 px from the first frame (empty or not), in portrait */
+@media (orientation:portrait){#mutRow{height:22px;min-height:22px;box-sizing:border-box}}
+/* landscape: the rank has the gutter to itself (the distance sits under it) */
+@media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){#rank{font-size:clamp(22px,13cqw,40px)}}
+/* a big rank jump: the +places ticker lifts to the label row, right end (main.js rankTight) instead of running into the distance
+   or covering the swimmers-alive line under the rank; in the egg (no label, no alive line) it drops under the rank */
+#rankRow.tight #rankTick{position:absolute;left:auto;right:0;top:auto;bottom:100%;margin:0 0 3px;font-size:13px;flex:none;z-index:2;background:rgba(20,2,18,.85);border-radius:6px;padding:1px 5px}
+body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:1px 0 0}
+/* short portrait phones: the combo strip sits tight under the HUD (its number capped at 26 px in fitCombo) */
+@media (orientation:portrait) and (max-height:700px){
+  #combo{top:calc(var(--hudB) + 8px)}
+  #combo .barW{margin:4px auto 6px}
+  body.comboOn #coach,body.comboOn.threat #coach{top:calc(var(--hudB) + 14px + var(--comboH,64px))}
+  body.comboOn.comboCall #coach{top:calc(var(--hudB) + 40px + var(--comboH,64px))}
+  body.comboOn #banner.top,body.comboOn #banner.kclr,body.comboOn.egg #banner.top{top:calc(var(--hudB) + 16px + var(--comboH,64px))}
+  body.comboOn #banner.top.clr{top:calc(var(--hudB) + 32px + var(--comboH,64px))}
+  body.racing.swim1.swim1.swim1.comboOn #tut:not(.fg){top:calc(var(--hudB) + 14px + var(--comboH,64px))}
+}
+/* ---------- the result card that pulls you back ---------- */
+/* the button bar is pinned at the bottom on every card (the first card and the spend card too); main.js resPad sets its
+   bottom padding so the primary button's centre sits at the safe area + 56 px */
+#result.first #resActions,#result.spend #resActions{position:sticky;bottom:calc(-16px - var(--safeB));z-index:3;width:calc(100% + 36px);margin:auto -18px 0;padding:24px 18px calc(var(--safeB) + 12px);background:linear-gradient(rgba(20,2,18,0),rgba(20,2,18,.97) 24px)}
+@media (orientation:portrait) and (min-height:761px){#result{justify-content:flex-end}}
+@media (orientation:landscape) and (max-height:520px),(orientation:landscape) and (min-aspect-ratio:5/4){#result.first #resActions,#result.spend #resActions{width:100%;margin:6px 0 0;padding:10px 0 calc(var(--safeB) + 8px);bottom:calc(-8px - var(--safeB))}}
+/* the rival who sat at the egg first (over.arriveGap) */
+#resDuel small.ag{display:block;font-size:12px;font-weight:700;color:#ff9fb4;margin-top:2px}
+/* SWIM AGAIN after a buy on the card: 'WITH <icon> <habit>' */
+#againBtn small.with{display:block;color:var(--mint)}
+/* a result stamp's toast: always at the top, over everything (main.js stampToast) */
+#toast.top,body.racing #toast.top,body.resOn #toast.top{top:calc(var(--safeT) + 10px)!important;bottom:auto!important;z-index:9}
+#toast.top:not(.on){transform:translate(-50%,-20px)!important}
+#toast.top.on{transform:translate(-50%,0)!important}
+/* rested DNA waiting: the title chip and the SWIM button's small line */
+#titleRested{font-size:13px;font-weight:800;color:var(--mint);text-align:center;max-width:330px;margin:-2px auto 8px;line-height:1.15;text-shadow:0 2px 0 var(--ink);background:rgba(125,255,176,.1);border:1.5px solid rgba(125,255,176,.45);border-radius:12px;padding:4px 10px}
+#titleRested small{display:block;font-size:11px;font-weight:700;color:var(--cream);opacity:.85;margin-top:2px}
+#playBtn small.rest{display:block;font-size:12px;font-weight:800;color:var(--mint);margin-top:2px;letter-spacing:.02em}
+#title.fresh #titleRested{display:none}
 </style>
 </head>
 <body>
@@ -1445,6 +1507,7 @@ body.resOn #toast.on{transform:translate(-50%,0)}
     <div class="t">TAP TAP TAP!</div>
     <div class="cpips hide" aria-hidden="true"></div>
     <div class="cd"></div>
+    <div class="hl hide" aria-live="off"></div>
     <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div></div>
     <div class="row riv"><b>RIVAL</b><div class="bb"><i></i></div></div>
     <div class="ep"></div>
@@ -1464,6 +1527,7 @@ body.resOn #toast.on{transform:translate(-50%,0)}
     <div id="titleNem" class="hide"></div>
     <div class="stats" id="titleStats"></div>
     <div id="titleGoal" class="hide"></div>
+    <div id="titleRested" class="hide"></div>
     <div id="bankBox"><div class="top"><span id="bankName"></span><button id="bankBtn">Collect</button></div><div class="bb"><i id="bankFill"></i></div><div class="bl" id="bankLine"></div></div>
     </div>
     <div class="tR">
@@ -1597,7 +1661,7 @@ body.resOn #toast.on{transform:translate(-50%,0)}
     <label class="setRow"><span>No flashes 🕶️<small>Screen flashes become a soft edge glow</small></span><input type="checkbox" id="setNoFlash"></label>
     <div class="setRow" id="setSensRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
 </div>
-    <label class="setRow"><span>Left-handed 🤚<small>DASH button on the left</small></span><input type="checkbox" id="setLefty"></label>
+    <div class="setRow"><span>DASH button 🤚<small>Off: flick up or double tap to dash</small></span><span class="seg" id="setDashBtn"><button data-v="right">Right</button><button data-v="left">Left</button><button data-v="off">Off</button></span></div>
     <div class="setRow"><span>Graphics 🎨<small>Auto steps down on slow phones</small></span><span class="seg" id="setGfx"><button data-v="auto">Auto</button><button data-v="full">Full</button><button data-v="lite">Lite</button></span></div>
     <button class="btn alt" id="setTut">Replay tutorial</button>
     <div class="foot"><button class="btn" id="setBack">Back</button></div>
