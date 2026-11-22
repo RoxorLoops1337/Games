@@ -31,9 +31,16 @@ const P_DOUBLES = ['x', 'y', 'vx', 'vy', 'e', 'maxE', 'dashT', 'dashCd', 'frenzy
 // OVERCLOCK stacks' speed, DNA and FRENZY time (the stacks and their 'overclock' events always run); bountyKeep: a bounty
 // lasts GOAL_SWIMS swims; photoGrade: photoPay and the drill-graded silver; headGas: the head start's tank term reads
 // absolute GAS (HEAD_E_GAS); lateSprint: the band-2 sprinter's lateSprintNeed; overclockSplit: the OVERCLOCK stacks' speed
-// and FRENZY time without their DNA (overclockBoost adds the DNA); movers: the career ramp of drifters and drippers
-export const FEATURES = { overclockSplit: false, duelFight: false, doorHold: false, winGate: false, rescue: false, movers: false, medley: false, buzzer: false,
-  overclockBoost: false, bountyKeep: false, photoGrade: true, headGas: false, lateSprint: false };
+// and FRENZY time without their DNA (overclockBoost adds the DNA); movers: the career ramp of drifters and drippers;
+// draftLink: a tuck-in held SLING_HOLD s is one 'draft' combo link (systems round 5: on, it put GOD MODE on 4 of 24
+// half-habit runs (15% max), ENCORE on none of them and the greedy shop under 28 runs, so it waits for its own tuning)
+// SYSTEMS ROUND 5, one at a time over the full bands (kept only when every band held): ON now: photoGrade, buzzer,
+// rescue, bountyKeep, winGate. Tried and held back: medley (MEDLEY_AT 3; GOD MODE on 4 of 24 half-habit runs, with
+// MEDLEY_LINKS 6, 8 or 10 alike, twice), duelFight (LAST_GASP_LATE 0.8; 12 bands off: first wins too early, maxed gens
+// 94%), doorHold (the career duels won 44%, maxed 57%), movers (career duels 49%, GOD MODE 1 of 24), overclockBoost
+// (GOD MODE 4 of 24, the shop under 28 runs), headGas (runs 15-25 won 34%), lateSprint (maxed 86%)
+export const FEATURES = { overclockSplit: false, duelFight: false, doorHold: false, winGate: true, rescue: true, movers: false, medley: false, buzzer: true,
+  overclockBoost: false, bountyKeep: true, photoGrade: true, headGas: false, lateSprint: false, draftLink: false };
 
 // ------------------------------------------------------------------ combos, synergies, race events
 // DNA multiplier for the current combo chain: x1 at 0, +0.02 per link to x2 at combo 50, then +0.004 per link
@@ -421,7 +428,10 @@ const centreW = (y, wob) => VIEW_W / 2 + wob * (0.6 * Math.sin(y / 1100) + 0.4 *
 export function centre(y) { return centreW(y, params(y).wob); }
 // one channel of the tube: {c, h}. side is -1/1 (only matters from the fork on). out: the object to fill (a fresh one by
 // default; the sim's hot callers pass their own scratch, CH_*, so a step makes no garbage)
-export function channel(y, side, out = {}) {
+export function channel(y, side, out) { return channelInto(y, side, out || {}); }
+// channelInto(y, side, out): channel() with no allocation at all: it always fills the caller's out ({c, h}) and returns it
+// (render's wall cache calls it every frame)
+export function channelInto(y, side, out) {
   const p = params(y), cx = centreW(y, p.wob), phw = p.hw;
   if (y < FORK_Y0 - 1 || !side) { out.c = cx; out.h = phw; return out; }
   if (y < FORK_END) {
@@ -705,7 +715,8 @@ export const MAX_ARRIVED = 2;
 // DRILL_ARRIVED_CAP of its need, the next ones at DRILL_ARRIVED_CAP2, so a duel is a fight, not a 2-second blowout.
 // (taps past the bucket carry to the next step, up to DRILL_CARRY: a hit-stop never eats a tap. The counter tallies
 // (Brock's block, Tiffany's citation, Chad's hair check) count every raw tap on their side: the bucket only paces the drill)
-export const DRILL_CARRY = 2;
+// (DRILL_BUCKET: the bucket holds DRILL_BUCKET taps, 2/3 s of DRILL_TAPS_MAX)
+export const DRILL_CARRY = 2, DRILL_BUCKET = 2;
 // (FRENZY at the egg drills DRILL_FRENZY a second faster)
 export const DRILL_FRENZY = 0.3;
 // (round 1: DRILL_HEAD_MAX 3.4 (2.9) with HEAD_KNEE_W 2.5 (1.5): with HEAD_TIER 0.38 nearly every career duel started at
@@ -736,8 +747,12 @@ export const lastGaspK = (meta, daily) => (pepSteps(meta, daily) > 0 ? LAST_GASP
 // race.rescuePct (0, 50 or 100) tells the UI
 export const EARLY_MIN_T = 40, EARLY_FROM = 2, EARLY_N = 2, RESCUE_SUGAR = 0.4, RESCUE_ACID = 0.9;
 export const rescueSteps = (meta, daily) => (FEATURES.rescue && daily == null && meta ? clamp(Math.floor(ok(+meta.earlyRun, 0)) - EARLY_FROM + 1, 0, EARLY_N) : 0);
-// a counted tap shoves every arrived named rival back DRILL_SHOVE (bent by its move: see shoveRival)
-export const DRILL_SHOVE = 0.05;
+// a counted tap shoves every arrived named rival back DRILL_SHOVE (bent by its move: see shoveRival); a tap on Gunther's
+// side while he is out chips STUNT_CHIP off his drill, and a shove on Steve gives Kevin SORRY_GIFT a quarter of the time
+// (systems round 5 tried DRILL_TAPS_MAX 6 with DRILL_TAP 0.03, DRILL_SHOVE 0.025 and these two halved: the same drill a
+// second for a full masher, but the 4 taps/s careers drilled a third less from their taps and the career duel band fell
+// from 52% to 40%, so the 3 a second cap stays)
+export const DRILL_SHOVE = 0.05, STUNT_CHIP = 0.05, SORRY_GIFT = 0.04;
 // the rivals that were already drilling when Kevin arrived pull their move by duel time (s after the drill starts), not
 // by their drill fraction (they would all fire at once): Steve's first 'sorry' tell from PRE_MOVE_AT.sorry s on
 export const PRE_MOVE_AT = { byTheBook: 0.9, stuntDive: 1.6, hairCheck: 2.2, maxRep: 1.2, sorry: 0.8 };
@@ -897,10 +912,13 @@ export function newMeta() {
     bestWinT: 0, bestDnaRun: 0, sweeps: 0, bestWinStreak: 0, lossRun: 0,
     // earlyRun: counted normal losses in a row that ended before the Great Womb Sea after EARLY_MIN_T s of swimming (the
     // early-death rescue, rescueSteps); mutsSeen: every card id ever taken (the Mashup Book)
-    earlyRun: 0, mutsSeen: [] };
+    // act4Seen: the story's fourth act has played once (audio's setStoryStage reads it from the save)
+    earlyRun: 0, mutsSeen: [], act4Seen: false };
 }
-// the sat-nav (autopilot) only unlocks from generation 2: earn your first baby by hand
-export const maxLv = (meta, id) => (id === 'gps' && ((meta && meta.gen) || 0) < 2 ? 0 : HABITS[id].max + (GRANDAD.includes(id) ? grandadLevels((meta && meta.gen) || 0) : 0));
+// the sat-nav (autopilot) only unlocks from generation GPS_GEN (meta.gen, which counts from 0: the shop shows it as
+// Gen GPS_GEN + 1): earn your babies by hand first
+export const GPS_GEN = 2;
+export const maxLv = (meta, id) => (id === 'gps' && ((meta && meta.gen) || 0) < GPS_GEN ? 0 : HABITS[id].max + (GRANDAD.includes(id) ? grandadLevels((meta && meta.gen) || 0) : 0));
 function cleanGoal(g) {
   if (!g || typeof g !== 'object' || Array.isArray(g) || !GOAL_IDS.includes(g.id)) return null;
   const num = (v) => (isFinite(+v) ? +v : NaN);
@@ -921,6 +939,7 @@ export function loadMeta(o) {
   if (!Array.isArray(m.synergiesSeen)) m.synergiesSeen = [];
   for (const k of ['gen', 'runs', 'wins', 'bestCombo', 'dailyRuns', 'dailyStreak', 'bestRivals', 'bank', 'eggLosses', 'bestStreak', 'quits', 'raceLosses', 'sinceWin', 'dailyMedal', 'dailyGolds', 'winStreak', 'lastWinStreak', 'bestWinT', 'bestDnaRun', 'sweeps', 'bestWinStreak', 'lossRun', 'earlyRun']) if (!isFinite(m[k]) || m[k] < 0) m[k] = 0;
   m.earlyRun = Math.min(99, Math.floor(m.earlyRun));
+  m.act4Seen = o.act4Seen === true;
   m.mutsSeen = Array.isArray(o.mutsSeen) ? [...new Set(o.mutsSeen.filter((id) => typeof id === 'string' && MUTATIONS[id]))] : [];
   // normal runs (the rookie grace): an old save does not know how many of its runs were dailies, so all of them count
   m.runs = Math.floor(m.runs); m.winStreak = Math.floor(m.winStreak); m.lastWinStreak = Math.floor(m.lastWinStreak);
@@ -967,7 +986,7 @@ export function loadMeta(o) {
 // touches the rival W-L record, raceLosses or eggLosses.
 // (a paused swim is forgiven only if it was still a live one at the last note: the tank at FORGIVE_E of its size or more
 // and Kevin not in the last FORGIVE_END of the way to the egg. Killing the app on a doomed swim is a quit)
-export const ABANDON_Y = 3000, PAUSE_FORGIVE_MS = 10 * 60000, FORGIVE_E = 0.3, FORGIVE_END = 0.15;
+export const ABANDON_Y = 3000, PAUSE_FORGIVE_MS = 90 * 1000, FORGIVE_E = 0.3, FORGIVE_END = 0.15;
 export function openRun(meta, race) {
   if (!meta) return null;
   const d = race && Number.isInteger(race.daily) ? race.daily : -1;
@@ -1308,6 +1327,10 @@ export class Race {
     this.hNext = 0; this.hDashAt = -Infinity; this.hTx = null; this.hrng = this.human ? mulberry((this.layoutSeed ^ 0x48554D4E) >>> 0) : null;
     this.bot = !!opts.bot || !!this.human;           // test bot: steers like the autopilot but plays like a person
     this.autopilot = !!opts.autopilot || this.bot; this.autoT = 0;
+    // who drove the finale: handFrom is the race time the sat-nav was last switched off (-1: never), autoFinal whether it
+    // was still driving when Kevin crossed into the last zone (settle: an autopilot win is practice only if it was;
+    // null: the swim never crossed into it, then the old rule, the sat-nav swam more than half of it)
+    this.autoOn = this.autopilot && !this.bot; this.handFrom = -1; this.autoFinal = null;
     // from generation 2 the tube itself gets nastier, one step per generation to 8 (never in the daily: same layout for everybody)
     // and mid-career the tube toughens up with experience too: one step per 3 normal runs past the 6th, up to 8 (hzCareer)
     this.hzGen = this.daily == null ? Math.max(hzGenOf(this.gen), hzCareer(meta)) : 0;
@@ -1346,7 +1369,7 @@ export class Race {
     // (the fractional fields start as doubles (D0): one stable shape from birth, no mid-race deopts)
     const p = this.p = { x: D0, y: D0, vx: D0, vy: D0, e: D0, maxE: D0, shield: lv(meta, 'hottub'), dashT: D0, dashCd: D0, frenzyT: D0, nextFrenzy: 10, combo: D0,
       comboT: D0, comboMax: D0, tier: 0, fz: 0, fzPen: D0, fzPts: D0, bestTier: 0, mult: D0, bestCombo: D0, bestComboLate: D0, kindLast: {}, rep: [], style: 1, bank:
-      D0, dashN: 0, draftN: 0, z0Key: '', draftT: D0, passSide: 0, passT: D0, passX: D0, slingOK: false, draftHold: D0, draft: D0, comeback: 0, side: 0, stuck: D0,
+      D0, dashN: 0, draftN: 0, draftLinkN: -1, z0Key: '', draftT: D0, passSide: 0, passT: D0, passX: D0, slingOK: false, draftHold: D0, draft: D0, comeback: 0, side: 0, stuck: D0,
       inv: D0, acid: D0, wing: 0, second: 0, overtakes: 0, heading: D0, swatT: D0, swatDir: 0, current: 0, sameRun: 0, lastKind: '', clutch: D0, couchT: D0, acidT:
       D0, zoneBonks: 0, lastHit: '', frenzyTier: 0, swatSafe: D0, actT: D0, lastTx: null, lastOff: null, passRun: 0, seq: [], trickMult: D0, trickChain: {},
       freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0, fzCarry: D0, hits: 0, leadSec: D0, capDraftT: D0, whipN: -1, goo: D0, swatSlow: D0, oc: 0, swerveT: D0, txT: D0, arrD: D0 };
@@ -1376,7 +1399,7 @@ export class Race {
       const stam = lrng(), ph = lrng() * 6.28, face = Math.floor(lrng() * 6);
       const a = { y: D0, lane: D0, side, lane2: D0, sp: D0, stam: D0, alive: true, zone: -1, deathY: Infinity, ph: D0,
         kx: D0, arrived: false, drill: D0, need: D0, w: D0, face, k: -1, tauntT: D0, bumpT: D0, passT: D0, group: 'A',
-        boss: null, acc: D0, zoneEnd: -Infinity, sph: D0, cph: D0, bumped: 0, arrivedT: D0, diedT: D0, sprint: 0, passedOnce: 0, draftedT: D0,
+        boss: null, acc: D0, zoneEnd: -Infinity, sph: D0, cph: D0, bumped: 0, arrivedT: D0, diedT: D0, sprint: 0, passedOnce: 0, passedByKevin: 0, diedMet: 0, draftedT: D0,
         drillK: D0, T: D0, shoveT: D0, spawnY: D0, met: true, mv: null, conga: D0, eggSide: 0, strag: false, gx: D0, stuck: D0, splatY: D0 };
       a.y = 0; a.lane = lane; a.lane2 = clamp(Math.abs(lane) / 0.9 * 2 - 1, -0.9, 0.9); a.sp = 0; a.stam = stam; a.need = EGG_DRILL; a.w = 1; a.draftedT = -9; a.drillK = 1;
       a.ph = ph;
@@ -2112,7 +2135,9 @@ export class Race {
     // after the end never fires later on its own)
     if (this.over || this.pending || this.paused) { this.input.cashOut = false; this.input.dash = false; this.input.tap = 0; return; }
     this.t += dt;
-    if (this.autopilot && !this.bot) this.autoT += dt;
+    const ap = this.autopilot && !this.bot;
+    if (ap) this.autoT += dt; else if (this.autoOn) this.handFrom = this.t;
+    this.autoOn = ap;
     const p = this.p, s = this.s;
     if (this.tuckPending) { this.tuckPending = false; this.emit('slingReady', { x: p.x, y: p.y }); this.perkFire('tuckIn'); }
     if (!this.featuredSent) {
@@ -2133,6 +2158,7 @@ export class Race {
     const zi = zoneIndex(p.y);
     if (zi > this.zoneReached) {
       this.zoneReached = zi; this.cleared = zi; p.wing = this.muts.wingman || 0; p.zoneBonks = 0;
+      if (zi === ZONES.length - 1) this.autoFinal = !!this.autopilot && !this.bot;
       if (zi >= FREE_SECOND_ZONE + 1 && p.freeSecond) { p.freeSecond = 0; if (!this.muts.second) p.second = 0; }   // the free one is spent
       this.refreshStats();
       const egg = !!ZONES[zi].egg;
@@ -2250,6 +2276,11 @@ export class Race {
       const held0 = p.draftHold || 0; p.draftHold = held0 + dt; p.draftT = this.t;
       if (held0 < DRAFT_ON && p.draftHold >= DRAFT_ON) this.emit('draftOn', { x: p.x, y: p.y, id: target ? this.agents.indexOf(target) : -1, k: target && target.boss ? target.k : -1 });
       if (p.draftHold >= SLING_HOLD && held0 < SLING_HOLD) { p.slingOK = true; this.emit('slingReady', { x: p.x, y: p.y }); }
+      // DRAFT AS A LINK: a tuck-in held SLING_HOLD s is one 'draft' combo link (once a tuck-in, p.draftLinkN; never with
+      // Couch Potato or Slipstream Pro's capstone, which pay their own draft links; only while the thumb plays, like a pass)
+      if (FEATURES.draftLink && p.draftHold >= SLING_HOLD && p.draftLinkN !== p.draftN && !this.syn.couchPotato && !this.cap.draft && (p.actT < IDLE_T || this.input.finger === true)) {
+        p.draftLinkN = p.draftN; this.addCombo('draft', p.x, p.y);
+      }
       // (the trick step counts from DRAFT_ON: a tuck-in that held is a draft for TAILGATE, the slingshot still needs SLING_HOLD)
       if (p.draftHold >= DRAFT_ON) this.seqPush('draft');
     } else p.draftHold = 0;
@@ -2545,7 +2576,7 @@ export class Race {
     // the Launch Tube warm-up: one full link per dash or draft, the plain passes after it count Z0_PLOW, the chain
     // clamps at Z0_COMBO_MAX (the climax belongs further up the tube)
     const z0 = this.zoneReached === 0;
-    if (z0 && PASS_KINDS.has(kind)) {
+    if (z0 && (PASS_KINDS.has(kind) || (FEATURES.draftLink && kind === 'draft'))) {    // (a draft link opens its draft's plow like a first pass)
       const key = p.dashT > 0 ? 'd' + p.dashN : p.draft > 0.08 || this.t - p.draftT <= 0.5 ? 'f' + p.draftN : '';
       if (key && key === p.z0Key && kind === 'pass') n *= Z0_PLOW;
       else if (key) p.z0Key = key;
@@ -3030,6 +3061,7 @@ export class Race {
       // overtakes (only rivals you can actually see)
       const nowAhead = a.y > p.y, sameTube = p.y < FORK_Y0 || a.side === p.side;
       if (wasAhead && !nowAhead && sameTube) {
+        if (a.boss) a.passedByKevin = 1;     // (settle's rivals beaten: a rival Kevin passed while it was alive)
         const ax = this.agentX(a), dx = Math.abs(ax - p.x);
         if (dx < 220) {
           p.overtakes++;
@@ -3102,11 +3134,14 @@ export class Race {
     const g = this.meta && this.meta.goal, p = this.p;
     if (this.goalSeen || !g) return;
     let beaten = null;
-    if (g.id === 'beatRival') { const a = this.agents[g.k]; beaten = a && a.boss && (a.met || this.meet(a)) && (!a.alive || (!a.arrived && a.y < p.y)) ? [firstName(a.boss)] : []; }
+    if (g.id === 'beatRival') { const a = this.agents[g.k]; beaten = a && a.boss && (a.met || this.meet(a)) && this.rivalBeaten(a) ? [firstName(a.boss)] : []; }
     if (!goalMet(g, { won: false, zone: this.zoneReached, combo: p.bestComboLate, beaten })) return;
     this.goalSeen = true;
     this.emit('goalMet', { id: g.id, dna: g.dna, k: g.k, target: g.target, x: p.x, y: p.y });
   }
+  // has Kevin beaten this named rival? A win beats every one still swimming; else one he passed alive that is still
+  // behind him (not at the egg), or one that died once he had met it (a.diedMet)
+  rivalBeaten(a) { return a.alive ? this.won || (!!a.passedByKevin && !a.arrived && a.y < this.p.y) : !!a.diedMet; }
   // a named rival counts in the ledger only once you have met it: within 600 of it, or of its starting slot
   // (passing the slot counts too, so a fast step or a backflow cannot skip it)
   meet(a) {
@@ -3114,8 +3149,11 @@ export class Race {
     if (Math.abs(a.y - py) < 600 || (a.spawnY != null && py >= a.spawnY - 600)) a.met = true;
     return a.met;
   }
+  // (a named rival that dies once Kevin has met it, or within 600 of him, counts as beaten: a.diedMet; one that died
+  // before he ever met it counts for nobody)
   killAgent(a, how) {
     a.alive = false; a.diedT = this.t;
+    if (a.boss) a.diedMet = a.met || Math.abs(a.y - this.p.y) < 600 ? 1 : 0;
     if (Math.abs(a.y - this.p.y) < 700) this.fx.push({ t: how, x: this.agentX(a), y: a.y, age: 0, face: a.face | 0 });
   }
 
@@ -3373,7 +3411,7 @@ export class Race {
   startDrill() {
     this.p.leadSec = this.leadAtEgg();
     const head = this.headStart(), hb = this.headBonus();
-    this.drill = { t0: this.t, me: head, head, need: this.playerNeed(), tok: 2, carry: 0, lead: null, tellT: -Infinity, gasp: null, held: 0 };
+    this.drill = { t0: this.t, me: head, head, need: this.playerNeed(), tok: DRILL_BUCKET, carry: 0, lead: null, tellT: -Infinity, gasp: null, held: 0 };
     // a race too good for the duel: what the knee does not take is paid as DNA instead (once, as the drill starts)
     if (hb.dna > 0) { this.dnaRun += hb.dna; this.dnaBonus += hb.dna; this.emit('headBonus', hb); }
     // the named rivals already drilling are held when you arrive (the first to arrive at DRILL_ARRIVED_CAP of its need,
@@ -3409,7 +3447,7 @@ export class Race {
     if (!(dt > 0) || dt > 0.25) return;
     const d = this.drill, p = this.p;
     // taps count up to DRILL_TAPS_MAX a second (a small token bucket), each +DRILL_TAP and a shove on every arrived rival
-    d.tok = Math.min(2, d.tok + DRILL_TAPS_MAX * dt);
+    d.tok = Math.min(DRILL_BUCKET, d.tok + DRILL_TAPS_MAX * dt);
     const raw = Math.max(0, Math.floor(this.input.tap || 0)), taps = Math.min(raw, Math.floor(d.tok));
     // fresh: the taps new this step (the carried ones were tallied the step they came in)
     const fresh = Math.max(0, raw - Math.min(d.carry || 0, raw));
@@ -3435,7 +3473,7 @@ export class Race {
       if (a.tauntT > 0) a.tauntT -= dt; if (a.bumpT > 0) a.bumpT -= dt; if (a.passT > 0) a.passT -= dt;
       if (!a.arrived) {
         a.y += a.sp * 0.9 * dt;
-        if (a.side !== this.eggSide && a.y >= DEAD_Y) { a.alive = false; continue; }
+        if (a.side !== this.eggSide && a.y >= DEAD_Y) { a.alive = false; if (a.boss) a.diedMet = a.met || Math.abs(a.y - this.p.y) < 600 ? 1 : 0; continue; }
         if (a.y >= RACE_LEN - 70) this.arrive(a);
         continue;
       }
@@ -3586,7 +3624,7 @@ export class Race {
     if (!taps) return;
     if (move === 'stuntDive' && mv.outT > 0) {                                  // Gunther is out: taps on his side chip his drill instead
       if (!here) return;
-      const take = Math.min(here * 0.05, STUNT_CAP - mv.taken);
+      const take = Math.min(here * STUNT_CHIP, STUNT_CAP - mv.taken);
       if (take > 0) { mv.taken += take; a.drill = Math.max(0, a.drill - take); }
       this.emit('drillShove', { k: a.k, boss: a.boss.name });
       return;
@@ -3595,8 +3633,8 @@ export class Race {
     if (move === 'hairCheck' && mv.hairT > 0) k = 2;                            // mid hair check: shoves count double
     a.drill = Math.max(0, a.drill - DRILL_SHOVE * taps * k);
     this.emit('drillShove', { k: a.k, boss: a.boss.name });
-    if (move === 'sorry') {   // Steve apologises his way back: each shove has a 25% chance of giving Kevin +0.04
-      for (let i = 0; i < taps; i++) if (this.rng() < 0.25) { this.drill.me += 0.04; this.emitMove(a, 'countered', { dme: 0.04 }); }
+    if (move === 'sorry') {   // Steve apologises his way back: each shove has a 25% chance of giving Kevin +SORRY_GIFT
+      for (let i = 0; i < taps; i++) if (this.rng() < 0.25) { this.drill.me += SORRY_GIFT; this.emitMove(a, 'countered', { dme: SORRY_GIFT }); }
     }
   }
 
@@ -3637,14 +3675,22 @@ export class Race {
     if (reason === 'energy') cause = this.t - p.acidT < 3 ? 'acid' : p.zoneBonks >= 3 ? 'bonk' : 'energy';
     // an autopilot run (the sat-nav swam more than half of it) is practice: it counts as a run (and keeps the daily
     // streak going) but never touches the difficulty ledgers, the rival W-L record, the bounty or the medals
-    const autoFrac = this.t > 0 ? clamp(this.autoT / this.t, 0, 1) : 0, auto = autoFrac > 0.5, noLedger = auto || crash;
-    // rivals: who did you finish ahead of? Only the ones you actually met count, either way.
-    const beaten = [];
+    // (a swim that reached the last zone is judged by who drove the finale, this.autoFinal: taking the wheel back
+    // before the egg and winning it is a real win, whatever share the sat-nav swam; the DNA cut still reads autoFrac)
+    const autoFrac = this.t > 0 ? clamp(this.autoT / this.t, 0, 1) : 0, auto = this.autoFinal != null ? this.autoFinal : autoFrac > 0.5, noLedger = auto || crash;
+    // rivals: who did you finish ahead of? Only the ones you actually met count, either way (rivalBeaten: one Kevin
+    // passed alive and is still ahead of, or one that died once he had met it; one that died before he met it counts
+    // for nobody, a win beats every one still swimming)
+    const beaten = []; let aheadOf = 0, lastAhead = false;
     if (counted) {
       for (let _i_a = 0, _A_a = this.agents, a; _i_a < _A_a.length && ((a = _A_a[_i_a]), true); _i_a++) {
         if (!a.boss || !(a.met || this.meet(a) || this.won)) continue;
+        // (the bounty's placing pay: every met named rival behind Kevin at the end, the old count, so the honest list
+        // below never moved the economy)
+        if (this.won || !a.alive || (!a.arrived && a.y < p.y)) { aheadOf++; if (a.boss === RIVALS[RIVALS.length - 1]) lastAhead = true; }
+        if (!a.alive && !a.diedMet) continue;      // (died before Kevin met it: it counts for nobody)
         const nm = firstName(a.boss);
-        const beat = this.won || (!a.alive) || (!a.arrived && a.y < p.y);
+        const beat = this.rivalBeaten(a);
         if (beat) beaten.push(nm);
         if (!noLedger && M.rivals && typeof M.rivals === 'object') {
           const r = M.rivals[nm] || (M.rivals[nm] = { beat: 0, lost: 0 });
@@ -3699,14 +3745,16 @@ export class Race {
     // a daily won again on a day that already has its gold: a baby for the album, no new generation (the tube is the
     // same every attempt, so only the first daily gold of a day makes a generation)
     const dailyRepeat = this.won && !auto && this.daily != null && counted && M.dailyDay === this.daily && Math.floor(M.dailyMedal || 0) >= 3;
-    const practice = this.won && (auto || dailyRepeat);    // an autopilot win: a baby for the album, but no new generation
+    const practice = this.won && (auto || dailyRepeat);    // an autopilot win (the sat-nav drove the finale): a baby for the album, but no new generation
     const bk = {
       dist: dist / 2000,
       place: placePay(rank) + (this.won && !practice ? WIN_BONUS : 0),
       // (the NaN firewall's last line: a broken ledger pays 0, it never zeroes the whole swim)
       combo: ok(this.dnaRun, 0) - ok(this.dnaBank, 0) - ok(this.dnaBonus, 0),
       bank: ok(this.dnaBank, 0),
-      bounty: ok(this.dnaBonus, 0) + 3 * beaten.length + (beaten.includes(firstName(RIVALS[RIVALS.length - 1])) ? 15 : 0),
+      // (3 a met named rival Kevin finished ahead of, aheadOf, +15 for the last one: a placing pay, kept on the old count so
+      // the honest rivalsBeaten list never moved the economy)
+      bounty: ok(this.dnaBonus, 0) + 3 * aheadOf + (lastAhead ? 15 : 0),
       // photo finish: beaten at the egg itself pays for how far you drilled, on a gradient that is steep at the end
       // (photoPay: 10 under 60% of the drill, 60 at 100%: a 95% loss pays far more than a 70% one)
       photo: reason === 'late' && this.drill ? (FEATURES.photoGrade ? photoPay(fDrill) : Math.min(36, Math.round(55 * fDrill))) : 0,
@@ -3798,7 +3846,7 @@ export class Race {
     this.over = { reason, cause, rank, dna, dist, baby, combo: Math.floor(p.bestCombo), comboLate: Math.floor(p.bestComboLate || 0), head: this.drill ? this.drill.head : 0, overtakes: p.overtakes, zone: this.zoneReached,
       tier: p.bestTier, synergies: Object.keys(this.syn), comboDna: Math.round(this.dnaFromCombo), daily: this.daily, dailyBest,
       events: this.schedule.filter((e) => p.y >= e.y0).map((e) => e.id),
-      by, gapBy, rivalsBeaten: beaten, gapSec, auto, practice, breakdown, dailyBonus, streak: this.daily != null && counted ? streak : 0, goalDone, photo: bk.photo, counted,
+      by, gapBy, rivalsBeaten: beaten, gapSec, auto, autoFinal: this.autoFinal === true, practice, breakdown, dailyBonus, streak: this.daily != null && counted ? streak : 0, goalDone, photo: bk.photo, counted,
       bite: reason === 'wbc' ? this.biteBy || 'wbc' : null, freezeUsed, gooTime: Math.round(this.gooTime * 10) / 10,
       dailyRule: this.dailyRule, medal: this.daily != null ? medal : 0, medalNew, dailyAttempt, dailyScale, featuredTrick: this.featuredTrick, tricks: Object.keys(this.tricksRun || {}),
       // autoPct: the share the autopilot keeps out of the swim's pay (the UI label: 'autopilot -N%')

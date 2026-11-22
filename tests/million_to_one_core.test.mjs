@@ -371,7 +371,8 @@ ok(RIVALS.every((R) => R.drill > 0.5 && R.drill < 2 && R.sp > 0.5), 'every named
 // ---------------------------------------------------------------- the egg: winning makes a baby and starts a new generation
 {
   const m = newMeta(); const r = new Race(m, mulberry(7));
-  r.agents.forEach((a) => { a.alive = false; }); r.p.y = RACE_LEN - 200; r.p.side = r.eggSide; r.zoneReached = ZONES.length - 1; r.p.e = 1e6;
+  // (the named rivals died once Kevin had met them, a.diedMet: they count as beaten)
+  r.agents.forEach((a) => { a.alive = false; if (a.boss) a.diedMet = 1; }); r.p.y = RACE_LEN - 200; r.p.side = r.eggSide; r.zoneReached = ZONES.length - 1; r.p.e = 1e6;
   for (let t = 0; t < 20 && !r.over; t += 1 / 60) { r.input.tap = 1; r.step(1 / 60); }
   ok(r.over && r.over.reason === 'win' && r.won, 'first into the egg wins');
   ok(m.babies.length === 1 && m.babies[0].name && m.gen === 1, 'a baby is born and the next generation starts');
@@ -383,7 +384,7 @@ ok(RIVALS.every((R) => R.drill > 0.5 && R.drill < 2 && R.sp > 0.5), 'every named
 }
 { // someone already drilling beats a slow tapper
   const m = newMeta(); const r = new Race(m, mulberry(9));
-  r.agents.forEach((a, i) => { a.alive = i === 0; }); const a = r.agents[0]; a.arrived = true; a.arrivedT = -1; a.drill = 2.9; a.y = RACE_LEN - 70;
+  r.agents.forEach((a, i) => { a.alive = i === 0; if (a.boss && i) a.diedMet = 1; }); const a = r.agents[0]; a.arrived = true; a.arrivedT = -1; a.drill = 2.9; a.y = RACE_LEN - 70;
   r.p.y = RACE_LEN - 100; r.p.side = r.eggSide; r.zoneReached = ZONES.length - 1; r.p.e = 1e6;
   for (let t = 0; t < 20 && !r.over; t += 1 / 60) r.step(1 / 60);
   ok(r.over && r.over.reason === 'late' && r.over.rank === 2, 'arrive second and do not tap: you lose at #2');
@@ -785,6 +786,9 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 //   sprinter. Their unit tests switch the one they test on (withFeatures). Kept as they are (no bot career runs through
 //   them): the free reroll, the thumb bot, the graded near-miss gap, the touch caps 580 / 680 (460 / 560 keys) with the
 //   swerve kick at x1.03 (1.2 left steerK 1 too little room under the 1.8x bullet-time band).
+// SYSTEMS ROUND 5: the held-back FEATURES were switched on one at a time over these bands; buzzer, rescue, bountyKeep and
+//   winGate held every band and are on (their unit tests run default-on), the rest stay off (see the FEATURES comment in
+//   core.js for what each moved). The trick band is back at 6-8 a run.
 // NOT REACHED (reported, the bands are not widened past what the game meets):
 //   - energy deaths on runs 6-8 within 4 points of runs 3-5: 8% (3 of 36) against 0%; the band is 9 points, see the test
 //     (it conflicts with the GAS-by-generation band from main)
@@ -3691,7 +3695,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   const gains = [g(0), g(1), g(2), g(0, 1)];
   a._contest = true; a._tension = 0.1; const bed = a._bedT();
   // assert
-  ok(gains.join() === '0.85,1,1.12,1.3', 'Audio._intGain: 0.85 / 1 / 1.12 for the intensity levels, 1.3 in FRENZY (' + gains.join() + ')');
+  ok(gains.join() === '0.85,1,1.12,1.2', 'Audio._intGain: 0.85 / 1 / 1.12 for the intensity levels, 1.2 in FRENZY (' + gains.join() + ')');
   ok(bed === 0.6 && Audio._ladderCheck().length === 0, 'Audio._bedT() is 0.6 when contested with low tension, and _ladderCheck() returns []');
 }
 
@@ -4195,7 +4199,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(loadMeta({ streakFreeze: 7 }).streakFreeze === 2 && loadMeta({ streakFreeze: -1 }).streakFreeze === 0 && loadMeta({ streakFreeze: 'x' }).streakFreeze === 0 && newMeta().streakFreeze === 0, 'loadMeta clamps streakFreeze to 0..2');
   ok(dailyBonusFor(10, 0) === 600 && dailyBonusFor(12, 0) === 600 && dailyBonusFor(9, 0) === 540, 'the daily bonus climbs to day 10');
 }
-{ // 7b: a paused swim the OS discards is forgiven: 10+ minutes paused counts the run but not a quit, and keeps the win streak
+{ // 7b: a paused swim the OS discards is forgiven: PAUSE_FORGIVE_MS (90 s) or more paused counts the run but not a quit, and keeps the win streak
   // arrange
   const lost = (pausedMin, paused = true) => {
     const m = veteran(); m.winStreak = 3; const r = new Race(m, mulberry(4)); CORE.openRun(m, r); CORE.runProgress(m, 8000);
@@ -4204,10 +4208,12 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
     return { m: back, res: CORE.settleAbandoned(back, t0 + pausedMin * 60000) };
   };
   // act
-  const long = lost(20), short = lost(2), live = lost(20, false);
+  const long = lost(20), short = lost(2), brief = lost(20 / 60), live = lost(20, false);
   // assert
   ok(long.res.counted && long.res.forgiven === true && long.m.winStreak === 3 && long.m.quits === 0 && long.m.runs === 11, 'paused 20 min: counted, not a quit, the win streak lives (' + JSON.stringify(long.res) + ')');
-  ok(short.res.counted && !short.res.forgiven && short.m.winStreak === 0 && short.m.quits === 1, 'paused 2 min: a quit, the streak resets');
+  // (a phone evicts a backgrounded tab after 1 to 5 minutes: a 2 minute call is the OS tidying up, not a rage quit)
+  ok(CORE.PAUSE_FORGIVE_MS === 90 * 1000 && short.res.counted && short.res.forgiven === true && short.m.winStreak === 3 && short.m.quits === 0, 'paused 2 min: forgiven, the streak lives (' + JSON.stringify(short.res) + ')');
+  ok(brief.res.counted && !brief.res.forgiven && brief.m.winStreak === 0 && brief.m.quits === 1, 'paused 20 s then killed: a quit, the streak resets');
   ok(live.res.counted && !live.res.forgiven && live.m.winStreak === 0 && live.m.quits === 1, 'never paused: a quit, the streak resets');
   const o = loadMeta({ openRun: { daily: -1, y: 5000, at: 1, paused: true, pausedAt: 123 } }).openRun;
   ok(o && o.paused === true && o.pausedAt === 123, 'loadMeta keeps paused and pausedAt');
@@ -4327,10 +4333,11 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.580,0.700,0.825,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.58 / 0.70 / 0.825 / 0.95 at gens 1-4, fruitFloor(1) = 1');
   const fresh = Object.assign(veteran(), { gen: 1, sinceWin: 0, lastWinStreak: 1, normRuns: 6, runs: 6 }), r = new Race(fresh, mulberry(1), { events: false });
   ok(Math.abs(r.rivalK - CORE.rivalDrillK(fresh) / (1 + CORE.FRESH_GEN)) < 1e-12 && Math.abs(CORE.rivalDrillRace(fresh, null) * (1 + CORE.FRESH_GEN) - CORE.rivalDrillK(fresh)) < 1e-12 && CORE.rivalDrillRace(fresh, 5) === CORE.rivalDrillK(fresh), 'the run after a first win: the rivals drill / (1 + FRESH_GEN) (never in the daily)');
-  // (a save with a win: one that never won keeps most of the LAST GASP, see the fairness test)
-  const at = (n, since = 0) => CORE.lastGaspK(Object.assign(newMeta(), { normRuns: n, runs: n, sinceWin: since, lossRun: since, wins: 1 }), null);
+  // (a save with 4 wins: FEATURES.winGate lets the fade go LAST_GASP_WIN_K runs a win, 4 x 3 = the full LAST_GASP_RUNS; one
+  // that never won keeps most of the LAST GASP, see the fairness test)
+  const at = (n, since = 0) => CORE.lastGaspK(Object.assign(newMeta(), { normRuns: n, runs: n, sinceWin: since, lossRun: since, wins: 4 }), null);
   ok(at(7) === 0.6 && Math.abs(at(19) - 1) < 1e-12 && Math.abs(at(13) - 0.8) < 1e-12 && at(40) === at(19) && at(19, 5) === 0.6 && CORE.LAST_GASP_FROM === 7, 'lastGaspK: 0.6 to run 7, gone (x1) by run 19, 0.6 while the losing-streak cushion is on');
-  const vr = new Race(Object.assign(newMeta(), { normRuns: 25, runs: 25, sinceWin: 0, wins: 1 }), mulberry(1), { events: false });
+  const vr = new Race(Object.assign(newMeta(), { normRuns: 25, runs: 25, sinceWin: 0, wins: 4 }), mulberry(1), { events: false });
   ok(Math.abs(vr.gaspK - 1) < 1e-12, 'a run-25 race has no LAST GASP left (x1)');
 }
 // the capstones: a multi-level common card at its max adds a twist
@@ -4441,9 +4448,9 @@ const passOne = (r, extra = {}) => { const a = r.agents[20]; Object.assign(a, { 
   const M = await SW.midMeta, G = await SW.gen0, A = await SW.autoTier;
   const avg = M.reduce((a, x) => a + x.tricks, 0) / M.length, s2 = M.filter((x) => x.streak >= 2).length, g5 = G.filter((x) => x.tier >= 5).length;
   // assert
-  // (systems round 4: 5-8, was 6+: the trick grace and the x4 streak cap put the half-habit bots at about 7.3 a run, over
-  // the 5-7 asked for, so the band is widened to 8)
-  ok(avg >= 5 && avg <= 8, 'half-habit bots average 5-8 tricks a run (' + avg.toFixed(1) + ')');
+  // (systems round 4: 6-8: the trick grace and the x4 streak cap put the half-habit bots at about 7.3 a run; the lower
+  // bound is back at 6 (round 4 had let it slip to 5))
+  ok(avg >= 6 && avg <= 8, 'half-habit bots average 6-8 tricks a run (' + avg.toFixed(1) + ')');
   ok(s2 >= M.length / 3, 'and a third of them reach TRICK STREAK 2 (' + s2 + '/' + M.length + ')');
   // (the director's table: maxed habits at gen 0 reach GOD MODE on 1 in 6 runs or more (8+ of 48), half-habit runs at most 15%)
   const m5 = M.filter((x) => x.tier >= 5).length;
@@ -4975,17 +4982,17 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   });
 }
 { // 3b: the career ramps are gated on wins: a 20-run save that never won meets one career hazard step and the full LAST GASP
-  withFeatures({ winGate: true }, () => {
+  (() => { ok(CORE.FEATURES.winGate === true, 'FEATURES.winGate is on by default');
     // arrange
     const m = Object.assign(veteran(), { runs: 20, normRuns: 20, wins: 0, lossRun: 0 }), w = Object.assign(veteran(), { runs: 20, normRuns: 20, wins: 3, lossRun: 0 });
     // act
     const r = new Race(m, mulberry(1), { events: false }), rw = new Race(w, mulberry(1), { events: false });
     // assert
     ok(r.hzGen <= 1 && r.gaspK === CORE.LAST_GASP_K && rw.hzGen === 4 && rw.gaspK > CORE.LAST_GASP_K, 'a 0-win 20-run save: hzGen ' + r.hzGen + ', gaspK ' + r.gaspK + ' (a 3-win one: ' + rw.hzGen + ', ' + rw.gaspK.toFixed(2) + ')');
-  });
+  })();
 }
 { // 3c: the early-death rescue: two 45 s Acid Lagoon deaths in a row give one rescue step, a 15 s dive none
-  withFeatures({ rescue: true }, () => {
+  (() => { ok(CORE.FEATURES.rescue === true, 'FEATURES.rescue is on by default');
     // arrange
     const die = (m, t, zi = ACID_Z) => { const r = new Race(m, mulberry(9), { events: false }); r.t = t; r.zoneReached = zi; r.p.y = ZSTART[zi] + 1000; r.end('energy'); return r; };
     const m = Object.assign(veteran(), { normRuns: 12, runs: 12, gen: 3 }), q = Object.assign(veteran(), { normRuns: 12, runs: 12, gen: 3 });
@@ -4997,7 +5004,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
     ok(res.rescuePct === 50 && base.rescuePct === 0 && res.hzGen === Math.max(0, base.hzGen - 1) && Math.abs(res.sugarGas - base.sugarGas - 0.4) < 1e-9 && Math.abs(res.s.acid / base.s.acid - 0.9 * CORE.hzMul(res.hzGen, 0.08) / CORE.hzMul(base.hzGen, 0.08)) < 1e-9 && res.rescueBites === 1, 'rescue step 1: one hazard step less, +0.4 GAS a fruit, acid x0.9, one more spare bite, rescuePct 50');
     die(m, 45); ok(CORE.rescueSteps(m, null) === 2 && new Race(m, mulberry(3), { events: false }).rescuePct === 100, 'a third: step 2, rescuePct 100');
     die(m, 45, SEA_I); ok(m.earlyRun === 0 && loadMeta(JSON.parse(JSON.stringify(Object.assign(m, { earlyRun: 3 })))).earlyRun === 3 && newMeta().earlyRun === 0, 'a loss in the Great Womb Sea zeroes it; it survives the save');
-  });
+  })();
 }
 { // 4b: the touch steering keeps up with a thumb: Great Womb Sea, band centre to band.r in 0.55 s, overshoot under 10 px
   // arrange
@@ -5036,7 +5043,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   });
 }
 { // 5c: BUZZER BEATER: a finisher in the last quarter of the timer pays (fm + 0.4) / fm of an early one
-  withFeatures({ buzzer: true }, () => {
+  (() => { ok(CORE.FEATURES.buzzer === true, 'FEATURES.buzzer is on by default');
     // arrange
     const cash = (k) => { const r = quiet(); styled(r); r.p.combo = 30; r.p.bank = 30; r.p.comboMax = 3; r.p.comboT = 3 * k; r.cashOut(); return { b: r.events.find((e) => e.type === 'comboBank'), end: r.events.find((e) => e.type === 'comboEnd'), seed: r.p.combo }; };
     // act
@@ -5044,7 +5051,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
     // assert
     ok(buzz.b.buzzer && buzz.end.buzzer && Math.abs(buzz.b.dna / early.b.dna - (fm + 0.4) / fm) < 0.01, 'a buzzer beater pays (fm + 0.4) / fm of an early cash (' + (buzz.b.dna / early.b.dna).toFixed(3) + ')');
     ok(!half.b.buzzer && Math.abs(half.b.dna - early.b.dna) < 1e-9 && CORE.finisherSeed(200, CORE.BUZZER_SEED) === 16 && CORE.finisherSeed(200) === 8, 'at half the timer it is a plain finisher; a buzzer seeds up to 16 links (8 plain)');
-  });
+  })();
 }
 { // 5d: graded near misses: a 2 px graze reports gap < 4, a 17 px pass gap > 12
   // arrange
@@ -5056,7 +5063,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   ok(graze && graze.kind === 'close' && graze.gap < 4 && wide && wide.gap > 12, 'near misses carry their gap: graze ' + (graze ? graze.gap : '-') + ', wide pass ' + (wide ? wide.gap : '-'));
 }
 { // 7a: a bounty persists: a weaker run keeps it (a swim less), three failed swims replace it, a rematch takes over at once
-  withFeatures({ bountyKeep: true }, () => {
+  (() => { ok(CORE.FEATURES.bountyKeep === true, 'FEATURES.bountyKeep is on by default');
     // arrange
     const m = veteran(); m.goal = { id: 'reachZone', target: 5, dna: 100, k: -1, left: 3 };
     const fail = () => { const r = new Race(m, mulberry(81), { events: false }); r.zoneReached = 1; r.p.y = ZSTART[1] + 500; r.end('energy'); return r.over.nextGoal; };
@@ -5069,7 +5076,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
     CORE.settleGoal(f, { reason: 'late', by: 'Chad', gapBy: 'Chad', zone: EGG_I, combo: 5, rank: 2 });
     ok(f.goal.id === 'beatRival' && f.goal.k === 4, 'a rematch on the last foe replaces a held bounty at once');
     ok(CORE.GOAL_FLOOR_SHARE === 0.2 && loadMeta({ goal: { id: 'combo', target: 9, dna: 30, left: 2 } }).goal.left === 2, 'GOAL_FLOOR_SHARE 0.2; a held bounty keeps its swims left in the save');
-  });
+  })();
 }
 { // 7b: mashups: Domino is Mosh Pit + Chain Reaction (the systems round's Mosh Pit + Battering Ram and its Slot Machine are
   // held back in the balance restore: a new recipe changes every deal), and the greedy picker meets every mashup
@@ -5146,9 +5153,23 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   ok(f.zoneVowel === 270 && f.deal.notes === 3 && f.deal.rising && f.deal.inKey && f.deal.gap && f.deal.cym, 'audio: the zone choir opens to its vowel, deal plays a rising in-key tag');
   ok(f.afford.f.join() === '1318.5,1661.2' && f.afford.peak === 0.12 && f.afford.sum === CUE_VOL.afford && f.afford.step === 2, 'audio: afford is E6 to G#6 at 0.12, sums to 0.18, a repeat climbs a whole step ' + JSON.stringify(f.afford));
   ok(f.overclock.rising && f.overclock.inKey && f.medley.n === 4 && f.medley.rising && f.medley.inKey && f.tight, 'audio: overclock and medley climb in key, a tight close gets its edge');
-  ok(Math.abs(f.story.duck - 0.355) < 0.002 && f.story.built && f.story.off && Math.abs(f.menuTrim - 0.536) < 0.002, 'audio: a story ducks the groove 9 dB and plays its music box, menus trimmed 4 dB');
+  ok(Math.abs(f.story.duck - 0.355) < 0.002 && f.story.built && f.story.off && Math.abs(f.menuTrim - 0.608) < 0.002, 'audio: a story ducks the groove 9 dB and plays its music box, menus trimmed 2.9 dB');
   ok(f.gentle.calm && f.gentle.keep && f.gentle.off && f.gentle.attack >= 0.06, 'audio: gentle turns calm on, holds it, lets go, and slows impact attacks to 60 ms ' + JSON.stringify(f.gentle));
   ok(f.cues && f.mutedSilent, 'audio: every new cue sounds, and none when muted');
+}
+{
+  // arrange
+  const { Audio } = await import('../million_to_one/audio.js');
+  // act
+  const f = Audio._round7Facts();
+  // assert
+  ok(f.tailVol.join() === '0.42,0.42,0.528,0.708,0.72', 'audio: the ladder tail grows to link 60');
+  ok(f.leadDip.frenzy === 0.5 && f.leadDip.plain === 0 && f.presDip.two === 1 && f.presDip.low === 0 && f.presDip.calm === 0, 'audio: FRENZY links dip the lead and the presence peak, once per 16th, combo 10+');
+  ok(f.kevin.normalCapped && f.kevin.bigSpeaks && f.kevin.bigLouder && f.kevin.gap && f.nooo.sung && f.nooo.inDry && f.yay.join() === '0,1' && f.lose && f.wooo.join() === '1,0', 'audio: Kevin big lines');
+  ok(f.heart.thumps === 8 && f.heart.at === 1.6 && f.heart.box === 1 && f.heart.muffledBox === 0, 'audio: win heartbeat');
+  ok(f.release.hurt.join() === '0,1,0,0' && f.release.pay.join() === '1,0,2,0' && f.release.metal.join() === '0,0,0,1' && f.release.plain.join() === '1,0,0,0', 'audio: impactRelease by kind');
+  ok(f.timbre.sling && f.timbre.weave && f.timbre.snipe && f.dash.transient && f.dash.sweep, 'audio: link timbres and dash punch');
+  ok(f.steer.quiet && f.steer.full && f.steer.pan === -0.4 && f.steer.built === 1 && f.steer.rebuilt === 0 && f.hype.lift === 3 && f.hype.none === 1 && f.hype.gold === 2 && f.hype.again === 0 && f.hype.later === 2 && f.hum, 'audio: steerLevel, hype, macroHum no-op');
 }
 
 { // round 2 writing: first-deal lines, Act 4, endless intros and the combo beat pools stay short and complete
@@ -5241,7 +5262,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   // assert
   ok(r0.hzGen <= 1 && CORE.lastGaspK(w0, null) <= 0.7 + 1e-9, 'normRuns 18, no win: hzGen ' + r0.hzGen + ' (<= 1), lastGaspK ' + CORE.lastGaspK(w0, null).toFixed(2) + ' (<= 0.7)');
   // (systems round 4: the win gate always holds: one win allows 1 + HZ_CAREER_WIN_K career steps)
-  ok(r1.hzGen === Math.min(Math.floor((18 - CORE.HZ_CAREER_FROM) / CORE.HZ_CAREER_EVERY), 1 + CORE.HZ_CAREER_WIN_K) && r1.hzGen === 3 && Math.abs(CORE.lastGaspK(w1, null) - (CORE.LAST_GASP_K + (CORE.LAST_GASP_LATE - CORE.LAST_GASP_K) * 11 / 12)) < 1e-9, 'one win: the career tube runs to 1 + 2 a win, the fade as before (hzGen ' + r1.hzGen + ', lastGaspK ' + CORE.lastGaspK(w1, null).toFixed(3) + ')');
+  ok(r1.hzGen === Math.min(Math.floor((18 - CORE.HZ_CAREER_FROM) / CORE.HZ_CAREER_EVERY), 1 + CORE.HZ_CAREER_WIN_K) && r1.hzGen === 3 && Math.abs(CORE.lastGaspK(w1, null) - (CORE.LAST_GASP_K + (CORE.LAST_GASP_LATE - CORE.LAST_GASP_K) * Math.min(11, CORE.LAST_GASP_WIN_K) / 12)) < 1e-9, 'one win: the career tube runs to 1 + 2 a win, the fade LAST_GASP_WIN_K runs a win (hzGen ' + r1.hzGen + ', lastGaspK ' + CORE.lastGaspK(w1, null).toFixed(3) + ')');
   ok(rs.eggBoost() <= CORE.DRILL_BOOST_MAX + 1e-9 && CORE.DRILL_BOOST_MAX === 1.3 && CORE.PEP_DRILL === 0.08, '3 egg losses and a 9-loss streak: eggBoost ' + rs.eggBoost().toFixed(3) + ' (at most 1.3)');
 }
 { // 6: touch steering lands a swerve by its arrival time; keys and the autopilot keep STEER_CAP_KEYS
@@ -5489,6 +5510,95 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   ok(zoneTwice.length === 0 && F.every((x) => Object.keys(x.zones).length >= x.reached), 'each zone is emitted once (' + zoneTwice.map((x) => x.seed + ':' + JSON.stringify(x.zones)).join(' ') + ')');
   ok(F.every((x) => x.bad.length === 0), 'the meta holds no non-finite number after end() (' + F.flatMap((x) => x.bad).slice(0, 4).join(', ') + ')');
   ok(F.every((x) => !x.fault), 'simFault never fires (' + F.filter((x) => x.fault).map((x) => x.seed).join(',') + ')');
+}
+
+// ---------------------------------------------------------------- systems round 5
+{ // SAT-NAV LOCK: the gps habit opens at meta.gen GPS_GEN (the shop's Gen GPS_GEN + 1), not one generation early
+  // arrange
+  const before = Object.assign(newMeta(), { gen: CORE.GPS_GEN - 1 }), at = Object.assign(newMeta(), { gen: CORE.GPS_GEN });
+  // act
+  const lockedLv = maxLv(before, 'gps'), openLv = maxLv(at, 'gps');
+  // assert
+  ok(CORE.GPS_GEN === 2 && lockedLv === 0 && openLv > 0, 'maxLv gps is 0 at gen GPS_GEN - 1 and ' + openLv + ' at GPS_GEN (' + CORE.GPS_GEN + ')');
+}
+{ // meta.act4Seen: a boolean the save keeps (false by default, anything but true loads as false)
+  // arrange / act
+  const fresh = newMeta(), kept = loadMeta({ act4Seen: true }), junk = loadMeta({ act4Seen: 'yes' }), old = loadMeta({ runs: 3 });
+  // assert
+  ok(fresh.act4Seen === false && kept.act4Seen === true && junk.act4Seen === false && old.act4Seen === false, 'act4Seen defaults to false, survives loadMeta as true, junk loads as false');
+}
+{ // channelInto fills the caller's object (no allocation) with exactly what channel() returns
+  // arrange
+  const out = { c: 0, h: 0 }, ys = [100, 5000, FORK_Y0 - 2, FORK_Y0 + 400, FORK_END + 300, RACE_LEN - 100];
+  // act
+  const rows = []; for (const y of ys) for (const side of [-1, 0, 1]) { const got = CORE.channelInto(y, side, out), ref = channel(y, side); rows.push(got === out && got.c === ref.c && got.h === ref.h && Object.keys(got).length === 2); }
+  // assert
+  ok(typeof CORE.channelInto === 'function' && rows.every(Boolean), 'channelInto returns the same out object with channel()\'s c and h at ' + rows.length + ' samples');
+}
+{ // WHO DROVE THE FINALE: the sat-nav swam most of the race, Kevin took the wheel before the last zone and won: a real win
+  // arrange
+  const swim = (handOver) => {
+    const m = Object.assign(veteran(), { gen: CORE.GPS_GEN }); m.habits.gps = 1; const gen0 = m.gen;
+    const r = new Race(m, mulberry(77), { autopilot: true, events: false });
+    for (let i = 0; i < 600 && !r.over; i++) { r.p.e = 100; r.step(1 / 60); if (r.pending) r.choose(r.pending[0]); }
+    // (the last stretch before the egg zone: nobody else left in the race)
+    r.agents.forEach((a) => { a.alive = false; }); r.p.y = r.prevPY = ZSTART[EGG_I] - 30; r.p.side = r.eggSide; r.p.x = channel(r.p.y, r.eggSide).c;
+    if (handOver) r.autopilot = false;
+    for (let i = 0; i < 120 && !r.over && r.zoneReached < EGG_I; i++) { r.p.e = 100; r.step(1 / 60); if (r.pending) r.choose(r.pending[0]); }
+    const crossed = r.zoneReached === EGG_I;
+    atEgg(r, 0); if (!r.drill) r.startDrill(); r.end('win');
+    return { r, m, gen0, crossed };
+  };
+  // act
+  const hand = swim(true), auto = swim(false);
+  // assert
+  ok(hand.crossed && hand.r.over.autoPct > 30 && hand.r.handFrom > 0, 'the sat-nav swam over half the race before the hand-over (autoPct ' + hand.r.over.autoPct + ', handFrom ' + hand.r.handFrom.toFixed(1) + ')');
+  ok(hand.r.over.auto === false && hand.r.over.autoFinal === false && !hand.r.over.baby.practice && hand.m.gen === hand.gen0 + 1, 'taking over before the last zone and winning: not auto, not practice, gen + 1 (' + hand.m.gen + ')');
+  ok(hand.r.over.breakdown.autoCut > 0, 'and the DNA still prorates the sat-nav share (autoCut ' + hand.r.over.breakdown.autoCut + ')');
+  ok(auto.crossed && auto.r.over.auto === true && auto.r.over.autoFinal === true && auto.r.over.baby.practice === true && auto.m.gen === auto.gen0, 'the sat-nav driving through the last zone: still practice, no new generation');
+}
+{ // HONEST RIVALS BEATEN: named rivals that died before Kevin ever met them count for nobody
+  // arrange: every boss killed by a hazard far ahead before the meeting, then Kevin swims past their slots to 4000
+  const r = new Race(veteran(), mulberry(5), { events: false });
+  const bosses = r.agents.filter((a) => a.boss);
+  for (const a of bosses) { a.met = false; a.y = 12000; a.spawnY = 3000; r.killAgent(a, 'pop'); }
+  r.p.y = 4000;
+  // act
+  r.end('energy');
+  // assert
+  ok(bosses.length === RIVALS.length && r.over.rivalsBeaten.length === 0, 'a run to 4000 with every boss killed before meeting beats nobody (' + r.over.rivalsBeaten.join(',') + ')');
+  const q = new Race(veteran(), mulberry(6), { events: false }), [b1, b2, b3] = q.agents.filter((a) => a.boss);
+  q.p.y = 6000; Object.assign(b1, { y: 5000, passedByKevin: 1, met: true }); Object.assign(b2, { y: 5500, passedByKevin: 0, met: true }); q.killAgent(Object.assign(b3, { y: 6300, met: true }), 'eaten');
+  ok(q.rivalBeaten(b1) && !q.rivalBeaten(b2) && q.rivalBeaten(b3), 'passed alive counts, behind but never passed does not, died after the meeting counts');
+}
+{ // DRAFT AS A COMBO LINK (FEATURES.draftLink): one tuck-in held past SLING_HOLD is exactly one draft link, and draft counts for STYLE
+  withFeatures({ draftLink: true }, () => {
+  // arrange: a swimmer 50 ahead in Kevin's lane at his drafting speed
+  const r = quiet(); r.p.y = 3000; r.prevPY = 3000; r.p.x = centre(3000);
+  const a = r.agents[20]; Object.assign(a, { alive: true, arrived: false, y: 3050, lane: 0, kx: 0, deathY: Infinity, conga: 0 }); a.zone = zoneIndex(a.y); a.zoneEnd = ZSTART[a.zone + 1];
+  let links = 0;
+  // act: one 2 s tuck-in
+  for (let i = 0; i < 120; i++) { a.sp = r.p.vy || r.s.speed; a.y = r.p.y + 50; r.input.tx = r.agentX(a); r.p.e = 100; r.step(1 / 60); for (const e of r.events) if (e.type === 'combo' && e.kind === 'draft') links += e.add; r.events.length = 0; }
+  // assert
+  ok(links === 1 && r.p.kindLast.draft > 0 && CORE.STYLE_KINDS.has('draft'), 'one held draft gives exactly 1 draft link and STYLE counts the kind (' + links + ', style ' + r.p.style + ')');
+  });
+}
+
+{ // round 1 writing: new UI copy, first deal, win banners
+  // arrange
+  const K = CONTENT;
+  const fill = (s) => s.replace('{name}', 'GUNTHER');
+  // act
+  const overLines = Object.values(K.EGG_WIN_OVER || {}).flat();
+  // assert
+  ok(K.UI_COPY.comboFirst.length <= 22 && K.UI_COPY.autoTakeover.length <= 48, 'content: comboFirst 22 or fewer, autoTakeover 48 or fewer');
+  ok(typeof K.FIRST_DEAL_SUB === 'string' && K.FIRST_DEAL_SUB.length <= 36, 'content: FIRST_DEAL_SUB is short (' + K.FIRST_DEAL_SUB.length + ')');
+  ok(['dash', 'steer'].every((k) => typeof K.TUT_GENTLE_BY_STEP[k] === 'string' && K.TUT_GENTLE_BY_STEP[k].length <= 44), 'content: TUT_GENTLE_BY_STEP has dash and steer, 44 or fewer');
+  ok(typeof K.ALBUM_EMPTY === 'string' && K.ALBUM_EMPTY.length > 0, 'content: ALBUM_EMPTY exists');
+  ok(['Steve', 'Brock', 'Tiffany', 'Gunther', 'Chad'].every((n) => (K.EGG_WIN_OVER[n] || []).length >= 3), 'content: EGG_WIN_OVER has 3+ lines per named rival');
+  ok(K.EGG_LINES.win.concat(overLines).every((s) => s.length <= 22) && K.EGG_WIN_NEMESIS.every((s) => s.includes('{name}') && fill(s).length <= 22), 'content: egg win banners fit in 22 characters');
+  ok(!K.EGG_WIN_OVER.Gunther.some((s) => /Dieter/.test(s)), 'content: Gunther win banners never name Dieter');
+  ok(ZONES.every((z) => (K.FAMILY_ZONE_LINES[z.id] || []).length >= 3), 'content: FAMILY_ZONE_LINES has 3+ lines per zone');
 }
 
 console.log(`million_to_one_core: ${passed} passed, ${failed} failed`);

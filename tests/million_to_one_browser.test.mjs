@@ -250,6 +250,13 @@ const headNow = await p2.evaluate(() => { const d = game.race && game.race.drill
 ok(/Head start \+\d+\.\ds/.test(chipT), 'a lost duel puts its head start on the chip row ("' + chipT + '")');
 ok(headNow == null || headNow >= 2.75 || /Best 2\.8s/.test(chipT), 'and the best head start when this one fell short (now ' + headNow + ', "' + chipT + '")');
 ok(/Attempt 2 · [^·]*pay/.test(chipT), 'the daily result says what this attempt pays on the chip row ("' + chipT + '")');
+// Assert: the result card shows one stamp at most (record, bounty, medal, grudge); the rest become toasts
+const stamps = await p2.evaluate(() => ['resRecord', 'resBounty', 'resMedal', 'resGrudge'].filter((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hide') && e.getClientRects().length > 0; }));
+ok(stamps.length <= 1, 'the result card shows at most one stamp (' + stamps.join() + ')');
+// Arrange / Act: the no-flash setting
+const nf = await p2.evaluate(() => { const b = document.getElementById('setNoFlash'), was = b.checked; b.checked = true; b.dispatchEvent(new Event('change')); const on = document.body.classList.contains('noFlash'); b.checked = false; b.dispatchEvent(new Event('change')); const off = !document.body.classList.contains('noFlash'); b.checked = was; b.dispatchEvent(new Event('change')); return { on, off }; });
+// Assert
+ok(nf.on && nf.off, 'the no-flash setting toggles body.noFlash ' + JSON.stringify(nf));
 ok(errs.length === errs2, 'the returning player pass runs without page errors ' + errs.slice(errs2).join(' | '));
 
 
@@ -274,9 +281,10 @@ const openPaused = () => p3.evaluate(() => { const m = JSON.parse(localStorage.g
 // Assert
 ok(await openPaused() === true, 'hiding the tab on a deal saves the open swim as paused');
 await setHidden(false);
-ok(await openPaused() === false, 'coming back to the tab clears the paused mark');
+ok(await openPaused() === true, 'coming back to the tab keeps the paused mark while the deal is still up');
 await p3.waitForTimeout(900);
 await p3.tap('#cardRow .card'); await p3.waitForTimeout(500);
+ok(await openPaused() === false, 'picking a card clears the paused mark');
 // Arrange: count every time the dash input goes on
 const cdp3 = await ctx3.newCDPSession(p3);
 const tp3 = (type, pts) => cdp3.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
