@@ -72,6 +72,21 @@ const after = await page.evaluate(() => game.race.p.x);
 await touch('touchEnd', 120, 600);
 ok(after < before - 15, `dragging left steers left (${before.toFixed(0)} -> ${after.toFixed(0)})`);
 ok(await page.evaluate(() => game.race.rank < 1000000), 'you are already overtaking');
+// a tight rank row (a 7-digit rank plus a long +places tick): the tick never covers the swimmers-alive line or the distance
+{ // arrange: the long rank and tick the 8_perk_pop shot showed, the row marked tight the way rankTight() does
+  const hit = await page.evaluate(() => {
+    const $ = (id) => document.getElementById(id), rr = $('rankRow'), tk = $('rankTick'), rk = $('rank');
+    const keep = [rk.textContent, tk.textContent, tk.className, rr.className];
+    rk.textContent = '#989,241'; tk.textContent = '+16.8k'; tk.classList.add('on'); rr.classList.add('tight');
+    // act: measure in the same task, before the HUD writes again
+    const a = tk.getBoundingClientRect(), al = $('alive').getBoundingClientRect(), ds = $('dist').getBoundingClientRect();
+    const meet = (b) => b.width > 0 && b.height > 0 && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    rk.textContent = keep[0]; tk.textContent = keep[1]; tk.className = keep[2]; rr.className = keep[3];
+    return { alive: meet(al), dist: meet(ds), h: a.height };
+  });
+  // assert
+  ok(hit.h > 0 && !hit.alive && !hit.dist, 'a tight rank row keeps the +places tick off the swimmers-alive line and the distance (' + JSON.stringify(hit) + ')');
+}
 
 // swim 1 never teaches cashing in: a watcher records every class #tut gets from here on
 await page.evaluate(() => { window.__tutCls = []; new MutationObserver(() => window.__tutCls.push(document.getElementById('tut').className)).observe(document.getElementById('tut'), { attributes: true, attributeFilter: ['class'] }); });
