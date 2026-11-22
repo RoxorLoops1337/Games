@@ -81,7 +81,8 @@ const CARD_FAMILIES = { turbo: ['turbo'], combo: ['memory', 'hype'], tank: ['tan
 const SWEEPS = {
   // a fresh save played by a taps/s bot that buys the cheapest habit it can after every run; the first race's 'over' is kept
   // (human: the thumb bot, Race opts.human: a re-plan every 0.18 s, 280 px of sight, aim noise, a dash every 2 s at most)
-  career(seed, n, tap, stopAtWin = false, human = false) {
+  // (afterWin: stop that many runs after the first win; the first-win bands only read up to there)
+  career(seed, n, tap, stopAtWin = false, human = false, afterWin = null) {
     const m = newMeta(), runs = [];
     for (let run = 1; run <= n; run++) {
       const kinds = {}, tricks = {}; let maxStyle = 0, minE = Infinity, z0peak = 0, z0mile = 0, tot = null, feat = false;
@@ -97,6 +98,7 @@ const SWEEPS = {
         gap: r.over.gapSec, rookie: r.rookie > 0, t: r.t,
         buys: greedyBuy(m), open: HABIT_ORDER.filter((id) => lv(m, id) < maxLv(m, id)).length, over: run === 1 ? r.over : null, gl: grandadShare(m) });
       if (stopAtWin && r.won) break;
+      if (afterWin != null) { const w = runs.findIndex((x) => x.won); if (w >= 0 && runs.length - 1 - w >= afterWin) break; }
     }
     return runs;
   },
@@ -268,11 +270,16 @@ const SW = {
   // (45 runs: the career difficulty check needs gens 10-14; 24 careers, was 8: on 8 one reshuffle of the tubes moved the
   // career bands 5-10 points (a 12-career sample swung runs 15-25 from 30% to 36% on two seed sets of the same code))
   careers4: Promise.all(Array.from({ length: 24 }, (_, i) => sweep('career', 1 + i, 45, 4))),
+  // (the first-win band's extra careers: 40 fresh saves (seeds 501-520 at 4 taps/s, 601-620 at 6) played to 3 runs past
+  // the first win, at most 20 runs; with the other careers and the thumbs about 88 first wins (a rookie run costs about
+  // 0.85 s, so 96 more saves put the suite past 9 minutes))
+  firstWins: Promise.all([[501, 4], [601, 6]].flatMap(([s0, tap]) => Array.from({ length: 20 }, (_, i) => sweep('career', s0 + i, 20, tap, false, false, 3)))),
   dry: sweep('autoReasons', [301, 302, 303, 304, 305, 306]),
   autoTier: sweep('autoReasons', [3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008]),
   firstDuel: Promise.all([0, 6].map((o) => sweep('firstDuel', Array.from({ length: 6 }, (_, i) => 101 + o + i)))).then((h) => h.flat()),
   firsts: Promise.all([0, 22].map((o) => sweep('firsts', Array.from({ length: 22 }, (_, i) => 5 + o + i)))).then((h) => h.flat()),
   midMeta: Promise.all([0, 12].map((o) => sweep('midMeta', Array.from({ length: 12 }, (_, i) => 3001 + o + i)))).then((h) => h.flat()),
+  midMeta2: Promise.all([24, 36].map((o) => sweep('midMeta', Array.from({ length: 12 }, (_, i) => 3001 + o + i)))).then((h) => h.flat()),   // (seeds 3025-3048: the late-loss band's second half)
   gen0: parts('maxed', 0, 500, 48),
   gen0b: parts('maxed', 0, 548, 48),   // (seeds 549-596: the GOD MODE band's second half)
   gen30: parts('maxed', 30, 600, 16, 2),
@@ -282,7 +289,8 @@ const SW = {
   families: Promise.all(['random', ...Object.keys(CARD_FAMILIES)].map((f) => Promise.all([1, 25, 49, 73].map((s0) => sweep('maxed', 4, DANGER_BASE + 37 * 4, s0, 24, f))).then((h) => ({ f, runs: h.flat() })))),
   finales: Promise.all([[1, 30], [31, 60]].map(([a, b]) => sweep('finales', a, b, 12))),
   // (120 saves, was 40: the rarest mashup's share swung 7-9% between 40-save samples)
-  mashups: Promise.all([0, 40, 80].map((o) => sweep('mashups', Array.from({ length: 40 }, (_, i) => 1 + o + i)))).then((h) => h.flat()),
+  // (systems round 7: 360 saves, was 120: the 4+ band sat on its 35% edge; three times the sample at the same bound)
+  mashups: Promise.all([0, 120, 240].map((o) => sweep('mashups', Array.from({ length: 120 }, (_, i) => 1 + o + i)))).then((h) => h.flat()),
   // finger speed: seeds 201-204 played for 25 runs at 3, 5 and 8 taps/s (the duel is won by the race, not the finger)
   taps: Promise.all([3, 5, 8].map((tap) => Promise.all([201, 202, 203, 204].map((seed) => sweep('career', seed, 25, tap))))),
   // hazard fairness: the Big Macro death rate in the Rapids and the Great Womb Sea at hazard step 6 (40 seeds each)
@@ -1853,9 +1861,10 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
 }
 { // mid-meta (every habit at half): a 'late' loss almost always happens at the egg itself
   let late = 0, pre = 0, wins = 0;
-  for (const r of await SW.midMeta) { if (r.won) wins++; if (r.reason === 'late') { late++; if (r.zone < EGG_I) pre++; } }
-  // (the table: at least 1 late loss for half-habit bots at gen 0, GOD MODE is no free pass through the egg)
-  ok(late > 0 && pre <= 0.15 * late, "fewer than 15% of mid-meta 'late' losses happen before THE EGG (" + pre + '/' + late + ', ' + wins + ' wins)');
+  // (systems round 7: 48 runs, was 24, and 2+ late losses, was 1+: the same rate of 1 in 24 on twice the sample)
+  for (const r of (await SW.midMeta).concat(await SW.midMeta2)) { if (r.won) wins++; if (r.reason === 'late') { late++; if (r.zone < EGG_I) pre++; } }
+  // (the table: at least 1 late loss in 24 for half-habit bots at gen 0, GOD MODE is no free pass through the egg)
+  ok(late >= 2 && pre <= 0.15 * late, "fewer than 15% of mid-meta 'late' losses happen before THE EGG, 2+ of them in 48 runs (" + pre + '/' + late + ', ' + wins + ' wins)');
 }
 
 // ================================================================ round: the combo economy
@@ -3799,7 +3808,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(CORE.duelHead(1.5) === 1.5 && CORE.duelHead(2.0) === 2.0 && Math.abs(CORE.duelHead(2.6) - 2.3) < 1e-9 && Math.abs(CORE.duelHead(3.0) - 2.5) < 1e-9 && Math.abs(CORE.duelHead(3.5) - 3.25) < 1e-9 && Math.abs(CORE.duelHead(9) - 3.4) < 1e-9 && CORE.DRILL_HEAD_MAX === 3.4, 'duelHead: 1.5 -> 1.5, 2.6 -> 2.3, 3.0 -> 2.5, 3.5 -> 3.25, 3.6+ -> 3.4 (DRILL_HEAD_MAX)');
   // before the first baby the duel takes at most HEAD_CAP_GEN0 (never in the daily); a gen 1 save gets the full cap
   const cap0 = quiet(); atEgg(cap0, 0); cap0.p.e = 100; cap0.p.maxE = 100; cap0.p.bestTier = 5; cap0.p.bestCombo = 100; cap0.startDrill();
-  ok(CORE.HEAD_CAP_GEN0 === 2.56 && Math.abs(cap0.drill.me - 2.56) < 1e-9 && Math.abs(gen1Cap() - CORE.DRILL_HEAD_MAX) < 1e-9 && CORE.headCapOf(veteran(), 5) === CORE.DRILL_HEAD_MAX, 'a gen 0 duel takes at most 2.56 of the head start, a gen 1 save and the daily 3.4 (' + cap0.drill.me + ')');
+  ok(CORE.HEAD_CAP_GEN0 === 2.56 && CORE.HEAD_CAP_THIN === 0.6 && Math.abs(cap0.drill.me - (2.56 - 0.6)) < 1e-9 && Math.abs(CORE.headCapGen0(maxed(0)) - 2.56) < 1e-9 && Math.abs(gen1Cap() - CORE.DRILL_HEAD_MAX) < 1e-9 && CORE.headCapOf(veteran(), 5) === CORE.DRILL_HEAD_MAX, 'a gen 0 duel takes at most 2.56 of the head start less 0.6 for the habits not bought (no habits: ' + cap0.drill.me.toFixed(2) + '), a gen 1 save and the daily 3.4');
   const big = quiet(); big.headCap = gen1Cap(); atEgg(big, 0); big.p.e = 150; big.p.maxE = 150; big.p.bestTier = 5; big.p.bestCombo = 100; big.p.bossPasses = 2; big.startDrill();
   const bh = big.events.find((e) => e.type === 'headBonus');
   const bigT = 0.45 + 5 * CORE.HEAD_TIER + 100 * CORE.HEAD_COMBO + 0.6;
@@ -4182,6 +4191,18 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(CORE.DAD_PICKS.win.join() === 'meditate,hottub,broccoli,beatbox' && !Object.values(CORE.DAD_PICKS).some((a) => a.includes('gps')), "Dad's pick after a win: meditate, hot tub, broccoli, beatbox; never the sat-nav");
   ok(CORE.COMPLETER_W === 1.25 && CORE.COMPLETER_FORCE === 0.25 && HABITS.factory.grow === 1.3 && CORE.factoryRateAt(1, 0) === 50, 'completers x1.25 (forced 25%), the factory x1.3 a level and +10 DNA an hour a level');
 }
+{ // a run that already made MASHUP_LEAN_MAX mashups gets no more lean: its completers are dealt like any card
+  // arrange: a save past its first mashup holding Battering Ram (half of Bulldozer), with 0 or 3 mashups already made this run
+  const dealt = (made) => { let n = 0; for (let s = 1; s <= 400; s++) {
+    const m = veteran(); m.synergiesSeen = ['jackpot']; const r = new Race(m, mulberry(s), { events: false }); give(r, 'ram');
+    for (let k = 0; k < made; k++) r.syn['x' + k] = true;
+    // act
+    r.zoneReached = 1; r.cleared = 1; r.p.y = ZSTART[1] + 10; r.draft(false); if (r.pending && r.pending.includes('rush')) n++; }
+    return n; };
+  const lean = dealt(0), none = dealt(CORE.MASHUP_LEAN_MAX);
+  // assert
+  ok(CORE.MASHUP_LEAN_MAX === 3 && lean > none * 1.3, 'Bulldozer\'s other half is dealt on ' + lean + ' of 400 deals, ' + none + ' after 3 mashups in the run');
+}
 { // 6b: goals: a GAS death at 99% wants the egg won (or the rival beaten), never a combo; every bounty pays 20%+ of the run; combo goals ask for a real chain
   // arrange: Kevin runs dry at 99% of the race with nobody ahead, then with Tiffany ahead
   const dry = (withRival) => { const m = veteran(); const r = new Race(m, mulberry(91), { events: false }); r.agents.forEach((a) => { a.alive = false; }); r.ents = []; r.genY = 1e9;
@@ -4348,11 +4369,13 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
 { // the first win is no cliff: the 3 runs after a first win win within 15 points of the 3 runs ending with it
   // ((the 3 runs before a first win are losses by definition, so the window that ends with the win is the one compared)
   // arrange: every career sweep
-  const taps = (await SW.taps).flat(), cs = careers4.concat(careers, taps); let inc = 0, incn = 0, aft = 0, aftn = 0;
+  // (systems round 7: plus the thumbs and SW.firstWins, 40 careers to 3 runs past the first win: on the 40 careers before
+  // the two rates were good to about 4.5 points, now about 3; the bound is the same)
+  const taps = (await SW.taps).flat(), cs = careers4.concat(careers, taps, await SW.thumbs, await SW.firstWins); let inc = 0, incn = 0, aft = 0, aftn = 0;
   // act
   for (const c of cs) { const w = c.findIndex((x) => x.won); if (w < 0) continue; for (let i = Math.max(0, w - 2); i <= w; i++) { inc += c[i].won; incn++; } for (let i = w + 1; i <= w + 3 && i < c.length; i++) { aft += c[i].won; aftn++; } }
   // assert
-  ok(aftn >= 40 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points)');
+  ok(aftn >= 240 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points, ' + aftn + ' runs after)');
 }
 { // the softer first win: the training ramp, the fruit floor, the fresh-generation drill, the LAST GASP fade
   ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.580,0.700,0.825,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.58 / 0.70 / 0.825 / 0.95 at gens 1-4, fruitFloor(1) = 1');

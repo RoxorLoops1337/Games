@@ -295,7 +295,10 @@ export const CAP_TANK_AT = 0.5, CAP_TANK_SP = 0.05, CAP_RING_R = 120, CAP_DRAFT_
 // and a book in 35: the half you held felt like a broken promise)
 // (COMPLETER_LEG_W: a legendary completer leans in x3 more: Domino Effect needs two legendaries and a greedy picker made it on
 // 8% of 120 saves' runs against the 9%+ band; x3 puts it at 12%)
-export const COMPLETER_W = 1.25, COMPLETER_FORCE = 0.25, COMPLETER_LEG_W = 3;
+// (systems round 7: MASHUP_LEAN_MAX: once a run has made 3 mashups its completers lose the lean (dealt like any card, never
+// forced). With the four double-edged mashups a greedy picker made 4+ in 35.0% of 9130 runs against the 35% band; this puts
+// it at about 20% (2.99 a run, every mashup 6%+) and leaves the career bots, who rarely make 3, nearly as they were)
+export const COMPLETER_W = 1.25, COMPLETER_FORCE = 0.25, COMPLETER_LEG_W = 3, MASHUP_LEAN_MAX = 3;
 export const LINK_DNA = 0.025;      // DNA per combo link, times the chain multiplier
 
 // Random mid-race events. Each run schedules a few, placed by the layout seed, in zones that suit them.
@@ -833,8 +836,13 @@ export const HEAD_RAMP_FROM = 4, HEAD_RAMP_RUNS = 7;
 // before the first baby the duel takes at most HEAD_CAP_GEN0 (64% of the gen 0 drill): a gen 0 duel is always a fight,
 // so a half-habit save that never won is no sure thing at the egg (with the full 3.4 it won all 24 bot runs), and a
 // maxed gen 0 save still wins 85%+ (2.6 put it at 40 of 48, 2.48 at 38)
-export const HEAD_CAP_GEN0 = 2.56;
-export const headCapOf = (meta, daily) => (daily != null ? DRILL_HEAD_MAX : Math.min(Math.floor((meta && meta.gen) || 0) >= 1 ? DRILL_HEAD_MAX : HEAD_CAP_GEN0, lerp(DRILL_HEAD_ROOKIE, DRILL_HEAD_MAX, clamp((normRunsOf(meta) - HEAD_RAMP_FROM) / HEAD_RAMP_RUNS, 0, 1))));
+// (systems round 7: HEAD_CAP_THIN: the gen 0 cap is HEAD_CAP_THIN lower for each share of the habits a save has not bought
+// (habitShare): a half-habit save that never had a baby duels from about 2.26 and lost at the egg on 5 of 48 bot runs (1
+// before, against the 1-in-24 band), a maxed gen 0 save keeps the full 2.56 (43 of 48 won either way). The rookie runs sit
+// under it anyway (the head ramp))
+export const HEAD_CAP_GEN0 = 2.56, HEAD_CAP_THIN = 0.6;
+export const headCapGen0 = (meta) => HEAD_CAP_GEN0 - HEAD_CAP_THIN * (1 - habitShare(meta));
+export const headCapOf = (meta, daily) => (daily != null ? DRILL_HEAD_MAX : Math.min(Math.floor((meta && meta.gen) || 0) >= 1 ? DRILL_HEAD_MAX : headCapGen0(meta), lerp(DRILL_HEAD_ROOKIE, DRILL_HEAD_MAX, clamp((normRunsOf(meta) - HEAD_RAMP_FROM) / HEAD_RAMP_RUNS, 0, 1))));
 // Kevin's own drill grows PLAYER_NEED_GEN a generation (to gen 8); the rivals' training carries the rest of the climb
 // (0.09, was 0.06: the duel the combo top end feeds (GOD MODE was at 8 then) needs a little more drilling to stay a duel)
 export const PLAYER_NEED_GEN = 0.15;
@@ -1849,7 +1857,9 @@ export class Race {
     const late = (id) => (id === 'antacid' && this.zoneReached > ACID_I && !comp.has(id) ? 0.25 : 1);
     // the first mashup is a sure thing: until a save has seen any synergy, a completer is always dealt (and leans in x6)
     const hook = this.daily == null && !((this.meta.synergiesSeen || []).length);
-    const wOf = (id) => RW[MUTATIONS[id].r - 1] * (comp.has(id) ? (hook ? 6 : COMPLETER_W * (MUTATIONS[id].r === 3 ? COMPLETER_LEG_W : 1)) : 1) * late(id) * (EDGE_CARDS.includes(id) && !comp.has(id) ? EDGE_W : 1);
+    // (a run that already made MASHUP_LEAN_MAX mashups gets no more lean: its completers are dealt like any card, never forced)
+    const lean = hook || Object.keys(this.syn).length < MASHUP_LEAN_MAX;
+    const wOf = (id) => RW[MUTATIONS[id].r - 1] * (comp.has(id) && lean ? (hook ? 6 : COMPLETER_W * (MUTATIONS[id].r === 3 ? COMPLETER_LEG_W : 1)) : 1) * late(id) * (EDGE_CARDS.includes(id) && !comp.has(id) ? EDGE_W : 1);
     const take = (cands) => {
       const ws = cands.map(wOf); let r = rng() * ws.reduce((a, b) => a + b, 0), k = 0;
       while (k < ws.length - 1 && r > ws[k]) { r -= ws[k]; k++; }
@@ -1864,7 +1874,7 @@ export class Race {
     const legs = pool.filter((id) => MUTATIONS[id].r === 3);
     if (this.noLeg >= 3 && legs.length) add(take(legs));        // pity
     const forced = pool.filter((id) => comp.has(id));
-    if (forced.length && rng() < (hook ? 1 : COMPLETER_FORCE)) add(take(forced));
+    if (forced.length && rng() < (hook ? 1 : lean ? COMPLETER_FORCE : 0)) add(take(forced));
     while (picks.length < size && pool.length) add(take(pool));
     if (d >= 3 && picks.length && !picks.some((id) => MUTATIONS[id].r >= 2)) {   // a rare or better is guaranteed from draft 3
       // (a plain rare when there is one: the guarantee is a treat, not a catch)
