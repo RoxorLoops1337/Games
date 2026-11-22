@@ -88,6 +88,11 @@ body.noTick #rankTick{visibility:hidden}
 @keyframes mutin{0%{transform:scale(2.6) translateY(30px);opacity:0}}
 #shields{flex:none;font-size:12px;font-weight:800;line-height:1;white-space:nowrap;color:#fff;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,215,92,.5);border-radius:8px;padding:2px 5px 1px}
 #shields.flash{animation:shflash .5s ease-out}
+#shields .heart{font-style:normal;position:relative;display:inline-flex;align-items:center;gap:3px}
+#shields .heart.broke{opacity:.9}
+#shields .heart.broke::after{content:"";position:absolute;left:3px;top:1px;width:2px;height:10px;background:var(--ink,#14020f);transform:rotate(18deg)}
+#shields .heart em{font-style:normal;font-size:9px;letter-spacing:.04em;color:#ffb3c2;filter:none}
+#spareTick{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink,#14020f);pointer-events:none;z-index:1}
 #shields.lost{animation:shlost .4s ease-out}
 @keyframes shflash{0%{transform:scale(1.5);box-shadow:0 0 12px var(--gold);border-color:var(--gold)}}
 @keyframes shlost{0%,100%{transform:none}25%{transform:translateX(-3px);border-color:#ff3d6e}75%{transform:translateX(3px)}}
@@ -103,6 +108,10 @@ body.noTick #rankTick{visibility:hidden}
 /* coach strip: one small line under the HUD */
 #coach{position:absolute;left:50%;top:calc(var(--hudB) + 4px);z-index:1;transform:translate(-50%,-6px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-size:13px;font-weight:700;line-height:1.2;color:var(--cream);background:rgba(20,2,18,.72);border:1.5px solid rgba(255,215,92,.35);border-radius:12px;padding:4px 10px;pointer-events:none;opacity:0;transition:opacity .3s,transform .3s}
 #coach.on{opacity:1;transform:translate(-50%,0)}
+/* a hazard or a pickup is drawn in the coach band (main.js reads R.coachBandHit): the strip fades back and steps up */
+body.coachDim #coach.on{opacity:.6;background:rgba(20,2,18,.92);transform:translate(-50%,-8px);transition:opacity .15s,transform .15s,background .15s}
+body.reduced.coachDim #coach.on{opacity:1;background:rgba(20,2,18,.72)}
+@media (max-height:700px){body.bnr #coach{visibility:hidden}}
 /* combo strip: one row above the DASH button row */
 #combo{position:absolute;left:0;right:0;bottom:calc(var(--safeB) + 104px);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
 #combo .in{display:inline-flex;align-items:baseline;gap:8px;padding:2px 14px;border-radius:20px;background:rgba(20,2,18,.72);transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
@@ -140,6 +149,16 @@ body.reduced #combo .gap.near{text-decoration:underline 2px}
 #combo .links i{font-style:normal;background:rgba(20,2,18,.7);border-radius:6px;padding:1px 4px 0}
 #combo .links b{margin:0 2px;color:var(--cream);opacity:.7}
 #combo .links.fade{opacity:.35}
+#combo .links i.ghost.same{color:#9a8a96!important;border-color:#9a8a96;animation:none}
+#combo .links em.nw1{display:inline-block;margin-left:4px;font-style:normal;font-size:10px;letter-spacing:.06em;color:#3a2000;background:var(--mint);border-radius:5px;padding:1px 4px 0}
+#combo .stk{position:relative;display:inline-flex;align-items:center;gap:4px;flex:none;padding:1px 5px 4px;border-radius:7px;background:rgba(20,2,18,.7);border:1.5px solid rgba(255,139,224,.6);font-size:11px;font-weight:800;line-height:1;letter-spacing:.04em;color:#ff8be0;white-space:nowrap;text-shadow:0 1px 0 var(--ink)}
+#combo .stk .sp{display:inline-flex;gap:2px}
+#combo .stk .sp i{width:6px;height:6px;border-radius:50%;border:1.5px solid currentColor}
+#combo .stk .sp i.on{background:currentColor}
+#combo .stk u{position:absolute;left:4px;right:4px;bottom:1px;height:2px;border-radius:1px;background:rgba(255,255,255,.18);overflow:hidden;text-decoration:none}
+#combo .stk s{display:block;height:100%;width:100%;background:currentColor;transform-origin:0 50%;text-decoration:none}
+#combo .stk.red{color:#ff3d6e;border-color:#ff3d6e}
+body.hud1 #combo .stk{display:none!important}
 #combo .tag{font-size:12px;font-weight:800;background:var(--mint);color:#05301a;border-radius:8px;padding:1px 6px;opacity:0;transform:scale(.5);transition:opacity .2s,transform .25s cubic-bezier(.2,1.8,.4,1)}
 #combo .tag.on{opacity:1;transform:none}
 /* three rows: the count and its word; the timer bar with the STYLE notches; ONE slot (CASH > gap > chips > pot) */
@@ -322,7 +341,26 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
 #drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
 /* the head start's ledger: one line under the timer, a term at a time (main.js headLedger) */
-#drillUI .hl{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mint);line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 var(--ink)}
+#drillUI .hl{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mint);line-height:1.2;margin-top:2px;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 var(--ink)}
+/* the header on its own line, the parts on a second one that wraps (3+ parts never truncate) */
+#drillUI .hl .hh{display:block;font-weight:800;white-space:nowrap}
+#drillUI .hl .hp{display:block;font-size:11px;letter-spacing:.02em;color:var(--cream);white-space:normal;overflow-wrap:anywhere}
+/* the tap phase: the countdown (or the tell / claim / how-to that takes its line) and the two bars, 64 CSS px at most.
+   The ledger folds into the YOU bar's chip; the counter pips and ticks hang just under the panel */
+#drillUI .row .hchip{flex:none;font-style:normal;font-size:11px;line-height:12px;font-weight:800;color:var(--gold);background:rgba(255,215,92,.18);border-radius:6px;padding:0 4px;white-space:nowrap}
+#drillUI.tap{padding:3px 10px 3px;max-height:64px}
+#drillUI.tap .t{font-size:20px;line-height:24px;height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drillUI.tap .t.teach,#drillUI.tap .t.claimHd{font-size:16px}
+#drillUI.tap .cd{height:24px;line-height:24px;white-space:nowrap;overflow:hidden}
+#drillUI.tap .cd small{display:inline-block;margin:0 6px 0 0;vertical-align:middle}
+#drillUI.tap .cd b{font-size:22px;line-height:24px;vertical-align:middle}
+#drillUI.tap .row{margin-top:1px;font-size:11px;line-height:12px;height:14px}
+#drillUI.tap .row .bb{height:8px}
+#drillUI.tap .hl,#drillUI.tap .ep,#drillUI.tap .rate{display:none!important}
+/* the duel panel is two rows: the break timer, then the YOU and RIVAL bars (the head start ledger is on the result card) */
+#drillUI .hl,#drillUI .ep{display:none!important}
+#resDuel small.hd{display:block;font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--mint);margin-top:2px}
+#drillUI.tap .cpips,#drillUI.tap .ctk{position:absolute;left:0;right:0;top:calc(100% + 4px);margin:0}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
 #drillUI .row b{flex:none;width:78px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:clip}
 /* a long rival name drops a size instead of an ellipsis (main.js sets .long past 7 characters) */
@@ -430,6 +468,9 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 /* result */
 #resTitle{font-size:clamp(24px,8.5vw,36px);white-space:nowrap;max-width:100%;box-sizing:border-box;padding:0 8px;font-weight:800;text-align:center;line-height:1;color:#fff;text-shadow:0 4px 0 var(--ink)}
 #resWhy,#resRankLine,#resTip,#resNext,#resGloat,#resSyn,#resEgg span{text-wrap:balance}
+#resKevin{text-align:center;color:var(--dim);font-size:13px;font-style:italic;font-weight:700;margin:2px auto 0;max-width:320px;line-height:1.2}
+#result.tight #resKevin,#result.first #resKevin{display:none}
+@media (max-height:640px){#resKevin{display:none}}
 #resWhy{text-align:center;color:var(--cream);font-size:16px;font-weight:700;margin:4px auto 0;max-width:340px;line-height:1.2}
 #resRankLine{text-align:center;color:var(--dim);font-size:13px;font-weight:600;margin:2px auto 4px;max-width:330px;line-height:1.2}
 #resRankLbl{text-align:center;font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:800}
@@ -1493,12 +1534,12 @@ body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:
       <div id="dist"><b id="cm">13.4 cm</b><span id="toEgg">to the egg 🥚</span><div id="zoneName">The Launch Tube</div><div id="goalPill" class="hide"></div></div>
     </div>
     <div id="prog"><div id="progFill"></div><div id="me"></div><div id="egg">🥚</div></div>
-    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="dnaHud" class="hide">🧬 0</span><span id="pace" class="hide"></span><span id="gasChip" class="hide"></span></div>
+    <div id="energyRow"><span class="gas">GAS</span><div id="ebar"><div id="efill"></div><i id="spareTick" class="hide" aria-hidden="true"></i><span id="elow" class="hide">LOW!</span></div><span id="shields" class="hide"></span><span id="dnaHud" class="hide">🧬 0</span><span id="pace" class="hide"></span><span id="gasChip" class="hide"></span></div>
     <div id="headRow" class="hide"><span class="hl">EGG HEAD START</span><b>+0.0s</b><div class="hb"><i></i></div></div>
     <div id="mutRow"></div>
   </div>
   <div id="coach"></div>
-  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo"><b class="cv">CASH</b><i class="mt"></i></button></div><div class="call" aria-live="polite"></div></div>
+  <div id="combo"><div class="in"><span class="n">0</span><span class="w"></span><span class="ft"></span><span class="tag"></span></div><div class="barW"><div class="bar"><i></i></div><div class="pips"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="potRow"><span class="pot hide"></span><span class="gap hide"></span><span class="links hide"></span><span class="stk hide" aria-hidden="true"></span><button id="cashBtn" class="hide" aria-label="Cash in the combo"><b class="cv">CASH</b><i class="mt"></i></button></div><div class="call" aria-live="polite"></div></div>
   <div id="tutTarget" class="hide"><i class="trail"></i><i class="link"></i></div>
   <div id="tut"><div class="ic"></div><div class="tt"></div><div class="ts"></div><div class="dots"></div><div class="bar"><i></i></div></div>
   <div id="banner"><div class="bk"><div class="z"></div><div class="t"></div><div class="c"></div></div></div>
@@ -1507,8 +1548,8 @@ body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:
     <div class="t">TAP TAP TAP!</div>
     <div class="cpips hide" aria-hidden="true"></div>
     <div class="cd"></div>
-    <div class="hl hide" aria-live="off"></div>
-    <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div></div>
+    <div class="hl hide" aria-live="off"><b class="hh"></b><span class="hp hide"></span></div>
+    <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div><em class="hchip hide"></em></div>
     <div class="row riv"><b>RIVAL</b><div class="bb"><i></i></div></div>
     <div class="ep"></div>
     <div class="rate hide"><i></i><span>MAX!</span></div>
@@ -1557,6 +1598,7 @@ body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:
     <div class="resL">
     <div id="resTitle"></div>
     <div id="resWhy"></div>
+    <div id="resKevin" class="hide"></div>
     <div id="resMargin" class="hide"></div>
     <div id="resRankLine"></div>
     <div id="resRankLbl">FINAL PLACE</div>
