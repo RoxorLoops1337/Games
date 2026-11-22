@@ -19,7 +19,7 @@ const TAU = Math.PI * 2;
 const fin = Number.isFinite, ok = (v, f) => (Number.isFinite(v) ? v : f);   // (the NaN firewall's helpers)
 const D0 = -0;
 const P_DOUBLES = ['x', 'y', 'vx', 'vy', 'e', 'maxE', 'dashT', 'dashCd', 'frenzyT', 'combo', 'comboT', 'comboMax', 'fzPen', 'fzPts', 'mult', 'bestCombo', 'bestComboLate', 'bank',
-  'draftT', 'passT', 'passX', 'draftHold', 'draft', 'stuck', 'inv', 'acid', 'heading', 'swatT', 'clutch', 'couchT', 'acidT', 'swatSafe', 'actT', 'trickMult', 'trickCap', 'magT', 'dashRefund', 'lastTrickT', 'fzCarry', 'leadSec', 'capDraftT', 'goo', 'swatSlow', 'swerveT', 'txT', 'arrD', 'fanT', 'hitT', 'clutchAt'];     // a double zero: a field that starts with it is stored as a double from birth (no shape changes later)
+  'draftT', 'passT', 'passX', 'draftHold', 'draft', 'stuck', 'inv', 'acid', 'heading', 'swatT', 'clutch', 'couchT', 'acidT', 'swatSafe', 'actT', 'trickMult', 'trickCap', 'magT', 'dashRefund', 'lastTrickT', 'fzCarry', 'leadSec', 'capDraftT', 'goo', 'swatSlow', 'swerveT', 'txT', 'arrD', 'fanT', 'hitT', 'clutchAt', 'lastCallT'];     // a double zero: a field that starts with it is stored as a double from birth (no shape changes later)
 
 // ------------------------------------------------------------------ feature gates
 // FEATURES: round-2 mechanics whose balance effect is held back (false) because the balance bands did not hold with them
@@ -53,7 +53,13 @@ const P_DOUBLES = ['x', 'y', 'vx', 'vy', 'e', 'maxE', 'dashT', 'dashCd', 'frenzy
 // 15-25 33%, the career head-start split 16 points, a 14-run losing streak); duelFloor (DUEL_MIN_T; only measured
 // in the first pass, all of round 8 on at once: the career duel 5.7 s, the split 16 points; not yet alone); novelty (see HZ_NEW)
 export const FEATURES = { overclockSplit: false, duelFight: false, doorHold: false, winGate: true, rescue: true, movers: false, medley: true, buzzer: true,
-  overclockBoost: true, bountyKeep: true, photoGrade: true, headGas: false, lateSprint: false, draftLink: false, tellPace: false, novelty: false, duelFloor: false };
+  overclockBoost: true, bountyKeep: true, photoGrade: true, headGas: false, lateSprint: false, draftLink: false, tellPace: false, novelty: false, duelFloor: false,
+  passEarly: false, nearGrade: false, switchUp: true };
+// SYSTEMS ROUND 9: movers tried again on top of the round's changes (with MOVER_EASY tells): runs 15-30 duels won 49% (50-65),
+// runs 15-25 won 34% (35-45), GOD MODE on 4 of 24 half-habit runs, DOMINO never fired: still off.
+// SYSTEMS ROUND 9 (over the half-habit seeds of the bands): held back: passEarly (the overtake halving from the 4th / quarter
+// from the 9th: DOMINO never fired on the 24 half-habit seeds) and nearGrade (the 24 px near-miss band graded 2 / 1 / 0.5:
+// half-habit tricks 8.3 a run against the 6-8 band, a run paid 10% more). SWITCH-UP and LAST CALL are in (no gate).
 
 // ------------------------------------------------------------------ combos, synergies, race events
 // DNA multiplier for the current combo chain: x1 at 0, +0.02 per link to x2 at combo 50, then +0.004 per link
@@ -127,7 +133,9 @@ export const bankGrade = (n) => { let g = 0; while (g < BANK_AT.length - 1 && n 
 // (systems round 4: BANK_SOFT 100 (40): a big bank pays on the n^1.4 curve to 100 links, then the straight line; banks
 // under 40 pay as before)
 // (systems round 8: BANK_K 0.049 (0.052): the medley, the overclock's DNA and the bigger head start paid 4% more a run)
-export const BANK_SOFT = 100, BANK_K = 0.049;
+// (systems round 9: BANK_K 0.027 (0.049): LAST CALL turns most x0.6 timeouts into finishers (x1.3-2); the half-habit bots'
+// bank pay nearly doubled at 0.049, a run paid 23% more)
+export const BANK_SOFT = 100, BANK_K = 0.027;
 export const BANK_AT_SOFT = BANK_K * Math.pow(BANK_SOFT, 1.4), BANK_SLOPE = 1.4 * BANK_K * Math.pow(BANK_SOFT, 0.4);
 export const bankBase = (n) => { n = Math.max(0, n || 0); return n <= BANK_SOFT ? BANK_K * Math.pow(n, 1.4) : BANK_AT_SOFT + BANK_SLOPE * (n - BANK_SOFT); };
 export const bankDna = (n, style, clutch = 0, trick = 0) => bankBase(n) * styleMult(style) * (1 + clamp(clutch || 0, 0, 0.5)) * (1 + clamp(trick || 0, 0, MEDLEY_MULT_CAP));
@@ -135,6 +143,16 @@ export const bankDna = (n, style, clutch = 0, trick = 0) => bankBase(n) * styleM
 // TIMEOUT_BANK (x1 with Echo Chamber or Elephant Brain), so cashing out on purpose is the far better play.
 export const finisherMult = (style) => (style >= 5 ? 2.0 : style >= 4 ? 1.7 : style >= 3 ? 1.45 : 1.3);
 export const TIMEOUT_BANK = 0.6;
+// LAST CALL (systems round 9): a chain whose timer runs out with a bank of LAST_CALL_BANK+ is not dropped at once. For
+// LAST_CALL_T s (p.lastCallT) no new link lands and comboT stays 0; a cash-in inside it is a CLUTCH CASH: the FINISHER at
+// finisherMult(style) (never the BUZZER_K) seeding the next chain with half the finisher seed, its comboBank carries
+// clutch: true. When it runs out the chain drops as ever (x TIMEOUT_BANK). Emits lastCall {bank, t} once. (comboBank's
+// clutch multiplier, the number, is clutchK on every comboBank: a clutch-cash bank says clutch: true instead)
+// (a clutch cash fans no FRENZY, carries no FRENZY progress and opens no trick: with them GOD MODE came on 5 of the 24
+// half-habit runs (15% at most); with GOD MODE at 17.5x (17) it is 3)
+export const LAST_CALL_T = 0.45, LAST_CALL_BANK = 20;
+// (the test bots react BOT_LAST_CALL_REACT s into the window: a phone thumb that sees the call)
+export const BOT_LAST_CALL_REACT = 0.25;
 export const FAN_EVERY = 4, FZ_CARRY_AT = 10;   // a finisher fans FRENZY at most once every FAN_EVERY s; a bank under FZ_CARRY_AT carries no FRENZY progress
 export const FINISHER_BLAST_AT = 18;      // a finisher on a bank this big also blasts (pops Big Macros, shoves rivals)
 export const finisherBlastR = (bank) => 120 + 2 * Math.min(Math.max(0, bank), 100);
@@ -146,9 +164,23 @@ export const BUZZER_AT = 0.25, BUZZER_K = 0.4, BUZZER_SEED = 16;
 export const sameRefill = (run) => (run >= 7 ? 0.4 : run >= 4 ? 0.65 : 1);
 // and for the nth overtake in a row of any kind (p.passRun; any other link resets it)
 export const passRefill = (run) => (run >= 10 ? 0.4 : run >= 6 ? 0.65 : 1);
-// an overtake link counts this much from the 6th overtake in a row (0.25 from the 12th), whatever the STYLE.
-// A slingshot always counts in full (there is one per dash or draft).
-export const passLinkK = (run, kind) => (kind === 'slingshot' ? 1 : run >= 12 ? 0.25 : run >= 6 ? 0.5 : 1);
+// an overtake link counts this much from the PASS_HALF_AT-th overtake in a row (0.25 from the PASS_QUARTER_AT-th), whatever
+// the STYLE. A slingshot always counts in full (there is one per dash or draft).
+// (systems round 9: 4th / 9th (6th / 12th): overtakes were 75-88% of the bots' links, the expressive moves drowned)
+// (FEATURES.passEarly; off: the 6th / 12th as before)
+export const PASS_HALF_AT = 4, PASS_QUARTER_AT = 9;
+export const passLinkK = (run, kind) => { const early = FEATURES.passEarly; return kind === 'slingshot' ? 1 : run >= (early ? PASS_QUARTER_AT : 12) ? 0.25 : run >= (early ? PASS_HALF_AT : 6) ? 0.5 : 1; };
+// SWITCH-UP: a close, dodge, pop or gate link landing after SWITCH_UP_AT+ overtakes in a row is +SWITCH_UP_LINKS link and
+// refills the combo timer to 100% (whatever sameRefill says); its combo event carries switchUp: true. Never in the Launch
+// Tube (zoneReached 0, the warm-up) and never on the first CALM_TIER_RUNS swims (calmTiers: with it swim 1 lit MEGA FRENZY at
+// a median 44.8 s, the band asks after 45)
+export const SWITCH_UP_KINDS = new Set(['close', 'dodge', 'pop', 'gate']), SWITCH_UP_AT = 3, SWITCH_UP_LINKS = 1;
+// the near-miss band of a puddle: NEAR_BAND px past its rim (was 18). Graded by the closest gap: NEAR_RAZOR px or less pays
+// 2 links (a RAZOR: combo.razor), NEAR_TIGHT or less 1, wider NEAR_WIDE_K (nearLinks; a miss with no known gap pays 1)
+// (FEATURES.nearGrade; off: an 18 px band (NEAR_BAND_OLD), every near miss 1 link)
+export const NEAR_BAND = 24, NEAR_BAND_OLD = 18, NEAR_RAZOR = 4, NEAR_TIGHT = 10, NEAR_WIDE_K = 0.5;
+export const nearBand = () => (FEATURES.nearGrade ? NEAR_BAND : NEAR_BAND_OLD);
+export const nearLinks = (gap) => (!FEATURES.nearGrade || gap == null || !Number.isFinite(gap) ? 1 : gap <= NEAR_RAZOR ? 2 : gap <= NEAR_TIGHT ? 1 : NEAR_WIDE_K);
 // the combo timer shrinks on a long chain (-0.4% a link past 20, to x0.6): a big chain is tense, not a cruise
 export const COMBO_HEAT_AT = 20, COMBO_HEAT = 0.004, COMBO_HEAT_MIN = 0.6;
 export const comboHeat = (n) => Math.max(COMBO_HEAT_MIN, 1 - COMBO_HEAT * Math.max(0, (n || 0) - COMBO_HEAT_AT));
@@ -255,7 +287,7 @@ export const FRENZY_TIERS = [
   { name: 'MEGA FRENZY!',  at: 2.5, speed: 0.36, desc: 'Pickups fly to you from twice as far.' },
   { name: 'ULTRA FRENZY!', at: 4, speed: 0.42, desc: 'Combos last 50% longer.' },
   { name: 'HYPER FRENZY!', at: 5.5, speed: 0.48, desc: 'Acid cannot touch you.' },
-  { name: 'GOD MODE!',     at: 17, speed: 0.55, desc: 'Nothing can hurt you and DNA blobs pay double.' },
+  { name: 'GOD MODE!',     at: 17.5, speed: 0.55, desc: 'Nothing can hurt you and DNA blobs pay double.' },
 ];
 
 // Two specific mutations owned together unlock a named synergy with an extra effect.
@@ -378,9 +410,24 @@ export function hashSeed(n) { let h = (n | 0) ^ 0x9E3779B9; h = Math.imul(h ^ (h
 export const splitSeed = (seed, tag) => { let h = 0x811C9DC5; const t = String(tag); for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193); return hashSeed(hashSeed(seed >>> 0) ^ h); };
 export const runSeedOf = (careerSeed, run) => splitSeed(hashSeed(Math.floor(+careerSeed || 0)) ^ Math.imul(Math.floor(+run || 0), 0x9E3779B1), 'run');
 // the daily layout's version: bumped whenever the same day lays out a different tube (2: the split run seeds, 3: new cards)
-export const DAILY_LAYOUT = 3;   // (3: the four double-edged rare cards join the deals)
-// the rule a daily runs under (an EVENT_ORDER id): the menu can show it before the race exists
-export const dailyRule = (day) => EVENT_ORDER[hashSeed(Math.floor(day)) % EVENT_ORDER.length];
+export const DAILY_LAYOUT = 4;   // (3: the four double-edged rare cards join the deals; 4: the daily rule never repeats the day before, the Rapids' hairs are spaced)
+// the rule a daily runs under (an EVENT_ORDER id): the menu can show it before the race exists.
+// It never repeats the day before: a hash pick equal to yesterday's rule (index i) takes EVENT_ORDER[(i + 1 + hashSeed(day ^
+// 0x5bd1) % 6) % 7] instead. Worked out forward from DAILY_RULE_BACK days back (a bounded loop, no recursion): a day whose
+// pick differs from both of yesterday's possible rules settles the chain, so the lookback only matters on a run of
+// DAILY_RULE_BACK unsettled days in a row (about 1 in 20000)
+export const DAILY_RULE_BACK = 8;
+const dailyPick = (d) => hashSeed(d) % EVENT_ORDER.length;
+export const dailyRule = (day) => {
+  const n = EVENT_ORDER.length, d1 = Math.floor(day);
+  let prev = dailyPick(d1 - DAILY_RULE_BACK);
+  for (let d = d1 - DAILY_RULE_BACK + 1; d <= d1; d++) {
+    let i = dailyPick(d);
+    if (i === prev) i = (prev + 1 + hashSeed(d ^ 0x5bd1) % (n - 1)) % n;
+    prev = i;
+  }
+  return EVENT_ORDER[prev];
+};
 
 // ------------------------------------------------------------------ track geometry
 export const ZSTART = []; { let s = 0; for (const z of ZONES) { ZSTART.push(s); s += z.len; } }
@@ -551,6 +598,13 @@ export const HZ_CAP = 14;
 // the 0.1 every zone's hairs grow: the swim takes a bigger share of a mid career's losses (GAS plus hazard endings
 // 15%+ of runs 15-30), the egg duel a smaller one
 export const WBC_HZ = 0.25, RAPIDS_CILIA_HZ = 0.08;
+// (systems round 9: the Rapids' hair roll is ONE hzMul with the two growths added, hzMul(hg, 0.1 + RAPIDS_CILIA_HZ); two
+// hzMuls multiplied counted HZ_LATE twice, x7.4 at step 13, and the hairs' clearance wiped out the Big Macros. A row rolls
+// a hair at most CILIA_ROW_MAX; no hair within CILIA_GAP of the last one on the same wall (the other wall is tried, then
+// none); a Big Macro keeps CILIA_WBC_CLEAR from a hair only when it sits inside the hair's reach + CILIA_WBC_REACH, the
+// hair's own near-miss band (at + 60 the Rapids' hairs, whose reach is most of the narrow tube, still left 0.5-0.6 Big
+// Macros per 1000 at gen 20; at + 24 about 0.7))
+export const CILIA_ROW_MAX = 0.35, CILIA_GAP = 260, CILIA_WBC_CLEAR = 160, CILIA_WBC_REACH = 24;
 // and WBC_HZ_LATE more a career hazard step past WBC_LATE_FROM (hzCareer: the normal runs played, not the generation),
 // so the mid career swim keeps its teeth while a fast winner's tube is no harder for it (runs 15-30 ended 13-16% before
 // THE EGG on the race-fed duel without it; the table asks 18%+). Never in the daily
@@ -632,6 +686,11 @@ export const DRIP_SHARE = 1 / 3, DRIP_EVERY = 1.8, DRIP_TELL = 0.5, DRIP_R = 24,
 // at DRIFT_SHARE0 of the Lagoon's puddles, up to DRIFT_SHARE by run DRIFT_FULL; drippers from run DRIP_FROM at DRIP_SHARE0
 // of the goo gates, up to DRIP_SHARE by run DRIP_FULL
 export const DRIFT_FROM = 2, DRIFT_FULL = 6, DRIFT_SHARE0 = 0.15, DRIP_FROM = 4, DRIP_FULL = 8, DRIP_SHARE0 = 0.2;
+// (systems round 9: the gentle intro, like LUNGE_EASY_CROUCH: on the first MOVER_EASY_RUNS normal runs of each mover type a
+// dripper's tell lasts MOVER_EASY_TELL s longer and a drifter sways on a MOVER_EASY_DRIFT x slower period)
+export const MOVER_EASY_RUNS = 2, MOVER_EASY_TELL = 0.12, MOVER_EASY_DRIFT = 1.25;
+export const dripTellOf = (meta) => DRIP_TELL + (normRunsOf(meta) < DRIP_FROM + MOVER_EASY_RUNS ? MOVER_EASY_TELL : 0);
+export const driftPeriodOf = (meta) => DRIFT_T * (normRunsOf(meta) < DRIFT_FROM + MOVER_EASY_RUNS ? MOVER_EASY_DRIFT : 1);
 const rampShare = (nr, from, full, a, b) => (nr < from ? 0 : lerp(a, b, clamp((nr - from) / (full - from), 0, 1)));
 export const driftShareOf = (meta) => rampShare(normRunsOf(meta), DRIFT_FROM, DRIFT_FULL, DRIFT_SHARE0, DRIFT_SHARE);
 export const dripShareOf = (meta) => rampShare(normRunsOf(meta), DRIP_FROM, DRIP_FULL, DRIP_SHARE0, DRIP_SHARE);
@@ -740,7 +799,9 @@ export const raceLossT = (meta, daily) => (daily == null ? 1 + RACE_LOSS_T * cla
 // that (meta.sinceWin; never in the daily, never at gen 0). Only after the first win of a streak: a second win in a
 // row (meta.lastWinStreak 2+) brings no cushion. The win still brings a faster field, just not a wall.
 // (systems round 8: 0.02 (0.04): the gen 1 training came down to 0.50, the first baby needs less cushion)
-export const FRESH_GEN = 0.02;
+// (systems round 9: 0.01 (0.02): generations came too cheaply; with LAST CALL and SWITCH-UP the 3 runs after a first win
+// won 49-50% against 34% for the 3 ending with it, over the 15-point band)
+export const FRESH_GEN = 0.01;
 export const freshGenT = (meta, daily) => { const n = Math.floor((meta && meta.sinceWin) ?? 99); return daily == null && meta && (meta.gen || 0) > 0 && n < 2 && !((meta.lastWinStreak || 0) >= 2) ? 1 + FRESH_GEN * (n ? 0.5 : 1) : 1; };
 export const freshGenActive = (meta) => freshGenT(meta, null) > 1;
 // the losing-streak cushion: from the PEP_FROM-th normal loss in a row (meta.sinceWin, counted only on normal runs; a
@@ -959,7 +1020,9 @@ export const HEAD_E_GAS = 0.3;   // (FEATURES.headGas: the tank term per 100 GAS
 // (systems round 3: HEAD_TIER 0.40 (0.38), HEAD_COMBO 0.016 (0.015): on 24 careers (was 8) the career duels of runs 15-30
 // were won 44% against the 50-65% band and runs 15-25 33%; the maxed saves sit at the duel cap, so this lifts the careers)
 // (systems round 8: HEAD_TIER 0.42 (0.40): with the swim's teeth back (WBC_HZ_LATE 0.8) runs 15-30 won 48-50% of their duels)
-export const HEAD_E = 0.45, HEAD_TIER = 0.42, HEAD_COMBO = 0.016, HEAD_COMBO_CAP = 100, HEAD_BOSS = 0.3, HEAD_BOSS_CAP = 0.6;
+// (systems round 9: HEAD_E 0.6 (0.45): with LAST CALL and SWITCH-UP in, the career head-start split fell to 25 points on
+// one tube set (bound 30); a full tank worth 0.6 at the egg measured 31. HEAD_HIT -0.24 and HEAD_E 0.75 measured 27-29)
+export const HEAD_E = 0.6, HEAD_TIER = 0.42, HEAD_COMBO = 0.016, HEAD_COMBO_CAP = 100, HEAD_BOSS = 0.3, HEAD_BOSS_CAP = 0.6;
 export const HEAD_HIT = -0.18, HEAD_HIT_CAP = -0.9, HEAD_LEAD = 0.15, HEAD_LEAD_CAP = 0.6;
 // the named rivals train too: they drill faster as your career goes on (the share of RIVAL_TRAIN_RUNS normal runs
 // played), x1.38 at gen 0, x1.58 / x1.70 / x1.93 at gens 1 / 2 / 4, x1.94 at gen 12 and x1.97 from gen 20 (RIVAL_TRAIN, straight lines
@@ -982,7 +1045,9 @@ export const habitShare = (meta) => { let n = 0, t = 0; for (const id of HABIT_O
 // (balance pass: gens 1 / 2 0.58 / 0.70 (0.53 / 0.64): the S-curve duel made the first babies' duels easier)
 // (systems round 3: gens 4 / 12 0.95 / 0.95 (0.93 / 0.94), with the bigger head start above)
 // (systems round 8: gen 1 0.50 (0.58): the run 4-6 cliff)
-export const RIVAL_TRAIN = [[0, 0.38], [1, 0.50], [2, 0.70], [4, 0.95], [12, 0.95], [20, 0.97]];
+// (systems round 9: gen 2 0.78 (0.70), and the share follows the generation too (rivalTrainShare): gen 1 to gen 4 came in
+// four straight wins at runs 6-9)
+export const RIVAL_TRAIN = [[0, 0.38], [1, 0.50], [2, 0.78], [4, 0.95], [12, 0.95], [20, 0.97]];
 export const rivalTrain = (gen) => {
   const g = Math.max(0, Math.floor(gen || 0)), T = RIVAL_TRAIN;
   for (let i = 1; i < T.length; i++) if (g <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (g - T[i - 1][0]) / (T[i][0] - T[i - 1][0]));
@@ -994,7 +1059,11 @@ export const RIVAL_TRAIN_RUNS = 14;
 // ((runs / RIVAL_TRAIN_RUNS) ^ RIVAL_TRAIN_POW: about 20% after the first run, 54% by run 5, 71% by run 8), so the early
 // generations are no cakewalk before a wall
 export const RIVAL_TRAIN_POW = 0.6;
-export const rivalTrainShare = (meta) => Math.pow(clamp(normRunsOf(meta) / RIVAL_TRAIN_RUNS, 0, 1), RIVAL_TRAIN_POW);
+// (systems round 9: and at least gen / RIVAL_TRAIN_GEN of it: a save that wins its generations fast meets rivals trained
+// for them, not for its few runs)
+export const RIVAL_TRAIN_GEN = 4;
+export const rivalTrainShare = (meta) => Math.max(Math.pow(clamp(normRunsOf(meta) / RIVAL_TRAIN_RUNS, 0, 1), RIVAL_TRAIN_POW),
+  Math.min(1, Math.max(0, Math.floor(ok(+(meta && meta.gen), 0))) / RIVAL_TRAIN_GEN));
 export const rivalDrillK = (meta) => 1 + rivalTrainShare(meta) * rivalTrain(meta && meta.gen);
 // the rivals' drill in a race: the training, eased by the fresh-generation cushion too (freshGenT: x1 / (1 + FRESH_GEN) on
 // the first run after a first win, half that on the second), so a first win is no cliff at the egg either
@@ -1507,7 +1576,7 @@ export class Race {
     this.movers = FEATURES.movers && opts.movers !== false && this.daily == null && normRunsOf(meta) > 0;   // the early-zone movers (DRIFT_*, DRIP_*; opts.movers false: none)
     // (FEATURES.novelty: the HZ_NEW step the save's normal runs reach, never in the daily or a rookie run; spawnAhead reads max(hzGen, it))
     this.novelty = FEATURES.novelty && this.daily == null && !(this.rookie > 0) ? noveltyStep(meta) : 0;
-    this.driftK = this.movers ? driftShareOf(meta) : 0; this.dripK = this.movers ? dripShareOf(meta) : 0;   // (their career ramp)
+    this.driftK = this.movers ? driftShareOf(meta) : 0; this.dripK = this.movers ? dripShareOf(meta) : 0; this.driftT = driftPeriodOf(meta); this.dripTellT = dripTellOf(meta);   // (their career ramp)
     this.rescue = rescueSteps(meta, this.daily); this.rescuePct = Math.round(100 * this.rescue / EARLY_N); this.rescueBites = this.rescue;
     this.hzGen = Math.max(0, this.hzGen - this.rescue); this.sugarGas += RESCUE_SUGAR * this.rescue;
     // the wall clock for the daily streak (opts.now in ms); a daily for another day than today counts at its noon
@@ -1543,11 +1612,11 @@ export class Race {
       D0, dashN: 0, draftN: 0, draftLinkN: -1, z0Key: '', draftT: D0, passSide: 0, passT: D0, passX: D0, slingOK: false, draftHold: D0, draft: D0, comeback: 0, side: 0, stuck: D0,
       inv: D0, acid: D0, wing: 0, second: 0, overtakes: 0, heading: D0, swatT: D0, swatDir: 0, current: 0, sameRun: 0, lastKind: '', clutch: D0, couchT: D0, acidT:
       D0, zoneBonks: 0, lastHit: '', frenzyTier: 0, swatSafe: D0, actT: D0, lastTx: null, lastOff: null, passRun: 0, seq: [], trickMult: D0, trickCap: D0, trickChain: {},
-      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0, fzCarry: D0, hits: 0, leadSec: D0, capDraftT: D0, whipN: -1, goo: D0, swatSlow: D0, oc: 0, swerveT: D0, txT: D0, arrD: D0, fanT: D0, hitT: D0, clutchAt: D0 };
+      freeSecond: 0, draftLock: null, magOff: null, magT: D0, mileI: 0, dashRefund: D0, trickStreak: 0, lastTrick: '', lastTrickT: D0, dashAt: D0, bossPasses: 0, fzCarry: D0, hits: 0, leadSec: D0, capDraftT: D0, whipN: -1, goo: D0, swatSlow: D0, oc: 0, swerveT: D0, txT: D0, arrD: D0, fanT: D0, hitT: D0, clutchAt: D0, lastCallT: D0 };
     p.x = VIEW_W / 2; p.y = startY; p.vx = 0; p.vy = 0; p.e = maxE; p.maxE = maxE; p.dashT = 0; p.dashCd = 0; p.frenzyT = 0; p.combo = 0; p.comboT = 0; p.comboMax
       = 2.2; p.fzPen = 0; p.fzPts = 0; p.mult = 1; p.bestCombo = 0; p.bestComboLate = 0; p.bank = 0; p.draftT = -9; p.passT = -9; p.passX = 0; p.draftHold = 0;
       p.draft = 0; p.stuck = 0; p.inv = 0; p.acid = 0; p.heading = 0; p.swatT = 0; p.clutch = 0; p.couchT = 0; p.acidT = -99; p.swatSafe = 0; p.actT = IDLE_T;
-      p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99; p.dashAt = -99; p.fzCarry = 0; p.leadSec = 0; p.capDraftT = 0; p.goo = 0; p.swatSlow = 0; p.swerveT = 0; p.txT = -99; p.arrD = 0; p.fanT = -99; p.hitT = -99; p.clutchAt = -99;
+      p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.magT = 0; p.dashRefund = 0; p.lastTrickT = -99; p.dashAt = -99; p.fzCarry = 0; p.leadSec = 0; p.capDraftT = 0; p.goo = 0; p.swatSlow = 0; p.swerveT = 0; p.txT = -99; p.arrD = 0; p.fanT = -99; p.hitT = -99; p.clutchAt = -99; p.lastCallT = 0;
     this.startY = startY; this.prevPY = startY;
     this.dnaRun = 0; this.dnaBank = 0; this.dnaBonus = 0; this.zoneReached = 0; this.cleared = 0; this.ciliaN = 0;
     this.ents = []; this.genY = Math.ceil((startY + 300) / 100) * 100;   // rows on a fixed 100 grid (same daily layout for everyone)
@@ -2091,6 +2160,11 @@ export class Race {
     if (seen[id]) return;
     seen[id] = 1; this.emit('hzNew', { id, x: e.x, y: e.y });
   }
+  // a Big Macro at (x, y) is too close to a wall hair on this side: within CILIA_WBC_CLEAR of its row and inside its reach
+  nearHair(side, x, y) {
+    for (const c of this.ciliaYs) if (c.side === side && Math.abs(c.y - y) < CILIA_WBC_CLEAR && Math.abs(x - c.x) < c.r + CILIA_WBC_REACH) return true;
+    return false;
+  }
   spawnAhead() {
     // (hn: the step the new READS (HZ_NEW) come in on; hg: the density's)
     const p = this.p, m = this.muts, hg = this.hzGen, nv = this.novelty > 0, hn = Math.max(hg, this.novelty || 0), fz = fruitStep(this.gen, hg, this.daily != null, normRunsOf(this.meta));
@@ -2146,7 +2220,7 @@ export class Race {
             // a DRIFTER: it sways DRIFT_AMP across its row (kept inside the tube), never a pulse puddle too
             if (mrng && zi === ACID_I && !e.pulse && mrng() < this.driftK) {
               e.r = DRIFT_R[0] + mrng() * (DRIFT_R[1] - DRIFT_R[0]); e.drift = DRIFT_AMP; e.dph = mrng() * TAU;
-              e.x0 = clamp(e.x, bl + DRIFT_AMP, Math.max(bl + DRIFT_AMP, br - DRIFT_AMP)); e.x = e.x0 + DRIFT_AMP * Math.sin(this.t * TAU / DRIFT_T + e.dph);
+              e.x0 = clamp(e.x, bl + DRIFT_AMP, Math.max(bl + DRIFT_AMP, br - DRIFT_AMP)); e.x = e.x0 + DRIFT_AMP * Math.sin(this.t * TAU / (this.driftT || DRIFT_T) + e.dph);
             }
             this.puddles.push({ x: e.drift ? e.x0 : e.x, y, r: e.r + (e.drift || 0), side });
             if (hostile) { this.ents.push(e); if (e.pulse) this.hzNew('pulse', e); if (e.drift) this.hzNew('drift', e); }
@@ -2182,7 +2256,7 @@ export class Race {
           // fair Big Macros: one per 380 on a side (240 in a stampede), and none within 300 of a wall hair.
           // (the rolls above are always drawn, so the daily layout stays the same for everybody)
           const last = this.lastWbcY[side], gap = wbcGap(wbcD) - 140 * kStamp;
-          const spaced = !(last != null && Math.abs(e.y - last) < gap) && !this.ciliaYs.some((c) => c.side === side && Math.abs(c.y - e.y) < 300);
+          const spaced = !(last != null && Math.abs(e.y - last) < gap) && !this.nearHair(side, e.x, e.y);
           const twin = hn >= HZ_NEW.twins && rng() < (narrow ? 0.12 : 0.25);
           if (hn >= HZ_NEW.lunge && rng() < (nv ? lungeShareN(hn, narrow) : lungeShare(hg, narrow))) e.lunger = 1;
           if (spaced && dry && !gateHere) {
@@ -2191,29 +2265,37 @@ export class Race {
             const ty = e.y - (narrow ? 180 : 120), tw = { ...e, x: clamp(2 * ch.c - e.x, bl, br), y: ty, ph: e.ph + 1.5, twin: 1, lunger: 0 };
             const tRow = Math.floor(ty / 100) * 100;
             if (twin && hostile && ty >= this.calmY && ty >= p.y + 450 && !this.gateRow(tRow) && !this.gateRow(tRow - 100) && !this.gateRow(tRow + 100)
-              && !this.ciliaYs.some((c) => c.side === side && Math.abs(c.y - ty) < 300) && !this.puddles.some((q) => q.side === side && Math.abs(q.x - tw.x) < q.r + 50)) {
+              && !this.nearHair(side, tw.x, ty) && !this.puddles.some((q) => q.side === side && Math.abs(q.x - tw.x) < q.r + 50)) {
               this.ents.push(tw); this.hzNew('twins', tw);
             }
           }
         }
         for (const pc of this.patches) if (pc.y === y && !pc.done && hostile) { pc.done = true; this.spawnPopcorn(pc, side); }
         if (hz.current && rng() < 0.03 * hz.current) { const e = { t: 'current', x: ch.c, y, r: ch.h, h: 260 + rng() * 200, dir: rng() < 0.5 ? -1 : 1 }; if (hostile) this.ents.push(e); }
-        if (hz.cilia && rng() < 0.05 * hz.cilia * hzMul(hg, 0.1) * (z.id === 'rapids' ? hzMul(hg, RAPIDS_CILIA_HZ) : 1)) {   // a little hair on one wall that swats you aside on the beat
-          const wall = this.ciliaN++ % 2 ? 1 : -1, len = 0.45 + rng() * 0.2, beat = 60 / (z.beat || 120);
-          // (a period of 3+ beats, about 2 s: a pair's tells, half a period apart, never overlap)
-          const period = Math.max(3, Math.round(2.0 / beat)) * beat;
-          const e = { t: 'cilia', x: ch.c + wall * ch.h, y: y + 50, r: len * 2 * ch.h, wall, len, period, off: Math.floor(rng() * 8) * beat, state: 0, phase: 0, tellT: CILIA_TELL, swatT: CILIA_SWAT };
-          if (hostile) this.ents.push(e);
-          // a pair: a twin hair on the opposite wall, swatting half a period later
-          if (hn >= HZ_NEW.pair && rng() < 0.4 && hostile) {
-            // (the two reaches together cover at most CILIA_PAIR_MAX of the tube: the twin is the shorter hair)
-            const len2 = Math.min(len, CILIA_PAIR_MAX - len);
-            const e2 = { ...e, wall: -wall, x: ch.c - wall * ch.h, off: e.off + period / 2, pair: 1, len: len2, r: len2 * 2 * ch.h };
-            this.ents.push(e2); this.hzNew('pair', e2);
+        if (hz.cilia && rng() < Math.min(CILIA_ROW_MAX, 0.05 * hz.cilia * hzMul(hg, 0.1 + (z.id === 'rapids' ? RAPIDS_CILIA_HZ : 0)))) {   // a little hair on one wall that swats you aside on the beat
+          // (every roll below is drawn whether the hair spawns or not, so the daily layout holds)
+          const len = 0.45 + rng() * 0.2, beat = 60 / (z.beat || 120), offU = rng(), pairU = hn >= HZ_NEW.pair ? rng() : 1;
+          // CILIA_GAP: the wall whose turn it is, else the other one, else no hair on this row
+          const w0 = this.ciliaN % 2 ? 1 : -1, hy = y + 50, free = (w) => !this.ciliaYs.some((c) => c.side === side && c.wall === w && Math.abs(c.y - hy) < CILIA_GAP);
+          const wall = free(w0) ? w0 : free(-w0) ? -w0 : 0;
+          if (wall) {
+            this.ciliaN = wall === 1 ? 0 : 1;      // (the next hair goes on the other wall)
+            // (a period of 3+ beats, about 2 s: a pair's tells, half a period apart, never overlap)
+            const period = Math.max(3, Math.round(2.0 / beat)) * beat;
+            const e = { t: 'cilia', x: ch.c + wall * ch.h, y: hy, r: len * 2 * ch.h, wall, len, period, off: Math.floor(offU * 8) * beat, state: 0, phase: 0, tellT: CILIA_TELL, swatT: CILIA_SWAT };
+            if (hostile) this.ents.push(e);
+            this.ciliaYs.push({ y: e.y, side, wall, x: e.x, r: e.r });
+            // a pair: a twin hair on the opposite wall, swatting half a period later (only when that wall is free too)
+            if (hn >= HZ_NEW.pair && pairU < 0.4 && hostile && free(-wall)) {
+              // (the two reaches together cover at most CILIA_PAIR_MAX of the tube: the twin is the shorter hair)
+              const len2 = Math.min(len, CILIA_PAIR_MAX - len);
+              const e2 = { ...e, wall: -wall, x: ch.c - wall * ch.h, off: e.off + period / 2, pair: 1, len: len2, r: len2 * 2 * ch.h };
+              this.ents.push(e2); this.hzNew('pair', e2);
+              this.ciliaYs.push({ y: e2.y, side, wall: -wall, x: e2.x, r: e2.r });
+            }
+            // a hair clears the Big Macros inside its reach spawned in the CILIA_WBC_CLEAR before it (still far off screen)
+            for (let _i_w = 0, _A_w = this.ents, w; _i_w < _A_w.length && ((w = _A_w[_i_w]), true); _i_w++) if (w.t === 'wbc' && !w.dead && !w.popcorn && (w.side == null || w.side === side) && w.y >= p.y + 450 && this.nearHair(side, w.x, w.y)) w.dead = 1;
           }
-          // a hair clears the Big Macros spawned in the 300 before it (they are still far off screen)
-          this.ciliaYs.push({ y: e.y, side });
-          for (let _i_w = 0, _A_w = this.ents, w; _i_w < _A_w.length && ((w = _A_w[_i_w]), true); _i_w++) if (w.t === 'wbc' && !w.dead && !w.popcorn && (w.side == null || w.side === side) && Math.abs(w.y - e.y) < 300 && w.y >= p.y + 450) w.dead = 1;
         }
       }
     }
@@ -2222,6 +2304,8 @@ export class Race {
   // ---------------------------------------------------------------- autopilot (also the test bot)
   autoSteer() {
     const H = this.human;
+    // LAST CALL: a bot (and the thumb) cashes in BOT_LAST_CALL_REACT s into the window, as a player who saw it would
+    if (this.bot && this.p.lastCallT > 0 && this.p.lastCallT <= LAST_CALL_T - BOT_LAST_CALL_REACT) this.input.cashOut = true;
     // the thumb: between re-plans it holds its last target and does not dash
     if (H && this.t < this.hNext) { this.input.tx = this.hTx; this.input.dash = false; return; }
     const p = this.p, nose = this.muts.nose, fs = nose ? this.eggSide : this.autoFork, look = H ? H.look : 420;
@@ -2371,10 +2455,17 @@ export class Race {
     this.tickFrenzy(dt);
     // bridges: a draft or a dash holds the chain (the timer drains at DRAFT_DRAIN / DASH_DRAIN). Not in FRENZY: it
     // is the high, not the gap between two moves.
-    if (p.combo > 0) {
+    if (p.combo > 0 && p.lastCallT > 0) {
+      // LAST CALL: the timer is empty, the bank waits LAST_CALL_T s for a cash-in, then drops
+      p.comboT = 0; p.lastCallT -= dt;
+      if (p.lastCallT <= 0) { p.lastCallT = 0; this.dropCombo(); }
+    } else if (p.combo > 0) {
       p.comboT -= dt * (p.frenzyT > 0 ? 1 : p.draft > 0.08 ? DRAFT_DRAIN : p.dashT > 0 ? DASH_DRAIN : 1);
       if (this.cap.memory && p.frenzyT > 0 && p.comboT < CAP_MEMORY_FLOOR) { p.comboT = Math.min(CAP_MEMORY_FLOOR, p.comboMax); this.capFire('memory'); }   // Long Memory's capstone
-      if (p.comboT <= 0) this.dropCombo();
+      if (p.comboT <= 0) {
+        if (p.bank >= LAST_CALL_BANK) { p.comboT = 0; p.lastCallT = LAST_CALL_T; this.emit('lastCall', { bank: Math.floor(p.bank), t: LAST_CALL_T, x: p.x, y: p.y }); }
+        else this.dropCombo();
+      }
     }
     const frenzy = p.frenzyT > 0, nitro = frenzy && this.muts.nitro, tier = frenzy ? p.tier : 0;
     const safe = nitro || tier >= 5;            // nothing can hurt you
@@ -2519,7 +2610,7 @@ export class Race {
           e.touched = 1;
           if (this.syn.hazmat && !e.paid) { e.paid = 1; this.nearMiss(e.x, e.y); }   // Hazmat: a touch is a near miss
         }
-        else if (d < e.r + 18) { e.near = 1; e.minGap = Math.min(e.minGap ?? Infinity, d - e.r); }
+        else if (d < e.r + nearBand()) { e.near = 1; e.minGap = Math.min(e.minGap ?? Infinity, d - e.r); }
         if (e.near && !e.touched && !e.paid && p.y - e.y > e.r * 0.8) { e.paid = 1; this.nearMiss(e.x, e.y, e.minGap); }
       }
     }
@@ -2652,6 +2743,7 @@ export class Race {
   // one link in the chain. n links at once (Chain Reaction doubles, Slick Moves adds).
   // (extra: fields added to the 'combo' event, e.g. {gap} on a graded near miss)
   addCombo(kind, x, y, n = 1, extra = null) {
+    if (this.p.lastCallT > 0) return;     // LAST CALL: no new link lands (the strip holds too)
     this.linkCombo(kind, x, y, n, extra);
     // (a plain pass is neutral filler: it never opens, breaks or finishes a trick)
     if (kind !== 'trick' && kind !== 'pass') this.seqPush(kind, x, y);
@@ -2750,6 +2842,7 @@ export class Race {
   }
   linkCombo(kind, x, y, n = 1, extra = null) {
     const p = this.p, s = this.s, frenzy = p.frenzyT > 0;
+    if (p.lastCallT > 0) return;          // LAST CALL: no new link lands
     if (frenzy && this.muts.chain && kind !== 'domino') {   // (a Domino knock is exactly +1 a rival)
       n *= 2;
       if (PASS_KINDS.has(kind)) p.frenzyT = Math.max(p.frenzyT, Math.min(p.frenzyT + 0.2, s.frenzyLen * 2));
@@ -2758,6 +2851,8 @@ export class Race {
     // same kind in a row: the timer refills less from the 4th; overtakes in a row (any kind): less from the 6th
     p.sameRun = kind === p.lastKind ? p.sameRun + 1 : 1; p.lastKind = kind;
     const pass = PASS_KINDS.has(kind);
+    // SWITCH-UP: an expressive move breaking a run of overtakes
+    const switchUp = FEATURES.switchUp && !pass && SWITCH_UP_KINDS.has(kind) && (p.passRun || 0) >= SWITCH_UP_AT && this.zoneReached > 0 && !this.calmTiers;   // (never in the Launch Tube warm-up or on the calm swims)
     p.passRun = pass ? (p.passRun || 0) + 1 : 0;
     // style: the different moves you landed in the last STYLE_WINDOW s are worth more (p.kindLast: kind -> time);
     // spamming one move (the same kind 4 times in a row, p.rep) climbs FRENZY at half speed
@@ -2781,13 +2876,14 @@ export class Race {
     // (spam does not count: the 4th+ same-kind link in a row only ever refills part of the timer)
     const clutch = p.combo > 0 && p.comboT > 0 && p.comboT < 0.25 * p.comboMax && p.sameRun < 4;
     if (clutch) { n += 1; p.clutch = Math.min(0.5, Math.round((p.clutch + 0.1) * 10) / 10); }
+    if (switchUp) n += SWITCH_UP_LINKS;
     p.combo += n; p.bank += n;
     if (z0) { const zc = this.firstNormal ? Z0_COMBO_MAX_ROOKIE : Z0_COMBO_MAX; p.combo = Math.min(p.combo, zc); p.bank = Math.min(p.bank, zc); }
     if (rep) p.fzPen += n * 0.5;
     else if (kind === 'sugar') p.fzPen += n * SUGAR_HIGH_FZ;     // (a Sugar High fruit link climbs FRENZY at half speed)
     { const tc = this.tierCap(); if (tc < FRENZY_TIERS.length) { const over = this.fzPoints() - this.frenzyThreshold(tc); if (over > 0) p.fzPen += Math.min(n, over) * CAP_FZ_K; } }   // (half banking behind the cap)
     const disco = this.evK('disco');
-    p.comboMax = this.comboMaxOf(p); p.comboT = p.comboMax * Math.min(sameRefill(p.sameRun), passRefill(p.passRun || 0));
+    p.comboMax = this.comboMaxOf(p); p.comboT = p.comboMax * (switchUp ? 1 : Math.min(sameRefill(p.sameRun), passRefill(p.passRun || 0)));
     p.bestCombo = Math.max(p.bestCombo, p.combo);
     if (!z0) p.bestComboLate = Math.max(p.bestComboLate || 0, p.combo);
     p.mult = comboMult(p.combo) * styleMult(p.style);
@@ -2795,6 +2891,7 @@ export class Race {
     this.dnaRun += gain; this.dnaFromCombo += gain - LINK_DNA * n;
     const ce = this.emit('combo', { kind, n: Math.floor(p.combo), add: n, x, y, mult: p.mult, style: p.style, fresh, same: p.sameRun, clutch, passRun: p.passRun });
     if (extra) Object.assign(ce, extra);
+    if (switchUp) ce.switchUp = true;
     if (clutch && !this.fzHold && !(this.t - p.clutchAt < (this.calmTiers ? CLUTCH_CD_CALM : CLUTCH_CD))) { p.clutchAt = this.t; this.emit('clutch', { x, y, n: Math.floor(p.combo), mult: p.clutch }); }
     p.mileI = p.mileI || 0;
     if (!z0 && p.combo >= comboMilestoneAt(p.mileI)) {
@@ -2898,14 +2995,15 @@ export class Race {
   }
   // pay the bank (a run-out at x0.6, or a FINISHER at x1.3..2) and reset the clutch.
   // comboBank: {n, dna, grade (0..4), style, clutch, finisher, mult, blastN}
-  payBank(fin, blastN = 0, buzzer = false) {
+  payBank(fin, blastN = 0, buzzer = false, clutchCash = false) {
     const p = this.p;
+    p.lastCallT = 0;
     if (p.bank < 3) { p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.trickChain = {}; return 0; }
     const fm = fin ? finisherMult(p.style) + (buzzer ? BUZZER_K : 0) : this.s.keep > 0 ? 1 : TIMEOUT_BANK;
     const dna = bankDna(p.bank, p.style, p.clutch, p.trickMult) * (1 + this.evK('disco')) * fm;
     this.dnaRun += dna; this.dnaBank += dna;
-    this.emit('comboBank', { n: Math.floor(p.bank), dna: Math.round(dna * 10) / 10, grade: bankGrade(p.bank), style: p.style, x: p.x, y: p.y, clutch: p.clutch,
-      finisher: !!fin, mult: fm, blastN, trick: p.trickMult || 0, ...(buzzer ? { buzzer: true } : null) });
+    this.emit('comboBank', { n: Math.floor(p.bank), dna: Math.round(dna * 10) / 10, grade: bankGrade(p.bank), style: p.style, x: p.x, y: p.y, clutch: clutchCash ? true : p.clutch,
+      clutchK: p.clutch, finisher: !!fin, mult: fm, blastN, trick: p.trickMult || 0, ...(buzzer ? { buzzer: true } : null) });
     p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.trickChain = {};
     return dna;
   }
@@ -2929,22 +3027,24 @@ export class Race {
     if (n < 3 || bank < 3) return false;
     const big = bank >= FINISHER_BLAST_AT, R = finisherBlastR(bank);
     const blastN = big ? this.ents.filter((e) => !e.dead && e.t === 'wbc' && Math.abs(e.y - p.y) <= R && Math.hypot(e.x - p.x, e.y - p.y) <= R).length : 0;
+    // LAST CALL: a cash-in after the timer ran out (a CLUTCH CASH: the plain finisher, half the seed, never a buzzer)
+    const clutchCash = p.lastCallT > 0;
     // BUZZER BEATER: cashed in the last BUZZER_AT of the timer
-    const buzzer = FEATURES.buzzer && p.comboT < BUZZER_AT * p.comboMax;
-    this.payBank(true, blastN, buzzer);
+    const buzzer = !clutchCash && FEATURES.buzzer && p.comboT < BUZZER_AT * p.comboMax;
+    this.payBank(true, blastN, buzzer, clutchCash);
     // a BIG finisher fans the flames: up to +1.5 s of FRENZY (0.06 s a banked link), one fan every FAN_EVERY s, never past
     // frenzyLen (spamming small cash-ins in FRENZY kept it burning: bank-3 cashing held FRENZY 53% of a race, GOD MODE 3 of 8)
     const fan = bank >= FINISHER_BLAST_AT ? Math.min(1.5, 0.06 * bank) : 0;
-    if (p.frenzyT > 0 && fan > 0 && this.t - p.fanT >= FAN_EVERY) { p.fanT = this.t; p.frenzyT = Math.max(p.frenzyT, Math.min(p.frenzyT + fan, s.frenzyLen)); }
-    const seed = finisherSeed(bank, buzzer ? BUZZER_SEED : 8);
-    this.emit('comboEnd', { n: Math.floor(n), kept: seed, finisher: true, ...(buzzer ? { buzzer: true } : null) });
+    if (!clutchCash && p.frenzyT > 0 && fan > 0 && this.t - p.fanT >= FAN_EVERY) { p.fanT = this.t; p.frenzyT = Math.max(p.frenzyT, Math.min(p.frenzyT + fan, s.frenzyLen)); }
+    const seed = clutchCash ? Math.floor(finisherSeed(bank) / 2) : finisherSeed(bank, buzzer ? BUZZER_SEED : 8);
+    this.emit('comboEnd', { n: Math.floor(n), kept: seed, finisher: true, ...(buzzer ? { buzzer: true } : null), ...(clutchCash ? { clutch: true } : null) });
     // CASH TO CLIMB: in FRENZY the FRENZY points so far carry over (the new chain climbs on from them)
     // (only a bank of FZ_CARRY_AT+ carries: a pot-3 cash-in no longer keeps the climb alive)
-    p.fzCarry = p.frenzyT > 0 && bank >= FZ_CARRY_AT ? Math.max(0, this.fzPoints() - seed) : 0;
+    p.fzCarry = !clutchCash && p.frenzyT > 0 && bank >= FZ_CARRY_AT ? Math.max(0, this.fzPoints() - seed) : 0;
     p.fzPen = 0; p.combo = seed; p.bank = seed; p.comboMax = this.comboMaxOf(p); p.comboT = seed ? p.comboMax : 0;
     this.resetTier(0, false);              // (the STYLE and the kinds behind it stay: the next chain starts in style)
     p.mult = comboMult(seed) * styleMult(p.style);
-    this.seqPush('cash', p.x, p.y);       // a finisher can open a trick (encore, rebound): no link, no STYLE kind
+    if (!clutchCash) this.seqPush('cash', p.x, p.y);       // a finisher can open a trick (encore, rebound): no link, no STYLE kind (a clutch cash opens none)
     if (big) {
       let shoved = 0;
       for (let _i_a = 0, _A_a = this.agents, a; _i_a < _A_a.length && ((a = _A_a[_i_a]), true); _i_a++) {
@@ -2967,6 +3067,7 @@ export class Race {
     p.fzCarry = 0;                        // and the FRENZY progress a finisher carried
     p.trickStreak = 0; p.lastTrick = ''; p.lastTrickT = D0;     // and the TRICK STREAK: a hit is never part of a streak
     if (n <= 0) return;
+    p.lastCallT = 0;
     const keep = Math.floor(n * 0.25 * (1 + s.keep));
     p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.trickChain = {};
     p.fzPen = p.fzPen * keep / n;
@@ -2977,7 +3078,7 @@ export class Race {
   // the whole chain is gone (the spare bite): no bank, nothing kept
   loseCombo(why, x, y) {
     const p = this.p, n = p.combo;
-    p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.trickChain = {}; p.fzCarry = 0; p.oc = 0;
+    p.bank = 0; p.clutch = 0; p.trickMult = 0; p.trickCap = TRICK_MULT_CAP; p.trickChain = {}; p.fzCarry = 0; p.oc = 0; p.lastCallT = 0;
     this.clearTricks();
     p.trickStreak = 0; p.lastTrick = ''; p.lastTrickT = D0;
     if (n <= 0) return;
@@ -2990,7 +3091,9 @@ export class Race {
     const sl = this.muts.slick || 0, p = this.p;
     if (sl) p.e += 2 * sl;
     if (this.syn.greased) p.dashCd = Math.max(0, p.dashCd - 0.6);
-    this.addCombo('close', x, y, 1 + sl, gap != null && Number.isFinite(gap) ? { gap: Math.round(Math.max(0, gap) * 10) / 10 } : null);
+    // (graded by the gap when it is known: nearLinks; Slick Moves adds its links on top)
+    const known = gap != null && Number.isFinite(gap), g = known ? Math.max(0, gap) : null, base = nearLinks(g);
+    this.addCombo('close', x, y, base + sl, known ? (base >= 2 ? { gap: Math.round(g * 10) / 10, razor: true } : { gap: Math.round(g * 10) / 10 }) : null);
   }
   // pop every white blood cell within r of (x, y); each pop is a combo link
   blast(x, y, r, why) {
@@ -3372,7 +3475,7 @@ export class Race {
     let drops = null;
     for (let _i_e = 0, _A_e = this.ents, e; _i_e < _A_e.length && ((e = _A_e[_i_e]), true); _i_e++) {
       if (e.dead) continue;
-      if (e.drift) e.x = e.x0 + e.drift * Math.sin(this.t * TAU / DRIFT_T + e.dph);
+      if (e.drift) e.x = e.x0 + e.drift * Math.sin(this.t * TAU / (this.driftT || DRIFT_T) + e.dph);
       if (e.drop) {            // a dripper's glob: falls toward Kevin, then sits as a goo blob, then is gone
         if (e.fall > 0) { const d = Math.min(e.fall, DRIP_VY * dt); e.y -= d; e.fall -= d; }
         else if ((e.life -= dt) <= 0) { e.dead = 1; continue; }
@@ -3386,7 +3489,7 @@ export class Race {
           const b = playBand(e.y, e.side || p.side), lo = b.l + DRIP_R, hi = b.r - DRIP_R; let best = null;
           for (let k = 0; k <= 12; k++) { const x = lo + (hi - lo) * k / 12; let inG = false; for (let gi = 0; gi < e.gaps.length; gi++) if (Math.abs(e.gaps[gi] - x) < e.gw / 2 + DRIP_R + 8) { inG = true; break; } if (inG) continue; if (best == null || Math.abs(x - p.x) < Math.abs(best - p.x)) best = x; }
           e.dripT += DRIP_EVERY;
-          if (best != null && !e.passed) { e.dripX = best; e.dripTell = DRIP_TELL; this.emit('drip', { phase: 'tell', x: best, y: e.y, t: DRIP_TELL, side: e.side }); }
+          if (best != null && !e.passed) { const tl = this.dripTellT || DRIP_TELL; e.dripX = best; e.dripTell = tl; this.emit('drip', { phase: 'tell', x: best, y: e.y, t: tl, side: e.side }); }
         }
       }
       if (e.pulse) {

@@ -211,9 +211,6 @@ body.reduced #combo .links i.ghost{opacity:.7}
 @keyframes dashrdy{50%{transform:scale(1.12)}}
 /* not enough GAS for a dash: a thin red tick ring */
 #dashBtn.lowE{box-shadow:0 5px 0 #5c0822,0 0 0 2px #ff3d6e,0 0 10px rgba(255,61,110,.6)}
-/* long press to cash in: a gold ring fills round the button (main.js sets --hold 0..1) */
-#dashBtn::after{content:"";position:absolute;inset:-7px;border-radius:50%;pointer-events:none;opacity:0;background:conic-gradient(var(--gold) calc(var(--hold,0) * 360deg),rgba(255,255,255,.15) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px))}
-#dashBtn.holding::after{opacity:1}
 #dashBtn.cd{filter:grayscale(.5) brightness(.8)}
 /* the first swims: LOW GAS under the word when the tank has 2.5 dashes left or fewer */
 #dashBtn .dl{position:relative;font-weight:800}
@@ -385,6 +382,10 @@ body.reduced #drillUI .cpips i.pop,body.reduced #drillUI .cpips i.pop::after{ani
 /* the first drill's how-to: a size down so it fits on one line */
 #drillUI .t.teach{font-size:20px;color:var(--gold)}
 #drillUI .riv i{background:linear-gradient(90deg,#ff8b5c,#ff3d6e)}
+/* PAST BEST: the swim went past its best mark while the duel panel was up (a small tick on the YOU row, never a pop) */
+#drillUI .you .pb{flex:none;margin-left:4px;font-style:normal;font-size:10px;font-weight:800;line-height:1;letter-spacing:.04em;color:#3a2400;background:var(--gold);border-radius:5px;padding:2px 4px 1px;white-space:nowrap}
+#drillUI .you .pb::before{content:"✓ "}
+#drillUI .you .pb.hide{display:none}
 #drillUI .riv.hot .bb{animation:blink .36s infinite alternate}
 /* ---------- overlays ---------- */
 .ov{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;padding:calc(var(--safeT) + 16px) calc(var(--safeR) + 18px) calc(var(--safeB) + 16px) calc(var(--safeL) + 18px);background:rgba(20,2,18,.9);overflow-y:auto;touch-action:pan-y}
@@ -920,7 +921,9 @@ body.reduced .card .shine{display:none}
   body.lefty #dashBtn{right:auto;left:calc(var(--safeL) + max(14px,(50% - min(280px,37vh) - 78px) / 2))}
   /* the HUD is a full-height gutter here (so --hudB is the screen height): everything re-anchors to the screen. The combo strip
      and the egg panel sit at the bottom of the HUD gutter, the lesson card at the top of the DASH gutter */
-  #coach{top:calc(var(--safeT) + 8px)}
+  #coach{top:calc(var(--safeT) + 8px);max-width:calc(100% - 2 * (var(--safeL) + 64px))}
+  /* (the coach plate keeps clear of the pause button in the HUD gutter; lefties have it on the right) */
+  body.lefty #coach{max-width:calc(100% - 2 * (var(--safeR) + 64px))}
   #tut,#tut.step-drill{top:calc(var(--safeT) + 10px);bottom:auto;left:auto;right:calc(var(--safeR) + 6px);width:calc(50% - min(280px,37vh) - 12px);max-height:120px;transform:translate(0,-10px)}
   /* the gutter card: the icon and the step dots sit in the flow, so the text gets the whole width and never clips */
   #tut,#tut.step-drill{padding:6px 10px 8px;justify-content:flex-start;max-height:calc(100% - var(--safeT) - var(--safeB) - 110px)}
@@ -933,7 +936,8 @@ body.reduced .card .shine{display:none}
   body.lefty #tut{right:auto;left:calc(var(--safeL) + 6px)}
   /* the combo strip and its CASH chip sit in the DASH gutter, just above the button: the thumb that dashes cashes, and the
      steering thumb never lands on CASH when it re-grips */
-  #combo{left:auto;right:0;width:calc(50% - min(280px,37vh));bottom:calc(var(--safeB) + 24px + 78px + 16px);padding-right:var(--safeR);box-sizing:border-box;
+  /* (28 px above the DASH button's top: CASH and its hit area stay 24 px or more above DASH) */
+  #combo{left:auto;right:0;width:calc(50% - min(280px,37vh));bottom:calc(var(--safeB) + 28px + 78px + 28px);max-height:100px;padding-right:var(--safeR);box-sizing:border-box;
     display:flex;flex-direction:column;align-items:center}
   body.lefty #combo{right:auto;left:0;padding-right:0;padding-left:var(--safeL)}
   /* a narrow gutter: the recipe keeps its last 2 chips (the step just made and the one to make), at 12px */
@@ -1319,6 +1323,9 @@ body.racing.swim1.threat #tut .ts{display:none!important}
 /* Brag with nothing to brag about: a quiet icon */
 .row3 #shareBtn.icon{flex:0 0 52px;width:52px;padding:8px 0;font-size:20px}
 /* the first death's warm tail, under its lesson */
+/* the first card's spend layout (#result.spend): the warm tail steps aside, BUY + SWIM says enough */
+#result.spend #resTail{display:none!important}
+#resLessons small.incl{display:block;text-align:center;font-size:13px;font-weight:700;color:var(--dim);margin:0}
 #resTail{text-align:center;font-size:12px;font-style:italic;font-weight:600;color:var(--dim);max-width:330px;margin:2px auto 0;line-height:1.2;text-wrap:balance}
 #resSeeAll{font-size:13px;min-height:40px;margin-top:2px}
 #resSeeAll.wait{pointer-events:none;opacity:.55}
@@ -1467,11 +1474,16 @@ body.resOn #toast.on{transform:translate(-50%,0)}
   /* the card deal: one partner line, 3-line descriptions, Reroll as a 44 px pill top-right */
   #cards .syn~.syn{display:none}
   #cards .card .ds{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-  #cards #rerollBtn{position:absolute;top:calc(var(--safeT) + 8px);right:calc(var(--safeR) + 10px);margin:0;min-height:44px;height:44px;padding:0 14px;border-radius:22px;font-size:14px;z-index:2}
+  #cards #rerollBtn{position:absolute;top:calc(var(--safeT) + 8px);right:calc(var(--safeR) + 10px);margin:0;min-height:44px;height:44px;padding:0 14px;border-radius:22px;font-size:14px;z-index:2;width:auto;max-width:none;white-space:nowrap}
+  /* the header keeps clear of the pill: a right margin the pill's width (the lines centre in what is left) */
+  #cards #cardsSub,#cards #cardsH,#cards #cardsLine{margin-left:0!important;margin-right:calc(var(--safeR) + 200px)!important;max-width:min(330px,calc(100% - var(--safeR) - 200px));box-sizing:border-box}
 }
 
 /* ---------- no flashing (S.noFlash, body.noFlash): the blinkers and pulses become the reduced-motion static stand-ins ---------- */
 body.noFlash #cashBtn.buzz{animation:none;outline:2px solid #fff4f8}
+/* LAST CALL: the pot is about to slip; CASH widens and goes gold for the window (main.js, systems 'lastCall') */
+#cashBtn.lastCall{padding:2px 20px;min-width:96px;background:linear-gradient(#fff3b0,#ffc21f 60%,#e89a10);color:#3a2000;box-shadow:0 3px 0 #9a6410,0 0 0 2px #fff4f8,0 0 18px 4px rgba(255,215,92,.95);animation:buzzp .1667s ease-in-out infinite alternate}
+body.reduced #cashBtn.lastCall,body.noFlash #cashBtn.lastCall{animation:none;outline:2px solid #fff4f8}
 body.noFlash #efill.low,body.noFlash #ebar.shake #efill.low{animation:none;opacity:1}
 body.noFlash #pace.hot{animation:none;background:#ff1f4a;color:#fff;border-color:#fff}
 body.noFlash #combo .gap.near{animation:none;text-decoration:underline 2px}
@@ -1699,7 +1711,7 @@ body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:
     <label class="setRow"><span>Gentle sound 🪶<small>Softer highs, no sharp stings</small></span><input type="checkbox" id="setGentle" aria-label="Gentle sound"></label>
     <label class="setRow hide" id="setMixRow"><span>Play over my music 🎵<small>Your own music keeps playing; the band stays quiet</small></span><input type="checkbox" id="setMix" aria-label="Play over my music"></label>
     <label class="setRow" id="setHapticsRow"><span>Haptics 📳<small>Buzz on dashes, hits and FRENZY</small></span><input type="checkbox" id="setHaptics"></label>
-    <label class="setRow"><span>Reduced motion 🐢<small>Less shake, flash and slow-mo</small></span><input type="checkbox" id="setReduced"></label>
+    <label class="setRow"><span>Reduced motion 🐢<small>Less shake, zoom and flash</small></span><input type="checkbox" id="setReduced"></label>
     <label class="setRow"><span>No flashes 🕶️<small>Screen flashes become a soft edge glow</small></span><input type="checkbox" id="setNoFlash"></label>
     <div class="setRow" id="setSensRow"><span>Steering 👆<small>How far a drag moves you (fast swipes go further)</small></span><span class="seg" id="setSens"><button data-v="1.2">Chill</button><button data-v="1.6">Normal</button><button data-v="2.1">Twitchy</button></span>
 </div>

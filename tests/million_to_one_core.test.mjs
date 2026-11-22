@@ -475,6 +475,8 @@ const types = (r) => r.events.map((e) => e.type);
 const setKinds = (r, ks) => { r.p.kindLast = {}; for (const k of ks) r.p.kindLast[k] = r.t; r.p.rep = ks.slice(-3); r.p.style = r.styleNow(); return r; };
 const styled = (r) => { setKinds(r, ['pass', 'close', 'gate', 'dodge']); r.p.style = 4; r.p.lastKind = 'dodge'; r.p.sameRun = 1; return r; };   // STYLE 4: every FRENZY tier open
 const wbcAt = (x, y) => ({ t: 'wbc', x, y, r: 24, vx: 0, vy: 0, hunt: 0, eat: 0, ph: 0 });
+// a Big Macro at (x, y) a wall hair h keeps clear (spawnAhead's nearHair): within CILIA_WBC_CLEAR of its row, inside its reach + CILIA_WBC_REACH
+const hairNear = (h, x, y) => Math.abs(h.y - y) < CORE.CILIA_WBC_CLEAR && Math.abs(x - h.x) < h.r + CORE.CILIA_WBC_REACH;
 const gateAt = (y, gapX) => ({ t: 'gate', x: VIEW_W / 2, y, r: 120, gaps: [gapX], gw: 80, side: 0, bonkT: 0, contact: 0 });
 // a winner's goal is a weighted pick (trick / margin / sweep / combo, a hash of the save): the first combo goal over runs 0..199
 const comboWinGoal = (m, over) => { for (let n = 0; n < 200; n++) { m.runs = n; m.lastGoalId = ''; const g = nextGoal(m, over); if (g.id === 'combo') return g; } return null; };
@@ -709,7 +711,8 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 { // bank: a clean finish pays, graded
   const r = quiet();
   for (let i = 0; i < 30; i++) r.addCombo(i % 3 ? 'pass' : 'close', 0, 0);
-  const d0 = r.dnaRun; r.p.comboT = 0.001; r.step(1 / 60);
+  // (a 20+ bank waits LAST_CALL_T for a cash-in first: step past it)
+  const d0 = r.dnaRun; r.p.comboT = 0.001; for (let i = 0; i < 31; i++) r.step(1 / 60);
   const b = r.events.find((e) => e.type === 'comboBank');
   ok(b && b.n === 30 && b.grade === 1 && !b.finisher && b.blastN === 0 && Math.abs(b.dna - Math.round(0.6 * CORE.BANK_K * Math.pow(30, 1.4) * styleMult(2) * 10) / 10) < 1e-9, 'a 30 chain that runs out banks 0.6 * BANK_K * n^1.4 * style DNA, grade 1');
   ok(r.dnaRun - d0 > 2 && r.p.bank === 0, 'the bank is paid into the run');
@@ -856,6 +859,11 @@ const atEgg = (r, out) => { r.p.y = RACE_LEN - 70 - out; r.p.x = centre(r.p.y); 
 // SYSTEMS ROUND 5: the held-back FEATURES were switched on one at a time over these bands; buzzer, rescue, bountyKeep and
 //   winGate held every band and are on (their unit tests run default-on), the rest stay off (see the FEATURES comment in
 //   core.js for what each moved). The trick band is back at 6-8 a run.
+// SYSTEMS ROUND 9: the Rapids' hairs (one hazard growth, CILIA_GAP 260, a 160 clearance only inside a hair's reach) give
+//   the Rapids its Big Macros back, so runs 15-30 end before THE EGG 23-24% (18% before); LAST CALL (BANK_K 0.027, was
+//   0.049, so a half-habit run pays within 4%), SWITCH-UP (never in the Launch Tube or on the calm swims), GOD MODE at
+//   17.5x (17), RIVAL_TRAIN gen 2 0.78 (0.70) with the generation share, FRESH_GEN 0.01 (0.02), HEAD_E 0.6 (0.45).
+//   Held back behind FEATURES: passEarly, nearGrade, movers (see core.js)
 // NOT REACHED (reported, the bands are not widened past what the game meets):
 //   - energy deaths on runs 6-8 within 4 points of runs 3-5: 8% (3 of 36) against 0%; the band is 9 points, see the test
 //     (it conflicts with the GAS-by-generation band from main)
@@ -1021,6 +1029,11 @@ const firstPays = careers.map((c) => c[0].dna).sort((a, b) => a - b), firstPayMe
   // run 20: a phone-tapping greedy career wins about 40-45% (runs 15-25 of the eight 4-taps/s careers)
   const r20 = careers4.flatMap((c) => c.slice(14, 25)), w20 = r20.filter((x) => x.won).length / r20.length;
   ok(w20 >= 0.35 && w20 <= 0.45, 'runs 15-25 of a phone-tapping career win 35-45% (' + Math.round(w20 * 100) + '% of ' + r20.length + ')');
+  // (systems round 9) generations are no free ride: over the 6 runs after each career's first win, the win rate averaged
+  // over the 4-taps/s careers stays at 60% or under (the rivals' training follows the generation too: rivalTrainShare)
+  const after6 = careers4.map((c) => { const w = c.findIndex((x) => x.won); return w < 0 ? null : c.slice(w + 1, w + 7); }).filter((a) => a && a.length === 6);
+  const a6 = after6.reduce((a, rs) => a + rs.filter((x) => x.won).length / 6, 0) / Math.max(1, after6.length);
+  ok(after6.length >= 20 && a6 <= 0.6, 'the 6 runs after a first win win ' + Math.round(a6 * 100) + '% on average (60% at most, ' + after6.length + ' careers)');
   // the race feeds the duel: over career runs 6+ that reached the drill, the top third of head starts wins 30+ points more
   const cTot = careers4.flatMap((c) => c.slice(5)).filter((x) => x.tot != null).sort((a, b) => a.tot - b.tot), ct3 = Math.floor(cTot.length / 3);
   const cLo = rateOf(cTot.slice(0, ct3)), cHi = rateOf(cTot.slice(-ct3));
@@ -1910,7 +1923,7 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
 { // a timeout banks at x0.6 (x1 with Echo Chamber), a finisher x1.3 / x1.6 / x2 and seeds the next chain
   const chain = (r, n, kinds) => { for (let i = 0; i < n; i++) r.addCombo(kinds[i % kinds.length], 0, 0); };
   const plain = quiet(), echo = quiet(); give(echo, 'echo');
-  for (const r of [plain, echo]) { chain(r, 20, ['pass', 'close']); r.events.length = 0; r.p.comboT = 0.001; r.step(1 / 60); }
+  for (const r of [plain, echo]) { chain(r, 20, ['pass', 'close']); r.events.length = 0; r.p.comboT = 0.001; for (let i = 0; i < 31; i++) r.step(1 / 60); }   // (past the LAST CALL window)
   const bp = plain.events.find((e) => e.type === 'comboBank'), be = echo.events.find((e) => e.type === 'comboBank');
   ok(bp && Math.abs(bp.dna - Math.round(TIMEOUT_BANK * bankDna(20, 2) * 10) / 10) < 1e-9 && TIMEOUT_BANK === 0.6 && bp.finisher === false, 'a timeout pays 0.6 x bankDna');
   ok(be && Math.abs(be.dna - Math.round(bankDna(20, 2) * 10) / 10) < 1e-9, 'with Echo Chamber a timeout pays the full bankDna');
@@ -2034,7 +2047,7 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
   q.muts.turbo = MUTATIONS.turbo.max; q.p.y = FORK_END + 10; q.draftN = 5;
   ok(!can('turbo') && !can('nose') && !can('bloom'), 'canOffer: maxed, Egg Nose past the Fork and Late Bloomer after draft 4 are out');
 }
-{ // fair Big Macros: spaced out, never next to a wall hair
+{ // fair Big Macros: spaced out, never next to a wall hair (within CILIA_WBC_CLEAR of its row and inside its reach + CILIA_WBC_REACH)
   const RAP = ZONES.findIndex((z) => z.id === 'rapids');
   let crowd = 0, hairy = 0, wbcs = 0;
   for (let s = 0; s < 200; s++) {
@@ -2044,10 +2057,10 @@ function FORK_I() { return ZONES.findIndex((z) => z.fork); }
     const w = r.ents.filter((e) => e.t === 'wbc' && !e.dead && !e.popcorn).sort((a, b) => a.y - b.y), c = r.ents.filter((e) => e.t === 'cilia');
     wbcs += w.length;
     for (let i = 1; i < w.length; i++) if (w[i].y - w[i - 1].y < 380) crowd++;
-    for (const e of w) if (c.some((h) => Math.abs(h.y - e.y) < 300)) hairy++;
+    for (const e of w) if (c.some((h) => hairNear(h, e.x, e.y))) hairy++;
   }
   ok(wbcs > 200 && crowd === 0, 'over 200 Rapids layouts no two Big Macros are within 380 (' + crowd + ' of ' + wbcs + ')');
-  ok(hairy === 0, 'and none is within 300 of a wall hair (' + hairy + ')');
+  ok(hairy === 0, 'and none is within ' + CORE.CILIA_WBC_CLEAR + ' of a wall hair inside its reach (' + hairy + ')');
 }
 { // a Big Macro spots you first: 0.35 s of wind-up before it hunts
   // arrange: a cell 440 ahead, Kevin dashes straight at it (the wind-up is shorter at dash speed: w.spotT)
@@ -2592,7 +2605,7 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   for (const r of [a, b, c]) r.startDrill();
   // assert
   c.p.bestCombo = 50; c.drill = null; c.startDrill();
-  ok(Math.abs(a.drill.me - 0.225) < 1e-9 && Math.abs(b.drill.me - (0.45 + 2 * CORE.HEAD_TIER)) < 1e-9 && Math.abs(c.drill.me - (CORE.HEAD_TIER + 50 * CORE.HEAD_COMBO)) < 1e-9 && CORE.HEAD_TIER === 0.42 && CORE.HEAD_COMBO === 0.016, 'head start = 0.45 x energy share + 0.42 x best tier + 0.016 x best chain (' + [a, b, c].map((r) => r.drill.me.toFixed(3)).join(', ') + ')');
+  ok(Math.abs(a.drill.me - 0.5 * CORE.HEAD_E) < 1e-9 && Math.abs(b.drill.me - (CORE.HEAD_E + 2 * CORE.HEAD_TIER)) < 1e-9 && Math.abs(c.drill.me - (CORE.HEAD_TIER + 50 * CORE.HEAD_COMBO)) < 1e-9 && CORE.HEAD_TIER === 0.42 && CORE.HEAD_COMBO === 0.016, 'head start = ' + CORE.HEAD_E + ' x energy share + 0.42 x best tier + 0.016 x best chain (' + [a, b, c].map((r) => r.drill.me.toFixed(3)).join(', ') + ')');
   const bp = quiet(); atEgg(bp, 0); bp.p.e = 0; bp.p.maxE = 100; bp.p.bossPasses = 1; bp.startDrill();
   const bp9 = quiet(); atEgg(bp9, 0); bp9.p.e = 0; bp9.p.maxE = 100; bp9.p.bossPasses = 9; bp9.startDrill();
   ok(Math.abs(bp.drill.me - 0.3) < 1e-9 && Math.abs(bp9.drill.me - 0.6) < 1e-9, 'every named rival passed on the way adds 0.3, up to 0.6 (' + bp.drill.me.toFixed(2) + ', ' + bp9.drill.me.toFixed(2) + ')');
@@ -2601,7 +2614,7 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   const hb = b.events.find((e) => e.type === 'headBonus');
   // (0.45 (150 GAS) + 5 tiers + the chain counted to 100 + 0.6 raw; the S takes 2.0 + 0.5 x 1.0 + 1.5 x 0.6 = 3.4 =
   // DRILL_HEAD_MAX, the rest pays its whole tenths)
-  const bTot = 0.45 + 5 * CORE.HEAD_TIER + 100 * CORE.HEAD_COMBO + 0.6;
+  const bTot = CORE.HEAD_E + 5 * CORE.HEAD_TIER + 100 * CORE.HEAD_COMBO + 0.6;
   ok(Math.abs(b.drill.me - 3.4) < 1e-9 && b.events.some((e) => e.type === 'drill' && e.head === 3.4) && hb && hb.dna === Math.floor((bTot - 3.4) * 10 + 1e-6) * CORE.HEAD_BONUS_DNA, "and the duel takes it on the soft knee, the chain counting up to 100 (the 'drill' event says how much: head; the rest is paid as headBonus " + (hb && hb.dna) + ' DNA)');
   const rk = new Race(newMeta(), mulberry(3), { events: false }); rk.agents.forEach((q) => { q.alive = false; }); atEgg(rk, 0); rk.p.e = 100; rk.p.maxE = 100; rk.p.bestTier = 5; rk.p.bestCombo = 100; rk.startDrill();
   ok(rk.drill.me === CORE.DRILL_HEAD_ROOKIE && CORE.DRILL_HEAD_ROOKIE === 1.3, 'a rookie run caps the head start at 1.3 (' + rk.drill.me + ')');
@@ -2855,7 +2868,8 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   ok(god <= 0.15 * M.length, 'GOD MODE in at most 15% of ' + M.length + ' half-habit runs (' + god + ', ' + Math.round(100 * god / M.length) + '%)');
   // (the spec asked for 45%: the autopilot bot never hunts close shaves or dodges, so it lands far fewer other links
   // than a player; measured about 75% before the trim, 85%+ without the overtake anti-spam)
-  ok(passes <= 0.8 * all, 'overtakes are at most 80% of the bot\'s chain value (' + Math.round(100 * passes / Math.max(1, all)) + '%)');
+  // (systems round 9: 70% (80%), with SWITCH-UP in: about 50% on these seeds)
+  ok(passes <= 0.7 * all, 'overtakes are at most 70% of the bot\'s chain value (' + Math.round(100 * passes / Math.max(1, all)) + '%)');
 }
 { // overtake spam: the 6th overtake in a row counts half, the 12th a quarter, a slingshot is always whole
   // arrange
@@ -2871,12 +2885,26 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   const t = quiet(); for (let i = 0; i < 9; i++) t.addCombo(['pass', 'weave', 'snipe'][i % 3], 0, 0);
   ok(Math.abs(t.p.comboT - t.p.comboMax * 0.65) < 1e-9 && CORE.passRefill(10) === 0.4, 'the 6th-9th overtake in a row refills the timer to 65%, the 10th+ to 40%');
 }
+withFeatures({ passEarly: true }, () => { // (FEATURES.passEarly, held back) the 4th overtake in a row counts half, the 9th a quarter
+  // arrange
+  const r = quiet(), kinds = ['pass', 'weave', 'snipe'];
+  for (const k of kinds) r.addCombo(k, 0, 0);
+  // act
+  const c3 = r.p.combo; r.addCombo('pass', 0, 0); const half = r.p.combo - c3;
+  r.addCombo('slingshot', 0, 0); const sling = r.p.combo - c3 - half;
+  for (const k of ['weave', 'snipe', 'pass']) r.addCombo(k, 0, 0);
+  const c8 = r.p.combo; r.addCombo('weave', 0, 0); const quarter = r.p.combo - c8;
+  const style = r.p.style; r.addCombo('dodge', 0, 0); const run0 = r.p.passRun;
+  // assert
+  ok(half === 0.5 && sling === 1 && quarter === 0.25 && run0 === 0 && CORE.PASS_HALF_AT === 4 && CORE.PASS_QUARTER_AT === 9, 'passEarly: the 4th counts 0.5, the 9th 0.25, a slingshot 1, any other link resets the run (' + [half, sling, quarter, run0].join('/') + ')');
+  ok(style === 1 && r.p.style === 2, 'passEarly: overtakes alone are STYLE 1; a dodge makes it 2');
+});
 { // timer heat: a long chain has a shorter timer, and the bar never jumps when a chain shrinks
   // arrange
   const r = quiet(); r.p.combo = 150; r.p.frenzyT = 0;
   // act / assert
   ok(r.comboMaxOf(r.p) <= 0.62 * r.s.combo && r.comboMaxOf({ ...r.p, combo: 10 }) === r.s.combo, 'comboMaxOf: x1 up to 20 links, at most x0.62 at 150 outside FRENZY (' + (r.comboMaxOf(r.p) / r.s.combo).toFixed(2) + ')');
-  const d = quiet(); give(d, 'echo'); d.p.combo = 60; d.p.bank = 60; d.p.comboT = 0.01; d.p.comboMax = d.comboMaxOf(d.p); d.step(1 / 30);
+  const d = quiet(); give(d, 'echo'); d.p.combo = 60; d.p.bank = 60; d.p.comboT = 0.01; d.p.comboMax = d.comboMaxOf(d.p); for (let i = 0; i < 16; i++) d.step(1 / 30);   // (past the LAST CALL window)
   ok(d.p.combo === 30 && Math.abs(d.p.comboMax - d.comboMaxOf(d.p)) < 1e-9 && d.p.comboT <= d.p.comboMax, 'a kept half restarts on the same bar it is measured against');
 }
 { // the bank: one 80 chain pays more than two 40s; the curve is n^1.4 to BANK_SOFT (100), straight past it
@@ -2957,7 +2985,7 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   const late = [1, 2, 3, 4, 5, 6].map((s) => layout(11, s));
   const all = late.flatMap((r) => r.ents), news = new Set(late.flatMap((r) => r.events.filter((e) => e.type === 'hzNew').map((e) => e.id)));
   const twins = all.filter((e) => e.twin && !e.dead), cil = all.filter((e) => e.t === 'cilia');
-  const badTwin = late.reduce((n, r) => n + r.ents.filter((e) => e.twin && !e.dead && (r.ents.some((c) => c.t === 'cilia' && Math.abs(c.y - e.y) < 300) || r.ents.some((g) => g.t === 'gate' && Math.abs(g.y - e.y) < 100))).length, 0);
+  const badTwin = late.reduce((n, r) => n + r.ents.filter((e) => e.twin && !e.dead && (r.ents.some((c) => c.t === 'cilia' && hairNear(c, e.x, e.y)) || r.ents.some((g) => g.t === 'gate' && Math.abs(g.y - e.y) < 100))).length, 0);
   // assert
   // (fingerprint re-taken when the Sea got 1.1 Big Macros and the Rapids 1.85 wall hairs)
   // (re-taken with the fruit drought guard: a trail at least every 2600)
@@ -2966,9 +2994,10 @@ function drumDuel(k, { seed = 1, tps = 6, side = -1, drill = 0, steps = 600 } = 
   // clump, which the acid keeps clear of; the daily layout moves with it, on purpose)
   // (re-taken with the split run seeds: the hazard rows draw from splitSeed(runSeed, 'hz'), and a DNA blob's x is drawn
   // whether it spawns or not)
-  ok(g0 === '373:3994388346 387:1037224672', 'with a fixed seed the gen-0 layout is unchanged (' + g0 + ')');
+  // (re-taken in systems round 9: the Rapids' hairs are spaced (CILIA_GAP) and clear only the Big Macros inside their reach)
+  ok(g0 === '374:1741877334 387:1037224672', 'with a fixed seed the gen-0 layout is unchanged (' + g0 + ')');
   ok(['slide', 'twins', 'pulse', 'pair'].every((id) => news.has(id)) && late.every((r) => r.events.filter((e) => e.type === 'hzNew').length === new Set(r.events.filter((e) => e.type === 'hzNew').map((e) => e.id)).size), 'gen 11 layouts bring sliding gates, Big Macro twins, pulsing puddles and hair pairs, each announced once a run (' + [...news].join(',') + ')');
-  ok(twins.length >= 3 && badTwin === 0, 'twins never land within 300 of a wall hair or on a gate row (' + twins.length + ' twins, ' + badTwin + ' bad)');
+  ok(twins.length >= 3 && badTwin === 0, 'twins never land next to a wall hair (within its clearance) or on a gate row (' + twins.length + ' twins, ' + badTwin + ' bad)');
   ok(cil.filter((e) => e.pair).every((e) => cil.some((c) => c !== e && !c.pair && c.y === e.y && c.wall === -e.wall)), 'a hair pair sits on the opposite wall at the same row');
   const pul = all.find((e) => e.pulse); const rs = [];
   if (pul) { const r = late.find((q) => q.ents.includes(pul)); r.p.y = pul.y; for (let i = 0; i < 60; i++) { r.t += 0.02; r.stepEnts(0, false, false, 0); rs.push(pul.r / pul.r0); } }
@@ -3729,7 +3758,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(d1 === d2 && lab.includes('(tail sips ' + Math.round(CORE.WATER_DRAIN * HABITS.water.max * 100) + '% more)'), 'grandad water adds tank, not drain (' + lab + ')');
   // (retuned for the phone-tapping bots and the race-fed duel: gen 0 stays soft so the first win lands on run 3-5, the first
   // baby brings the real training, and the late points ease so a maxed save still wins 65-80%)
-  ok(CORE.RIVAL_TRAIN.map((x) => x.join(':')).join() === '0:0.38,1:0.5,2:0.7,4:0.95,12:0.95,20:0.97' && CORE.RIVAL_TRAIN.every((x, i, T) => !i || x[1] >= T[i - 1][1]), 'the rivals train on one ramp that never goes down (RIVAL_TRAIN ' + CORE.RIVAL_TRAIN.map((x) => x[1]).join(' / ') + ')');
+  ok(CORE.RIVAL_TRAIN.map((x) => x.join(':')).join() === '0:0.38,1:0.5,2:0.78,4:0.95,12:0.95,20:0.97' && CORE.RIVAL_TRAIN.every((x, i, T) => !i || x[1] >= T[i - 1][1]), 'the rivals train on one ramp that never goes down (RIVAL_TRAIN ' + CORE.RIVAL_TRAIN.map((x) => x[1]).join(' / ') + ')');
 }
 { // no difficulty cliff: over the eight 4-taps/s careers gens 1-6 win 35-55%, gens 10-14 25%+, never 6 losses in a row past gen 10
   // arrange (the careers above, 45 runs each)
@@ -3824,7 +3853,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(M.filter((x) => x.tier >= 4).length >= 9 && M.filter((x) => x.tier >= 5).length >= 2, 'half-habit bots reach HYPER on 9+ of 24 runs and GOD MODE on 2+ (' + M.map((x) => x.tier).join('') + ')');
   // (GOD MODE at 14 and HYPER at 5.5: the top of the ladder is for a built run; a no-habit autopilot never reaches it)
   ok(A.length >= 8 && A.every((x) => x.tier < 5), 'a no-habit autopilot never reaches GOD MODE (' + A.map((x) => x.tier).join('') + ')');
-  ok(CORE.FRENZY_TIERS.map((T) => T.at).join() === '1,2.5,4,5.5,17', 'FRENZY tiers at 1, 2.5, 4, 5.5 and 14 times the base');
+  ok(CORE.FRENZY_TIERS.map((T) => T.at).join() === '1,2.5,4,5.5,17.5', 'FRENZY tiers at 1, 2.5, 4, 5.5 and 17.5 times the base');
 }
 { // CASH TO CLIMB: a FINISHER cashed in FRENZY keeps the FRENZY progress, out of FRENZY it does not
   // arrange: two styled chains of 25 (MEGA reached in one, none of FRENZY running in the other)
@@ -3872,8 +3901,8 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   // act
   const parts = r.headParts(); r.startDrill(); const hb = r.events.filter((e) => e.type === 'headBonus');
   // assert
-  const T3 = 0.45 + 3 * CORE.HEAD_TIER + 59 * CORE.HEAD_COMBO + 0.3, D3 = CORE.duelHead(T3);
-  ok(Math.abs(parts.tank - 0.45) < 1e-9 && Math.abs(parts.tier - 3 * CORE.HEAD_TIER) < 1e-9 && Math.abs(parts.combo - 59 * CORE.HEAD_COMBO) < 1e-9 && Math.abs(parts.boss - 0.3) < 1e-9 && parts.hits === 0 && parts.lead === 0 && Math.abs(parts.total - T3) < 1e-9 && parts.cap === CORE.HEAD_DUEL_MAX, 'headParts: {tank, tier, combo, boss, hits, lead, total, cap} (' + JSON.stringify(parts) + ')');
+  const T3 = CORE.HEAD_E + 3 * CORE.HEAD_TIER + 59 * CORE.HEAD_COMBO + 0.3, D3 = CORE.duelHead(T3);
+  ok(Math.abs(parts.tank - CORE.HEAD_E) < 1e-9 && Math.abs(parts.tier - 3 * CORE.HEAD_TIER) < 1e-9 && Math.abs(parts.combo - 59 * CORE.HEAD_COMBO) < 1e-9 && Math.abs(parts.boss - 0.3) < 1e-9 && parts.hits === 0 && parts.lead === 0 && Math.abs(parts.total - T3) < 1e-9 && parts.cap === CORE.HEAD_DUEL_MAX, 'headParts: {tank, tier, combo, boss, hits, lead, total, cap} (' + JSON.stringify(parts) + ')');
   // assert: each term has its ceiling in parts.max (hits: its floor), so the result screen can name the biggest shortfall
   const mx = parts.max || {};
   ok(mx.tank === CORE.HEAD_E && mx.boss === CORE.HEAD_BOSS_CAP && Math.abs(mx.combo - 100 * CORE.HEAD_COMBO) < 1e-9 && mx.tier >= parts.tier - 1e-9 && mx.hits === CORE.HEAD_HIT_CAP && mx.lead === CORE.HEAD_LEAD_CAP && mx.boss - parts.boss > 0.29, 'headParts.max holds each term ceiling (' + JSON.stringify(mx) + ')');
@@ -3887,7 +3916,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(CORE.HEAD_CAP_GEN0 === 2.56 && CORE.HEAD_CAP_THIN === 0.6 && Math.abs(cap0.drill.me - (2.56 - 0.6)) < 1e-9 && Math.abs(CORE.headCapGen0(maxed(0)) - 2.56) < 1e-9 && Math.abs(gen1Cap() - CORE.DRILL_HEAD_MAX) < 1e-9 && CORE.headCapOf(veteran(), 5) === CORE.DRILL_HEAD_MAX, 'a gen 0 duel takes at most 2.56 of the head start less 0.6 for the habits not bought (no habits: ' + cap0.drill.me.toFixed(2) + '), a gen 1 save and the daily 3.4');
   const big = quiet(); big.headCap = gen1Cap(); atEgg(big, 0); big.p.e = 150; big.p.maxE = 150; big.p.bestTier = 5; big.p.bestCombo = 100; big.p.bossPasses = 2; big.startDrill();
   const bh = big.events.find((e) => e.type === 'headBonus');
-  const bigT = 0.45 + 5 * CORE.HEAD_TIER + 100 * CORE.HEAD_COMBO + 0.6;
+  const bigT = CORE.HEAD_E + 5 * CORE.HEAD_TIER + 100 * CORE.HEAD_COMBO + 0.6;
   ok(Math.abs(big.drill.me - CORE.DRILL_HEAD_MAX) < 1e-9 && bh && Math.abs(bh.sec - Math.floor((bigT - CORE.DRILL_HEAD_MAX) * 10 + 1e-6) / 10) < 1e-9, 'a ' + bigT.toFixed(2) + ' head start drills from the 3.4 cap and the 1.05 the duel cannot take is paid (' + (bh && bh.sec) + ' s)');
   const rk = new Race(newMeta(), mulberry(3), { events: false }); rk.agents.forEach((q) => { q.alive = false; }); atEgg(rk, 0); rk.p.bestTier = 5; rk.p.bestCombo = 100; rk.startDrill();
   ok(!rk.events.some((e) => e.type === 'headBonus') && rk.drill.me === CORE.DRILL_HEAD_ROOKIE, 'a rookie run keeps its own cap and pays no head bonus');
@@ -3973,7 +4002,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(Math.abs(rate(1, 3) - rate(4, 7)) <= 0.25, 'gens 1-3 win within 25 points of gens 4-7 (' + Math.round(rate(1, 3) * 100) + '% vs ' + Math.round(rate(4, 7) * 100) + '%)');
   ok(down === 0 && CORE.RIVAL_TRAIN_RUNS === 14, 'rivalDrillK never goes down along a career (' + down + ' drops)');
   ok(grow(g20) <= 1.03 * grow(g10), 'a maxed broccoli never outgrows the field: gen 20 x' + grow(g20).toFixed(3) + ' vs gen 10 x' + grow(g10).toFixed(3));
-  ok(CORE.FRESH_GEN === 0.02, 'a fresh generation eases in by 2% (systems round 8: 4% before the gen 1 training came down)');
+  ok(CORE.FRESH_GEN === 0.01, 'a fresh generation eases in by 1% (systems round 9: 2% put the 3 runs after a first win 15-16 points over the 3 ending with it; 4% before the gen 1 training came down)');
 }
 { // no fruit droughts: at hazard step 6 the gap between two fruit trails is sugarGap(6) + 100 at most, and the Acid Lagoon opens with one
   // arrange / act: 20 layouts, the whole tube
@@ -4511,7 +4540,7 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(aftn >= 400 && Math.abs(aft / aftn - inc / incn) <= 0.15, 'the 3 runs after a first win win ' + Math.round(100 * aft / aftn) + '%, the 3 ending with it ' + Math.round(100 * inc / incn) + '% (within 15 points, ' + aftn + ' runs after)');
 }
 { // the softer first win: the training ramp, the fruit floor, the fresh-generation drill, the LAST GASP fade
-  ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.500,0.700,0.825,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.50 / 0.70 / 0.825 / 0.95 at gens 1-4, fruitFloor(1) = 1');
+  ok([1, 2, 3, 4].map((g) => CORE.rivalTrain(g).toFixed(3)).join() === '0.500,0.780,0.865,0.950' && CORE.fruitFloor(1) === 1 && CORE.fruitFloor(0) === 0 && CORE.FRUIT_FLOOR === 0, 'rivalTrain 0.50 / 0.78 / 0.865 / 0.95 at gens 1-4, fruitFloor(1) = 1');
   const fresh = Object.assign(veteran(), { gen: 1, sinceWin: 0, lastWinStreak: 1, normRuns: 6, runs: 6 }), r = new Race(fresh, mulberry(1), { events: false });
   ok(Math.abs(r.rivalK - CORE.rivalDrillK(fresh) / (1 + CORE.FRESH_GEN)) < 1e-12 && Math.abs(CORE.rivalDrillRace(fresh, null) * (1 + CORE.FRESH_GEN) - CORE.rivalDrillK(fresh)) < 1e-12 && CORE.rivalDrillRace(fresh, 5) === CORE.rivalDrillK(fresh), 'the run after a first win: the rivals drill / (1 + FRESH_GEN) (never in the daily)');
   // (a save with 4 wins: FEATURES.winGate lets the fade go LAST_GASP_WIN_K runs a win, 4 x 3 = the full LAST_GASP_RUNS; one
@@ -4637,7 +4666,7 @@ const passOne = (r, extra = {}) => { const a = r.agents[20]; Object.assign(a, { 
   // (systems round 6: over 96 runs, still 1 in 6 or more (16+), the same rate on a sample twice as big)
   const m5 = M.filter((x) => x.tier >= 5).length, g96 = G96.filter((x) => x.tier >= 5).length;
   ok(g96 >= 16 && G96.length === 96 && m5 <= 0.15 * M.length && A.every((x) => x.tier < 5), 'maxed habits at gen 0 reach GOD MODE on 16+ of 96 runs (' + g96 + ', ' + g5 + ' of the first 48), half-habit runs on 15% at most (' + m5 + '/' + M.length + '), no habits never (' + A.filter((x) => x.tier >= 5).length + '/' + A.length + ')');
-  ok(CORE.FRENZY_TIERS[3].at === 5.5 && CORE.FRENZY_TIERS[4].at === 17 && CORE.FRENZY_TIER_ADD === 2 && CORE.STYLE_WINDOW === 7.5, 'HYPER at 5.5, GOD MODE at 17, a tier climbed mid FRENZY adds 2 s, a 7.5 s STYLE window');
+  ok(CORE.FRENZY_TIERS[3].at === 5.5 && CORE.FRENZY_TIERS[4].at === 17.5 && CORE.FRENZY_TIER_ADD === 2 && CORE.STYLE_WINDOW === 7.5, 'HYPER at 5.5, GOD MODE at 17.5, a tier climbed mid FRENZY adds 2 s, a 7.5 s STYLE window');
 }
 { // a FINISHER keeps the STYLE: style 5, cash, then a pop inside 2 s is still STYLE 5+
   // arrange
@@ -5210,7 +5239,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   ok(r.p.tier === 0 || r.p.frenzyT === 0, 'FRENZY ended');
   ok(oc === 2 && evs.map((e) => e.n).join() === '1,2' && fz > r.s.frenzyLen - 1e-9 - 0 && r.p.oc === 0, 'OVERCLOCK: 2 stacks at 5.5x + 50 (' + oc + ', events ' + evs.map((e) => e.n).join() + '), zeroed when FRENZY ends (' + r.p.oc + ')');
   const c = quiet(); styled(c); c.addCombo('close', 0, 0, 5.5 * at + 2 * CORE.OVERCLOCK_STEP * at); c.breakCombo('bonk'); ok(c.p.oc === 0, 'a smashed chain zeroes the OVERCLOCK');
-  ok(CORE.FRENZY_TIERS[4].at === 17 && CORE.OVERCLOCK_STEP === 2.5 && CORE.OVERCLOCK_MAX === 4, 'GOD MODE stays at 17x, OVERCLOCK every 2.5x, up to 4 stacks');
+  ok(CORE.FRENZY_TIERS[4].at === 17.5 && CORE.OVERCLOCK_STEP === 2.5 && CORE.OVERCLOCK_MAX === 4, 'GOD MODE stays at 17.5x (systems round 9), OVERCLOCK every 2.5x, up to 4 stacks');
 }
 { // 5b: MEDLEY: five different tricks inside TRICK_STREAK_T give one medley at streak 3 (it never lights FRENZY); a repeat holds the streak
   withFeatures({ medley: true }, () => {
@@ -5410,7 +5439,8 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   const d1 = fpOf(new Race(newMeta(), mulberry(1), { seed: 20500, events: false })), d2 = fpOf(new Race(newMeta(), mulberry(77), { seed: 20500, events: false }));
   // assert
   ok(d1 === d2, 'the daily is the same tube whatever the game rng (' + d1 + ' vs ' + d2 + ')');
-  ok(CORE.DAILY_LAYOUT === 3 && d1 === '374:1184107832', 'daily layout ' + CORE.DAILY_LAYOUT + ' fingerprint ' + d1);
+  // (layout 4, systems round 9: the Rapids' hair spacing and clearance)
+  ok(CORE.DAILY_LAYOUT === 4 && d1 === '374:1737362746', 'daily layout ' + CORE.DAILY_LAYOUT + ' fingerprint ' + d1);
 }
 { // 3a: the head start the cap keeps out of the duel is paid: duel + paid seconds = the whole head start (a run-6 save)
   // arrange: gen 0, normal run 6 (headCap on the ramp, under duelHead), a big race
@@ -6156,7 +6186,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   const plan = (nr, gen = 0) => CORE.eventPlan({ runs: nr, normRuns: nr, gen });
   // assert
   ok([3, 4, 5].every((nr) => plan(nr).kinds === CORE.FRIENDLY_EVENTS) && plan(6).kinds.includes('stampede') && plan(6).hostileMax === 1, 'normal runs 4-6 (nr 3-5) meet friendly events only, the stampede from nr 6');
-  ok(CORE.RIVAL_TRAIN[1][1] === 0.5 && CORE.RIVAL_TRAIN[2][1] === 0.7, 'RIVAL_TRAIN: gen 1 0.50, gen 2 0.70');
+  ok(CORE.RIVAL_TRAIN[1][1] === 0.5 && CORE.RIVAL_TRAIN[2][1] === 0.78, 'RIVAL_TRAIN: gen 1 0.50, gen 2 0.78 (systems round 9)');
 }
 { // 6: Great-Grandad: past GRANDAD_MAX a level every 3 generations, with no end, at GRANDAD_FX3 each, priced x2 then x1.06 compounding
   // arrange
@@ -6212,6 +6242,163 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   ok(overtaken.sweep.join() === '3200,450' && overtaken.nyeh === 2 && overtaken.fourth === -5, 'audio r9: overtaken hums 3200 -> 450 Hz and nyehs a fourth down ' + JSON.stringify(overtaken));
   ok(brk.dry.join() === '0,4,16,16,32,32' && brk.notes.join() === '0,4,8,10,12,12' && brk.gapMs.join() === '0,40,40,45,45,45' && brk.balloon.join() === 'false,false,false,true,true,true' && brk.uhh.join() === 'false,false,false,false,true,true' && brk.plain, 'audio r9: the combo break grows by rung ' + JSON.stringify(brk));
   ok(reveal === 0.9, 'audio r9: the baby reveal at 0.9 s');
+}
+
+// ================================================================ systems round 9
+{ // the Rapids' wall hairs at gen 20: one hazard growth (not two multiplied), CILIA_GAP spacing, Big Macros left to meet
+  // arrange: spawnAhead alone (no race steps) over the Rapids of 10 run seeds at gen 20 (hazard step 14)
+  const RAP = ZONES.findIndex((z) => z.id === 'rapids');
+  let hairs = 0, macs = 0, swum = 0, sameWall = 0;
+  for (let s = 1; s <= 10; s++) {
+    const m = veteran(); m.gen = 20; m.normRuns = 6;
+    const r = new Race(m, mulberry(s), { events: false, runSeed: CORE.runSeedOf(s, 20) }); r.p.side = r.eggSide;
+    const y0 = ZSTART[RAP], y1 = y0 + ZONES[RAP].len - 400;
+    // act
+    r.genY = y0; for (let y = y0; y < y1 - 2200; y += 500) { r.p.y = y - 500; r.spawnAhead(); }
+    const c = r.ents.filter((e) => e.t === 'cilia' && e.y >= y0 && e.y < y1).sort((a, b) => a.y - b.y);
+    hairs += c.length; macs += r.ents.filter((e) => e.t === 'wbc' && !e.dead && !e.popcorn && e.y >= y0 && e.y < y1).length; swum += y1 - y0;
+    for (let i = 0; i < c.length; i++) for (let j = i + 1; j < c.length && c[j].y - c[i].y < CORE.CILIA_GAP; j++) if (c[j].wall === c[i].wall) sameWall++;
+  }
+  const hk = 1000 * hairs / swum, wk = 1000 * macs / swum;
+  // assert
+  ok(r9Hz(), 'the Rapids hair roll is one hzMul(hg, 0.1 + RAPIDS_CILIA_HZ), capped at CILIA_ROW_MAX 0.35 a row');
+  ok(hk <= 4.5 && wk >= 0.6, 'gen 20 Rapids: ' + hk.toFixed(2) + ' wall hairs (4.5 at most) and ' + wk.toFixed(2) + ' Big Macros (0.6+) per 1000 units');
+  ok(sameWall === 0, 'no two hairs on one wall within CILIA_GAP ' + CORE.CILIA_GAP + ' (' + sameWall + ')');
+}
+function r9Hz() { return CORE.CILIA_ROW_MAX === 0.35 && CORE.CILIA_GAP === 260 && CORE.CILIA_WBC_CLEAR === 160 && Math.abs(CORE.hzMul(13, 0.1 + CORE.RAPIDS_CILIA_HZ) - 3.44) < 1e-9; }
+{ // LAST CALL: a 20+ bank whose timer runs out waits 0.45 s for a cash-in (a CLUTCH CASH), then drops at x0.6
+  // arrange: one scripted chain of 25 mixed links per race, the timer then run out
+  const lastCallRace = () => { const r = quiet(); for (let i = 0; i < 25; i++) r.addCombo(['pass', 'close', 'gate', 'dodge', 'pop'][i % 5], 0, 0); r.events.length = 0; r.p.comboT = 0.001; r.step(1 / 60); return r; };
+  const cashAfter = (sec) => {
+    const r = lastCallRace(), call = r.events.find((e) => e.type === 'lastCall'), bank = r.p.bank, style = r.p.style, combo0 = r.p.combo;
+    const evs = r.events.slice(); r.events.length = 0;
+    for (let t = 0; t < sec - 1e-9; t += 1 / 60) { if (r.p.lastCallT > 0) r.addCombo('close', 0, 0); r.step(1 / 60); evs.push(...r.events); r.events.length = 0; }
+    const comboHeld = r.p.combo;
+    r.input.cashOut = true; r.step(1 / 60); evs.push(...r.events);
+    return { r, call, bank, style, combo0, comboHeld, bankEv: evs.find((e) => e.type === 'comboBank'), end: evs.find((e) => e.type === 'comboEnd') };
+  };
+  // act
+  const a = cashAfter(0.3), b = cashAfter(0.5);
+  const pz = lastCallRace(), lt0 = pz.p.lastCallT; pz.paused = true; for (let i = 0; i < 60; i++) pz.step(1 / 60); const ltPaused = pz.p.lastCallT; pz.paused = false;
+  // assert
+  ok(a.call && a.call.bank === Math.floor(a.bank) && a.call.t === CORE.LAST_CALL_T && CORE.LAST_CALL_T === 0.45, 'an empty timer on a ' + Math.floor(a.bank) + ' bank emits lastCall {bank, t: 0.45} instead of dropping');
+  ok(a.comboHeld === a.combo0, 'no new link lands during LAST CALL (' + a.combo0 + ' -> ' + a.comboHeld + ')');
+  const fm = finisherMult(a.style);
+  ok(a.bankEv && a.bankEv.finisher && a.bankEv.clutch === true && a.bankEv.mult === fm && !a.bankEv.buzzer && Math.abs(a.bankEv.dna - Math.round(bankDna(a.bank, a.style, a.bankEv.clutchK, a.bankEv.trick) * fm * 10) / 10) < 1e-9,
+    'a cash-in 0.3 s into it is a CLUTCH CASH: the finisher x' + fm + ' (no buzzer), comboBank.clutch true (' + JSON.stringify(a.bankEv) + ')');
+  ok(a.end && a.end.clutch === true && a.r.p.combo === Math.floor(finisherSeed(a.bank) / 2), 'and it seeds the next chain with half the finisher seed (' + a.r.p.combo + ')');
+  ok(b.bankEv && !b.bankEv.finisher && b.bankEv.mult === TIMEOUT_BANK && b.bankEv.clutch !== true && b.r.p.combo === 0, 'one at 0.5 s is too late: the chain dropped at x0.6 (' + (b.bankEv && b.bankEv.mult) + ')');
+  ok(lt0 === CORE.LAST_CALL_T && ltPaused === lt0, 'a paused race holds the LAST CALL timer (' + lt0 + ' -> ' + ltPaused + ')');
+  // (a bank under 20 still drops at once)
+  const small = quiet(); for (let i = 0; i < 10; i++) small.addCombo(['pass', 'close'][i % 2], 0, 0); small.events.length = 0; small.p.comboT = 0.001; small.step(1 / 60);
+  ok(!small.events.some((e) => e.type === 'lastCall') && small.events.some((e) => e.type === 'comboBank' && e.mult === TIMEOUT_BANK), 'a bank under 20 drops at once, no LAST CALL');
+}
+{ // the daily rule never repeats the day before, and every rule keeps its share
+  // arrange
+  const days = Array.from({ length: 1000 }, (_, i) => 20000 + i), share = {};
+  // act
+  const rules = days.map((d) => CORE.dailyRule(d)); let repeats = 0;
+  for (let i = 0; i < rules.length; i++) { share[rules[i]] = (share[rules[i]] || 0) + 1; if (rules[i] === CORE.dailyRule(days[i] - 1)) repeats++; }
+  // assert
+  ok(repeats === 0, 'over 1000 days no two neighbours share a daily rule (' + repeats + ')');
+  ok(EVENT_ORDER.every((id) => Math.abs((share[id] || 0) / 1000 - 1 / 7) <= 0.03), 'each rule runs 14% +/- 3% of days (' + EVENT_ORDER.map((id) => id + ' ' + (share[id] || 0)).join(', ') + ')');
+  ok(CORE.DAILY_LAYOUT === 4, 'DAILY_LAYOUT 4: the rule change is versioned');
+}
+{ // SWITCH-UP: a close, dodge, pop or gate after 3+ overtakes in a row is +1 link and refills the timer to 100%
+  // arrange
+  const up = quiet(), flat = quiet();
+  for (const k of ['pass', 'weave', 'snipe']) up.addCombo(k, 0, 0);
+  for (const k of ['pass', 'weave']) flat.addCombo(k, 0, 0);
+  up.events.length = 0; flat.events.length = 0;
+  // act
+  const u0 = up.p.combo; up.addCombo('dodge', 0, 0); const uAdd = up.p.combo - u0, ue = up.events.find((e) => e.type === 'combo');
+  const f0 = flat.p.combo; flat.addCombo('dodge', 0, 0); const fAdd = flat.p.combo - f0, fe = flat.events.find((e) => e.type === 'combo');
+  const sl = quiet(); for (const k of ['pass', 'weave', 'snipe']) sl.addCombo(k, 0, 0); sl.events.length = 0; sl.addCombo('sugar', 0, 0);
+  // assert
+  ok(uAdd === 2 && ue && ue.switchUp === true && up.p.comboT === up.p.comboMax, 'a dodge after 3 overtakes: +2 links, switchUp, a full timer (' + uAdd + ')');
+  ok(fAdd === 1 && fe && !fe.switchUp, 'after only 2 overtakes it is a plain link (' + fAdd + ')');
+  ok(!sl.events.find((e) => e.type === 'combo').switchUp, 'a fruit link is no SWITCH-UP');
+}
+withFeatures({ nearGrade: true }, () => { // (FEATURES.nearGrade, held back) graded near misses: the band is 24 px past the rim; 4 px or less pays 2 (RAZOR), 10 or less 1, wider half a link
+  // arrange
+  const at = (gap) => { const r = quiet(); r.events.length = 0; const c0 = r.p.combo; r.nearMiss(r.p.x, r.p.y, gap); return { add: r.p.combo - c0, ev: r.events.find((e) => e.type === 'combo') }; };
+  // act
+  const razor = at(3), tight = at(8), wide = at(16), blind = at(null);
+  const band = quiet(); band.p.y = 500; band.p.x = centre(500); band.ents.push({ t: 'acid', x: band.p.x + 66, y: 640, r: 45, seed: 1 }); let closes = 0;
+  for (let t = 0; t < 0.8; t += 1 / 60) { band.input.tx = band.p.x; band.step(1 / 60); band.p.e = 100; for (const e of band.events) if (e.type === 'combo' && e.kind === 'close') closes++; band.events.length = 0; }
+  // assert
+  ok(razor.add === 2 && razor.ev.razor === true && tight.add === 1 && !tight.ev.razor && wide.add === 0.5 && blind.add === 1, 'near-miss links by gap: 3 px ' + razor.add + ' (razor), 8 px ' + tight.add + ', 16 px ' + wide.add + ', unknown ' + blind.add);
+  ok(CORE.NEAR_BAND === 24 && closes === 1, 'a pass 21 px off a puddle rim is inside the 24 px band and pays (' + closes + ')');
+});
+{ // (nearGrade off, the live game) a near miss is 1 link whatever the gap, inside the old 18 px band
+  // arrange / act
+  const r = quiet(); const c0 = r.p.combo; r.nearMiss(r.p.x, r.p.y, 3);
+  // assert
+  ok(r.p.combo - c0 === 1 && CORE.nearBand() === 18, 'nearGrade off: a 3 px shave is 1 link, the band 18 px');
+}
+
+{ // the rivals' training follows the generation too: max((runs / 14) ^ 0.6, min(1, gen / 4)); gen 2 trains to 0.78
+  // arrange
+  const at = (normRuns, gen) => CORE.rivalTrainShare({ normRuns, runs: normRuns, gen });
+  // act
+  const fast4 = at(8, 4), fast2 = at(3, 2), slow = at(5, 0), full = at(14, 0);
+  // assert
+  ok(fast4 === 1 && Math.abs(fast2 - 0.5) < 1e-12 && Math.abs(slow - Math.pow(5 / 14, 0.6)) < 1e-12 && full === 1, 'rivalTrainShare: gen 4 on run 8 is fully trained, gen 2 on run 3 half, gen 0 on run 5 the run ramp (' + [fast4, fast2, slow.toFixed(3)].join(' / ') + ')');
+  ok(CORE.RIVAL_TRAIN[2][1] === 0.78 && CORE.RIVAL_TRAIN_GEN === 4, 'RIVAL_TRAIN gen 2 0.78, RIVAL_TRAIN_GEN 4');
+}
+{ // SWITCH-UP waits for the real race: never in the Launch Tube, never on the calm first swims
+  // arrange
+  const z0 = quiet(); z0.zoneReached = 0; const calm = quiet(); calm.calmTiers = true;
+  for (const r of [z0, calm]) { for (const k of ['pass', 'weave', 'snipe']) r.addCombo(k, 0, 0); r.events.length = 0; }
+  // act
+  z0.addCombo('dodge', 0, 0); calm.addCombo('dodge', 0, 0);
+  // assert
+  ok([z0, calm].every((r) => !r.events.find((e) => e.type === 'combo').switchUp), 'no SWITCH-UP in the Launch Tube or on a calm swim');
+}
+
+{ // (FEATURES.movers, held back) the movers' gentle intro: a dripper's tell lasts 0.12 s longer and a drifter sways slower on
+  // the first 2 normal runs of each type
+  // arrange
+  const m = (n) => ({ normRuns: n, runs: n });
+  // act
+  const tells = [4, 5, 6].map((n) => CORE.dripTellOf(m(n))), periods = [2, 3, 4].map((n) => CORE.driftPeriodOf(m(n)));
+  const r = withFeatures({ movers: true }, () => new Race(Object.assign(veteran(), { normRuns: 4, runs: 4 }), mulberry(3), { events: false }));
+  // assert
+  ok(Math.abs(tells[0] - (CORE.DRIP_TELL + 0.12)) < 1e-12 && Math.abs(tells[1] - tells[0]) < 1e-12 && tells[2] === CORE.DRIP_TELL, 'dripper tells: ' + tells.map((t) => t.toFixed(2)).join(' / ') + ' s on normal runs 4 / 5 / 6');
+  ok(Math.abs(periods[0] - CORE.DRIFT_T * 1.25) < 1e-12 && Math.abs(periods[1] - periods[0]) < 1e-12 && periods[2] === CORE.DRIFT_T, 'drifter periods: ' + periods.map((t) => t.toFixed(2)).join(' / ') + ' s on normal runs 2 / 3 / 4');
+  ok(r.movers && Math.abs(r.dripTellT - tells[0]) < 1e-12 && r.driftT === CORE.DRIFT_T, 'a run-4 race carries the gentle dripper tell and the normal drift');
+}
+
+{ // round 10 copy: the new pools fit the buttons and lines that show them
+  // arrange
+  const K = CONTENT, fill7 = (s) => s.replace(/\{name\}/g, 'GUNTHER'), bs = K.REMATCH_BY_SHORT || {};
+  // act
+  const bsKeys = Object.keys(bs).sort().join(), bsBad = Object.values(bs).flat().filter((s) => fill7(s).length > 26 || /again/i.test(s) || !s.includes('{name}'));
+  const shortBad = Object.keys(K.HABIT_SHORT || {}).filter((id) => HABITS[id] && !HABITS[id].name.startsWith(K.HABIT_SHORT[id].split(' ').slice(0, 2).join(' ')));
+  const rival1000 = Object.keys(K).filter((k) => k.startsWith('RIVAL') && /\b1000\b/.test(JSON.stringify(K[k])));
+  // assert
+  ok(bsKeys === 'boss,tank,taps,tier' && Object.values(bs).every((a) => Array.isArray(a) && a.length >= 4 && a.length <= 5) && bsBad.length === 0, 'REMATCH_BY_SHORT: tank / tier / boss / taps, 4 to 5 lines each, 26 or fewer filled, each names the rival, never again (' + bsBad.join(' | ') + ')');
+  ok((K.LAST_CALL_LINES || []).length >= 6 && K.LAST_CALL_LINES.every((s) => s.length <= 14 && s === s.toUpperCase()), 'LAST_CALL_LINES: 6+ caps lines of 14 or fewer');
+  ok((K.CLUTCH_CASH_LINES || []).length >= 6 && K.CLUTCH_CASH_LINES.every((s) => s.length <= 16 && s === s.toUpperCase()), 'CLUTCH_CASH_LINES: 6+ caps lines of 16 or fewer');
+  ok((K.REMATCH_NOSE_GAS || []).length >= 4 && K.REMATCH_NOSE_GAS.every((s) => s.length <= 22 && !/again/i.test(s)), "REMATCH_NOSE_GAS: 22 or fewer, never 'again'");
+  ok(typeof K.UI_COPY.styleLock === 'string' && K.UI_COPY.styleLock.includes('{tier}') && K.UI_COPY.styleLock.replace('{tier}', 'GOD MODE').length <= 22, 'UI_COPY.styleLock fits 22 characters with GOD MODE');
+  ok(shortBad.length === 0, 'HABIT_SHORT: every short name starts with its habit name\'s first two words (' + shortBad.join() + ')');
+  ok(rival1000.length === 0, "rival text writes Chad's count as '1,000' (" + rival1000.join() + ')');
+  ok(Array.isArray(K.GPS_QUIPS_MORE) && K.GPS_QUIPS_MORE.length >= 2 && K.GPS_QUIPS_MORE.every((s) => s.length <= 48) && (K.HABIT_QUIPS.gps || []).length === 1, 'GPS_QUIPS_MORE: 2+ lines of 48 or fewer, HABIT_QUIPS.gps stays one line');
+}
+{ // audio round 10's rules (Audio._round10Facts, on its recording stand-in)
+  // arrange
+  const { Audio } = await import('../million_to_one/audio.js');
+  // act
+  const { rel, lastCall, clutch, close, move, takes, duel } = Audio._round10Facts();
+  // assert
+  ok(rel.hurt.join() === '180,90,0.088' && rel.pay === 2800 && rel.soft && rel.noBlip && rel.rate && rel.range && rel.gasp, 'audio r10: releaseTick, 40 to 59 ms holds only, by kind ' + JSON.stringify(rel));
+  ok(lastCall.tonal && lastCall.horn === -5 && lastCall.duck === 0.63 && lastCall.lub, 'audio r10: LAST CALL horn a fourth down over a lub, music ducked ' + JSON.stringify(lastCall));
+  ok(clutch.rising && clutch.inKey && clutch.lifted, 'audio r10: the clutch cash rises in key and lifts the duck ' + JSON.stringify(clutch));
+  ok(close.band.join() === '1200,4800' && close.zip.join() === '523.3,587.3' && close.human, 'audio r10: the near miss band and its pentatonic zip ' + JSON.stringify(close));
+  ok(move.lowFirst && move.highFirst && move.later && move.dip === 0.5, 'audio r10: swerve / tailFlick / edge share one key by priority, the motion bus dips 6 dB ' + JSON.stringify(move));
+  ok(takes.daily && takes.varied && takes.swing && takes.progs && takes.climb && takes.base, 'audio r10: zone takes, seeded by the daily, all climb-checked ' + JSON.stringify(takes));
+  ok(duel.hook === 130.8 && duel.hookOverMotif === 0.5 && duel.kevin === 12 && duel.steal.join() === '0.1,349' && duel.capped, 'audio r10: the egg duel hooks and the steal ' + JSON.stringify(duel));
 }
 
 console.log(`million_to_one_core: ${passed} passed, ${failed} failed`);
