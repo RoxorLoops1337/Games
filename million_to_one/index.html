@@ -103,6 +103,8 @@ body.noTick #rankTick{visibility:hidden}
 /* coach strip: one small line under the HUD */
 #coach{position:absolute;left:50%;top:calc(var(--hudB) + 4px);z-index:1;transform:translate(-50%,-6px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-size:13px;font-weight:700;line-height:1.2;color:var(--cream);background:rgba(20,2,18,.72);border:1.5px solid rgba(255,215,92,.35);border-radius:12px;padding:4px 10px;pointer-events:none;opacity:0;transition:opacity .3s,transform .3s}
 #coach.on{opacity:1;transform:translate(-50%,0)}
+/* a hazard or a pickup is drawn in the coach band (main.js reads R.coachBandHit): the strip fades back and steps up */
+body.coachDim #coach.on{opacity:.25;transform:translate(-50%,-8px);transition:opacity .15s,transform .15s}
 /* combo strip: one row above the DASH button row */
 #combo{position:absolute;left:0;right:0;bottom:calc(var(--safeB) + 104px);text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
 #combo .in{display:inline-flex;align-items:baseline;gap:8px;padding:2px 14px;border-radius:20px;background:rgba(20,2,18,.72);transform-origin:50% 80%;transition:transform .25s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
@@ -322,7 +324,23 @@ transform:translateX(-50%);width:min(300px,calc(100% - 40px));text-align:center;
 /* the rival is not drilling (a counter, a stunt, a hair check): its clock stands still, grey */
 #drillUI .cd b.frz{color:#9a8a96;text-shadow:none}
 /* the head start's ledger: one line under the timer, a term at a time (main.js headLedger) */
-#drillUI .hl{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mint);line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 var(--ink)}
+#drillUI .hl{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mint);line-height:1.2;margin-top:2px;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 var(--ink)}
+/* the header on its own line, the parts on a second one that wraps (3+ parts never truncate) */
+#drillUI .hl .hh{display:block;font-weight:800;white-space:nowrap}
+#drillUI .hl .hp{display:block;font-size:11px;letter-spacing:.02em;color:var(--cream);white-space:normal;overflow-wrap:anywhere}
+/* the tap phase: the countdown (or the tell / claim / how-to that takes its line) and the two bars, 64 CSS px at most.
+   The ledger folds into the YOU bar's chip; the counter pips and ticks hang just under the panel */
+#drillUI .row .hchip{flex:none;font-style:normal;font-size:11px;line-height:12px;font-weight:800;color:var(--gold);background:rgba(255,215,92,.18);border-radius:6px;padding:0 4px;white-space:nowrap}
+#drillUI.tap{padding:3px 10px 3px;max-height:64px}
+#drillUI.tap .t{font-size:20px;line-height:24px;height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drillUI.tap .t.teach,#drillUI.tap .t.claimHd{font-size:16px}
+#drillUI.tap .cd{height:24px;line-height:24px;white-space:nowrap;overflow:hidden}
+#drillUI.tap .cd small{display:inline-block;margin:0 6px 0 0;vertical-align:middle}
+#drillUI.tap .cd b{font-size:22px;line-height:24px;vertical-align:middle}
+#drillUI.tap .row{margin-top:1px;font-size:11px;line-height:12px;height:14px}
+#drillUI.tap .row .bb{height:8px}
+#drillUI.tap .hl,#drillUI.tap .ep,#drillUI.tap .rate{display:none!important}
+#drillUI.tap .cpips,#drillUI.tap .ctk{position:absolute;left:0;right:0;top:calc(100% + 4px);margin:0}
 #drillUI .row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em}
 #drillUI .row b{flex:none;width:78px;letter-spacing:.02em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:clip}
 /* a long rival name drops a size instead of an ellipsis (main.js sets .long past 7 characters) */
@@ -1507,8 +1525,8 @@ body.egg #rankRow.tight #rankTick{left:0;right:auto;top:100%;bottom:auto;margin:
     <div class="t">TAP TAP TAP!</div>
     <div class="cpips hide" aria-hidden="true"></div>
     <div class="cd"></div>
-    <div class="hl hide" aria-live="off"></div>
-    <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div></div>
+    <div class="hl hide" aria-live="off"><b class="hh"></b><span class="hp hide"></span></div>
+    <div class="row you"><b>YOU</b><div class="bb"><i></i><u class="hide"></u></div><em class="hchip hide"></em></div>
     <div class="row riv"><b>RIVAL</b><div class="bb"><i></i></div></div>
     <div class="ep"></div>
     <div class="rate hide"><i></i><span>MAX!</span></div>

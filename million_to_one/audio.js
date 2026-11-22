@@ -60,6 +60,11 @@
 // the link's tail drops an octave, so the hook and the ladder sit in separate registers.
 
 import { bankGrade, TRICK_STREAK_T, comboMilestoneAt } from './core.js';
+import * as CORE_NS from './core.js';
+import * as CONTENT_NS from './content.js';
+// the baby-to-be's reveal: the win heartbeat's music-box note lands this long after the heartbeat starts, the moment render.js
+// finishes fading the portrait in. The shared constant (content.js or core.js BABY_REVEAL_S), read guarded: 0.9 s without it
+const BABY_REVEAL = (() => { const v = +(CONTENT_NS.BABY_REVEAL_S ?? CORE_NS.BABY_REVEAL_S); return v > 0 && v < 3 ? v : 0.9; })();
 
 const VOW = {
   oo: [300, 870, 2240], oh: [570, 840, 2410], ah: [730, 1090, 2440],
@@ -138,18 +143,32 @@ const BOOST = new Set(['frenzy', 'egg', 'win', 'finisher', 'trick', 'trickStreak
 // comboBreak's level: a failure, so its peak sits more than 5 dB under a link's (measureMix: breakOverLinkDb); the moment
 // itself comes from the band dropping out around it (the duck, the dry beat, the 900 Hz dip), not from being loud
 const BRK_V = 0.2, BRK_RUN = 0.45;   // the scratch, and the falling run (a 0.1 triangle against the link tail's 0.42)
+// ...and how it keeps scaling past 30 (by rungOf(n): 4 is the 45 rung, 5 the 65 rung, 6 the 100 rung): the dry gap in 16ths
+// (2 bars from 65), the 900 Hz dip's hold, the falling run's notes (2 a rung from 45, up to 12), the run's and Kevin's "nooo" level (BRK_UP: +2 dB at 45, +3.5 from 65, so the 50 ms RMS reads
+// about -14 / -12.5 dBFS against -16 at 30, still 3+ dB under a link 30's peak: measureMix brk45Db, brk65Db), the balloon's level
+const brkDry = (n) => (n >= 25 ? (rungOf(n) >= 5 ? 32 : 16) : 4), brkDip = (n) => (rungOf(n) >= 5 ? 0.6 : 0.35);
+const brkNotes = (n) => (n < 25 ? 4 : rungOf(n) >= 4 ? Math.min(12, 2 * rungOf(n) + 2) : 8);
+const BRK_UP = [1, 1, 1, 1, Math.pow(10, 2 / 20), Math.pow(10, 3.5 / 20), Math.pow(10, 3.5 / 20)], BRK_BALLOON = 0.08;
 // the stingers calm mode holds 4 dB down (the shield hit plays as 'hit'): how long each one keeps the sfx bus capped, in s
 const STING = { frenzy: 0.7, second: 1.5, win: 4, lose: 3.5, hit: 0.7, shieldHit: 0.7, buzzer: 0.8, perk: 0.6 };
 const CALM_STING = Math.pow(10, -4 / 20);
 // the lose sting's rationing (see _loseSting): deaths 1..LOSE_FULL of a session (reset when the title's waiting room plays)
 // keep the full sting, later ones the short one (the groove back after LOSE_SHORT s); every LOSE_EVERY-th death and a close
 // loss (rematchMusic(true), or sfx('lose', { k, close: true })) still get the full one
-const LOSE_FULL = 3, LOSE_EVERY = 5, LOSE_SHORT = 1.2;
+const LOSE_FULL = 2, LOSE_EVERY = 5, LOSE_SHORT = 1.2;
+// ...and its level: every lose sting (short, full and a close loss's upgrade) on a LOSE_BUS gain, the thief's gloat inside it at
+// LOSE_GLOAT, so a loss lands under the win's fanfare (measureMix: loseUnderWinDb, at least 2.5 dB), never over it
+const LOSE_BUS = 0.55, LOSE_GLOAT = 0.7;
+// the full sting's three endings' own trims (0 trombone, 1 kazoo, 2 beatboxer): the sfx compressor gives the bus cut back on
+// the loudest bits, so the kazoo's 1.5 s "eeeoo" and the beatboxer's first kick come down on their own as well
+const LOSE_END = [1, 0.55, 0.65];
 // A.birth: the membrane pop on the white flash, the music box's theme call (a 1.2 s bar on 75 ms 16ths, so the first birth's
 // kazoo answers it at BIRTH_ANS), the baby's "goo-ga" over the name reveal; the stage stays held until BIRTH_HOLD s (first: +1)
 const BIRTH_POP = 0.6, BIRTH_BOX = 1.2, BIRTH_GOO = 1.6, BIRTH_ANS = 2.4, BIRTH_SQ = 0.075, BIRTH_HOLD = 2.8;
 // the win's door slam ('doorShut' inside 'win'): this long after the win (render's seal ring sweeps 0.3..1.05 s)
 const DOOR_AT = 0.3;
+// ...and the rivals already at the egg (win { k, arrived }), behind it: each one's motif at this level, this far apart
+const DOOR_RIV_V = 0.5, DOOR_RIV_GAP = 0.09;
 // the card draft (setMuffle(true, 'draft')): its lowpass (Hz) and time constant, the "oo" choir's level and length
 const DRAFT_LP = 2200, DRAFT_TC = 0.08, DRAFT_OO = 0.05, DRAFT_OO_LEN = 1.5;
 // the opening (A.openingCue): the lounge lick's tempo, and the count-in: 4 beats of the launch tube's tempo, the first OPEN_LEAD
@@ -158,6 +177,11 @@ const OPEN_BPM = 80, OPEN_LEAD = 0.06;
 export const OPENING_COUNT_S = OPEN_LEAD + 4 * 60 / ZONE_BPM[0];
 // tailFlick: at most one per FLICK_GAP s, snapped to the next 16th when that is FLICK_SNAP s away or less, FLICK_V its level
 const FLICK_GAP = 0.11, FLICK_SNAP = 0.03, FLICK_V = 0.17;
+// the cilia swat's 'tell': the rising fizz's peak gain (mono output: TELL_PK_MONO), its two pips' level (see 'tell'). The bandpassed noise
+// loses most of its energy in the Q 4 band, so these sit far over the 0.22 / 0.06 first tried (that measured -35 dBFS)
+const TELL_PK = 0.75, TELL_PK_MONO = 1, TELL_PIP = 0.4;
+// 'overtaken': the Doppler hum's level, the rival's 2-note motif call (5 semitones down) and its "nyeh" (see 'overtaken')
+const OVT_HUM = 0.5, OVT_MOTIF = 0.75, OVT_NYEH = 0.095;
 // stinger arbitration (see sfx): a BOOST or STING stinger (or a zone arrival, or a blast of 5+) under STING_WIN s after
 // another loses its kick, crash and duck layers, sings in the first one's key and lands on the next 8th, unless it
 // outranks the first (SPRI, the rest 0). finisher, egg and trickStreak keep their own timing (main.js syncs visuals to them)
@@ -213,6 +237,9 @@ const PRES_DB = 5, PRES_DIP = 2.5;
 const LAD_K = 1.2;
 // the dash's lift over its last measured build: +2.5 dB in, about +1.5 out of the sfx compressor (dash50Db -16.6 -> -14.8..-15.7)
 const DASH_UP = Math.pow(10, 2.5 / 20);
+// ...and its body (the 380 -> 2800 Hz swept hum) on its own a little more, so the 50 ms max lands at -15 dBFS (it read
+// -15.2..-16.5, the HUMAN +-12% wobble included); the transients and the peak stay where they were
+const DASH_BODY = Math.pow(10, 0.8 / 20);
 // a link's pitched tail on top of _tailVol: times 1 + LINK_BODY * (n - 12) / 18 up to link 30 (held from there), never over
 // LINK_TOP, and it rings LINK_RING s longer by link 30 (0.11 -> 0.145 s): the peak meets the limiter, so the extra weight has to
 // come from the length. A lone link 30 then stands about 3 dB over the FRENZY groove's median (it measured 0.5 dB)
@@ -312,10 +339,18 @@ const BASS_MID_F = 650, BASS_MID_CUT = -9, BASS_MID_Q = 0.9, BASS_HI = 0.2, BASS
 // the median, the peaks still -1.2 dBFS; tailFlick's 50 ms max 18.4 dB under the L1 groove's RMS; frenzyEnd's peak 13.6 dB under
 // the frenzy stinger's; a 'lose' cut by 'again' 1.5 s in leaves the 190..202 and 227..240 Hz bands after 1.6 s within 0.1 dB of
 // the 'again' alone (the trombone's 196 / 233 Hz: 22 dB down with the sting uncut)
-export const MIX_MEASURED = { presUnderMidsDb: 10.5, breakOverLinkDb: -7.7, breakOverLinkRmsDb: -6.8, dashReadyUnderMusicDb: 14.6, menuOverRaceDb: -7.1, menuOverL0Db: -6.2,
-  bonkOverLinkDb: -4.1, bonkPhoneOverLinkDb: -0.2, grooveRmsDb: -17.2, frenzyBusyPeakDb: -1.2, frenzyBurstPeakDb: -1.2, busyLinkOverFrenzyDb: 4.2,
-  link30OverFrenzyDb: 3.5, link60OverLink5Db: 5.7, link60OverMusicRmsDb: 5.2, dash50Db: -15.2, dashUnderLinkPeakDb: 3.3, steerUnderMusicDb: 18.7,
-  hypeHatLiftDb: 2.5, goldUnderLinkPeakDb: 10.2, tailFlickUnderMusicDb: 18.4, frenzyEndUnderFrenzyDb: 13.6, loseCutLeakDb: 0.1 };
+// Re-run after round 9 (two full runs, plus 12 dash renders): the cilia tell's 50 ms max -24.4..-24.9 dBFS (TELL_PK, was -49.5)
+// with its peak -10.8 (the pips), 7.2..7.6 dB under the groove's RMS (it sat 32 under); overtaken -24.2 (OVT_*, was -32.3),
+// 6.5 dB under a link 5; comboBreak 45 -14.2 and 65 -12.7..-12.8 (BRK_UP; 30 still -16.1), their peaks 6.2 dB under a link
+// 30's; the win (4 rivals behind the door) -11.3 and the loudest full lose ending -14.7 (LOSE_BUS, LOSE_GLOAT, LOSE_END):
+// 3.4 dB under it (it was 0.1 over); dash50Db -14.6..-15.6, mean -15.0 (DASH_BODY); the FRENZY busy and burst peaks still
+// -1.2, every older number within its old spread
+export const MIX_MEASURED = { presUnderMidsDb: 10.9, breakOverLinkDb: -8.1, breakOverLinkRmsDb: -6.8, dashReadyUnderMusicDb: 14.6, menuOverRaceDb: -7.1, menuOverL0Db: -6.2,
+  bonkOverLinkDb: -4.5, bonkPhoneOverLinkDb: -0.4, grooveRmsDb: -17.2, frenzyBusyPeakDb: -1.2, frenzyBurstPeakDb: -1.2, busyLinkOverFrenzyDb: 4.2,
+  link30OverFrenzyDb: 3.4, link60OverLink5Db: 5.7, link60OverMusicRmsDb: 5.2, dash50Db: -15.0, dashUnderLinkPeakDb: 2.5, steerUnderMusicDb: 18.7,
+  hypeHatLiftDb: 2.2, goldUnderLinkPeakDb: 10.6, tailFlickUnderMusicDb: 18.4, frenzyEndUnderFrenzyDb: 13.6, loseCutLeakDb: 0.1,
+  tell50Db: -24.6, tellPeakDb: -10.8, tellUnderMusicDb: 7.4, overtaken50Db: -24.2, overtakenUnderLink5Db: 6.5, brk45Db: -14.2, brk65Db: -12.8,
+  brkUnderLink30PeakDb: 6.2, loseUnderWinDb: 3.4 };
 // the stem ladder's rungs: crossing each rolls a 1-beat snare fill into a crash (see _step). 45: off-beat claps and a pad
 // sidechain; 65: the bass doubles up an octave on the off-16ths through a filter opening over the bar; 100: an ad-lib chop
 // every 2 bars and +1.5 dB on the whole mix
@@ -2912,8 +2947,8 @@ export class Audio {
   //   nooo: { sung, inDry }: comboBreak 30 sings the 360 Hz "nooo", and it starts and ends inside the dry bar
   //   yay: [bank grade 2, bank grade 3]: the 300 Hz "yay" saws (0, 1); lose: a 260 Hz "huh?" before the kazoo (true)
   //   wooo: [first frenzy, second frenzy]: 260 Hz "wooo" saws ([1, 0]: the second one says "wheee")
-  //   heart: { thumps, at, box, muffledBox }: 90 Hz thumps after a win (8), the first one 1.6 s after it, the music box
-  //     note (1, or 0 when muffled)
+  //   heart: { thumps, at, box, muffledBox, reveal, revealWant }: 90 Hz thumps after a win (8), the first one 1.6 s after it,
+  //     the music box note (1, or 0 when muffled), landing reveal s after the first thump (revealWant: BABY_REVEAL_S, 0.9)
   //   release: { hurt, pay, metal, plain }: [crack sines at 1 kHz, 180 Hz thups, triangles, 1.8 kHz pings] per kind
   //   timbre: { sling, weave, snipe }: a slingshot's 0.75x -> 1.5x glide, a weave's two extra triangles (the 2nd higher,
   //     in key), a snipe's octave sine (all true)
@@ -2961,10 +2996,11 @@ export class Audio {
     const FR = mk(), w1 = sawsAt(run(FR, 'frenzy', { tier: 1 }), 260), w2 = sawsAt(run(FR, 'frenzy', { tier: 1 }), 260);
     // the win heartbeat
     const W = mk(); ctx.currentTime += 10; const w0 = ctx.currentTime; const wo = run(W, 'win', undefined, 0), th = wo.filter((o) => o.type === 'sine' && near(first(o.frequency), 90));
-    const boxF = wo.filter((o) => o.type === 'sine' && o.frequency.ev.length === 1 && first(o.frequency) > 1000 && first(o.frequency) < 4000 && o.frequency.ev[0][0] > w0 + 3).length;
+    const boxO = wo.filter((o) => o.type === 'sine' && o.frequency.ev.length === 1 && first(o.frequency) > 1000 && first(o.frequency) < 4000 && o.frequency.ev[0][0] > w0 + WIN_HEART_AT + 0.5), boxF = boxO.length;
+    const reveal = boxO.length ? Math.round((boxO[0].frequency.ev[0][0] - w0 - SFX_T - WIN_HEART_AT) * 100) / 100 : -1;
     const WM = mk(); WM._muffled = true; ctx.currentTime += 10; const wm0 = ctx.currentTime; const wmo = run(WM, 'win', undefined, 0);
-    const muffledBox = wmo.filter((o) => o.type === 'sine' && o.frequency.ev.length === 1 && first(o.frequency) > 1000 && first(o.frequency) < 4000 && o.frequency.ev[0][0] > wm0 + 3).length;
-    const heart = { thumps: th.length, at: th.length ? Math.round((th[0].frequency.ev[0][0] - w0 - SFX_T) * 100) / 100 : -1, box: boxF, muffledBox };
+    const muffledBox = wmo.filter((o) => o.type === 'sine' && o.frequency.ev.length === 1 && first(o.frequency) > 1000 && first(o.frequency) < 4000 && o.frequency.ev[0][0] > wm0 + WIN_HEART_AT + 0.5).length;
+    const heart = { thumps: th.length, at: th.length ? Math.round((th[0].frequency.ev[0][0] - w0 - SFX_T) * 100) / 100 : -1, box: boxF, muffledBox, reveal, revealWant: BABY_REVEAL };
     // the impact release by kind
     const rel = (kind) => { const a = mk(); ctx.currentTime += 1; a.impact(120); ctx.currentTime += 0.05; clear(); a.impactRelease(120, kind);
       return [oscs.filter((o) => o.type === 'sine' && near(first(o.frequency), 1000)).length, oscs.filter((o) => near(first(o.frequency), 180)).length,
@@ -2996,7 +3032,7 @@ export class Audio {
   // round 8's audio rules, on a recording stand-in for an AudioContext (node, no audio). Returns:
   //   loseBox: { built, cut, quitBox, newRunCut, muffleCut }: 'lose' opens _loseBox, 'again' shuts it (its gain set toward 0),
   //     'quit' gets one too, and newRun() and setMuffle(true) shut it as well
-  //   deaths: { holds, reset, upgrade, bagOk }: the stage hold (s) after deaths 1..7 (full ones about 2+, the 4th, 6th and 7th
+  //   deaths: { holds, reset, upgrade, bagOk }: the stage hold (s) after deaths 1..7 (full ones about 2+, the 3rd, 4th, 6th and 7th
   //     1.2), deaths counted again from 1 after menuKind = 'title' (true), rematchMusic(true) right after a short sting
   //     upgrading it to the full one (true), and 30 full stings drawing every ending once per bag of 3, never twice in a row
   //   birth: { pop, box, goo, gooFm, kazoo, aww, firstKazoo, hold }: the pop's 240 Hz sine at 0.6 s, the music box's first tine at
@@ -3088,6 +3124,81 @@ export class Audio {
     const SN = mk(); SN.on = true; ctx.currentTime += 1; SN.next = ctx.currentTime + 0.02; SN.stepI = 3; const sn = run(SN, 'tailFlick', { vx: 500, dir: 1 }, 0);
     const flick = { f: [fq(fA), fq(fC)], rate: fB.length === 0, snap: sn.length > 0 && Math.abs(at0(sn[0]) - SN.next) < 1e-6 };
     return { loseBox, deaths, birth, door, progs, climb: Audio._climbCheck().ok, draft, open, frenzyEnd, flick };
+  }
+  // round 9's audio rules, on the same recording stand-in as _round8Facts (node, no audio). Returns:
+  //   tell: { pk, pkMono, sweep, pips, gapMs, inKey, capped }: the fizz's peak gain (TELL_PK 0.75, mono 1), its bandpass
+  //     sweep [from, to] Hz, the pips' pitches (Hz, kf(1760) / kf(2350) in key 0: 1760, 2349), 70 ms apart, every pip in the
+  //     key, and the tell still built with the voice cap full (its _busy(1) stinger budget)
+  //   door: { legacy, rivals, gapMs, pans, beforeFanfare }: a bare number k still plays that rival behind the door; { k, arrived:
+  //     [0, 2, 4, 2, 9] } plays 3 (duplicates and bad indices dropped), 90 ms apart, panned apart (pans [-0.7, 0.7]: the middle
+  //     one is centred, no panner), every motif
+  //     starting before the fanfare's first "da" (1.2 s)
+  //   lose: { bus, upgradeBus, full }: the full and short stings' gate gain (LOSE_BUS 0.55), the close-loss upgrade's (0.55),
+  //     and which of deaths 1..5 get the full sting ([true, true, false, false, true]: LOSE_FULL 2, every 5th)
+  //   overtaken: { sweep, nyeh, fourth }: the Doppler hum's [from, to] Hz (3200, 450), the "nyeh" voices' count (2) and their
+  //     interval (5 semitones down)
+  //   brk: { dry, notes, gapMs, balloon, uhh, plain }: per chain n of [9, 12, 30, 45, 65, 100]: the dry gap in 16ths (0, 4, 16, 16,
+  //     32, 32), the falling run's notes (0, 4, 8, 10, 12, 12), its spacing in ms (40 up to the 45 rung, then 45), the
+  //     330 -> 110 Hz balloon (only from 45), Kevin's dazed 300 Hz "uhh" (only from 65); and the n 9 break unchanged
+  //     (plain: 3 scratch saws, nothing else pitched)
+  static _round9Facts() {
+    const oscs = [], srcs = [], filt = [], pans = [];
+    const param = (v) => ({ value: v, ev: [], setValueAtTime(x, t) { this.ev.push([t, x]); }, exponentialRampToValueAtTime(x, t) { this.ev.push([t, x]); },
+      linearRampToValueAtTime(x, t) { this.ev.push([t, x]); }, setTargetAtTime(x, t) { this.ev.push([t, x]); this.value = x; }, cancelScheduledValues() {}, cancelAndHoldAtTime() {} });
+    const node = () => ({ connect() {}, disconnect() {}, start() {}, stop() {}, gain: param(1), frequency: param(440), Q: param(1), detune: param(0), playbackRate: param(1), pan: param(0), type: '' });
+    const gains = [];
+    const ctx = { currentTime: 1, state: 'running', sampleRate: 44100, createStereoPanner: () => { const p = node(); pans.push(p); return p; }, createGain: () => { const g = node(); gains.push(g); return g; },
+      createBiquadFilter: () => { const f = node(); filt.push(f); return f; },
+      createBufferSource: () => { const b = node(); srcs.push(b); return b; }, createOscillator: () => { const o = node(); oscs.push(o); return o; } };
+    const mk = () => { const a = new Audio(); a._hasSession = () => false; a.ctx = ctx; a._cap = 1e9; for (const f of ['fx', 'fxEcho', 'music', 'tlp', 'mlp', 'slp', 'mduck', 'echo', 'leadBus', '_mPres', 'storyBus', '_hatIn', '_hatSkip', 'mfb', 'mfb2', 'tsBus', 'tsLp', 'hatBus']) a[f] = node(); a.mlp.frequency.value = 18000; return a; };
+    const clear = () => { oscs.length = 0; srcs.length = 0; filt.length = 0; pans.length = 0; gains.length = 0; };
+    const run = (a, name, k, dt = 1) => { ctx.currentTime += dt; clear(); a.sfx(name, k); return oscs.slice(); };
+    const first = (p) => (p.ev.length ? p.ev[0][1] : p.value), last = (p) => (p.ev.length ? p.ev[p.ev.length - 1][1] : p.value), at0 = (o) => (o.frequency.ev.length ? o.frequency.ev[0][0] : -1);
+    const ms = (x) => Math.round(x * 1000), r0 = (x) => Math.round(x);
+    // the tell
+    const T = mk(), to = run(T, 'tell', { side: 1 }), tf = filt.find((f) => f.type === 'bandpass'), tg = gains.map((g) => g.gain.ev.reduce((m, e) => Math.max(m, e[1]), 0));
+    const pips = to.filter((o) => o.type === 'triangle').sort((x, y) => at0(x) - at0(y));
+    const TM = mk(); TM.setMono(true); run(TM, 'tell', { side: 1 }); const tgM = gains.map((g) => g.gain.ev.reduce((m, e) => Math.max(m, e[1]), 0));
+    const TC = mk(); TC._cap = 4; TC.live = 10; const tc = run(TC, 'tell', { side: -1 });
+    const tell = { pk: Math.max(...tg), pkMono: Math.max(...tgM), sweep: tf ? [r0(first(tf.frequency)), r0(last(tf.frequency))] : [],
+      pips: pips.map((o) => r0(first(o.frequency))), gapMs: pips.length > 1 ? ms(at0(pips[1]) - at0(pips[0])) : -1,
+      inKey: pips.length === 2 && pips.every((o) => inPenta(first(o.frequency), 0)), capped: tc.length === 2 && srcs.length === 1 };
+    // the door slam: the motifs are the oscillators built after the thwump that the plain win does not build
+    const W0 = mk(), wPlain = run(W0, 'win', { k: 4, arrived: [] }, 10).length;
+    const WL = mk(), wLeg = run(WL, 'win', 2, 10).length;
+    const WA = mk(); ctx.currentTime += 10; const w0 = ctx.currentTime + SFX_T; clear(); WA.sfx('win', { k: 4, arrived: [0, 2, 4, 2, 9] });
+    const dPans = pans.filter((p) => p.pan.value !== 0).map((p) => Math.round(p.pan.value * 100) / 100);
+    const motifStarts = [];   // the first note of each rival: Steve's 523 Hz triangle, Tiffany's 1047 Hz sine, Chad's 392 Hz brass saw
+    const m5 = st(-5), pick = (type, f) => oscs.filter((o) => o.type === type && Math.abs(first(o.frequency) - f * m5) < 0.5).map((o) => at0(o) - w0);
+    const s0 = pick('triangle', 523), s2 = pick('sine', 1047), s4 = pick('sawtooth', 392);
+    if (s0.length) motifStarts.push(Math.min(...s0)); if (s2.length) motifStarts.push(Math.min(...s2)); if (s4.length) motifStarts.push(Math.min(...s4));
+    motifStarts.sort((x, y) => x - y);
+    const door = { legacy: wLeg > wPlain, rivals: motifStarts.length, gapMs: motifStarts.length > 1 ? ms(motifStarts[1] - motifStarts[0]) : -1, pans: dPans,
+      beforeFanfare: motifStarts.length > 0 && motifStarts.every((x) => x < 16 * 0.075) };
+    // the lose bus
+    const busOf = (a) => (a._loseBox ? Math.round(a._loseBox.g.gain.value * 100) / 100 : -1);
+    const LF = mk(); run(LF, 'lose', 4); const fullBus = busOf(LF);
+    const LU = mk(); for (let i = 0; i < 3; i++) run(LU, 'lose', 4, 6); const shortBus = busOf(LU); LU.rematchMusic(true); const upBus = busOf(LU);
+    const LD = mk(), full = []; for (let i = 0; i < 5; i++) { run(LD, 'lose', undefined, 6); full.push(LD._loseFull); }
+    const lose = { bus: fullBus === shortBus ? fullBus : -1, upgradeBus: upBus, full };
+    // overtaken
+    const O = mk(); run(O, 'overtaken', { k: 2, pan: 0.6 }); const of = filt.find((f) => f.type === 'bandpass' && Math.abs(first(f.frequency) - 3200) < 1);
+    const nyeh = oscs.filter((o) => o.type === 'sawtooth').sort((x, y) => at0(x) - at0(y));
+    const overtaken = { sweep: of ? [r0(first(of.frequency)), r0(last(of.frequency))] : [], nyeh: nyeh.length,
+      fourth: nyeh.length === 2 ? Math.round(12 * Math.log2(first(nyeh[1].frequency) / first(nyeh[0].frequency)) * 100) / 100 : 0 };
+    // comboBreak by rung (the beat running, so the dry gap is really booked)
+    const brk = { dry: [], notes: [], gapMs: [], balloon: [], uhh: [], plain: false };
+    for (const n of [9, 12, 30, 45, 65, 100]) {
+      const B = mk(); B.on = true; ctx.currentTime += 5; B.next = ctx.currentTime + 0.05; B.stepI = 16; B._dryUntil = -1;
+      const sp = 60 / B._bpm / 4, bo = run(B, 'comboBreak', n, 0), q0 = B._unsched(ctx.currentTime);
+      brk.dry.push(B._dryUntil > 0 ? Math.round((B._dryUntil - q0) / sp) : 0);
+      const runT = bo.filter((o) => o.type === 'triangle' && !(Math.abs(first(o.frequency) - 330) < 0.5 && Math.abs(last(o.frequency) - 110) < 0.5)).sort((x, y) => at0(x) - at0(y));
+      brk.notes.push(runT.length); brk.gapMs.push(runT.length > 1 ? ms(at0(runT[1]) - at0(runT[0])) : 0);
+      brk.balloon.push(bo.some((o) => o.type === 'triangle' && Math.abs(first(o.frequency) - 330) < 0.5 && Math.abs(last(o.frequency) - 110) < 0.5));
+      brk.uhh.push(bo.some((o) => o.type === 'sawtooth' && Math.abs(first(o.frequency) - KEVIN.f) < 0.5));
+      if (n === 9) brk.plain = bo.length === 3 && bo.every((o) => o.type === 'sawtooth');
+    }
+    return { tell, door, lose, overtaken, brk, reveal: BABY_REVEAL };   // reveal: the BABY_REVEAL_S in use (0.9)
   }
   // the mix's rules as plain numbers, for a test to assert without an AudioContext: the intensity gains, the race trim,
   // the beat lock's no-snap hold, calm mode's floors, the perceptual sliders (gain = v * v) and the FRENZY riser staying
@@ -3496,6 +3607,10 @@ export class Audio {
   //   150 ms after each link in the busy render over the median), link5OverFrenzyDb / link30OverFrenzyDb (a lone link's 50 ms
   //   max over the median), link60OverLink5Db; dash50Db / dashUnderLinkPeakDb; steerUnderMusicDb (steerLevel(800));
   //   hypeHatLiftDb (hype(8, 0)'s 5..12 kHz over the plain groove's); goldUnderLinkPeakDb (the gold sting)
+  //   tell50Db / tellPeakDb / tellUnderMusicDb: the cilia 'tell' (the groove's RMS minus its 50 ms max: about 7, it was 32);
+  //   overtaken50Db / overtakenUnderLink5Db; brk45Db / brk65Db (comboBreak at the 45 / 65 rungs, 50 ms max) and
+  //   brkUnderLink30PeakDb (a link 30's peak over the louder of their peaks: 3+); win50Db / lose50Db / loseUnderWinDb (the win
+  //   with 4 rivals behind the door over the loudest of the three full lose endings, Chad gloating: 2.5+)
   // opts: { secs: 8, I: 1 } for the groove. Each render builds a fresh graph with no voice cap.
   static async measureMix(opts = {}) {
     const OAC = typeof globalThis !== 'undefined' && (globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext);
@@ -3571,7 +3686,19 @@ export class Audio {
     const hyped = await grooveAt(1, null, (a) => a.hype(8, 0));
     const [gHi] = bands(groove, [[5000, 12000]]), [hHi] = bands(hyped, [[5000, 12000]]);
     const gold = await render(1.2, (a) => { a.on = true; a._int = 1; a.hype(0, 0); a.hype(0, 0.15); });
+    // the cilia tell (from the right wall), being overtaken (Tiffany, from the right), comboBreak at the 45 and 65 rungs
+    const tell = await one('tell', { side: 1 }), ovt = await one('overtaken', { k: 2, pan: 0.6 });
+    const brkLong = (n) => render(2.5, (a) => a.sfx('comboBreak', n)), brk45 = await brkLong(45), brk65 = await brkLong(65);
+    // the win (with every other named rival behind the door) against the loudest full lose sting: Chad gloating, each of
+    // the three endings forced (the bag), so the worst case is what is measured
+    const win = await render(6, (a) => a.sfx('win', { k: 4, arrived: [0, 1, 2, 3] }));
+    let loseMax = 0;
+    for (const v of [0, 1, 2]) loseMax = Math.max(loseMax, rmsMax(await render(6, (a) => { a._loseBag = [v]; a.sfx('lose', 4); })));
     return {
+      tell50Db: r(db(rmsMax(tell))), tellPeakDb: r(db(peak(tell))), tellUnderMusicDb: r(db(rms(groove)) - db(rmsMax(tell))),
+      overtaken50Db: r(db(rmsMax(ovt))), overtakenUnderLink5Db: r(db(rmsMax(link)) - db(rmsMax(ovt))),
+      brk45Db: r(db(rmsMax(brk45))), brk65Db: r(db(rmsMax(brk65))), brkUnderLink30PeakDb: r(db(peak(link30)) - db(Math.max(peak(brk45), peak(brk65)))),
+      win50Db: r(db(rmsMax(win))), lose50Db: r(db(loseMax)), loseUnderWinDb: r(db(rmsMax(win)) - db(loseMax)),
       grooveRmsDb: r(db(rms(groove))), frenzyRmsDb: r(db(rms(frenzy))), frenzyMedianDb: r(db(fMed)), frenzyBusyPeakDb: r(db(peak(busy))), frenzyBurstPeakDb: r(db(peak(burst))),
       link5OverFrenzyDb: r(db(rmsMax(link)) - db(fMed)), link30OverFrenzyDb: r(db(rmsMax(link30)) - db(fMed)), link60OverLink5Db: r(db(rmsMax(link60)) - db(rmsMax(link))),
       busyLinkOverFrenzyDb: r(db(atLinks[atLinks.length >> 1]) - db(fMed)),
@@ -3599,22 +3726,25 @@ export class Audio {
   }
   // a broken chain falls back down its own ladder: triangles 40 ms apart from the first grid slot after the scratch's
   // first half (_quantCap), on the same pentatonic as _scaleF. n 10..24: 4 notes down from the last link (_passF);
-  // n 25+: 8 notes that end one octave under the chain's first note, the last one held
+  // n 25+: 8 notes that end one octave under the chain's first note, the last one held. From the 45 rung (rungOf 4) the
+  // fall covers every rung climbed (brkNotes: 2 notes a rung, up to 12, 45 ms apart, BRK_UP[rung] louder) and a
+  // "deflating balloon" triangle sags 330 -> 110 Hz over 0.7 s under its last note
   _breakRun(now, n, K, fx) {
     const b0 = this._runBase(0, 440, K) * st(K), s = 12 * Math.log2((this._passF > 0 ? this._passF : b0) / b0);
     let D = 0, be = 1e9; for (let d = -10; d <= 30; d++) { const e = Math.abs(penD(d) - s); if (e < be) { be = e; D = d; } }
-    const degs = [];
+    const degs = [], rg = rungOf(n), N = brkNotes(n), gap = rg >= 4 ? 0.045 : 0.04, up = BRK_UP[rg] || 1;
     if (n < 25) for (let j = 1; j <= 4; j++) degs.push(D - j);
     else {
-      const end = -5, top = Math.max(D - 1, end + 7);   // too short a fall (a low last link): start higher, still end on the octave
-      for (let j = 0; j < 8; j++) degs.push(Math.round(top - (top - end) * j / 7));
+      const end = -5, top = Math.max(D - 1, end + N - 1);   // too short a fall (a low last link): start higher, still end on the octave
+      for (let j = 0; j < N; j++) degs.push(Math.round(top - (top - end) * j / (N - 1)));
     }
     const q = this._quantCap(now + 0.09);
     degs.forEach((d, j) => {
       let f = b0 * st(penD(d)); while (f > 1760) f /= 2;
       const last = j === degs.length - 1;
-      this.tone('triangle', f * 1.02, f, q + j * 0.04, last && n >= 25 ? 0.3 : 0.07, (0.22 - 0.01 * j) * BRK_RUN, fx, 0.003, 0.015);
+      this.tone('triangle', f * 1.02, f, q + j * gap, last && n >= 25 ? 0.3 : 0.07, Math.max(0.12, 0.22 - 0.01 * j) * BRK_RUN * up, fx, 0.003, 0.015);
     });
+    if (rg >= 4) { const m = st(K), tb = q + (degs.length - 1) * gap; this.tone('triangle', 330 * m, 110 * m, tb, 0.7, BRK_BALLOON, fx, 0.01, 0.7); }
   }
   // one scratch stroke: a saw sliding f0 -> f1 through a 1.8 kHz bandpass (Q 0.8: the needle's bark, not its sub),
   // held at vol for 75% of dur, then let go (slow-mo bends it like tone())
@@ -3755,11 +3885,12 @@ export class Audio {
     switch (name) {
       case 'pass': this.heat = Math.max(this.heat, +k || 0); this.heatT = now; break;
       case 'comboBreak': {      // k = the chain it destroyed (older callers pass nothing: 0). The band's reaction scales with it:
-        // under 10 it plays on, 10..24 it holds its breath for 4 sixteenths, 25+ for a whole bar behind a 900 Hz dip
+        // under 10 it plays on, 10..24 it holds its breath for 4 sixteenths, 25+ for a whole bar behind a 900 Hz dip, and from
+        // the 65 rung (rungOf 5) for 2 bars behind a dip held 0.6 s (brkDry, brkDip): losing 70 is not losing 30
         const n = Math.max(0, numArg(k, 'n') | 0), sp = 60 / this._bpm / 4;
         this._brkN = n; this.heat = 0;
-        if (n >= 10) this._dryUntil = Math.max(this._dryUntil, this._unsched(now) + (n >= 25 ? 16 : 4) * sp);
-        if (n >= 25) this._slpDip(now, 900, 0.35);
+        if (n >= 10) this._dryUntil = Math.max(this._dryUntil, this._unsched(now) + brkDry(n) * sp);
+        if (n >= 25) this._slpDip(now, 900, brkDip(n));
         this._streakCut(now);   // the shatter takes every trick streak layer with it
         endCombo(); break;
       }
@@ -3992,7 +4123,7 @@ export class Audio {
         // 220 -> 660 Hz at 0.22 (was 180 -> 520 at 0.16): its 50 ms max near -15 dBFS, still peaking under a link (measureMix)
         // DASH_UP on every layer: its 50 ms max reaches about -15 dBFS, its peak still 2.5..4 dB under a link's
         this._transient(t, 1200, fx, [0.14 * DASH_UP, 0.12 * DASH_UP]);
-        this.hum(t, 0.32, 0.7 * DASH_UP, 'bandpass', 380, 1.0, fx, 2800, 0.04, 1, DUCK);
+        this.hum(t, 0.32, 0.7 * DASH_UP * DASH_BODY, 'bandpass', 380, 1.0, fx, 2800, 0.04, 1, DUCK);
         this.hum(t + 0.12, 0.2, 0.2 * DASH_UP, 'bandpass', 2600, 1.2, fx, 700);
         this.tone('sine', 220, 660, t, 0.18, 0.22 * DASH_UP, fx);
         this.hum(t, 0.03, 0.3 * DASH_UP, 'bandpass', 1200, 1, fx);
@@ -4336,12 +4467,16 @@ export class Audio {
       case 'tell': {            // the cilia are about to swat: a rising fizz from their wall, on the next 16th
         const side = Math.max(-1, Math.min(1, numArg(k, 'side'))), q = this._next16(now);
         if (this._busy(1)) break;
-        const dest = this._panned(side * 0.8, fx), pk = this.mono ? 0.07 : 0.05;   // mono: about +3 dB, so it cuts through on one earbud
+        // TELL_PK (mono TELL_PK_MONO: about +3 dB, so it cuts through on one earbud): its 50 ms RMS near -24 dBFS, its peak
+        // near -10 (it sat at -39, 32 dB under the groove: inaudible), swept 1200 -> 2600 Hz where a phone speaker is loudest
+        const dest = this._panned(side * 0.8, fx), pk = this.mono ? TELL_PK_MONO : TELL_PK;
         const s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
         s.buffer = this.noiseBuf; bp.type = 'bandpass'; bp.Q.value = 4;
-        bp.frequency.setValueAtTime(600, q); bp.frequency.exponentialRampToValueAtTime(1800, q + 0.4);
+        bp.frequency.setValueAtTime(1200, q); bp.frequency.exponentialRampToValueAtTime(2600, q + 0.4);
         g.gain.setValueAtTime(0.0001, q); g.gain.exponentialRampToValueAtTime(pk, q + 0.34); g.gain.linearRampToValueAtTime(0.0001, q + 0.4);
         s.connect(bp); bp.connect(g); g.connect(dest); this.live++; s.onended = this._dec; s.start(q, Math.random() * 0.5); s.stop(q + 0.42);
+        // and two in-key 35 ms triangle pips, 70 ms apart, on the same side: "ti-ting", the swat is coming
+        [1760, 2350].forEach((f, j) => this.tone('triangle', kf(f), 0, q + j * 0.07, 0.035, TELL_PIP, dest, 0.002));
         break;
       }
       case 'comboLow': {        // the combo timer is running out: a kick-tick on every 8th, a semitone higher each tick
@@ -4521,10 +4656,14 @@ export class Audio {
         this.hum(t + 0.19, 0.17, 0.6 * V, 'bandpass', 2800, 2, fx, 400);
         this._scratch(t, 900, 160, 0.1, 0.6 * V, fx); this._scratch(t + 0.1, 180, 700, 0.09, 0.48 * V, fx); this._scratch(t + 0.19, 800, 110, 0.2, 0.55 * V, fx);
         if (n >= 10) this._breakRun(now, n, K, fx);
-        this.duck(n >= 10 ? 0.35 : 0.6, (n >= 25 ? 16 : n >= 10 ? 4 : 2) * sp);
+        this.duck(n >= 10 ? 0.35 : 0.6, (n >= 10 ? brkDry(n) : 2) * sp);
         if (n >= 25) {          // Kevin's "nooo" (0.6 s) inside the dry bar the break booked (_dryUntil): after the scratch, ending in it
-          const d0 = this._dryUntil - 16 * sp, at = Math.max(t + 0.2, Math.min(Math.max(t + 0.4, d0 + 4 * sp), this._dryUntil - 0.62));
-          this._kevin('nooo', now, at, fx);
+          const d0 = this._dryUntil - brkDry(n) * sp, at = Math.max(t + 0.2, Math.min(Math.max(t + 0.4, d0 + 4 * sp), this._dryUntil - 0.62));
+          const kg = rungOf(n) >= 4 ? this._gain(BRK_UP[rungOf(n)], fx) : fx, said = this._kevin('nooo', now, at, kg);
+          if (rungOf(n) >= 5) {   // 65+: and then, still inside the 2 dry bars, a dazed "uhh" (his line gap is the nooo's own)
+            if (said) this._kevT = -9;   // (the nooo just booked the gap: the uhh is part of the same moment)
+            this._kevin('uhh', now, Math.min(at + 0.75, this._dryUntil - 0.25), fx);
+          }
         }
         break;
       }
@@ -4886,11 +5025,18 @@ export class Audio {
         this.duck(0.45, 0.5);
         break;
       }
-      case 'overtaken': {       // a rival swims past you: a Doppler whoosh from its side, then the first 2 notes of its motif, low
-        const pan = Math.max(-1, Math.min(1, numArg(k, 'pan')));
-        this.hum(t, 0.3, 0.18, 'bandpass', 2600, 2, this._panned(pan, fx), 500, 0.03);
+      case 'overtaken': {       // a rival swims past you: a Doppler whoosh from its side (3200 -> 450 Hz over 0.3 s), the first 2
+        // notes of its motif, low, and a smug 2-note "nyeh" falling a fourth, on its pan. About -24 dB on the 50 ms RMS (it sat
+        // at -35: nearly silent), still under a link 5 (measureMix: overtakenUnderLink5Db)
+        const pan = Math.max(-1, Math.min(1, numArg(k, 'pan'))), side = this._panned(pan, fx);
+        this.hum(t, 0.3, OVT_HUM, 'bandpass', 3200, 2, side, 450, 0.03);
         const rv = rivalIdx(k);
-        if (rv >= 0) { const base = this.fx; this.fx = this._panned(pan * 0.5, base); try { this._rival(t + 0.2, rv, 0.35, -5, 0, K, 0.5, 2); } finally { this.fx = base; } }
+        if (rv >= 0) { const base = this.fx; this.fx = this._panned(pan * 0.5, base); try { this._rival(t + 0.2, rv, OVT_MOTIF, -5, 0, K, 0.5, 2); } finally { this.fx = base; } }
+        // (pitched from the rival's babble voice, in key, folded into 260..520 Hz so a phone speaker plays it; a fourth down)
+        let hi = kf(rv >= 0 ? BABBLE[rv].f : 392); while (hi > 520) hi /= 2; while (hi < 260) hi *= 2;
+        const ny = t + 0.42;
+        this.say(ny, [hi], 'eh', 'uh', 0.12, OVT_NYEH, 0.05, 1, side, 1);
+        this.say(ny + 0.13, [hi * st(-5)], 'eh', 'uh', 0.12, OVT_NYEH, 0.05, 0.97, side, 1);
         break;
       }
       case 'gift': {            // a free sugar: two in-key pings an octave apart
@@ -5158,11 +5304,12 @@ export class Audio {
     F.cancelScheduledValues(t); F.setValueAtTime(f0 * r, t);
     for (const [f, at] of pts) F.exponentialRampToValueAtTime(f * r, t + at / r);
   }
-  // the win's heartbeat from t (WIN_HEART_AT s after the win: render.js fades the baby-to-be in at 1.6..2.0 s): a lub-dub
+  // the win's heartbeat from t (WIN_HEART_AT s after the win: render.js fades the baby-to-be in by t + BABY_REVEAL_S): a lub-dub
   // (two thumps 0.28 s apart: a 55 Hz sine dropping fast from 90 Hz, 120 ms, its octave-up triangle for a phone, and a -18 dB
   // 2 kHz click on the first) at 72 bpm for 4 beats, fading out, with the fanfare's tail (fx, the stinger's own send) ducked
-  // 4 dB under it. On the 4th beat one music-box note (fb: THEME's first note two octaves over the brass call), through a
-  // gate that a muffle (pause, a card deal), a suspend or a new run shuts (_winBoxCut); skipped if already muffled
+  // 4 dB under it. BABY_REVEAL s after the first thump (BABY_REVEAL_S, as the portrait's fade finishes) one music-box note
+  // (fb: THEME's first note two octaves over the brass call), through a gate that a muffle (pause, a card deal), a suspend
+  // or a new run shuts (_winBoxCut); skipped if already muffled
   _winHeart(t, fb, fx) {
     const base = this._sfxBase || this.fx, dest = this.sfxMuted ? fx : base, bt = 60 / WIN_HEART_BPM, n = 4;
     const end = t + (n - 1) * bt + 0.28 + 0.15;
@@ -5179,7 +5326,7 @@ export class Audio {
       this.hum(tb, 0.006, v * Math.pow(10, -18 / 20), 'bandpass', 2000, 1.5, dest, 0, 0.001);
     }
     if (this._muffled || this._suspended) return;
-    const gate = this._gain(1, dest), tb = t + (n - 1) * bt;
+    const gate = this._gain(1, dest), tb = t + BABY_REVEAL;
     this.tone('sine', fb, 0, tb, 1.1, 0.07, gate, 0.002, 0, 1);       // the tine
     this.tone('sine', fb * 4, 0, tb, 0.08, 0.015, gate, 0.001, 0, 0); // its ping
     this._winBox = { g: gate, until: tb + 1.2 };
@@ -5191,8 +5338,9 @@ export class Audio {
     hold(b.g.gain, now); b.g.gain.setTargetAtTime(0, now, 0.01);
   }
   // 'doorShut' (inside 'win', DOOR_AT s after it): the egg's door slams on everyone else. A 90 Hz thwump (and its octave for a
-  // phone), a bright two-part lock click, then each arrived loser's motif from behind the door (a 1.1 kHz lowpass), bent down
-  // a minor third over 0.3 s, 0.12 s apart. k: the win's rival index (that rival), or { k, arrived: [rival indices] }
+  // phone), a bright two-part lock click, then each arrived loser's motif from behind the door (a 1.1 kHz lowpass), in the
+  // bossTaunt voice, 90 ms apart and panned apart. k: the win's rival index (that rival; legacy), or { k, arrived: [rival
+  // indices 0..4] } (main.js: exactly that), duplicates and bad indices dropped
   _doorShut(td, k, K, fx) {
     // (92 Hz, not exactly 90: the win's 90 Hz heartbeat thumps stay countable on their own, _round7Facts)
     this.tone('sine', 92, 48, td, 0.22, 0.42, fx, 0.003, 0.15);
@@ -5204,10 +5352,13 @@ export class Audio {
     const arr = k && typeof k === 'object' && Array.isArray(k.arrived) ? k.arrived : [k], seen = new Set();
     const who = arr.map((x) => rivalIdx(x)).filter((x) => x >= 0 && !seen.has(x) && seen.add(x)).slice(0, 5);
     if (!who.length) return;
-    const c = this.ctx, lp = c.createBiquadFilter(), base = this.fx;
+    const c = this.ctx, lp = c.createBiquadFilter(), base = this.fx, n = who.length;
     lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 0.7; lp.connect(fx);
-    this.fx = lp;
-    try { who.forEach((r, j) => this._rival(td + 0.2 + j * 0.12, r, 0.5, 0, 0.3, K, st(-3))); } finally { this.fx = base; }
+    // each one in its bossTaunt voice (DOOR_RIV_V, 5 semitones down), DOOR_RIV_GAP s apart and spread across the stereo field
+    // (-0.7..+0.7 in arrival order), all of them inside the slam's tail and done before the fanfare's first "da" (1.2 s)
+    try {
+      who.forEach((r, j) => { this.fx = this._panned(n > 1 ? -0.7 + 1.4 * j / (n - 1) : 0, lp); this._rival(td + 0.2 + j * DOOR_RIV_GAP, r, DOOR_RIV_V, -5, 0, K); });
+    } finally { this.fx = base; }
   }
   // the lose (and quit) sting's gate, built like _winBox: { g, until }. A quick SWIM AGAIN ('again'), a new run, a muffle and a
   // suspend shut it in about 45 ms, so the gloat, the "huh?", the kazoo and the trombone never ring over the rev-up and the count
@@ -5230,19 +5381,19 @@ export class Audio {
   }
   // the lose sting from t in key K (k: the thief's rival index, or { k }), every voice through one gate (_loseBox, see
   // _loseBoxCut). full: the thief gloats with its own motif, Kevin's "huh?" (0.18 s) comes just before a kazoo that tries the
-  // theme's first 4 notes and gives up on the 4th, then one ending from the bag (_losePick). Short (deaths 4 and on, see the
+  // theme's first 4 notes and gives up on the 4th, then one ending from the bag (_losePick). Short (deaths 3 and on, see the
   // state switch): the gloat cut to 0.35 s, the "huh?", then one sagging brass note (the trombone's last, 196 Hz in A, 0.6 s),
   // no kazoo, and the groove back after LOSE_SHORT s. The caller has already muffled the band (setMuffle(true))
   _loseSting(now, t, K, k, fx, full) {
     this._loseBoxCut();
-    const m = st(K), rv = rivalIdx(k), g = this._gain(1, fx), base = this.fx;
+    const m = st(K), rv = rivalIdx(k), g = this._gain(LOSE_BUS, fx), base = this.fx;   // the upgrade comes through here too: the same bus
     this.fx = g;
     try {
       if (!full) {
         const tk = rv >= 0 ? t + 0.42 : t + 0.12, tb = tk + 0.22;
         if (rv >= 0) {   // the gloat, faded out over 50 ms at 0.35 s
           const rg = this._gain(1, g); rg.gain.setValueAtTime(1, t + 0.3); rg.gain.linearRampToValueAtTime(0, t + 0.35);
-          this.fx = rg; this._rival(t, rv, 1, 7, 0.6, K, 1); this.fx = g;
+          this.fx = rg; this._rival(t, rv, LOSE_GLOAT, 7, 0.6, K, 1); this.fx = g;
         }
         this._kevin('huh', now, tk, g);
         this._brass(tb, 196 * m, 0.6, 0.13, true, true);
@@ -5254,7 +5405,7 @@ export class Audio {
         return;
       }
       const tk = rv >= 0 ? t + 0.9 : t + 0.22, t0 = tk + 0.95;
-      if (rv >= 0) this._rival(t, rv, 1, 7, 0.6, K, 1);
+      if (rv >= 0) this._rival(t, rv, LOSE_GLOAT, 7, 0.6, K, 1);
       this._kevin('huh', now, tk - 0.22, g);
       let j = 0; const lb = themeBase(K, 700);   // one octave for the 4 notes (never folded one by one)
       for (let s = 0; s < 16 && j < 4; s++) {   // the first 4 notes of the theme; the 4th hangs on and sags, unresolved
@@ -5267,17 +5418,19 @@ export class Audio {
       this._holdUntil = v === 2 ? t0 + 16 * sp + 0.9 : t0 + 2.0;   // the groove waits for the sting
       this.duck(0.2, 3.2 + t0 - t); this.mlp.frequency.setTargetAtTime(18000, t0 + 3.2, this._ftc(0.4));
       let end = t0 + 2.8;
+      // each ending on its own trim (LOSE_END: the kazoo and the beatboxer's kick measured hottest), the gate g still over it
+      const eg = this._gain(LOSE_END[v], g); this.fx = eg;
       if (v === 0) {          // sad trombone: wah wah wah waaaah
         [233, 220, 208].forEach((f, i) => this._brass(t0 + i * 0.42, f * m, 0.38, 0.13, true));
         this._brass(t0 + 1.26, 196 * m, 1.4, 0.13, true, true);
-        this.tone('sine', 98 * m, 0, t0 + 1.26, 1.3, 0.12, g, 0.05);
+        this.tone('sine', 98 * m, 0, t0 + 1.26, 1.3, 0.12, eg, 0.05);
       } else if (v === 1) {   // a kazoo deflating like a party balloon, and a last little "pfft"
         this.say(t0, [466 * m, 470 * m], 'ee', 'oo', 1.5, 0.2, 0.6, 0.33);
-        this.tone('triangle', 233 * m, 78 * m, t0, 1.45, 0.05, g, 0.04);
-        this.hum(t0 + 1.5, 0.12, 0.2, 'bandpass', 900, 1.2, g, 300, 0.01);
+        this.tone('triangle', 233 * m, 78 * m, t0, 1.45, 0.05, eg, 0.04);
+        this.hum(t0 + 1.5, 0.12, 0.2, 'bandpass', 900, 1.2, eg, 300, 0.01);
       } else {                // the beatboxer loses heart: "boots-n-cats-n-boots-n..." and stops
-        this.B(t0, 1, g); this.ts(t0 + 2 * sp, 0.9, g); this.Pf(t0 + 4 * sp, 1, g); this.ts(t0 + 6 * sp, 0.9, g);
-        this.B(t0 + 8 * sp, 0.9, g); this.ts(t0 + 10 * sp, 0.6, g);
+        this.B(t0, 1, eg); this.ts(t0 + 2 * sp, 0.9, eg); this.Pf(t0 + 4 * sp, 1, eg); this.ts(t0 + 6 * sp, 0.9, eg);
+        this.B(t0 + 8 * sp, 0.9, eg); this.ts(t0 + 10 * sp, 0.6, eg);
         this.say(t0 + 16 * sp, [196 * m], 'uh', 'oh', 0.25, 0.16, 0.1, 0.92);
         this.say(t0 + 16 * sp + 0.3, [165 * m], 'oh', 'oo', 0.6, 0.16, 0.2, 0.75);
         end = t0 + 16 * sp + 1;

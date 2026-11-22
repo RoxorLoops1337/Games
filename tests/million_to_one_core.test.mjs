@@ -109,19 +109,26 @@ const SWEEPS = {
   maxed(gen, base, s0, n, fam = null) {
     const out = [];
     for (let s = s0; s < s0 + n; s++) {
-      let drillT = null, finT = null, minE = Infinity, tot = null, fins = 0, fin5 = 0, moved = 0; const arr = [];
+      let drillT = null, finT = null, minE = Infinity, tot = null, fins = 0, fin5 = 0, moved = 0, tl = 0, tr = 0, res = 0, preArr = false; const arr = [], open = {};
       const prng = mulberry((base + s) ^ 0x7a11), F = fam && CARD_FAMILIES[fam];
       const choose = fam ? (q) => { const own = F ? q.pending.filter((id) => F.includes(id)) : []; const pool = own.length ? own : q.pending; return pool[Math.floor(prng() * pool.length)]; } : null;
       const r = sim(maxed(gen), base + s, 600, (q) => {
         if (!q.drill && !q.over) minE = Math.min(minE, q.p.e / q.p.maxE);
         for (const e of q.events) { if (e.type === 'comboBank' && e.finisher && !e.egg) { fins++; if (e.style >= 5) fin5++; } if (e.type === 'finale') finT = q.t; if (e.type === 'drill') { drillT = q.t; tot = q.headParts().total; } if ((e.type === 'eggClaim' || e.type === 'arrive') && e.k >= 0) arr.push(q.t);
-          if (e.type === 'rivalMove' && e.k > 0 && q.drill && (e.phase === 'hit' || e.phase === 'countered')) moved++; }
+          if (e.type === 'rivalMove' && e.k > 0 && q.drill && (e.phase === 'hit' || e.phase === 'countered')) moved++;
+          // (the tells: a non-Steve tell in the duel (Tiffany's shove-proof notice is no move: only her citation counts) and
+          // whether it resolved, 'hit' or 'countered', before the duel ended; res: any move resolved, Steve's too)
+          if (e.type === 'drill') preArr = q.agents.some((a) => a.boss && a.alive && a.arrived);
+          if (e.type === 'rivalMove' && q.drill) {
+            if (e.phase === 'tell' && e.k > 0 && (e.move !== 'byTheBook' || e.cite)) { tl++; open[e.k] = (open[e.k] || 0) + 1; }
+            if (e.phase === 'hit' || e.phase === 'countered') { res++; if (open[e.k] > 0) { open[e.k]--; tr++; } }
+          } }
       }, { bot: true, dt: 1 / 30, tap: 6, choose });
       // (nsArr: a named rival other than Steve was at the egg while Kevin drilled)
       const nsArr = !!r.drill && r.agents.some((a) => a.boss && a.k > 0 && a.arrived);
       // (duel: how long the egg duel ran and where Kevin's drill stood when it ended)
       out.push({ won: r.won, tier: r.p.bestTier, minE, dna: r.over.dna, fin: finT != null, close: finT != null && drillT != null && arr.some((t) => Math.abs(t - drillT) <= 2.5), reason: r.over.reason, by: r.over.by,
-        duel: drillT != null ? r.t - drillT : null, me: r.drill ? r.drill.me / r.drill.need : 0, tot, fins, fin5, moved, nsArr, gap: r.over.gapSec, drilled: !!r.drill });
+        duel: drillT != null ? r.t - drillT : null, me: r.drill ? r.drill.me / r.drill.need : 0, tot, fins, fin5, moved, nsArr, gap: r.over.gapSec, drilled: !!r.drill, tl, tr, res, preArr });
     }
     return out;
   },
@@ -3110,16 +3117,19 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
 }
 { // TRICK STREAK: different tricks within 13 s climb it; links pay x(1 + 0.75 streak) up to x4 (TRICK_STREAK_CAP, the first medley)
   // arrange / act: five different first-time tricks 0.9 s apart, then the same one again
+  // (the medley off: its extra links land on streak 3; the medley tests below switch it on)
   const r = quiet(); const seq = ['matador', 'needle', 'popcorn', 'snack', 'pinball'];
   const tr = [], st = [];
-  for (const id of seq) { for (const k of CORE.TRICKS.find((T) => T.id === id).kinds) { r.t += 0.3; r.addCombo(k, 0, 0); } for (const e of r.events) { if (e.type === 'trick') tr.push(e); if (e.type === 'trickStreak') st.push(e); } r.events.length = 0; }
+  withFeatures({ medley: false }, () => { for (const id of seq) { for (const k of CORE.TRICKS.find((T) => T.id === id).kinds) { r.t += 0.3; r.addCombo(k, 0, 0); } for (const e of r.events) { if (e.type === 'trick') tr.push(e); if (e.type === 'trickStreak') st.push(e); } r.events.length = 0; } });
   // assert
   ok(tr.length === 5 && tr.map((e) => e.n).join() === '8,14,20,26,32' && st.map((e) => e.n).join() === '1,2,3,4' && st.map((e) => e.mult).join() === '1.75,2.5,3.25,4', 'the streak pays x1.75, x2.5, x3.25, then the x4 cap at streak 4 (' + tr.map((e) => e.n).join(',') + ')');
   const cap = quiet(); cap.p.lastTrick = 'matador'; cap.p.lastTrickT = cap.t; cap.p.trickStreak = 7; cap.trick(CORE.TRICKS[7], 0, 0);
   ok(CORE.TRICK_STREAK_CAP === 4 && Math.abs(CORE.trickStreakMult(8) - 4) < 1e-9 && Math.abs(CORE.trickStreakMult(4) - 4) < 1e-9 && cap.events.find((e) => e.type === 'trick').n === 32, 'and caps at x4');
-  const same = quiet(); same.p.lastTrick = 'needle'; same.p.lastTrickT = same.t; same.p.trickStreak = 3; same.trick(CORE.TRICKS[7], 0, 0);
+  const again = (medley) => withFeatures({ medley }, () => { const q = quiet(); q.p.lastTrick = 'needle'; q.p.lastTrickT = q.t; q.p.trickStreak = 3; q.trick(CORE.TRICKS[7], 0, 0); return q; });
+  const same = again(false), held = again(true);
   const late = quiet(); late.p.lastTrick = 'matador'; late.p.lastTrickT = late.t - 13.1; late.p.trickStreak = 3; late.trick(CORE.TRICKS[7], 0, 0);
-  ok(same.p.trickStreak === 0 && late.p.trickStreak === 0 && !same.events.some((e) => e.type === 'trickStreak') && CORE.TRICK_STREAK_T === 13, 'the same trick again, or one after 13 s, resets it');
+  ok(same.p.trickStreak === 0 && late.p.trickStreak === 0 && !same.events.some((e) => e.type === 'trickStreak') && CORE.TRICK_STREAK_T === 13, 'without the medley the same trick again resets it; one after 13 s always does');
+  ok(held.p.trickStreak === 3 && !held.events.some((e) => e.type === 'trickStreak'), 'with the medley the same trick again HOLDS the streak (no climb, no reset, no trickStreak event: ' + held.p.trickStreak + ')');
   // FRENZY: from streak 2 a running FRENZY gets 1.5 s more than a plain trick gives
   const fz = (n) => { const q = quiet(); styled(q); q.p.frenzyT = 4; q.p.lastTrick = n ? 'matador' : ''; q.p.lastTrickT = q.t; q.p.trickStreak = n; const f0 = q.p.frenzyT; q.trick(CORE.TRICKS[7], 0, 0); return q.p.frenzyT - f0; };
   ok(Math.abs(fz(1) - fz(-1) - 1.5) < 1e-9 && Math.abs(fz(0) - fz(-1)) < 1e-9, 'from streak 2 a trick adds 1.5 s more FRENZY (' + fz(1).toFixed(2) + ' vs ' + fz(-1).toFixed(2) + ')');
@@ -3368,6 +3378,35 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(all.every((ts) => ts.length >= 5) && minGap >= 1 - 1e-6, 'no two tells at the egg start within 1.0 s (closest ' + minGap.toFixed(3) + ' s, ' + all.map((ts) => ts.length).join('/') + ' tells)');
   ok(all.every((ts) => ['byTheBook', 'maxRep', 'stuntDive', 'hairCheck', 'sorry'].every((mv) => firstOf(ts, mv) >= CORE.PRE_MOVE_AT[mv] - 1e-6)),
     'each pre-arrived move waits for its duel time (' + all[0].map((x) => x.move + '@' + x.t.toFixed(2)).join(' ') + ')');
+}
+{ // TELL PACE (FEATURES.tellPace): the pre-arrived rivals' first tells are paced by Kevin's expected drill time, and each move resolves before he gets in
+  withFeatures({ tellPace: true }, () => {
+    // arrange: Chad got in first, then Brock; Kevin arrives and taps 6 a second on Chad's side
+    const r = quiet(77); atEgg(r, 0);
+    for (const [k, t] of [[4, -6], [1, -5]]) Object.assign(r.agents[k], { alive: true, arrived: true, arrivedT: t, y: RACE_LEN - 70, need: 40, drill: 30, eggSide: k === 4 ? -1 : 1 });
+    r.startDrill(); const ex = r.expectedDrillT(), chad = r.agents[4].mv, brock = r.agents[1].mv, t0 = r.t, seen = [];
+    let heldOK = true, nextTap = 0;
+    // act
+    for (let i = 0; i < 60 * 12 && !r.over; i++) {
+      if (r.t - t0 >= nextTap) { r.input.tap++; r.input.tapSide = -1; nextTap += 1 / 6; }
+      r.step(1 / 60);
+      if (r.doorHeld() && r.drill.me > CORE.DOOR_HOLD * r.drill.need + 1e-9) heldOK = false;
+      for (const e of r.events) if (e.type === 'rivalMove') seen.push(e.move + ':' + e.phase); r.events.length = 0;
+    }
+    // assert
+    ok(Math.abs(chad.at - Math.max(CORE.TELL_PACE_MIN, CORE.TELL_PACE_1 * ex)) < 1e-9 && Math.abs(brock.at - CORE.TELL_PACE_2 * ex) < 1e-9, 'the leading rival tells at max(0.35, 0.25 x expected), the second at 0.55 x expected (expected ' + ex.toFixed(2) + ' s: Chad ' + chad.at.toFixed(2) + ', Brock ' + brock.at.toFixed(2) + ')');
+    ok(heldOK && seen.includes('hairCheck:tell') && seen.includes('hairCheck:hit') && seen.includes('maxRep:tell') && (seen.includes('maxRep:hit') || seen.includes('maxRep:countered')), 'Kevin holds at 0.97 of his need while a window is open, and both moves resolve (' + seen.join(' ') + ')');
+    ok(r.over && r.over.reason === 'win', 'and he still gets in (' + (r.over && r.over.reason) + ')');
+  });
+}
+{ // TELL PACE on the maxed gen-0 veterans (SW.gen0, 48 seeds): the egg moves land instead of fizzling
+  // arrange
+  const G = (await SW.gen0).filter((x) => x.drilled), tl = G.reduce((a, x) => a + x.tl, 0), tr = G.reduce((a, x) => a + x.tr, 0), pre = G.filter((x) => x.preArr), dead = pre.filter((x) => !x.res).length;
+  // act / assert
+  if (CORE.FEATURES.tellPace) {
+    ok(tl > 0 && tr >= 0.9 * tl, 'at least 90% of the non-Steve tells resolve, hit or countered (' + tr + ' of ' + tl + ')');
+    ok(dead === 0, 'every duel with a named rival already at the egg resolves at least one move (' + (pre.length - dead) + ' of ' + pre.length + ')');
+  } else if (process.env.MTO_VERBOSE) console.log('info: tellPace off: ' + tr + ' of ' + tl + ' non-Steve tells resolve; ' + (pre.length - dead) + ' of ' + pre.length + ' duels with a rival waiting resolve a move');
 }
 { // 2: a lost egg duel is a fight, not a blowout (the eight 4-taps/s careers from run 6, past the rookie photo finishes)
   // arrange
@@ -4003,6 +4042,25 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(h9.every((k) => !k.lunge && !k.close) && h10.every((k) => k.lunge > 0 && !k.close && k.news.filter((id) => id === 'lunge').length === 1) && h12.every((k) => k.lunge > 0 && k.close > 0 && k.news.includes('close')), 'lungers from step 10, closing gates from step 12, each announced once (' + h10.map((k) => k.lunge).join(',') + ' lungers, ' + h12.map((k) => k.close).join(',') + ' closing)');
   ok(!daily.lunge && !daily.close, 'the daily has neither');
 }
+{ // NOVELTY (FEATURES.novelty): enemy variety comes with normal runs, not wins; the density stays on hzGen
+  // arrange: winless gen-0 saves (hzGen at most 1) at normal runs 4, 5, 14 and 17, whole-race layouts; a daily at run 17
+  const save = (n) => { const m = newMeta(); m.runs = n; m.normRuns = n; m.wins = 0; m.gen = 0; return m; };
+  const layout = (n, o = {}) => withFeatures({ novelty: true }, () => { const r = new Race(save(n), mulberry(o.s || 1), { ...o }); r.p.side = r.eggSide; for (let y = 0; y < RACE_LEN - 2600; y += 500) { r.p.y = y; r.spawnAhead(); } return r; });
+  const kinds = (r) => ({ nv: r.novelty, hz: r.hzGen, twin: r.ents.filter((e) => e.twin).length, lunge: r.ents.filter((e) => e.lunger).length, close: r.ents.filter((e) => e.close).length, news: r.events.filter((e) => e.type === 'hzNew').map((e) => e.id) });
+  // act
+  const steps = [0, 4, 5, 7, 8, 11, 14, 17, 20, 40].map((n) => CORE.noveltyStep(save(n)));
+  const r4 = kinds(layout(4)), r14 = [1, 2, 3].map((s) => kinds(layout(14, { s }))), r17 = [1, 2, 3].map((s) => kinds(layout(17, { s }))), daily = kinds(layout(17, { seed: 20500 }));
+  const off = kinds(new Race(save(17), mulberry(1), { events: false }));
+  // assert
+  ok(steps.join() === '0,0,4,4,6,8,10,12,14,14', 'noveltyStep: twins at normal run 5, pulse 8, pair 11, lunge 14, close 17 (' + steps.join() + ')');
+  ok(CORE.FEATURES.novelty || off.nv === 0, 'with the gate off a Race keeps novelty 0');
+  ok(r4.nv === 0 && !r4.twin && !r4.lunge && !r4.close, 'a rookie run (normal run 4) meets none of the new reads');
+  ok(r14.every((k) => k.nv === 10 && k.hz <= 1 && k.lunge > 0 && !k.close && k.news.filter((id) => id === 'lunge').length === 1), 'a winless save on normal run 14 meets lungers (hzGen ' + r14.map((k) => k.hz).join(',') + ', lungers ' + r14.map((k) => k.lunge).join(',') + '), announced once, and no closing gates');
+  ok(r17.every((k) => k.nv === 12 && (!k.close || k.news.includes('close'))) && r17.reduce((a, k) => a + k.close, 0) > 0, 'on normal run 17 the closing gates come in, a quarter of the gates (' + r17.map((k) => k.close).join(',') + ' over 3 tubes)');
+  ok(daily.nv === 0 && !daily.lunge && !daily.close && !daily.twin, 'the daily has none of them');
+  ok(Math.abs(CORE.lungeShareN(10) - 0.08) < 1e-9 && Math.abs(CORE.lungeShareN(12) - 0.19) < 1e-9 && CORE.lungeShareN(14) === CORE.LUNGE_SHARE && CORE.lungeShareN(30) === CORE.LUNGE_SHARE && CORE.lungeShareN(9) === 0, 'lungeShareN: 0.08 when first met, +0.055 a step, up to 0.3');
+  ok(CORE.closeShareN(11) === 0 && CORE.closeShareN(12) === 0.25 && CORE.closeShareN(14) === 0.5, 'closeShareN: a quarter of the gates when first met, half two steps later');
+}
 { // a lunger: wind-up, a 0.45 s crouch with a second spot, a dash of at most 170 at 900 u/s, then a 1.2 s stun worth a 3-link dodge
   // arrange: Kevin 300 below a lunger, far from his start
   const r = quiet(); r.p.y = 20000; r.prevPY = r.p.y; r.p.x = centre(r.p.y); r.biteUsed = 1; r.p.shield = 5;
@@ -4087,6 +4145,19 @@ const trickStep = (r, k) => (k === 'cash' ? r.seqPush('cash', 0, 0) : r.addCombo
   ok(hit.r.over && hit.r.over.reason === 'wbc' && hit.r.over.bite === 'lunge' && hit.r.p.lastHit === 'lunge', "and it bites: reason 'wbc', over.bite 'lunge' (" + (hit.r.over && hit.r.over.bite) + ')');
   ok(hit.spot && hit.spot.crouch === CORE.LUNGE_CROUCH, "the crouch tell is a 'spot' with lunge: true and crouch: LUNGE_CROUCH (audio sync)");
   ok(dodge.launch && !dodge.r.over, 'a 60 px sidestep during the crouch dodges the pounce');
+  // arrange / act: a bot cruising at the usual 445 u/s meets 20 lungers dead ahead (one race each, a few px across and
+  // a few px of phase apart): the wind-up must end above the window, so they crouch instead of giving up and hunting
+  const cruise = (k) => {
+    const r = quiet(); r.ents = []; r.genY = 1e9; r.agents.forEach((a) => { a.alive = false; }); r.biteUsed = 1; r.p.shield = 9; r.p.wing = 0; r.p.inv = 0;
+    r.p.y = 3000; r.p.x = centre(3000); r.p.vy = 445; r.p.e = 1e6;
+    const w = Object.assign(wbcAt(r.p.x + (k % 5) * 6 - 12, r.p.y + 1300 + 7 * k), { lunger: 1, lunged: 0, crouch: 0, lunge: 0, ld: 0, tx: 0, ty: 0, side: 0, kW: 1 });
+    r.ents.push(w); let crouched = false; const dt = 1 / 240;
+    for (let i = 0; i < 960 && !r.over && !crouched; i++) { r.t += dt; r.prevPY = r.p.y; r.p.y += 445 * dt; r.p.vy = 445; r.stepEnts(dt, false, false, 0); if (w.crouch > 0) crouched = true; }
+    return crouched;
+  };
+  const crouchN = Array.from({ length: 20 }, (_, k) => cruise(k)).filter(Boolean).length;
+  // assert
+  ok(crouchN > 17, 'at 445 u/s more than 85% of 20 lungers met dead ahead crouch (' + crouchN + ' of 20)');
   // arrange / act: a lunger whose intercept would already be behind it never crouches, it just hunts
   const close = quiet(); close.ents = []; close.genY = 1e9; close.agents.forEach((a) => { a.alive = false; }); close.p.y = 3000; close.p.vy = 700;
   const w2 = Object.assign(wbcAt(close.p.x, close.p.y + 300), { lunger: 1, lunged: 0, crouch: 0, lunge: 0, ld: 0, tx: 0, ty: 0, side: 0, kW: 1, spot: 1, spotT: 0.1, sight: 600 });
@@ -5080,17 +5151,25 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   const c = quiet(); styled(c); c.addCombo('close', 0, 0, 5.5 * at + 2 * CORE.OVERCLOCK_STEP * at); c.breakCombo('bonk'); ok(c.p.oc === 0, 'a smashed chain zeroes the OVERCLOCK');
   ok(CORE.FRENZY_TIERS[4].at === 17 && CORE.OVERCLOCK_STEP === 2.5 && CORE.OVERCLOCK_MAX === 4, 'GOD MODE stays at 17x, OVERCLOCK every 2.5x, up to 4 stacks');
 }
-{ // 5b: MEDLEY: five different tricks inside TRICK_STREAK_T give one medley (it lights FRENZY); a repeat resets the streak
+{ // 5b: MEDLEY: five different tricks inside TRICK_STREAK_T give one medley at streak 3 (it never lights FRENZY); a repeat holds the streak
   withFeatures({ medley: true }, () => {
     // arrange
-    const r = quiet(); styled(r); r.s.frenzyAt = 1000; const ids = ['tailgate', 'matador', 'pinball', 'grudge', 'snack'];   // (a far threshold: only the medley lights FRENZY)
+    const r = quiet(); styled(r); r.s.frenzyAt = 1000; const ids = ['tailgate', 'matador', 'pinball', 'grudge', 'snack'];   // (a far threshold: nothing lights FRENZY)
     // act
     for (const id of ids) { r.t += 1; r.trick(CORE.TRICKS.find((T) => T.id === id), 0, 0); }
     const med = r.events.filter((e) => e.type === 'trickStreak' && e.medley), lit = r.events.some((e) => e.type === 'frenzy' && e.medley);
     r.t += 1; r.trick(CORE.TRICKS.find((T) => T.id === 'snack'), 0, 0);
     // assert
-    ok(med.length === 1 && med[0].n === 4 && lit && r.p.frenzyT > 0, 'five tricks in a streak: one medley trickStreak (n 4) that lights FRENZY (' + med.length + ')');
-    ok(r.p.trickStreak === 0 && CORE.TRICK_STREAK_K === 0.75 && CORE.TRICK_STREAK_CAP === 4 && CORE.MEDLEY_LINKS === 10 && CORE.MEDLEY_LINKS_UP === 5, 'a repeat resets the streak; TRICK_STREAK_K 0.75, CAP 4, MEDLEY_LINKS 10 (+5 a repeat)');
+    ok(med.length === 1 && med[0].n === 3 && med[0].mk === 1 && !lit && !(r.p.frenzyT > 0), 'five tricks in a streak: one medley trickStreak (n 3, mk 1), and no frenzy event has medley: true (' + med.length + ')');
+    ok(r.p.trickStreak === 4 && CORE.TRICK_STREAK_K === 0.75 && CORE.TRICK_STREAK_CAP === 4 && CORE.MEDLEY_AT === 3 && CORE.MEDLEY_LINKS === 8 && CORE.MEDLEY_LINKS_UP === 4, 'a repeat holds the streak at 4; TRICK_STREAK_K 0.75, CAP 4, MEDLEY_AT 3, MEDLEY_LINKS 8 (+4 a medley)');
+    // arrange / act: a medley with FRENZY running adds MEDLEY_FRENZY s, never past frenzyLen
+    // (q: streak 2 to 3, a medley; plain: streak 3 to 4, no medley; both get the same trick and streak FRENZY time)
+    const one = (streak, len) => { const q = quiet(); styled(q); q.s.frenzyAt = 1000; q.s.frenzyLen = len; q.p.frenzyT = 0.1; q.p.tier = 1; q.p.lastTrick = 'matador'; q.p.lastTrickT = q.t; q.p.trickStreak = streak; q.trick(CORE.TRICKS[7], 0, 0); return q; };
+    const fz = (len) => { const q = one(2, len), plain = one(3, len); return { q, d: q.p.frenzyT - plain.p.frenzyT, tier: q.p.tier, ev: q.events.filter((e) => e.type === 'frenzy').length }; };
+    const lo = fz(10), hi = fz(3.5);
+    // assert
+    ok(Math.abs(lo.d - CORE.MEDLEY_FRENZY) < 1e-9 && CORE.MEDLEY_FRENZY === 2 && lo.tier === 1 && lo.ev === 0, 'a medley in a running FRENZY adds +2 s over a plain streak-4 trick and climbs no tier (' + lo.d.toFixed(2) + ' s, tier ' + lo.tier + ')');
+    ok(hi.d > 0 && hi.d < CORE.MEDLEY_FRENZY && Math.abs(hi.q.p.frenzyT - 3.5) < 1e-9, 'the medley bonus never lifts FRENZY past frenzyLen (' + hi.q.p.frenzyT.toFixed(2) + ' of 3.5)');
   });
 }
 { // 5c: BUZZER BEATER: a finisher in the last quarter of the timer pays (fm + 0.4) / fm of an early one
@@ -5410,7 +5489,7 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   one.offer(); one.choose(one.pending[0]); one.zoneReached = 1; for (let i = 0; i < 12; i++) { one.t += 0.3; one.addCombo(['close', 'gate', 'dodge', 'pop'][i % 4], 0, 0); }
   ok(!one.fzHold && one.p.frenzyT > 0, 'after the first offer swim 1 lights FRENZY as usual');
 }
-{ // 3a/b: the trick streak's top end: a medley every 4th trick (mk 1, 2, ...), +5 links a repeat, the x4 cap
+{ // 3a/b: the trick streak's top end: a medley every 3rd climb (mk 1, 2, ...), +4 links a medley, the x4 cap, the bank's trick multiplier to 1.5
   withFeatures({ medley: true }, () => {
     // arrange: nine different first-time tricks 1 s apart, a far FRENZY threshold
     const r = quiet(); styled(r); r.s.frenzyAt = 1000; const ids = ['tailgate', 'matador', 'pinball', 'grudge', 'snack', 'popcorn', 'domino', 'needle', 'rush'];
@@ -5419,8 +5498,25 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
     for (const id of ids) { r.t += 1; r.trick(CORE.TRICKS.find((T) => T.id === id), 0, 0); for (const e of r.events) { if (e.type === 'trick') tr.push(e); if (e.type === 'trickStreak') st.push(e); } r.events.length = 0; }
     const at = (n) => st.find((e) => e.n === n);
     // assert
-    ok(at(4) && at(4).medley && at(4).mk === 1 && at(8) && at(8).medley && at(8).mk === 2 && at(5) && !at(5).medley && at(5).mk === undefined && st.filter((e) => e.medley).length === 2, 'streaks 4 and 8 are medleys (mk 1, 2), 5 is not (' + st.map((e) => e.n + (e.medley ? 'M' + e.mk : '')).join(',') + ')');
-    ok(tr[4].n === 8 * 4 + CORE.MEDLEY_LINKS && tr[8].n === 8 * 4 + CORE.MEDLEY_LINKS + CORE.MEDLEY_LINKS_UP && at(8).mult === 4 && at(5).mult === 4, 'medley 1 pays +10 links, medley 2 +15, both at the x4 cap (' + tr[4].n + ', ' + tr[8].n + ')');
+    ok(at(3) && at(3).medley && at(3).mk === 1 && at(6) && at(6).medley && at(6).mk === 2 && at(4) && !at(4).medley && at(4).mk === undefined && st.filter((e) => e.medley).length === 2, 'streaks 3 and 6 are medleys (mk 1, 2), 4 is not (' + st.map((e) => e.n + (e.medley ? 'M' + e.mk : '')).join(',') + ')');
+    ok(tr[3].n === 8 * 3.25 + CORE.MEDLEY_LINKS && tr[6].n === 8 * 4 + CORE.MEDLEY_LINKS + CORE.MEDLEY_LINKS_UP && at(6).mult === 4 && at(4).mult === 4, 'medley 1 pays +8 links, medley 2 +12 (' + tr[3].n + ', ' + tr[6].n + ')');
+    // (the bank's trick multiplier: past TRICK_MULT_CAP up to 1.5 once a medley landed, back to the cap once banked)
+    const mult = r.p.trickMult; r.p.bank = 30; r.p.combo = 30; r.payBank(true); r.p.trickMult = 0.9; r.p.trickStreak = 0; r.p.lastTrick = ''; r.t += 1; r.trick(CORE.TRICKS.find((T) => T.id === 'conga'), 0, 0);
+    ok(CORE.MEDLEY_MULT_CAP === 1.5 && Math.abs(mult - 1.5) < 1e-9 && Math.abs(r.p.trickMult - CORE.TRICK_MULT_CAP) < 1e-9, 'after a medley trickMult reaches 1.5 (' + mult + '); banked, it is capped at TRICK_MULT_CAP again (' + r.p.trickMult + ')');
+    ok(Math.abs(CORE.bankDna(40, 3, 0, 1.5) / CORE.bankDna(40, 3, 0, 1) - 2.5 / 2) < 1e-9, 'bankDna pays a 1.5 trick multiplier in full');
+  });
+}
+{ // the medley's streak hold: a repeat holds it, a gap over TRICK_STREAK_T or a smash resets it
+  withFeatures({ medley: true }, () => {
+    // arrange
+    const r = quiet(); const T = (id) => CORE.TRICKS.find((q) => q.id === id);
+    // act
+    r.t += 1; r.trick(T('tailgate'), 0, 0); r.t += 1; r.trick(T('matador'), 0, 0); r.t += 1; r.trick(T('matador'), 0, 0); const heldN = r.p.trickStreak;
+    r.t += 1; r.trick(T('pinball'), 0, 0); const climbN = r.p.trickStreak;
+    r.t += CORE.TRICK_STREAK_T + 0.1; r.trick(T('pinball'), 0, 0); const gapN = r.p.trickStreak;
+    r.t += 1; r.trick(T('grudge'), 0, 0); r.p.combo = 10; r.breakCombo('test'); const smashN = r.p.trickStreak;
+    // assert
+    ok(heldN === 1 && climbN === 2 && gapN === 0 && smashN === 0, 'repeat holds (1), the next different trick climbs (2), a 13 s gap resets (0), breakCombo resets (0): ' + [heldN, climbN, gapN, smashN].join(','));
   });
 }
 { // 3c: the trick grace: a 2-of-3 recipe stays live TRICK_GRACE s after its second step, even past TRICK_T from its first
@@ -5726,6 +5822,40 @@ const ACID_Z = ZONES.findIndex((z) => z.id === 'acid');
   // a Race is info too: its clock and the last energy hit (p.hitT)
   const m2 = veteran(); const r = quiet(); CORE.openRun(m2, r); r.t = 42; r.p.hitT = 41; CORE.runProgress(m2, 6000, 0.5, 9, r);
   ok(m2.openRun.t === 42 && m2.openRun.hitAt === 41, 'runProgress reads a Race: t ' + m2.openRun.t + ', hitAt ' + m2.openRun.hitAt);
+}
+{ // systems round 7: past half the way, a swim lost on rank is a quit even when the OS took it; a podium swim or an early one stays forgiven
+  // arrange: a live swim (full tank, no hit) on a 3-win streak, noted at a rank and a share of the way, then a background pause
+  const t0 = 1e12;
+  const play = (share, rank) => {
+    const m = veteran(); m.winStreak = 3; CORE.openRun(m, null);
+    CORE.runProgress(m, share * (RACE_LEN - 70), 1, rank, { t: 100, hitAt: -99, now: t0 });
+    CORE.runPaused(m, true, t0, 'bg');
+    const back = loadMeta(JSON.parse(JSON.stringify(m)));
+    return { m: back, res: CORE.settleAbandoned(back, t0 + 5000) };
+  };
+  // act
+  const lost = play(0.7, 40), podium = play(0.7, 2), early = play(0.3, 40), unranked = play(0.7, 0);
+  // assert
+  ok(CORE.FORGIVE_RANK === 3, 'FORGIVE_RANK is 3');
+  ok(lost.res.counted && lost.res.forgiven !== true && lost.m.winStreak === 0 && lost.m.quits === 1, 'rank 40 at 0.7 of the way, full tank, bg pause: a quit, the streak ends (' + JSON.stringify(lost.res) + ', streak ' + lost.m.winStreak + ')');
+  ok(podium.res.forgiven === true && podium.m.winStreak === 3, 'rank 2 at 0.7 of the way stays forgiven (' + JSON.stringify(podium.res) + ')');
+  ok(early.res.forgiven === true && early.m.winStreak === 3, 'rank 40 at 0.3 of the way stays forgiven (' + JSON.stringify(early.res) + ')');
+  ok(unranked.res.forgiven !== true && unranked.m.winStreak === 0, 'no rank noted at 0.7 of the way: not forgiven');
+}
+{ // systems round 7: rested DNA comes from real breaks only; play-time ticks credit none, the factory keeps filling
+  // arrange: a gen 2 save ticked every 60 s for an hour (the title and every save do this), and one with a 2 h gap
+  const t0 = 1e12, H = 3600000;
+  const busy = veteran(); busy.gen = 2; busy.lastSeen = t0;
+  const away = veteran(); away.gen = 2; away.lastSeen = t0;
+  // act
+  for (let i = 1; i <= 60; i++) idleTick(busy, t0 + i * 60000);
+  idleTick(away, t0 + 2 * H);
+  // assert
+  ok(CORE.REST_MIN_GAP_H === 0.25, 'REST_MIN_GAP_H is 0.25');
+  ok(busy.rested === 0, '60 ticks 60 s apart leave rested at 0 (' + busy.rested + ')');
+  ok(Math.abs(busy.bank - factoryRate(busy)) < 1e-6, 'and the factory bank still fills for the whole hour (' + busy.bank.toFixed(2) + ' of ' + factoryRate(busy) + ')');
+  const want = Math.min(CORE.restedCap(2), 2 * CORE.RESTED_PER_H * genFactor(2));
+  ok(Math.abs(away.rested - want) < 1e-6, 'one 2 h gap gives 2 x RESTED_PER_H x genFactor(2) (' + away.rested.toFixed(2) + ' of ' + want.toFixed(2) + ')');
 }
 { // 6.2c: the step and end guards: a bad dt is no step at all; end('quit') twice settles once
   // arrange
