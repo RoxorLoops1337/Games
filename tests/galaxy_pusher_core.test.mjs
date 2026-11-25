@@ -137,6 +137,7 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   g.pushToken('Y'); g.pushToken('Y'); g.pushToken('Y');
   eq(g.out.filter((e) => e.t === 'autoStart').map((e) => e.side), ['L', 'R'], 'volleys take turns between the left and right shooter');
 }
+// ---------------------------------------------------------------- combo meter
 {
   const g = newGame(9, false); g.foe.hp = g.foe.max = 1e9;
   for (const k of ['B', 'B', 'B', 'P', 'P', 'P']) g.pushToken(k);
