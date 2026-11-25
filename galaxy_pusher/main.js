@@ -40,7 +40,7 @@ try { seen = !!(JSON.parse(localStorage.getItem(SAVE_KEY) || 'null') || {}).seen
 
 // presentation state
 const B = {
-  heroes: [{ id: 'rox', col: 'B', x: 0.14, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'jas', col: 'P', x: 0.31, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'mew', col: 'Y', x: 0.48, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }],
+  heroes: [{ id: 'rox', col: 'B', x: 0.1, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'jas', col: 'P', x: 0.245, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'mew', col: 'Y', x: 0.395, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }],
   foe: null, row: [], rowPop: [], slots: [], shake: 0, stage: '',
 };
 const fx = { parts: [], floats: [], flyers: [], shots: [], banners: [], lasers: [], rings: [], bankFly: [] };
@@ -74,10 +74,10 @@ function layout() {
   const probe = document.getElementById('safe'); const cs = getComputedStyle(probe);
   const st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0;
   const gw = Math.min(VW, Math.max(320, VH * 0.6), 560), gx = (VW - gw) / 2;
-  const hud = { x: gx, y: st, w: gw, h: 46 };
-  const bh = clamp(gw * 0.7, 180, VH * 0.34);
+  const hud = { x: gx, y: st, w: gw, h: 42 };
+  const bh = clamp(gw * 0.5, 150, VH * 0.24);
   const battle = { x: gx + 6, y: hud.y + hud.h, w: gw - 12, h: bh };
-  const barH = 70;
+  const barH = 62;
   const bar = { x: gx, y: VH - sb - barH, w: gw, h: barH };
   const mach = { x: gx, y: battle.y + battle.h + 4, w: gw, h: bar.y - (battle.y + battle.h + 4) };
   L = { gw, gx, hud, battle, bar, mach, st, sb };
@@ -387,7 +387,7 @@ function update(dt) {
   for (const r of fx.rings) { r.life -= dt; r.r += dt * 160; } fx.rings = fx.rings.filter((r) => r.life > 0);
   for (const T of game.f.towers) if (T.state === 'stand' && T.wob > 0.6 && Math.random() < dt * 2) S.creak();
   B.shake = shake * 0.6;
-  document.getElementById('itemBtn').classList.toggle('can', game.bank >= ITEMS.wheel.cost);
+  document.getElementById('itemBtn').classList.toggle('can', game.canBuy('wheel'));
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
 }
 
@@ -536,7 +536,7 @@ function buildShop() {
   for (const id of ITEM_ORDER) {
     const I = ITEMS[id], b = document.createElement('button');
     b.className = 'item'; b.dataset.id = id; b.disabled = !game.canBuy(id);
-    b.innerHTML = `<div class="ic" style="background:${ICON[id][1]}">${ICON[id][0]}</div><div class="tx"><b>${I.name}</b>${I.desc}</div><div class="cost">${I.cost}</div>`;
+    b.innerHTML = `<div class="ic" style="background:${ICON[id][1]}">${ICON[id][0]}</div><div class="tx"><b>${I.name}</b>${I.desc}</div><div class="cost">${game.itemCost(id)}</div>`;
     b.addEventListener('click', () => { if (game.buy(id)) { S.click(); show('shop', false); paused = false; } });
     list.appendChild(b);
   }

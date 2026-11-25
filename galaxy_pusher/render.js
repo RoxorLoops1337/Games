@@ -1,6 +1,6 @@
 // Galaxy Pusher drawing: perspective camera for the machine, coin sprites, the battle screen,
 // the cat mech, the enemies and the Galaxy Wheel. Pure drawing: state comes in, pixels go out.
-import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, ENERGY_MAX, FEVER_TIME, heroAtk, xpNeed } from './core.js';
+import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, TH_T, RING_N, RING_R, TWIST, towerLayers, ROW, ENERGY_MAX, FEVER_TIME, heroAtk, xpNeed } from './core.js';
 
 export const COLS = {
   B: { main: '#2fb4ff', dark: '#0d5fa8', light: '#a8e4ff', glow: '#5cd0ff', name: 'BLUE' },
@@ -21,9 +21,10 @@ export function txt(g, s, x, y, size, col, o = {}) {
   g.fillStyle = col; g.fillText(s, x, y); g.shadowBlur = 0;
 }
 
+import { drawFighter, drawHeroBust } from './heroes.js';
 // ------------------------------------------------------------------------------------------------ camera
 export function makeCam(rect) {
-  const C = [W / 2, FRONT + 6.5, 27], T = [W / 2, 9.6, 0];
+  const C = [W / 2, FRONT + 3, 31], T = [W / 2, 11.5, 0];
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const nrm = (a) => { const l = Math.hypot(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; };
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -35,7 +36,7 @@ export function makeCam(rect) {
   const ox = rect.x + rect.w / 2 - ((u0 + u1) / 2) * s;
   const oy = rect.y + rect.h - 4 + v0 * s;
   const cam = {
-    rect, s, C,
+    rect, s, C, key: Math.random(),
     // returns screen x, y, k (px per unit at that depth) and q (how flat a horizontal disc looks there)
     P(x, y, z) {
       const dx = x - C[0], dy = y - C[1], dz = z - C[2];
@@ -87,58 +88,118 @@ export function catFace(g, x, y, s, col = '#ffb02e', o = {}) {
   g.lineWidth = s * 0.03; g.beginPath(); for (const sg of [-1, 1]) { g.moveTo(sg * s * 0.45, s * 0.25); g.lineTo(sg * s * 1.0, s * 0.15); g.moveTo(sg * s * 0.45, s * 0.33); g.lineTo(sg * s * 1.0, s * 0.38); } g.stroke();
   g.restore();
 }
+// Coins are minted once into sprites: a lathe-turned metal face with a bevelled rim, a bead ring and an embossed
+// star, lit from the upper left. VARIANTS copies per metal turn the design, so a carpet of coins never looks stamped.
+const VARIANTS = 6;
+function mintFace(S, pal, rot) {
+  const c = mk(S, S), g = c.getContext('2d'), R = S / 2;
+  // body
+  let gr = g.createRadialGradient(R * 0.75, R * 0.65, R * 0.05, R, R, R);
+  gr.addColorStop(0, pal.hi); gr.addColorStop(0.55, pal.mid); gr.addColorStop(1, pal.lo);
+  g.fillStyle = gr; g.beginPath(); g.arc(R, R, R - 0.5, 0, TAU); g.fill();
+  // lathe marks: fine concentric rings
+  let sd = 1 + Math.floor(rot * 1000); const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 26; i++) { const rr_ = R * (0.15 + 0.8 * rnd()); g.strokeStyle = rnd() < 0.5 ? `rgba(255,255,255,${0.04 + rnd() * 0.06})` : `rgba(0,0,0,${0.03 + rnd() * 0.05})`; g.lineWidth = 0.8 + rnd(); g.beginPath(); g.arc(R, R, rr_, 0, TAU); g.stroke(); }
+  // raised rim, bevelled: bright upper left, dark lower right
+  const rimW = S * 0.085;
+  gr = g.createLinearGradient(0, 0, S, S); gr.addColorStop(0, pal.rimHi); gr.addColorStop(0.5, pal.mid); gr.addColorStop(1, pal.rimLo);
+  g.strokeStyle = gr; g.lineWidth = rimW; g.beginPath(); g.arc(R, R, R - rimW / 2 - 0.5, 0, TAU); g.stroke();
+  gr = g.createLinearGradient(0, 0, S, S); gr.addColorStop(0, pal.rimLo); gr.addColorStop(1, pal.rimHi);
+  g.strokeStyle = gr; g.lineWidth = 1.6; g.beginPath(); g.arc(R, R, R - rimW - 0.6, 0, TAU); g.stroke();
+  g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1; g.beginPath(); g.arc(R, R, R - 0.8, 0, TAU); g.stroke();
+  // embossed design, turned by rot: bead ring, star, a little cat-ear crown
+  g.save(); g.translate(R, R); g.rotate(rot);
+  const emboss = (fn, fill) => {
+    g.save(); g.translate(1.4, 1.6); fn(); g.fillStyle = 'rgba(0,0,0,0.32)'; g.fill(); g.restore();
+    g.save(); g.translate(-1.1, -1.2); fn(); g.fillStyle = 'rgba(255,255,255,0.55)'; g.fill(); g.restore();
+    fn(); g.fillStyle = fill; g.fill();
+  };
+  for (let i = 0; i < 20; i++) { const a = (i / 20) * TAU; emboss(() => { g.beginPath(); g.arc(Math.cos(a) * R * 0.7, Math.sin(a) * R * 0.7, S * 0.017, 0, TAU); }, pal.mid); }
+  emboss(() => star(g, 0, 0, R * 0.42, R * 0.18), pal.emb);
+  emboss(() => { g.beginPath(); g.arc(0, 0, R * 0.09, 0, TAU); }, pal.hi);
+  g.restore();
+  // soft specular sweep (fixed light, not turned)
+  g.globalCompositeOperation = 'lighter';
+  gr = g.createRadialGradient(R * 0.62, R * 0.5, 0, R * 0.62, R * 0.5, R * 0.75); gr.addColorStop(0, 'rgba(255,255,255,0.28)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(R, R, R - 1, 0, TAU); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  // wear: a few tiny dark specks
+  for (let i = 0; i < 14; i++) { const a = rnd() * TAU, d = rnd() * R * 0.85; g.fillStyle = `rgba(40,40,50,${0.08 + rnd() * 0.12})`; g.fillRect(R + Math.cos(a) * d, R + Math.sin(a) * d, 1.2, 1.2); }
+  return c;
+}
+const PAL = {
+  c: { hi: '#ffffff', mid: '#c3cad6', lo: '#7b8496', rimHi: '#ffffff', rimLo: '#5c6474', emb: '#d7dde7', edge: ['#4b5262', '#c9d0db', '#8a93a3', '#3d4452'] },
+  g: { hi: '#fff8d6', mid: '#f0c24a', lo: '#a3680c', rimHi: '#fff3b8', rimLo: '#7a4806', emb: '#ffd970', edge: ['#6b3f05', '#ffe38a', '#c4890f', '#5a3404'] },
+};
 export function buildSprites() {
-  const S = 96;
-  const face = (k) => {
-    const c = mk(S, S), g = c.getContext('2d'); const R = S / 2;
-    if (k === 'c') { metal(g, S, '#ffffff', '#c9d2e0', '#7d889c', '#9aa5b8'); g.strokeStyle = 'rgba(80,90,110,0.55)'; g.lineWidth = 3; star(g, R, R, R * 0.42, R * 0.18); g.stroke(); g.beginPath(); g.arc(R, R, R * 0.62, 0, TAU); g.lineWidth = 2; g.stroke(); }
-    else if (k === 'g') { metal(g, S, '#fffbe0', '#ffd34a', '#b5780e', '#e0a020'); g.fillStyle = 'rgba(150,90,0,0.55)'; star(g, R, R, R * 0.44, R * 0.19); g.fill(); g.fillStyle = 'rgba(255,255,220,0.8)'; star(g, R - 2, R - 2, R * 0.4, R * 0.17); g.fill(); }
-    else {
-      const C = COLS[k];
-      g.fillStyle = C.dark; g.beginPath(); g.arc(R, R, R - 1, 0, TAU); g.fill();
-      g.fillStyle = C.main; g.beginPath(); g.arc(R, R, R - 6, 0, TAU); g.fill();
-      g.fillStyle = '#fff'; for (let i = 0; i < 8; i++) { g.save(); g.translate(R, R); g.rotate((i * TAU) / 8); g.fillRect(-4, -R + 2, 8, 9); g.restore(); }
-      g.fillStyle = '#16122e'; g.beginPath(); g.arc(R, R, R * 0.66, 0, TAU); g.fill();
-      g.save(); g.beginPath(); g.arc(R, R, R * 0.62, 0, TAU); g.clip();
-      const bg = g.createRadialGradient(R, R * 0.8, 2, R, R, R * 0.7); bg.addColorStop(0, C.light); bg.addColorStop(1, C.main); g.fillStyle = bg; g.fillRect(0, 0, S, S);
-      if (k === 'Y') catFace(g, R, R + 6, R * 0.42);
-      else if (window.RJ && window.RJ.bust) {
-        const t = mk(S, S); const tg = t.getContext('2d');
-        try { window.RJ.bust(tg, k === 'B' ? 'roxor' : 'jasmin', S, S, { t: 0, expr: 'happy' }); } catch (e) { /* art kit missing */ }
-        g.drawImage(t, R - R * 0.68, R - R * 0.66, R * 1.36, R * 1.36);
-      }
-      g.restore();
-      g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.arc(R, R, R * 0.64, Math.PI * 1.1, Math.PI * 1.7); g.stroke();
-    }
+  const S = 128;
+  const token = (k) => {
+    const c = mk(S, S), g = c.getContext('2d'); const R = S / 2, C = COLS[k];
+    g.fillStyle = C.dark; g.beginPath(); g.arc(R, R, R - 1, 0, TAU); g.fill();
+    const rg = g.createLinearGradient(0, 0, S, S); rg.addColorStop(0, C.light); rg.addColorStop(0.5, C.main); rg.addColorStop(1, C.dark);
+    g.fillStyle = rg; g.beginPath(); g.arc(R, R, R - 4, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.92)'; for (let i = 0; i < 8; i++) { g.save(); g.translate(R, R); g.rotate((i * TAU) / 8); g.fillRect(-5, -R + 3, 10, 12); g.restore(); }
+    g.fillStyle = '#16122e'; g.beginPath(); g.arc(R, R, R * 0.68, 0, TAU); g.fill();
+    g.save(); g.beginPath(); g.arc(R, R, R * 0.63, 0, TAU); g.clip();
+    const bg = g.createRadialGradient(R, R * 0.8, 2, R, R, R * 0.7); bg.addColorStop(0, C.light); bg.addColorStop(1, C.main); g.fillStyle = bg; g.fillRect(0, 0, S, S);
+    if (k === 'Y') catFace(g, R, R + 8, R * 0.42);
+    else drawHeroBust(g, k === 'B' ? 'rox' : 'jas', R, R, R * 0.63);
+    g.restore();
+    g.globalCompositeOperation = 'lighter';
+    const sp = g.createLinearGradient(0, 0, S, S); sp.addColorStop(0, 'rgba(255,255,255,0.35)'); sp.addColorStop(0.45, 'rgba(255,255,255,0)'); g.fillStyle = sp; g.beginPath(); g.arc(R, R, R - 2, 0, TAU); g.fill();
+    g.globalCompositeOperation = 'source-over';
     return c;
   };
-  const edge = (k) => {
+  const edge = (cols) => {
     const c = mk(S, S), g = c.getContext('2d'), R = S / 2;
-    const col = k === 'c' ? ['#5d6676', '#9ba5b5'] : k === 'g' ? ['#7a4a06', '#d39a1c'] : [COLS[k].dark, COLS[k].main];
-    const gr = g.createLinearGradient(0, 0, S, 0); gr.addColorStop(0, col[0]); gr.addColorStop(0.35, col[1]); gr.addColorStop(1, col[0]);
-    g.fillStyle = gr; g.beginPath(); g.arc(R, R, R - 1, 0, TAU); g.fill();
-    if (k !== 'c' && k !== 'g') { g.fillStyle = '#fff'; for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; g.fillRect(R + Math.cos(a) * R * 0.85 - 4, R * 1.4, 8, R * 0.6); } }
+    const gr = g.createLinearGradient(0, 0, S, 0); gr.addColorStop(0, cols[0]); gr.addColorStop(0.3, cols[1]); gr.addColorStop(0.65, cols[2]); gr.addColorStop(1, cols[3]);
+    g.fillStyle = gr; g.beginPath(); g.arc(R, R, R - 0.5, 0, TAU); g.fill();
     return c;
   };
-  for (const k of ['c', 'g', 'B', 'P', 'Y']) { SPR[k] = face(k); SPR[k + 'e'] = edge(k); }
+  for (const k of ['c', 'g']) {
+    SPR[k + 'v'] = []; for (let i = 0; i < VARIANTS; i++) SPR[k + 'v'].push(mintFace(S, PAL[k], (i / VARIANTS) * TAU * 0.2 + i * 0.7));
+    SPR[k] = SPR[k + 'v'][0]; SPR[k + 'e'] = edge(PAL[k].edge); SPR[k + 'band'] = PAL[k].edge;
+  }
+  for (const k of ['B', 'P', 'Y']) { SPR[k] = token(k); SPR[k + 'v'] = [SPR[k]]; SPR[k + 'e'] = edge([COLS[k].dark, COLS[k].main, COLS[k].main, COLS[k].dark]); SPR[k + 'band'] = [COLS[k].dark, COLS[k].main, '#ffffff', COLS[k].dark]; }
+  // the coin's edge as a strip image (stretched, far cheaper than a gradient per coin per frame)
+  for (const k of ['c', 'g', 'B', 'P', 'Y']) {
+    const cols = SPR[k + 'band'], c = mk(64, 4), g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 64, 0);
+    gr.addColorStop(0, cols[0]); gr.addColorStop(0.3, cols[1]); gr.addColorStop(0.65, cols[2]); gr.addColorStop(1, cols[3]);
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 4); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 3, 64, 1); SPR[k + 'bandImg'] = c;
+  }
   // ball
   const b = mk(64, 64), bg = b.getContext('2d'); const gr = bg.createRadialGradient(24, 22, 2, 32, 32, 31); gr.addColorStop(0, '#fff'); gr.addColorStop(0.4, '#dfe6f2'); gr.addColorStop(1, '#5a6478'); bg.fillStyle = gr; bg.beginPath(); bg.arc(32, 32, 30, 0, TAU); bg.fill(); SPR.ball = b;
   return SPR;
 }
 export const sprite = (k) => SPR[k];
 
-// draw one coin given its bottom centre in the world
-export function drawCoin(g, cam, k, x, y, z, h, r, alpha = 1, glow = 0) {
+// draw one coin given its bottom centre in the world. rot picks the minted variant; tilt leans it (sq flattens, ang turns it on screen)
+export function drawCoin(g, cam, k, x, y, z, h, r, alpha = 1, glow = 0, rot = 0, sq = 1, ang = 0) {
   const p = cam.P(x, y, z), q = cam.P(x, y, z + h);
-  const rx = r * q.k, ry = rx * Math.max(0.2, q.q);
+  const rx = r * q.k, ry = rx * Math.max(0.18, q.q * sq);
   if (rx < 0.5) return;
   if (alpha < 1) g.globalAlpha = alpha;
+  const band = p.y - q.y;
+  if (ang) { g.save(); g.translate(q.x, q.y); g.rotate(ang); g.translate(-q.x, -q.y); }
   g.drawImage(SPR[k + 'e'], p.x - rx, p.y - ry, rx * 2, ry * 2);
-  if (q.y - p.y < -1.2) { g.fillStyle = k === 'c' ? '#7f899b' : k === 'g' ? '#b47c10' : COLS[k].dark; g.fillRect(q.x - rx + 0.5, q.y, rx * 2 - 1, p.y - q.y); }
+  if (band > 1.2) {
+    g.drawImage(SPR[k + 'bandImg'], q.x - rx + 0.3, q.y, rx * 2 - 0.6, band);
+  }
   if (glow) { g.shadowColor = glow; g.shadowBlur = rx * 0.9; }
-  g.drawImage(SPR[k], q.x - rx, q.y - ry, rx * 2, ry * 2);
+  const vs = SPR[k + 'v'];
+  g.drawImage(vs.length > 1 ? vs[Math.floor(((rot % TAU) + TAU) % TAU / TAU * vs.length) % vs.length] : vs[0], q.x - rx, q.y - ry, rx * 2, ry * 2);
   if (glow) g.shadowBlur = 0;
+  if (ang) g.restore();
   if (alpha < 1) g.globalAlpha = 1;
+}
+// how a loose coin leans: resting off-centre on another coin tips it toward the low side
+function lean(c) {
+  const s = c.sup;
+  if (!s || s.want !== undefined) return [1 + Math.sin(c.rot * 3) * 0.05, 0];
+  const dx = c.x - s.x, dy = c.y - s.y, d = Math.hypot(dx, dy);
+  if (d < 0.15) return [1, 0];
+  const k = Math.min(1, d / 1.15) * 0.45;
+  return [1 + (dy / d) * k * 0.6, (dx / d) * k * 0.5];
 }
 
 // ------------------------------------------------------------------------------------------------ the machine
@@ -210,14 +271,23 @@ export function drawMachine(g, cam, game, V) {
   for (const T of f.towers) list.push(T);
   list.sort((a, b) => (a.y - b.y) || (a.z - b.z));
   const frontY = cam.P(W / 2, FRONT, 0).y;
-  for (const c of list) {
-    if (c.want !== undefined) { drawTower(g, cam, c, t); continue; }
-    if (c.off && c.z < -0.2) continue;   // drawn after the front lip
-    const glow = (c.k === 'B' || c.k === 'P' || c.k === 'Y') ? null : 0;
-    drawCoin(g, cam, c.k, c.x, c.y, c.z, c.h, c.r, 1, glow);
+  // contact shadows: one soft dark blob under every coin (a single path, so overlaps do not stack up)
+  g.fillStyle = 'rgba(6,4,20,0.33)'; g.beginPath();
+  for (const c of f.coins) {
+    if (c.off) continue;
+    const zf = c.y < f.pf ? PH : 0, sp = cam.P(c.x + 0.12, c.y + 0.22, zf), rx = c.r * 1.06 * sp.k, ry = rx * sp.q;
+    g.moveTo(sp.x + rx, sp.y); g.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU);
   }
-  // front lip and the falling coins disappearing behind it
-  for (const c of f.coins) if (c.off && c.z < -0.2) drawCoin(g, cam, c.k, c.x, c.y, c.z, c.h, c.r, clamp(1 + c.z / 5, 0, 1));
+  g.fill();
+  for (const c of list) {
+    if (c.want !== undefined) { drawTower(g, cam, c, t, V.dpr); continue; }
+    if (c.off && c.z < -0.2) continue;   // drawn after the front lip
+    const [sq, ang] = lean(c);
+    drawCoin(g, cam, c.k, c.x, c.y, c.z, c.h, c.r, 1, 0, c.rot, sq, ang);
+  }
+  // front lip and the falling coins disappearing behind it (a big spill draws only a sample)
+  let nOff = 0;
+  for (const c of f.coins) if (c.off && c.z < -0.2 && nOff++ < 160) drawCoin(g, cam, c.k, c.x, c.y, c.z, c.h, c.r, clamp(1 + c.z / 5, 0, 1), 0, c.rot);
   const l0 = cam.P(0, FRONT, 0), l1 = cam.P(W, FRONT, 0), l2 = cam.P(W, FRONT + 0.6, -2.5), l3 = cam.P(0, FRONT + 0.6, -2.5);
   g.beginPath(); g.moveTo(l0.x, l0.y); g.lineTo(l1.x, l1.y); g.lineTo(l2.x, rect.y + rect.h); g.lineTo(l3.x, rect.y + rect.h); g.closePath();
   gr = g.createLinearGradient(0, l0.y, 0, rect.y + rect.h); gr.addColorStop(0, '#1d1640'); gr.addColorStop(1, '#0a0618'); g.fillStyle = gr; g.fill();
@@ -240,56 +310,72 @@ export function drawMachine(g, cam, game, V) {
   g.globalAlpha = 1;
 }
 
-function drawTower(g, cam, T, t) {
-  const n = T.n; if (!n) return;
-  const h = TH_T, k = T.gold ? 'g' : 'c';
-  const ca = Math.cos(T.dir), sa = Math.sin(T.dir);
-  const wob = T.state === 'stand' ? (T.wob || 0) : 0;
-  const sway = wob * wob * 0.5 * Math.sin(t * (6 + wob * 8));
-  const lean = T.state === 'fall' || T.state === 'teeter' ? T.ang : 0;
-  // base glow ring
-  const b = cam.P(T.x, T.y, 0);
-  g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(b.x, b.y, T.r * 1.3 * b.k, T.r * 1.3 * b.k * b.q, 0, 0, TAU); g.fill();
-  const C = COLS[T.col] || COLS.B;
-  if (T.state !== 'fall') { g.strokeStyle = C.glow; g.lineWidth = 2; g.globalAlpha = 0.5 + 0.4 * Math.sin(t * 6); g.beginPath(); g.ellipse(b.x, b.y, T.r * 1.5 * b.k, T.r * 1.5 * b.k * b.q, 0, 0, TAU); g.stroke(); g.globalAlpha = 1; }
-  if (lean === 0 && sway === 0) {
-    // fast path: one column with ridges, then the top face
-    const top = cam.P(T.x, T.y, n * h), bot = cam.P(T.x, T.y, 0), rx = T.r * top.k;
-    g.save(); g.shadowColor = C.glow; g.shadowBlur = 14; g.fillStyle = 'rgba(0,0,0,0.01)'; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y); g.restore();
-    const gr = g.createLinearGradient(top.x - rx, 0, top.x + rx, 0);
-    const cc = T.gold ? ['#7a4a06', '#ffe37a', '#c48816', '#6a3e04'] : ['#4b5466', '#eef2fa', '#9aa5b8', '#3d4556'];
-    gr.addColorStop(0, cc[0]); gr.addColorStop(0.3, cc[1]); gr.addColorStop(0.6, cc[2]); gr.addColorStop(1, cc[3]);
-    g.fillStyle = gr; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y);
-    g.beginPath(); g.ellipse(bot.x, bot.y, rx, rx * bot.q, 0, 0, Math.PI); g.fill();
-    // every coin's rim: a dark groove and a bright lip, so it reads as a stack of coins
-    g.lineWidth = 1;
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.beginPath();
-    for (let i = 1; i < n; i++) { const p = cam.P(T.x, T.y, i * h); g.moveTo(p.x - rx, p.y); g.ellipse(p.x, p.y, rx, rx * p.q, 0, Math.PI, 0, true); }
-    g.stroke();
-    g.strokeStyle = T.gold ? 'rgba(255,245,190,0.55)' : 'rgba(255,255,255,0.45)'; g.beginPath();
-    for (let i = 1; i < n; i++) { const p = cam.P(T.x, T.y, i * h); g.moveTo(p.x - rx * 0.7, p.y + 1.2); g.ellipse(p.x, p.y + 1.2, rx * 0.7, rx * 0.7 * p.q, 0, Math.PI * 0.85, Math.PI * 0.3, true); }
-    g.stroke();
-    // a soft neon wash in the tower colour
-    const wash = g.createLinearGradient(0, top.y, 0, bot.y); wash.addColorStop(0, 'rgba(255,255,255,0)'); wash.addColorStop(1, C.glow + '55');
-    g.fillStyle = wash; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y);
-    drawCoin(g, cam, k, T.x, T.y, (n - 1) * h, h, T.r);
-  } else {
-    for (let i = 0; i < n; i++) {
-      const hz = i * h + h / 2, s = Math.sin(lean), c = Math.cos(lean);
-      const swx = sway * (hz / (n * h)) * (hz / 3);
-      drawCoin(g, cam, k, T.x + ca * hz * s + swx, T.y + sa * hz * s, hz * c - h / 2, h, T.r);
-    }
+// The ring tower. Standing still it is drawn from a cache (hundreds of coins, painted once, layer by layer as it grows);
+// rocking it is the cache sheared; toppling it is drawn coin by coin around the tipping base.
+function towerCoinWorld(T, i, lean, sway) {
+  const k = Math.floor(i / RING_N), j = i % RING_N, a = T.twist0 + k * TWIST + (j * TAU) / RING_N;
+  const ox = Math.cos(a) * RING_R, oy = Math.sin(a) * RING_R, hz = k * TH_T;
+  if (!lean) return [T.x + ox, T.y + oy, hz];
+  const dx = Math.cos(T.dir), dy = Math.sin(T.dir), od = ox * dx + oy * dy, op = -ox * dy + oy * dx;
+  const sa = Math.sin(lean), ca = Math.cos(lean), along = hz * sa + od * ca, z = hz * ca - od * sa;
+  return [T.x + dx * along - dy * op, T.y + dy * along + dx * op, z];
+}
+function paintLayers(cg, cam, T, L0, L1) {
+  const k = T.gold ? 'g' : 'c', order = [];
+  for (let l = L0; l < L1; l++) {
+    order.length = 0;
+    for (let j = 0; j < RING_N; j++) { const i = l * RING_N + j; if (i >= T.n) break; order.push(towerCoinWorld(T, i, 0, 0).concat(i)); }
+    order.sort((a, b) => a[1] - b[1]);
+    for (const [x, y, z, i] of order) drawCoin(cg, cam, k, x, y, z, TH_T, 1, 1, 0, i * 1.7);
   }
-  // the crown of tokens rides on top
-  const topZ = n * h;
+}
+function drawTower(g, cam, T, t, dpr) {
+  if (!T.n) return;
+  const C = COLS[T.col] || COLS.B;
+  const b = cam.P(T.x, T.y, 0);
+  // floor shadow and a pulsing ring in the tower colour
+  g.fillStyle = 'rgba(0,0,0,0.38)'; g.beginPath(); g.ellipse(b.x, b.y + 2, T.r * 1.15 * b.k, T.r * 1.15 * b.k * b.q, 0, 0, TAU); g.fill();
+  if (T.state !== 'fall') { g.strokeStyle = C.glow; g.lineWidth = 2; g.globalAlpha = 0.45 + 0.4 * Math.sin(t * 6); g.beginPath(); g.ellipse(b.x, b.y, T.r * 1.35 * b.k, T.r * 1.35 * b.k * b.q, 0, 0, TAU); g.stroke(); g.globalAlpha = 1; }
+  const tipping = T.state === 'fall' || T.state === 'teeter';
+  if (tipping && T.ang > 0.001) {
+    const k = T.gold ? 'g' : 'c', pts = [];
+    for (let i = 0; i < T.n; i++) pts.push(towerCoinWorld(T, i, T.ang, 0).concat(i));
+    // paint the near side last: lower coins first along the column, nearer ones later within a layer
+    for (let l = 0; l < T.layers; l++) {
+      const s0 = l * RING_N, layer = pts.slice(s0, s0 + RING_N).sort((a, b2) => a[1] - b2[1]);
+      for (const [x, y, z, i] of layer) drawCoin(g, cam, k, x, y, z, TH_T, 1, 1, 0, i * 1.7);
+    }
+  } else {
+    // cached column
+    const fullH = towerLayers(T.want) * TH_T;
+    let Cc = T._cache;
+    const stale = !Cc || Cc.dpr !== dpr || Cc.n > T.n || Math.abs(Cc.x - T.x) + Math.abs(Cc.y - T.y) > 0.6 || Cc.key !== cam.key;
+    if (stale) {
+      const top = cam.P(T.x, T.y, fullH + 1.5), w = (RING_R + 1.6) * 2 * b.k, pad = 12;
+      const ox = b.x - w / 2, oy = top.y - pad, hgt = b.y - top.y + (RING_R + 1.6) * b.k * b.q + pad * 2;
+      const cv = mk(Math.ceil(w * dpr), Math.ceil(hgt * dpr));
+      Cc = T._cache = { cv, cg: cv.getContext('2d'), x: T.x, y: T.y, ox, oy, w, h: hgt, layers: 0, n: 0, dpr, bx: b.x, by: b.y, key: cam.key };
+      Cc.cg.setTransform(dpr, 0, 0, dpr, -ox * dpr, -oy * dpr);
+    }
+    const L = towerLayers(T.n);
+    if (L > Cc.layers || T.n !== Cc.n) { paintLayers(Cc.cg, cam, T, Math.max(0, Math.min(Cc.layers, L) - (T.n !== Cc.n && Cc.layers === L ? 1 : 0)), L); Cc.layers = L; Cc.n = T.n; }
+    const sx = b.x - Cc.bx, sy = b.y - Cc.by;
+    const wob = T.state === 'stand' ? (T.wob || 0) : 0, sway = T.state === 'teeter' ? Math.sin(T.ft * 14) * 0.06 : wob * wob * 0.03 * Math.sin(t * (6 + wob * 8));
+    g.save();
+    if (sway) { g.translate(b.x, b.y); g.transform(1, 0, -sway * 3, 1, 0, 0); g.translate(-b.x, -b.y); }
+    g.drawImage(Cc.cv, Cc.ox + sx, Cc.oy + sy, Cc.w, Cc.h);
+    g.restore();
+  }
+  // tokens resting in the hollow on top
+  const ang = tipping ? T.ang : 0, dx = Math.cos(T.dir), dy = Math.sin(T.dir);
   T.crown.forEach((ck, i) => {
-    const hz = topZ + i * KIND.B.h, s = Math.sin(lean), c = Math.cos(lean);
-    const swx = sway * (topZ / 3);
-    drawCoin(g, cam, ck, T.x + ca * hz * s + swx, T.y + sa * hz * s, hz * c, KIND.B.h, KIND.B.r, 1, COLS[ck].glow);
+    const off = (i - (T.crown.length - 1) / 2) * 1.3, hz = T.hgt + 0.05;
+    const along = hz * Math.sin(ang), z = hz * Math.cos(ang);
+    drawCoin(g, cam, ck, T.x + dx * along - dy * off, T.y + dy * along + dx * off, z, KIND.B.h, KIND.B.r * 0.9, 1, COLS[ck].glow);
   });
   if (T.state === 'build') {
-    const p = cam.P(T.x, T.y, topZ + 1.2);
-    txt(g, String(n), p.x, p.y - 10, Math.max(14, p.k * 1.6), '#fff', { glow: C.glow });
+    const p = cam.P(T.x, T.y, T.hgt + 1.6);
+    txt(g, String(T.n), p.x, p.y - 12, Math.max(16, p.k * 1.8), '#fff', { glow: C.glow });
   }
 }
 
@@ -350,7 +436,7 @@ export function drawMew(g, x, y, s, t, pose = 'idle') {
   const fl = 10 + Math.sin(t * 40) * 4 + (pose === 'attack' ? 14 : 0);
   g.fillStyle = '#ffd75c'; g.beginPath(); g.moveTo(-44, -40); g.lineTo(-58 - fl, -30); g.lineTo(-44, -22); g.fill();
   g.fillStyle = '#fff'; g.beginPath(); g.moveTo(-44, -36); g.lineTo(-52 - fl * 0.5, -31); g.lineTo(-44, -27); g.fill();
-  g.lineJoin = 'round'; g.strokeStyle = '#3a1d05'; g.lineWidth = 5;
+  g.lineJoin = 'round'; g.strokeStyle = '#120a1f'; g.lineWidth = 2.2;
   // legs
   g.fillStyle = '#6b5a4a'; for (const lx of [-22, 18]) { rr(g, lx - 8, -26, 16, 22, 5); g.fill(); g.stroke(); rr(g, lx - 13, -8, 26, 10, 5); g.fillStyle = '#ffb02e'; g.fill(); g.stroke(); g.fillStyle = '#6b5a4a'; }
   // jet pack
@@ -360,8 +446,8 @@ export function drawMew(g, x, y, s, t, pose = 'idle') {
   g.fillStyle = gr; g.beginPath(); g.ellipse(0, -58, 44, 40, 0, 0, TAU); g.fill(); g.stroke();
   g.fillStyle = '#3a1d05'; g.globalAlpha = 0.15; g.beginPath(); g.ellipse(6, -44, 34, 22, 0, 0, Math.PI); g.fill(); g.globalAlpha = 1;
   // stripes on the pod
-  g.strokeStyle = '#b5620c'; g.lineWidth = 5; for (const k of [-16, 0, 16]) { g.beginPath(); g.moveTo(k - 6, -24); g.lineTo(k, -36); g.stroke(); }
-  g.strokeStyle = '#3a1d05'; g.lineWidth = 5;
+  g.strokeStyle = '#b5620c'; g.lineWidth = 2.2; for (const k of [-16, 0, 16]) { g.beginPath(); g.moveTo(k - 6, -24); g.lineTo(k, -36); g.stroke(); }
+  g.strokeStyle = '#120a1f'; g.lineWidth = 2.2;
   // arm (punch on attack)
   const ax = pose === 'attack' ? 70 : 42 + Math.sin(t * 3 + 1) * 2;
   g.fillStyle = '#8c95ad'; rr(g, 30, -66, ax - 26, 14, 7); g.fill(); g.stroke();
@@ -371,10 +457,10 @@ export function drawMew(g, x, y, s, t, pose = 'idle') {
   g.fillStyle = 'rgba(150,220,255,0.35)'; g.fillRect(-40, -130, 90, 70);
   catFace(g, 6, -88, 22, '#ffb02e', { blink: (t % 4) > 3.85 });
   g.restore();
-  g.strokeStyle = '#3a1d05'; g.lineWidth = 4; g.beginPath(); g.ellipse(4, -96, 34, 30, 0, 0, TAU); g.stroke();
-  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 3; g.beginPath(); g.ellipse(4, -96, 26, 22, 0, Math.PI * 1.15, Math.PI * 1.5); g.stroke();
+  g.strokeStyle = '#120a1f'; g.lineWidth = 2; g.beginPath(); g.ellipse(4, -96, 34, 30, 0, 0, TAU); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(4, -96, 26, 22, 0, Math.PI * 1.15, Math.PI * 1.5); g.stroke();
   // antenna
-  g.strokeStyle = '#3a1d05'; g.lineWidth = 3; g.beginPath(); g.moveTo(14, -125); g.lineTo(20, -142); g.stroke();
+  g.strokeStyle = '#120a1f'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(14, -125); g.lineTo(20, -142); g.stroke();
   g.fillStyle = Math.sin(t * 6) > 0 ? '#ff4fb0' : '#ffd75c'; g.beginPath(); g.arc(20, -144, 5, 0, TAU); g.fill(); g.stroke();
   g.restore();
 }
@@ -383,7 +469,7 @@ export function drawMew(g, x, y, s, t, pose = 'idle') {
 export function drawFoe(g, kind, x, y, s, t, flash = 0) {
   g.save(); g.translate(x, y); g.scale(s, s);
   g.lineJoin = 'round'; g.lineCap = 'round';
-  const ink = '#14081f', L = 4.5;
+  const ink = '#14081f', L = 2.4;
   const body = (fn) => { fn(); };
   const eye = (ex, ey, r, col = '#ff3b47') => { g.fillStyle = '#fff'; g.beginPath(); g.arc(ex, ey, r, 0, TAU); g.fill(); g.strokeStyle = ink; g.lineWidth = 3; g.stroke(); g.fillStyle = col; g.beginPath(); g.arc(ex - r * 0.25, ey, r * 0.55, 0, TAU); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(ex - r * 0.4, ey - r * 0.25, r * 0.18, 0, TAU); g.fill(); };
   const rotor = (rx, ry, w) => { g.fillStyle = 'rgba(210,230,255,0.35)'; g.beginPath(); g.ellipse(rx, ry, w, w * 0.25, 0, 0, TAU); g.fill(); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2; const a = t * 40; g.beginPath(); g.moveTo(rx + Math.cos(a) * w, ry + Math.sin(a) * w * 0.25); g.lineTo(rx - Math.cos(a) * w, ry - Math.sin(a) * w * 0.25); g.stroke(); };
@@ -478,9 +564,9 @@ export function drawBattle(g, rect, game, B, t, dpr) {
   const hs = h * 0.00175;
   for (const H of B.heroes) {
     const hx = x + w * H.x + H.dx, hy = gy + h * 0.06 + H.dy;
-    if (H.glow > 0) { g.fillStyle = `rgba(255,255,200,${H.glow * 0.4})`; g.beginPath(); g.ellipse(hx, hy - h * 0.25, h * 0.2, h * 0.32, 0, 0, TAU); g.fill(); }
-    if (H.id === 'mew') drawMew(g, hx, hy, h * 0.003, t, H.pose);
-    else if (window.RJ && window.RJ.draw) window.RJ.draw(g, H.id === 'rox' ? 'roxor' : 'jasmin', { x: hx, y: hy, s: hs * (H.id === 'jas' ? 0.98 : 1), pose: H.pose, t: t + (H.id === 'jas' ? 1.7 : 0) });
+    if (H.glow > 0) { g.fillStyle = `rgba(255,255,200,${H.glow * 0.3})`; g.beginPath(); g.ellipse(hx, hy - h * 0.22, h * 0.12, h * 0.28, 0, 0, TAU); g.fill(); }
+    if (H.id === 'mew') drawMew(g, hx, hy, h * 0.0024, t, H.pose);
+    else drawFighter(g, H.id, hx, hy, h * (H.id === 'rox' ? 0.5 : 0.47), t, H.pose);
     const hero = game.heroes.find((q) => q.id === H.id), C = COLS[hero.col];
     // label: level and attack
     const ly = hy + 13;
