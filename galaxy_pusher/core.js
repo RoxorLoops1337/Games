@@ -20,7 +20,7 @@
 
 export const W = 22, BACK = 0, FRONT = 20;
 export const PMIN = 2.0, PMAX = 6.6, PERIOD = 4.2, PH = 1.0;
-export const GUT = 2.6;               // width of each corner gutter at the front edge
+export const GUT = 3.0;               // width of each corner gutter at the front edge
 export const G = 42;
 const CELL = 2.6;                  // gravity (units/s^2)
 export const DT = 1 / 120;
@@ -36,6 +36,7 @@ export const KIND = {
 };
 export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
 export const TOWER = { B: 30, Y: 36, P: 60, JP: 80 };
+export const TH_T = 0.3;            // a tower coin's height on screen (taller than a loose coin so towers look like towers)
 // The wheel: 12 pockets clockwise from the top. c = tower colour, x2 = gold coins (pay double), lv = every hero levels up.
 export const WHEEL = [
   { c: 'B', x2: true }, { c: 'P' }, { c: 'Y', x2: true }, { c: 'JP' },
@@ -54,7 +55,7 @@ export const SECTORS = [
   { name: 'Void Arcade', foes: ['eel', 'saucer', 'drone2', 'crab', 'boss_squid'] },
 ];
 export const FOE_NAME = { drone: 'Buzz Drone', drone2: 'Twin Drones', crab: 'Scrap Crab', saucer: 'Hoverdisc', eel: 'Volt Eel', boss_mech: 'Titan Mech', boss_squid: 'Nebula Squid' };
-export const ENERGY_MAX = 160, FEVER_TIME = 20;
+export const ENERGY_MAX = 200, FEVER_TIME = 20;
 export const REGEN_BELOW = 50, REGEN_EVERY = 5;
 export const FIRE_GAP = 0.24;
 
@@ -73,7 +74,7 @@ export function foeAt(idx) {
   const sec = SECTORS[Math.floor(idx / 5) % SECTORS.length];
   const kind = sec.foes[idx % 5];
   const boss = idx % 5 === 4;
-  const hp = Math.round(100 * Math.pow(1.2, idx) * (boss ? 2.5 : 1));
+  const hp = Math.round(150 * Math.pow(1.17, idx) * (boss ? 2.4 : 1));
   return { idx, kind, boss, hp, max: hp, name: FOE_NAME[kind], sector: Math.floor(idx / 5) };
 }
 
@@ -97,7 +98,7 @@ export class Field {
   add(k, x, y, z) { const c = mkCoin(k, x, y, z); this.coins.push(c); return c; }
 
   // A fresh machine: a loose carpet of coins and a few tokens on the field, some coins on the shelf.
-  seedCarpet(tokens = 12, extra = 30) {
+  seedCarpet(tokens = 9, extra = 30) {
     const r = this.rng;
     const free = (x, y, rr) => this.coins.every((o) => Math.hypot(o.x - x, o.y - y) >= o.r + rr - 0.02);
     // tokens first, scattered
@@ -292,14 +293,14 @@ export class Field {
         const n = Math.min(T.want, Math.floor(T.n + rate * dt + (T.frac || 0)));
         T.frac = (T.n + rate * dt + (T.frac || 0)) - Math.floor(T.n + rate * dt + (T.frac || 0));
         if (n > T.n) { for (let i = T.n; i < n; i++) this.events.push({ t: 'towerCoin', i, n: T.want, T }); T.n = n; }
-        T.hgt = T.n * KIND.c.h;
+        T.hgt = T.n * TH_T;
         if (T.n >= T.want) { T.state = 'stand'; T.stress = 0; T.px = 0; T.py = 0; this.events.push({ t: 'towerDone', T }); }
         out.push(T); continue;
       }
       if (T.state === 'stand') {
         T.wob = Math.min(1, T.stress / T.limit);
         if (T.stress > T.limit || T.y > FRONT - 2.2) {
-          T.state = 'fall'; T.ft = 0; T.ang = 0; T.av = 0.6;
+          T.state = 'teeter'; T.ft = 0; T.ang = 0; T.av = 0.15;
           const push = Math.atan2(T.py, T.px);
           const fwd = Math.PI / 2;
           let a = isFinite(push) && (T.px || T.py) ? push * 0.4 + fwd * 0.6 : fwd;
@@ -309,11 +310,17 @@ export class Field {
         }
         out.push(T); continue;
       }
+      if (T.state === 'teeter') {   // it rocks for a moment, then goes
+        T.ft += dt;
+        T.ang = Math.max(0, Math.sin(T.ft * 14) * 0.05 * (1 + T.ft * 2));
+        if (T.ft > 0.7) { T.state = 'fall'; T.ft = 0; T.ang = 0.06; T.av = 0.2; this.events.push({ t: 'fall', T }); }
+        out.push(T); continue;
+      }
       if (T.state === 'fall') {
         T.ft += dt;
-        T.av += (2.2 + 9 * Math.sin(T.ang)) * dt;
+        T.av += (0.8 + 5.5 * Math.sin(T.ang)) * dt;
         T.ang += T.av * dt;
-        if (T.ang >= 1.25) { this.burst(T); continue; }
+        if (T.ang >= 1.15) { this.burst(T); continue; }
         out.push(T); continue;
       }
     }
@@ -321,21 +328,20 @@ export class Field {
   }
   // The toppled tower becomes coins: the coin that was k coins up lands about k coin-thicknesses away along the fall.
   burst(T) {
-    const r = this.rng, dx = Math.cos(T.dir), dy = Math.sin(T.dir);
-    const reach = 0.9;
-    for (let k = 0; k < T.n; k++) {
-      const h = k * KIND.c.h * reach + 0.6;
-      const jit = (r() - 0.5) * 1.6, along = h + (r() - 0.5) * 0.8;
-      const c = this.add(T.gold ? 'g' : 'c', T.x + dx * along - dy * jit, T.y + dy * along + dx * jit, 0.6 + r() * 1.2 + Math.min(3, k * 0.03));
-      c.vx = dx * (1.5 + r() * 2.5) + (r() - 0.5) * 1.5; c.vy = dy * (1.5 + r() * 2.5) + (r() - 0.5) * 1.5; c.vz = 1 + r() * 4; c.tw = true;
+    // every coin keeps where the falling column put it and how fast it was swinging, then flies loose
+    const r = this.rng, dx = Math.cos(T.dir), dy = Math.sin(T.dir), sa = Math.sin(T.ang), ca = Math.cos(T.ang);
+    const make = (k, hz, rad, tok) => {
+      const along = hz * sa, jit = (r() - 0.5) * 1.4;
+      const c = this.add(k, T.x + dx * along - dy * jit, T.y + dy * along + dx * jit, Math.max(0.05, hz * ca));
+      const v = T.av * hz * 0.85;                       // tangential speed of the swinging column
+      c.vx = dx * v * ca + (r() - 0.5) * 2.5 - dy * jit * 0.8; c.vy = dy * v * ca + (r() - 0.5) * 2.5 + dx * jit * 0.8; c.vz = -v * sa * 0.3 + r() * 3;
+      c.tw = true;
       c.x = Math.max(c.r, Math.min(W - c.r, c.x));
-    }
-    T.crown.forEach((k, i) => {
-      const h = T.n * KIND.c.h * reach + 1 + i;
-      const c = this.add(k, T.x + dx * h, T.y + dy * h, 1.5);
-      c.vx = dx * 3; c.vy = dy * 3; c.vz = 3; c.tw = true;
-      c.x = Math.max(c.r, Math.min(W - c.r, c.x));
-    });
+      if (c.y < BACK + c.r) c.y = BACK + c.r;
+      return c;
+    };
+    for (let k = 0; k < T.n; k++) make(T.gold ? 'g' : 'c', k * TH_T + TH_T / 2);
+    T.crown.forEach((k, i) => make(k, T.n * TH_T + (i + 0.5) * KIND.B.h));
     this.events.push({ t: 'burst', T, n: T.n });
   }
 
@@ -382,7 +388,7 @@ export class Game {
     this.f.drop('c', aim);
     // the machine adds a bonus token now and then (about one in six shots, never twice in a row)
     this.tokenEvery++;
-    if (this.tokenEvery >= 3 && this.rng() < 0.2) {
+    if (this.tokenEvery >= 4 && this.rng() < 0.2) {
       this.tokenEvery = 0;
       const k = COL[Math.floor(this.rng() * 3)];
       this.f.drop(k, this.rng());
@@ -408,9 +414,9 @@ export class Game {
         if (isToken(e.k)) { this.stats.tokens++; this.addEnergy(4); this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); }
         else {
           const v = KIND[e.k].v * (this.fever > 0 ? 2 : 1);
-          this.bank += v; this.stats.paid += v; this.addEnergy(1);
+          this.bank += v; this.stats.paid += v; this.addEnergy(e.tw ? 0.8 : 0.15);   // knocked-down tower coins charge the ring fastest
           this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw });
-          this.damage(this.fever > 0 ? 2 : 1, 'chip', null);
+          if (!e.tw) this.damage(this.fever > 0 ? 2 : 1, 'chip', null);   // every won coin is a laser shot (tower spills only pay)
         }
       } else if (e.t === 'lost') { this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); }
       else this.out.push(e);
@@ -532,7 +538,7 @@ export class Game {
     for (const a of (s.towers || [])) {
       if (!Array.isArray(a)) continue;
       const T = g.f.addTower(num(a[0], W / 2), num(a[1], 10), Math.max(1, Math.min(200, Math.floor(num(a[2], 30)))), { gold: !!a[3], col: a[4] || 'B', crown: String(a[5] || '').split('').filter(isToken) });
-      T.n = T.want; T.hgt = T.n * KIND.c.h; T.state = 'stand';
+      T.n = T.want; T.hgt = T.n * TH_T; T.state = 'stand';
     }
     g.f.events.length = 0;
     return g;

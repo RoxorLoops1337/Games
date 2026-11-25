@@ -1,6 +1,6 @@
 // Galaxy Pusher drawing: perspective camera for the machine, coin sprites, the battle screen,
 // the cat mech, the enemies and the Galaxy Wheel. Pure drawing: state comes in, pixels go out.
-import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, ROW, ENERGY_MAX, FEVER_TIME, heroAtk, xpNeed } from './core.js';
+import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, ENERGY_MAX, FEVER_TIME, heroAtk, xpNeed } from './core.js';
 
 export const COLS = {
   B: { main: '#2fb4ff', dark: '#0d5fa8', light: '#a8e4ff', glow: '#5cd0ff', name: 'BLUE' },
@@ -237,11 +237,11 @@ export function drawMachine(g, cam, game, V) {
 
 function drawTower(g, cam, T, t) {
   const n = T.n; if (!n) return;
-  const h = KIND.c.h, k = T.gold ? 'g' : 'c';
+  const h = TH_T, k = T.gold ? 'g' : 'c';
   const ca = Math.cos(T.dir), sa = Math.sin(T.dir);
   const wob = T.state === 'stand' ? (T.wob || 0) : 0;
   const sway = wob * wob * 0.5 * Math.sin(t * (6 + wob * 8));
-  const lean = T.state === 'fall' ? T.ang : 0;
+  const lean = T.state === 'fall' || T.state === 'teeter' ? T.ang : 0;
   // base glow ring
   const b = cam.P(T.x, T.y, 0);
   g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(b.x, b.y, T.r * 1.3 * b.k, T.r * 1.3 * b.k * b.q, 0, 0, TAU); g.fill();
@@ -250,14 +250,23 @@ function drawTower(g, cam, T, t) {
   if (lean === 0 && sway === 0) {
     // fast path: one column with ridges, then the top face
     const top = cam.P(T.x, T.y, n * h), bot = cam.P(T.x, T.y, 0), rx = T.r * top.k;
+    g.save(); g.shadowColor = C.glow; g.shadowBlur = 14; g.fillStyle = 'rgba(0,0,0,0.01)'; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y); g.restore();
     const gr = g.createLinearGradient(top.x - rx, 0, top.x + rx, 0);
     const cc = T.gold ? ['#7a4a06', '#ffe37a', '#c48816', '#6a3e04'] : ['#4b5466', '#eef2fa', '#9aa5b8', '#3d4556'];
     gr.addColorStop(0, cc[0]); gr.addColorStop(0.3, cc[1]); gr.addColorStop(0.6, cc[2]); gr.addColorStop(1, cc[3]);
     g.fillStyle = gr; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y);
     g.beginPath(); g.ellipse(bot.x, bot.y, rx, rx * bot.q, 0, 0, Math.PI); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 1; g.beginPath();
+    // every coin's rim: a dark groove and a bright lip, so it reads as a stack of coins
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.beginPath();
     for (let i = 1; i < n; i++) { const p = cam.P(T.x, T.y, i * h); g.moveTo(p.x - rx, p.y); g.ellipse(p.x, p.y, rx, rx * p.q, 0, Math.PI, 0, true); }
     g.stroke();
+    g.strokeStyle = T.gold ? 'rgba(255,245,190,0.55)' : 'rgba(255,255,255,0.45)'; g.beginPath();
+    for (let i = 1; i < n; i++) { const p = cam.P(T.x, T.y, i * h); g.moveTo(p.x - rx * 0.7, p.y + 1.2); g.ellipse(p.x, p.y + 1.2, rx * 0.7, rx * 0.7 * p.q, 0, Math.PI * 0.85, Math.PI * 0.3, true); }
+    g.stroke();
+    // a soft neon wash in the tower colour
+    const wash = g.createLinearGradient(0, top.y, 0, bot.y); wash.addColorStop(0, 'rgba(255,255,255,0)'); wash.addColorStop(1, C.glow + '55');
+    g.fillStyle = wash; g.fillRect(top.x - rx, top.y, rx * 2, bot.y - top.y);
     drawCoin(g, cam, k, T.x, T.y, (n - 1) * h, h, T.r);
   } else {
     for (let i = 0; i < n; i++) {
@@ -461,7 +470,7 @@ export function drawBattle(g, rect, game, B, t, dpr) {
   const sh = B.shake ? (Math.random() - 0.5) * B.shake : 0;
   g.translate(sh, sh * 0.5);
   // heroes
-  const hs = h * 0.0021;
+  const hs = h * 0.00175;
   for (const H of B.heroes) {
     const hx = x + w * H.x + H.dx, hy = gy + h * 0.06 + H.dy;
     if (H.glow > 0) { g.fillStyle = `rgba(255,255,200,${H.glow * 0.4})`; g.beginPath(); g.ellipse(hx, hy - h * 0.25, h * 0.2, h * 0.32, 0, 0, TAU); g.fill(); }

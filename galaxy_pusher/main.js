@@ -1,5 +1,5 @@
 // Galaxy Pusher: game loop, input, presentation (animations, effects) and saves.
-import { Game, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS } from './core.js';
+import { Game, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS } from './core.js';
 import { makeCam, buildSprites, drawMachine, drawLauncher, drawBattle, drawWheel, pocketAngle, drawCoin, sprite, txt, rr, COLS, FONT, resetBackdrop } from './render.js';
 import { A, S, Music } from './audio.js';
 
@@ -130,12 +130,14 @@ function heroPos(col) {
 }
 function foePos() { const R = L.battle, E = B.foe; return [R.x + R.w * 0.79 + (E ? E.dx : 0), R.y + R.h * 0.58 + (E ? E.dy : 0)]; }
 
+const SHOUT = { B: ['BOOM!', 'TSS!', 'KA!', 'PF!', 'BRRT!'], P: ['LA~', 'OOH!', 'HAA!', 'MI!'], Y: ['NYA!', 'MEOW!', 'POW!'] };
 function releaseDamage(n, col) {
   const E = B.foe; if (!E) return;
   E.shown = Math.max(0, E.shown - n);
   E.flash = 1; E.dx += 10; E.kick = 1;
   const [x, y] = foePos();
-  floatText(String(Math.round(n)), x + (Math.random() - 0.5) * 30, y - 20 - Math.random() * 20, col ? COLS[col].light : '#fff', n >= 30 ? 26 : 16, 0.9, -70);
+  floatText(String(Math.round(n)), x + (Math.random() - 0.5) * 30, y - 20 - Math.random() * 20, col ? COLS[col].light : '#fff', n >= 30 ? 30 : 22, 0.9, -70);
+  if (col) { const W_ = SHOUT[col]; floatText(W_[Math.floor(Math.random() * W_.length)], x + 30 + Math.random() * 20, y - 50 - Math.random() * 20, COLS[col].main, 15, 0.6, -40); }
   burstParts(x, y, n >= 30 ? 16 : 6, col ? [COLS[col].main, '#fff'] : ['#5cd0ff', '#fff'], 200, 0.5, 3, 200);
 }
 
@@ -268,9 +270,10 @@ function handle(e) {
     case 'feverEnd': Music.fever(false); break;
     case 'bonus': break;
     case 'towerStart': break;
-    case 'towerCoin': S.towerCoin(e.i, e.n); if (e.i % 4 === 0) { const p = cam.P(e.T.x, e.T.y, e.i * KIND.c.h); burstParts(p.x, p.y, 1, '#fff', 60, 0.3, 2, 0); } break;
-    case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.y, e.T.n * KIND.c.h); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
-    case 'topple': S.topple(); addShake(4); break;
+    case 'towerCoin': S.towerCoin(e.i, e.n); if (e.i % 4 === 0) { const p = cam.P(e.T.x, e.T.y, e.i * TH_T); burstParts(p.x, p.y, 1, '#fff', 60, 0.3, 2, 0); } break;
+    case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.y, e.T.n * TH_T); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
+    case 'topple': S.creak(); S.creak(); floatText('!!', cam.P(e.T.x, e.T.y, e.T.hgt).x, cam.P(e.T.x, e.T.y, e.T.hgt).y - 16, '#ff6b74', 22, 0.8, -20); break;
+    case 'fall': S.topple(); addShake(4); break;
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
     default: break;
@@ -403,7 +406,7 @@ function draw() {
   // banners
   for (const b of fx.banners) {
     const k = b.t / b.dur, sc = b.t < 0.25 ? backOut(b.t / 0.25) : 1, a = k > 0.8 ? (1 - k) / 0.2 : 1;
-    const by = wheel ? L.battle.y + 30 : L.mach.y + L.mach.h * 0.32;
+    const by = wheel ? wheelGeo().cy + wheelGeo().R * 1.25 + 30 : L.mach.y + L.mach.h * 0.2;
     g.save(); g.globalAlpha = a; g.translate(L.gx + L.gw / 2, by); g.scale(sc, sc);
     const size = Math.min(40, L.gw * 0.09) * b.big;
     txt(g, b.text, 0, 0, size, b.col, { glow: b.col, lw: size * 0.22 });
@@ -456,16 +459,19 @@ function drawBar() {
   g.fillStyle = '#ffc21f'; g.strokeStyle = '#3a1d05'; g.lineWidth = 2; g.beginPath(); g.moveTo(kx, y - 14); g.lineTo(kx + 10, y); g.lineTo(kx, y + 14); g.lineTo(kx - 10, y); g.closePath(); g.fill(); g.stroke();
   txt(g, 'HOLD ON THE MACHINE · SLIDE TO AIM', (x0 + x1) / 2, y + 22, 8, 'rgba(191,230,255,0.7)', { stroke: false });
 }
+function wheelGeo() {
+  const R = Math.min(L.gw * 0.43, (L.mach.y + L.mach.h * 0.45 - L.battle.y) * 0.47);
+  return { R, cx: L.gx + L.gw / 2, cy: L.battle.y + R * 1.12 + 16 };
+}
 function drawWheelOverlay() {
   const Wh = wheel;
   const a = Wh.phase === 'in' ? ease(Wh.t / 0.6) : Wh.phase === 'out' ? 1 - ease(Wh.t / 0.45) : 1;
   g.fillStyle = `rgba(4,2,16,${0.7 * a})`; g.fillRect(0, 0, VW, VH);
-  const R = Math.min(L.gw * 0.43, (L.mach.y + L.mach.h * 0.45 - L.battle.y) * 0.47);
-  const cx = L.gx + L.gw / 2, cy = L.battle.y + R * 1.12 + 26;
+  const { R, cx, cy } = wheelGeo();
   g.save(); g.translate(cx, cy); const sc = 0.4 + 0.6 * backOut(a); g.scale(sc, sc); g.globalAlpha = a;
   drawWheel(g, 0, 0, R, Wh.rot || 0, Wh.phase === 'spin' || Wh.phase === 'show' ? Wh.ball : null, t, Wh.phase === 'show' ? Wh.pocket : -1, Wh.t, Wh.phase === 'spin' ? 18 : 6);
   g.restore();
-  if (Wh.phase === 'show') txt(g, 'TAP TO CONTINUE', cx, cy + R * 1.2 + 16, 11, 'rgba(255,255,255,0.7)', { lw: 3 });
+  if (Wh.phase === 'show') txt(g, 'TAP TO CONTINUE', cx, cy + R * 1.25 + 92, 11, 'rgba(255,255,255,0.7)', { lw: 3 });
 }
 
 // ------------------------------------------------------------------------------------------------ loop
