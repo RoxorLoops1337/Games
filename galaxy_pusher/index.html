@@ -13,6 +13,9 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#030210;color:#fff;font-family:"Russo One","Arial Black",system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
 canvas{position:fixed;left:0;top:0;touch-action:none}
+#cv3{pointer-events:none;background:radial-gradient(ellipse at 50% 20%,#2a1660,#0b0626 70%)}
+html,body{background:linear-gradient(#0b0626,#030210)}
+.card .big:disabled{opacity:.6}
 #safe{position:fixed;left:0;top:0;width:0;height:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden}
 button{font:inherit;color:inherit;cursor:pointer;border:0}
 .gbtn{position:fixed;z-index:5;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1}
@@ -60,6 +63,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 </head>
 <body>
 <div id="safe"></div>
+<canvas id="cv3"></canvas>
 <canvas id="cv"></canvas>
 <button id="menuBtn" class="gbtn" aria-label="Menu">☰</button>
 <button id="autoBtn" class="gbtn" aria-label="Auto fire">AUTO<small>fire</small></button>
@@ -107,6 +111,8 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
   </div>
 </div>
 
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }</script>
+<link rel="modulepreload" href="vendor/three.module.min.js">
 <script type="module" src="main.js"></script>
 </body>
 </html>
