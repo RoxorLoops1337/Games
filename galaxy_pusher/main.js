@@ -1,5 +1,5 @@
 // Galaxy Pusher: game loop, input, presentation (animations, effects) and saves.
-import { Game, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS } from './core.js';
+import { Game, ITEMS, ITEM_ORDER, GUT, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS } from './core.js';
 import { makeCam, buildSprites, drawMachine, drawLauncher, drawBattle, drawWheel, pocketAngle, drawCoin, sprite, txt, rr, COLS, FONT, resetBackdrop } from './render.js';
 import { A, S, Music } from './audio.js';
 
@@ -43,7 +43,7 @@ const B = {
   heroes: [{ id: 'rox', col: 'B', x: 0.14, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'jas', col: 'P', x: 0.31, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }, { id: 'mew', col: 'Y', x: 0.48, dx: 0, dy: 0, pose: 'idle', glow: 0, act: null }],
   foe: null, row: [], rowPop: [], slots: [], shake: 0, stage: '',
 };
-const fx = { parts: [], floats: [], flyers: [], shots: [], banners: [], lasers: [], rings: [] };
+const fx = { parts: [], floats: [], flyers: [], shots: [], banners: [], lasers: [], rings: [], bankFly: [] };
 let actions = [];          // queued hero attacks (played one after another)
 let killPending = false, killWait = 0, dying = null;
 let wheel = null;
@@ -83,7 +83,9 @@ function layout() {
   const fb = document.getElementById('fireBtn'), ab = document.getElementById('autoBtn');
   const bs = Math.min(64, barH - 8);
   Object.assign(fb.style, { left: (gx + gw - bs * 1.9 - 10) + 'px', top: (bar.y + (barH - bs) / 2) + 'px', width: bs * 1.9 + 'px', height: bs + 'px' });
-  Object.assign(ab.style, { left: (gx + 10) + 'px', top: (bar.y + (barH - bs * 0.8) / 2) + 'px', width: bs * 1.15 + 'px', height: bs * 0.8 + 'px' });
+  Object.assign(ab.style, { left: (gx + 10) + 'px', top: (bar.y + (barH - bs * 0.8) / 2) + 'px', width: bs * 1.1 + 'px', height: bs * 0.8 + 'px' });
+  Object.assign(document.getElementById('itemBtn').style, { left: (gx + 16 + bs * 1.1) + 'px', top: (bar.y + (barH - bs * 0.8) / 2) + 'px', width: bs * 1.15 + 'px', height: bs * 0.8 + 'px' });
+  L.lever = { x0: gx + 30 + bs * 2.25, x1: gx + gw - bs * 1.9 - 24 };
   const mb = document.getElementById('menuBtn');
   Object.assign(mb.style, { left: (gx + gw - 46) + 'px', top: (st + 5) + 'px' });
 }
@@ -239,6 +241,7 @@ function handle(e) {
       const [x, y] = edgePoint(e.x);
       burstParts(x, y + 4, e.k === 'g' ? 6 : 3, e.k === 'g' ? ['#ffd75c', '#fff'] : ['#dfe6f2', '#ffd75c'], 120, 0.5, 2.5, 400);
       payAcc += e.v; payAccT = 0.35; payAccX = e.x;
+      if (fx.bankFly.length < 14) fx.bankFly.push({ x0: x, y0: y, t: 0, dur: 0.55 + Math.random() * 0.2, gold: e.k === 'g' });
       edgeGlow = Math.min(1, edgeGlow + 0.15);
       bankPop = 1;
       if (B.foe) { const [fx_, fy] = foePos(); fx.lasers.push({ x0: L.battle.x + L.battle.w * 0.5, y0: L.battle.y + L.battle.h * 0.18, x1: fx_, y1: fy, life: 0.18, max: 0.18 }); S.laser(); }
@@ -276,6 +279,13 @@ function handle(e) {
     case 'fall': S.topple(); addShake(4); break;
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
+    case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;
+    case 'item': {
+      const I = ITEMS[e.id]; banner(I.name.toUpperCase() + '!', ICON[e.id][1], e.id === 'guard' ? 'gutters closed' : e.id === 'turbo' ? 'pusher at double speed' : e.id === 'wheel' ? 'bonus spin' : e.id === 'rain' ? 'tokens incoming' : 'everything jolts forward', 1.2, 0.9);
+      S.fever(); break;
+    }
+    case 'quake': addShake(16); S.burst(10); buzz([60, 40, 60]); break;
+    case 'itemEnd': floatText(ITEMS[e.id].name + ' over', L.gx + L.gw / 2, L.mach.y + 40, '#bfe6ff', 13, 1.2, -10); break;
     default: break;
   }
 }
@@ -348,7 +358,7 @@ function update(dt) {
     if (E && dying.t > 0.6 && !dying.boom) { dying.boom = true; const [x, y] = foePos(); burstParts(x, y, 50, ['#ffd75c', '#ff4fb0', '#5cd0ff', '#fff'], 340, 1.0, 4, 120); fx.rings.push({ x, y, r: 10, life: 0.6, max: 0.6, col: '#fff' }); flash = 0.4; banner('DEFEATED!', '#ffd75c', 'spin the Galaxy Wheel', 1.2, 1); }
     if (dying.t > 1.3) { dying = null; B.foe = null; if (game.wheelQ > 0 && !wheel) openWheel(); else game.nextFoe(); }
   }
-  if (!wheel && !dying && !killPending && game.wheelQ > 0 && !B.foe) openWheel();
+  if (!wheel && !dying && !killPending && game.wheelQ > 0 && !actions.length) openWheel();
   stepWheel(dt);
 
   // misc decay
@@ -358,6 +368,9 @@ function update(dt) {
   if (payAccT <= 0 && payAcc > 0) { const [x, y] = edgePoint(payAccX); floatText('+' + payAcc, x, y - 10, '#ffd75c', payAcc >= 10 ? 22 : 16, 0.9, -60); payAcc = 0; }
   bankShown += (game.bank - bankShown) * Math.min(1, dt * 10); if (Math.abs(game.bank - bankShown) < 0.5) bankShown = game.bank;
   bankPop = Math.max(0, bankPop - dt * 4);
+  for (const f of fx.bankFly) f.t += dt;
+  if (fx.bankFly.some((f) => f.t >= f.dur)) { bankPop = 1; S.tick(0.3); }
+  fx.bankFly = fx.bankFly.filter((f) => f.t < f.dur);
   for (const p of fx.parts) { p.life -= dt; p.vy += p.grav * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
   fx.parts = fx.parts.filter((p) => p.life > 0);
   if (fx.parts.length > 600) fx.parts.splice(0, fx.parts.length - 600);
@@ -369,6 +382,7 @@ function update(dt) {
   for (const r of fx.rings) { r.life -= dt; r.r += dt * 160; } fx.rings = fx.rings.filter((r) => r.life > 0);
   for (const T of game.f.towers) if (T.state === 'stand' && T.wob > 0.6 && Math.random() < dt * 2) S.creak();
   B.shake = shake * 0.6;
+  document.getElementById('itemBtn').classList.toggle('can', game.bank >= ITEMS.wheel.cost);
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
 }
 
@@ -400,6 +414,11 @@ function draw() {
     g.shadowColor = COLS[f.k].glow; g.shadowBlur = 16; g.drawImage(sprite(f.k), x - sz / 2, y - sz / 2, sz, sz); g.shadowBlur = 0;
   }
   for (const f of (fx.flyers2 || [])) { const k = ease(f.t / f.dur), x = lerp(f.x0, f.x1, k), y = lerp(f.y0, f.y1, k) - Math.sin(k * Math.PI) * 30, sz = 30 * (1 - k * 0.6); g.globalAlpha = 1 - k * 0.5; g.drawImage(sprite(f.k), x - sz / 2, y - sz / 2, sz, sz); g.globalAlpha = 1; }
+  for (const f of fx.bankFly) {
+    const k = f.t / f.dur, e2 = k * k, tx = L.hud.x + 26, ty = L.hud.y + L.hud.h / 2;
+    const x = lerp(f.x0, tx, e2) + Math.sin(k * Math.PI) * 40, y = lerp(f.y0, ty, e2), sz = 16 - k * 6;
+    g.drawImage(sprite(f.gold ? 'g' : 'c'), x - sz / 2, y - sz / 2, sz, sz);
+  }
   for (const f of fx.floats) { const a = clamp(f.life / f.max * 2, 0, 1), sc = 1 + Math.max(0, (f.life - f.max + 0.15)) * 3; g.globalAlpha = a; txt(g, f.text, f.x, f.y, f.size * sc, f.col); g.globalAlpha = 1; }
   // wheel overlay
   if (wheel) drawWheelOverlay();
@@ -447,17 +466,25 @@ function drawHUD() {
   rr(g, ex, ey, ew, 11, 5.5); g.fillStyle = 'rgba(8,4,24,0.85)'; g.fill(); g.strokeStyle = 'rgba(160,210,255,0.4)'; g.lineWidth = 1; g.stroke();
   if (ek > 0) { rr(g, ex + 1.5, ey + 1.5, Math.max(8, (ew - 3) * ek), 8, 4); if (fev) g.fillStyle = `hsl(${(t * 300) % 360},100%,62%)`; else { const eg = g.createLinearGradient(ex, 0, ex + ew, 0); eg.addColorStop(0, '#2fb4ff'); eg.addColorStop(0.5, '#ff4fb0'); eg.addColorStop(1, '#ffc21f'); g.fillStyle = eg; } g.fill(); }
   txt(g, fev ? `DOUBLE TIME ${Math.ceil(game.fever)}s` : 'ENERGY', ex + ew / 2, ey + 19, 8, fev ? '#fff' : '#9fc6ea', { lw: 2.5 });
+  // running items
+  let ix = L.mach.x + 8;
+  for (const [id, tt] of [['guard', game.guardT], ['turbo', game.turboT]]) {
+    if (!(tt > 0)) continue;
+    rr(g, ix, L.mach.y + 4, 62, 18, 9); g.fillStyle = 'rgba(8,4,24,0.8)'; g.fill(); g.strokeStyle = ICON[id][1]; g.lineWidth = 1.5; g.stroke();
+    txt(g, ICON[id][0] + ' ' + Math.ceil(tt) + 's', ix + 31, L.mach.y + 13.5, 10, '#fff', { lw: 2 });
+    ix += 68;
+  }
 }
 function drawBar() {
   const R = L.bar;
   g.fillStyle = 'rgba(8,4,24,0.9)'; g.fillRect(R.x, R.y, R.w, VH - R.y);
   g.strokeStyle = 'rgba(92,208,255,0.4)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(R.x, R.y); g.lineTo(R.x + R.w, R.y); g.stroke();
   // aim lever track
-  const x0 = R.x + R.w * 0.27, x1 = R.x + R.w * 0.64, y = R.y + R.h / 2;
+  const x0 = L.lever.x0, x1 = L.lever.x1, y = R.y + R.h / 2 - 4;
   rr(g, x0, y - 4, x1 - x0, 8, 4); g.fillStyle = 'rgba(255,255,255,0.1)'; g.fill();
   const kx = lerp(x0, x1, aimShown);
   g.fillStyle = '#ffc21f'; g.strokeStyle = '#3a1d05'; g.lineWidth = 2; g.beginPath(); g.moveTo(kx, y - 14); g.lineTo(kx + 10, y); g.lineTo(kx, y + 14); g.lineTo(kx - 10, y); g.closePath(); g.fill(); g.stroke();
-  txt(g, 'HOLD ON THE MACHINE · SLIDE TO AIM', (x0 + x1) / 2, y + 22, 8, 'rgba(191,230,255,0.7)', { stroke: false });
+  txt(g, 'HOLD MACHINE · SLIDE AIM', (x0 + x1) / 2, y + 22, 7, 'rgba(191,230,255,0.7)', { stroke: false });
 }
 function wheelGeo() {
   const R = Math.min(L.gw * 0.43, (L.mach.y + L.mach.h * 0.45 - L.battle.y) * 0.47);
@@ -482,6 +509,21 @@ function frame(ts) {
   draw();
   requestAnimationFrame(frame);
 }
+
+// ------------------------------------------------------------------------------------------------ items
+const ICON = { quake: ['≋', '#ff8a1f'], guard: ['▮▮', '#2fb4ff'], turbo: ['»', '#2bd67b'], rain: ['●●', '#ff4fb0'], wheel: ['◎', '#ffc21f'] };
+function buildShop() {
+  const list = document.getElementById('itemList'); list.innerHTML = '';
+  for (const id of ITEM_ORDER) {
+    const I = ITEMS[id], b = document.createElement('button');
+    b.className = 'item'; b.dataset.id = id; b.disabled = !game.canBuy(id);
+    b.innerHTML = `<div class="ic" style="background:${ICON[id][1]}">${ICON[id][0]}</div><div class="tx"><b>${I.name}</b>${I.desc}</div><div class="cost">${I.cost}</div>`;
+    b.addEventListener('click', () => { if (game.buy(id)) { S.click(); show('shop', false); paused = false; } });
+    list.appendChild(b);
+  }
+}
+document.getElementById('itemBtn').addEventListener('click', () => { if (!started) return; A.unlock(); S.click(); buildShop(); show('shop', true); paused = true; });
+document.getElementById('shopClose').addEventListener('click', () => { S.click(); show('shop', false); paused = false; });
 
 // ------------------------------------------------------------------------------------------------ menus
 const $ = (id) => document.getElementById(id);

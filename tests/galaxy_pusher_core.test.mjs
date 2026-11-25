@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { Game, Field, W, FRONT, PH, PMAX, ROW, WHEEL, TOWER, KIND, ENERGY_MAX, FEVER_TIME, mulberry, foeAt, heroAtk } from '../galaxy_pusher/core.js';
+import { Game, Field, W, FRONT, PH, PMAX, ROW, WHEEL, TOWER, KIND, ENERGY_MAX, FEVER_TIME, ITEMS, ITEM_ORDER, mulberry, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
@@ -183,6 +183,40 @@ function play(g, sec, every = 4, each) {
   eq(g.bank, 9, 'a shot costs one coin');
   ok(!g.fire(0.5), 'shots are rate limited');
   ok(foeAt(4).boss && foeAt(4).hp > foeAt(3).hp * 2, 'every fifth enemy is a much tougher boss');
+}
+
+// ---------------------------------------------------------------- items
+{
+  const g = new Game(20); g.newMachine();
+  g.bank = 10;
+  ok(!g.buy('wheel') && g.bank === 10, 'an item you cannot afford is not bought');
+  g.bank = 1000;
+  ok(g.buy('wheel') && g.bank === 1000 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs coins and queues a wheel spin');
+  ok(g.foe, 'a bonus spin does not need the enemy to die');
+  const n0 = g.f.coins.length; g.row = ['P', 'P'];
+  g.buy('rain');
+  const fresh = g.f.coins.slice(n0).map((c) => c.k);
+  eq(fresh.length, 3, 'Token Rain drops three tokens');
+  ok(fresh.filter((k) => k === 'P').length >= 2, 'Token Rain favours the colour you are collecting');
+  // Wall Guard: a coin over a gutter pays instead of being lost
+  g.buy('guard'); g.tick(1 / 60);
+  const side = g.f.add('c', 1.1, FRONT - 0.1, 0); side.vy = 4;
+  let lost = 0, paid = 0;
+  for (let i = 0; i < 60; i++) { g.tick(1 / 60); for (const e of g.out) { if (e.t === 'lost') lost++; if (e.t === 'pay' && e.x < 3) paid++; } g.out.length = 0; }
+  ok(lost === 0 && paid >= 1, 'Wall Guard closes the gutters');
+  for (let i = 0; i < 60 * 31; i++) g.tick(1 / 60);
+  ok(g.guardT === 0 && !g.f.guard, 'Wall Guard runs out');
+  // Turbo: the pusher strokes twice as often
+  const t0 = g.f.t; g.buy('turbo'); g.tick(1);
+  ok(Math.abs(g.f.t - t0 - 2) < 0.05, 'Turbo Push doubles the pusher speed');
+  // Quake shoves coins toward the edge
+  const ys = g.f.coins.filter((c) => !c.off).map((c) => c.y), avg0 = ys.reduce((a, b) => a + b, 0) / ys.length;
+  g.buy('quake'); for (let i = 0; i < 20; i++) g.tick(1 / 60);
+  const ys2 = g.f.coins.filter((c) => !c.off).map((c) => c.y), avg1 = ys2.reduce((a, b) => a + b, 0) / ys2.length;
+  ok(avg1 > avg0, 'Quake jolts the coins forward');
+  ok(ITEM_ORDER.every((id) => ITEMS[id].name && ITEMS[id].cost > 0 && ITEMS[id].desc), 'every item has a name, price and description');
+  const h = Game.load(JSON.parse(JSON.stringify(g.save())));
+  ok(h.turboT > 0, 'running items survive a save');
 }
 
 // ---------------------------------------------------------------- saves

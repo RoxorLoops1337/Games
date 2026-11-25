@@ -21,6 +21,18 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #fireBtn.on{transform:translateY(4px);box-shadow:0 1px 0 #a4500a,0 0 30px rgba(255,220,90,.9)}
 #autoBtn{background:#1d1640;border:2px solid #5cd0ff;color:#bfe6ff;font-size:13px}
 #autoBtn small{font-size:8px;opacity:.7;margin-top:3px}
+#itemBtn{background:#3a1d5a;border:2px solid #ff7ccc;color:#ffc0e3;font-size:13px}
+#itemBtn small{font-size:9px;opacity:.8;margin-top:3px}
+#itemBtn.can{box-shadow:0 0 14px #ff4fb0;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 4px #ff4fb0}}
+.items{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;background:#2a2066;border:2px solid #5cd0ff44;text-align:left;width:100%}
+.item:disabled{opacity:.45}
+.item .ic{flex:none;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;border:2px solid #fff6}
+.item .tx{flex:1;font-family:system-ui,sans-serif;font-size:12px;color:#cfe3ff;line-height:1.3}
+.item .tx b{display:block;font-family:'Russo One',sans-serif;font-size:15px;color:#fff;font-weight:400}
+.item .cost{flex:none;font-size:16px;color:#ffd75c}
+.item .cost::before{content:'●';font-size:12px;margin-right:4px;vertical-align:1px}
 #autoBtn.on{background:#5cd0ff;color:#0b0626;box-shadow:0 0 16px #5cd0ff}
 #menuBtn{width:38px;height:36px;background:rgba(29,22,64,.85);border:2px solid rgba(92,208,255,.6);font-size:18px;border-radius:10px}
 .ov{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:rgba(4,2,16,.82);padding:20px}
@@ -52,6 +64,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 <button id="menuBtn" class="gbtn" aria-label="Menu">☰</button>
 <button id="autoBtn" class="gbtn" aria-label="Auto fire">AUTO<small>fire</small></button>
 <button id="fireBtn" class="gbtn" aria-label="Fire">FIRE<small>hold</small></button>
+<button id="itemBtn" class="gbtn" aria-label="Items">ITEMS<small>道具</small></button>
 
 <div id="title" class="ov show">
   <div class="card" style="background:none;border:0;box-shadow:none">
@@ -70,6 +83,14 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
     <div class="step"><div class="ic" style="background:#ff4fb0">◎</div><p>Beat the enemy to spin the <b>Galaxy Wheel</b>. The ball builds a <b>coin tower</b> (blue 30, yellow 36, pink 60, JP 80). Shove it till it topples!</p></div>
     <div class="step"><div class="ic" style="background:linear-gradient(90deg,#2fb4ff,#ff4fb0,#ffc21f)">x2</div><p>Every coin you win charges <b>Energy</b>. Full energy starts <b>Double Time</b>: double damage and double coins.</p></div>
     <button id="howGo" class="big">LET'S PUSH!</button>
+  </div>
+</div>
+
+<div id="shop" class="ov">
+  <div class="card">
+    <h2>ITEMS</h2>
+    <div class="items" id="itemList"></div>
+    <button id="shopClose" class="sm">Close</button>
   </div>
 </div>
 

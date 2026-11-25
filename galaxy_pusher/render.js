@@ -201,7 +201,7 @@ export function drawMachine(g, cam, game, V) {
   gr = g.createLinearGradient(0, fa.y, 0, fb.y); gr.addColorStop(0, '#e4e9f7'); gr.addColorStop(0.3, '#8e98b5'); gr.addColorStop(1, '#3c435c'); g.fillStyle = gr; g.fill();
   // neon trim on the pusher edge
   const n0 = cam.P(0, pf, PH), n1 = cam.P(W, pf, PH);
-  g.strokeStyle = game.fever > 0 ? `hsl(${(t * 300) % 360},100%,65%)` : '#5cd0ff'; g.lineWidth = 2.5; g.shadowColor = g.strokeStyle; g.shadowBlur = 10;
+  g.strokeStyle = game.fever > 0 ? `hsl(${(t * 300) % 360},100%,65%)` : game.turboT > 0 ? (Math.sin(t * 20) > 0 ? '#2bd67b' : '#d8ffe0') : '#5cd0ff'; g.lineWidth = game.turboT > 0 ? 4 : 2.5; g.shadowColor = g.strokeStyle; g.shadowBlur = 10;
   g.beginPath(); g.moveTo(n0.x, n0.y); g.lineTo(n1.x, n1.y); g.stroke(); g.shadowBlur = 0;
 
   // coins + towers, back to front
@@ -229,6 +229,11 @@ export function drawMachine(g, cam, game, V) {
   g.beginPath(); g.moveTo(ga.x, ga.y); g.lineTo(gb.x, gb.y); g.stroke(); g.shadowBlur = 0;
   g.strokeStyle = 'rgba(255,60,90,0.8)'; g.lineWidth = 2;
   g.beginPath(); g.moveTo(l0.x, l0.y); g.lineTo(ga.x, ga.y); g.moveTo(gb.x, gb.y); g.lineTo(l1.x, l1.y); g.stroke();
+  if (game.guardT > 0) { // Wall Guard: glowing shields over the gutters
+    g.fillStyle = `rgba(47,180,255,${0.35 + 0.15 * Math.sin(t * 8)})`; g.strokeStyle = '#a8e4ff'; g.lineWidth = 2; g.shadowColor = '#2fb4ff'; g.shadowBlur = 14;
+    for (const [x0, x1] of [[0, GUT], [W - GUT, W]]) { quad(g, cam, [[x0, FRONT, 0], [x1, FRONT, 0], [x1, FRONT, 1.6], [x0, FRONT, 1.6]]); g.fill(); g.stroke(); }
+    g.shadowBlur = 0;
+  }
   // chevrons on the lip
   g.fillStyle = 'rgba(255,215,92,0.22)';
   for (let i = 0; i < 7; i++) { const x = ga.x + ((gb.x - ga.x) * (i + 0.5)) / 7, y = frontY + 10; const a = ((t * 2 + i * 0.25) % 1); g.globalAlpha = 0.25 + 0.5 * (1 - a); g.beginPath(); g.moveTo(x - 8, y); g.lineTo(x, y + 7); g.lineTo(x + 8, y); g.lineTo(x + 8, y + 4); g.lineTo(x, y + 11); g.lineTo(x - 8, y + 4); g.fill(); }
@@ -509,6 +514,15 @@ export function drawBattle(g, rect, game, B, t, dpr) {
   }
   // sector label
   txt(g, B.stage, x + 10, y + h * 0.27 - 17, 10, '#bfe6ff', { align: 'left', lw: 3 });
+  // progress through the sector: four enemies then the boss
+  const step = game.foeIdx % 5;
+  for (let i = 0; i < 5; i++) {
+    const px = x + 16 + i * 16, py = y + h * 0.27 - 2, boss = i === 4;
+    g.fillStyle = i < step ? '#2bd67b' : i === step ? (Math.sin(t * 6) > 0 ? '#ffd75c' : '#fff') : 'rgba(255,255,255,0.2)';
+    if (boss) { g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr_ = k % 2 ? 2.6 : 6; g.lineTo(px + Math.cos(a) * rr_, py + Math.sin(a) * rr_); } g.closePath(); g.fill(); }
+    else { g.beginPath(); g.arc(px, py, 4, 0, TAU); g.fill(); }
+    if (i < 4) { g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(px + 5, py - 0.75, 6, 1.5); }
+  }
   // token row (6 slots) across the top
   const n = ROW, sl = Math.min(w * 0.115, h * 0.2), gap = sl * 0.18, tw = n * sl + (n - 1) * gap, tx = x + (w - tw) / 2, ty = y + 6;
   rr(g, tx - 8, ty - 3, tw + 16, sl + 6, sl * 0.35); g.fillStyle = 'rgba(8,4,24,0.7)'; g.fill(); g.strokeStyle = 'rgba(160,210,255,0.35)'; g.lineWidth = 1.5; g.stroke();

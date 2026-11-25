@@ -58,6 +58,15 @@ export const FOE_NAME = { drone: 'Buzz Drone', drone2: 'Twin Drones', crab: 'Scr
 export const ENERGY_MAX = 200, FEVER_TIME = 20;
 export const REGEN_BELOW = 50, REGEN_EVERY = 5;
 export const FIRE_GAP = 0.24;
+// items (the cabinet's 道具 button): bought with coins
+export const ITEMS = {
+  quake: { name: 'Quake', cost: 30, desc: 'Bump the table: every coin jolts forward.' },
+  guard: { name: 'Wall Guard', cost: 40, dur: 30, desc: 'Close both corner gutters for 30 s.' },
+  turbo: { name: 'Turbo Push', cost: 50, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
+  rain: { name: 'Token Rain', cost: 60, desc: 'Drop 3 tokens, picked to match your row.' },
+  wheel: { name: 'Tower Call', cost: 250, desc: 'Spin the Galaxy Wheel right now.' },
+};
+export const ITEM_ORDER = ['quake', 'guard', 'turbo', 'rain', 'wheel'];
 
 export function mulberry(seed) {
   let a = (seed >>> 0) || 0x9e3779b9;
@@ -94,6 +103,8 @@ export class Field {
     this.towers = [];
     this.events = [];
     this.grid = new Map();
+    this.speed = 1;      // pusher speed (Turbo Push)
+    this.guard = false;  // corner gutters closed (Wall Guard)
   }
   add(k, x, y, z) { const c = mkCoin(k, x, y, z); this.coins.push(c); return c; }
 
@@ -145,7 +156,7 @@ export class Field {
 
   step(dt) {
     const prev = this.pf;
-    this.t += dt;
+    this.t += dt * this.speed;
     this.pf = pusherFace(this.t);
     this.pv = (this.pf - prev) / dt;
     const ev = this.events, cs = this.coins, n = cs.length, towers = this.towers;
@@ -245,7 +256,7 @@ export class Field {
     for (let i = 0; i < n; i++) {
       const c = cs[i];
       if (!c.off && c.y > FRONT && c.z < 0.5) {
-        c.off = true; c.gut = c.x < GUT || c.x > W - GUT;
+        c.off = true; c.gut = !this.guard && (c.x < GUT || c.x > W - GUT);
         c.vy = Math.max(c.vy, 1.5);
       }
       if (c.off && c.z < -6) { ev.push({ t: c.gut ? 'lost' : 'pay', k: c.k, x: c.x, tw: c.tw }); continue; }
@@ -353,6 +364,12 @@ export class Field {
     c.vy = 2.2 + r() * 2.2; c.vx = (r() - 0.5) * 1.2; c.vz = 1.5;
     return c;
   }
+  quake() {
+    const r = this.rng;
+    for (const c of this.coins) { if (c.off) continue; c.vy += 2.2 + r() * 2.2; c.vx += (r() - 0.5) * 2.5; c.vz += 2 + r() * 3; c.gr = false; }
+    for (const T of this.towers) if (T.state === 'stand') T.stress += T.limit * 0.35;
+    this.events.push({ t: 'quake' });
+  }
   count(fn) { let n = 0; for (const c of this.coins) if (fn(c)) n++; return n; }
 }
 
@@ -373,9 +390,10 @@ export class Game {
     this.fireCd = 0;
     this.regen = 0;
     this.out = [];          // game events for the presentation layer
-    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0 };
+    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0 };
     this.time = 0;
     this.tokenEvery = 0;
+    this.guardT = 0; this.turboT = 0;
   }
   newMachine() { this.f.seedCarpet(); }
   hero(col) { return this.heroes.find((h) => h.col === col); }
@@ -402,6 +420,9 @@ export class Game {
     this.time += dt;
     this.fireCd -= dt;
     if (this.fever > 0) { this.fever -= dt; if (this.fever <= 0) { this.fever = 0; this.out.push({ t: 'feverEnd' }); } }
+    if (this.guardT > 0) { this.guardT = Math.max(0, this.guardT - dt); if (!this.guardT) this.out.push({ t: 'itemEnd', id: 'guard' }); }
+    if (this.turboT > 0) { this.turboT = Math.max(0, this.turboT - dt); if (!this.turboT) this.out.push({ t: 'itemEnd', id: 'turbo' }); }
+    this.f.guard = this.guardT > 0; this.f.speed = this.turboT > 0 ? 2 : 1;
     if (this.bank < REGEN_BELOW) { this.regen += dt; if (this.regen >= REGEN_EVERY) { this.regen = 0; this.bank++; this.out.push({ t: 'regen' }); } } else this.regen = 0;
     let acc = dt;
     while (acc > 1e-9) { const s = Math.min(DT, acc); this.f.step(s); acc -= s; this.consume(); }
@@ -455,6 +476,24 @@ export class Game {
     this.bonusCoins(3);   // every attack rains a few bonus coins into the machine
   }
 
+  canBuy(id) { const I = ITEMS[id]; return !!I && this.bank >= I.cost; }
+  buy(id) {
+    if (!this.canBuy(id)) return false;
+    this.bank -= ITEMS[id].cost;
+    if (id === 'quake') this.f.quake();
+    else if (id === 'guard') this.guardT += ITEMS.guard.dur;
+    else if (id === 'turbo') this.turboT += ITEMS.turbo.dur;
+    else if (id === 'rain') {
+      // the colour you hold most of comes first, so the rain tends to finish a set
+      const cnt = { B: 0, P: 0, Y: 0 }; for (const k of this.row) cnt[k]++;
+      const best = COL.slice().sort((a, b) => cnt[b] - cnt[a] || this.rng() - 0.5);
+      [best[0], best[0], best[1]].forEach((k) => this.f.drop(k, 0.15 + this.rng() * 0.7));
+    } else if (id === 'wheel') this.wheelQ++;
+    this.stats.items = (this.stats.items || 0) + 1;
+    this.out.push({ t: 'item', id });
+    return true;
+  }
+
   bonusCoins(n) {
     for (let i = 0; i < n; i++) this.f.drop('c', this.rng());
     this.out.push({ t: 'bonus', n });
@@ -468,6 +507,7 @@ export class Game {
       this.foe.hp = 0;
       this.stats.kills++;
       this.out.push({ t: 'kill', foe: this.foe });
+      if (this.foe.boss) { const prize = 60 + 30 * this.foe.sector; this.bank += prize; this.out.push({ t: 'sector', n: this.foe.sector + 1, prize }); }
       this.foe = null;
       this.wheelQ++;
     }
@@ -506,7 +546,7 @@ export class Game {
     return {
       v: 1, bank: this.bank, row: this.row.slice(), heroes: this.heroes.map((h) => ({ ...h })), foeIdx: this.foeIdx,
       foe: this.foe ? { hp: this.foe.hp } : null, energy: this.energy, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
-      stats: { ...this.stats }, t: r2(this.f.t), seed: this.rng.seed(),
+      stats: { ...this.stats }, t: r2(this.f.t), seed: this.rng.seed(), guardT: r2(this.guardT), turboT: r2(this.turboT),
       coins: this.f.coins.filter((c) => !c.off).map((c) => [c.k, r2(c.x), r2(c.y), r2(c.z)]),
       towers: this.f.towers.map((T) => [r2(T.x), r2(T.y), T.state === 'build' ? T.want : T.n, T.gold ? 1 : 0, T.col, T.crown.join('')]),
     };
@@ -526,6 +566,7 @@ export class Game {
     g.energy = Math.max(0, Math.min(ENERGY_MAX - 1, num(s.energy, 0)));
     g.fever = Math.max(0, Math.min(FEVER_TIME, num(s.fever, 0)));
     g.pendingDmg = Math.max(0, num(s.pendingDmg, 0));
+    g.guardT = Math.max(0, Math.min(600, num(s.guardT, 0))); g.turboT = Math.max(0, Math.min(600, num(s.turboT, 0)));
     if (s.stats) for (const k in g.stats) g.stats[k] = num(s.stats[k], 0);
     if (s.seed) g.rng.set(s.seed);
     g.f.t = num(s.t, 0); g.f.pf = pusherFace(g.f.t);
