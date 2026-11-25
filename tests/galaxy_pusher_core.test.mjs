@@ -35,10 +35,10 @@ function play(g, sec, every = 4, each) {
   g.bank = 1e6;
   play(g, 180, 3, () => {
     for (const c of g.f.coins) if (!c.off && (!isFinite(c.x + c.y + c.z) || c.x < c.r - 0.01 || c.x > W - c.r + 0.01 || c.y < 0 || c.z < -0.01 || c.z > 30)) bad++;
-    maxN = Math.max(maxN, g.f.coins.length);
+    maxN = Math.max(maxN, g.f.coins.filter((c) => !c.off).length);
   });
   eq(bad, 0, 'no coin ever leaves the walls, sinks through the floor or goes NaN in 3 minutes of play');
-  ok(maxN < 450, 'the coin count stays bounded (' + maxN + ')');
+  ok(maxN <= 400, 'the loose coins on the field stay bounded (' + maxN + ')');
   ok(g.stats.paid > 200 && g.stats.lost > 0, 'coins pay out over the edge and some fall in the gutters');
   ok(g.stats.kills >= 2 && g.stats.towers >= 2, 'enemies die and wheels build towers during normal play (' + g.stats.kills + ' kills)');
 }
@@ -190,8 +190,8 @@ function play(g, sec, every = 4, each) {
   const g = new Game(20); g.newMachine();
   g.bank = 10;
   ok(!g.buy('wheel') && g.bank === 10, 'an item you cannot afford is not bought');
-  g.bank = 1000;
-  ok(g.buy('wheel') && g.bank === 1000 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs coins and queues a wheel spin');
+  g.bank = 5000;
+  ok(g.buy('wheel') && g.bank === 5000 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs coins and queues a wheel spin');
   ok(g.foe, 'a bonus spin does not need the enemy to die');
   const n0 = g.f.coins.length; g.row = ['P', 'P'];
   g.buy('rain');

@@ -14,11 +14,11 @@
 // into a row of 6. Three of a colour = that hero attacks the enemy. A full row
 // without a triple = team strike. Every paid coin is a small laser shot. A
 // defeated enemy spins the Galaxy Wheel; the pocket the ball lands in builds a
-// coin TOWER on the field (blue 30, yellow 36, pink 60, JP 80 coins) that the
+// coin TOWER on the field (blue 330, yellow 360, pink 720, JP 900 coins) that the
 // pusher shoves until it topples in a shower of coins. Paid coins charge the
 // energy ring; full energy starts DOUBLE TIME (double damage, double pay).
 
-export const W = 22, BACK = 0, FRONT = 20;
+export const W = 22, BACK = 0, FRONT = 26;
 export const PMIN = 2.0, PMAX = 6.6, PERIOD = 4.2, PH = 1.0;
 export const GUT = 3.0;               // width of each corner gutter at the front edge
 export const G = 42;
@@ -35,8 +35,12 @@ export const KIND = {
   Y: { r: 1.25, h: 0.32, m: 1.6, v: 0 },
 };
 export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
-export const TOWER = { B: 30, Y: 36, P: 60, JP: 80 };
-export const TH_T = 0.3;            // a tower coin's height on screen (taller than a loose coin so towers look like towers)
+export const TOWER = { B: 330, Y: 360, P: 720, JP: 900 };   // the cabinet's own numbers
+// A tower is a hollow cylinder of coins like the real ones: every layer is a ring of RING_N coins
+// around the axis, each layer turned a little further, so the coin edges climb in spirals.
+export const RING_N = 8, RING_R = 2.0, TH_T = 0.2, TWIST = 0.13;
+export const towerLayers = (n) => Math.ceil(n / RING_N);
+export const FIELD_CAP = 340;       // most loose coins the field simulates; a bigger spill merges coins (each worth more)
 // The wheel: 12 pockets clockwise from the top. c = tower colour, x2 = gold coins (pay double), lv = every hero levels up.
 export const WHEEL = [
   { c: 'B', x2: true }, { c: 'P' }, { c: 'Y', x2: true }, { c: 'JP' },
@@ -60,11 +64,11 @@ export const REGEN_BELOW = 50, REGEN_EVERY = 5;
 export const FIRE_GAP = 0.24;
 // items (the cabinet's 道具 button): bought with coins
 export const ITEMS = {
-  quake: { name: 'Quake', cost: 30, desc: 'Bump the table: every coin jolts forward.' },
-  guard: { name: 'Wall Guard', cost: 40, dur: 30, desc: 'Close both corner gutters for 30 s.' },
-  turbo: { name: 'Turbo Push', cost: 50, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
-  rain: { name: 'Token Rain', cost: 60, desc: 'Drop 3 tokens, picked to match your row.' },
-  wheel: { name: 'Tower Call', cost: 250, desc: 'Spin the Galaxy Wheel right now.' },
+  quake: { name: 'Quake', cost: 60, desc: 'Bump the table: every coin jolts forward.' },
+  guard: { name: 'Wall Guard', cost: 120, dur: 30, desc: 'Close both corner gutters for 30 s.' },
+  turbo: { name: 'Turbo Push', cost: 150, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
+  rain: { name: 'Token Rain', cost: 150, desc: 'Drop 3 tokens, picked to match your row.' },
+  wheel: { name: 'Tower Call', cost: 900, desc: 'Spin the Galaxy Wheel right now.' },
 };
 export const ITEM_ORDER = ['quake', 'guard', 'turbo', 'rain', 'wheel'];
 
@@ -90,7 +94,7 @@ export function foeAt(idx) {
 let NEXT_ID = 1;
 function mkCoin(k, x, y, z) {
   const K = KIND[k];
-  return { id: NEXT_ID++, k, x, y, z, vx: 0, vy: 0, vz: 0, r: K.r, h: K.h, m: K.m, gr: false, sup: null, off: false, tw: false };
+  return { id: NEXT_ID++, k, x, y, z, vx: 0, vy: 0, vz: 0, r: K.r, h: K.h, m: K.m, gr: false, sup: null, off: false, tw: false, mul: 1, rot: (NEXT_ID * 2.399) % (Math.PI * 2) };
 }
 
 // ------------------------------------------------------------------------------------------------ the machine
@@ -259,7 +263,7 @@ export class Field {
         c.off = true; c.gut = !this.guard && (c.x < GUT || c.x > W - GUT);
         c.vy = Math.max(c.vy, 1.5);
       }
-      if (c.off && c.z < -6) { ev.push({ t: c.gut ? 'lost' : 'pay', k: c.k, x: c.x, tw: c.tw }); continue; }
+      if (c.off && c.z < -6) { ev.push({ t: c.gut ? 'lost' : 'pay', k: c.k, x: c.x, tw: c.tw, mul: c.mul }); continue; }
       if (!isFinite(c.x + c.y + c.z)) continue;   // never let a NaN coin live
       cs[w++] = c;
     }
@@ -284,13 +288,14 @@ export class Field {
   // A tower grows coin by coin (build), stands while the carpet shoves it (stress builds up),
   // then topples (fall) and turns into a shower of real coins.
   addTower(x, y, n, opt = {}) {
+    const TR = RING_R + 1.0;
     for (const c of this.coins) { // make room: push coins away from the base
       if (c.off || c.z > 1.5) continue;
-      const dx = c.x - x, dy = c.y - y, d = Math.hypot(dx, dy);
-      if (d < 1.15 + c.r + 0.1) { const k = (1.15 + c.r + 0.1) / (d || 1e-3); c.x = x + (d ? dx : 1) * k; c.y = y + (d ? dy : 0) * k; }
+      const dx = c.x - x, dy = c.y - y, d = Math.hypot(dx, dy), need = TR + c.r + 0.05;
+      if (d < need) { const k = need / (d || 1e-3); c.x = Math.max(c.r, Math.min(W - c.r, x + (d ? dx : 1) * k)); c.y = y + (d ? dy : 0) * k; }
     }
-    const T = { x, y, z: 0, r: 1.15, m: 9, n: 0, want: n, hgt: 0, gold: !!opt.gold, col: opt.col || 'B', crown: opt.crown || [], state: 'build', bt: 0,
-      stress: 0, px: 0, py: 0, limit: 4.2 + this.rng() * 3.5 - Math.min(2, n / 40), ang: 0, dir: Math.PI / 2, ft: 0 };
+    const T = { x, y, z: 0, r: TR, m: 40, n: 0, want: n, layers: 0, hgt: 0, gold: !!opt.gold, col: opt.col || 'B', crown: opt.crown || [], state: 'build', bt: 0,
+      twist0: this.rng() * Math.PI * 2, stress: 0, px: 0, py: 0, limit: 3.2 + this.rng() * 2.8 - Math.min(1.5, n / 600), ang: 0, dir: Math.PI / 2, ft: 0, frac: 0 };
     this.towers.push(T);
     this.events.push({ t: 'towerStart', T });
     return T;
@@ -300,17 +305,20 @@ export class Field {
     for (const T of this.towers) {
       if (T.state === 'build') {
         T.bt += dt;
-        const rate = 10 + T.bt * 26;               // coins per second, speeding up
-        const n = Math.min(T.want, Math.floor(T.n + rate * dt + (T.frac || 0)));
-        T.frac = (T.n + rate * dt + (T.frac || 0)) - Math.floor(T.n + rate * dt + (T.frac || 0));
-        if (n > T.n) { for (let i = T.n; i < n; i++) this.events.push({ t: 'towerCoin', i, n: T.want, T }); T.n = n; }
-        T.hgt = T.n * TH_T;
+        const dur = 1.5 + T.want / 450;                    // a 330 tower takes ~2.2 s, a 900 jackpot ~3.5 s
+        const rate = (T.want / dur) * Math.min(1.6, 0.4 + T.bt / dur * 1.6);   // speeding up as it grows
+        T.frac += rate * dt;
+        const add = Math.floor(T.frac); T.frac -= add;
+        const n = Math.min(T.want, T.n + add);
+        const L0 = towerLayers(T.n), L1 = towerLayers(n);
+        for (let l = L0; l < L1; l++) this.events.push({ t: 'towerCoin', i: l, n: towerLayers(T.want), T });
+        T.n = n; T.layers = L1; T.hgt = L1 * TH_T;
         if (T.n >= T.want) { T.state = 'stand'; T.stress = 0; T.px = 0; T.py = 0; this.events.push({ t: 'towerDone', T }); }
         out.push(T); continue;
       }
       if (T.state === 'stand') {
         T.wob = Math.min(1, T.stress / T.limit);
-        if (T.stress > T.limit || T.y > FRONT - 2.2) {
+        if (T.stress > T.limit || T.y > FRONT - T.r - 0.5) {
           T.state = 'teeter'; T.ft = 0; T.ang = 0; T.av = 0.15;
           const push = Math.atan2(T.py, T.px);
           const fwd = Math.PI / 2;
@@ -323,36 +331,46 @@ export class Field {
       }
       if (T.state === 'teeter') {   // it rocks for a moment, then goes
         T.ft += dt;
-        T.ang = Math.max(0, Math.sin(T.ft * 14) * 0.05 * (1 + T.ft * 2));
-        if (T.ft > 0.7) { T.state = 'fall'; T.ft = 0; T.ang = 0.06; T.av = 0.2; this.events.push({ t: 'fall', T }); }
+        T.ang = Math.max(0, Math.sin(T.ft * 14) * 0.04 * (1 + T.ft * 2));
+        if (T.ft > 0.8) { T.state = 'fall'; T.ft = 0; T.ang = 0.05; T.av = 0.15; this.events.push({ t: 'fall', T }); }
         out.push(T); continue;
       }
       if (T.state === 'fall') {
         T.ft += dt;
-        T.av += (0.8 + 5.5 * Math.sin(T.ang)) * dt;
+        T.av += (0.6 + 4.5 * Math.sin(T.ang)) * dt * Math.min(1.4, 6 / Math.max(4, T.hgt));
         T.ang += T.av * dt;
-        if (T.ang >= 1.15) { this.burst(T); continue; }
+        if (T.ang >= 1.05) { this.burst(T); continue; }
         out.push(T); continue;
       }
     }
     this.towers = out;
   }
-  // The toppled tower becomes coins: the coin that was k coins up lands about k coin-thicknesses away along the fall.
+  // where coin i of a tower sits (tower-local, untilted): offset across the ground and height
+  static ringPos(T, i) {
+    const k = Math.floor(i / RING_N), j = i % RING_N, a = T.twist0 + k * TWIST + (j * Math.PI * 2) / RING_N;
+    return [Math.cos(a) * RING_R, Math.sin(a) * RING_R, k * TH_T];
+  }
+  // The toppled tower becomes coins: each coin keeps where the tipping column put it and how fast it was swinging.
+  // Coins that fly past the edge drop at once; the field keeps at most FIELD_CAP loose coins, extra ones merge (worth more).
   burst(T) {
-    // every coin keeps where the falling column put it and how fast it was swinging, then flies loose
     const r = this.rng, dx = Math.cos(T.dir), dy = Math.sin(T.dir), sa = Math.sin(T.ang), ca = Math.cos(T.ang);
-    const make = (k, hz, rad, tok) => {
-      const along = hz * sa, jit = (r() - 0.5) * 1.4;
-      const c = this.add(k, T.x + dx * along - dy * jit, T.y + dy * along + dx * jit, Math.max(0.05, hz * ca));
-      const v = T.av * hz * 0.85;                       // tangential speed of the swinging column
-      c.vx = dx * v * ca + (r() - 0.5) * 2.5 - dy * jit * 0.8; c.vy = dy * v * ca + (r() - 0.5) * 2.5 + dx * jit * 0.8; c.vz = -v * sa * 0.3 + r() * 3;
+    let live = 0; for (const c of this.coins) if (!c.off) live++;
+    const kept = [];
+    const make = (k, ox, oy, hz) => {
+      const od = ox * dx + oy * dy, op = -ox * dy + oy * dx;
+      const along = hz * sa + od * ca, z = Math.max(0.05, hz * ca - od * sa + 0.1);
+      let x = T.x + dx * along - dy * op, y = T.y + dy * along + dx * op;
+      x = Math.max(1, Math.min(W - 1, x)); if (y < BACK + 1) y = BACK + 1;
+      const v = T.av * Math.hypot(hz, od) * 0.9;
+      if (y < FRONT && live >= FIELD_CAP && kept.length && !isToken(k)) { kept[Math.floor(r() * kept.length)].mul++; return; }
+      const c = this.add(k, x, y, z);
+      c.vx = dx * v * ca + (r() - 0.5) * 3; c.vy = dy * v * ca + (r() - 0.5) * 3; c.vz = -v * sa * 0.25 + r() * 3;
       c.tw = true;
-      c.x = Math.max(c.r, Math.min(W - c.r, c.x));
-      if (c.y < BACK + c.r) c.y = BACK + c.r;
-      return c;
+      if (y >= FRONT) { c.off = true; c.gut = !this.guard && (x < GUT || x > W - GUT); c.vy = Math.max(c.vy, 2); }
+      else { live++; kept.push(c); }
     };
-    for (let k = 0; k < T.n; k++) make(T.gold ? 'g' : 'c', k * TH_T + TH_T / 2);
-    T.crown.forEach((k, i) => make(k, T.n * TH_T + (i + 0.5) * KIND.B.h));
+    for (let i = 0; i < T.n; i++) { const [ox, oy, hz] = Field.ringPos(T, i); make(T.gold ? 'g' : 'c', ox, oy, hz + TH_T / 2); }
+    T.crown.forEach((k, i) => make(k, (i - (T.crown.length - 1) / 2) * 1.3, 0, T.hgt + 0.2));
     this.events.push({ t: 'burst', T, n: T.n });
   }
 
@@ -434,9 +452,9 @@ export class Game {
       if (e.t === 'pay') {
         if (isToken(e.k)) { this.stats.tokens++; this.addEnergy(4); this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); }
         else {
-          const v = KIND[e.k].v * (this.fever > 0 ? 2 : 1);
-          this.bank += v; this.stats.paid += v; this.addEnergy(e.tw ? 0.8 : 0.15);   // knocked-down tower coins charge the ring fastest
-          this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw });
+          const v = KIND[e.k].v * (e.mul || 1) * (this.fever > 0 ? 2 : 1);
+          this.bank += v; this.stats.paid += v; this.addEnergy(e.tw ? 0.2 : 0.15);   // knocked-down tower coins charge the ring fastest
+          this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw, mul: e.mul || 1 });
           if (!e.tw) this.damage(this.fever > 0 ? 2 : 1, 'chip', null);   // every won coin is a laser shot (tower spills only pay)
         }
       } else if (e.t === 'lost') { this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); }
@@ -476,10 +494,12 @@ export class Game {
     this.bonusCoins(3);   // every attack rains a few bonus coins into the machine
   }
 
-  canBuy(id) { const I = ITEMS[id]; return !!I && this.bank >= I.cost; }
+  // Tower Call gets dearer as the enemies (and the towers' value to you) grow
+  itemCost(id) { const I = ITEMS[id]; return !I ? Infinity : id === 'wheel' ? I.cost + 150 * this.foeIdx : I.cost; }
+  canBuy(id) { return this.bank >= this.itemCost(id); }
   buy(id) {
     if (!this.canBuy(id)) return false;
-    this.bank -= ITEMS[id].cost;
+    this.bank -= this.itemCost(id);
     if (id === 'quake') this.f.quake();
     else if (id === 'guard') this.guardT += ITEMS.guard.dur;
     else if (id === 'turbo') this.turboT += ITEMS.turbo.dur;
@@ -507,7 +527,7 @@ export class Game {
       this.foe.hp = 0;
       this.stats.kills++;
       this.out.push({ t: 'kill', foe: this.foe });
-      if (this.foe.boss) { const prize = 60 + 30 * this.foe.sector; this.bank += prize; this.out.push({ t: 'sector', n: this.foe.sector + 1, prize }); }
+      if (this.foe.boss) { const prize = 200 + 100 * this.foe.sector; this.bank += prize; this.out.push({ t: 'sector', n: this.foe.sector + 1, prize }); }
       this.foe = null;
       this.wheelQ++;
     }
@@ -547,8 +567,8 @@ export class Game {
       v: 1, bank: this.bank, row: this.row.slice(), heroes: this.heroes.map((h) => ({ ...h })), foeIdx: this.foeIdx,
       foe: this.foe ? { hp: this.foe.hp } : null, energy: this.energy, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
       stats: { ...this.stats }, t: r2(this.f.t), seed: this.rng.seed(), guardT: r2(this.guardT), turboT: r2(this.turboT),
-      coins: this.f.coins.filter((c) => !c.off).map((c) => [c.k, r2(c.x), r2(c.y), r2(c.z)]),
-      towers: this.f.towers.map((T) => [r2(T.x), r2(T.y), T.state === 'build' ? T.want : T.n, T.gold ? 1 : 0, T.col, T.crown.join('')]),
+      coins: this.f.coins.filter((c) => !c.off).map((c) => (c.mul > 1 ? [c.k, r2(c.x), r2(c.y), r2(c.z), c.mul] : [c.k, r2(c.x), r2(c.y), r2(c.z)])),
+      towers: this.f.towers.map((T) => [r2(T.x), r2(T.y), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0)]),
     };
   }
   static load(s, fallbackSeed = 1) {
@@ -574,12 +594,13 @@ export class Game {
       if (!Array.isArray(a) || !KIND[a[0]]) continue;
       const [k, x, y, z] = a; if (![x, y, z].every((v) => typeof v === 'number' && isFinite(v))) continue;
       if (y > FRONT || y < 0 || x < 0 || x > W) continue;
-      g.f.add(k, x, y, Math.max(0, z));
+      const c = g.f.add(k, x, y, Math.max(0, z));
+      if (typeof a[4] === 'number' && a[4] > 1) c.mul = Math.min(50, Math.floor(a[4]));
     }
     for (const a of (s.towers || [])) {
       if (!Array.isArray(a)) continue;
-      const T = g.f.addTower(num(a[0], W / 2), num(a[1], 10), Math.max(1, Math.min(200, Math.floor(num(a[2], 30)))), { gold: !!a[3], col: a[4] || 'B', crown: String(a[5] || '').split('').filter(isToken) });
-      T.n = T.want; T.hgt = T.n * TH_T; T.state = 'stand';
+      const T = g.f.addTower(num(a[0], W / 2), num(a[1], 10), Math.max(1, Math.min(1000, Math.floor(num(a[2], 330)))), { gold: !!a[3], col: a[4] || 'B', crown: String(a[5] || '').split('').filter(isToken) });
+      T.n = T.want; T.layers = towerLayers(T.n); T.hgt = T.layers * TH_T; T.state = 'stand'; T.twist0 = num(a[6], 0);
     }
     g.f.events.length = 0;
     return g;
