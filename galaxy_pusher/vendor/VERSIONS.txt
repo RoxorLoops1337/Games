@@ -1,0 +1,2 @@
+vendor/rapier.js is @dimforge/rapier3d-compat 0.17.3 (rapier.es.js), Apache-2.0 (see RAPIER_LICENSE.txt).
+vendor/three.module.min.js is three.js r170 (MIT); jsm/RoomEnvironment.js from three r186.

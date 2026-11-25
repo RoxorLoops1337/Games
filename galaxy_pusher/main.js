@@ -1,6 +1,8 @@
 // Galaxy Pusher: game loop, input, presentation (animations, effects) and saves.
-import { Game, ITEMS, ITEM_ORDER, GUT, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS, COMBO_FULL, comboMult, FEVER_TIME, AUTO_SHOTS } from './core.js';
-import { makeCam, buildSprites, drawMachine, drawShooters, drawBattle, drawWheel, pocketAngle, drawCoin, sprite, txt, rr, COLS, FONT, resetBackdrop } from './render.js';
+import { loadPhysics, Machine, EDGE, SHOOTER, LAYER_H } from './machine.js';
+import { View3D } from './view3d.js';
+import { Game, ITEMS, ITEM_ORDER, W, WHEEL, TOWER, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS, COMBO_FULL, comboMult, FEVER_TIME, AUTO_SHOTS } from './core.js';
+import { buildSprites, drawBattle, drawWheel, pocketAngle, sprite, txt, rr, COLS, FONT } from './render.js';
 import { A, S, Music } from './audio.js';
 
 const SAVE_KEY = 'galaxy_pusher_v1';
@@ -12,7 +14,10 @@ const backOut = (t) => { t = clamp(t, 0, 1); const c = 1.7; return 1 + (c + 1) *
 
 const cv = document.getElementById('cv');
 const g = cv.getContext('2d');
-let dpr = 1, VW = 0, VH = 0, L = null, cam = null;
+let dpr = 1, VW = 0, VH = 0, L = null, view = null;
+const cv3 = document.getElementById('cv3');
+// world -> screen for the 2D effects drawn over the 3D machine
+const cam = { P: (x, y, z) => view.project(x, y, z, L.mach) };
 
 // ------------------------------------------------------------------------------------------------ state
 let game = null;
@@ -20,13 +25,13 @@ function loadGame() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { s = null; }
   let gm = null;
-  try { gm = s ? Game.load(s, (Date.now() & 0xffffff) || 1) : null; } catch (e) { gm = null; }
+  try { gm = s ? Game.load(s, new Machine(), (Date.now() & 0xffffff) || 1) : null; } catch (e) { console.error(e); gm = null; }
   if (gm) {
     const away = Math.max(0, (Date.now() - (s.at || Date.now())) / 1000);
     if (gm.bank < REGEN_BELOW) { const add = Math.min(REGEN_BELOW - gm.bank, Math.floor(away / REGEN_EVERY)); if (add > 0) { gm.bank += add; welcomeBack = add; } }
     return gm;
   }
-  const ng = new Game((Date.now() & 0xffffff) || 1);
+  const ng = new Game((Date.now() & 0xffffff) || 1, new Machine());
   ng.newMachine();
   return ng;
 }
@@ -78,14 +83,13 @@ function layout() {
   const hud = { x: gx, y: st, w: gw, h: 42 };
   const barH = 66;
   const bar = { x: gx, y: VH - sb - barH, w: gw, h: barH };
-  // the machine fills the width; the battle screen takes whatever height is left, so nothing sits empty
-  const need = makeCam({ x: gx, y: 0, w: gw, h: 4000 }).needH;
-  const bh = clamp(bar.y - (hud.y + hud.h) - need - 4, 150, VH * 0.36);
+  // a slim battle strip; the machine gets everything else
+  const bh = clamp(VH * 0.19, 126, 168);
   const battle = { x: gx + 6, y: hud.y + hud.h, w: gw - 12, h: bh };
-  const mach = { x: gx, y: battle.y + battle.h + 4, w: gw, h: bar.y - (battle.y + battle.h + 4) };
+  const mach = { x: gx, y: battle.y + battle.h + 2, w: gw, h: bar.y - (battle.y + battle.h + 2) };
   L = { gw, gx, hud, battle, bar, mach, st, sb };
-  cam = makeCam(mach);
-  resetBackdrop();
+  Object.assign(cv3.style, { left: mach.x + 'px', top: mach.y + 'px', width: mach.w + 'px', height: mach.h + 'px' });
+  if (view) view.resize(mach.w, mach.h);
   const bs = Math.min(60, barH - 8), fw = Math.min(gw * 0.3, bs * 2.1), sw = (gw - fw * 2 - 40) / 2;
   const put = (id, x, w, h) => Object.assign(document.getElementById(id).style, { left: x + 'px', top: (bar.y + (barH - h) / 2) + 'px', width: w + 'px', height: h + 'px' });
   put('fireL', gx + 10, fw, bs); put('fireR', gx + gw - 10 - fw, fw, bs);
@@ -132,7 +136,7 @@ function floatText(text, x, y, col, size = 16, life = 0.9, vy = -50) { fx.floats
 function banner(text, col, sub, dur = 1.5, big = 1) { fx.banners = fx.banners.filter((b) => b.t < b.dur - 0.3); fx.banners.push({ text, col, sub, t: 0, dur, big }); }
 function addShake(v) { shake = Math.max(shake, v); }
 const buzz = (ms) => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* */ } };
-function edgePoint(fx_) { const p = cam.P(clamp(fx_, 0.5, W - 0.5), FRONT, 0); return [p.x, p.y]; }
+function edgePoint(fx_) { const p = cam.P(clamp(fx_, -W / 2 + 0.5, W / 2 - 0.5), 0, EDGE); return [p.x, p.y]; }
 function heroPos(col) {
   const H = B.heroes.find((h) => h.col === col), R = L.battle;
   return [R.x + R.w * H.x + H.dx, R.y + R.h * 0.82 - R.h * 0.3];
@@ -222,7 +226,7 @@ function stepWheel(dt) {
       const P = WHEEL[Wh.pocket];
       S.prize(P.c === 'JP'); buzz([30, 40, 60]);
       const C = COLS[P.c];
-      banner(P.c === 'JP' ? 'JACKPOT TOWER!' : `${C.name} TOWER`, C.main, `${TOWER[P.c]} ${P.x2 || P.c === 'JP' ? 'GOLD ' : ''}COINS${P.lv ? ' · ALL HEROES LEVEL UP' : ''}${P.x2 ? ' · x2' : ''}`, 2.2, 1.1);
+      banner(P.c === 'JP' ? 'JACKPOT TOWER!' : `${C.name} TOWER`, C.main, `${TOWER[P.c]} ${P.c === 'JP' || P.c === 'V' ? 'GOLD ' : ''}COINS${P.lv ? ' · ALL HEROES LEVEL UP' : ''}`, 2.2, 1.1);
       addShake(6);
       Wh.showEnd = 2.0;
     }
@@ -241,7 +245,7 @@ function handle(e) {
   switch (e.t) {
     case 'fire': S.fire(); shooter[e.side].flash = 1; break;
     case 'autoShot': S.fire(); shooter[e.side].flash = 1; shooter[e.side].left = e.left; if (e.left <= 0) shooter[e.side].col = null; break;
-    case 'autoStart': { const S2 = shooter[e.side]; S2.glow = 1; S2.col = e.col; S2.left = e.n; const p = cam.P(e.side === 'L' ? 1.4 : W - 1.4, 1.2, CHUTE_Z); floatText(`+${e.n} FREE`, p.x + (e.side === 'L' ? 40 : -40), p.y + 30, COLS[e.col].light, 18, 1.2, -30); break; }
+    case 'autoStart': { const S2 = shooter[e.side]; S2.glow = 1; S2.col = e.col; S2.left = e.n; const p = cam.P(SHOOTER[e.side].x, SHOOTER[e.side].y, SHOOTER[e.side].z); floatText(`+${e.n} FREE`, p.x + (e.side === 'L' ? 40 : -40), p.y + 30, COLS[e.col].light, 18, 1.2, -30); break; }
     case 'combo': comboPop = 1; if (e.combo >= 2) floatText(`COMBO ${e.combo}  x${e.mult.toFixed(2).replace(/0$/, '')}`, L.gx + L.gw / 2, L.mach.y + L.mach.h * 0.12, '#ffd75c', 16, 1.2, -20); break;
     case 'comboBreak': if (e.combo > 0) { banner('COMBO BREAK', '#ff6b74', `6 slots, no three of a kind · combo ${e.combo} lost`, 1.5, 0.9); S.lost(); addShake(4); } else banner('ROW FULL', '#ff6b74', 'no three of a kind', 1.0, 0.7); buzz(60); break;
     case 'reward': floatText(`+${e.coins} coins`, L.hud.x + 60, L.hud.y + 40, '#ffd75c', 15, 1.4, -15); bankPop = 1; break;
@@ -284,10 +288,11 @@ function handle(e) {
     case 'feverEnd': Music.fever(false); break;
     case 'bonus': break;
     case 'towerStart': break;
-    case 'towerCoin': S.towerCoin(e.i, e.n); if (e.i % 4 === 0) { const p = cam.P(e.T.x, e.T.y, e.i * TH_T); burstParts(p.x, p.y, 1, '#fff', 60, 0.3, 2, 0); } break;
-    case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.y, e.T.n * TH_T); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
-    case 'topple': S.creak(); S.creak(); floatText('!!', cam.P(e.T.x, e.T.y, e.T.hgt).x, cam.P(e.T.x, e.T.y, e.T.hgt).y - 16, '#ff6b74', 22, 0.8, -20); break;
+    case 'towerCoin': S.towerCoin(e.i, e.n); if (e.i % 4 === 0) { const p = cam.P(e.T.x, e.i * LAYER_H, e.T.z); burstParts(p.x, p.y, 1, '#fff', 60, 0.3, 2, 0); } break;
+    case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.hgt, e.T.z); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
+    case 'topple': S.creak(); S.creak(); { const p = cam.P(e.T.x, e.T.hgt, e.T.z); floatText('!!', p.x, p.y - 16, '#ff6b74', 22, 0.8, -20); } break;
     case 'fall': S.topple(); addShake(4); break;
+    case 'smack': { view.smack(e.x, e.y); S.smack(e.n); addShake(22); flash = 0.3; buzz([60, 40, 120]); const p = cam.P(e.x, e.y, e.z); floatText('SMACK!', p.x, p.y, '#ffffff', 34, 1.0, -30); break; }
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
     case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins to shoot`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;
@@ -395,7 +400,7 @@ function update(dt) {
   fx.banners = fx.banners.filter((b) => b.t < b.dur);
   for (const l of fx.lasers) l.life -= dt; fx.lasers = fx.lasers.filter((l) => l.life > 0);
   for (const r of fx.rings) { r.life -= dt; r.r += dt * 160; } fx.rings = fx.rings.filter((r) => r.life > 0);
-  for (const T of game.f.towers) if (T.state === 'stand' && T.wob > 0.6 && Math.random() < dt * 2) S.creak();
+  for (const T of game.f.towers) if (T.state === 'stand' && (T.tilt || 0) > 0.04 && Math.random() < dt * 3) S.creak();
   B.shake = shake * 0.6;
   document.getElementById('itemBtn').classList.toggle('can', game.canBuy('wheel'));
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
@@ -405,15 +410,10 @@ function update(dt) {
 const stars = Array.from({ length: 70 }, (_, i) => [((i * 7919) % 1000) / 1000, ((i * 104729) % 1000) / 1000, ((i * 31) % 10) / 10]);
 function draw() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const bg = g.createLinearGradient(0, 0, 0, VH); bg.addColorStop(0, '#0b0626'); bg.addColorStop(1, '#030210'); g.fillStyle = bg; g.fillRect(0, 0, VW, VH);
-  for (const [sx, sy, b] of stars) { g.fillStyle = `rgba(255,255,255,${0.15 + b * 0.4 * (0.6 + 0.4 * Math.sin(t * 2 + sx * 20))})`; g.fillRect(sx * VW, sy * VH, 1.5, 1.5); }
+  g.clearRect(0, 0, VW, VH);
+  if (view) view.render(game, t, { edgeGlow, shooter });
   const sx = shake ? (Math.random() - 0.5) * shake : 0, sy = shake ? (Math.random() - 0.5) * shake : 0;
   g.save(); g.translate(sx, sy);
-  // the machine
-  g.save(); g.beginPath(); g.rect(L.mach.x - 20, L.mach.y, L.mach.w + 40, L.mach.h); g.clip();
-  drawMachine(g, cam, game, { t, key: VW + 'x' + VH + ':' + dpr, dpr, edgeGlow });
-  drawShooters(g, cam, t, shooter);
-  g.restore();
   // battle screen
   drawBattle(g, L.battle, game, B, t, dpr);
   drawBattleFx();
@@ -577,7 +577,7 @@ $('howGo').addEventListener('click', () => { S.click(); show('how', false); paus
 $('resetBtn').addEventListener('click', () => {
   if (!confirm('Start a brand new machine? Your heroes, coins and progress reset.')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* */ }
-  game = new Game((Date.now() & 0xffffff) || 1); game.newMachine(); syncView(); actions = []; wheel = null; dying = null; killPending = false;
+  game = new Game((Date.now() & 0xffffff) || 1, new Machine()); game.newMachine(); syncView(); actions = []; wheel = null; dying = null; killPending = false;
   fx.flyers = []; fx.shots = [];
   show('menu', false); paused = false; save();
 });
@@ -591,10 +591,28 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { sav
 window.addEventListener('pagehide', save);
 
 // ------------------------------------------------------------------------------------------------ boot
-game = loadGame();
+// Physics (Rapier, WebAssembly) loads first; PLAY unlocks when the machine is ready.
+const playEl = $('playBtn');
+playEl.disabled = true; playEl.textContent = 'LOADING…';
 buildSprites();
-syncView();
-layout();
-requestAnimationFrame(frame);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { resetBackdrop(); });
-window.GP = { get game() { return game; }, get L() { return L; }, get cam() { return cam; }, B, fx, get wheel() { return wheel; }, save, start: () => $('playBtn').click() };
+(async () => {
+  try {
+    await loadPhysics();
+    view = new View3D(cv3);
+    game = loadGame();
+    syncView();
+    layout();
+    playEl.disabled = false; playEl.textContent = 'PLAY';
+    requestAnimationFrame(frame);
+  } catch (e) {
+    console.error(e);
+    playEl.textContent = 'This device cannot run the 3D machine';
+  }
+})();
+window.GP = {
+  get game() { return game; }, get L() { return L; }, get cam() { return cam; }, get view() { return view; }, B, fx, get wheel() { return wheel; }, save,
+  start: () => $('playBtn').click(),
+  ready: () => !!game && !playEl.disabled,
+  // fast-forward: run the game for `sec` seconds of game time right now (tests use it; frame rate does not matter)
+  ff: (sec) => { for (let i = 0; i < Math.round(sec * 60); i++) update(1 / 60); },
+};

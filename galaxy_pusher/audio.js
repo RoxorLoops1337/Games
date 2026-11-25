@@ -114,6 +114,13 @@ export const S = {
   towerCoin(i, n) { if (!ok() || !allow('tcoin', 30)) return; const t = now(); const f = 600 * Math.pow(2, (i / Math.max(1, n)) * 2); tone('sine', f, t, 0.001, 0.06, 0.05); tone('sine', f * 1.5, t, 0.001, 0.03, 0.04); },
   towerDone() { if (!ok()) return; const t = now(); [0, 7, 12].forEach((s, i) => tone('triangle', 784 * Math.pow(2, s / 12), t + i * 0.06, 0.003, 0.08, 0.3)); },
   creak() { if (!ok() || !allow('creak', 3)) return; const t = now(); tone('sawtooth', 70 + Math.random() * 30, t, 0.05, 0.03, 0.25, null, 55); },
+  // a tower smacking the cabinet glass: a deep thud, the pane ringing, then the coins
+  smack(n = 300) {
+    if (!ok()) return; const t = now();
+    tone('sine', 62, t, 0.002, 0.8, 0.5, null, 32); noise(t, 0.22, 0.45, 'lowpass', 900, 0.8, null, 180);
+    [1180, 1710, 2630].forEach((f, i) => tone('sine', f, t + 0.01, 0.002, 0.07 - i * 0.015, 1.1 - i * 0.25));
+    for (let i = 0; i < Math.min(30, n / 30); i++) tone('sine', 2200 + Math.random() * 2400, t + 0.05 + Math.random() * 0.5, 0.001, 0.05, 0.05);
+  },
   topple() { if (!ok()) return; const t = now(); tone('sawtooth', 90, t, 0.05, 0.08, 0.6, null, 40); noise(t, 0.6, 0.08, 'bandpass', 600, 1, null, 2000); },
   burst(n) {
     if (!ok()) return; const t = now();
