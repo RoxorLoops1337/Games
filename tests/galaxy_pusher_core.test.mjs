@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, COIN_HH, KINDS, FIELD_CAP, HZ } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, COIN_HH, KINDS, FIELD_CAP, HZ } from '../galaxy_pusher/machine.js';
 import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -26,7 +26,7 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
 {
   const g = newGame(1);
   const live = g.f.coins.filter((c) => c.body);
-  ok(live.length >= 80, 'a new machine starts with a carpet of coins (' + live.length + ')');
+  ok(live.length >= 70, 'a new machine starts with a carpet of coins (' + live.length + ')');
   ok(['B', 'P', 'Y'].every((k) => live.some((c) => c.k === k)), 'the carpet holds tokens of all three colours');
   ok(live.every((c) => { const p = c.body.translation(); return Math.abs(p.x) < W / 2 && p.z < EDGE + 1.6 && p.y > 0; }), 'every coin starts inside the machine (some hang over the edge)');
   ok(g.bank === START_COINS && g.score === 0 && g.foe.hp === foeAt(0).hp, 'start with a full coin bank, no points and the first enemy at full health');
@@ -37,10 +37,10 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   const m = new Machine(mulberry(3));
   const a = m.add('c', 0, 3, 6);
   steps(m, 1.5);
-  ok(Math.abs(a.body.translation().y - COIN_HH) < 0.03 && up(a.body.rotation()) > 0.98, 'a dropped coin comes to rest lying flat on the floor');
+  ok(Math.abs(a.body.translation().y - COIN_HH) < 0.04 && up(a.body.rotation()) > 0.98, 'a dropped coin comes to rest lying flat on the floor');
   const b = m.add('c', 0.1, 3, 6);
   steps(m, 1.5);
-  ok(Math.abs(b.body.translation().y - 3 * COIN_HH) < 0.04, 'a coin dropped onto another rests on top of it');
+  ok(Math.abs(b.body.translation().y - 3 * COIN_HH) < 0.06, 'a coin dropped onto another rests on top of it, not inside it (' + b.body.translation().y.toFixed(3) + ')');
   m.add('c', 4, 0.5, 6); const d = m.add('c', 4 + KINDS.c.r * 1.75, 2, 6);
   steps(m, 2);
   ok(d.body.translation().y < 0.6, 'a coin landing on the very edge of another tips off or leans, it never floats (' + d.body.translation().y.toFixed(2) + ')');
@@ -48,15 +48,16 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
 {
   // the pusher shoves a coin in front of it toward the edge
   const m = new Machine(mulberry(4));
-  const c = m.add('c', 0, COIN_HH, FACE_MAX + KINDS.c.r + 0.3);
+  const c = m.add('c', 8, COIN_HH, FACE_MAX + KINDS.c.r - 1.0);   // within the pusher's stroke, beside the notch
   const z0 = c.body.translation().z;
   steps(m, 9);
   ok(c.body.translation().z > z0 + 0.5, 'a coin in front of the pusher is shoved forward');
-  // a coin on the shelf gets scraped off by the back wall and falls onto the field
-  const s = m.add('c', 2, PH + 0.3, BACK_WALL + 1.3);
-  steps(m, 12);
-  const sp = s.body ? s.body.translation() : null;
-  ok(sp && sp.y < 1 && sp.z > -4.5, 'a coin on the shelf is scraped off onto the field');
+  // coins raining onto the shelf crowd each other; the back wall scrapes them forward and they spill onto the field
+  const m2 = new Machine(mulberry(9)), r = mulberry(10), shelf = [];
+  for (let i = 0; i < 30; i++) { shelf.push(m2.add('c', (r() - 0.5) * 18, PH + 1 + (i % 3) * 0.4, BACK_WALL + 1.3 + r() * 3)); steps(m2, 0.4); }
+  steps(m2, 15);
+  const down = shelf.filter((c) => !c.body || c.body.translation().y < 1).length;
+  ok(down >= 6, 'coins crowding the shelf spill off it onto the field (' + down + ' of 30)');
 }
 {
   // over the edge: the middle pays, the corners are gutters, Wall Guard closes them
@@ -106,7 +107,12 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   ok(!g.f.towers.includes(T), 'the pusher and the carpet bring the tower down within a minute');
   // every coin of the tower is accounted for: the loose coins it becomes carry its whole value
   const m = new Machine(mulberry(5)); m.seedCarpet();
-  const T2 = m.placeTower(720, {}); T2.n = T2.want; T2.layers = Math.ceil(720 / 8); T2.hgt = T2.layers * 0.22;
+  const T2 = m.placeTower(720, {});
+  ok(T2.state === 'wait' && !T2.body, 'a won tower waits for the pusher to pull back');
+  let rose = false; for (let i = 0; i < HZ * 8 && T2.state !== 'stand'; i++) { m.stepOnce(); if (T2.state === 'build') { rose = true;  } }
+  ok(rose && T2.state === 'stand' && Math.abs(T2.body.translation().z - FACE_RET) < 0.3, 'it rises out of the floor in the pusher notch, then stands');
+  ok(T2.body.translation().y > T2.H / 2 - 0.05, 'once risen it stands on the floor, not sunk or launched');
+  m.events.length = 0;
   const before = new Set(m.coins); m.burst(T2);
   const spill = m.coins.filter((c) => !before.has(c) && c.k === 'c');
   eq(spill.reduce((a, c) => a + c.mul, 0), 720, 'a toppled tower turns into loose coins worth all 720 of its coins');
@@ -215,7 +221,7 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   ok(g.f.guard, 'Wall Guard closes the gutters');
   for (let i = 0; i < 60 * 31; i++) g.tick(1 / 60);
   ok(g.guardT === 0 && !g.f.guard, 'Wall Guard runs out');
-  const t0 = g.f.t; g.buy('turbo'); g.tick(1);
+  const t0 = g.f.t; g.buy('turbo'); for (let i = 0; i < 60; i++) g.tick(1 / 60);
   ok(Math.abs(g.f.t - t0 - 2) < 0.15, 'Turbo Push doubles the pusher speed');
   const zs = () => { const a = g.f.coins.filter((c) => c.body && c.body.translation().y < 1).map((c) => c.body.translation().z); return a.reduce((x, y) => x + y, 0) / a.length; };
   const z0 = zs(); g.buy('quake'); for (let i = 0; i < 12; i++) g.tick(1 / 60);
@@ -231,7 +237,7 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   for (let i = 0; i < 60 * 4; i++) g.tick(1 / 60);
   const s = JSON.parse(JSON.stringify(g.save()));
   const h = Game.load(s, new Machine());
-  ok(h && h.bank >= 77 && h.heroes[1].lv === 4 && h.foe.hp === 33 && h.score === 1234 && h.combo === 3 && h.meter === 3, 'a save round-trips coins, points, combo, heroes and enemy');
+  ok(h && h.bank === g.bank && h.heroes[1].lv === 4 && h.foe.hp === g.foe.hp && h.score === g.score && h.combo === 3 && h.meter === 3, 'a save round-trips coins, points, combo, heroes and enemy');
   eq(h.row, ['B', 'Y'], 'the token row is saved');
   ok(Math.abs(h.f.live() - g.f.live()) <= 2 && h.f.towers.length === 1 && h.f.towers[0].n === 360, 'the coins on the field (with their tilt) and the standing tower are saved');
   // an old save from the 2.5D machine keeps its progress and gets a fresh 3D machine

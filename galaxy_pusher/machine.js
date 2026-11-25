@@ -24,11 +24,20 @@ export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
 export const FACE_MIN = -4.5, FACE_MAX = 0.5, PERIOD = 4.2, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -7.6;
 export const SHOOTER = { L: { x: -W / 2 + 1.6, y: PH + 7, z: BACK_WALL + 1.2 }, R: { x: W / 2 - 1.6, y: PH + 7, z: BACK_WALL + 1.2 } };
 // towers: a hollow ring of coins, RING_N per layer, each layer twisted a little more
-export const RING_N = 8, RING_R = 2.0 * COIN_R, LAYER_H = COIN_HH * 2, TWIST = 0.13;
+// RING_R is the smallest ring where neighbours touch edge to edge (no coin ever overlaps another); every other layer is
+// turned half a coin, like brickwork, so each coin rests on two below, and the whole stack drifts round slowly.
+export const RING_N = 8, RING_R = (COIN_R + 0.005) / Math.sin(Math.PI / RING_N), LAYER_H = COIN_HH * 2, TWIST = 0.05;
 export const TOWER_R = RING_R + COIN_R;
+// The pusher has a half-circle notch in the middle of its front (like the real cabinet). For a tower the pusher pulls
+// back further than its normal stroke (to FACE_RET), the tower rises out of the floor inside the notch, and then the
+// notch cradles it and shoves it forward. The back wall is recessed in the middle so the tower has room to rise.
+export const NOTCH_R = TOWER_R + 0.35, FACE_RET = -9, NOTCH_W = NOTCH_R + 0.3, BACK_RECESS = FACE_RET - NOTCH_R - 0.4;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
 export const FIELD_CAP = 230;    // most loose coins simulated at once
+// collision groups: (memberships << 16) | filter. Coins hanging past the edge filter the floor out.
+const GROUP_FLOOR = (0x0001 << 16) | 0xffff, GROUP_HANG = (0x0002 << 16) | 0xfffe;
 export let HZ = 40;
+export const GRAV = 500;
 export function setPhysicsRate(hz) { HZ = hz; }
 
 export const pusherFace = (t) => FACE_MIN + (FACE_MAX - FACE_MIN) * (0.5 - 0.5 * Math.cos((t / PERIOD) * Math.PI * 2));
@@ -59,19 +68,48 @@ export class Machine {
     this.speed = 1; this.guard = false;
     this.coins = []; this.towers = []; this.events = [];
     this.pf = pusherFace(0);
-    const w = (this.world = new R.World({ x: 0, y: -981, z: 0 }));
-    w.lengthUnit = 100;            // centimetres
+    // Tuned on measured fixtures (a 6-coin stack, a 30-coin rain onto a carpet, a shoved 150-coin carpet):
+    // gravity at half of real (coins land a touch softer and do not punch through each other at 40 Hz), stiff contacts
+    // (natural frequency 100, 4 inner PGS passes) so thin coins stack true, and a 1 mm contact prediction for speed.
+    const w = (this.world = new R.World({ x: 0, y: -GRAV, z: 0 }));
+    w.lengthUnit = 10;   // measured: Rapier's contact-refresh thresholds scale with this; 10 keeps contacts fresh at coin scale
     w.numSolverIterations = 4;
     w.timestep = 1 / HZ; this.hz = HZ;
+    const ip = w.integrationParameters;
+    ip.normalizedPredictionDistance = 0.1 / w.lengthUnit; ip.contact_natural_frequency = 100; ip.numInternalPgsIterations = 4;
+    w.integrationParameters = ip;
     const fixed = w.createRigidBody(R.RigidBodyDesc.fixed());
     const box = (hx, hy, hz, x, y, z, fr = 0.32) => w.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setFriction(fr), fixed);
-    box(W / 2, 1, (EDGE + 30) / 2, 0, -1, (EDGE - 30) / 2);                // floor, from under the pusher to the drop edge
+    box(W / 2, 10, (EDGE + 30) / 2, 0, -10, (EDGE - 30) / 2).setCollisionGroups(GROUP_FLOOR);   // floor (a thick slab: nothing is driven through it)
     box(1, 10, (EDGE + 30) / 2, -W / 2 - 1, 9, (EDGE - 30) / 2, 0.1);    // side walls
     box(1, 10, (EDGE + 30) / 2, W / 2 + 1, 9, (EDGE - 30) / 2, 0.1);
-    box(W / 2, 8, 1, 0, PH + 0.06 + 8, BACK_WALL - 1, 0.1);              // back wall, just above the shelf
+    // back wall just above the shelf, recessed in the middle where towers rise
+    const sideW = (W / 2 - NOTCH_W) / 2;
+    box(sideW, 8, 1, -(W / 2 + NOTCH_W) / 2, PH + 0.06 + 8, BACK_WALL - 1, 0.1);
+    box(sideW, 8, 1, (W / 2 + NOTCH_W) / 2, PH + 0.06 + 8, BACK_WALL - 1, 0.1);
+    box(NOTCH_W, 8, 1, 0, PH + 0.06 + 8, BACK_RECESS - 1, 0.1);
+    for (const sx of [-1, 1]) box(0.2, 8, (BACK_WALL - BACK_RECESS) / 2, sx * (NOTCH_W + 0.2), PH + 0.06 + 8, (BACK_WALL + BACK_RECESS) / 2 - 1, 0.1);
     this.pusher = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PH / 2, this.pf - PUSH_HALF));
-    w.createCollider(R.ColliderDesc.cuboid(W / 2, PH / 2, PUSH_HALF).setFriction(0.45), this.pusher);
+    for (const [hx, hz, x, z] of Machine.pusherBoxes()) w.createCollider(R.ColliderDesc.cuboid(hx, PH / 2, hz).setTranslation(x, 0, z).setFriction(0.45), this.pusher);
+    this.hold = false; this.tq = [];
     this.hulls = {};
+  }
+
+  // The pusher as boxes in its own frame (front face at z = +PUSH_HALF): two side blocks, a back block behind the notch,
+  // and thin slices that follow the half-circle so nothing pokes into the notch. [halfX, halfZ, x, z]
+  static pusherBoxes() {
+    const out = [], NR = NOTCH_R, side = (W / 2 - NR) / 2;
+    out.push([side, PUSH_HALF, -(W / 2 + NR) / 2, 0], [side, PUSH_HALF, (W / 2 + NR) / 2, 0]);
+    out.push([NR, PUSH_HALF - NR / 2, 0, -NR / 2]);
+    const S = 6;
+    // the solid corners behind the curve: each slice runs from the back block forward to where the circle starts
+    // (measured at the slice's inner side, so no slice pokes into the notch)
+    for (let i = 0; i < S; i++) {
+      const x0 = (i / S) * NR, x1 = ((i + 1) / S) * NR, z0 = PUSH_HALF - NR, z1 = PUSH_HALF - Math.sqrt(Math.max(0, NR * NR - x0 * x0));
+      const hz = (z1 - z0) / 2; if (hz < 0.02) continue;
+      for (const sx of [-1, 1]) out.push([(x1 - x0) / 2, hz, sx * (x0 + x1) / 2, z0 + hz]);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ coins
@@ -80,14 +118,10 @@ export class Machine {
     const desc = R.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinearDamping(0.05).setAngularDamping(0.4).setCcdEnabled(!!o.ccd);
     if (o.rot) desc.setRotation(o.rot);
     const body = this.world.createRigidBody(desc);
-    // The collision shape is a 12-pointed star of three thin boxes, not a cylinder: Rapier's flat cylinder-on-cylinder
-    // contacts let thin coins sink into each other (a stack of six settles at half height); box faces stack true.
-    const s = K.r * Math.cos(Math.PI / 12), d = s * Math.tan(Math.PI / 6);
-    for (let i = 0; i < 3; i++) {
-      const a = (i * Math.PI) / 6;
-      this.world.createCollider(R.ColliderDesc.cuboid(s, K.hh, d).setRotation({ x: 0, y: Math.sin(a), z: 0, w: Math.cos(a) })
-        .setFriction(isToken(k) ? 0.45 : 0.3).setRestitution(0.1).setDensity(K.density), body);
-    }
+    // a rounded cylinder (a coin's edge is milled round anyway); with the stiff contact settings in the constructor a
+    // stack of six holds its height and resting coins do not sink into each other
+    this.world.createCollider(R.ColliderDesc.roundCylinder(K.hh - 0.04, K.r - 0.04, 0.04)
+      .setFriction(isToken(k) ? 0.3 : 0.18).setRestitution(0.1).setDensity(K.density).setContactSkin(0.01), body);
     if (o.v) body.setLinvel(o.v, true);
     if (o.w) body.setAngvel(o.w, true);
     const c = { id: NEXT++, k, body, mul: o.mul || 1, tw: !!o.tw, off: false, spd: 0, born: this.t };
@@ -101,11 +135,11 @@ export class Machine {
   seedCarpet(tokens = 9) {
     const r = this.rng;
     let row = 0;
-    for (let z = FACE_MIN + COIN_R + 0.25; z < EDGE - COIN_R - 0.2; z += 2.12, row++)
+    for (let z = FACE_MAX + COIN_R + 0.25; z < EDGE - COIN_R - 0.2; z += 2.12, row++)
       for (let x = -W / 2 + COIN_R + 0.15 + (row % 2) * 1.22; x < W / 2 - COIN_R - 0.1; x += 2.44)
         if (r() > 0.06) this.add('c', x + (r() - 0.5) * 0.08, COIN_HH + 0.005, z + (r() - 0.5) * 0.08);
     // a loose second layer with the tokens on top of the carpet, and a few coins on the shelf
-    for (let i = 0; i < 24 + tokens; i++) this.add(i < tokens ? 'BPY'[i % 3] : 'c', (r() - 0.5) * (W - 5), 0.9 + (i % 4) * 0.5, FACE_MAX + 1.5 + r() * (EDGE - FACE_MAX - 4));
+    for (let i = 0; i < 34 + tokens; i++) this.add(i < tokens ? 'BPY'[i % 3] : 'c', (r() - 0.5) * (W - 5), 0.9 + (i % 4) * 0.5, FACE_MAX + 1.5 + r() * (EDGE - FACE_MAX - 4));
     for (let i = 0; i < 8; i++) this.add('c', (r() - 0.5) * (W - 5), PH + 0.3 + (i % 3) * 0.3, BACK_WALL + 1.4 + r() * 2.5);
     for (let i = 0; i < 4 * HZ; i++) this.stepOnce();
     this.events.length = 0;
@@ -116,7 +150,7 @@ export class Machine {
     const S = SHOOTER[side === 'R' ? 'R' : 'L'], r = this.rng, dir = side === 'R' ? -1 : 1;
     const c = this.add(k, S.x, S.y, S.z, {
       ccd: true,
-      v: { x: dir * (8 + r() * 30), y: 4 + r() * 6, z: 12 + r() * 26 },
+      v: { x: dir * (6 + r() * 22), y: 3 + r() * 5, z: 9 + r() * 20 },
       w: { x: (r() - 0.5) * 30, y: (r() - 0.5) * 10, z: (r() - 0.5) * 30 },
     });
     c.shot = true;
@@ -136,11 +170,15 @@ export class Machine {
 
   // ------------------------------------------------------------------ towers
   // Where the tower goes: on the field in front of the pusher, away from the walls.
+  // A won tower waits until the notch is free, then the pusher pulls back and it rises there.
   placeTower(n, opt = {}) {
-    const r = this.rng;
-    return this.addTower((r() - 0.5) * (W - 2 * TOWER_R - 4), FACE_MAX + TOWER_R + 2.2 + r() * 1.6, n, opt);
+    const T = { id: NEXT++, body: null, n: 0, want: n, layers: towerLayers(n), H: towerLayers(n) * LAYER_H, hgt: towerLayers(n) * LAYER_H, gold: !!opt.gold, col: opt.col || 'B',
+      crown: opt.crown || [], state: 'wait', bt: 0, frac: 0, twist0: this.rng() * Math.PI * 2, stand: 0, x: 0, z: FACE_RET, opt };
+    this.towers.push(T);
+    return T;
   }
-  addTower(x, z, n, opt = {}) {
+  notchFree() { return !this.towers.some((T) => T.body && Math.hypot(T.x, T.z - FACE_RET) < TOWER_R * 2 + 0.5); }
+  addTower(x, z, n, opt = {}, into = null) {
     // clear the coins standing where it goes
     for (const c of this.coins) {
       if (!c.body) continue;
@@ -148,13 +186,14 @@ export class Machine {
       if (d < need && p.y < 3) { const k = need / (d || 1e-3); c.body.setTranslation({ x: Math.max(-W / 2 + 1.3, Math.min(W / 2 - 1.3, x + (d ? dx : 1) * k)), y: p.y + 0.3, z: z + (d ? dz : 0) * k }, true); }
     }
     const L = towerLayers(n), H = L * LAYER_H;
-    const body = this.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(x, H / 2, z).setAngularDamping(0.2));
+    // it starts sunk in the floor (top level with it) and rises while it builds
+    const body = this.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(x, into ? -H / 2 : H / 2, z).setAngularDamping(0.2));
     // light enough that the pusher and the carpet can shove it (a real tower rides the carpet), heavy enough to plough
     const vol = Math.PI * TOWER_R * TOWER_R * H, mass = Math.min(n, 80) * Math.PI * COIN_R * COIN_R * COIN_HH * 2 * 8.9;
-    this.world.createCollider(R.ColliderDesc.cylinder(H / 2, TOWER_R).setFriction(0.25).setRestitution(0.02).setDensity(mass / vol), body);
-    const T = { id: NEXT++, body, n: 0, want: n, layers: 0, H, hgt: 0, gold: !!opt.gold, col: opt.col || 'B', crown: opt.crown || [], state: 'build', bt: 0, frac: 0,
-      twist0: this.rng() * Math.PI * 2, stand: 0, x, z };
-    this.towers.push(T);
+    this.world.createCollider(R.ColliderDesc.cylinder(H / 2, TOWER_R).setFriction(0.14).setRestitution(0.02).setDensity(mass / vol), body);
+    const T = into || { id: NEXT++, n: 0, want: n, gold: !!opt.gold, col: opt.col || 'B', crown: opt.crown || [], bt: 0, frac: 0, twist0: this.rng() * Math.PI * 2, stand: 0 };
+    Object.assign(T, { body, H, layers: L, hgt: H, state: 'build', x, z, rise: !!into });
+    if (!into) this.towers.push(T);
     this.events.push({ t: 'towerStart', T });
     return T;
   }
@@ -167,15 +206,36 @@ export class Machine {
   stepTowers(dt) {
     const keep = [];
     for (const T of this.towers) {
+      if (T.state === 'wait') {
+        // the notch must be clear; the pusher pulls all the way back, then the tower comes up
+        if (this.notchFree()) { this.hold = true; if (this.pf <= FACE_RET + 0.05) this.addTower(0, FACE_RET, T.want, T.opt, T); }
+        keep.push(T); continue;
+      }
       if (T.state === 'build') {
         T.bt += dt;
+        this.hold = true;
         const dur = 1.5 + T.want / 450;
         T.frac += (T.want / dur) * Math.min(1.6, 0.4 + (T.bt / dur) * 1.6) * dt;
         const add = Math.floor(T.frac); T.frac -= add;
         const n = Math.min(T.want, T.n + add), L0 = towerLayers(T.n), L1 = towerLayers(n);
         for (let l = L0; l < L1; l++) this.events.push({ t: 'towerCoin', i: l, n: towerLayers(T.want), T });
-        T.n = n; T.layers = L1; T.hgt = L1 * LAYER_H;
-        if (T.n >= T.want) { T.state = 'stand'; T.body.setBodyType(R.RigidBodyType.Dynamic, true); this.events.push({ t: 'towerDone', T }); }
+        T.n = n;
+        if (!T.rise) { T.layers = L1; T.hgt = L1 * LAYER_H; }
+        else {
+          const k = Math.min(1, T.n / T.want), y = -T.H / 2 + T.H * (1 - Math.pow(1 - k, 2)); T.body.setNextKinematicTranslation({ x: T.x, y, z: T.z });
+          // the rising tower shoulders loose coins aside, so none end up inside or under it
+          for (const c of this.coins) {
+            if (!c.body) continue;
+            const q = c.body.translation(), dx = q.x - T.x, dz = q.z - T.z, d = Math.hypot(dx, dz), need = TOWER_R + KINDS[c.k].r + 0.05;
+            if (d >= need || q.y > y + T.H / 2 + 0.5) continue;
+            const f = need / (d || 1e-3);
+            c.body.setTranslation({ x: Math.max(-W / 2 + 1.3, Math.min(W / 2 - 1.3, T.x + (d ? dx : 0.5) * f)), y: q.y + 0.05, z: T.z + (d ? dz : 1) * f }, true);
+          }
+        }
+        if (T.n >= T.want) {
+          if (T.rise) T.body.setTranslation({ x: T.x, y: T.H / 2 + 0.005, z: T.z }, true);
+          T.state = 'stand'; T.body.setBodyType(R.RigidBodyType.Dynamic, true); this.hold = false; this.events.push({ t: 'towerDone', T });
+        }
         keep.push(T); continue;
       }
       const p = T.body.translation(), up = rotY(T.body.rotation());
@@ -186,8 +246,8 @@ export class Machine {
         if (T.tilt > 0.05 && !T.warned) { T.warned = true; this.events.push({ t: 'topple', T }); }
         if (T.tilt > 0.18 && !T.falling) { T.falling = true; this.events.push({ t: 'fall', T }); }
         // an overhanging tower teeters over the edge; one that stands too long gets nudged (the carpet would get it there)
-        if (p.z > EDGE - TOWER_R * 0.45 && this.rng() < dt * 3) this.tip(T, 10);
-        else if (T.stand > 15 && this.rng() < dt * 0.6) this.tip(T, 7);
+        if (p.z > EDGE - TOWER_R * 0.6 && this.rng() < dt * 3) this.tip(T, 22);
+        else if (T.stand > 14 && this.rng() < dt * 0.7) this.tip(T, 16 + T.stand * 0.5);
         if (T.tilt > 0.8 || p.y < T.H * 0.3) { this.burst(T); continue; }
       }
       keep.push(T);
@@ -196,8 +256,13 @@ export class Machine {
   }
   // the coin at ring slot i, in the tower's own frame (y up from its base centre)
   static ringLocal(T, i) {
-    const k = Math.floor(i / RING_N), j = i % RING_N, a = T.twist0 + k * TWIST + (j * Math.PI * 2) / RING_N;
+    const k = Math.floor(i / RING_N), j = i % RING_N, a = T.twist0 + k * TWIST + (k % 2) * (Math.PI / RING_N) + (j * Math.PI * 2) / RING_N;
     return [Math.cos(a) * RING_R, k * LAYER_H + COIN_HH - T.H / 2, Math.sin(a) * RING_R];
+  }
+  // the crown tokens lie on the top ring, spread round it so they never touch each other
+  static crownLocal(T, i) {
+    const k = T.layers - 1, a = T.twist0 + k * TWIST + (k % 2) * (Math.PI / RING_N) + (i * Math.PI * 2) / Math.max(1, T.crown.length) + 0.3;
+    return [Math.cos(a) * RING_R, T.hgt - T.H / 2 + KINDS.B.hh, Math.sin(a) * RING_R];
   }
   // The tower turns into loose coins where its coins were, moving the way it was moving. Three coins per layer
   // (they do not overlap), up to FIELD_CAP loose coins on the field: the tower's full count is shared between them.
@@ -214,7 +279,7 @@ export class Machine {
       const v = { x: lv.x + av.y * w.z - av.z * w.y + (r() - 0.5) * 6, y: lv.y + av.z * w.x - av.x * w.z + r() * 4, z: lv.z + av.x * w.y - av.y * w.x + (r() - 0.5) * 6 };
       this.add(T.gold ? 'g' : 'c', Math.max(-W / 2 + 1.25, Math.min(W / 2 - 1.25, pos.x)), pos.y, pos.z, { rot: q, v, w: { x: (r() - 0.5) * 8, y: (r() - 0.5) * 8, z: (r() - 0.5) * 8 }, tw: true, mul: per + (idx < extra ? 1 : 0) });
     });
-    T.crown.forEach((k, i) => { const w = rotate(q, (i - 1) * 1.6, T.H / 2 + 0.3, 0); this.add(k, p.x + w.x, Math.max(0.3, p.y + w.y), p.z + w.z, { v: { x: lv.x, y: lv.y + 3, z: lv.z }, tw: true }); });
+    T.crown.forEach((k, i) => { const [cx, cy, cz] = Machine.crownLocal(T, i), w = rotate(q, cx, cy + 0.05, cz); this.add(k, p.x + w.x, Math.max(0.3, p.y + w.y), p.z + w.z, { v: { x: lv.x, y: lv.y + 3, z: lv.z }, tw: true }); });
     this.world.removeRigidBody(T.body); T.body = null;
     this.events.push({ t: 'burst', T, n: T.want });
   }
@@ -222,10 +287,14 @@ export class Machine {
   // ------------------------------------------------------------------ stepping
   stepOnce() {
     const dt = 1 / HZ;
-    this.t += dt * this.speed;
-    this.pf = pusherFace(this.t);
+    // the stroke runs unless a tower is coming up; the face never jumps (it moves at most 10 cm/s toward its target)
+    if (!this.towers.some((T) => T.state === 'wait' || T.state === 'build')) this.hold = false;
+    if (!this.hold && Math.abs(this.pf - pusherFace(this.t)) < 0.05) this.t += dt * this.speed;
+    const target = this.hold ? FACE_RET : pusherFace(this.t), stepMax = 10 * dt * this.speed;
+    this.pf += Math.max(-stepMax, Math.min(stepMax, target - this.pf));
     this.pusher.setNextKinematicTranslation({ x: 0, y: PH / 2, z: this.pf - PUSH_HALF });
     this.world.step();
+    this.separate();
     this.stepTowers(dt);
     const ev = this.events, keep = [];
     for (const c of this.coins) {
@@ -238,6 +307,11 @@ export class Machine {
         this.remove(c); continue;
       }
       if (p.y < -30 || !isFinite(p.x + p.y + p.z)) { this.remove(c); continue; }
+      // A coin more than 60% past the edge tips and drops (Rapier can keep a stale floor contact on a coin that has
+      // slid past the end of the floor, so the tip is applied here, as a real coin with nothing on top would do).
+      // A coin more than 55% past the edge stops touching the floor. Rapier can keep reusing a stale floor contact from
+      // centimetres back while a coin creeps forward, which leaves it hovering past the edge; a real coin there tips off.
+      if (!c.hang && p.z > EDGE + KINDS[c.k].r * 0.55) { c.hang = true; c.body.collider(0).setCollisionGroups(GROUP_HANG); c.body.wakeUp(); }
       // landing and clinks: a sudden stop after moving fast
       if (c.shot || c.tw) {
         const v = c.body.linvel(), s = Math.hypot(v.x, v.y, v.z);
@@ -249,6 +323,49 @@ export class Machine {
     }
     this.coins = keep;
   }
+  // Rapier lets thin coins sink part way into each other while they slide (its contacts lag behind). After every step,
+  // any two near-flat coins that share space are pulled apart: the upper one is lifted onto the lower one. Coins are
+  // bucketed in a 3 cm grid, so this is a few hundred cheap checks.
+  separate() {
+    const cs = this.coins, g = this._grid || (this._grid = new Map());
+    g.clear();
+    const info = [];
+    for (const c of cs) {
+      if (!c.body || c.hang) continue;
+      const p = c.body.translation(), q = c.body.rotation(), upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+      // a coin pressed into the floor (the pusher can wedge one) goes back on top of it
+      if (p.y < c.body.collider(0).halfHeight() * 0.6 && p.y > -4 && p.z < EDGE - 0.2) {
+        // under the pusher's footprint (not in its notch) it goes onto the shelf, anywhere else back onto the floor
+        const hh = KINDS[c.k].hh, under = p.z < this.pf - 0.1 && Math.hypot(p.x, p.z - this.pf) > NOTCH_R && p.z > this.pf - 2 * PUSH_HALF;
+        const y = under ? PH + hh + 0.02 : hh + 0.01;
+        c.body.setTranslation({ x: p.x, y, z: p.z }, true);
+        const v = c.body.linvel(); c.body.setLinvel({ x: v.x, y: Math.max(0, v.y), z: v.z }, true);
+        p.y = y;
+      }
+      if (Math.abs(upY) < 0.94 || p.y < -0.5) continue;    // tilted or falling coins are left to Rapier (flipped coins lie flat too)
+      const o = { c, p, K: KINDS[c.k] }; info.push(o);
+      const key = Math.floor(p.x / 3) * 1000 + Math.floor(p.z / 3);
+      let b = g.get(key); if (!b) g.set(key, (b = [])); b.push(o);
+    }
+    for (const a of info) {
+      const gx = Math.floor(a.p.x / 3), gz = Math.floor(a.p.z / 3);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const b0 = g.get((gx + i) * 1000 + gz + j); if (!b0) continue;
+        for (const b of b0) {
+          if (b === a || b.p.y > a.p.y || (b.p.y === a.p.y && b.c.id > a.c.id)) continue;   // a is the upper coin of the pair
+          const dx = a.p.x - b.p.x, dz = a.p.z - b.p.z, d2 = dx * dx + dz * dz, rr = a.K.r + b.K.r - 0.15;
+          if (d2 > rr * rr) continue;
+          const need = a.K.hh + b.K.hh, gap = a.p.y - b.p.y;
+          if (gap >= need - 0.015) continue;
+          a.p = { x: a.p.x, y: b.p.y + need, z: a.p.z };
+          a.c.body.setTranslation(a.p, true);
+          const v = a.c.body.linvel(); if (v.y < 0) a.c.body.setLinvel({ x: v.x, y: 0, z: v.z }, true);
+          this.fixes = (this.fixes || 0) + 1;
+        }
+      }
+    }
+  }
+
   // advance by real time dt with a fixed 60 Hz step (at most 4 steps a frame so a slow phone never spirals)
   advance(dt) {
     this.acc = Math.min(this.acc + dt, 4 / HZ);
@@ -263,7 +380,8 @@ export class Machine {
     return {
       t: r2(this.t),
       coins: this.coins.filter((c) => c.body).map((c) => { const p = c.body.translation(), q = c.body.rotation(); const a = [c.k, r2(p.x), r2(p.y), r2(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w)]; if (c.mul > 1) a.push(c.mul); return a; }),
-      towers: this.towers.map((T) => { const p = T.body.translation(); return [r2(p.x), r2(p.z), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0)]; }),
+      // a standing tower keeps its place; one still waiting or rising comes up again after a reload
+      towers: this.towers.map((T) => { const up = T.state === 'stand' && T.body, p = up ? T.body.translation() : { x: 0, z: FACE_RET }; return [r2(p.x), r2(p.z), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0), up ? 's' : 'w']; }),
     };
   }
   restore(s) {
@@ -281,6 +399,8 @@ export class Machine {
     }
     for (const a of (Array.isArray(s.towers) ? s.towers : [])) {
       if (!Array.isArray(a)) continue;
+      const want = Math.max(1, Math.min(1000, Math.floor(num(a[2], 330))));
+      if (a[7] === 'w') { this.placeTower(want, { gold: !!a[3], col: a[4] || 'B', crown: String(a[5] || '').split('').filter(isToken) }); continue; }
       const T = this.addTower(num(a[0], 0), num(a[1], 6), Math.max(1, Math.min(1000, Math.floor(num(a[2], 330)))), { gold: !!a[3], col: a[4] || 'B', crown: String(a[5] || '').split('').filter(isToken) });
       T.n = T.want; T.layers = towerLayers(T.n); T.hgt = T.layers * LAYER_H; T.twist0 = num(a[6], 0);
       T.state = 'stand'; T.body.setBodyType(R.RigidBodyType.Dynamic, true);

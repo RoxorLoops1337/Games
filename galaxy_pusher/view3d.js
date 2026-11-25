@@ -3,7 +3,7 @@
 // tower body's transform. The 2D overlay (battle, HUD, wheel) is drawn on a separate canvas above this one.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
-import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, Machine } from './machine.js';
+import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, NOTCH_W, BACK_RECESS, FACE_RET, TOWER_R, Machine } from './machine.js';
 import { sprite, COLS } from './render.js';
 
 const MAX = { c: 1500, g: 1100, B: 60, P: 60, Y: 60 };
@@ -92,21 +92,43 @@ export class View3D {
     const gr = bg.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#120a3a'); gr.addColorStop(1, '#2d1d6e'); bg.fillStyle = gr; bg.fillRect(0, 0, 1024, 512);
     bg.strokeStyle = 'rgba(120,200,255,0.25)'; bg.lineWidth = 3;
     for (let i = 0; i < 26; i++) { const x = 20 + i * 40, y = 140 + ((i * 97) % 300); bg.beginPath(); bg.moveTo(x, 512); bg.lineTo(x, y); bg.lineTo(x + 30, y - 30); bg.stroke(); bg.fillStyle = 'rgba(120,200,255,0.5)'; bg.beginPath(); bg.arc(x + 30, y - 30, 5, 0, Math.PI * 2); bg.fill(); }
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, 16), new THREE.MeshStandardMaterial({ map: canvasTex(bc), metalness: 0.3, roughness: 0.6, emissive: 0xffffff, emissiveIntensity: 0.18, emissiveMap: canvasTex(bc) }));
-    back.position.set(0, PH + 8, BACK_WALL - 0.02); S.add(back);
+    const backMat = new THREE.MeshStandardMaterial({ map: canvasTex(bc), metalness: 0.3, roughness: 0.6, emissive: 0xffffff, emissiveIntensity: 0.18, emissiveMap: canvasTex(bc) });
+    // the back wall: two side panels and, between them, a recessed bay where towers rise
+    const sideW = W / 2 + 1 - NOTCH_W;
+    for (const sx of [-1, 1]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(sideW, 16), backMat); b.position.set(sx * (NOTCH_W + sideW / 2), PH + 8, BACK_WALL - 0.02); S.add(b); }
+    const bay = new THREE.Mesh(new THREE.PlaneGeometry(NOTCH_W * 2, 16), new THREE.MeshStandardMaterial({ color: 0x241a52, metalness: 0.5, roughness: 0.45 }));
+    bay.position.set(0, PH + 8, BACK_RECESS - 0.02); S.add(bay);
+    for (const sx of [-1, 1]) {
+      const side = new THREE.Mesh(new THREE.PlaneGeometry(BACK_WALL - BACK_RECESS, 16), new THREE.MeshStandardMaterial({ color: 0x3a2a7a, metalness: 0.4, roughness: 0.5, side: THREE.DoubleSide }));
+      side.rotation.y = Math.PI / 2; side.position.set(sx * NOTCH_W, PH + 8, (BACK_WALL + BACK_RECESS) / 2); S.add(side);
+      const neon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 16, 0.15), new THREE.MeshBasicMaterial({ color: 0xffd75c }));
+      neon.position.set(sx * NOTCH_W, PH + 8, BACK_WALL); S.add(neon);
+    }
+    // the lift: a glowing ring on the floor where a tower comes up (hidden under the pusher until it pulls back)
+    this.lift = new THREE.Mesh(new THREE.RingGeometry(TOWER_R - 0.2, TOWER_R + 0.15, 48), new THREE.MeshBasicMaterial({ color: 0xffd75c, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
+    this.lift.rotation.x = -Math.PI / 2; this.lift.position.set(0, 0.012, FACE_RET); S.add(this.lift);
     this.ringC = mk(256, 256);
     this.ringT = canvasTex(this.ringC);
-    const ring = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
-    ring.position.set(0, PH + 7.2, BACK_WALL + 0.05); S.add(ring);
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 5.6), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
+    ring.position.set(-(NOTCH_W + sideW / 2), PH + 7.4, BACK_WALL + 0.05); S.add(ring);
     this.ringKey = '';
     // pusher: a chrome block with a glowing front edge
     this.pusher = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(W, PH, PUSH_HALF * 2), new THREE.MeshStandardMaterial({ color: 0x7d869c, metalness: 0.9, roughness: 0.34 }));
+    // the block with its half-circle notch, drawn as a 2D outline (x, -z) extruded upward by the shelf height
+    const sh = new THREE.Shape();
+    sh.moveTo(-W / 2, PUSH_HALF); sh.lineTo(W / 2, PUSH_HALF); sh.lineTo(W / 2, -PUSH_HALF); sh.lineTo(NOTCH_R, -PUSH_HALF);
+    sh.absarc(0, -PUSH_HALF, NOTCH_R, 0, Math.PI, false); sh.lineTo(-W / 2, -PUSH_HALF); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: PH, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 2, curveSegments: 40 });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, -PH / 2, 0);
+    const body = new THREE.Mesh(geo, [new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.9, roughness: 0.3 }), new THREE.MeshStandardMaterial({ color: 0xd9dee8, metalness: 0.6, roughness: 0.35 })]);
     body.receiveShadow = true; body.castShadow = true; this.pusher.add(body);
-    this.pusherNeon = new THREE.Mesh(new THREE.BoxGeometry(W, 0.18, 0.18), new THREE.MeshBasicMaterial({ color: 0x5cd0ff }));
-    this.pusherNeon.position.set(0, PH / 2 - 0.05, PUSH_HALF + 0.02); this.pusher.add(this.pusherNeon);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(W, 0.5, 0.05), new THREE.MeshStandardMaterial({ color: 0x1d2333, metalness: 0.4, roughness: 0.5 }));
-    stripe.position.set(0, -0.2, PUSH_HALF + 0.02); this.pusher.add(stripe);
+    // neon along the front edge: the two straight parts and the curve of the notch
+    const neonMat = (this.neonMat = new THREE.MeshBasicMaterial({ color: 0x5cd0ff }));
+    const straight = W / 2 - NOTCH_R;
+    for (const sx of [-1, 1]) { const n = new THREE.Mesh(new THREE.BoxGeometry(straight, 0.16, 0.16), neonMat); n.position.set(sx * (NOTCH_R + straight / 2), PH / 2 + 0.02, PUSH_HALF + 0.03); this.pusher.add(n); }
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(NOTCH_R, 0.08, 6, 48, Math.PI), neonMat);
+    arc.rotation.x = -Math.PI / 2; arc.position.set(0, PH / 2 + 0.02, PUSH_HALF); this.pusher.add(arc);
+    this.pusherNeon = { material: neonMat };
     S.add(this.pusher);
   }
   drawRing(game, t) {
@@ -228,14 +250,16 @@ export class View3D {
       const tr = T.body.translation(), ro = T.body.rotation();
       this._tp.set(tr.x, tr.y, tr.z); this._tq.set(ro.x, ro.y, ro.z, ro.w);
       const k = T.gold ? 'g' : 'c', I = this.inst[k];
-      for (let i = 0; i < T.n && counts[k] < MAX[k]; i++) {
+      const nDraw = T.rise && T.state === 'build' ? T.want : T.n;   // a rising tower is whole, coming up through the floor
+      for (let i = 0; i < nDraw && counts[k] < MAX[k]; i++) {
         const [lx, ly, lz] = Machine.ringLocal(T, i);
         this._lp.set(lx, ly, lz).applyQuaternion(this._tq).add(this._tp);
         this._lq.setFromAxisAngle(this._ax, i * 1.7).premultiply(this._tq);
         m.compose(this._lp, this._lq, s); I.setMatrixAt(counts[k]++, m);
       }
       T.crown.forEach((ck, i) => {
-        this._lp.set((i - (T.crown.length - 1) / 2) * 1.6, T.hgt - T.H / 2 + KINDS.B.hh, 0).applyQuaternion(this._tq).add(this._tp);
+        const [cx, cy, cz] = Machine.crownLocal(T, i);
+        this._lp.set(cx, cy, cz).applyQuaternion(this._tq).add(this._tp);
         m.compose(this._lp, this._tq, s); if (counts[ck] < MAX[ck]) this.inst[ck].setMatrixAt(counts[ck]++, m);
       });
     }
@@ -260,6 +284,8 @@ export class View3D {
       this.guards = [-1, 1].map((sx) => { const g = new THREE.Mesh(new THREE.BoxGeometry(GUT, 1.6, 0.15), new THREE.MeshBasicMaterial({ color: 0x2fb4ff, transparent: true, opacity: 0.4 })); g.position.set(sx * (W / 2 - GUT / 2), 0.8, EDGE + 0.1); this.scene.add(g); return g; });
     }
     for (const g of this.guards) { g.visible = game.guardT > 0; g.material.opacity = 0.3 + 0.15 * Math.sin(t * 8); }
+    const lifting = M.towers.some((T) => T.state === 'wait' || T.state === 'build');
+    this.lift.material.opacity = lifting ? 0.55 + 0.45 * Math.sin(t * 12) : 0.25;
     this.drawRing(game, t);
     this.renderer.render(this.scene, this.camera);
   }
