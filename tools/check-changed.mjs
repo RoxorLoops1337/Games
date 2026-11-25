@@ -89,6 +89,7 @@ const GAME_SUITES = {
   groove_lock: ['test:groovelock'],
   ricochet_mint: ['test:ricochet'],
   million_to_one: ['test:million'],
+  galaxy_pusher: ['test:galaxy'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
