@@ -226,7 +226,7 @@ function stepWheel(dt) {
       const P = WHEEL[Wh.pocket];
       S.prize(P.c === 'JP'); buzz([30, 40, 60]);
       const C = COLS[P.c];
-      banner(P.c === 'JP' ? 'JACKPOT TOWER!' : `${C.name} TOWER`, C.main, `${TOWER[P.c]} ${P.x2 || P.c === 'JP' ? 'GOLD ' : ''}COINS${P.lv ? ' · ALL HEROES LEVEL UP' : ''}${P.x2 ? ' · x2' : ''}`, 2.2, 1.1);
+      banner(P.c === 'JP' ? 'JACKPOT TOWER!' : `${C.name} TOWER`, C.main, `${TOWER[P.c]} ${P.c === 'JP' || P.c === 'V' ? 'GOLD ' : ''}COINS${P.lv ? ' · ALL HEROES LEVEL UP' : ''}`, 2.2, 1.1);
       addShake(6);
       Wh.showEnd = 2.0;
     }
@@ -292,6 +292,7 @@ function handle(e) {
     case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.hgt, e.T.z); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
     case 'topple': S.creak(); S.creak(); { const p = cam.P(e.T.x, e.T.hgt, e.T.z); floatText('!!', p.x, p.y - 16, '#ff6b74', 22, 0.8, -20); } break;
     case 'fall': S.topple(); addShake(4); break;
+    case 'smack': { view.smack(e.x, e.y); S.smack(e.n); addShake(22); flash = 0.3; buzz([60, 40, 120]); const p = cam.P(e.x, e.y, e.z); floatText('SMACK!', p.x, p.y, '#ffffff', 34, 1.0, -30); break; }
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
     case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins to shoot`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;

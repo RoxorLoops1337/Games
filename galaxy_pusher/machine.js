@@ -34,8 +34,10 @@ export const TOWER_R = RING_R + COIN_R;
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = -9, NOTCH_W = NOTCH_R + 0.3, BACK_RECESS = FACE_RET - NOTCH_R - 0.4;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
 export const FIELD_CAP = 230;    // most loose coins simulated at once
+// the front window: a glass pane just past the drop edge, like the cabinet glass the player looks through
+export const GLASS_Z = EDGE + TOWER_R + 3.5;   // far enough that a tower falls a good way before its top smacks it
 // collision groups: (memberships << 16) | filter. Coins hanging past the edge filter the floor out.
-const GROUP_FLOOR = (0x0001 << 16) | 0xffff, GROUP_HANG = (0x0002 << 16) | 0xfffe;
+const GROUP_FLOOR = (0x0001 << 16) | 0xffff, GROUP_HANG = (0x0002 << 16) | 0xfffe, GROUP_ALL = 0xffffffff;
 export let HZ = 40;
 export const GRAV = 500;
 export function setPhysicsRate(hz) { HZ = hz; }
@@ -81,6 +83,7 @@ export class Machine {
     const fixed = w.createRigidBody(R.RigidBodyDesc.fixed());
     const box = (hx, hy, hz, x, y, z, fr = 0.32) => w.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setFriction(fr), fixed);
     box(W / 2, 10, (EDGE + 30) / 2, 0, -10, (EDGE - 30) / 2).setCollisionGroups(GROUP_FLOOR);   // floor (a thick slab: nothing is driven through it)
+    box(W / 2 + 1, 30, 0.2, 0, 18, GLASS_Z + 0.2, 0.2);                    // the front glass
     box(1, 10, (EDGE + 30) / 2, -W / 2 - 1, 9, (EDGE - 30) / 2, 0.1);    // side walls
     box(1, 10, (EDGE + 30) / 2, W / 2 + 1, 9, (EDGE - 30) / 2, 0.1);
     // back wall just above the shelf, recessed in the middle where towers rise
@@ -245,9 +248,20 @@ export class Machine {
         T.tilt = Math.acos(Math.max(-1, Math.min(1, up.y)));
         if (T.tilt > 0.05 && !T.warned) { T.warned = true; this.events.push({ t: 'topple', T }); }
         if (T.tilt > 0.18 && !T.falling) { T.falling = true; this.events.push({ t: 'fall', T }); }
-        // an overhanging tower teeters over the edge; one that stands too long gets nudged (the carpet would get it there)
-        if (p.z > EDGE - TOWER_R * 0.6 && this.rng() < dt * 3) this.tip(T, 22);
-        else if (T.stand > 14 && this.rng() < dt * 0.7) this.tip(T, 16 + T.stand * 0.5);
+        // A tower stands and rides the carpet slowly. Only once it really hangs over the edge does it tip toward the
+        // player (the stale floor contact Rapier keeps at the edge would otherwise hold it up).
+        if (p.z > EDGE - 0.6) {
+          // its centre is at the lip: it goes over, swinging its top toward the window
+          const w = T.body.angvel(), v = T.body.linvel();
+          T.body.setAngvel({ x: Math.max(w.x, 1.4 + T.tilt * 2.5), y: w.y * 0.5, z: w.z * 0.5 }, true);
+          T.body.setLinvel({ x: v.x, y: v.y, z: Math.max(v.z, 2) }, true);
+        } else if (p.z > EDGE - TOWER_R * 0.25 && this.rng() < dt * 4) this.tip(T, 14);
+        // tipping toward the window: its top hits the glass, and a moment later it bursts
+        const top = this.towerTop(T);
+        if (!T.smack && top.z + TOWER_R * Math.cos(T.tilt) > GLASS_Z - 0.25 && T.tilt > 0.05) {
+          T.smack = this.t; this.events.push({ t: 'smack', T, x: top.x, y: top.y, z: GLASS_Z, n: T.want });
+        }
+        if (T.smack && this.t - T.smack > 0.35) { this.burst(T); continue; }
         if (T.tilt > 0.8 || p.y < T.H * 0.3) { this.burst(T); continue; }
       }
       keep.push(T);
@@ -312,6 +326,11 @@ export class Machine {
       // A coin more than 55% past the edge stops touching the floor. Rapier can keep reusing a stale floor contact from
       // centimetres back while a coin creeps forward, which leaves it hovering past the edge; a real coin there tips off.
       if (!c.hang && p.z > EDGE + KINDS[c.k].r * 0.55) { c.hang = true; c.body.collider(0).setCollisionGroups(GROUP_HANG); c.body.wakeUp(); }
+      // ...and a coin that comes back over the field (bounced off the glass) gets the floor back
+      else if (c.hang && p.z < EDGE + KINDS[c.k].r * 0.3) {
+        c.hang = false; c.body.collider(0).setCollisionGroups(GROUP_ALL);
+        if (p.y < KINDS[c.k].hh && p.z < EDGE - 0.1) { c.body.setTranslation({ x: p.x, y: KINDS[c.k].hh + 0.02, z: p.z }, true); const v = c.body.linvel(); c.body.setLinvel({ x: v.x, y: 0, z: v.z }, true); }
+      }
       // landing and clinks: a sudden stop after moving fast
       if (c.shot || c.tw) {
         const v = c.body.linvel(), s = Math.hypot(v.x, v.y, v.z);

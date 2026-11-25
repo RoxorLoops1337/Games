@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, COIN_HH, KINDS, FIELD_CAP, HZ } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ } from '../galaxy_pusher/machine.js';
 import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -127,7 +127,7 @@ function overlaps(m) {
   g.bank = 1e6;
   let bad = 0, maxN = 0;
   play(g, 120, 4, () => {
-    for (const c of g.f.coins) { if (!c.body) continue; const p = c.body.translation(); if (!isFinite(p.x + p.y + p.z) || (p.z < EDGE - 0.5 && p.y < -0.05) || Math.abs(p.x) > W / 2 + 0.5) bad++; }
+    for (const c of g.f.coins) { if (!c.body) continue; const p = c.body.translation(); if (!isFinite(p.x + p.y + p.z) || (p.z < EDGE - 0.5 && p.y < -0.05) || (Math.abs(p.x) > W / 2 + 0.5 && p.z < EDGE)) bad++; }
     maxN = Math.max(maxN, g.f.live());
   });
   eq(bad, 0, 'no coin sinks through the floor, passes a wall or goes NaN in 2 minutes of play');
@@ -139,11 +139,19 @@ function overlaps(m) {
 // ---------------------------------------------------------------- towers
 {
   const g = newGame(13); g.foe.hp = g.foe.max = 1e9; g.bank = 1e6;
-  const T = g.f.placeTower(330, { gold: true, col: 'P', crown: ['P', 'P'] });
-  let built = false;
-  play(g, 70, 6, () => { if (T.state === 'stand') built = true; });
-  ok(built, 'the tower finishes building and stands on the field');
-  ok(!g.f.towers.includes(T), 'the pusher and the carpet bring the tower down within a minute');
+  const T = g.f.placeTower(300, { col: 'B', crown: ['B', 'B'] });
+  let built = false, maxTilt = 0;
+  play(g, 40, 6, () => { if (T.state === 'stand') { built = true; maxTilt = Math.max(maxTilt, T.tilt || 0); } });
+  ok(built && g.f.towers.includes(T), 'the tower finishes building and is still standing 40 s later');
+  ok(maxTilt < 0.12 && T.body.translation().z > FACE_RET + 2, 'it rides the carpet forward slowly, upright (' + maxTilt.toFixed(2) + ' rad)');
+  // at the edge it goes over toward the player, smacks the front glass and spills
+  T.body.setTranslation({ x: 0, y: T.H / 2 + 0.01, z: EDGE - 1 }, true);
+  let smack = null, burst = null, paid0 = g.stats.paid;
+  for (let i = 0; i < 60 * 15 && !burst; i++) { g.tick(1 / 60); for (const e of g.out) { if (e.t === 'smack') smack = e; if (e.t === 'burst') burst = e; } g.out.length = 0; }
+  ok(smack && smack.z === GLASS_Z, 'a tower that reaches the edge falls over and smacks against the front glass');
+  ok(burst && !g.f.towers.includes(T), 'then it bursts into loose coins');
+  for (let i = 0; i < 60 * 6; i++) { g.tick(1 / 60); g.out.length = 0; }
+  ok(g.stats.paid - paid0 > 120, 'most of its coins pour down between the edge and the glass and pay (' + (g.stats.paid - paid0) + ')');
   // every coin of the tower is accounted for: the loose coins it becomes carry its whole value
   const m = new Machine(mulberry(5)); m.seedCarpet();
   const T2 = m.placeTower(720, {});
@@ -159,8 +167,9 @@ function overlaps(m) {
 }
 {
   const counts = {}; WHEEL.forEach((P) => { counts[P.c] = (counts[P.c] || 0) + 1; });
-  ok(counts.JP === 1 && counts.B >= 3 && counts.P >= 3 && counts.Y >= 3, 'the wheel has one jackpot pocket and several of each colour');
-  eq([TOWER.B, TOWER.Y, TOWER.P, TOWER.JP], [330, 360, 720, 900], 'tower sizes are the cabinet numbers: blue 330, yellow 360, pink 720, JP 900');
+  ok(counts.JP === 1 && counts.B >= 3 && counts.Y >= 3 && counts.P >= 2 && counts.V >= 2, 'the wheel has one jackpot pocket, smaller towers more often than big ones');
+  eq([TOWER.B, TOWER.Y, TOWER.P, TOWER.V, TOWER.JP], [300, 400, 600, 900, 1200], 'tower sizes: 300, 400, 600, 900, and the biggest, 1200');
+  ok(WHEEL.filter((P) => P.c === 'JP').length === 1, 'the 1200 tower is the one jackpot pocket');
 }
 
 {
@@ -170,13 +179,15 @@ function overlaps(m) {
   const J = g.f.towers[0];
   let maxY = 0, stood = false;
   play(g, 8, 6, () => { if (J.body) { maxY = Math.max(maxY, J.body.translation().y); if (J.state === 'stand') stood = true; } });
-  ok(stood && maxY < J.H / 2 + 0.5, 'a 900-coin jackpot tower rises in the notch and stands without being launched');
+  ok(stood && maxY < J.H / 2 + 0.5 && J.want === 1200, 'the 1200-coin jackpot tower rises in the notch and stands without being launched');
   g.buy('wheel'); g.spinWheel(); g.resolveWheel(0);
   const T2 = g.f.towers.find((T) => T !== J);
   ok(T2 && (T2.state === 'wait' || !J.body), 'a second tower waits while the first one still blocks the notch');
-  let bothDown = false;
-  play(g, 80, 6, () => { if (!g.f.towers.length) bothDown = true; });
-  ok(bothDown, 'both towers rise, get pushed and come down within 80 s');
+  // move the first one on (as the pusher would), then the second rises in the notch
+  J.body.setTranslation({ x: 0, y: J.H / 2 + 0.01, z: 7 }, true);
+  let rose = false;
+  play(g, 10, 6, () => { if (T2.body && T2.state === 'stand') rose = true; });
+  ok(rose, 'once the notch is clear, the waiting tower rises');
 }
 
 // ---------------------------------------------------------------- token row: triples, volleys, combo

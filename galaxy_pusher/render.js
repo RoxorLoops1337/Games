@@ -6,6 +6,7 @@ export const COLS = {
   B: { main: '#2fb4ff', dark: '#0d5fa8', light: '#a8e4ff', glow: '#5cd0ff', name: 'BLUE' },
   P: { main: '#ff4fb0', dark: '#a3176a', light: '#ffc0e3', glow: '#ff7ccc', name: 'PINK' },
   Y: { main: '#ffc21f', dark: '#b9700a', light: '#fff0a6', glow: '#ffd75c', name: 'YELLOW' },
+  V: { main: '#a24bff', dark: '#5a1bb0', light: '#dcc0ff', glow: '#b98cff', name: 'VIOLET' },
   JP: { main: '#ff3b47', dark: '#8f0f1a', light: '#ffb3b8', glow: '#ff6b74', name: 'JACKPOT' },
 };
 export const FONT = '"Russo One", "Arial Black", system-ui, sans-serif';
@@ -400,7 +401,7 @@ export function drawWheel(g, cx, cy, R, rot, ball, t, hiPocket, hiT, lights) {
     g.fillStyle = '#05030f'; g.beginPath(); g.arc(hx, hy, R * 0.085, 0, TAU); g.fill(); g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; g.stroke();
     // label
     g.save(); g.translate(Math.cos(am) * R * 0.45, Math.sin(am) * R * 0.45); g.rotate(am + Math.PI / 2);
-    const lab = P.c === 'JP' ? 'JP' : P.x2 ? 'x2' : P.lv ? 'LV↑' : String(TOWER[P.c]);
+    const lab = P.c === 'JP' ? 'JP' : P.lv ? TOWER[P.c] + '↑' : String(TOWER[P.c]);
     txt(g, lab, 0, 0, R * (P.c === 'JP' ? 0.13 : 0.1), '#fff', { lw: R * 0.025 });
     g.restore();
   }

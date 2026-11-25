@@ -6,19 +6,21 @@
 // the combo (a points multiplier) and fills a segment of the meter; a full meter starts DOUBLE TIME. Six tokens
 // without a triple break the combo. Coins are never reused: what falls off the edge scores POINTS (and each won
 // coin is a laser shot at the enemy). Coins to shoot refill slowly and come back as rewards for beating enemies.
-// A defeated enemy spins the Galaxy Wheel; the pocket builds a coin TOWER (blue 330, yellow 360, pink 720, JP 900).
+// A defeated enemy spins the Galaxy Wheel; the pocket builds a coin TOWER of 300, 400, 600, 900 or (jackpot) 1200 coins.
 import { W, KINDS, isToken, mulberry } from './machine.js';
 export { W, isToken, mulberry };
 export const KIND = KINDS;
 
 export const ROW = 6;
 export const COL = ['B', 'P', 'Y'];   // blue = Rox, pink = Jas, yellow = Mew
-export const TOWER = { B: 330, Y: 360, P: 720, JP: 900 };   // the cabinet's own numbers
+export const TOWER = { B: 300, Y: 400, P: 600, V: 900, JP: 1200 };   // tower sizes like the cabinet's (1200 is the biggest)
 // The wheel: 12 pockets clockwise from the top. c = tower colour, x2 = gold coins (pay double), lv = every hero levels up.
+// 12 pockets: blue 300 (x4), yellow 400 (x3), pink 600 (x2), violet 900 (x2), one red jackpot 1200.
+// lv = every hero levels up too; the violet and jackpot towers are gold coins (worth double).
 export const WHEEL = [
-  { c: 'B', x2: true }, { c: 'P' }, { c: 'Y', x2: true }, { c: 'JP' },
-  { c: 'B' }, { c: 'P' }, { c: 'Y' }, { c: 'B', lv: true },
-  { c: 'P' }, { c: 'Y', x2: true }, { c: 'B' }, { c: 'Y', lv: true },
+  { c: 'B' }, { c: 'P' }, { c: 'Y' }, { c: 'JP' },
+  { c: 'B' }, { c: 'V' }, { c: 'Y' }, { c: 'B', lv: true },
+  { c: 'P' }, { c: 'Y', lv: true }, { c: 'B' }, { c: 'V' },
 ];
 export const HEROES = [
   { id: 'rox', name: 'Rox', col: 'B', base: 12 },
@@ -232,8 +234,8 @@ export class Game {
     if (P.c === 'JP') this.stats.jp++;
     if (P.lv) for (const h of this.heroes) { h.lv++; h.xp = 0; this.out.push({ t: 'levelUp', col: h.col, lv: h.lv }); }
     const n = TOWER[P.c];
-    const crown = P.c === 'JP' ? ['B', 'P', 'Y'] : [P.c, P.c];
-    this.f.placeTower(n, { gold: !!P.x2 || P.c === 'JP', col: P.c, crown });
+    const crown = P.c === 'JP' || P.c === 'V' ? ['B', 'P', 'Y'] : [P.c, P.c];
+    this.f.placeTower(n, { gold: P.c === 'JP' || P.c === 'V', col: P.c, crown });
     this.out.push({ t: 'tower', P, n });
     this.nextFoe();
   }

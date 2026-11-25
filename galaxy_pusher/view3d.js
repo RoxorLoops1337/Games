@@ -3,7 +3,7 @@
 // tower body's transform. The 2D overlay (battle, HUD, wheel) is drawn on a separate canvas above this one.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
-import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, NOTCH_W, BACK_RECESS, FACE_RET, TOWER_R, Machine } from './machine.js';
+import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, NOTCH_W, BACK_RECESS, FACE_RET, TOWER_R, GLASS_Z, Machine } from './machine.js';
 import { sprite, COLS } from './render.js';
 
 const MAX = { c: 1500, g: 1100, B: 60, P: 60, Y: 60 };
@@ -112,6 +112,14 @@ export class View3D {
     const ring = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 5.6), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
     ring.position.set(-(NOTCH_W + sideW / 2), PH + 7.4, BACK_WALL + 0.05); S.add(ring);
     this.ringKey = '';
+    // the front window the player looks through: faint diagonal reflections, and impact flashes when a tower smacks it
+    const gc = mk(256, 256), gg = gc.getContext('2d');
+    for (let i = 0; i < 5; i++) { const x = 30 + i * 52 + (i % 2) * 20; const gr2 = gg.createLinearGradient(x, 0, x + 40, 256); gr2.addColorStop(0, 'rgba(255,255,255,0)'); gr2.addColorStop(0.5, `rgba(255,255,255,${0.10 + (i % 2) * 0.06})`); gr2.addColorStop(1, 'rgba(255,255,255,0)'); gg.fillStyle = gr2; gg.beginPath(); gg.moveTo(x, 0); gg.lineTo(x + 18 + i * 3, 0); gg.lineTo(x - 50 + i * 3, 256); gg.lineTo(x - 68, 256); gg.fill(); }
+    this.glass = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, 34), new THREE.MeshBasicMaterial({ map: canvasTex(gc), transparent: true, opacity: 0.55, depthWrite: false }));
+    this.glass.position.set(0, 13, GLASS_Z); S.add(this.glass);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(W + 2.4, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x1b1438, metalness: 0.7, roughness: 0.3 }));
+    frame.position.set(0, -2.6, GLASS_Z); S.add(frame);
+    this.hits = [];
     // pusher: a chrome block with a glowing front edge
     this.pusher = new THREE.Group();
     // the block with its half-circle notch, drawn as a 2D outline (x, -z) extruded upward by the shelf height
@@ -210,7 +218,7 @@ export class View3D {
     cam.fov = w / h < 0.75 ? 36 : 42;
     const target = new THREE.Vector3(0, 0, 2.5);
     const dir = new THREE.Vector3(0, Math.sin(1.12), Math.cos(1.12)).normalize();    // looking down ~64 degrees from the player side
-    const pts = [[-W / 2, 0, EDGE + 0.6], [W / 2, 0, EDGE + 0.6], [-W / 2, 0, BACK_WALL], [W / 2, 0, BACK_WALL], [-W / 2, PH + 9.5, BACK_WALL], [W / 2, PH + 9.5, BACK_WALL], [0, -2.6, EDGE + 1.4]].map((p) => new THREE.Vector3(...p));
+    const pts = [[-W / 2, 0, EDGE + 0.6], [W / 2, 0, EDGE + 0.6], [-W / 2, 0, BACK_WALL], [W / 2, 0, BACK_WALL], [-W / 2, PH + 9.5, BACK_WALL], [W / 2, PH + 9.5, BACK_WALL], [0, -2.6, EDGE + 1.4], [-W / 2, 0, GLASS_Z], [W / 2, 0, GLASS_Z]].map((p) => new THREE.Vector3(...p));   // the window zone in front, where towers smack
     const span = (d) => {
       cam.position.copy(target).addScaledVector(dir, d); cam.lookAt(target); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -226,6 +234,12 @@ export class View3D {
     cam.setViewOffset(w, h, xc * w / 2, (-1 - S.y0) * h / 2 - 2, w, h);
     cam.updateProjectionMatrix();
     this.w = w; this.h = h;
+  }
+  smack(x, y) {
+    const flash = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.2, 40), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
+    for (const o of [flash, ring]) { o.position.set(x, Math.max(1, y), GLASS_Z - 0.05); this.scene.add(o); }
+    this.hits.push({ flash, ring, t: 0 });
   }
   project(x, y, z, rect) {
     const v = this._pv || (this._pv = new THREE.Vector3());
@@ -286,6 +300,10 @@ export class View3D {
     for (const g of this.guards) { g.visible = game.guardT > 0; g.material.opacity = 0.3 + 0.15 * Math.sin(t * 8); }
     const lifting = M.towers.some((T) => T.state === 'wait' || T.state === 'build');
     this.lift.material.opacity = lifting ? 0.55 + 0.45 * Math.sin(t * 12) : 0.25;
+    // glass impacts: a bright splash that spreads as a ring and fades
+    for (const h of this.hits) { h.t += 1 / 60; const k = h.t / 0.9; h.flash.material.opacity = Math.max(0, 0.9 * (1 - k * 2)); h.ring.scale.setScalar(1 + k * 9); h.ring.material.opacity = Math.max(0, 0.7 * (1 - k)); }
+    this.hits = this.hits.filter((h) => { if (h.t < 0.9) return true; this.scene.remove(h.flash, h.ring); return false; });
+    this.glass.material.opacity = 0.55 + (this.hits.length ? 0.3 * Math.max(0, 1 - this.hits[0].t * 3) : 0);
     this.drawRing(game, t);
     this.renderer.render(this.scene, this.camera);
   }
