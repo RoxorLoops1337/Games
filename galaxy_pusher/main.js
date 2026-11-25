@@ -50,6 +50,9 @@ let wheel = null;
 let shake = 0, flash = 0, edgeGlow = 0, combo = 0, comboT = 0, payAcc = 0, payAccT = 0, payAccX = W / 2;
 let aim = 0.5, aimShown = 0.5, firing = false, fireBtn = false, auto = false, paused = true, started = false;
 let bankShown = 0, bankPop = 0, t = 0;
+let tip = null, tipsSeen = {};
+try { tipsSeen = JSON.parse(localStorage.getItem('galaxy_pusher_tips') || '{}') || {}; } catch (e) { tipsSeen = {}; }
+function showTip(id, text) { if (tipsSeen[id]) return; tipsSeen[id] = 1; try { localStorage.setItem('galaxy_pusher_tips', JSON.stringify(tipsSeen)); } catch (e) { /* */ } tip = { text, t: 0 }; }
 
 function mkFoeView(foe, enter) {
   return { kind: foe.kind, name: foe.name, boss: foe.boss, max: foe.max, shown: foe.hp, lag: foe.hp, dx: enter ? 200 : 0, dy: 0, flash: 0, alpha: enter ? 0 : 1, scale: 1, enter: enter ? 0 : 1 };
@@ -311,6 +314,7 @@ function update(dt) {
   fx.flyers = fx.flyers.filter((f) => f.t < f.dur);
   for (const f of landed) {
     B.row.push(f.k); const i = B.row.length - 1; B.rowPop[i] = 1; S.slot(i);
+    showTip('row', 'Get 3 of a colour and that hero attacks!');
     const same = B.row.filter((q) => q === f.k).length;
     if (same >= 3) {
       // three of a kind: they fly to the hero
@@ -368,6 +372,7 @@ function update(dt) {
   if (payAccT <= 0 && payAcc > 0) { const [x, y] = edgePoint(payAccX); floatText('+' + payAcc, x, y - 10, '#ffd75c', payAcc >= 10 ? 22 : 16, 0.9, -60); payAcc = 0; }
   bankShown += (game.bank - bankShown) * Math.min(1, dt * 10); if (Math.abs(game.bank - bankShown) < 0.5) bankShown = game.bank;
   bankPop = Math.max(0, bankPop - dt * 4);
+  if (tip) { tip.t += dt; if (tip.t > 4) tip = null; }
   for (const f of fx.bankFly) f.t += dt;
   if (fx.bankFly.some((f) => f.t >= f.dur)) { bankPop = 1; S.tick(0.3); }
   fx.bankFly = fx.bankFly.filter((f) => f.t < f.dur);
@@ -420,6 +425,20 @@ function draw() {
     g.drawImage(sprite(f.gold ? 'g' : 'c'), x - sz / 2, y - sz / 2, sz, sz);
   }
   for (const f of fx.floats) { const a = clamp(f.life / f.max * 2, 0, 1), sc = 1 + Math.max(0, (f.life - f.max + 0.15)) * 3; g.globalAlpha = a; txt(g, f.text, f.x, f.y, f.size * sc, f.col); g.globalAlpha = 1; }
+  // first-time hints
+  if (started && !paused && game.stats.shots < 6 && !wheel) {
+    const hx = L.gx + L.gw / 2, hy = L.mach.y + L.mach.h * 0.62, p = 0.5 + 0.5 * Math.sin(t * 5);
+    g.strokeStyle = `rgba(255,215,92,${0.5 + p * 0.5})`; g.lineWidth = 3; g.beginPath(); g.arc(hx, hy, 18 + p * 10, 0, TAU); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(hx, hy, 9, 0, TAU); g.fill();
+    txt(g, 'HOLD TO SHOOT', hx, hy + 44, 16, '#ffd75c', { glow: '#ff8a1f' });
+    txt(g, 'slide to aim', hx, hy + 64, 11, '#fff');
+  }
+  if (tip && tip.t < 4) {
+    const a = tip.t < 0.3 ? tip.t / 0.3 : tip.t > 3.5 ? (4 - tip.t) / 0.5 : 1;
+    const s0 = B.slots[0], s5 = B.slots[ROW - 1];
+    if (s0 && s5) { g.globalAlpha = a; rr(g, s0[0] - 30, s0[1] + s0[2] * 0.6 + 4, s5[0] - s0[0] + 60, 26, 13); g.fillStyle = 'rgba(8,4,24,0.92)'; g.fill(); g.strokeStyle = '#ffd75c'; g.lineWidth = 1.5; g.stroke();
+      txt(g, tip.text, (s0[0] + s5[0]) / 2, s0[1] + s0[2] * 0.6 + 17, 11, '#fff', { lw: 2 }); g.globalAlpha = 1; }
+  }
   // wheel overlay
   if (wheel) drawWheelOverlay();
   // banners
