@@ -1,6 +1,6 @@
 // Galaxy Pusher drawing: perspective camera for the machine, coin sprites, the battle screen,
 // the cat mech, the enemies and the Galaxy Wheel. Pure drawing: state comes in, pixels go out.
-import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, TH_T, RING_N, RING_R, TWIST, towerLayers, ROW, ENERGY_MAX, FEVER_TIME, heroAtk, xpNeed } from './core.js';
+import { W, FRONT, BACK, PH, GUT, KIND, CHUTE_Z, WHEEL, TOWER, TH_T, RING_N, RING_R, TWIST, towerLayers, ROW, COMBO_FULL, comboMult, FEVER_TIME, heroAtk, xpNeed } from './core.js';
 
 export const COLS = {
   B: { main: '#2fb4ff', dark: '#0d5fa8', light: '#a8e4ff', glow: '#5cd0ff', name: 'BLUE' },
@@ -33,10 +33,11 @@ export function makeCam(rect) {
   const pts = [[0, BACK, 0], [W, BACK, 0], [0, FRONT, 0], [W, FRONT, 0], [0, BACK, 8.5], [W, BACK, 8.5], [0, FRONT + 1.2, -2.2], [W, FRONT + 1.2, -2.2]].map((p) => raw(...p));
   let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9; for (const [a, b] of pts) { u0 = Math.min(u0, a); u1 = Math.max(u1, a); v0 = Math.min(v0, b); v1 = Math.max(v1, b); }
   const s = Math.min(rect.w * 1.0 / (u1 - u0), rect.h * 0.99 / (v1 - v0));
+  const needH = (v1 - v0) * (rect.w / (u1 - u0)) + 6;   // how tall the machine is when it fills the width
   const ox = rect.x + rect.w / 2 - ((u0 + u1) / 2) * s;
   const oy = rect.y + rect.h - 4 + v0 * s;
   const cam = {
-    rect, s, C, key: Math.random(),
+    rect, s, C, key: Math.random(), needH,
     // returns screen x, y, k (px per unit at that depth) and q (how flat a horizontal disc looks there)
     P(x, y, z) {
       const dx = x - C[0], dy = y - C[1], dz = z - C[2];
@@ -242,15 +243,17 @@ export function drawMachine(g, cam, game, V) {
   if (!bgCache || bgCache.key !== V.key) bgCache = { key: V.key, c: machineBackdrop(cam, rect, V.dpr) };
   g.drawImage(bgCache.c, 0, 0, bgCache.c.width / V.dpr, bgCache.c.height / V.dpr);
   const t = V.t;
-  // energy ring on the back wall
-  const ec = cam.P(W - 3.2, BACK, 4.2), er = 2.2 * ec.k;
+  // combo ring on the back wall: fills one segment per three-of-a-kind, full = DOUBLE TIME
+  const ec = cam.P(W / 2, BACK, 5.6), er = 2.3 * ec.k;
   g.save();
   g.lineWidth = er * 0.18; g.strokeStyle = 'rgba(0,0,0,0.5)'; g.beginPath(); g.arc(ec.x, ec.y, er, 0, TAU); g.stroke();
-  const en = game.fever > 0 ? game.fever / FEVER_TIME : game.energy / ENERGY_MAX;
+  const en = game.fever > 0 ? game.fever / FEVER_TIME : game.meter / COMBO_FULL;
   const rg = g.createLinearGradient(ec.x - er, 0, ec.x + er, 0); rg.addColorStop(0, '#2fb4ff'); rg.addColorStop(0.5, '#ff4fb0'); rg.addColorStop(1, '#ffc21f');
   g.strokeStyle = game.fever > 0 ? `hsl(${(t * 300) % 360},100%,65%)` : rg; g.shadowColor = g.strokeStyle; g.shadowBlur = 12 + (game.fever > 0 ? 10 * Math.sin(t * 12) : 0);
   g.beginPath(); g.arc(ec.x, ec.y, er, -Math.PI / 2, -Math.PI / 2 + TAU * en); g.stroke(); g.shadowBlur = 0;
-  txt(g, game.fever > 0 ? 'x2' : Math.floor(en * 100) + '%', ec.x, ec.y, Math.max(9, er * (game.fever > 0 ? 0.7 : 0.42)), game.fever > 0 ? '#fff' : '#ffd75c');
+  if (game.fever <= 0) for (let i = 0; i < COMBO_FULL; i++) { const a = -Math.PI / 2 + (i * TAU) / COMBO_FULL; g.fillStyle = '#05030f'; g.beginPath(); g.arc(ec.x + Math.cos(a) * er, ec.y + Math.sin(a) * er, er * 0.07, 0, TAU); g.fill(); }
+  txt(g, game.fever > 0 ? 'x2' : 'x' + comboMult(game.combo).toFixed(2).replace(/0$/, '').replace(/\.0$/, ''), ec.x, ec.y - er * 0.08, Math.max(9, er * (game.fever > 0 ? 0.7 : 0.4)), game.fever > 0 ? '#fff' : '#ffd75c');
+  txt(g, game.fever > 0 ? Math.ceil(game.fever) + 's' : 'COMBO ' + game.combo, ec.x, ec.y + er * 0.38, Math.max(7, er * 0.2), '#bfe6ff', { lw: 2 });
   g.restore();
   // pusher block: top shelf + front face
   const pf = f.pf;
@@ -379,26 +382,33 @@ function drawTower(g, cam, T, t, dpr) {
   }
 }
 
-// launcher: a glowing nozzle that slides along the top of the back wall
-export function drawLauncher(g, cam, aim, t, firing, bank) {
-  const x = lerp(1.2, W - 1.2, aim);
-  const p = cam.P(x, BACK + 0.3, CHUTE_Z + 0.6), q = cam.P(x, BACK + 3.2, PH);
-  // rail
-  const a = cam.P(0.6, BACK + 0.3, CHUTE_Z + 0.6), b = cam.P(W - 0.6, BACK + 0.3, CHUTE_Z + 0.6);
-  g.strokeStyle = 'rgba(120,200,255,0.35)'; g.lineWidth = 4; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
-  // aim guide
-  g.setLineDash([4, 6]); g.lineDashOffset = -t * 30; g.strokeStyle = 'rgba(255,215,92,0.55)'; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(p.x, p.y + 6); g.lineTo(q.x, q.y); g.stroke(); g.setLineDash([]);
-  g.fillStyle = 'rgba(255,215,92,0.4)'; g.beginPath(); g.ellipse(q.x, q.y, 1.1 * q.k, 1.1 * q.k * q.q, 0, 0, TAU); g.fill();
-  // nozzle
-  const s = Math.max(10, p.k * 1.4);
-  g.save(); g.translate(p.x, p.y);
-  rr(g, -s, -s * 0.7, s * 2, s * 1.3, s * 0.4); const gr = g.createLinearGradient(0, -s, 0, s); gr.addColorStop(0, '#ffe680'); gr.addColorStop(1, '#ff8a1f'); g.fillStyle = gr; g.fill();
-  g.lineWidth = 2; g.strokeStyle = '#3a1d05'; g.stroke();
-  g.fillStyle = firing ? '#fff' : '#3a1d05'; rr(g, -s * 0.55, s * 0.2, s * 1.1, s * 0.35, 3); g.fill();
-  if (firing) { g.shadowColor = '#ffd75c'; g.shadowBlur = 16; g.fillStyle = 'rgba(255,240,180,0.8)'; g.fillRect(-s * 0.5, s * 0.25, s, s * 0.25); g.shadowBlur = 0; }
-  if (bank <= 0) txt(g, 'EMPTY', 0, -s * 1.3, 11, '#ff6b74');
-  g.restore();
+// the two coin shooters in the back corners: a turret whose barrel points in toward the middle
+export function drawShooters(g, cam, t, st) {
+  for (const side of ['L', 'R']) {
+    const S = st[side], L = side === 'L', x = L ? 1.4 : W - 1.4;
+    const p = cam.P(x, BACK + 1.2, CHUTE_Z), k = p.k, dir = L ? 1 : -1;
+    const glow = S.glow, col = S.col ? COLS[S.col] : null;
+    g.save(); g.translate(p.x, p.y);
+    // mount
+    g.fillStyle = '#2a2f3d'; g.strokeStyle = '#120a1f'; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(-1.1 * k, 1.6 * k); g.lineTo(1.1 * k, 1.6 * k); g.lineTo(0.6 * k, 0); g.lineTo(-0.6 * k, 0); g.closePath(); g.fill(); g.stroke();
+    // barrel, recoiling when it fires
+    const rec = S.flash * 0.35 * k;
+    g.save(); g.rotate(dir * 0.35); g.translate(-dir * rec, 0);
+    const bg = g.createLinearGradient(0, -0.5 * k, 0, 0.5 * k); bg.addColorStop(0, '#e8eef8'); bg.addColorStop(0.5, '#8c95ad'); bg.addColorStop(1, '#3d4456');
+    g.fillStyle = bg; rr(g, L ? 0 : -2.3 * k, -0.5 * k, 2.3 * k, 1.0 * k, 0.3 * k); g.fill(); g.stroke();
+    g.fillStyle = col ? col.main : '#ffc21f'; g.fillRect(L ? 1.6 * k : -1.9 * k, -0.52 * k, 0.3 * k, 1.04 * k);
+    if (S.flash > 0) { g.globalAlpha = S.flash; g.fillStyle = '#fff6c0'; g.shadowColor = '#ffd75c'; g.shadowBlur = 14; g.beginPath(); g.arc(dir * 2.5 * k, 0, 0.38 * k * (0.5 + S.flash), 0, TAU); g.fill(); g.shadowBlur = 0; g.globalAlpha = 1; }
+    g.restore();
+    // body: a round turret with a neon ring
+    const tg = g.createRadialGradient(-0.3 * k, -0.3 * k, 0, 0, 0, 1.1 * k); tg.addColorStop(0, '#ffe680'); tg.addColorStop(1, '#ff8a1f');
+    g.fillStyle = tg; g.beginPath(); g.arc(0, 0, 1.05 * k, 0, TAU); g.fill(); g.lineWidth = 1.2; g.stroke();
+    g.strokeStyle = col ? col.glow : (glow ? '#ffffff' : '#5cd0ff'); g.lineWidth = 2; g.shadowColor = g.strokeStyle; g.shadowBlur = 6 + glow * 14;
+    g.beginPath(); g.arc(0, 0, 0.7 * k, 0, TAU); g.stroke(); g.shadowBlur = 0;
+    txt(g, side, 0, 0.5, Math.max(8, k * 0.8), '#3a1d05', { stroke: false });
+    if (S.left > 0) txt(g, '+' + S.left, dir * 1.2 * k, -1.7 * k, Math.max(12, k * 1.2), col ? col.light : '#fff', { glow: col ? col.glow : '#fff' });
+    g.restore();
+  }
 }
 
 // ------------------------------------------------------------------------------------------------ battle screen

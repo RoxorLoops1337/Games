@@ -1,6 +1,6 @@
 // Galaxy Pusher: game loop, input, presentation (animations, effects) and saves.
-import { Game, ITEMS, ITEM_ORDER, GUT, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS } from './core.js';
-import { makeCam, buildSprites, drawMachine, drawLauncher, drawBattle, drawWheel, pocketAngle, drawCoin, sprite, txt, rr, COLS, FONT, resetBackdrop } from './render.js';
+import { Game, ITEMS, ITEM_ORDER, GUT, W, FRONT, PH, BACK, CHUTE_Z, WHEEL, TOWER, TH_T, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS, COMBO_FULL, comboMult, FEVER_TIME, AUTO_SHOTS } from './core.js';
+import { makeCam, buildSprites, drawMachine, drawShooters, drawBattle, drawWheel, pocketAngle, drawCoin, sprite, txt, rr, COLS, FONT, resetBackdrop } from './render.js';
 import { A, S, Music } from './audio.js';
 
 const SAVE_KEY = 'galaxy_pusher_v1';
@@ -48,8 +48,9 @@ let actions = [];          // queued hero attacks (played one after another)
 let killPending = false, killWait = 0, dying = null;
 let wheel = null;
 let shake = 0, flash = 0, edgeGlow = 0, combo = 0, comboT = 0, payAcc = 0, payAccT = 0, payAccX = W / 2;
-let aim = 0.5, aimShown = 0.5, firing = false, fireBtn = false, auto = false, paused = true, started = false;
-let bankShown = 0, bankPop = 0, t = 0;
+let firing = null, fireL = false, fireR = false, auto = false, autoSide = 'L', paused = true, started = false;
+let bankShown = 0, bankPop = 0, scoreShown = 0, scorePop = 0, comboPop = 0, t = 0;
+const shooter = { L: { flash: 0, glow: 0, left: 0, col: null }, R: { flash: 0, glow: 0, left: 0, col: null } };
 let tip = null, tipsSeen = {};
 try { tipsSeen = JSON.parse(localStorage.getItem('galaxy_pusher_tips') || '{}') || {}; } catch (e) { tipsSeen = {}; }
 function showTip(id, text) { if (tipsSeen[id]) return; tipsSeen[id] = 1; try { localStorage.setItem('galaxy_pusher_tips', JSON.stringify(tipsSeen)); } catch (e) { /* */ } tip = { text, t: 0 }; }
@@ -62,7 +63,7 @@ function syncView() {
   B.row = game.row.slice(); B.rowPop = [];
   B.foe = game.foe ? mkFoeView(game.foe, false) : null;
   B.stage = stageLabel();
-  bankShown = game.bank;
+  bankShown = game.bank; scoreShown = game.score;
 }
 
 // ------------------------------------------------------------------------------------------------ layout
@@ -75,20 +76,20 @@ function layout() {
   const st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0;
   const gw = Math.min(VW, Math.max(320, VH * 0.6), 560), gx = (VW - gw) / 2;
   const hud = { x: gx, y: st, w: gw, h: 42 };
-  const bh = clamp(gw * 0.5, 150, VH * 0.24);
-  const battle = { x: gx + 6, y: hud.y + hud.h, w: gw - 12, h: bh };
-  const barH = 62;
+  const barH = 66;
   const bar = { x: gx, y: VH - sb - barH, w: gw, h: barH };
+  // the machine fills the width; the battle screen takes whatever height is left, so nothing sits empty
+  const need = makeCam({ x: gx, y: 0, w: gw, h: 4000 }).needH;
+  const bh = clamp(bar.y - (hud.y + hud.h) - need - 4, 150, VH * 0.36);
+  const battle = { x: gx + 6, y: hud.y + hud.h, w: gw - 12, h: bh };
   const mach = { x: gx, y: battle.y + battle.h + 4, w: gw, h: bar.y - (battle.y + battle.h + 4) };
   L = { gw, gx, hud, battle, bar, mach, st, sb };
   cam = makeCam(mach);
   resetBackdrop();
-  const fb = document.getElementById('fireBtn'), ab = document.getElementById('autoBtn');
-  const bs = Math.min(64, barH - 8);
-  Object.assign(fb.style, { left: (gx + gw - bs * 1.9 - 10) + 'px', top: (bar.y + (barH - bs) / 2) + 'px', width: bs * 1.9 + 'px', height: bs + 'px' });
-  Object.assign(ab.style, { left: (gx + 10) + 'px', top: (bar.y + (barH - bs * 0.8) / 2) + 'px', width: bs * 1.1 + 'px', height: bs * 0.8 + 'px' });
-  Object.assign(document.getElementById('itemBtn').style, { left: (gx + 16 + bs * 1.1) + 'px', top: (bar.y + (barH - bs * 0.8) / 2) + 'px', width: bs * 1.15 + 'px', height: bs * 0.8 + 'px' });
-  L.lever = { x0: gx + 30 + bs * 2.25, x1: gx + gw - bs * 1.9 - 24 };
+  const bs = Math.min(60, barH - 8), fw = Math.min(gw * 0.3, bs * 2.1), sw = (gw - fw * 2 - 40) / 2;
+  const put = (id, x, w, h) => Object.assign(document.getElementById(id).style, { left: x + 'px', top: (bar.y + (barH - h) / 2) + 'px', width: w + 'px', height: h + 'px' });
+  put('fireL', gx + 10, fw, bs); put('fireR', gx + gw - 10 - fw, fw, bs);
+  put('autoBtn', gx + 20 + fw, sw, bs * 0.8); put('itemBtn', gx + 20 + fw + sw, sw, bs * 0.8);
   const mb = document.getElementById('menuBtn');
   Object.assign(mb.style, { left: (gx + gw - 46) + 'px', top: (st + 5) + 'px' });
 }
@@ -101,15 +102,18 @@ cv.addEventListener('pointerdown', (e) => {
   if (!started || paused) return;
   A.unlock();
   if (wheel && wheel.phase === 'show' && wheel.t > 0.6) { wheel.t = Math.max(wheel.t, wheel.showEnd - 0.2); return; }
-  if (inMachine(e.clientX, e.clientY)) { aimPtr = e.pointerId; aim = cam.aimOf(e.clientX); firing = true; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* */ } }
+  // hold on the left half for the left shooter, the right half for the right one
+  if (inMachine(e.clientX, e.clientY)) { aimPtr = e.pointerId; firing = e.clientX < L.gx + L.gw / 2 ? 'L' : 'R'; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* */ } }
 });
-cv.addEventListener('pointermove', (e) => { if (aimPtr === e.pointerId) aim = cam.aimOf(e.clientX); });
-const endPtr = (e) => { if (aimPtr === e.pointerId) { aimPtr = null; firing = false; } };
+cv.addEventListener('pointermove', (e) => { if (aimPtr === e.pointerId) firing = e.clientX < L.gx + L.gw / 2 ? 'L' : 'R'; });
+const endPtr = (e) => { if (aimPtr === e.pointerId) { aimPtr = null; firing = null; } };
 cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
-const fireEl = document.getElementById('fireBtn');
-fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); A.unlock(); fireBtn = true; fireEl.classList.add('on'); });
-const fireUp = () => { fireBtn = false; fireEl.classList.remove('on'); };
-fireEl.addEventListener('pointerup', fireUp); fireEl.addEventListener('pointercancel', fireUp); fireEl.addEventListener('pointerleave', fireUp);
+for (const side of ['L', 'R']) {
+  const el = document.getElementById('fire' + side);
+  const set = (on) => { if (side === 'L') fireL = on; else fireR = on; el.classList.toggle('on', on); };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); A.unlock(); set(true); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => set(false));
+}
 const autoEl = document.getElementById('autoBtn');
 autoEl.addEventListener('click', () => { auto = !auto; autoEl.classList.toggle('on', auto); S.click(); });
 const keys = {};
@@ -235,7 +239,12 @@ function stepWheel(dt) {
 // ------------------------------------------------------------------------------------------------ core events -> presentation
 function handle(e) {
   switch (e.t) {
-    case 'fire': S.fire(); break;
+    case 'fire': S.fire(); shooter[e.side].flash = 1; break;
+    case 'autoShot': S.fire(); shooter[e.side].flash = 1; shooter[e.side].left = e.left; if (e.left <= 0) shooter[e.side].col = null; break;
+    case 'autoStart': { const S2 = shooter[e.side]; S2.glow = 1; S2.col = e.col; S2.left = e.n; const p = cam.P(e.side === 'L' ? 1.4 : W - 1.4, 1.2, CHUTE_Z); floatText(`+${e.n} FREE`, p.x + (e.side === 'L' ? 40 : -40), p.y + 30, COLS[e.col].light, 18, 1.2, -30); break; }
+    case 'combo': comboPop = 1; if (e.combo >= 2) floatText(`COMBO ${e.combo}  x${e.mult.toFixed(2).replace(/0$/, '')}`, L.gx + L.gw / 2, L.mach.y + L.mach.h * 0.12, '#ffd75c', 16, 1.2, -20); break;
+    case 'comboBreak': if (e.combo > 0) { banner('COMBO BREAK', '#ff6b74', `6 slots, no three of a kind · combo ${e.combo} lost`, 1.5, 0.9); S.lost(); addShake(4); } else banner('ROW FULL', '#ff6b74', 'no three of a kind', 1.0, 0.7); buzz(60); break;
+    case 'reward': floatText(`+${e.coins} coins`, L.hud.x + 60, L.hud.y + 40, '#ffd75c', 15, 1.4, -15); bankPop = 1; break;
     case 'land': if (e.v > 7) S.land(e.v / 10); break;
     case 'clink': S.clink(e.v / 8); break;
     case 'pay': {
@@ -246,7 +255,6 @@ function handle(e) {
       payAcc += e.v; payAccT = 0.35; payAccX = e.x;
       if (fx.bankFly.length < 14) fx.bankFly.push({ x0: x, y0: y, t: 0, dur: 0.55 + Math.random() * 0.2, gold: e.k === 'g' });
       edgeGlow = Math.min(1, edgeGlow + 0.15);
-      bankPop = 1;
       if (B.foe) { const [fx_, fy] = foePos(); fx.lasers.push({ x0: L.battle.x + L.battle.w * 0.5, y0: L.battle.y + L.battle.h * 0.18, x1: fx_, y1: fy, life: 0.18, max: 0.18 }); S.laser(); }
       if (e.v) releaseChip(e.v > 1 ? 2 : 1);
       break;
@@ -272,7 +280,7 @@ function handle(e) {
     }
     case 'kill': killPending = true; killWait = 0; break;
     case 'foe': B.foe = mkFoeView(e.foe, true); B.stage = stageLabel(); if (e.foe.boss) banner('BOSS!', '#ff3b47', e.foe.name, 1.6, 1.1); else banner(e.foe.name.toUpperCase(), '#5cd0ff', 'incoming', 1.0, 0.7); break;
-    case 'fever': banner('DOUBLE TIME!', '#fff', 'double damage · double coins', 1.8, 1.2); S.fever(); Music.fever(true); addShake(5); buzz([20, 30, 20]); break;
+    case 'fever': banner('DOUBLE TIME!', '#fff', 'combo meter full · double damage and points', 1.8, 1.2); S.fever(); Music.fever(true); addShake(5); buzz([20, 30, 20]); break;
     case 'feverEnd': Music.fever(false); break;
     case 'bonus': break;
     case 'towerStart': break;
@@ -282,7 +290,7 @@ function handle(e) {
     case 'fall': S.topple(); addShake(4); break;
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
-    case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;
+    case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins to shoot`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;
     case 'item': {
       const I = ITEMS[e.id]; banner(I.name.toUpperCase() + '!', ICON[e.id][1], e.id === 'guard' ? 'gutters closed' : e.id === 'turbo' ? 'pusher at double speed' : e.id === 'wheel' ? 'bonus spin' : e.id === 'rain' ? 'tokens incoming' : 'everything jolts forward', 1.2, 0.9);
       S.fever(); break;
@@ -298,12 +306,12 @@ function releaseChip(n) { const E = B.foe; if (!E) return; E.shown = Math.max(0,
 let saveT = 0, last = 0;
 function update(dt) {
   t += dt;
-  // aim + firing
-  if (keys.ArrowLeft) aim = clamp(aim - dt * 0.8, 0, 1);
-  if (keys.ArrowRight) aim = clamp(aim + dt * 0.8, 0, 1);
-  aimShown += (aim - aimShown) * Math.min(1, dt * 14);
-  const wantFire = (firing || fireBtn || auto || keys.Space) && !paused;
-  if (wantFire && game.canFire()) { if (game.fire(aimShown)) buzz(6); }
+  // firing: the side you hold; AUTO and both sides held take turns
+  let side = null;
+  const wantL = fireL || firing === 'L' || keys.ArrowLeft, wantR = fireR || firing === 'R' || keys.ArrowRight;
+  if (wantL && wantR) side = autoSide; else if (wantL) side = 'L'; else if (wantR) side = 'R'; else if (auto || keys.Space) side = autoSide;
+  if (side && !paused && game.canFire() && game.fire(side)) { buzz(6); autoSide = autoSide === 'L' ? 'R' : 'L'; }
+  for (const k of ['L', 'R']) { shooter[k].flash = Math.max(0, shooter[k].flash - dt * 8); shooter[k].glow = Math.max(game.autoQ.some((A) => A.side === k) ? 1 : 0, shooter[k].glow - dt * 2); }
   if (!paused) game.tick(dt);
   for (const e of game.out) handle(e);
   game.out.length = 0;
@@ -371,10 +379,12 @@ function update(dt) {
   comboT -= dt; payAccT -= dt;
   if (payAccT <= 0 && payAcc > 0) { const [x, y] = edgePoint(payAccX); floatText('+' + payAcc, x, y - 10, '#ffd75c', payAcc >= 10 ? 22 : 16, 0.9, -60); payAcc = 0; }
   bankShown += (game.bank - bankShown) * Math.min(1, dt * 10); if (Math.abs(game.bank - bankShown) < 0.5) bankShown = game.bank;
+  scoreShown += (game.score - scoreShown) * Math.min(1, dt * 8); if (Math.abs(game.score - scoreShown) < 1) scoreShown = game.score;
+  scorePop = Math.max(0, scorePop - dt * 4); comboPop = Math.max(0, comboPop - dt * 3);
   bankPop = Math.max(0, bankPop - dt * 4);
   if (tip) { tip.t += dt; if (tip.t > 4) tip = null; }
   for (const f of fx.bankFly) f.t += dt;
-  if (fx.bankFly.some((f) => f.t >= f.dur)) { bankPop = 1; S.tick(0.3); }
+  if (fx.bankFly.some((f) => f.t >= f.dur)) { scorePop = 1; S.tick(0.3); }
   fx.bankFly = fx.bankFly.filter((f) => f.t < f.dur);
   for (const p of fx.parts) { p.life -= dt; p.vy += p.grav * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
   fx.parts = fx.parts.filter((p) => p.life > 0);
@@ -402,7 +412,7 @@ function draw() {
   // the machine
   g.save(); g.beginPath(); g.rect(L.mach.x - 20, L.mach.y, L.mach.w + 40, L.mach.h); g.clip();
   drawMachine(g, cam, game, { t, key: VW + 'x' + VH + ':' + dpr, dpr, edgeGlow });
-  drawLauncher(g, cam, aimShown, t, (firing || fireBtn || auto || keys.Space) && game.bank > 0, game.bank);
+  drawShooters(g, cam, t, shooter);
   g.restore();
   // battle screen
   drawBattle(g, L.battle, game, B, t, dpr);
@@ -420,18 +430,21 @@ function draw() {
   }
   for (const f of (fx.flyers2 || [])) { const k = ease(f.t / f.dur), x = lerp(f.x0, f.x1, k), y = lerp(f.y0, f.y1, k) - Math.sin(k * Math.PI) * 30, sz = 30 * (1 - k * 0.6); g.globalAlpha = 1 - k * 0.5; g.drawImage(sprite(f.k), x - sz / 2, y - sz / 2, sz, sz); g.globalAlpha = 1; }
   for (const f of fx.bankFly) {
-    const k = f.t / f.dur, e2 = k * k, tx = L.hud.x + 26, ty = L.hud.y + L.hud.h / 2;
+    const k = f.t / f.dur, e2 = k * k, tx = L.hud.x + L.hud.w * 0.5, ty = L.hud.y + L.hud.h / 2;
     const x = lerp(f.x0, tx, e2) + Math.sin(k * Math.PI) * 40, y = lerp(f.y0, ty, e2), sz = 16 - k * 6;
     g.drawImage(sprite(f.gold ? 'g' : 'c'), x - sz / 2, y - sz / 2, sz, sz);
   }
   for (const f of fx.floats) { const a = clamp(f.life / f.max * 2, 0, 1), sc = 1 + Math.max(0, (f.life - f.max + 0.15)) * 3; g.globalAlpha = a; txt(g, f.text, f.x, f.y, f.size * sc, f.col); g.globalAlpha = 1; }
   // first-time hints
   if (started && !paused && game.stats.shots < 6 && !wheel) {
-    const hx = L.gx + L.gw / 2, hy = L.mach.y + L.mach.h * 0.62, p = 0.5 + 0.5 * Math.sin(t * 5);
-    g.strokeStyle = `rgba(255,215,92,${0.5 + p * 0.5})`; g.lineWidth = 3; g.beginPath(); g.arc(hx, hy, 18 + p * 10, 0, TAU); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(hx, hy, 9, 0, TAU); g.fill();
-    txt(g, 'HOLD TO SHOOT', hx, hy + 44, 16, '#ffd75c', { glow: '#ff8a1f' });
-    txt(g, 'slide to aim', hx, hy + 64, 11, '#fff');
+    const hy = L.mach.y + L.mach.h * 0.6, p = 0.5 + 0.5 * Math.sin(t * 5);
+    for (const fx_ of [0.25, 0.75]) {
+      const hx = L.gx + L.gw * fx_;
+      g.strokeStyle = `rgba(255,215,92,${0.5 + p * 0.5})`; g.lineWidth = 3; g.beginPath(); g.arc(hx, hy, 16 + p * 9, 0, TAU); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(hx, hy, 8, 0, TAU); g.fill();
+      txt(g, fx_ < 0.5 ? 'LEFT' : 'RIGHT', hx, hy + 36, 13, '#fff');
+    }
+    txt(g, 'HOLD TO SHOOT', L.gx + L.gw / 2, hy + 66, 17, '#ffd75c', { glow: '#ff8a1f' });
   }
   if (tip && tip.t < 4) {
     const a = tip.t < 0.3 ? tip.t / 0.3 : tip.t > 3.5 ? (4 - tip.t) / 0.5 : 1;
@@ -470,21 +483,28 @@ function drawBattleFx() {
   g.restore();
 }
 function drawHUD() {
-  const H = L.hud;
-  // coin bank
-  const cx = H.x + 26, cy = H.y + H.h / 2, pop = 1 + bankPop * 0.25;
-  g.save(); g.translate(cx, cy); g.scale(pop, pop); g.rotate(Math.sin(t * 2) * 0.1);
-  g.drawImage(sprite('g'), -14, -14, 28, 28); g.restore();
-  txt(g, String(Math.round(bankShown)), cx + 22, cy + 1, 24, game.bank > 0 ? '#ffd75c' : '#ff6b74', { align: 'left', glow: 'rgba(255,200,60,0.6)', blur: 10 * bankPop });
-  if (game.bank < REGEN_BELOW) {
-    const k = game.regen / REGEN_EVERY; const bx = cx + 22, by = cy + 15; g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(bx, by, 60, 3); g.fillStyle = '#5cd0ff'; g.fillRect(bx, by, 60 * k, 3);
+  const H = L.hud, cy = H.y + H.h / 2;
+  // coins to shoot
+  const cx = H.x + 24, pop = 1 + bankPop * 0.25;
+  g.save(); g.translate(cx, cy); g.scale(pop, pop); g.drawImage(sprite('c'), -13, -13, 26, 26); g.restore();
+  txt(g, String(Math.round(bankShown)), cx + 19, cy, 21, game.bank > 0 ? '#e8eef8' : '#ff6b74', { align: 'left' });
+  if (game.bank < REGEN_BELOW) { const k = game.regen / REGEN_EVERY, bx = cx + 19; g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(bx, cy + 13, 44, 3); g.fillStyle = '#5cd0ff'; g.fillRect(bx, cy + 13, 44 * k, 3); }
+  // points
+  const sx = H.x + H.w * 0.5, sp = 1 + scorePop * 0.15;
+  g.save(); g.translate(sx, cy - 3); g.scale(sp, sp);
+  txt(g, Math.round(scoreShown).toLocaleString('en-US'), 0, 0, 22, '#ffd75c', { glow: 'rgba(255,200,60,0.5)', blur: 8 * scorePop });
+  g.restore();
+  txt(g, 'POINTS', sx, cy + 14, 7, '#9fc6ea', { lw: 2 });
+  // combo meter
+  const mx = H.x + H.w * 0.68, mw = H.w * 0.2, my = cy - 8, fev = game.fever > 0;
+  const cp = 1 + comboPop * 0.3;
+  txt(g, fev ? 'x2' : 'x' + comboMult(game.combo).toFixed(2).replace(/0$/, '').replace(/\.0$/, ''), mx + mw / 2, my + 1, 12 * cp, fev ? '#fff' : '#ffd75c', { lw: 3 });
+  for (let i = 0; i < COMBO_FULL; i++) {
+    const w = mw / COMBO_FULL, x = mx + i * w;
+    rr(g, x + 1, my + 9, w - 2, 7, 3);
+    g.fillStyle = fev ? `hsl(${(t * 300 + i * 40) % 360},100%,62%)` : i < game.meter ? ['#2fb4ff', '#ff4fb0', '#ffc21f'][i % 3] : 'rgba(255,255,255,0.15)'; g.fill();
   }
-  // energy meter in the middle (full = DOUBLE TIME)
-  const ex = H.x + H.w * 0.4, ew = H.w * 0.42, ey = cy - 5;
-  const fev = game.fever > 0, ek = fev ? game.fever / 20 : game.energy / 160;
-  rr(g, ex, ey, ew, 11, 5.5); g.fillStyle = 'rgba(8,4,24,0.85)'; g.fill(); g.strokeStyle = 'rgba(160,210,255,0.4)'; g.lineWidth = 1; g.stroke();
-  if (ek > 0) { rr(g, ex + 1.5, ey + 1.5, Math.max(8, (ew - 3) * ek), 8, 4); if (fev) g.fillStyle = `hsl(${(t * 300) % 360},100%,62%)`; else { const eg = g.createLinearGradient(ex, 0, ex + ew, 0); eg.addColorStop(0, '#2fb4ff'); eg.addColorStop(0.5, '#ff4fb0'); eg.addColorStop(1, '#ffc21f'); g.fillStyle = eg; } g.fill(); }
-  txt(g, fev ? `DOUBLE TIME ${Math.ceil(game.fever)}s` : 'ENERGY', ex + ew / 2, ey + 19, 8, fev ? '#fff' : '#9fc6ea', { lw: 2.5 });
+  txt(g, fev ? `DOUBLE ${Math.ceil(game.fever)}s` : `COMBO ${game.combo}`, mx + mw / 2, my + 23, 7, fev ? '#fff' : '#9fc6ea', { lw: 2 });
   // running items
   let ix = L.mach.x + 8;
   for (const [id, tt] of [['guard', game.guardT], ['turbo', game.turboT]]) {
@@ -498,12 +518,6 @@ function drawBar() {
   const R = L.bar;
   g.fillStyle = 'rgba(8,4,24,0.9)'; g.fillRect(R.x, R.y, R.w, VH - R.y);
   g.strokeStyle = 'rgba(92,208,255,0.4)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(R.x, R.y); g.lineTo(R.x + R.w, R.y); g.stroke();
-  // aim lever track
-  const x0 = L.lever.x0, x1 = L.lever.x1, y = R.y + R.h / 2 - 4;
-  rr(g, x0, y - 4, x1 - x0, 8, 4); g.fillStyle = 'rgba(255,255,255,0.1)'; g.fill();
-  const kx = lerp(x0, x1, aimShown);
-  g.fillStyle = '#ffc21f'; g.strokeStyle = '#3a1d05'; g.lineWidth = 2; g.beginPath(); g.moveTo(kx, y - 14); g.lineTo(kx + 10, y); g.lineTo(kx, y + 14); g.lineTo(kx - 10, y); g.closePath(); g.fill(); g.stroke();
-  txt(g, 'HOLD MACHINE · SLIDE AIM', (x0 + x1) / 2, y + 22, 7, 'rgba(191,230,255,0.7)', { stroke: false });
 }
 function wheelGeo() {
   const R = Math.min(L.gw * 0.43, (L.mach.y + L.mach.h * 0.45 - L.battle.y) * 0.47);
@@ -536,7 +550,7 @@ function buildShop() {
   for (const id of ITEM_ORDER) {
     const I = ITEMS[id], b = document.createElement('button');
     b.className = 'item'; b.dataset.id = id; b.disabled = !game.canBuy(id);
-    b.innerHTML = `<div class="ic" style="background:${ICON[id][1]}">${ICON[id][0]}</div><div class="tx"><b>${I.name}</b>${I.desc}</div><div class="cost">${game.itemCost(id)}</div>`;
+    b.innerHTML = `<div class="ic" style="background:${ICON[id][1]}">${ICON[id][0]}</div><div class="tx"><b>${I.name}</b>${I.desc}</div><div class="cost">${game.itemCost(id).toLocaleString('en-US')}</div>`;
     b.addEventListener('click', () => { if (game.buy(id)) { S.click(); show('shop', false); paused = false; } });
     list.appendChild(b);
   }
