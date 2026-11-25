@@ -16,7 +16,10 @@
 // defeated enemy spins the Galaxy Wheel; the pocket the ball lands in builds a
 // coin TOWER on the field (blue 330, yellow 360, pink 720, JP 900 coins) that the
 // pusher shoves until it topples in a shower of coins. Paid coins charge the
-// energy ring; full energy starts DOUBLE TIME (double damage, double pay).
+// combo meter: every three-of-a-kind adds to the combo (a points multiplier) and a segment of the meter;
+// a full meter starts DOUBLE TIME. Six tokens in the row without a triple break the combo.
+// Coins are never reused: what falls off the edge scores POINTS. Coins to shoot refill slowly, come back
+// as rewards for beating enemies, and a triple makes a shooter fire a free volley (blue 10, yellow 15, pink 25).
 
 export const W = 22, BACK = 0, FRONT = 26;
 export const PMIN = 2.0, PMAX = 6.6, PERIOD = 4.2, PH = 1.0;
@@ -59,18 +62,24 @@ export const SECTORS = [
   { name: 'Void Arcade', foes: ['eel', 'saucer', 'drone2', 'crab', 'boss_squid'] },
 ];
 export const FOE_NAME = { drone: 'Buzz Drone', drone2: 'Twin Drones', crab: 'Scrap Crab', saucer: 'Hoverdisc', eel: 'Volt Eel', boss_mech: 'Titan Mech', boss_squid: 'Nebula Squid' };
-export const ENERGY_MAX = 200, FEVER_TIME = 20;
-export const REGEN_BELOW = 50, REGEN_EVERY = 5;
-export const FIRE_GAP = 0.24;
+export const FEVER_TIME = 20;
+export const START_COINS = 150, REGEN_BELOW = 150, REGEN_EVERY = 1;   // a free coin every second while you hold fewer than 150
+export const FIRE_GAP = 0.24, AUTO_GAP = 0.085;
+export const COIN_PTS = 10;
+export const AUTO_SHOTS = { B: 10, Y: 15, P: 25 };   // free coins a three-of-a-kind fires
+export const COMBO_FULL = 6;                          // triples in a row to fill the meter (DOUBLE TIME)
+export const comboMult = (c) => Math.min(4, 1 + 0.25 * c);
+export const KILL_COINS = 40;
 // items (the cabinet's 道具 button): bought with coins
 export const ITEMS = {
-  quake: { name: 'Quake', cost: 60, desc: 'Bump the table: every coin jolts forward.' },
-  guard: { name: 'Wall Guard', cost: 120, dur: 30, desc: 'Close both corner gutters for 30 s.' },
-  turbo: { name: 'Turbo Push', cost: 150, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
-  rain: { name: 'Token Rain', cost: 150, desc: 'Drop 3 tokens, picked to match your row.' },
-  wheel: { name: 'Tower Call', cost: 900, desc: 'Spin the Galaxy Wheel right now.' },
+  refill: { name: 'Coin Pack', cost: 2500, coins: 80, desc: '80 more coins to shoot.' },
+  quake: { name: 'Quake', cost: 1500, desc: 'Bump the table: every coin jolts forward.' },
+  guard: { name: 'Wall Guard', cost: 3000, dur: 30, desc: 'Close both corner gutters for 30 s.' },
+  turbo: { name: 'Turbo Push', cost: 3000, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
+  rain: { name: 'Token Rain', cost: 4000, desc: 'Drop 3 tokens, picked to match your row.' },
+  wheel: { name: 'Tower Call', cost: 20000, desc: 'Spin the Galaxy Wheel right now.' },
 };
-export const ITEM_ORDER = ['quake', 'guard', 'turbo', 'rain', 'wheel'];
+export const ITEM_ORDER = ['refill', 'quake', 'guard', 'turbo', 'rain', 'wheel'];   // bought with points
 
 export function mulberry(seed) {
   let a = (seed >>> 0) || 0x9e3779b9;
@@ -374,7 +383,14 @@ export class Field {
     this.events.push({ t: 'burst', T, n: T.n });
   }
 
-  // fire one coin (or token) from the chute at the back, aim 0..1 across the machine
+  // fire one coin (or token) from a shooter in a back corner, side 'L' or 'R': it arcs in toward the middle
+  shoot(k, side) {
+    const r = this.rng, L = side !== 'R';
+    const c = this.add(k, L ? 1.4 : W - 1.4, BACK + 1.6, CHUTE_Z);
+    c.vx = (L ? 1 : -1) * (2.5 + r() * 15); c.vy = 1.2 + r() * 2.8; c.vz = 2.5 + r() * 1.5;
+    return c;
+  }
+  // drop straight down from the back at aim 0..1 across the machine
   drop(k, aim) {
     const r = this.rng, rr = KIND[k].r;
     const x = rr + 0.2 + Math.max(0, Math.min(1, aim)) * (W - 2 * rr - 0.4);
@@ -396,19 +412,21 @@ export class Game {
   constructor(seed = 1) {
     this.rng = mulberry(seed);
     this.f = new Field(this.rng);
-    this.bank = 120;
+    this.bank = START_COINS;   // coins to shoot
+    this.score = 0;            // points: what you knock off the edge
+    this.combo = 0; this.meter = 0;
+    this.autoQ = []; this.autoCd = 0; this.nextSide = 'L';
     this.row = [];
     this.heroes = HEROES.map((h) => ({ id: h.id, col: h.col, lv: 1, xp: 0 }));
     this.foeIdx = 0;
     this.foe = foeAt(0);
-    this.energy = 0;
     this.fever = 0;
     this.wheelQ = 0;        // wheels waiting to be spun
     this.pendingDmg = 0;    // damage dealt while no enemy stood (hits the next one)
     this.fireCd = 0;
     this.regen = 0;
     this.out = [];          // game events for the presentation layer
-    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0 };
+    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0, bestCombo: 0 };
     this.time = 0;
     this.tokenEvery = 0;
     this.guardT = 0; this.turboT = 0;
@@ -418,19 +436,20 @@ export class Game {
   atk(col) { return heroAtk(this.hero(col).lv); }
 
   canFire() { return this.bank >= 1 && this.fireCd <= 0; }
-  fire(aim) {
+  fire(side = 'L') {
     if (!this.canFire()) return false;
+    side = side === 'R' ? 'R' : 'L';
     this.bank -= 1; this.fireCd = FIRE_GAP; this.stats.shots++;
-    this.f.drop('c', aim);
+    this.f.shoot('c', side);
     // the machine adds a bonus token now and then (about one in six shots, never twice in a row)
     this.tokenEvery++;
     if (this.tokenEvery >= 4 && this.rng() < 0.2) {
       this.tokenEvery = 0;
       const k = COL[Math.floor(this.rng() * 3)];
-      this.f.drop(k, this.rng());
+      this.f.shoot(k, side);
       this.out.push({ t: 'tokenDrop', k });
     }
-    this.out.push({ t: 'fire', aim });
+    this.out.push({ t: 'fire', side });
     return true;
   }
 
@@ -441,6 +460,16 @@ export class Game {
     if (this.guardT > 0) { this.guardT = Math.max(0, this.guardT - dt); if (!this.guardT) this.out.push({ t: 'itemEnd', id: 'guard' }); }
     if (this.turboT > 0) { this.turboT = Math.max(0, this.turboT - dt); if (!this.turboT) this.out.push({ t: 'itemEnd', id: 'turbo' }); }
     this.f.guard = this.guardT > 0; this.f.speed = this.turboT > 0 ? 2 : 1;
+    // the free volley from a three-of-a-kind
+    if (this.autoQ.length) {
+      this.autoCd -= dt;
+      while (this.autoQ.length && this.autoCd <= 0) {
+        const A = this.autoQ[0];
+        this.f.shoot('c', A.side); A.n--; this.autoCd += AUTO_GAP;
+        this.out.push({ t: 'autoShot', side: A.side, left: A.n });
+        if (A.n <= 0) this.autoQ.shift();
+      }
+    } else this.autoCd = 0;
     if (this.bank < REGEN_BELOW) { this.regen += dt; if (this.regen >= REGEN_EVERY) { this.regen = 0; this.bank++; this.out.push({ t: 'regen' }); } } else this.regen = 0;
     let acc = dt;
     while (acc > 1e-9) { const s = Math.min(DT, acc); this.f.step(s); acc -= s; this.consume(); }
@@ -450,10 +479,12 @@ export class Game {
     const ev = this.f.events;
     for (const e of ev) {
       if (e.t === 'pay') {
-        if (isToken(e.k)) { this.stats.tokens++; this.addEnergy(4); this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); }
+        if (isToken(e.k)) { this.stats.tokens++; this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); }
         else {
-          const v = KIND[e.k].v * (e.mul || 1) * (this.fever > 0 ? 2 : 1);
-          this.bank += v; this.stats.paid += v; this.addEnergy(e.tw ? 0.2 : 0.15);   // knocked-down tower coins charge the ring fastest
+          // coins are not reused: a coin over the edge is points, times the combo and DOUBLE TIME
+          const coins = KIND[e.k].v * (e.mul || 1);
+          const v = Math.round(COIN_PTS * coins * comboMult(this.combo) * (this.fever > 0 ? 2 : 1));
+          this.score += v; this.stats.paid += coins; this.stats.best = Math.max(this.stats.best, this.score);
           this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw, mul: e.mul || 1 });
           if (!e.tw) this.damage(this.fever > 0 ? 2 : 1, 'chip', null);   // every won coin is a laser shot (tower spills only pay)
         }
@@ -463,23 +494,22 @@ export class Game {
     ev.length = 0;
   }
 
-  addEnergy(n) {
-    if (this.fever > 0) return;
-    this.energy += n;
-    if (this.energy >= ENERGY_MAX) { this.energy = 0; this.fever = FEVER_TIME; this.out.push({ t: 'fever' }); }
-  }
 
   pushToken(k) {
     this.row.push(k);
     const n = this.row.filter((x) => x === k).length;
     if (n >= 3) {
       let left = 3; this.row = this.row.filter((x) => !(x === k && left-- > 0));
+      this.combo++; this.meter++;
+      this.stats.bestCombo = Math.max(this.stats.bestCombo || 0, this.combo);
+      this.out.push({ t: 'combo', combo: this.combo, meter: this.meter, mult: comboMult(this.combo) });
+      if (this.meter >= COMBO_FULL) { this.meter = 0; this.fever = FEVER_TIME; this.out.push({ t: 'fever' }); }
       this.attack(k);
     } else if (this.row.length >= ROW) {
+      // six tokens and no three of a kind: the combo breaks
       this.row = [];
-      this.out.push({ t: 'team' });
-      for (const h of this.heroes) this.damage(heroAtk(h.lv) * (this.fever > 0 ? 2 : 1), 'team', h.col);
-      this.bonusCoins(2);
+      this.out.push({ t: 'comboBreak', combo: this.combo });
+      this.combo = 0; this.meter = 0;
     }
   }
 
@@ -491,32 +521,32 @@ export class Game {
     this.damage(dmg, 'attack', col);
     h.xp++;
     if (h.xp >= xpNeed(h.lv)) { h.xp = 0; h.lv++; this.out.push({ t: 'levelUp', col, lv: h.lv }); }
-    this.bonusCoins(3);   // every attack rains a few bonus coins into the machine
+    // and a shooter fires a free volley, sides taking turns
+    const n = AUTO_SHOTS[col], side = this.nextSide;
+    this.nextSide = side === 'L' ? 'R' : 'L';
+    this.autoQ.push({ side, n });
+    this.out.push({ t: 'autoStart', col, n, side });
   }
 
   // Tower Call gets dearer as the enemies (and the towers' value to you) grow
-  itemCost(id) { const I = ITEMS[id]; return !I ? Infinity : id === 'wheel' ? I.cost + 150 * this.foeIdx : I.cost; }
-  canBuy(id) { return this.bank >= this.itemCost(id); }
+  itemCost(id) { const I = ITEMS[id]; return !I ? Infinity : id === 'wheel' ? I.cost + 2500 * this.foeIdx : I.cost; }
+  canBuy(id) { return this.score >= this.itemCost(id); }
   buy(id) {
     if (!this.canBuy(id)) return false;
-    this.bank -= this.itemCost(id);
-    if (id === 'quake') this.f.quake();
+    this.score -= this.itemCost(id);
+    if (id === 'refill') this.bank += ITEMS.refill.coins;
+    else if (id === 'quake') this.f.quake();
     else if (id === 'guard') this.guardT += ITEMS.guard.dur;
     else if (id === 'turbo') this.turboT += ITEMS.turbo.dur;
     else if (id === 'rain') {
       // the colour you hold most of comes first, so the rain tends to finish a set
       const cnt = { B: 0, P: 0, Y: 0 }; for (const k of this.row) cnt[k]++;
       const best = COL.slice().sort((a, b) => cnt[b] - cnt[a] || this.rng() - 0.5);
-      [best[0], best[0], best[1]].forEach((k) => this.f.drop(k, 0.15 + this.rng() * 0.7));
+      [best[0], best[0], best[1]].forEach((k, i) => this.f.shoot(k, i % 2 ? 'R' : 'L'));
     } else if (id === 'wheel') this.wheelQ++;
     this.stats.items = (this.stats.items || 0) + 1;
     this.out.push({ t: 'item', id });
     return true;
-  }
-
-  bonusCoins(n) {
-    for (let i = 0; i < n; i++) this.f.drop('c', this.rng());
-    this.out.push({ t: 'bonus', n });
   }
 
   damage(n, src, col) {
@@ -527,7 +557,8 @@ export class Game {
       this.foe.hp = 0;
       this.stats.kills++;
       this.out.push({ t: 'kill', foe: this.foe });
-      if (this.foe.boss) { const prize = 200 + 100 * this.foe.sector; this.bank += prize; this.out.push({ t: 'sector', n: this.foe.sector + 1, prize }); }
+      this.bank += KILL_COINS; this.out.push({ t: 'reward', coins: KILL_COINS });
+      if (this.foe.boss) { const prize = 100 + 50 * this.foe.sector; this.bank += prize; this.out.push({ t: 'sector', n: this.foe.sector + 1, prize }); }
       this.foe = null;
       this.wheelQ++;
     }
@@ -565,7 +596,7 @@ export class Game {
     const r2 = (v) => Math.round(v * 100) / 100;
     return {
       v: 1, bank: this.bank, row: this.row.slice(), heroes: this.heroes.map((h) => ({ ...h })), foeIdx: this.foeIdx,
-      foe: this.foe ? { hp: this.foe.hp } : null, energy: this.energy, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
+      foe: this.foe ? { hp: this.foe.hp } : null, score: this.score, combo: this.combo, meter: this.meter, autoQ: this.autoQ.map((A) => ({ ...A })), nextSide: this.nextSide, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
       stats: { ...this.stats }, t: r2(this.f.t), seed: this.rng.seed(), guardT: r2(this.guardT), turboT: r2(this.turboT),
       coins: this.f.coins.filter((c) => !c.off).map((c) => (c.mul > 1 ? [c.k, r2(c.x), r2(c.y), r2(c.z), c.mul] : [c.k, r2(c.x), r2(c.y), r2(c.z)])),
       towers: this.f.towers.map((T) => [r2(T.x), r2(T.y), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0)]),
@@ -575,7 +606,7 @@ export class Game {
     const g = new Game(fallbackSeed);
     if (!s || s.v !== 1 || !Array.isArray(s.coins)) return null;
     const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
-    g.bank = Math.max(0, Math.floor(num(s.bank, 120)));
+    g.bank = Math.max(0, Math.floor(num(s.bank, START_COINS)));
     g.row = (Array.isArray(s.row) ? s.row : []).filter(isToken).slice(0, ROW - 1);
     if (Array.isArray(s.heroes)) g.heroes.forEach((h, i) => { const o = s.heroes[i]; if (o) { h.lv = Math.max(1, Math.floor(num(o.lv, 1))); h.xp = Math.max(0, Math.floor(num(o.xp, 0))); } });
     g.foeIdx = Math.max(0, Math.floor(num(s.foeIdx, 0)));
@@ -583,7 +614,10 @@ export class Game {
     g.foe = s.foe ? foeAt(g.foeIdx) : null;
     if (g.foe) g.foe.hp = Math.max(1, Math.min(g.foe.max, num(s.foe.hp, g.foe.max)));
     if (!g.foe && g.wheelQ === 0) { g.foeIdx++; g.foe = foeAt(g.foeIdx); }
-    g.energy = Math.max(0, Math.min(ENERGY_MAX - 1, num(s.energy, 0)));
+    g.score = Math.max(0, Math.floor(num(s.score, 0)));
+    g.combo = Math.max(0, Math.floor(num(s.combo, 0))); g.meter = Math.max(0, Math.min(COMBO_FULL - 1, Math.floor(num(s.meter, 0))));
+    g.autoQ = (Array.isArray(s.autoQ) ? s.autoQ : []).filter((A) => A && (A.side === 'L' || A.side === 'R') && A.n > 0).map((A) => ({ side: A.side, n: Math.min(100, Math.floor(A.n)) }));
+    g.nextSide = s.nextSide === 'R' ? 'R' : 'L';
     g.fever = Math.max(0, Math.min(FEVER_TIME, num(s.fever, 0)));
     g.pendingDmg = Math.max(0, num(s.pendingDmg, 0));
     g.guardT = Math.max(0, Math.min(600, num(s.guardT, 0))); g.turboT = Math.max(0, Math.min(600, num(s.turboT, 0)));

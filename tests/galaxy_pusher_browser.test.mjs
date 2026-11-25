@@ -58,11 +58,18 @@ try {
   const shots = await page.evaluate(() => GP.game.stats.shots) - bank0;
   ok(shots >= 4, 'holding on the machine fires coins (' + shots + ')');
 
-  // aim follows the finger
-  await page.mouse.move(40, L.m.y + L.m.h * 0.6); await page.mouse.down(); await page.waitForTimeout(100);
-  const aimL = await page.evaluate(() => GP.cam.aimOf(40));
-  await page.mouse.up();
-  ok(aimL < 0.15, 'touching the left of the machine aims left');
+  // the left half fires the left shooter, the right half the right one
+  const fromSide = async (x) => {
+    const n0 = await page.evaluate(() => GP.game.stats.shots);
+    await page.evaluate(() => { GP.game.bank = 100; GP.game.fireCd = 0; });
+    await page.mouse.move(x, L.m.y + L.m.h * 0.6); await page.mouse.down(); await page.waitForTimeout(120); await page.mouse.up();
+    return page.evaluate((n0) => { const g = GP.game; return g.stats.shots > n0 ? g.f.coins.filter((c) => c.k === 'c').slice(-1)[0].vx : 0; }, n0);
+  };
+  ok(await fromSide(50) > 0, 'holding the left of the machine fires from the left shooter (coin flies right)');
+  ok(await fromSide(340) < 0, 'holding the right of the machine fires from the right shooter (coin flies left)');
+  ok(await page.isVisible('#fireL') && await page.isVisible('#fireR'), 'there is a FIRE button for each shooter');
+  const gap = await page.evaluate(() => GP.L.mach.y - (GP.L.battle.y + GP.L.battle.h));
+  ok(gap < 12, 'no empty band between the battle screen and the machine (' + Math.round(gap) + ' px)');
 
   // beat the enemy: the wheel opens, the ball lands, a tower builds
   await page.evaluate(() => GP.game.damage(1e6, 'chip', null));

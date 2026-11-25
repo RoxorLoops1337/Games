@@ -1,15 +1,15 @@
 // Galaxy Pusher: rules and physics, headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { Game, Field, W, FRONT, PH, PMAX, ROW, WHEEL, TOWER, KIND, ENERGY_MAX, FEVER_TIME, ITEMS, ITEM_ORDER, mulberry, foeAt, heroAtk } from '../galaxy_pusher/core.js';
+import { Game, Field, W, FRONT, PH, PMAX, ROW, WHEEL, TOWER, KIND, FEVER_TIME, ITEMS, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, ITEM_ORDER, mulberry, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 let passed = 0;
 const ok = (c, n) => { assert.ok(c, n); passed++; };
 const eq = (a, b, n) => { assert.deepEqual(a, b, n); passed++; };
-// play for `sec` seconds, firing every `every` frames and sweeping the aim; wheels resolve at once
+// play for `sec` seconds, firing every `every` frames from alternating shooters; wheels resolve at once
 function play(g, sec, every = 4, each) {
-  let aim = 0.5, dir = 1;
+  let n = 0;
   for (let s = 0; s < sec * 60; s++) {
-    if (every && s % every === 0) { aim += dir * 0.037; if (aim > 1 || aim < 0) dir = -dir; g.fire(Math.max(0, Math.min(1, aim))); }
+    if (every && s % every === 0) g.fire(n++ % 2 ? 'R' : 'L');
     g.tick(1 / 60);
     for (const e of g.out) if (e.t === 'kill') { const i = g.spinWheel(); g.resolveWheel(i); }
     g.out.length = 0;
@@ -25,7 +25,7 @@ function play(g, sec, every = 4, each) {
   ok(g.f.coins.length >= 70, 'a new machine starts with a carpet of coins (' + g.f.coins.length + ')');
   ok(g.f.coins.some((c) => c.k === 'B') && g.f.coins.some((c) => c.k === 'P') && g.f.coins.some((c) => c.k === 'Y'), 'the carpet holds tokens of all three colours');
   ok(g.f.coins.every((c) => c.x >= c.r - 1e-6 && c.x <= W - c.r + 1e-6 && c.y < FRONT), 'every coin starts inside the machine');
-  ok(g.bank === 120 && g.foe && g.foe.hp === foeAt(0).hp, 'start with 120 coins and the first enemy at full health');
+  ok(g.bank === START_COINS && g.score === 0 && g.foe && g.foe.hp === foeAt(0).hp, 'start with a full coin bank, no points and the first enemy at full health');
 }
 
 // ---------------------------------------------------------------- physics stays sane under a long session
@@ -99,14 +99,42 @@ function play(g, sec, every = 4, each) {
   ok(at && at.col === 'B', 'three blue tokens make Rox attack');
   eq(g.row, ['P'], 'the three matched tokens leave the row, the rest stay');
   eq(hp0 - g.foe.hp, heroAtk(1) * 3, 'a hero attack deals three hits of the hero attack');
-  ok(g.f.coins.length >= 3, 'an attack rains bonus coins into the machine');
+  const vol = g.out.find((e) => e.t === 'autoStart');
+  ok(vol && vol.n === AUTO_SHOTS.B, 'a blue triple makes a shooter fire a free volley of ' + AUTO_SHOTS.B);
+  const bank = g.bank, n0 = g.f.coins.length;
+  for (let i = 0; i < 120; i++) g.tick(1 / 60);
+  ok(g.bank >= bank && g.f.coins.length >= n0 + AUTO_SHOTS.B - 2, 'the volley lands in the machine and costs no coins');
+  ok(AUTO_SHOTS.B < AUTO_SHOTS.Y && AUTO_SHOTS.Y < AUTO_SHOTS.P, 'each colour fires a different number of coins (blue < yellow < pink)');
+  g.pushToken('Y'); g.pushToken('Y'); g.pushToken('Y');
+  const sides = g.out.filter((e) => e.t === 'autoStart').map((e) => e.side);
+  eq(sides, ['L', 'R'], 'volleys take turns between the left and right shooter');
 }
+// ---------------------------------------------------------------- combo meter
 {
-  const g = new Game(9);
+  const g = new Game(9); g.foe.hp = g.foe.max = 1e9;
+  for (const k of ['B', 'B', 'B', 'P', 'P', 'P']) g.pushToken(k);
+  eq(g.combo, 2, 'every three-of-a-kind adds to the combo');
+  ok(comboMult(2) > comboMult(0), 'a combo multiplies the points');
   for (const k of ['B', 'P', 'Y', 'B', 'P', 'Y']) g.pushToken(k);
-  ok(g.out.some((e) => e.t === 'team'), 'a full row of 2+2+2 fires a team strike');
-  eq(g.row.length, 0, 'the team strike clears the row');
-  ok(g.row.length < ROW, 'the row never stays full');
+  ok(g.out.some((e) => e.t === 'comboBreak' && e.combo === 2), 'six tokens without a triple break the combo');
+  ok(g.combo === 0 && g.meter === 0 && g.row.length === 0, 'a break empties the meter and the row');
+  for (let i = 0; i < COMBO_FULL; i++) { g.pushToken('Y'); g.pushToken('Y'); g.pushToken('Y'); }
+  ok(g.fever === FEVER_TIME && g.meter === 0 && g.combo === COMBO_FULL, 'a full combo meter starts Double Time and the combo keeps counting');
+}
+// ---------------------------------------------------------------- coins are not reused: they score points
+{
+  const g = new Game(30);
+  const bank = g.bank;
+  const c = g.f.add('c', 11, FRONT - 0.1, 0); c.vy = 4;
+  for (let i = 0; i < 60; i++) g.tick(1 / 60);
+  eq(g.score, COIN_PTS, 'a coin over the edge scores points');
+  ok(g.bank <= bank, 'a coin over the edge does not come back to shoot');
+  g.combo = 4;
+  const d = g.f.add('g', 11, FRONT - 0.1, 0); d.vy = 4;
+  for (let i = 0; i < 60; i++) g.tick(1 / 60);
+  eq(g.score - COIN_PTS, Math.round(COIN_PTS * 2 * comboMult(4)), 'gold coins score double, times the combo');
+  g.damage(1e6, 'chip', null);
+  eq(g.bank, bank + KILL_COINS, 'beating an enemy gives coins to shoot');
 }
 
 // ---------------------------------------------------------------- level ups
@@ -161,11 +189,10 @@ function play(g, sec, every = 4, each) {
   ok(g.stats.paid - paid0 > 60, 'a gold tower pays a pile of coins (' + (g.stats.paid - paid0) + ')');
 }
 
-// ---------------------------------------------------------------- energy -> double time
+// ---------------------------------------------------------------- double time
 {
   const g = new Game(14);
-  g.addEnergy(ENERGY_MAX);
-  ok(g.fever === FEVER_TIME && g.energy === 0, 'full energy starts Double Time');
+  g.fever = FEVER_TIME;
   const hp = g.foe.hp; g.pushToken('P'); g.pushToken('P'); g.pushToken('P');
   eq(hp - g.foe.hp, heroAtk(1) * 3 * 2, 'attacks deal double damage in Double Time');
   for (let i = 0; i < FEVER_TIME * 60 + 5; i++) g.tick(1 / 60);
@@ -176,22 +203,26 @@ function play(g, sec, every = 4, each) {
 {
   const g = new Game(15);
   g.bank = 0;
-  ok(!g.fire(0.5), 'you cannot fire with an empty bank');
+  ok(!g.fire('L'), 'you cannot fire with an empty bank');
   for (let i = 0; i < 60 * 11; i++) g.tick(1 / 60);
-  ok(g.bank >= 2, 'an empty bank refills slowly');
-  g.bank = 10; g.fireCd = 0; g.fire(0.5);
+  ok(g.bank >= 8, 'an empty bank refills over time');
+  g.bank = 10; g.fireCd = 0; g.fire('R');
   eq(g.bank, 9, 'a shot costs one coin');
-  ok(!g.fire(0.5), 'shots are rate limited');
+  ok(!g.fire('R'), 'shots are rate limited');
+  const sh = g.f.coins[g.f.coins.length - 1];
+  ok(sh.x > W / 2 && sh.vx < 0, 'the right shooter fires from the right corner toward the middle');
   ok(foeAt(4).boss && foeAt(4).hp > foeAt(3).hp * 2, 'every fifth enemy is a much tougher boss');
 }
 
 // ---------------------------------------------------------------- items
 {
   const g = new Game(20); g.newMachine();
-  g.bank = 10;
-  ok(!g.buy('wheel') && g.bank === 10, 'an item you cannot afford is not bought');
-  g.bank = 5000;
-  ok(g.buy('wheel') && g.bank === 5000 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs coins and queues a wheel spin');
+  g.score = 10;
+  ok(!g.buy('wheel') && g.score === 10, 'an item you cannot afford is not bought');
+  g.score = 1e6;
+  ok(g.buy('wheel') && g.score === 1e6 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs points and queues a wheel spin');
+  const b0 = g.bank; g.buy('refill');
+  eq(g.bank, b0 + ITEMS.refill.coins, 'a Coin Pack turns points into coins to shoot');
   ok(g.foe, 'a bonus spin does not need the enemy to die');
   const n0 = g.f.coins.length; g.row = ['P', 'P'];
   g.buy('rain');
@@ -222,11 +253,11 @@ function play(g, sec, every = 4, each) {
 // ---------------------------------------------------------------- saves
 {
   const g = new Game(16); g.newMachine();
-  g.bank = 77; g.row = ['B', 'Y']; g.heroes[1].lv = 4; g.foe.hp = 33; g.energy = 40;
+  g.bank = 77; g.row = ['B', 'Y']; g.heroes[1].lv = 4; g.foe.hp = 33; g.score = 1234; g.combo = 3; g.meter = 3;
   g.f.addTower(11, 12, 36, { col: 'Y', crown: ['Y', 'Y'] });
   const s = JSON.parse(JSON.stringify(g.save()));
   const h = Game.load(s);
-  ok(h && h.bank === 77 && h.heroes[1].lv === 4 && h.foe.hp === 33 && h.energy === 40, 'a save round-trips bank, heroes, enemy and energy');
+  ok(h && h.bank === 77 && h.heroes[1].lv === 4 && h.foe.hp === 33 && h.score === 1234 && h.combo === 3 && h.meter === 3, 'a save round-trips coins, points, combo, heroes and enemy');
   eq(h.row, ['B', 'Y'], 'the token row is saved');
   ok(Math.abs(h.f.coins.length - g.f.coins.length) <= 1 && h.f.towers.length === 1 && h.f.towers[0].n === 36, 'the coins on the field and the standing tower are saved');
   eq(Game.load({ v: 99 }), null, 'an unknown save version is refused');
