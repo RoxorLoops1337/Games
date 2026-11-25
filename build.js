@@ -101,6 +101,7 @@ const STATIC_PATHS = [
   'groove_lock',
   'ricochet_mint',
   'million_to_one',
+  'galaxy_pusher',
   'tools',
 ];
 

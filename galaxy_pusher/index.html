@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0626">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Galaxy Pusher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#030210;color:#fff;font-family:"Russo One","Arial Black",system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+canvas{position:fixed;left:0;top:0;touch-action:none}
+#safe{position:fixed;left:0;top:0;width:0;height:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0}
+.gbtn{position:fixed;z-index:5;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1}
+#fireBtn{background:linear-gradient(#ffe680,#ff8a1f);color:#3a1d05;font-size:20px;box-shadow:0 5px 0 #a4500a,0 0 18px rgba(255,180,40,.45);border:3px solid #3a1d05}
+#fireBtn small{font-size:9px;opacity:.75;margin-top:2px}
+#fireBtn.on{transform:translateY(4px);box-shadow:0 1px 0 #a4500a,0 0 30px rgba(255,220,90,.9)}
+#autoBtn{background:#1d1640;border:2px solid #5cd0ff;color:#bfe6ff;font-size:13px}
+#autoBtn small{font-size:8px;opacity:.7;margin-top:3px}
+#autoBtn.on{background:#5cd0ff;color:#0b0626;box-shadow:0 0 16px #5cd0ff}
+#menuBtn{width:38px;height:36px;background:rgba(29,22,64,.85);border:2px solid rgba(92,208,255,.6);font-size:18px;border-radius:10px}
+.ov{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:rgba(4,2,16,.82);padding:20px}
+.ov.show{display:flex}
+.card{width:min(380px,100%);background:linear-gradient(#1d1650,#0f0a2e);border:2px solid #5cd0ff;border-radius:22px;padding:22px 18px;text-align:center;box-shadow:0 0 40px rgba(92,208,255,.35)}
+.card h2{font-size:22px;color:#ffd75c;margin-bottom:12px;letter-spacing:.04em}
+.card p{font-family:system-ui,sans-serif;font-size:14px;line-height:1.45;color:#d9ecff;margin:8px 0}
+.card .big{display:block;width:100%;margin-top:14px;padding:14px;border-radius:14px;font-size:20px;background:linear-gradient(#ffe680,#ff8a1f);color:#3a1d05;box-shadow:0 5px 0 #a4500a}
+.card .big:active{transform:translateY(4px);box-shadow:0 1px 0 #a4500a}
+.card .sm{display:block;width:100%;margin-top:9px;padding:11px;border-radius:12px;font-size:15px;background:#2a2066;border:2px solid #5cd0ff55}
+#title{background:radial-gradient(circle at 50% 30%,#3a1d7a 0%,#0b0626 55%,#030210 100%)}
+#title .logo{font-size:min(15vw,64px);line-height:.95;background:linear-gradient(#fff6c0,#ffc21f 45%,#ff4fb0);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #3a1d05) drop-shadow(0 0 24px rgba(255,79,176,.6));animation:float 3s ease-in-out infinite}
+#title .sub{margin:12px 0 4px;color:#5cd0ff;font-size:15px;letter-spacing:.1em}
+#title .tok{display:flex;gap:10px;justify-content:center;margin:18px 0}
+#title .tok span{width:44px;height:44px;border-radius:50%;border:4px solid #fff;box-shadow:0 0 16px currentColor;animation:bob 1.4s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-8px) rotate(-1deg)}}
+@keyframes bob{50%{transform:translateY(-6px)}}
+.how{text-align:left}
+.how .step{display:flex;gap:12px;align-items:center;margin:11px 0}
+.how .ic{flex:none;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid #fff}
+.how .step p{margin:0}
+#stats{font-size:12px!important;color:#9fb6d8!important}
+#stats b{color:#ffd75c}
+</style>
+</head>
+<body>
+<div id="safe"></div>
+<canvas id="cv"></canvas>
+<button id="menuBtn" class="gbtn" aria-label="Menu">☰</button>
+<button id="autoBtn" class="gbtn" aria-label="Auto fire">AUTO<small>fire</small></button>
+<button id="fireBtn" class="gbtn" aria-label="Fire">FIRE<small>hold</small></button>
+
+<div id="title" class="ov show">
+  <div class="card" style="background:none;border:0;box-shadow:none">
+    <div class="logo">GALAXY<br>PUSHER</div>
+    <div class="sub">ROX &amp; JAS VS THE VOID ARMADA</div>
+    <div class="tok"><span style="background:#2fb4ff;color:#2fb4ff"></span><span style="background:#ff4fb0;color:#ff4fb0;animation-delay:.2s"></span><span style="background:#ffc21f;color:#ffc21f;animation-delay:.4s"></span></div>
+    <button id="playBtn" class="big">PLAY</button>
+  </div>
+</div>
+
+<div id="how" class="ov">
+  <div class="card how">
+    <h2 style="text-align:center">HOW TO PLAY</h2>
+    <div class="step"><div class="ic" style="background:#ffc21f;color:#3a1d05">●</div><p><b>Hold on the machine</b> to shoot coins, slide to aim. The pusher shoves coins over the edge. Coins that fall in the middle come back to you; the red corners eat them.</p></div>
+    <div class="step"><div class="ic" style="background:#2fb4ff">×3</div><p>Push <b>tokens</b> off the edge to fill the row of 6. <b>Three of a colour</b> and that hero attacks: blue Rox, pink Jas, yellow Mew. Attacks level heroes up.</p></div>
+    <div class="step"><div class="ic" style="background:#ff4fb0">◎</div><p>Beat the enemy to spin the <b>Galaxy Wheel</b>. The ball builds a <b>coin tower</b> (blue 30, yellow 36, pink 60, JP 80). Shove it till it topples!</p></div>
+    <div class="step"><div class="ic" style="background:linear-gradient(90deg,#2fb4ff,#ff4fb0,#ffc21f)">x2</div><p>Every coin you win charges <b>Energy</b>. Full energy starts <b>Double Time</b>: double damage and double coins.</p></div>
+    <button id="howGo" class="big">LET'S PUSH!</button>
+  </div>
+</div>
+
+<div id="menu" class="ov">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <p id="stats"></p>
+    <button id="resumeBtn" class="big">RESUME</button>
+    <button id="sfxBtn" class="sm">Sound</button>
+    <button id="musBtn" class="sm">Music</button>
+    <button id="howBtn" class="sm">How to play</button>
+    <button id="resetBtn" class="sm" style="border-color:#ff6b7455;color:#ffb3b8">New machine</button>
+  </div>
+</div>
+
+<script src="rj-cast.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
