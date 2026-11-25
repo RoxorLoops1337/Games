@@ -121,7 +121,7 @@ export class Machine {
     // a rounded cylinder (a coin's edge is milled round anyway); with the stiff contact settings in the constructor a
     // stack of six holds its height and resting coins do not sink into each other
     this.world.createCollider(R.ColliderDesc.roundCylinder(K.hh - 0.04, K.r - 0.04, 0.04)
-      .setFriction(isToken(k) ? 0.3 : 0.18).setRestitution(0.1).setDensity(K.density).setContactSkin(0.01), body);
+      .setFriction(isToken(k) ? 0.3 : 0.18).setRestitution(0.1).setDensity(K.density), body);
     if (o.v) body.setLinvel(o.v, true);
     if (o.w) body.setAngvel(o.w, true);
     const c = { id: NEXT++, k, body, mul: o.mul || 1, tw: !!o.tw, off: false, spd: 0, born: this.t };
@@ -323,16 +323,12 @@ export class Machine {
     }
     this.coins = keep;
   }
-  // Rapier lets thin coins sink part way into each other while they slide (its contacts lag behind). After every step,
-  // any two near-flat coins that share space are pulled apart: the upper one is lifted onto the lower one. Coins are
-  // bucketed in a 3 cm grid, so this is a few hundred cheap checks.
+  // After every step: a coin pressed into the floor (the pusher can wedge one) goes back on top of it. Coin-on-coin
+  // contact is left to Rapier (measured: lifting coins apart here caused ~250 visible pops a second on a still carpet).
   separate() {
-    const cs = this.coins, g = this._grid || (this._grid = new Map());
-    g.clear();
-    const info = [];
-    for (const c of cs) {
+    for (const c of this.coins) {
       if (!c.body || c.hang) continue;
-      const p = c.body.translation(), q = c.body.rotation(), upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+      const p = c.body.translation();
       // a coin pressed into the floor (the pusher can wedge one) goes back on top of it
       if (p.y < c.body.collider(0).halfHeight() * 0.6 && p.y > -4 && p.z < EDGE - 0.2) {
         // under the pusher's footprint (not in its notch) it goes onto the shelf, anywhere else back onto the floor
@@ -340,28 +336,7 @@ export class Machine {
         const y = under ? PH + hh + 0.02 : hh + 0.01;
         c.body.setTranslation({ x: p.x, y, z: p.z }, true);
         const v = c.body.linvel(); c.body.setLinvel({ x: v.x, y: Math.max(0, v.y), z: v.z }, true);
-        p.y = y;
-      }
-      if (Math.abs(upY) < 0.94 || p.y < -0.5) continue;    // tilted or falling coins are left to Rapier (flipped coins lie flat too)
-      const o = { c, p, K: KINDS[c.k] }; info.push(o);
-      const key = Math.floor(p.x / 3) * 1000 + Math.floor(p.z / 3);
-      let b = g.get(key); if (!b) g.set(key, (b = [])); b.push(o);
-    }
-    for (const a of info) {
-      const gx = Math.floor(a.p.x / 3), gz = Math.floor(a.p.z / 3);
-      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-        const b0 = g.get((gx + i) * 1000 + gz + j); if (!b0) continue;
-        for (const b of b0) {
-          if (b === a || b.p.y > a.p.y || (b.p.y === a.p.y && b.c.id > a.c.id)) continue;   // a is the upper coin of the pair
-          const dx = a.p.x - b.p.x, dz = a.p.z - b.p.z, d2 = dx * dx + dz * dz, rr = a.K.r + b.K.r - 0.15;
-          if (d2 > rr * rr) continue;
-          const need = a.K.hh + b.K.hh, gap = a.p.y - b.p.y;
-          if (gap >= need - 0.015) continue;
-          a.p = { x: a.p.x, y: b.p.y + need, z: a.p.z };
-          a.c.body.setTranslation(a.p, true);
-          const v = a.c.body.linvel(); if (v.y < 0) a.c.body.setLinvel({ x: v.x, y: 0, z: v.z }, true);
-          this.fixes = (this.fixes || 0) + 1;
-        }
+        this.fixes = (this.fixes || 0) + 1;
       }
     }
   }

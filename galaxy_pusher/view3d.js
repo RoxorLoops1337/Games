@@ -221,9 +221,9 @@ export class View3D {
     let lo = 8, hi = 300;
     for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2, S = span(mid); if (S.x1 - S.x0 <= 2.2 && S.y1 - S.y0 <= 1.98) hi = mid; else lo = mid; }
     const S = span(hi);
-    // slide the view window so the machine sits in the middle (its bottom lip on the bottom edge when height is the limit)
-    const yc = (S.y0 + S.y1) / 2, xc = (S.x0 + S.x1) / 2;
-    cam.setViewOffset(w, h, xc * w / 2, -yc * h / 2, w, h);
+    // slide the view window so the front lip sits on the bottom edge: spare height goes to the back wall at the top
+    const xc = (S.x0 + S.x1) / 2;
+    cam.setViewOffset(w, h, xc * w / 2, (-1 - S.y0) * h / 2 - 2, w, h);
     cam.updateProjectionMatrix();
     this.w = w; this.h = h;
   }

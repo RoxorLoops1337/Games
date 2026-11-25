@@ -5,7 +5,7 @@ import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SH
 
 await loadPhysics();
 let passed = 0;
-const ok = (c, n) => { assert.ok(c, n); passed++; };
+const ok = (c, n) => { assert.ok(c, n); passed++; if (process.env.GP_VERBOSE && /\(/.test(n)) console.log('  ok', n); };
 const eq = (a, b, n) => { assert.deepEqual(a, b, n); passed++; };
 const newGame = (seed, seeded = true) => { const g = new Game(seed, new Machine()); if (seeded) g.newMachine(); return g; };
 // play for `sec` seconds at 60 fps, firing every `every` frames from alternating shooters; wheels resolve at once
@@ -82,6 +82,45 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   ok([L, R].every((c) => !c.body || (c.body.translation().y < 3 && Math.abs(c.body.translation().x) < W / 2)), 'shot coins land in the machine');
 }
 
+// ---------------------------------------------------------------- coins never sit inside each other
+// A coin "inside" another: any point of its middle disc lies within the other coin's thickness and radius.
+const rotv = (q, x, y, z) => { const ix = q.w * x + q.y * z - q.z * y, iy = q.w * y + q.z * x - q.x * z, iz = q.w * z + q.x * y - q.y * x, iw = -q.x * x - q.y * y - q.z * z; return [ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x]; };
+const SAMP = []; for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; for (const rr of [0.95, 0.6]) SAMP.push([Math.cos(a) * rr, Math.sin(a) * rr]); } SAMP.push([0, 0]);
+function overlaps(m) {
+  const cs = m.coins.filter((c) => c.body).map((c) => { const p = c.body.translation(), q = c.body.rotation(); return { K: KINDS[c.k], p, q, n: rotv(q, 0, 1, 0) }; });
+  let n = 0, worst = 0;
+  for (let i = 0; i < cs.length; i++) for (let j = 0; j < cs.length; j++) {
+    if (i === j) continue; const A = cs[i], B = cs[j];
+    if (Math.hypot(A.p.x - B.p.x, A.p.y - B.p.y, A.p.z - B.p.z) > A.K.r + B.K.r) continue;
+    let deep = 0;
+    for (const [u, v] of SAMP) { const w = rotv(A.q, u * A.K.r, 0, v * A.K.r); const x = A.p.x + w[0] - B.p.x, y = A.p.y + w[1] - B.p.y, z = A.p.z + w[2] - B.p.z;
+      const h = x * B.n[0] + y * B.n[1] + z * B.n[2], rad = Math.sqrt(Math.max(0, x * x + y * y + z * z - h * h)), inT = B.K.hh - Math.abs(h), inR = B.K.r - rad; if (inT > 0 && inR > 0) deep = Math.max(deep, Math.min(inT, inR)); }
+    if (deep > 0.03) { n++; worst = Math.max(worst, deep); }
+  }
+  return { n, worst };
+}
+{
+  // a still carpet: nothing overlaps and nothing gets popped about
+  const m = new Machine(mulberry(31)); m.seedCarpet(); steps(m, 5);
+  m.fixes = 0; let sum = 0, k = 0, worst = 0;
+  for (let i = 0; i < HZ * 6; i++) { m.stepOnce(); if (i % 10 === 0) { const o = overlaps(m); sum += o.n; k++; worst = Math.max(worst, o.worst); } }
+  ok(sum / k < 0.6 && worst < 0.15, `a settled carpet has (almost) no coin inside another (${(sum / k).toFixed(2)} pairs, deepest ${(worst * 10).toFixed(1)} mm)`);
+  ok(m.fixes / 6 < 3, `a settled carpet is left alone: no coins popped into place (${(m.fixes / 6).toFixed(1)}/s)`);
+  // busy play: coins pile and tilt, overlaps stay rare and shallow
+  m.events.length = 0; sum = 0; k = 0; worst = 0;
+  for (let i = 0; i < HZ * 30; i++) { if (i % 10 === 0) m.shoot('c', i % 20 ? 'L' : 'R'); m.stepOnce(); m.events.length = 0; if (i % 10 === 0) { const o = overlaps(m); sum += o.n; k++; worst = Math.max(worst, o.worst); } }
+  ok(sum / k < 2.2 && worst < 0.26, `during play, coins inside others stay rare and shallow (${(sum / k).toFixed(2)} pairs at a time, deepest ${(worst * 10).toFixed(1)} mm of a ${(KINDS.c.hh * 20).toFixed(1)} mm coin)`);
+}
+{
+  // tower rings: neighbours in a layer never overlap; crown tokens never overlap each other
+  const m = new Machine(mulberry(32));
+  const T = m.placeTower(900, { crown: ['B', 'P', 'Y'] }); T.layers = Math.ceil(900 / 8); T.hgt = T.layers * 2 * COIN_HH; T.H = T.hgt;
+  let gap = 1e9; for (let L = 0; L < T.layers; L++) for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) { const p = Machine.ringLocal(T, L * 8 + a), q = Machine.ringLocal(T, L * 8 + b); gap = Math.min(gap, Math.hypot(p[0] - q[0], p[2] - q[2]) - 2 * KINDS.c.r); }
+  ok(gap >= 0, 'coins in a tower layer touch edge to edge, never overlapping (' + (gap * 10).toFixed(2) + ' mm apart)');
+  let cg = 1e9; for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) { const p = Machine.crownLocal(T, a), q = Machine.crownLocal(T, b); cg = Math.min(cg, Math.hypot(p[0] - q[0], p[2] - q[2]) - 2 * KINDS.B.r); }
+  ok(cg >= 0, 'the tokens crowning a tower never overlap');
+}
+
 // ---------------------------------------------------------------- a long session stays sane
 {
   const g = newGame(2);
@@ -122,6 +161,22 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   const counts = {}; WHEEL.forEach((P) => { counts[P.c] = (counts[P.c] || 0) + 1; });
   ok(counts.JP === 1 && counts.B >= 3 && counts.P >= 3 && counts.Y >= 3, 'the wheel has one jackpot pocket and several of each colour');
   eq([TOWER.B, TOWER.Y, TOWER.P, TOWER.JP], [330, 360, 720, 900], 'tower sizes are the cabinet numbers: blue 330, yellow 360, pink 720, JP 900');
+}
+
+{
+  // a jackpot from the wheel, end to end; and a second tower bought while the first still stands waits its turn
+  const g = newGame(41); g.foe.hp = g.foe.max = 1e9; g.bank = 1e6; g.score = 1e9;
+  g.wheelQ = 1; g.spinWheel(); g.resolveWheel(WHEEL.findIndex((P) => P.c === 'JP'));
+  const J = g.f.towers[0];
+  let maxY = 0, stood = false;
+  play(g, 8, 6, () => { if (J.body) { maxY = Math.max(maxY, J.body.translation().y); if (J.state === 'stand') stood = true; } });
+  ok(stood && maxY < J.H / 2 + 0.5, 'a 900-coin jackpot tower rises in the notch and stands without being launched');
+  g.buy('wheel'); g.spinWheel(); g.resolveWheel(0);
+  const T2 = g.f.towers.find((T) => T !== J);
+  ok(T2 && (T2.state === 'wait' || !J.body), 'a second tower waits while the first one still blocks the notch');
+  let bothDown = false;
+  play(g, 80, 6, () => { if (!g.f.towers.length) bothDown = true; });
+  ok(bothDown, 'both towers rise, get pushed and come down within 80 s');
 }
 
 // ---------------------------------------------------------------- token row: triples, volleys, combo
@@ -256,4 +311,5 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   ok(ms < 9000, `20 s of play with ~${g.f.live()} coins simulates in ${ms.toFixed(0)} ms (budget 9000)`);
 }
 
+if (process.env.GP_VERBOSE) console.log('done');
 console.log(`galaxy_pusher_core: ${passed} passed, 0 failed`);
