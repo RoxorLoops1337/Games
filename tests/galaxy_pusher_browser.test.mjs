@@ -87,8 +87,8 @@ try {
   ok(await page.evaluate(() => GP.game.foe.idx === 1), 'the next enemy arrives');
 
   // tokens reach the row and three make an attack
-  await page.evaluate(() => { const g = GP.game; g.pushToken('B'); g.pushToken('B'); g.pushToken('B'); GP.ff(2); });
-  ok(await page.evaluate(() => GP.game.stats.attacks === 1), 'three tokens trigger an attack');
+  // (tokens keep coming out of the port, so another triple can land in the same two seconds: at least one more attack)
+  ok(await page.evaluate(() => { const g = GP.game, a0 = g.stats.attacks; g.pushToken('B'); g.pushToken('B'); g.pushToken('B'); GP.ff(2); return g.stats.attacks >= a0 + 1; }), 'three tokens trigger an attack');
 
   // menu pauses, the game saves
   await page.tap('#menuBtn'); await page.waitForTimeout(150);

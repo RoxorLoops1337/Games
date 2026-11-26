@@ -22,7 +22,17 @@ export const KINDS = {
 export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
 // pusher: its front face sweeps between FACE_MIN and FACE_MAX; PH is the shelf height; BACK_WALL scrapes the shelf
 export const FACE_MIN = -4.5, FACE_MAX = 0.5, PERIOD = 4.2, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -10.8;   // one solid back wall; the shooters hang on it
-export const SHOOTER = { L: { x: -W / 2 + 1.6, y: PH + 7, z: BACK_WALL + 1.2 }, R: { x: W / 2 - 1.6, y: PH + 7, z: BACK_WALL + 1.2 } };
+// Coins shoot in from the two SIDE walls, low at shelf height near the back. Each shooter (the flipper) sits in its side
+// wall and keeps turning between its two limits: a little toward the back wall (FLIP_BACK) and a little toward the
+// front (FLIP_FRONT), always across the machine. Every coin leaves along its current direction.
+export const SHOOTER = { L: { x: -W / 2 + 0.3, y: PH + 0.45, z: BACK_WALL + 2.6 }, R: { x: W / 2 - 0.3, y: PH + 0.45, z: BACK_WALL + 2.6 } };
+export const SHOT_MIN = 30, SHOT_MAX = 62;   // cm/s a coin leaves the shooter with
+export const FLIP_BACK = -0.3, FLIP_FRONT = 0.38, FLIP_PERIOD = 2.6;   // radians from straight across (+ toward the player)
+// the shooter's angle at time t (the two sides turn in opposite phase)
+export function flipperAngle(side, t) {
+  const mid = (FLIP_BACK + FLIP_FRONT) / 2, amp = (FLIP_FRONT - FLIP_BACK) / 2;
+  return mid + amp * Math.sin((t / FLIP_PERIOD) * Math.PI * 2 + (side === 'R' ? Math.PI : 0));
+}
 // towers: a hollow ring of coins, RING_N per layer, each layer twisted a little more
 // RING_R is the smallest ring where neighbours touch edge to edge (no coin ever overlaps another); every other layer is
 // turned half a coin, like brickwork, so each coin rests on two below, and the whole stack drifts round slowly.
@@ -31,9 +41,10 @@ export const TOWER_R = RING_R + COIN_R;
 // The pusher has a half-circle notch in the middle of its front (like the real cabinet). For a tower the pusher pulls
 // back further than its normal stroke (to FACE_RET), the tower rises out of the floor inside the notch, and then the
 // notch cradles it and shoves it forward. The back wall sits far enough back that a rising tower clears it.
-// the token port: a round hole in the middle of the back wall, above the pusher; tokens are fired out of it toward the
-// player (the wall collider stays solid: tokens appear just in front of it)
-export const PORT = { x: 0, y: PH + 2.9, z: BACK_WALL, r: 1.95 };
+// the token port: a wide, low slot in the middle of the back wall just above the pusher (under the energy-ring badge,
+// like the cabinet); tokens slide out of it flat toward the player. The wall collider stays solid: tokens appear just
+// in front of it.
+export const PORT = { x: 0, y: PH + 3.9, z: BACK_WALL, w: 4.4, h: 2.0 };
 export const SPIRAL_TURNS = 1.5;   // turns a tower makes while it rises out of the notch
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
@@ -151,12 +162,15 @@ export class Machine {
   }
 
   // fire one coin (or token) from a back-corner shooter toward the middle; it spins in flight like a flicked coin
+  flipper(side) { return flipperAngle(side, (this.steps || 0) / HZ); }
   shoot(k, side) {
-    const S = SHOOTER[side === 'R' ? 'R' : 'L'], r = this.rng, dir = side === 'R' ? -1 : 1;
-    const c = this.add(k, S.x, S.y, S.z, {
+    side = side === 'R' ? 'R' : 'L';
+    const S = SHOOTER[side], r = this.rng, dir = side === 'R' ? -1 : 1, a = this.flipper(side) + (r() - 0.5) * 0.08;
+    const dx = dir * Math.cos(a), dz = Math.sin(a), sp = SHOT_MIN + r() * (SHOT_MAX - SHOT_MIN);
+    const c = this.add(k, S.x + dx * 1.6, S.y, S.z + dz * 1.6, {
       ccd: true,
-      v: { x: dir * (6 + r() * 22), y: 3 + r() * 5, z: 9 + r() * 20 },
-      w: { x: (r() - 0.5) * 30, y: (r() - 0.5) * 10, z: (r() - 0.5) * 30 },
+      v: { x: dx * sp, y: 2 + r() * 4, z: dz * sp },
+      w: { x: (r() - 0.5) * 6, y: (r() - 0.5) * 16, z: (r() - 0.5) * 6 },
     });
     c.shot = true;
     return c;
@@ -166,11 +180,12 @@ export class Machine {
   portFree() { return !this.towers.some((T) => T.state === 'wait' || T.state === 'build' || (T.body && T.state === 'stand' && T.z - TOWER_R < PORT.z + 1.6 && Math.abs(T.x) < TOWER_R + KINDS.B.r)); }
   fieldTokens() { let n = 0; for (const c of this.coins) if (c.body && isToken(c.k)) n++; return n; }
   launch(k) {
-    const r = this.rng, hh = KINDS[k].hh, a = Math.PI / 2;
-    const c = this.add(k, PORT.x + (r() - 0.5) * 0.6, PORT.y, PORT.z + hh + 0.15, {
-      ccd: true, rot: { x: Math.sin(a / 2), y: 0, z: 0, w: Math.cos(a / 2) },
-      v: { x: (r() - 0.5) * 16, y: 3 + r() * 5, z: 13 + r() * 15 },
-      w: { x: 4 + r() * 10, y: (r() - 0.5) * 6, z: (r() - 0.5) * 8 },
+    const r = this.rng, R0 = KINDS[k].r;
+    const c = this.add(k, PORT.x + (r() - 0.5) * (PORT.w - 2 * R0 - 0.3), PORT.y, PORT.z + R0 + 0.1, {
+      ccd: true,
+      // spat out with a bit of randomness in speed, height and width
+      v: { x: (r() - 0.5) * 14, y: r() * 6, z: 11 + r() * 17 },
+      w: { x: (r() - 0.5) * 4, y: (r() - 0.5) * 14, z: (r() - 0.5) * 4 },
     });
     c.shot = true;
     this.events.push({ t: 'portOut', k });
@@ -251,7 +266,12 @@ export class Machine {
             const q = c.body.translation(), dx = q.x - T.x, dz = q.z - T.z, d = Math.hypot(dx, dz), need = TOWER_R + KINDS[c.k].r + 0.05;
             if (d >= need || q.y > y + T.H / 2 + 0.5) continue;
             const f = need / (d || 1e-3);
-            c.body.setTranslation({ x: Math.max(-W / 2 + 1.3, Math.min(W / 2 - 1.3, T.x + (d ? dx : 0.5) * f)), y: q.y + 0.05, z: T.z + (d ? dz : 1) * f }, true);
+            let nx = T.x + (d ? dx : 0.5) * f, ny = q.y + 0.05, nz = T.z + (d ? dz : 1) * f;
+            // never shove a coin back through the wall: keep it in front and move it round the side instead (onto the
+            // pusher's top if that is where it lands)
+            const zMin = BACK_WALL + KINDS[c.k].r + 0.05;
+            if (nz < zMin) { nz = zMin; nx = T.x + Math.sign(dx || 1) * Math.sqrt(Math.max(0, need * need - (nz - T.z) ** 2)); if (Math.abs(nx) > NOTCH_R - 0.2) ny = PH + KINDS[c.k].hh + 0.02; }
+            c.body.setTranslation({ x: Math.max(-W / 2 + 1.3, Math.min(W / 2 - 1.3, nx)), y: ny, z: nz }, true);
           }
         }
         if (T.n >= T.want) {
@@ -359,7 +379,8 @@ export class Machine {
         ev.push({ t: gut ? 'lost' : 'pay', k: c.k, x: p.x, tw: c.tw, mul: c.mul });
         this.remove(c); continue;
       }
-      if (p.y < -30 || !isFinite(p.x + p.y + p.z)) { this.remove(c); continue; }
+      // gone for good: fallen out of the machine, or slipped behind the back wall into the mechanism
+      if (p.y < -30 || !isFinite(p.x + p.y + p.z) || p.z < BACK_WALL - 1) { this.remove(c); continue; }
       // A coin more than 60% past the edge tips and drops (Rapier can keep a stale floor contact on a coin that has
       // slid past the end of the floor, so the tip is applied here, as a real coin with nothing on top would do).
       // A coin more than 55% past the edge stops touching the floor. Rapier can keep reusing a stale floor contact from

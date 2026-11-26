@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER } from '../galaxy_pusher/machine.js';
 import { Game, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -73,13 +73,18 @@ const steps = (m, sec) => { for (let i = 0; i < sec * HZ; i++) m.stepOnce(); };
   ok(ev2.some((e) => e.t === 'pay') && !ev2.some((e) => e.t === 'lost'), 'Wall Guard turns a gutter coin into a payout');
 }
 {
-  // the two shooters fire from the back corners in toward the middle
+  // the two shooters sit in the side walls and fire across the machine, turning between a little toward the back
+  // wall and a little toward the front
   const m = new Machine(mulberry(8));
-  const L = m.shoot('c', 'L'), R = m.shoot('c', 'R');
-  ok(L.body.translation().x < 0 && L.body.linvel().x > 0, 'the left shooter fires from the left corner toward the middle');
-  ok(R.body.translation().x > 0 && R.body.linvel().x < 0, 'the right shooter fires from the right corner toward the middle');
+  const turn = (want) => { for (let i = 0; i < HZ * 3 && Math.abs(m.flipper('L') - want) > 0.05; i++) m.stepOnce(); };
+  turn(FLIP_BACK); const L = m.shoot('c', 'L');
+  ok(L.body.translation().x < -W / 2 + 3 && L.body.linvel().x > 0 && L.body.linvel().z < 0, 'the left shooter fires in from the left wall, at its back limit a little toward the back wall');
+  turn(FLIP_FRONT); const L2 = m.shoot('c', 'L');
+  ok(L2.body.linvel().x > 0 && L2.body.linvel().z > 0, 'at its front limit it fires across a little toward the player');
+  const R = m.shoot('c', 'R');
+  ok(R.body.translation().x > W / 2 - 3 && R.body.linvel().x < 0, 'the right shooter fires in from the right wall');
   steps(m, 3);
-  ok([L, R].every((c) => !c.body || (c.body.translation().y < 3 && Math.abs(c.body.translation().x) < W / 2)), 'shot coins land in the machine');
+  ok([L, L2, R].every((c) => !c.body || (c.body.translation().y < 3 && Math.abs(c.body.translation().x) < W / 2)), 'shot coins land in the machine');
 }
 
 // ---------------------------------------------------------------- coins never sit inside each other
@@ -265,6 +270,11 @@ function overlaps(m) {
   const s = newGame(43); s.bank = 500; const c0 = s.f.coins.length;
   for (let i = 0; i < 120; i++) { s.fire(i % 2 ? 'R' : 'L'); s.fireCd = 0; }
   ok(s.f.coins.slice(c0).every((c) => c.k === 'c'), 'the shooters fire coins, never tokens');
+  // coins come in low from the side walls, along the shooter's angle, which sweeps between its two limits
+  const angs = []; for (let i = 0; i < HZ * 3; i++) { s.f.stepOnce(); angs.push(s.f.flipper('L')); }
+  ok(Math.min(...angs) < FLIP_BACK + 0.05 && Math.max(...angs) > FLIP_FRONT - 0.05 && angs.every((a) => a >= FLIP_BACK - 1e-6 && a <= FLIP_FRONT + 1e-6), 'each shooter turns between its back and front limits');
+  const a = s.f.flipper('R'), shot = s.f.shoot('c', 'R'), v = shot.body.linvel(), p0 = shot.body.translation();
+  ok(Math.abs(Math.atan2(v.z, -v.x) - a) < 0.08 && p0.y < PH + 1 && Math.abs(p0.z - SHOOTER.R.z) < 2, 'a coin leaves low from the side wall along the shooter (' + a.toFixed(2) + ' rad)');
 }
 
 // ---------------------------------------------------------------- combo meter

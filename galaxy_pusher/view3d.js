@@ -135,7 +135,7 @@ export class View3D {
     this.ringC = mk(256, 256);
     this.ringT = canvasTex(this.ringC);
     const ring = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 6.4), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
-    ring.position.set(0, PH + 9.6, BACK_WALL + 0.05); S.add(ring);
+    ring.position.set(0, PH + 12.6, BACK_WALL + 0.05); S.add(ring);
     this.ringKey = '';
     // the front window the player looks through: faint diagonal reflections, and impact flashes when a tower smacks it
     const gc = mk(256, 256), gg = gc.getContext('2d');
@@ -213,19 +213,42 @@ export class View3D {
     this._tq = new THREE.Quaternion(); this._tp = new THREE.Vector3(); this._lq = new THREE.Quaternion(); this._lp = new THREE.Vector3(); this._ax = new THREE.Vector3(0, 1, 0);
   }
 
-  // ------------------------------------------------------------------ token port: the hole in the back wall tokens fly out of
+  // ------------------------------------------------------------------ token port: the slot under the energy-ring badge
   buildPort() {
-    const g = new THREE.Group(); g.position.set(PORT.x, PORT.y, PORT.z);
-    // the hole: dark, with a soft coloured glow at its rim that flares when a token comes out
-    const hc = mk(128, 128), hg = hc.getContext('2d'), gr = hg.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gr.addColorStop(0, '#000'); gr.addColorStop(0.62, '#05020c'); gr.addColorStop(0.9, '#3a2a70'); gr.addColorStop(1, '#8070c0'); hg.fillStyle = gr; hg.fillRect(0, 0, 128, 128);
-    const hole = new THREE.Mesh(new THREE.CircleGeometry(PORT.r, 40), new THREE.MeshBasicMaterial({ map: canvasTex(hc) })); hole.position.z = 0.02; g.add(hole);
-    this.portGlow = new THREE.Mesh(new THREE.RingGeometry(PORT.r * 0.55, PORT.r, 40), new THREE.MeshBasicMaterial({ color: 0x5cd0ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
-    this.portGlow.position.z = 0.04; g.add(this.portGlow);
-    // a polished chrome bezel with a thin gold inner ring
-    const bez = new THREE.Mesh(new THREE.TorusGeometry(PORT.r + 0.12, 0.3, 18, 56), this.chrome); bez.position.z = 0.12; g.add(bez);
-    const gold = new THREE.Mesh(new THREE.TorusGeometry(PORT.r - 0.12, 0.07, 8, 56), new THREE.MeshStandardMaterial({ color: 0xffc94a, metalness: 1, roughness: 0.2, envMapIntensity: 1.6 })); gold.position.z = 0.1; g.add(gold);
-    this.scene.add(g);
+    // the badge: a holographic silver plate with the three heroes above the slot and an arc meter round the middle one
+    const BW = 8.6, BH = 6.4, top = PORT.y + PORT.h / 2 + 4.3, px = 80;   // world size, pixels per cm
+    const c = mk(Math.round(BW * px), Math.round(BH * px)), g = c.getContext('2d'), cx = c.width / 2;
+    const sy = (y) => (top - y) * px;                     // world y -> canvas y
+    const mT = sy(PORT.y + PORT.h / 2), mB = sy(PORT.y - PORT.h / 2), mL = cx - (PORT.w / 2) * px, mR = cx + (PORT.w / 2) * px;
+    const plate = (inset) => { const r = 46 - inset; g.beginPath(); g.moveTo(cx - 175 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 300 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 300 + inset, mT - 70 + inset); g.lineTo(cx - 230 + inset, mT - 120 + inset); g.arc(cx, 205, 190 - inset, Math.PI * 1.08, Math.PI * 1.92); g.lineTo(cx + 300 - inset, mT - 70 + inset); g.lineTo(cx + 300 - inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 175 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.closePath(); return r; };
+    // holographic foil: a rainbow sheen over brushed silver
+    plate(0); const holo = g.createLinearGradient(0, 0, c.width, c.height);
+    ['#dfe6f0', '#b8f0ff', '#f4c8ff', '#fff4c0', '#c8ffe8', '#e0e4ee', '#ffd0e8', '#cfe0ff'].forEach((col, i, A) => holo.addColorStop(i / (A.length - 1), col));
+    g.fillStyle = holo; g.fill();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.stroke();
+    plate(16); g.fillStyle = '#0c0a1c'; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 3; g.stroke();
+    // orange accents beside the slot
+    g.fillStyle = '#ff9a1f'; for (const sx of [-1, 1]) g.fillRect(cx + sx * (PORT.w / 2 * px + 40) - 8, mT + 10, 16, mB - mT - 20);
+    // arc meter: pink, blue, yellow segments round the centre portrait
+    [['#ff4fb0', 1.12, 1.38], ['#2fb4ff', 1.4, 1.6], ['#ffc21f', 1.62, 1.88]].forEach(([col, a0, a1]) => { g.strokeStyle = col; g.lineWidth = 10; g.shadowColor = col; g.shadowBlur = 14; g.beginPath(); g.arc(cx, 205, 150, Math.PI * a0, Math.PI * a1); g.stroke(); });
+    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, 205, 170, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+    // three portraits: Jas (pink) left, Rox (blue) big in the middle, Mew (yellow) right
+    const face = (k, x, y, r) => { const sp = sprite(k), R = sp.width / 2; g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip(); g.drawImage(sp, R - R * 0.66, R - R * 0.66, R * 1.32, R * 1.32, x - r, y - r, r * 2, r * 2); g.restore(); g.lineWidth = 7; g.strokeStyle = COLS[k].main; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); };
+    face('P', cx - 128, 228, 50); face('Y', cx + 128, 228, 50); face('B', cx, 200, 72);
+    g.fillStyle = '#ffffff'; g.font = 'bold 30px "Russo One", sans-serif'; g.textAlign = 'center'; g.fillText('ENERGY', cx, 312);
+    // the slot: chrome frame, black mouth with depth shading
+    g.fillStyle = '#e6ebf3'; g.fillRect(mL - 16, mT - 16, mR - mL + 32, mB - mT + 32);
+    g.fillStyle = '#7f8798'; g.fillRect(mL - 6, mT - 6, mR - mL + 12, mB - mT + 12);
+    const mouth = g.createLinearGradient(0, mT, 0, mB); mouth.addColorStop(0, '#000'); mouth.addColorStop(0.75, '#07050f'); mouth.addColorStop(1, '#2a2440');
+    g.fillStyle = mouth; g.fillRect(mL, mT, mR - mL, mB - mT);
+    g.fillStyle = 'rgba(255,255,255,0.12)'; for (let i = 0; i < 5; i++) g.fillRect(mL + 30 + i * ((mR - mL - 60) / 4) - 3, mB - 10, 6, 6);
+    const tex = canvasTex(c);
+    const badge = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, metalness: 0.35, roughness: 0.3, transparent: true, alphaTest: 0.5 }));
+    badge.position.set(PORT.x, top - BH / 2, PORT.z + 0.03); this.scene.add(badge);
+    // a light bar under the slot (the cabinet's upper tier glows white) and the glow inside the mouth
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(PORT.w + 1.2, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff })); bar.position.set(PORT.x, PORT.y - PORT.h / 2 - 0.28, PORT.z + 0.12); this.scene.add(bar);
+    this.portGlow = new THREE.Mesh(new THREE.PlaneGeometry(PORT.w - 0.2, PORT.h - 0.2), new THREE.MeshBasicMaterial({ color: 0x5cd0ff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.portGlow.position.set(PORT.x, PORT.y, PORT.z + 0.06); this.scene.add(this.portGlow);
     this.portT = 0; this.portCol = new THREE.Color(0x5cd0ff);
   }
   portFlash(k) { this.portT = 1; this.portCol.set(COLS[k] ? COLS[k].main : '#5cd0ff'); }
@@ -234,24 +257,20 @@ export class View3D {
   buildShooters() {
     this.shooters = {};
     for (const side of ['L', 'R']) {
-      const S = SHOOTER[side], grp = new THREE.Group(), dir = side === 'L' ? 1 : -1;
-      grp.position.set(S.x, S.y - 0.6, S.z - 0.6);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.2, 24), new THREE.MeshStandardMaterial({ color: 0x2a2f3d, metalness: 0.7, roughness: 0.4 }));
-      base.position.y = -0.9; grp.add(base);
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(1.15, 28, 20), new THREE.MeshStandardMaterial({ color: 0xd98a1a, metalness: 0.4, roughness: 0.45, envMapIntensity: 0.4 }));
-      grp.add(ball);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.09, 8, 32), new THREE.MeshBasicMaterial({ color: 0x5cd0ff }));
-      ring.rotation.x = Math.PI / 2; grp.add(ring);
-      const barrelPivot = new THREE.Group(); grp.add(barrelPivot);
-      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 2.6, 20), new THREE.MeshStandardMaterial({ color: 0x9aa3b5, metalness: 1, roughness: 0.3 }));
-      barrel.rotation.z = Math.PI / 2; barrel.position.x = dir * 1.4; barrelPivot.add(barrel);
-      const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.12, 8, 20), new THREE.MeshBasicMaterial({ color: 0xffd75c }));
-      muzzle.rotation.y = Math.PI / 2; muzzle.position.x = dir * 2.7; barrelPivot.add(muzzle);
-      const flash = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0 }));
-      flash.position.x = dir * 3.1; barrelPivot.add(flash);
-      barrelPivot.rotation.y = -dir * 0.55; barrelPivot.rotation.z = dir * 0.25;
-      this.scene.add(grp);
-      this.shooters[side] = { grp, ring, muzzle, flash, barrel, barrelPivot, dir };
+      const S = SHOOTER[side], dir = side === 'L' ? 1 : -1, neon = side === 'L' ? 0x3fd0ff : 0xff4fb0;
+      // the shooter sits in the side wall: a chrome housing with a light ring, and a short nozzle that turns
+      const pivot = new THREE.Group(); pivot.position.set(dir * -(W / 2), S.y, S.z); this.scene.add(pivot);
+      const housing = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.6, 32, 1, false, 0, Math.PI), this.chrome);
+      housing.rotation.set(0, dir > 0 ? 0 : Math.PI, Math.PI / 2); housing.rotation.order = 'YZX'; housing.position.y = 0.2; pivot.add(housing);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.08, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: neon }));
+      ring.rotation.y = dir * Math.PI / 2; ring.position.set(dir * 0.32, 0.2, 0); pivot.add(ring);
+      const arm = new THREE.Group(); pivot.add(arm);
+      const nozzle = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.55, 1.5), this.chrome); nozzle.position.set(dir * 1.0, 0.05, 0); arm.add(nozzle);
+      const mouth = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.34), new THREE.MeshBasicMaterial({ color: 0x050210 })); mouth.rotation.y = dir * Math.PI / 2; mouth.position.set(dir * 1.96, 0.05, 0); arm.add(mouth);
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 1.56), new THREE.MeshBasicMaterial({ color: 0xffd75c })); tip.position.set(dir * 1.96, 0.05, 0); arm.add(tip);
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      flash.position.set(dir * 2.3, 0.05, 0); arm.add(flash);
+      this.shooters[side] = { arm, ring, flash, tip, dir, neon };
     }
   }
 
@@ -360,12 +379,13 @@ export class View3D {
     this.strip.material.color.setHSL(fev ? (hue + 0.3) % 1 : 0.12, 1, 0.55 + 0.35 * Math.min(1, st.edgeGlow || 0));
     this.rimL.intensity = 55 + 20 * Math.sin(t * 2); this.rimR.intensity = 55 + 20 * Math.sin(t * 2 + 2);
     if (fev) { this.rimL.color.setHSL(hue, 1, 0.6); this.rimR.color.setHSL((hue + 0.5) % 1, 1, 0.6); } else { this.rimL.color.set(0x3fd0ff); this.rimR.color.set(0xff4fb0); }
+    // the flippers sweep with the machine's clock; each coin leaves along the channel (the same angle machine.js uses)
     for (const side of ['L', 'R']) {
       const S = this.shooters[side], s2 = st.shooter[side];
-      S.barrel.position.x = S.dir * (1.4 - s2.flash * 0.45);
+      S.arm.rotation.y = -M.flipper(side) * S.dir;
       S.flash.material.opacity = s2.flash; S.flash.scale.setScalar(0.6 + s2.flash);
-      S.ring.material.color.set(s2.col ? COLS[s2.col].glow : '#5cd0ff');
-      S.barrelPivot.rotation.y = -S.dir * (0.55 + Math.sin(t * 1.3 + (side === 'L' ? 0 : 2)) * 0.12);
+      S.ring.material.color.set(s2.col ? COLS[s2.col].glow : S.neon);
+      S.tip.material.color.set(s2.flash > 0.5 ? 0xffffff : 0xffd75c);
     }
     // guard shields
     if (!this.guards) {
@@ -380,7 +400,7 @@ export class View3D {
     this.glass.material.opacity = 0.55 + (this.hits.length ? 0.3 * Math.max(0, 1 - this.hits[0].t * 3) : 0);
     // the port glows in the colour of the token it just fired, then settles back to a calm blue
     this.portT = Math.max(0, this.portT - 1 / 25);
-    this.portGlow.material.color.set(0x5cd0ff).lerp(this.portCol, this.portT); this.portGlow.material.opacity = 0.22 + 0.75 * this.portT;
+    this.portGlow.material.color.set(0x5cd0ff).lerp(this.portCol, this.portT); this.portGlow.material.opacity = 0.08 + 0.8 * this.portT;
     // marquee bulbs chase (faster while coins pour over the edge, rainbow in DOUBLE TIME)
     const NB = this.bulbs.count, ph = t * (6 + 10 * Math.min(1, st.edgeGlow || 0)), bc = this._bc || (this._bc = new THREE.Color());
     for (let i = 0; i < NB; i++) {
