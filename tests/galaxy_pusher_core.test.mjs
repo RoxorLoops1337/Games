@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER, EARLY_FALL } from '../galaxy_pusher/machine.js';
 import { Game, JP_FULL, JP_COINS, DAILY_BASE, DAILY_STEP, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -233,6 +233,25 @@ function overlaps(m) {
   ok(h.jp === 77 && h.day === 1010 && h.streak === 1 && h.daily(1010) === null, 'the jackpot meter and the streak are saved');
 }
 
+// ---------------------------------------------------------------- some towers fall over on the field
+{
+  const m = new Machine(mulberry(21)); m.seedCarpet();
+  const T = m.placeTower(400, {});
+  for (let i = 0; i < HZ * 12 && T.state !== 'stand'; i++) m.stepOnce();
+  T.fallAt = T.body.translation().z - 0.5; T.fallDir = 0.6;   // give this one a weak spot right where it stands
+  let topple = null, burst = null; const live0 = m.live();
+  for (let i = 0; i < HZ * 60 && !burst; i++) { m.stepOnce(); for (const e of m.events) { if (e.t === 'topple') topple = e; if (e.t === 'burst') burst = e; } m.events.length = 0; }
+  const bz = T.body ? T.body.translation().z : null;
+  ok(topple && burst && T.onField && bz < EDGE - 0.6, 'a tower with a weak spot creaks, leans and falls over on the field before the edge');
+  for (let i = 0; i < HZ * 2; i++) m.stepOnce();
+  const spilled = m.coins.filter((c) => c.body && c.tw).map((c) => c.body.translation());
+  ok(spilled.length > 60 && spilled.filter((p) => p.z < EDGE && p.y > -0.5).length > spilled.length * 0.7, 'it breaks up into real coins lying on the field (' + spilled.length + ')');
+  // about a third of towers get a weak spot
+  const mm = new Machine(mulberry(22)); let weak = 0;
+  for (let i = 0; i < 60; i++) { const r = mm.rng(); if (r < EARLY_FALL) weak++; }
+  ok(EARLY_FALL > 0.2 && EARLY_FALL < 0.5, 'some towers (not most) fall early');
+}
+
 // ---------------------------------------------------------------- a standing tower never deadlocks the next one
 {
   // The pusher pulls back for a waiting tower once the notch is clear. If a standing tower blocks the notch, the
@@ -413,7 +432,7 @@ function overlaps(m) {
   ok(g.row.length >= 2 && g.row[0] === 'B' && g.row[1] === 'Y', 'the row kept the tokens it started with');
   eq(h.row, g.row, 'the token row is saved');
   ok(h.portQ.some((q) => q.k === 'P'), 'tokens on their way back to the port are saved');
-  const onBoard = g.f.coins.filter((c) => c.body).map((c) => c.body.translation()).filter((p) => Math.abs(p.x) <= 12 && p.z <= 12 && p.y >= 0).length;   // coins already falling off are not saved
+  const onBoard = g.f.coins.filter((c) => c.body).map((c) => c.body.translation()).filter((p) => Math.abs(p.x) <= W / 2 && p.z <= EDGE && p.y >= 0).length;   // coins already falling off are not saved
   ok(Math.abs(h.f.live() - onBoard) <= 2 && h.f.towers.length === 1 && h.f.towers[0].n === 360, 'the coins on the field (with their tilt) and the standing tower are saved');
   // an old save from the 2.5D machine keeps its progress and gets a fresh 3D machine
   const old = Game.load({ v: 1, bank: 55, score: 999, foeIdx: 2, foe: { hp: 10 }, heroes: [{ lv: 3 }], coins: [['c', 5, 10, 0]] }, new Machine());
