@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" class="zh">
+<html lang="zh-CN" class="zh" translate="no">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,6 +8,7 @@
 <meta property="og:title" content="RoxorLoops & Jasmin">
 <meta property="og:description" content="Beatbox & singing duo · 人声 Beatbox 与歌唱二人组">
 <meta property="og:image" content="img/hero.webp">
+<meta name="google" content="notranslate">
 <meta name="theme-color" content="#e74380">
 <link rel="icon" href="img/icon-180.png">
 <link rel="apple-touch-icon" href="img/icon-180.png">
@@ -142,28 +143,41 @@ h2 .p{color:var(--pink)}
 .card p{margin:0;font-size:15px;opacity:.96}
 .card .ic{position:absolute;right:18px;bottom:16px;font-size:24px;opacity:.85}
 
-/* highlights */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:34px}
-.stat{background:#fff;border-radius:26px;padding:26px 24px;box-shadow:0 12px 34px rgba(36,33,42,.08);border:2px solid var(--line);transition:transform .3s var(--ease)}
-.stat:hover{transform:translateY(-6px)}
-.stat b{display:block;font:400 clamp(46px,6vw,62px)/1 var(--head);color:var(--pink);margin-bottom:8px}
-.stat:nth-child(2) b{color:var(--green)}
-.stat span{color:var(--soft)}
-.hl{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:12px 20px}
-.hl li{background:#fff;border-radius:18px;padding:14px 16px 14px 54px;position:relative;border:2px solid var(--line);font-weight:600}
-.hl li::before{content:"★";position:absolute;left:14px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:14px}
-.hl li:nth-child(even)::before{background:var(--pink)}
+/* highlights: bento grid */
+.bento{display:grid;grid-auto-flow:row dense;grid-template-columns:repeat(4,1fr);grid-auto-rows:190px;gap:16px}
+.tile{position:relative;border-radius:26px;overflow:hidden;color:#fff;padding:22px;display:flex;flex-direction:column;justify-content:flex-end;
+  transition:transform .4s var(--ease),box-shadow .4s;box-shadow:0 14px 34px rgba(36,33,42,.12)}
+.tile:hover{transform:translateY(-6px) rotate(-.6deg);box-shadow:0 22px 44px rgba(36,33,42,.2)}
+.tile.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .8s ease}
+.tile.ph:hover img{transform:scale(1.07)}
+.tile.ph::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.55) 60%,rgba(0,0,0,.85))}
+.tile.dk::after{background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.8) 55%,rgba(0,0,0,.9))}
+.tile.ph p,.tile.ph h3{text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.tile>*{position:relative;z-index:1}
+.tile .tag{position:absolute;top:16px;left:16px;z-index:2;background:#fff;color:var(--ink);font-weight:800;font-size:13px;padding:5px 12px;border-radius:99px}
+.tile h3{font:400 clamp(26px,3.2vw,40px)/1 var(--head);margin:0 0 6px;text-shadow:0 3px 0 rgba(0,0,0,.18)}
+.tile p{margin:0;font-weight:600;font-size:15px;opacity:.95;line-height:1.4}
+.tile .big{font:400 clamp(56px,7vw,92px)/.9 var(--head);margin-bottom:8px;text-shadow:0 5px 0 rgba(0,0,0,.14)}
+.tile.g{background:linear-gradient(150deg,#86c94a,var(--green-d))}
+.tile.p{background:linear-gradient(150deg,#ef5e93,var(--pink-d))}
+.tile.k{background:var(--ink)}
+.tile.k .big{color:var(--green)}
+.w2{grid-column:span 2}.h2{grid-row:span 2}
+.brands{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.brands span{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:99px;padding:5px 12px;font-weight:800;font-size:14px}
+.tile .spark{position:absolute;right:18px;top:14px;font-size:34px;animation:note 4s ease-in-out infinite}
 
-/* gallery */
-.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;align-items:center;padding:10px 0}
-.pol{background:#fff;padding:12px 12px 14px;border-radius:8px;box-shadow:0 18px 40px rgba(0,0,0,.16);transition:transform .45s var(--ease),box-shadow .45s;position:relative}
-.pol:nth-child(1){transform:rotate(-4deg)}.pol:nth-child(2){transform:rotate(3deg) translateY(-18px)}.pol:nth-child(3){transform:rotate(-2deg)}
-.pol:hover{transform:rotate(0) scale(1.05);z-index:2;box-shadow:0 26px 60px rgba(0,0,0,.22)}
-.pol img{aspect-ratio:1/1;object-fit:cover;width:100%;border-radius:4px}
-.pol figcaption{font:400 22px/1.2 var(--hand);text-align:center;padding-top:10px;color:var(--ink)}
-.pol::before{content:"";position:absolute;top:-12px;left:50%;width:90px;height:26px;transform:translateX(-50%) rotate(-3deg);background:rgba(120,188,59,.55)}
-.pol:nth-child(2)::before{background:rgba(231,67,128,.5)}
-
+/* moments strip */
+.strip{display:flex;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;padding:24px 16px 30px;margin:0 -16px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.pol{flex:none;width:250px;scroll-snap-align:center;background:#fff;padding:10px 10px 34px;border-radius:8px;box-shadow:0 16px 36px rgba(0,0,0,.16);
+  transition:transform .45s var(--ease);position:relative;margin:0}
+.pol:nth-child(odd){transform:rotate(-3deg)}.pol:nth-child(even){transform:rotate(2.5deg) translateY(12px)}
+.pol:hover{transform:rotate(0) scale(1.05);z-index:2}
+.pol img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:4px}
+.pol::before{content:"";position:absolute;top:-11px;left:50%;width:80px;height:24px;transform:translateX(-50%) rotate(-3deg);background:rgba(120,188,59,.55)}
+.pol:nth-child(even)::before{background:rgba(231,67,128,.5)}
+.swipe{font-weight:700;color:var(--soft);font-size:14px;text-align:center;margin-top:-6px}
 /* clients */
 .logos{overflow:hidden;background:#fff;border-radius:26px;border:2px solid var(--line);padding:24px 0;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
@@ -217,10 +231,6 @@ footer .soc a:hover{transform:translateY(-3px);border-color:var(--pink)}
   .btns{justify-content:center}
   .stage{width:min(330px,86%);order:-1}
   .cards{grid-template-columns:1fr 1fr;row-gap:120px}
-  .stats{grid-template-columns:1fr}
-  .hl{grid-template-columns:1fr}
-  .gal{grid-template-columns:1fr 1fr}
-  .gal .pol:nth-child(3){grid-column:span 2;width:70%;justify-self:center}
   .book{padding:40px 22px 30px;border-radius:30px}
   .duo{order:-1}
   .duo img{width:200px}
@@ -229,20 +239,25 @@ footer .soc a:hover{transform:translateY(-3px);border-color:var(--pink)}
   .frame{margin:0 12px}
   section{padding:70px 0}
   .fab{display:flex}
+  .bento{grid-template-columns:1fr 1fr;grid-auto-rows:170px;gap:12px}
+  .tile{padding:16px;border-radius:22px}
+  .tile p{font-size:14px}
   .cue{display:none}
 }
 @media (max-width:520px){
   .cards{grid-template-columns:1fr;margin-top:100px}
-  .gal{grid-template-columns:1fr}
-  .gal .pol:nth-child(3){grid-column:auto;width:auto}
   .row{position:relative;display:block;padding:12px 14px 14px}
   .row .ico{display:none}
   .row .k{margin-bottom:6px;line-height:32px}
   .row a{display:block;white-space:nowrap;word-break:normal;font-size:clamp(14px,4.3vw,17px)}
   .row .copy{position:absolute;top:10px;right:10px;padding:6px 14px}
   .book{padding-left:16px;padding-right:16px}
-  .pol:nth-child(2){transform:rotate(3deg)}
   .logos img{height:80px}
+  .bento{grid-auto-rows:150px}
+  .tile .big{font-size:52px}
+  .tile h3{font-size:24px}
+  .tile .tag{top:12px;left:12px}
+  .pol{width:210px}
   .ticker span{font-size:21px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -464,29 +479,47 @@ body.loading{overflow:hidden}
   <div class="wrap">
     <div class="rv">
       <h2><span lang="zh">精彩<span class="p">回顾</span></span><span lang="en">High<span class="p">lights</span></span></h2>
-      <p class="lead"><span lang="zh">从学校音乐会到国际音乐节，我们在世界各地演出和教学。</span><span lang="en">From school concerts to international festivals, RoxorLoops &amp; Jasmin have performed, taught and inspired audiences around the world.</span></p>
+      <p class="lead"><span lang="zh">从 Eurovision 舞台到世界合唱比赛的评委席。</span><span lang="en">From the Eurovision stage to the World Choir Games jury table.</span></p>
     </div>
-    <div class="stats">
-      <div class="stat rv"><b data-count="509" data-suf="K">0</b><span lang="zh">Facebook 粉丝（线上社区 35 万+）</span><span lang="en">Facebook followers (350k+ online community)</span></div>
-      <div class="stat rv d1"><b data-count="5" data-suf="×">0</b><span lang="zh">RoxorLoops 当过评委的世界锦标赛</span><span lang="en">World Championships judged by RoxorLoops</span></div>
-      <div class="stat rv d2"><b data-count="25" data-suf="">0</b><span lang="zh">2025 年的学校音乐会</span><span lang="en">School concerts in 2025</span></div>
+    <div class="bento">
+      <div class="tile ph w2 h2 rv"><img src="img/hl-eurovision.webp" alt="RoxorLoops & Jasmin at Eurovision" width="1000" height="642" loading="lazy">
+        <span class="tag">🎤 Eurovision</span>
+        <h3>Eurovision Song Contest</h3>
+        <p><span lang="zh">我们登上了 Eurovision 的舞台</span><span lang="en">We performed on the Eurovision stage</span></p></div>
+      <div class="tile p rv d1"><span class="big" data-count="509" data-suf="K">0</span>
+        <p><span lang="zh">Facebook 粉丝，线上社区 35 万+</span><span lang="en">Facebook followers, 350k+ online community</span></p></div>
+      <div class="tile k rv d2"><span class="spark" aria-hidden="true">🏆</span><span class="big" data-count="5" data-suf="×">0</span>
+        <p><span lang="zh">RoxorLoops 当过评委的世界锦标赛</span><span lang="en">World Championships judged by RoxorLoops</span></p></div>
+      <div class="tile ph w2 rv"><img src="img/hl-xfactor.webp" alt="RoxorLoops & Jasmin on X Factor" width="800" height="514" loading="lazy">
+        <span class="tag">⭐ TV</span>
+        <h3>X Factor</h3>
+        <p><span lang="zh">登上 X Factor 舞台</span><span lang="en">On the X Factor stage</span></p></div>
+      <div class="tile g w2 rv"><span class="spark" aria-hidden="true">🌍</span>
+        <h3><span lang="zh">世界合唱比赛评委</span><span lang="en">World Choir Games jury</span></h3>
+        <p><span lang="zh">世界合唱比赛和欧洲合唱比赛评委（两次），2026 年 8 月在瑞典赫尔辛堡再次担任评委。</span><span lang="en">Jury at the World Choir Games and European Choir Games (twice), and again in Helsingborg, August 2026.</span></p></div>
+      <div class="tile ph dk w2 rv d1"><img src="img/photo-greece.webp" alt="RoxorLoops & Jasmin with a children's choir in Greece" width="1000" height="668" loading="lazy">
+        <h3><span lang="zh">几百人的合唱团</span><span lang="en">Choirs of hundreds</span></h3>
+        <p><span lang="zh">从南非青年合唱团到塞萨洛尼基儿童合唱团</span><span lang="en">From the South Africa Youth Choir to the Thessaloniki kids choir</span></p></div>
+      <div class="tile p rv d2"><span class="big" data-count="35" data-suf="">0</span>
+        <p><span lang="zh">2026 年已预订的学校音乐会（2025 年 25 场）</span><span lang="en">School concerts booked for 2026 (25 in 2025)</span></p></div>
+      <div class="tile k w2 rv"><h3><span lang="zh">请过我们的品牌</span><span lang="en">Brands that booked us</span></h3>
+        <div class="brands"><span>Deloitte</span><span>Novo Nordisk</span><span>Tuborg</span><span>Bilka</span><span>Musikhuset Aarhus</span></div></div>
+      <div class="tile ph rv d1"><img src="img/photo-choir.webp" alt="RoxorLoops & Jasmin with a choir" width="900" height="900" loading="lazy"></div>
     </div>
-    <ul class="hl">
-      <li class="rv"><span lang="zh">世界合唱比赛和欧洲合唱比赛评委（两次）</span><span lang="en">World Choir Games &amp; European Choir Games jury (twice)</span></li>
-      <li class="rv d1"><span lang="zh">世界合唱比赛评委，瑞典赫尔辛堡（2026 年 8 月）</span><span lang="en">World Choir Games jury, Helsingborg (August 2026)</span></li>
-      <li class="rv"><span lang="zh">南非青年合唱团（80 多位歌手）</span><span lang="en">South Africa Youth Choir (80+ singers)</span></li>
-      <li class="rv d1"><span lang="zh">塞萨洛尼基儿童合唱团（几百位歌手）</span><span lang="en">Thessaloniki kids choir (hundreds of singers)</span></li>
-    </ul>
   </div>
 </section>
 
 <section style="padding-top:20px">
   <div class="wrap">
-    <div class="gal">
-      <figure class="pol rv" style="margin:0"><img src="img/photo-choir.webp" alt="" width="900" height="900" loading="lazy"></figure>
-      <figure class="pol rv d1" style="margin:0"><img src="img/photo-greece.webp" alt="" width="1000" height="668" loading="lazy"></figure>
-      <figure class="pol rv d2" style="margin:0"><img src="img/photo-stage.webp" alt="" width="870" height="579" loading="lazy"></figure>
+    <div class="strip" id="strip">
+      <figure class="pol"><img src="img/m1.webp" alt="" width="560" height="700" loading="lazy"></figure>
+      <figure class="pol"><img src="img/m2.webp" alt="" width="560" height="560" loading="lazy"></figure>
+      <figure class="pol"><img src="img/m3.webp" alt="" width="560" height="700" loading="lazy"></figure>
+      <figure class="pol"><img src="img/m5.webp" alt="" width="560" height="360" loading="lazy"></figure>
+      <figure class="pol"><img src="img/m4.webp" alt="" width="560" height="560" loading="lazy"></figure>
+      <figure class="pol"><img src="img/m6.webp" alt="" width="560" height="360" loading="lazy"></figure>
     </div>
+    <p class="swipe"><span lang="zh">← 左右滑动 →</span><span lang="en">← swipe →</span></p>
   </div>
 </section>
 
