@@ -251,7 +251,7 @@ export class View3D {
   // where to draw a body this frame: between its pose at the previous physics step and the latest one
   pose(o, body, M, al, p, q) {
     const tr = body.translation(), ro = body.rotation();
-    if (o._st !== M.steps) {
+    if (!o._cp || o._st !== M.steps) {
       if (!o._cp || o._st !== M.steps - 1) { o._pp = new THREE.Vector3(tr.x, tr.y, tr.z); o._pq = new THREE.Quaternion(ro.x, ro.y, ro.z, ro.w); o._cp = o._pp.clone(); o._cq = o._pq.clone(); }
       else { o._pp.copy(o._cp); o._pq.copy(o._cq); o._cp.set(tr.x, tr.y, tr.z); o._cq.set(ro.x, ro.y, ro.z, ro.w); }
       o._st = M.steps;
