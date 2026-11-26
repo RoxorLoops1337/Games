@@ -9,7 +9,7 @@
 //
 // The same Machine runs in the browser and in node (tests): create it with createMachine(seed).
 
-export const W = 24, EDGE = 12, GUT = 2.5;
+export const W = 24, EDGE = 16, GUT = 2.5;   // a long coin floor (the pusher's front to the drop edge is ~16 cm)
 export const COIN_R = 1.2, COIN_HH = 0.14;          // radius, half thickness (a 2.8 mm arcade token)
 export const TOKEN_R = 1.5, TOKEN_HH = 0.2;
 export const KINDS = {
@@ -48,6 +48,7 @@ export const PORT = { x: 0, y: PH + 3.9, z: BACK_WALL, w: 4.4, h: 2.0 };
 export const SPIRAL_TURNS = 1.5;   // turns a tower makes while it rises out of the notch
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
+export const EARLY_FALL = 0.35;   // share of towers with a weak spot: they fall over on the field before the edge
 export const POP_UP = 30, POP_SIDE = 45;   // cm/s: the most a coin that is not flying can be kicked by the solver
 export const FIELD_CAP = 230;    // most loose coins simulated at once
 export const CRUMBLE_MAX = 320, CRUMBLE_LIVE = 440;   // a crumbling tower adds at most this many real coins (briefly)
@@ -277,11 +278,15 @@ export class Machine {
         if (T.n >= T.want) {
           if (T.rise) { T.body.setTranslation({ x: T.x, y: T.H / 2 + 0.005, z: T.z }, true); const a = SPIRAL_TURNS * Math.PI * 2; T.body.setRotation({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, true); }
           T.state = 'stand'; T.body.setBodyType(R.RigidBodyType.Dynamic, true); this.hold = false; this.events.push({ t: 'towerDone', T });
+          // some towers have a weak spot: somewhere on the field they start to lean and fall over before the edge (out of the notch, which holds a tower upright, and short of the edge)
+          if (this.rng() < EARLY_FALL) { const z0 = FACE_MAX + TOWER_R + 1, z1 = EDGE - TOWER_R - 0.5; T.fallAt = z0 + this.rng() * Math.max(0, z1 - z0); T.fallDir = (this.rng() - 0.5) * 2.4; }
         }
         keep.push(T); continue;
       }
       if (T.state === 'crumble') {
-        const v = T.body.linvel(); T.body.setLinvel({ x: v.x, y: v.y - GRAV * dt, z: v.z }, true);   // still falling
+        // fallen on the field: it lies where it fell while its layers turn into coins; over the edge it keeps falling
+        if (T.onField) { T.body.setLinvel({ x: 0, y: 0, z: 0 }, true); T.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
+        else { const v = T.body.linvel(); T.body.setLinvel({ x: v.x, y: v.y - GRAV * dt, z: v.z }, true); }   // still falling
         T.peelAcc += T.peelRate * dt;
         while (T.peelAcc >= 1 && T.peel > 0) { T.peel--; T.peelAcc--; this.peelLayer(T, T.peel); }
         if (T.peel <= 0) { this.world.removeRigidBody(T.body); T.body = null; continue; }
@@ -296,6 +301,13 @@ export class Machine {
         if (T.tilt > 0.18 && !T.falling) { T.falling = true; this.events.push({ t: 'fall', T }); }
         // A tower stands and rides the carpet slowly. Only once it really hangs over the edge does it tip toward the
         // player (the stale floor contact Rapier keeps at the edge would otherwise hold it up).
+        // a weak tower: it creaks, leans (pushed at the top until it passes its tipping angle) and falls on the field
+        if (T.fallAt != null && !T.leaning && p.z > T.fallAt && p.z < EDGE - 1) { T.leaning = true; T.leanT = 0; this.events.push({ t: 'topple', T }); }
+        if (T.leaning && p.z < EDGE - 0.6) {
+          T.leanT += dt;
+          const crit = Math.atan(TOWER_R / Math.max(1, T.H / 2)) + 0.12;
+          if (T.tilt < crit && T.leanT > 0.5) { const m = T.body.mass(), top = this.towerTop(T), k = 0.35 + T.leanT * 0.3; T.body.applyImpulseAtPoint({ x: Math.sin(T.fallDir) * k * m, y: 0, z: Math.cos(T.fallDir) * k * m }, top, true); }
+        }
         if (p.z > EDGE - 0.6) {
           // its centre is at the lip: it goes over, swinging its top toward the window
           const w = T.body.angvel(), v = T.body.linvel();
@@ -308,7 +320,9 @@ export class Machine {
           T.smack = this.t; this.events.push({ t: 'smack', T, x: top.x, y: top.y, z: GLASS_Z, n: T.want });
         }
         if (T.smack && this.t - T.smack > 0.35) { this.burst(T); keep.push(T); continue; }
-        if (T.tilt > 0.8 || p.y < T.H * 0.3) { this.burst(T); keep.push(T); continue; }
+        // fallen: a tower that went over on the field breaks up once it lies nearly flat on the coins (it stops there);
+        // one knocked over anywhere else bursts as it goes
+        if (T.leaning && p.z < EDGE - 0.6 ? T.tilt > 1.2 : T.tilt > 0.8 || p.y < T.H * 0.3) { T.onField = T.leaning && p.z < EDGE - 0.6; this.burst(T); keep.push(T); continue; }
       }
       keep.push(T);
     }
