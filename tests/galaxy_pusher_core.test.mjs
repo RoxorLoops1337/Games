@@ -1,7 +1,7 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
 import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER } from '../galaxy_pusher/machine.js';
-import { Game, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
+import { Game, JP_FULL, JP_COINS, DAILY_BASE, DAILY_STEP, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
 let passed = 0;
@@ -209,6 +209,44 @@ function overlaps(m) {
   ok(rose, 'once the notch is clear, the waiting tower rises');
 }
 
+// ---------------------------------------------------------------- jackpot meter and daily streak
+{
+  const g = newGame(51); g.jp = JP_FULL - 2; g.autoQ.length = 0; g.out.length = 0;
+  g.f.events.push({ t: 'lost', k: 'c', x: -11 }); g.consume();
+  ok(g.jp === JP_FULL - 1 && !g.out.some((e) => e.t === 'jackpot'), 'every coin lost in a gutter charges the jackpot meter');
+  g.f.events.push({ t: 'lost', k: 'c', x: 11 }); g.consume();
+  const jpE = g.out.find((e) => e.t === 'jackpot');
+  ok(jpE && g.jp === 0 && g.autoQ.reduce((t, A) => t + A.n, 0) === JP_COINS && g.portQ.length >= 3, 'a full meter pays a jackpot: free coins from both shooters and tokens from the port');
+  // daily streak: consecutive days grow the bonus, a missed day starts again
+  const d = newGame(52), b0 = d.bank;
+  const e1 = d.daily(1000);
+  ok(e1 && e1.streak === 1 && d.bank === b0 + DAILY_BASE, 'the first day pays the daily bonus');
+  ok(d.daily(1000) === null, 'opening the game again the same day pays nothing more');
+  const e2 = d.daily(1001);
+  ok(e2.streak === 2 && e2.coins === DAILY_BASE + DAILY_STEP, 'the next day the streak grows and so does the bonus');
+  for (let day = 1002; day <= 1006; day++) d.daily(day);
+  const w0 = d.wheelQ, e7 = d.daily(1007);
+  ok(e7.streak === 8 && e7.spin && d.wheelQ === w0 + 1, 'a week in a row adds a free wheel spin');
+  ok(d.daily(1010).streak === 1, 'missing a day starts the streak again');
+  // both survive a save
+  d.jp = 77; const h = Game.load(JSON.parse(JSON.stringify(d.save())), new Machine());
+  ok(h.jp === 77 && h.day === 1010 && h.streak === 1 && h.daily(1010) === null, 'the jackpot meter and the streak are saved');
+}
+
+// ---------------------------------------------------------------- a standing tower never deadlocks the next one
+{
+  // The pusher pulls back for a waiting tower once the notch is clear. If a standing tower blocks the notch, the
+  // pusher must keep its stroke (it used to stay pulled back forever: nothing moved, no payouts, the port blocked).
+  const m = new Machine(mulberry(12)); m.seedCarpet();
+  const A = m.placeTower(300, {});
+  for (let i = 0; i < HZ * 10 && A.state !== 'stand'; i++) m.stepOnce();
+  const B = m.placeTower(300, {});
+  m.hold = true;   // the stuck state: pusher held back while the notch is blocked
+  let pfMax = -Infinity, heldBlocked = 0;
+  for (let i = 0; i < HZ * 6; i++) { m.stepOnce(); pfMax = Math.max(pfMax, m.pf); if (m.hold && !m.notchFree() && B.state === 'wait') heldBlocked++; }
+  ok(heldBlocked === 0 && pfMax > FACE_RET + 3, 'a waiting tower never freezes the pusher while the notch is blocked: it keeps pushing');
+}
+
 // ---------------------------------------------------------------- token row: triples, volleys, combo
 {
   const g = newGame(8, false);
@@ -260,7 +298,7 @@ function overlaps(m) {
   h.f.placeTower(300, {}); h.recycle('Y', 0, true);
   let during = 0, after = 0;
   for (let i = 0; i < 60 * 30 && !after; i++) {
-    const busy = h.f.towers.some((T) => T.state === 'wait' || T.state === 'build');
+    const busy = h.f.towers.some((T) => T.state === 'build' || (T.state === 'wait' && h.f.hold));
     h.tick(1 / 60);
     for (const e of h.out) if (e.t === 'portOut') { if (busy) during++; else after++; }
     h.out.length = 0;

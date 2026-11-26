@@ -177,7 +177,7 @@ export class Machine {
   }
   // fire a token out of the port in the back wall: it leaves standing up, facing the player, and tumbles onto the machine
   // the port fires unless a tower is coming up or still stands in the spot right in front of the hole
-  portFree() { return !this.towers.some((T) => T.state === 'wait' || T.state === 'build' || (T.body && T.state === 'stand' && T.z - TOWER_R < PORT.z + 1.6 && Math.abs(T.x) < TOWER_R + KINDS.B.r)); }
+  portFree() { return !this.towers.some((T) => T.state === 'build' || (T.state === 'wait' && this.hold) || (T.body && T.state === 'stand' && T.z - TOWER_R < PORT.z + 1.6 && Math.abs(T.x) < TOWER_R + KINDS.B.r)); }
   fieldTokens() { let n = 0; for (const c of this.coins) if (c.body && isToken(c.k)) n++; return n; }
   launch(k) {
     const r = this.rng, R0 = KINDS[k].r;
@@ -361,7 +361,9 @@ export class Machine {
     const dt = 1 / HZ;
     this.steps = (this.steps || 0) + 1; this.pfPrev = this.pf;   // the view draws between the last two steps
     // the stroke runs unless a tower is coming up; the face never jumps (it moves at most 10 cm/s toward its target)
-    if (!this.towers.some((T) => T.state === 'wait' || T.state === 'build')) this.hold = false;
+    // the pusher stays back only while a tower is rising, or one is waiting AND the notch is clear; otherwise it keeps
+    // its stroke and shoves the standing tower on (holding back with the notch blocked deadlocked the machine)
+    this.hold = this.towers.some((T) => T.state === 'build') || (this.towers.some((T) => T.state === 'wait') && this.notchFree());
     if (!this.hold && Math.abs(this.pf - pusherFace(this.t)) < 0.05) this.t += dt * this.speed;
     const target = this.hold ? FACE_RET : pusherFace(this.t), stepMax = 10 * dt * this.speed;
     this.pf += Math.max(-stepMax, Math.min(stepMax, target - this.pf));
