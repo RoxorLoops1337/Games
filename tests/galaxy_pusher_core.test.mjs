@@ -1,7 +1,7 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE } from '../galaxy_pusher/machine.js';
-import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken } from '../galaxy_pusher/machine.js';
+import { Game, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
 let passed = 0;
@@ -223,6 +223,50 @@ function overlaps(m) {
   g.pushToken('Y'); g.pushToken('Y'); g.pushToken('Y');
   eq(g.out.filter((e) => e.t === 'autoStart').map((e) => e.side), ['L', 'R'], 'volleys take turns between the left and right shooter');
 }
+// ---------------------------------------------------------------- tokens come back out of the port in the back wall
+{
+  const g = newGame(41);
+  for (let i = 0; i < 60 * 6; i++) { g.tick(1 / 60); g.out.length = 0; }
+  ok(g.f.fieldTokens() + g.portQ.length >= TOKEN_POP, 'the machine keeps a good amount of tokens in play (' + g.f.fieldTokens() + ' on the field)');
+  // a token drops into the collection box: 2 s later it shoots out of the port
+  g.portQ.length = 0; g.popT = -1e9; g.out.length = 0;
+  g.f.events.push({ t: 'pay', k: 'P', x: 0 }); g.consume(); const t0 = g.time;
+  const outs = []; let tok = null; const n0 = g.f.coins.length;
+  for (let i = 0; i < 60 * 3; i++) {
+    g.tick(1 / 60);
+    for (const e of g.out) if (e.t === 'portOut') { outs.push([e.k, g.time]); tok = tok || g.f.coins.slice(n0).find((c) => c.k === e.k); }
+    g.out.length = 0;
+  }
+  ok(outs.length === 1 && outs[0][0] === 'P' && Math.abs(outs[0][1] - t0 - PORT_DELAY) < 0.1, 'a token that drops comes back out of the port ' + PORT_DELAY + ' s later (' + (outs[0] && (outs[0][1] - t0).toFixed(2)) + ' s)');
+  const tp = tok && tok.body && tok.body.translation();
+  ok(tp && tp.z > PORT.z + 2 && Math.abs(tp.x) < W / 2, 'it flies out of the back wall onto the machine');
+  // gutter tokens come back too, so the machine never runs dry; recycling never piles up past the cap
+  g.portQ.length = 0; g.f.events.push({ t: 'lost', k: 'B', x: -11 }); g.consume();
+  ok(g.portQ.length === 1 && g.portQ[0].k === 'B', 'a token lost in a gutter comes back out of the port too');
+  g.portQ.length = 0; g.popT = 0;
+  let removed = 0; for (const c of g.f.coins) if (c.body && isToken(c.k) && removed < 10) { g.f.remove(c); removed++; }
+  for (let i = 0; i < 60 * 14; i++) { g.tick(1 / 60); g.out.length = 0; }
+  const pop = g.f.fieldTokens() + g.portQ.length;
+  ok(pop >= TOKEN_POP && pop <= TOKEN_CAP, 'the machine tops its tokens back up when they run low (' + pop + ')');
+  for (let i = 0; i < 40; i++) g.recycle('Y');
+  ok(g.f.fieldTokens() + g.portQ.length <= TOKEN_CAP, 'recycling never piles tokens up past ' + TOKEN_CAP);
+  // the port waits while a tower comes up in front of it
+  const h = newGame(42); h.portQ.length = 0; h.popT = -1e9; h.out.length = 0;
+  h.f.placeTower(300, {}); h.recycle('Y', 0, true);
+  let during = 0, after = 0;
+  for (let i = 0; i < 60 * 30 && !after; i++) {
+    const busy = h.f.towers.some((T) => T.state === 'wait' || T.state === 'build');
+    h.tick(1 / 60);
+    for (const e of h.out) if (e.t === 'portOut') { if (busy) during++; else after++; }
+    h.out.length = 0;
+  }
+  ok(during === 0 && after === 1, 'the port holds its token while a tower rises in front of it, then fires it');
+  // the shooters fire coins only (tokens come from the port)
+  const s = newGame(43); s.bank = 500; const c0 = s.f.coins.length;
+  for (let i = 0; i < 120; i++) { s.fire(i % 2 ? 'R' : 'L'); s.fireCd = 0; }
+  ok(s.f.coins.slice(c0).every((c) => c.k === 'c'), 'the shooters fire coins, never tokens');
+}
+
 // ---------------------------------------------------------------- combo meter
 {
   const g = newGame(9, false); g.foe.hp = g.foe.max = 1e9;
@@ -294,9 +338,9 @@ function overlaps(m) {
   ok(g.buy('wheel') && g.score === 1e6 - ITEMS.wheel.cost && g.wheelQ === 1, 'Tower Call costs points and queues a wheel spin');
   const b0 = g.bank; g.buy('refill');
   eq(g.bank, b0 + ITEMS.refill.coins, 'a Coin Pack turns points into coins to shoot');
-  const n0 = g.f.coins.length; g.row = ['P', 'P']; g.buy('rain');
-  const fresh = g.f.coins.slice(n0).map((c) => c.k);
-  ok(fresh.length === 3 && fresh.filter((k) => k === 'P').length >= 2, 'Token Rain drops three tokens favouring the colour you collect');
+  g.portQ.length = 0; g.out.length = 0; g.row = ['P', 'P']; g.buy('rain');
+  const fresh = []; for (let i = 0; i < 72; i++) { g.tick(1 / 60); for (const e of g.out) if (e.t === 'portOut') fresh.push(e.k); g.out.length = 0; }
+  ok(fresh.length === 3 && fresh.filter((k) => k === 'P').length >= 2, 'Token Rain fires three tokens out of the port, favouring the colour you collect');
   g.buy('guard'); g.tick(1 / 60);
   ok(g.f.guard, 'Wall Guard closes the gutters');
   for (let i = 0; i < 60 * 31; i++) g.tick(1 / 60);
@@ -312,7 +356,7 @@ function overlaps(m) {
 // ---------------------------------------------------------------- saves
 {
   const g = newGame(16);
-  g.bank = 77; g.row = ['B', 'Y']; g.heroes[1].lv = 4; g.foe.hp = 33; g.score = 1234; g.combo = 3; g.meter = 3;
+  g.bank = 77; g.row = ['B', 'Y']; g.recycle('P', 60, true); g.heroes[1].lv = 4; g.foe.hp = 33; g.score = 1234; g.combo = 3; g.meter = 3;
   g.f.placeTower(360, { col: 'Y', crown: ['Y', 'Y'] });
   for (let i = 0; i < 60 * 4; i++) g.tick(1 / 60);
   const s = JSON.parse(JSON.stringify(g.save()));
@@ -320,6 +364,7 @@ function overlaps(m) {
   ok(h && h.bank === g.bank && h.heroes[1].lv === 4 && h.foe.hp === g.foe.hp && h.score === g.score && h.combo === 3 && h.meter === 3, 'a save round-trips coins, points, combo, heroes and enemy');
   ok(g.row.length >= 2 && g.row[0] === 'B' && g.row[1] === 'Y', 'the row kept the tokens it started with');
   eq(h.row, g.row, 'the token row is saved');
+  ok(h.portQ.some((q) => q.k === 'P'), 'tokens on their way back to the port are saved');
   const onBoard = g.f.coins.filter((c) => c.body).map((c) => c.body.translation()).filter((p) => Math.abs(p.x) <= 12 && p.z <= 12 && p.y >= 0).length;   // coins already falling off are not saved
   ok(Math.abs(h.f.live() - onBoard) <= 2 && h.f.towers.length === 1 && h.f.towers[0].n === 360, 'the coins on the field (with their tilt) and the standing tower are saved');
   // an old save from the 2.5D machine keeps its progress and gets a fresh 3D machine

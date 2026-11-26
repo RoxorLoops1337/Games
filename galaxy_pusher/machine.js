@@ -31,9 +31,13 @@ export const TOWER_R = RING_R + COIN_R;
 // The pusher has a half-circle notch in the middle of its front (like the real cabinet). For a tower the pusher pulls
 // back further than its normal stroke (to FACE_RET), the tower rises out of the floor inside the notch, and then the
 // notch cradles it and shoves it forward. The back wall sits far enough back that a rising tower clears it.
+// the token port: a round hole in the middle of the back wall, above the pusher; tokens are fired out of it toward the
+// player (the wall collider stays solid: tokens appear just in front of it)
+export const PORT = { x: 0, y: PH + 2.9, z: BACK_WALL, r: 1.95 };
 export const SPIRAL_TURNS = 1.5;   // turns a tower makes while it rises out of the notch
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
+export const POP_UP = 30, POP_SIDE = 45;   // cm/s: the most a coin that is not flying can be kicked by the solver
 export const FIELD_CAP = 230;    // most loose coins simulated at once
 export const CRUMBLE_MAX = 320, CRUMBLE_LIVE = 440;   // a crumbling tower adds at most this many real coins (briefly)
 // the front window: a glass pane just past the drop edge, like the cabinet glass the player looks through
@@ -86,8 +90,8 @@ export class Machine {
     const box = (hx, hy, hz, x, y, z, fr = 0.32) => w.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setFriction(fr), fixed);
     box(W / 2, 10, (EDGE + 30) / 2, 0, -10, (EDGE - 30) / 2).setCollisionGroups(GROUP_FLOOR);   // floor (a thick slab: nothing is driven through it)
     box(W / 2 + 1, 30, 0.2, 0, 18, GLASS_Z + 0.2, 0.2);                    // the front glass
-    box(1, 10, (EDGE + 30) / 2, -W / 2 - 1, 9, (EDGE - 30) / 2, 0.1);    // side walls
-    box(1, 10, (EDGE + 30) / 2, W / 2 + 1, 9, (EDGE - 30) / 2, 0.1);
+    box(1, 18, (EDGE + 30) / 2, -W / 2 - 1, 17, (EDGE - 30) / 2, 0.1);    // side walls, as tall as the back wall
+    box(1, 18, (EDGE + 30) / 2, W / 2 + 1, 17, (EDGE - 30) / 2, 0.1);
     // the back wall, one solid piece just above the shelf (it scrapes shelf coins off as the pusher pulls back)
     box(W / 2, 15, 1, 0, PH + 0.06 + 15, BACK_WALL - 1, 0.1);
     this.pusher = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PH / 2, this.pf - PUSH_HALF));
@@ -133,7 +137,7 @@ export class Machine {
   live() { let n = 0; for (const c of this.coins) if (c.body) n++; return n; }
 
   // A fresh machine: a hexagonal carpet of coins on the field, a few tokens, some coins on the shelf.
-  seedCarpet(tokens = 9) {
+  seedCarpet(tokens = 15) {
     const r = this.rng;
     let row = 0;
     for (let z = FACE_MAX + COIN_R + 0.25; z < EDGE - COIN_R - 0.2; z += 2.12, row++)
@@ -155,6 +159,21 @@ export class Machine {
       w: { x: (r() - 0.5) * 30, y: (r() - 0.5) * 10, z: (r() - 0.5) * 30 },
     });
     c.shot = true;
+    return c;
+  }
+  // fire a token out of the port in the back wall: it leaves standing up, facing the player, and tumbles onto the machine
+  // the port fires unless a tower is coming up or still stands in the spot right in front of the hole
+  portFree() { return !this.towers.some((T) => T.state === 'wait' || T.state === 'build' || (T.body && T.state === 'stand' && T.z - TOWER_R < PORT.z + 1.6 && Math.abs(T.x) < TOWER_R + KINDS.B.r)); }
+  fieldTokens() { let n = 0; for (const c of this.coins) if (c.body && isToken(c.k)) n++; return n; }
+  launch(k) {
+    const r = this.rng, hh = KINDS[k].hh, a = Math.PI / 2;
+    const c = this.add(k, PORT.x + (r() - 0.5) * 0.6, PORT.y, PORT.z + hh + 0.15, {
+      ccd: true, rot: { x: Math.sin(a / 2), y: 0, z: 0, w: Math.cos(a / 2) },
+      v: { x: (r() - 0.5) * 16, y: 3 + r() * 5, z: 13 + r() * 15 },
+      w: { x: 4 + r() * 10, y: (r() - 0.5) * 6, z: (r() - 0.5) * 8 },
+    });
+    c.shot = true;
+    this.events.push({ t: 'portOut', k });
     return c;
   }
   quake() {
@@ -350,6 +369,13 @@ export class Machine {
       else if (c.hang && p.z < EDGE + KINDS[c.k].r * 0.3) {
         c.hang = false; c.body.collider(0).setCollisionGroups(GROUP_ALL);
         if (p.y < KINDS[c.k].hh && p.z < EDGE - 0.1) { c.body.setTranslation({ x: p.x, y: KINDS[c.k].hh + 0.02, z: p.z }, true); const v = c.body.linvel(); c.body.setLinvel({ x: v.x, y: 0, z: v.z }, true); }
+      }
+      // A resting coin squeezed in a pile against the back wall can be kicked out by the solver at over a metre a
+      // second (measured: one cleared the side wall). Nothing in the machine moves a coin like that except a shot,
+      // so a coin that is not flying is capped to a hop (Quake's jolt stays under the cap).
+      if (!c.shot && !c.tw && !c.hang) {
+        const v = c.body.linvel(), hs = Math.hypot(v.x, v.z);
+        if (v.y > POP_UP || hs > POP_SIDE) { const k = hs > POP_SIDE ? POP_SIDE / hs : 1; c.body.setLinvel({ x: v.x * k, y: Math.min(v.y, POP_UP), z: v.z * k }, true); }
       }
       // landing and clinks: a sudden stop after moving fast
       if (c.shot || c.tw) {

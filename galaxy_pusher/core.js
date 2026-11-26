@@ -42,13 +42,15 @@ export const AUTO_SHOTS = { B: 10, Y: 15, P: 25 };   // free coins a three-of-a-
 export const COMBO_FULL = 6;                          // triples in a row to fill the meter (DOUBLE TIME)
 export const comboMult = (c) => Math.min(4, 1 + 0.25 * c);
 export const KILL_COINS = 40;
+export const PORT_DELAY = 2, PORT_GAP = 0.35;   // a token comes back out of the back wall 2 s after it drops, one at a time
+export const TOKEN_POP = 15, TOKEN_CAP = 24;      // tokens kept in play (at least / at most)
 // items (the cabinet's 道具 button): bought with coins
 export const ITEMS = {
   refill: { name: 'Coin Pack', cost: 2500, coins: 80, desc: '80 more coins to shoot.' },
   quake: { name: 'Quake', cost: 1500, desc: 'Bump the table: every coin jolts forward.' },
   guard: { name: 'Wall Guard', cost: 3000, dur: 30, desc: 'Close both corner gutters for 30 s.' },
   turbo: { name: 'Turbo Push', cost: 3000, dur: 20, desc: 'The pusher runs at double speed for 20 s.' },
-  rain: { name: 'Token Rain', cost: 4000, desc: 'Drop 3 tokens, picked to match your row.' },
+  rain: { name: 'Token Rain', cost: 4000, desc: 'The port fires 3 tokens, picked to match your row.' },
   wheel: { name: 'Tower Call', cost: 20000, desc: 'Spin the Galaxy Wheel right now.' },
 };
 export const ITEM_ORDER = ['refill', 'quake', 'guard', 'turbo', 'rain', 'wheel'];   // bought with points
@@ -86,7 +88,7 @@ export class Game {
     this.out = [];          // game events for the presentation layer
     this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0, bestCombo: 0 };
     this.time = 0;
-    this.tokenEvery = 0;
+    this.portQ = []; this.portCd = 0; this.popT = 0;   // tokens waiting to come back out of the port
     this.guardT = 0; this.turboT = 0;
   }
   newMachine() { this.f.seedCarpet(); }
@@ -99,14 +101,6 @@ export class Game {
     side = side === 'R' ? 'R' : 'L';
     this.bank -= 1; this.fireCd = FIRE_GAP; this.stats.shots++;
     this.f.shoot('c', side);
-    // the machine adds a bonus token now and then (about one in six shots, never twice in a row)
-    this.tokenEvery++;
-    if (this.tokenEvery >= 4 && this.rng() < 0.2) {
-      this.tokenEvery = 0;
-      const k = COL[Math.floor(this.rng() * 3)];
-      this.f.shoot(k, side);
-      this.out.push({ t: 'tokenDrop', k });
-    }
     this.out.push({ t: 'fire', side });
     return true;
   }
@@ -129,6 +123,7 @@ export class Game {
       }
     } else this.autoCd = 0;
     if (this.bank < REGEN_BELOW) { this.regen += dt; if (this.regen >= REGEN_EVERY) { this.regen = 0; this.bank++; this.out.push({ t: 'regen' }); } } else this.regen = 0;
+    this.tickPort(dt);
     this.f.advance(dt);
     this.consume();
   }
@@ -137,7 +132,7 @@ export class Game {
     const ev = this.f.events;
     for (const e of ev) {
       if (e.t === 'pay') {
-        if (isToken(e.k)) { this.stats.tokens++; this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); }
+        if (isToken(e.k)) { this.stats.tokens++; this.out.push({ t: 'payToken', k: e.k, x: e.x }); this.pushToken(e.k); this.recycle(e.k); }
         else {
           // coins are not reused: a coin over the edge is points, times the combo and DOUBLE TIME
           const coins = KIND[e.k].v * (e.mul || 1);
@@ -146,12 +141,30 @@ export class Game {
           this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw, mul: e.mul || 1 });
           if (!e.tw) this.damage(this.fever > 0 ? 2 : 1, 'chip', null);   // every won coin is a laser shot (tower spills only pay)
         }
-      } else if (e.t === 'lost') { this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); }
+      } else if (e.t === 'lost') { this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); if (isToken(e.k)) this.recycle(e.k); }
       else this.out.push(e);
     }
     ev.length = 0;
   }
 
+
+  // Tokens are recycled: one that drops into the collection box (or a gutter) comes back out of the port in the back
+  // wall PORT_DELAY seconds later. The machine keeps at least TOKEN_POP in play and never recycles past TOKEN_CAP
+  // (tower crowns and Token Rain add tokens). The port waits while a tower is coming up in front of it.
+  recycle(k, delay = PORT_DELAY, force = false) {
+    if (!force && this.f.fieldTokens() + this.portQ.length >= TOKEN_CAP) return false;
+    const at = this.time + delay; let i = this.portQ.length;
+    while (i > 0 && this.portQ[i - 1].at > at) i--;
+    this.portQ.splice(i, 0, { k, at });
+    return true;
+  }
+  tickPort(dt) {
+    this.portCd -= dt; this.popT += dt;
+    if (this.popT >= 1) { this.popT = 0; if (this.f.fieldTokens() + this.portQ.length < TOKEN_POP) this.recycle(COL[Math.floor(this.rng() * 3)]); }
+    if (this.portQ.length && this.portQ[0].at <= this.time && this.portCd <= 0 && this.f.portFree()) {
+      this.f.launch(this.portQ.shift().k); this.portCd = PORT_GAP;
+    }
+  }
 
   pushToken(k) {
     this.row.push(k);
@@ -200,7 +213,7 @@ export class Game {
       // the colour you hold most of comes first, so the rain tends to finish a set
       const cnt = { B: 0, P: 0, Y: 0 }; for (const k of this.row) cnt[k]++;
       const best = COL.slice().sort((a, b) => cnt[b] - cnt[a] || this.rng() - 0.5);
-      [best[0], best[0], best[1]].forEach((k, i) => this.f.shoot(k, i % 2 ? 'R' : 'L'));
+      [best[0], best[0], best[1]].forEach((k, i) => this.recycle(k, 0.2 + i * PORT_GAP, true));
     } else if (id === 'wheel') this.wheelQ++;
     this.stats.items = (this.stats.items || 0) + 1;
     this.out.push({ t: 'item', id });
@@ -255,7 +268,7 @@ export class Game {
     return {
       v: 2, bank: this.bank, row: this.row.slice(), heroes: this.heroes.map((h) => ({ ...h })), foeIdx: this.foeIdx,
       foe: this.foe ? { hp: this.foe.hp } : null, score: this.score, combo: this.combo, meter: this.meter, autoQ: this.autoQ.map((A) => ({ ...A })), nextSide: this.nextSide, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
-      stats: { ...this.stats }, seed: this.rng.seed(), guardT: r2(this.guardT), turboT: r2(this.turboT),
+      stats: { ...this.stats }, seed: this.rng.seed(), port: this.portQ.map((q) => q.k).join(''), guardT: r2(this.guardT), turboT: r2(this.turboT),
       machine: this.f.snapshot(),
     };
   }
@@ -282,6 +295,8 @@ export class Game {
     if (s.seed) g.rng.set(s.seed);
     if (s.v === 2 && s.machine && Array.isArray(s.machine.coins) && s.machine.coins.length > 20) g.f.restore(s.machine);
     else g.f.seedCarpet();
+    // tokens that were on their way back come out of the port soon after loading
+    String(s.port || '').split('').filter(isToken).slice(0, TOKEN_CAP).forEach((k, i) => g.recycle(k, PORT_DELAY + i * PORT_GAP, true));
     g.f.events.length = 0;
     return g;
   }
