@@ -297,6 +297,47 @@ footer .soc a:hover{transform:translateY(-3px);border-color:var(--pink)}
 #ld.ld-playing .ld-mic{display:none}
 body.loading .hero *,body.loading .hero::before,body.loading .hero::after{animation-play-state:paused!important}
 body.loading{overflow:hidden}
+
+/* ---------- extra juice ---------- */
+#prog{position:fixed;left:0;top:56px;height:5px;width:0;z-index:25;background:linear-gradient(90deg,var(--pink),var(--green));border-radius:0 4px 4px 0;pointer-events:none}
+#rider{position:fixed;top:44px;left:0;z-index:26;width:34px;height:auto;pointer-events:none;transform:translateX(-50%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.25));transition:opacity .3s;opacity:0}
+#rider.on{opacity:1;animation:ride .5s ease-in-out infinite alternate}
+@keyframes ride{to{margin-top:3px;rotate:6deg}}
+.burst{position:fixed;z-index:60;pointer-events:none;font-size:22px;animation:burst .9s cubic-bezier(.2,.8,.3,1) forwards}
+@keyframes burst{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}70%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1.1) rotate(var(--r));opacity:0}}
+.peek{position:fixed;right:-4px;z-index:14;width:92px;cursor:pointer;transform:translateX(110%) rotate(-12deg);transition:transform .55s var(--ease);touch-action:manipulation}
+.peek.on{transform:translateX(18%) rotate(-12deg)}
+.peek.jump{animation:pj .5s var(--ease)}
+@keyframes pj{50%{transform:translateX(10%) translateY(-24px) rotate(-22deg)}}
+.peek img{width:100%;filter:drop-shadow(-4px 6px 8px rgba(0,0,0,.2))}
+.peek .say{position:absolute;right:86%;top:4px;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;border-radius:16px 16px 4px 16px;
+  box-shadow:0 6px 16px rgba(0,0,0,.15);transform:rotate(12deg) scale(0);transform-origin:right bottom;transition:transform .35s var(--ease) .25s}
+.peek.on .say{transform:rotate(12deg) scale(1)}
+.spark-h{position:relative;display:inline-block}
+.spark-h i{position:absolute;font-style:normal;font-size:.42em;pointer-events:none;animation:tw 2.2s ease-in-out infinite}
+.spark-h i:nth-child(1){right:-.7em;top:-.25em}.spark-h i:nth-child(2){left:-.6em;bottom:.05em;animation-delay:-.8s;font-size:.3em}.spark-h i:nth-child(3){right:-1.25em;bottom:.1em;animation-delay:-1.5s;font-size:.28em}
+@keyframes tw{0%,100%{transform:scale(.4) rotate(0);opacity:.3}50%{transform:scale(1) rotate(25deg);opacity:1}}
+.btn,.copy,.lang button,.fab{transition:transform .25s var(--ease)}
+.btn:active,.copy:active,.fab:active{animation:jelly .45s}
+@keyframes jelly{0%{transform:scale(1,1)}30%{transform:scale(1.18,.82)}50%{transform:scale(.88,1.12)}70%{transform:scale(1.05,.95)}100%{transform:scale(1,1)}}
+.tile{transform-style:preserve-3d}
+.tile .shine{position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);transform:translateX(-120%);transition:none}
+.tile:hover .shine{transform:translateX(120%);transition:transform .9s ease}
+.blobs{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.blobs b{position:absolute;border-radius:50%;opacity:.35;animation:blob 14s ease-in-out infinite alternate}
+.blobs b:nth-child(1){width:180px;height:180px;background:#fff;left:-40px;top:20%}
+.blobs b:nth-child(2){width:120px;height:120px;background:var(--pink-l);right:6%;top:8%;animation-delay:-4s}
+.blobs b:nth-child(3){width:90px;height:90px;background:#fff;right:30%;bottom:10%;animation-delay:-8s}
+@keyframes blob{to{transform:translate(40px,-30px) scale(1.25)}}
+.svc-bg>.wrap{position:relative;z-index:1}
+.card .hi{position:absolute;top:-118px;right:8px;background:#fff;color:var(--ink);font-weight:900;font-size:14px;padding:6px 11px;border-radius:14px 14px 14px 4px;box-shadow:0 6px 14px rgba(0,0,0,.14);
+  transform:scale(0) rotate(-8deg);transform-origin:left bottom;transition:transform .3s var(--ease)}
+.card:hover .hi,.card.tap .hi{transform:scale(1) rotate(-8deg)}
+.conf{position:fixed;top:-20px;z-index:70;width:10px;height:14px;border-radius:3px;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
+.rain{position:fixed;top:-120px;z-index:70;width:80px;pointer-events:none;animation:fall linear forwards}
+@media (max-width:860px){.peek{width:72px}}
+@media (prefers-reduced-motion:reduce){#rider,.peek,.burst,.conf,.rain{display:none!important}}
 </style>
 </head>
 <body class="loading">
@@ -572,6 +613,8 @@ body.loading{overflow:hidden}
 </footer>
 
 <a class="fab" id="fab" href="#book">🎤 <span lang="zh">预约我们</span><span lang="en">Book us</span></a>
+<div id="prog"></div><img id="rider" src="img/head-roxor.webp" alt="" width="151" height="160">
+<div class="peek" id="peek" aria-hidden="true"><span class="say" id="say">Hi!</span><img id="peekimg" src="img/head-jasmin.webp" alt="" width="148" height="160"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -654,6 +697,70 @@ body.loading{overflow:hidden}
       if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(function(){show(ok)},fallback)}else fallback();
     });
   });
+})();
+</script>
+<script>
+(function(){
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var root=document.documentElement;
+  function zh(){return root.className==='zh'}
+  function rnd(a,b){return a+Math.random()*(b-a)}
+  /* scroll progress with a chibi rider */
+  var prog=document.getElementById('prog'),rider=document.getElementById('rider');
+  function sp(){var h=document.documentElement.scrollHeight-innerHeight,f=h>0?scrollY/h:0;prog.style.width=(f*100)+'%';prog.style.opacity=scrollY>80?1:0;
+    rider.style.left=Math.max(17,Math.min(innerWidth-17,f*innerWidth))+'px';rider.classList.toggle('on',scrollY>80)}
+  addEventListener('scroll',sp,{passive:true});sp();
+  /* tap anywhere: little hearts and notes */
+  var ICONS=['💖','🎵','✨','💚','🎶','⭐'];
+  addEventListener('pointerdown',function(e){
+    if(document.getElementById('ld'))return;
+    for(var i=0;i<6;i++){var b=document.createElement('span');b.className='burst';b.textContent=ICONS[Math.random()*ICONS.length|0];
+      var a=rnd(0,6.28),d=rnd(40,90);b.style.left=e.clientX+'px';b.style.top=e.clientY+'px';
+      b.style.setProperty('--x',Math.cos(a)*d+'px');b.style.setProperty('--y',Math.sin(a)*d-30+'px');b.style.setProperty('--r',rnd(-60,60)+'deg');
+      document.body.appendChild(b);setTimeout(function(x){return function(){x.remove()}}(b),950)}
+  },{passive:true});
+  /* sparkles on section headings */
+  document.querySelectorAll('section h2').forEach(function(h){
+    var w=document.createElement('span');w.className='spark-h';while(h.firstChild)w.appendChild(h.firstChild);
+    w.insertAdjacentHTML('beforeend','<i>✨</i><i>✦</i><i>✨</i>');h.appendChild(w)});
+  /* chibi cards say hi (tap on phones) */
+  var HI=[['Hi!','你好!'],['Boom tss!','动次打次!'],['Yo!','嗨!'],['Hello!','哈喽!']];
+  document.querySelectorAll('.card').forEach(function(c,i){
+    var b=document.createElement('span');b.className='hi';b.innerHTML='<span lang="en">'+HI[i%4][0]+'</span><span lang="zh">'+HI[i%4][1]+'</span>';c.appendChild(b);
+    c.addEventListener('click',function(){c.classList.add('tap');setTimeout(function(){c.classList.remove('tap')},1500)})});
+  /* floating blobs behind the services */
+  var sv=document.querySelector('.svc-bg');if(sv)sv.insertAdjacentHTML('afterbegin','<div class="blobs"><b></b><b></b><b></b></div>');
+  /* tiles: 3D tilt + shine */
+  document.querySelectorAll('.tile').forEach(function(t){
+    t.insertAdjacentHTML('beforeend','<span class="shine"></span>');
+    t.addEventListener('pointermove',function(e){if(e.pointerType!=='mouse')return;var r=t.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+      t.style.transform='perspective(700px) rotateY('+(x*10)+'deg) rotateX('+(-y*10)+'deg) translateY(-6px)'});
+    t.addEventListener('pointerleave',function(){t.style.transform=''})});
+  /* peeking chibi */
+  var peek=document.getElementById('peek'),pimg=document.getElementById('peekimg'),say=document.getElementById('say'),ph=0,pt;
+  var LINES=[['Hi!','你好!'],['Boom tss!','动次打次!'],['Book us!','约我们!'],['Scroll more!','继续看!'],['Yay!','耶!']];
+  function doPeek(){if(document.getElementById('ld'))return;ph++;pimg.src='img/head-'+(ph%2?'roxor':'jasmin')+'.webp';
+    var l=LINES[Math.random()*LINES.length|0];say.textContent=zh()?l[1]:l[0];
+    peek.style.top=rnd(30,55)+'%';peek.classList.add('on');clearTimeout(pt);pt=setTimeout(function(){peek.classList.remove('on')},2800)}
+  if('IntersectionObserver' in window){var seen=new WeakSet(),io=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting&&!seen.has(e.target)){seen.add(e.target);setTimeout(doPeek,500)}})},{threshold:.35});
+    document.querySelectorAll('section').forEach(function(x){io.observe(x)})}
+  peek.addEventListener('click',function(){peek.classList.remove('jump');void peek.offsetWidth;peek.classList.add('jump');burstAt(peek);say.textContent=zh()?'嘿嘿!':'Hehe!';clearTimeout(pt);pt=setTimeout(function(){peek.classList.remove('on')},1800)});
+  function burstAt(el){var r=el.getBoundingClientRect();var ev=new PointerEvent('pointerdown',{clientX:r.left+r.width/2,clientY:r.top+r.height/3});dispatchEvent(ev)}
+  /* confetti */
+  var COLS=['#e74380','#78bc3b','#ffd23f','#ffffff','#5ab0ff'];
+  function confetti(n){for(var i=0;i<n;i++){var c=document.createElement('i');c.className='conf';c.style.left=rnd(0,100)+'vw';c.style.background=COLS[i%COLS.length];
+    c.style.setProperty('--dx',rnd(-120,120)+'px');c.style.setProperty('--rot',rnd(-720,720)+'deg');c.style.animationDuration=rnd(1.8,3.2)+'s';c.style.animationDelay=rnd(0,.4)+'s';
+    document.body.appendChild(c);setTimeout(function(x){return function(){x.remove()}}(c),3800)}}
+  document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){confetti(40)})});
+  var book=document.getElementById('book');
+  if(book&&'IntersectionObserver' in window){var bo=new IntersectionObserver(function(es){if(es[0].isIntersecting){confetti(60);bo.disconnect()}},{threshold:.5});bo.observe(book)}
+  /* secret: tap the logo 5 times for chibi rain */
+  var taps=0,tt,wm=document.querySelector('.bar .wm');
+  if(wm)wm.addEventListener("click",function(e){taps++;if(taps>1)e.preventDefault();clearTimeout(tt);tt=setTimeout(function(){taps=0},1200);
+    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
+      r.style.left=rnd(-5,95)+'vw';r.style.width=rnd(50,100)+'px';r.style.setProperty('--dx',rnd(-80,80)+'px');r.style.setProperty('--rot',rnd(-360,360)+'deg');
+      r.style.animationDuration=rnd(2.2,4)+'s';r.style.animationDelay=rnd(0,1.2)+'s';document.body.appendChild(r);setTimeout(function(x){return function(){x.remove()}}(r),5600)}confetti(50)}});
 })();
 </script>
 </body>
