@@ -21,7 +21,7 @@ export const KINDS = {
 };
 export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
 // pusher: its front face sweeps between FACE_MIN and FACE_MAX; PH is the shelf height; BACK_WALL scrapes the shelf
-export const FACE_MIN = -4.5, FACE_MAX = 0.5, PERIOD = 4.2, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -7.6;
+export const FACE_MIN = -4.5, FACE_MAX = 0.5, PERIOD = 4.2, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -10.8;   // one solid back wall; the shooters hang on it
 export const SHOOTER = { L: { x: -W / 2 + 1.6, y: PH + 7, z: BACK_WALL + 1.2 }, R: { x: W / 2 - 1.6, y: PH + 7, z: BACK_WALL + 1.2 } };
 // towers: a hollow ring of coins, RING_N per layer, each layer twisted a little more
 // RING_R is the smallest ring where neighbours touch edge to edge (no coin ever overlaps another); every other layer is
@@ -30,8 +30,8 @@ export const RING_N = 8, RING_R = (COIN_R + 0.005) / Math.sin(Math.PI / RING_N),
 export const TOWER_R = RING_R + COIN_R;
 // The pusher has a half-circle notch in the middle of its front (like the real cabinet). For a tower the pusher pulls
 // back further than its normal stroke (to FACE_RET), the tower rises out of the floor inside the notch, and then the
-// notch cradles it and shoves it forward. The back wall is recessed in the middle so the tower has room to rise.
-export const NOTCH_R = TOWER_R + 0.35, FACE_RET = -9, NOTCH_W = NOTCH_R + 0.3, BACK_RECESS = FACE_RET - NOTCH_R - 0.4;
+// notch cradles it and shoves it forward. The back wall sits far enough back that a rising tower clears it.
+export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
 export const FIELD_CAP = 230;    // most loose coins simulated at once
 export const CRUMBLE_MAX = 320, CRUMBLE_LIVE = 440;   // a crumbling tower adds at most this many real coins (briefly)
@@ -87,12 +87,8 @@ export class Machine {
     box(W / 2 + 1, 30, 0.2, 0, 18, GLASS_Z + 0.2, 0.2);                    // the front glass
     box(1, 10, (EDGE + 30) / 2, -W / 2 - 1, 9, (EDGE - 30) / 2, 0.1);    // side walls
     box(1, 10, (EDGE + 30) / 2, W / 2 + 1, 9, (EDGE - 30) / 2, 0.1);
-    // back wall just above the shelf, recessed in the middle where towers rise
-    const sideW = (W / 2 - NOTCH_W) / 2;
-    box(sideW, 8, 1, -(W / 2 + NOTCH_W) / 2, PH + 0.06 + 8, BACK_WALL - 1, 0.1);
-    box(sideW, 8, 1, (W / 2 + NOTCH_W) / 2, PH + 0.06 + 8, BACK_WALL - 1, 0.1);
-    box(NOTCH_W, 8, 1, 0, PH + 0.06 + 8, BACK_RECESS - 1, 0.1);
-    for (const sx of [-1, 1]) box(0.2, 8, (BACK_WALL - BACK_RECESS) / 2, sx * (NOTCH_W + 0.2), PH + 0.06 + 8, (BACK_WALL + BACK_RECESS) / 2 - 1, 0.1);
+    // the back wall, one solid piece just above the shelf (it scrapes shelf coins off as the pusher pulls back)
+    box(W / 2, 15, 1, 0, PH + 0.06 + 15, BACK_WALL - 1, 0.1);
     this.pusher = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PH / 2, this.pf - PUSH_HALF));
     for (const [hx, hz, x, z] of Machine.pusherBoxes()) w.createCollider(R.ColliderDesc.cuboid(hx, PH / 2, hz).setTranslation(x, 0, z).setFriction(0.45), this.pusher);
     this.hold = false; this.tq = [];
@@ -321,6 +317,7 @@ export class Machine {
   // ------------------------------------------------------------------ stepping
   stepOnce() {
     const dt = 1 / HZ;
+    this.steps = (this.steps || 0) + 1; this.pfPrev = this.pf;   // the view draws between the last two steps
     // the stroke runs unless a tower is coming up; the face never jumps (it moves at most 10 cm/s toward its target)
     if (!this.towers.some((T) => T.state === 'wait' || T.state === 'build')) this.hold = false;
     if (!this.hold && Math.abs(this.pf - pusherFace(this.t)) < 0.05) this.t += dt * this.speed;

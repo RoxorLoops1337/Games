@@ -309,8 +309,10 @@ function overlaps(m) {
   const s = JSON.parse(JSON.stringify(g.save()));
   const h = Game.load(s, new Machine());
   ok(h && h.bank === g.bank && h.heroes[1].lv === 4 && h.foe.hp === g.foe.hp && h.score === g.score && h.combo === 3 && h.meter === 3, 'a save round-trips coins, points, combo, heroes and enemy');
-  eq(h.row, ['B', 'Y'], 'the token row is saved');
-  ok(Math.abs(h.f.live() - g.f.live()) <= 2 && h.f.towers.length === 1 && h.f.towers[0].n === 360, 'the coins on the field (with their tilt) and the standing tower are saved');
+  ok(g.row.length >= 2 && g.row[0] === 'B' && g.row[1] === 'Y', 'the row kept the tokens it started with');
+  eq(h.row, g.row, 'the token row is saved');
+  const onBoard = g.f.coins.filter((c) => c.body).map((c) => c.body.translation()).filter((p) => Math.abs(p.x) <= 12 && p.z <= 12 && p.y >= 0).length;   // coins already falling off are not saved
+  ok(Math.abs(h.f.live() - onBoard) <= 2 && h.f.towers.length === 1 && h.f.towers[0].n === 360, 'the coins on the field (with their tilt) and the standing tower are saved');
   // an old save from the 2.5D machine keeps its progress and gets a fresh 3D machine
   const old = Game.load({ v: 1, bank: 55, score: 999, foeIdx: 2, foe: { hp: 10 }, heroes: [{ lv: 3 }], coins: [['c', 5, 10, 0]] }, new Machine());
   ok(old && old.bank === 55 && old.score === 999 && old.foeIdx === 2 && old.heroes[0].lv === 3 && old.f.live() > 60, 'an old save keeps its progress and gets a fresh machine');
