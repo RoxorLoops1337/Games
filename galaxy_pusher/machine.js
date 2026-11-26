@@ -31,6 +31,7 @@ export const TOWER_R = RING_R + COIN_R;
 // The pusher has a half-circle notch in the middle of its front (like the real cabinet). For a tower the pusher pulls
 // back further than its normal stroke (to FACE_RET), the tower rises out of the floor inside the notch, and then the
 // notch cradles it and shoves it forward. The back wall sits far enough back that a rising tower clears it.
+export const SPIRAL_TURNS = 1.5;   // turns a tower makes while it rises out of the notch
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
 export const FIELD_CAP = 230;    // most loose coins simulated at once
@@ -222,7 +223,9 @@ export class Machine {
         T.n = n;
         if (!T.rise) { T.layers = L1; T.hgt = L1 * LAYER_H; }
         else {
-          const k = Math.min(1, T.n / T.want), y = -T.H / 2 + T.H * (1 - Math.pow(1 - k, 2)); T.body.setNextKinematicTranslation({ x: T.x, y, z: T.z });
+          const k = Math.min(1, T.n / T.want), e = 1 - Math.pow(1 - k, 2), y = -T.H / 2 + T.H * e; T.body.setNextKinematicTranslation({ x: T.x, y, z: T.z });
+          // it spirals up: turning as it rises, fast at first and settling as it reaches full height
+          T.spin = SPIRAL_TURNS * Math.PI * 2 * e; T.body.setNextKinematicRotation({ x: 0, y: Math.sin(T.spin / 2), z: 0, w: Math.cos(T.spin / 2) });
           // the rising tower shoulders loose coins aside, so none end up inside or under it
           for (const c of this.coins) {
             if (!c.body) continue;
@@ -233,7 +236,7 @@ export class Machine {
           }
         }
         if (T.n >= T.want) {
-          if (T.rise) T.body.setTranslation({ x: T.x, y: T.H / 2 + 0.005, z: T.z }, true);
+          if (T.rise) { T.body.setTranslation({ x: T.x, y: T.H / 2 + 0.005, z: T.z }, true); const a = SPIRAL_TURNS * Math.PI * 2; T.body.setRotation({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, true); }
           T.state = 'stand'; T.body.setBodyType(R.RigidBodyType.Dynamic, true); this.hold = false; this.events.push({ t: 'towerDone', T });
         }
         keep.push(T); continue;
