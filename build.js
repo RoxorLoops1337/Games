@@ -35,6 +35,7 @@ const STATIC_PATHS = [
   'beatbox_story',
   'decktest',
   'pitchdeck',
+  'china',
   'DhauwieSurvival',
   'Carnegiendon',
   'loop_jam',

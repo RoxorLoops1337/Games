@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN" class="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RoxorLoops & Jasmin | Beatbox 与歌唱二人组</title>
+<meta name="description" content="RoxorLoops & Jasmin: a Denmark-based beatbox and singing duo. 来自丹麦的人声 Beatbox 与歌唱二人组。">
+<meta property="og:title" content="RoxorLoops & Jasmin">
+<meta property="og:description" content="Beatbox & singing duo · 人声 Beatbox 与歌唱二人组">
+<meta property="og:image" content="img/hero.webp">
+<meta name="theme-color" content="#78bc3b">
+<link rel="icon" href="img/icon-180.png">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<!-- China-friendly on purpose: every file is local. No Google, YouTube, Facebook or other blocked hosts. -->
+<style>
+@font-face{font-family:"Honey Monly";font-display:swap;src:url(fonts/Honey-Monly.otf) format("opentype")}
+:root{
+  --green:#78bc3b;--green-d:#5a9a24;--pink:#e74380;--pink-d:#c92e69;
+  --ink:#2b2b2b;--soft:#666;--bg:#fff;--card:#f7f7f4;--line:#ececec;
+  --head:"Honey Monly","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--body)}
+img{max-width:100%;display:block}
+a{color:inherit}
+.zh [lang=en]{display:none}.en [lang=zh]{display:none}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+
+/* top bar */
+.bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;justify-content:space-between;height:58px}
+.bar img{height:34px;width:auto}
+.lang{display:flex;border:2px solid var(--green);border-radius:99px;overflow:hidden}
+.lang button{border:0;background:none;padding:5px 13px;font:600 14px var(--body);color:var(--green-d);cursor:pointer}
+.zh .lang [data-l=zh],.en .lang [data-l=en]{background:var(--green);color:#fff}
+
+/* hero */
+.hero{background:linear-gradient(135deg,var(--pink) 0 50%,var(--green) 50% 100%);color:#fff;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:url(img/pattern.webp) center/700px repeat;opacity:.14}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:24px;align-items:center;padding-top:40px;padding-bottom:40px}
+.hero h1{font:400 clamp(38px,7vw,68px)/1 var(--head);margin:0 0 14px;letter-spacing:.5px;text-shadow:0 3px 0 rgba(0,0,0,.12)}
+.hero h1 .amp{color:#fff}
+.hero p.tag{font-size:clamp(18px,2.6vw,22px);margin:0 0 6px;font-weight:600}
+.hero p.sub{margin:0 0 24px;opacity:.95}
+.hero .pic{max-width:440px;justify-self:center;filter:drop-shadow(0 12px 24px rgba(0,0,0,.25))}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:99px;font-weight:700;text-decoration:none;border:0;cursor:pointer;font-size:16px}
+.btn.w{background:#fff;color:var(--pink-d)}
+.btn.o{background:rgba(255,255,255,.16);color:#fff;box-shadow:inset 0 0 0 2px #fff}
+
+/* sections */
+section{padding:56px 0}
+h2{font:400 clamp(30px,5vw,44px)/1.1 var(--head);margin:0 0 8px;color:var(--green)}
+h2 .p{color:var(--pink)}
+.lead{color:var(--soft);margin:0 0 28px;max-width:640px}
+
+.about{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}
+.about img{border-radius:22px}
+
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.card{border-radius:22px;padding:22px 20px;color:#fff;position:relative;overflow:hidden}
+.card:nth-child(odd){background:var(--green)}.card:nth-child(even){background:var(--pink)}
+.card h3{font:400 22px/1.15 var(--head);margin:0 0 8px}
+.card p{margin:0;font-size:15px;opacity:.95}
+.card .ic{font-size:28px;line-height:1;margin-bottom:10px}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+.stat{background:var(--card);border-radius:20px;padding:20px}
+.stat b{display:block;font:400 34px/1 var(--head);color:var(--pink);margin-bottom:6px}
+.stat:nth-child(even) b{color:var(--green)}
+.hl{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
+.hl li{padding-left:26px;position:relative}
+.hl li::before{content:"";position:absolute;left:0;top:.5em;width:12px;height:12px;border-radius:50%;background:var(--green)}
+.hl li:nth-child(even)::before{background:var(--pink)}
+
+.gallery{display:grid;grid-template-columns:1.2fr 1fr;grid-template-rows:auto auto;gap:14px}
+.gallery img{width:100%;height:100%;object-fit:cover;border-radius:20px}
+.gallery .big{grid-row:span 2}
+
+.clients{background:var(--card);border-radius:22px;padding:22px}
+
+.contact{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;border-radius:28px;padding:36px 28px;display:grid;grid-template-columns:1.3fr .7fr;gap:24px;align-items:center}
+.contact h2{color:#fff}
+.contact .lead{color:#fff;opacity:.92}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.14);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.row .k{font-size:13px;opacity:.85;width:100%}
+.row a{font-weight:700;font-size:18px;text-decoration:none;word-break:break-all;flex:1}
+.copy{border:0;background:#fff;color:var(--green-d);border-radius:99px;padding:6px 14px;font:600 14px var(--body);cursor:pointer}
+.contact img{max-width:260px;justify-self:center}
+
+footer{padding:36px 0 48px;text-align:center;color:var(--soft);font-size:14px}
+footer .soc{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0 16px}
+footer .soc a{padding:6px 14px;border:1px solid var(--line);border-radius:99px;text-decoration:none}
+footer img{height:56px;width:auto;margin:0 auto 10px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;transition:transform .25s,opacity .25s;z-index:9;opacity:0;visibility:hidden}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible}
+
+@media (max-width:820px){
+  .hero .wrap,.about,.contact{grid-template-columns:1fr}
+  .hero .wrap{text-align:center;padding-top:28px}
+  .btns{justify-content:center}
+  .hero .pic{max-width:300px;order:-1}
+  .cards{grid-template-columns:1fr 1fr}
+  .stats{grid-template-columns:1fr}
+  .hl{grid-template-columns:1fr}
+  .contact img{max-width:200px;order:-1}
+  section{padding:40px 0}
+}
+@media (max-width:460px){.cards{grid-template-columns:1fr}.gallery{grid-template-columns:1fr}.gallery .big{grid-row:auto}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <img src="img/wordmark.webp" alt="RoxorLoops & Jasmin" width="600" height="167">
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-l="zh">中文</button>
+      <button type="button" data-l="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <h1>RoxorLoops<br><span class="amp">&amp;</span> Jasmin</h1>
+      <p class="tag"><span lang="zh">来自丹麦的人声 Beatbox 与歌唱二人组</span><span lang="en">A beatbox and singing duo from Denmark</span></p>
+      <p class="sub"><span lang="zh">100% 纯人声打造的“有机”音乐。</span><span lang="en">100% organic music, made only with the human voice.</span></p>
+      <div class="btns">
+        <a class="btn w" href="#contact"><span lang="zh">预约演出</span><span lang="en">Book us</span></a>
+        <a class="btn o" href="#about"><span lang="zh">了解我们</span><span lang="en">About us</span></a>
+      </div>
+    </div>
+    <img class="pic" src="img/hero.webp" alt="RoxorLoops & Jasmin" width="640" height="713">
+  </div>
+</div>
+
+<section id="about">
+  <div class="wrap about">
+    <div>
+      <h2><span lang="zh">我们的<span class="p">故事</span></span><span lang="en">Our <span class="p">Story</span></span></h2>
+      <p lang="zh">我们是一对来自丹麦的 Beatbox 与歌唱二人组，自 2017 年起携手演出。从共同的音乐热爱出发，我们一路走上学校、音乐节和国际舞台。</p>
+      <p lang="zh">我们的目标很简单：用音乐与人相连。人声 Beatbox、有力的歌声，加上真诚的能量，把大家聚在一起，带来灵感与难忘的回忆。</p>
+      <p lang="en">We are a Denmark-based beatbox and singing duo, performing together since 2017. What started as a shared passion for music has grown into a journey across stages, schools, festivals and international events.</p>
+      <p lang="en">Our goal is simple: to connect with people through music, combining human beatboxing, powerful vocals and genuine energy.</p>
+    </div>
+    <img src="img/duo.webp" alt="RoxorLoops & Jasmin" width="1000" height="480" loading="lazy">
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2><span lang="zh">我们<span class="p">能做什么</span></span><span lang="en">What we <span class="p">do</span></span></h2>
+    <p class="lead"><span lang="zh">演出、教学、评审，适合各种舞台。</span><span lang="en">Shows, teaching and judging, for every kind of stage.</span></p>
+    <div class="cards">
+      <div class="card"><div class="ic">🎤</div>
+        <h3><span lang="zh">现场演出</span><span lang="en">Live Performances</span></h3>
+        <p><span lang="zh">为音乐节、音乐厅、学校和特别活动带来高能量的 Beatbox 与歌唱现场。</span><span lang="en">High-energy beatbox and singing sets for festivals, concert halls, schools and events.</span></p></div>
+      <div class="card"><div class="ic">🎶</div>
+        <h3><span lang="zh">工作坊与大师课</span><span lang="en">Workshops</span></h3>
+        <p><span lang="zh">面向学生和合唱团：Beatbox、人声打击乐、节奏、律动、合唱与无伴奏合唱。</span><span lang="en">Beatbox, vocal percussion, rhythm, groove, choir and a cappella singing for students and choirs.</span></p></div>
+      <div class="card"><div class="ic">⭐</div>
+        <h3><span lang="zh">国际评审</span><span lang="en">Judging</span></h3>
+        <p><span lang="zh">国际合唱比赛与 Beatbox 大赛的专业评审。</span><span lang="en">Professional jury for international choir competitions and beatbox battles.</span></p></div>
+      <div class="card"><div class="ic">🎉</div>
+        <h3><span lang="zh">企业与私人活动</span><span lang="en">Corporate &amp; Private</span></h3>
+        <p><span lang="zh">为品牌量身定制的演出和团队建设活动。</span><span lang="en">Brand-tailored entertainment and team-building.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2><span lang="zh">精彩<span class="p">瞬间</span></span><span lang="en">High<span class="p">lights</span></span></h2>
+    <p class="lead"><span lang="zh">从校园音乐会到国际音乐节，我们在世界各地演出、教学、带来灵感。</span><span lang="en">From school concerts to international festivals, we have performed, taught and inspired audiences around the world.</span></p>
+    <div class="stats">
+      <div class="stat"><b>509K</b><span lang="zh">Facebook 粉丝，线上社区超 35 万</span><span lang="en">Facebook followers, 350k+ online community</span></div>
+      <div class="stat"><b>5×</b><span lang="zh">RoxorLoops 担任 Beatbox 世界锦标赛评委</span><span lang="en">World Championships judged by RoxorLoops</span></div>
+      <div class="stat"><b>2017</b><span lang="zh">起携手演出，足迹遍布多国</span><span lang="en">Performing together across many countries</span></div>
+    </div>
+    <ul class="hl">
+      <li><span lang="zh">世界合唱比赛与欧洲合唱比赛评审（两次）</span><span lang="en">World Choir Games &amp; European Choir Games jury (twice)</span></li>
+      <li><span lang="zh">2026 年世界合唱比赛评审（瑞典赫尔辛堡）</span><span lang="en">World Choir Games jury, Helsingborg 2026</span></li>
+      <li><span lang="zh">与南非青年合唱团（80 余名歌手）同台</span><span lang="en">South Africa Youth Choir (80+ singers)</span></li>
+      <li><span lang="zh">与希腊塞萨洛尼基儿童合唱团（数百名歌手）同台</span><span lang="en">Thessaloniki kids choir (hundreds of singers)</span></li>
+      <li><span lang="zh">2025 年举办 25 场校园音乐会</span><span lang="en">25 school concerts in 2025</span></li>
+      <li><span lang="zh">音乐节、音乐厅、学校与电视舞台</span><span lang="en">Festivals, concert halls, schools and TV stages</span></li>
+    </ul>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="gallery">
+      <img class="big" src="img/photo-choir.webp" alt="" width="900" height="900" loading="lazy">
+      <img src="img/photo-greece.webp" alt="" width="1000" height="668" loading="lazy">
+      <img src="img/photo-stage.webp" alt="" width="870" height="579" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2><span lang="zh">合作<span class="p">伙伴</span></span><span lang="en">They put us <span class="p">on stage</span></span></h2>
+    <div class="clients"><img src="img/clients.webp" alt="Clients" width="1200" height="216" loading="lazy"></div>
+  </div>
+</section>
+
+<section id="contact" style="padding-top:0">
+  <div class="wrap">
+    <div class="contact">
+      <div>
+        <h2><span lang="zh">预约演出</span><span lang="en">Book us</span></h2>
+        <p class="lead"><span lang="zh">演出、工作坊、评审或活动合作，欢迎联系。我们会在 24 小时内回复（中文或英文均可）。</span><span lang="en">Shows, workshops, judging or events: get in touch. We reply within 24 hours.</span></p>
+        <div class="row"><span class="k"><span lang="zh">邮箱</span><span lang="en">Email</span></span>
+          <a href="mailto:booking@roxorloopsandjasmin.com">booking@roxorloopsandjasmin.com</a>
+          <button class="copy" type="button" data-copy="booking@roxorloopsandjasmin.com"><span lang="zh">复制</span><span lang="en">Copy</span></button></div>
+        <div class="row"><span class="k"><span lang="zh">电话</span><span lang="en">Phone</span></span>
+          <a href="tel:+4531330166">+45 31 33 01 66</a>
+          <button class="copy" type="button" data-copy="+4531330166"><span lang="zh">复制</span><span lang="en">Copy</span></button></div>
+      </div>
+      <img src="img/chibi.webp" alt="" width="520" height="507" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <img src="img/logo.webp" alt="RJ" width="240" height="240" loading="lazy">
+    <div><span lang="zh">国际社交平台</span><span lang="en">Follow us</span></div>
+    <div class="soc">
+      <a href="https://roxorloopsandjasmin.com/">Website</a>
+      <a href="https://www.instagram.com/roxorloopsandjasmin">Instagram</a>
+      <a href="https://www.tiktok.com/@roxorloopsandjasmin">TikTok</a>
+      <a href="https://www.youtube.com/@RoxorLoops">YouTube</a>
+      <a href="https://web.facebook.com/RoxorLoopsAndJasmin/">Facebook</a>
+    </div>
+    © 2026 RoxorLoops &amp; Jasmin
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function setLang(l){
+    root.className=l; root.lang=l==='zh'?'zh-CN':'en';
+    try{localStorage.setItem('rj_lang',l)}catch(e){}
+  }
+  var saved=null; try{saved=localStorage.getItem('rj_lang')}catch(e){}
+  var q=(location.search.match(/[?&]lang=(zh|en)/)||[])[1];
+  var nav=(navigator.language||'').toLowerCase();
+  setLang(q||saved||(nav.indexOf('zh')===0?'zh':(nav?'en':'zh')));
+  document.querySelectorAll('.lang button').forEach(function(b){
+    b.addEventListener('click',function(){setLang(b.dataset.l)});
+  });
+  var toast=document.getElementById('toast'),t;
+  function show(msg){toast.textContent=msg;toast.classList.add('on');clearTimeout(t);t=setTimeout(function(){toast.classList.remove('on')},1800)}
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var v=b.dataset.copy, ok=root.className==='zh'?'已复制':'Copied';
+      function fallback(){var i=document.createElement('textarea');i.value=v;document.body.appendChild(i);i.select();try{document.execCommand('copy');show(ok)}catch(e){}document.body.removeChild(i)}
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(function(){show(ok)},fallback)}else fallback();
+    });
+  });
+})();
+</script>
+</body>
+</html>
