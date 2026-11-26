@@ -235,6 +235,12 @@ footer .soc a:hover{transform:translateY(-3px);border-color:var(--pink)}
   .cards{grid-template-columns:1fr;margin-top:100px}
   .gal{grid-template-columns:1fr}
   .gal .pol:nth-child(3){grid-column:auto;width:auto}
+  .row{position:relative;display:block;padding:12px 14px 14px}
+  .row .ico{display:none}
+  .row .k{margin-bottom:6px;line-height:32px}
+  .row a{display:block;white-space:nowrap;word-break:normal;font-size:clamp(14px,4.3vw,17px)}
+  .row .copy{position:absolute;top:10px;right:10px;padding:6px 14px}
+  .book{padding-left:16px;padding-right:16px}
   .pol:nth-child(2){transform:rotate(3deg)}
   .logos img{height:80px}
   .ticker span{font-size:21px}
@@ -243,9 +249,143 @@ footer .soc a:hover{transform:translateY(-3px);border-color:var(--pink)}
   *,*::before,*::after{animation:none!important;transition:none!important}
   .hero h1 .ch,.fade,.rv{opacity:1;transform:none}
 }
+
+/* ---------- loader mini game: Catch the Beat ---------- */
+#ld{position:fixed;inset:0;z-index:100;color:#fff;overflow:hidden;touch-action:manipulation;-webkit-user-select:none;user-select:none;
+  background:linear-gradient(120deg,#e74380 0 50%,#78bc3b 50%);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  transition:opacity .5s ease,transform .6s cubic-bezier(.7,0,.3,1)}
+#ld.ld-bye{opacity:0;transform:scale(1.15);pointer-events:none}
+#ld .ld-top{position:absolute;left:0;right:0;top:calc(18px + env(safe-area-inset-top));text-align:center;padding:0 16px;pointer-events:none}
+#ld .ld-t1{font-weight:900;font-size:clamp(26px,7vw,38px);letter-spacing:1px;text-shadow:0 4px 0 rgba(0,0,0,.15);margin:0}
+#ld .ld-t2{margin:4px 0 0;font-weight:700;opacity:.95;font-size:16px}
+#ld .ld-score{display:inline-block;margin-top:12px;background:#fff;color:#e74380;font-weight:900;font-size:22px;border-radius:99px;padding:6px 18px;box-shadow:0 5px 0 rgba(0,0,0,.15);transition:transform .15s}
+#ld .ld-score.ld-hit{transform:scale(1.25) rotate(-4deg)}
+#ld .ld-combo{display:block;font-weight:900;font-size:15px;height:20px;margin-top:6px;color:#fff}
+#ld .ld-note{position:absolute;left:0;top:0;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:#fff;box-shadow:0 6px 0 rgba(0,0,0,.15),0 10px 24px rgba(0,0,0,.18);font-size:34px;line-height:68px;text-align:center;will-change:transform}
+#ld .ld-note.ld-gold{background:#ffd23f;box-shadow:0 6px 0 #d9a400,0 0 0 6px rgba(255,210,63,.35)}
+#ld .ld-pop{position:absolute;font-weight:900;font-size:30px;pointer-events:none;text-shadow:0 3px 0 rgba(0,0,0,.2);animation:ldpop .7s ease-out forwards;transform:translate(-50%,-50%)}
+@keyframes ldpop{to{opacity:0;transform:translate(-50%,-150%) scale(1.5) rotate(var(--r))}}
+#ld .ld-ring{position:absolute;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;border:5px solid #fff;pointer-events:none;animation:ldring .45s ease-out forwards}
+@keyframes ldring{to{transform:scale(2.2);opacity:0}}
+#ld .ld-bot{position:absolute;left:16px;right:16px;bottom:calc(22px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;text-align:center}
+#ld .ld-bar{height:22px;border-radius:99px;background:rgba(0,0,0,.18);overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,.15)}
+#ld .ld-fill{height:100%;width:3%;border-radius:99px;background:repeating-linear-gradient(-45deg,#fff 0 14px,#fde7ef 14px 28px);background-size:40px 40px;animation:ldstripe .8s linear infinite;transition:width .4s ease}
+@keyframes ldstripe{to{background-position:40px 0}}
+#ld .ld-pct{font-weight:800;margin-top:8px;font-size:15px}
+#ld .ld-go{display:none;margin:0 auto 14px;border:0;background:#fff;color:#e74380;font-weight:900;font-size:22px;padding:16px 38px;border-radius:99px;cursor:pointer;
+  box-shadow:0 7px 0 rgba(0,0,0,.18);animation:ldgo 1s ease-in-out infinite}
+#ld.ld-ready .ld-go{display:inline-block}
+@keyframes ldgo{50%{transform:scale(1.07)}}
+#ld .ld-mic{position:absolute;left:50%;top:50%;font-size:70px;transform:translate(-50%,-50%);animation:ldmic 1.2s ease-in-out infinite;pointer-events:none;opacity:.9}
+@keyframes ldmic{50%{transform:translate(-50%,-58%) rotate(-10deg)}}
+#ld.ld-playing .ld-mic{display:none}
+body.loading .hero *,body.loading .hero::before,body.loading .hero::after{animation-play-state:paused!important}
+body.loading{overflow:hidden}
 </style>
 </head>
-<body>
+<body class="loading">
+<div id="ld" role="dialog" aria-label="Loading">
+  <div class="ld-top">
+    <p class="ld-t1">Catch the Beat!</p>
+    <p class="ld-t2" id="ldt">点击音符，一起 Beatbox！ Tap the notes!</p>
+    <span class="ld-score" id="lds">0</span>
+    <span class="ld-combo" id="ldc"></span>
+  </div>
+  <span class="ld-mic" aria-hidden="true">🎤</span>
+  <div class="ld-bot">
+    <button class="ld-go" id="ldgo" type="button">进入 Enter ▶</button>
+    <div class="ld-bar"><div class="ld-fill" id="ldf"></div></div>
+    <div class="ld-pct" id="ldp">Loading… 0%</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L=document.getElementById('ld'),fill=document.getElementById('ldf'),pct=document.getElementById('ldp'),sc=document.getElementById('lds'),cb=document.getElementById('ldc'),go=document.getElementById('ldgo');
+  var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lq=(location.search.match(/[?&]lang=(zh|en)/)||[])[1],ls=null;try{ls=localStorage.getItem('rj_lang')}catch(e){}
+  var zh=(lq||ls)?(lq||ls)==='zh':(navigator.language||'zh').toLowerCase().indexOf('zh')===0;
+  var score=0,combo=0,lastHit=0,played=false,done=false,loaded=false,shown=0,t0=Date.now(),notes=[];
+  var SOUNDS=['BOOM','TSS','KA','PFF','动次','打次','BOOTS','CATS','WUB','ZZT'];
+  var ICONS=['🎵','🎶','🥁','🎤','🎵','🎶'];
+  /* sound: a tiny synthesized kick / snare / hat, no audio files */
+  var ac=null;
+  function snd(kind){
+    try{
+      ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+      if(ac.state==='suspended')ac.resume();
+      var t=ac.currentTime,g=ac.createGain();g.connect(ac.destination);
+      if(kind===0){var o=ac.createOscillator();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(40,t+.15);
+        g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);o.connect(g);o.start(t);o.stop(t+.26)}
+      else{var n=ac.createBufferSource(),len=kind===1?.18:.05,b=ac.createBuffer(1,ac.sampleRate*len,ac.sampleRate),d=b.getChannelData(0);
+        for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=b;
+        var f=ac.createBiquadFilter();f.type=kind===1?'bandpass':'highpass';f.frequency.value=kind===1?1800:7000;
+        g.gain.setValueAtTime(kind===1?.6:.35,t);g.gain.exponentialRampToValueAtTime(.001,t+len);n.connect(f);f.connect(g);n.start(t)}
+    }catch(e){}
+  }
+  function spawn(){
+    if(done||still)return;
+    var W=innerWidth,H=innerHeight,el=document.createElement('button');
+    var gold=Math.random()<.12;
+    el.type='button';el.className='ld-note'+(gold?' gold':'');el.textContent=gold?'⭐':ICONS[Math.random()*ICONS.length|0];
+    el.setAttribute('aria-label','note');
+    var n={el:el,x:40+Math.random()*(W-80),y:H*.78,vx:(Math.random()-.5)*60,vy:-(70+Math.random()*70+Math.min(score,40)*2),
+      ph:Math.random()*6.28,gold:gold,dead:false,top:H*.2};
+    el.addEventListener('pointerdown',function(ev){ev.preventDefault();hit(n)});
+    L.appendChild(el);notes.push(n);
+  }
+  function hit(n){
+    if(n.dead)return;n.dead=true;played=true;L.classList.add('ld-playing');
+    var now=Date.now();combo=now-lastHit<900?combo+1:1;lastHit=now;
+    var add=(n.gold?5:1)*(combo>=5?2:1);score+=add;sc.textContent=score;
+    sc.classList.add('ld-hit');setTimeout(function(){sc.classList.remove('ld-hit')},150);
+    cb.textContent=combo>=3?('COMBO x'+combo+(combo>=5?' · 2× !':'')):'';
+    snd(n.gold?0:(score%3));
+    var r=document.createElement('span');r.className='ld-ring';r.style.left=n.x+'px';r.style.top=n.y+'px';L.appendChild(r);
+    var p=document.createElement('span');p.className='ld-pop';p.textContent=n.gold?'+5 ⭐':SOUNDS[Math.random()*SOUNDS.length|0];
+    p.style.left=n.x+'px';p.style.top=n.y+'px';p.style.setProperty('--r',(Math.random()*40-20)+'deg');L.appendChild(p);
+    setTimeout(function(){r.remove();p.remove()},750);
+    n.el.remove();
+    if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
+  }
+  var last=performance.now(),acc=0;
+  function loop(now){
+    if(done)return;
+    var dt=Math.min(.05,(now-last)/1000);last=now;acc+=dt;
+    if(acc>Math.max(.38,.75-score*.01)){acc=0;spawn()}
+    for(var i=notes.length-1;i>=0;i--){var n=notes[i];
+      if(n.dead){notes.splice(i,1);continue}
+      n.y+=n.vy*dt;n.ph+=dt*3;var x=n.x+Math.sin(n.ph)*18;
+      n.el.style.transform='translate('+x+'px,'+n.y+'px) rotate('+Math.sin(n.ph)*12+'deg)';
+      if(n.y<n.top){n.el.style.transition='opacity .3s';n.el.style.opacity='0';n.dead=true;(function(e){setTimeout(function(){e.remove()},300)})(n.el);combo=0;cb.textContent=''}
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  /* progress: creeps forward on its own, then jumps to 100% when the page has loaded */
+  function setP(v){shown=Math.max(shown,v);fill.style.width=shown+'%';pct.textContent=(zh?'加载中… ':'Loading… ')+Math.round(shown)+'%'}
+  var creep=setInterval(function(){if(!loaded)setP(shown+(92-shown)*.05)},120);
+  function finish(){
+    if(done)return;done=true;clearInterval(creep);
+    L.classList.add('ld-bye');document.body.classList.remove('loading');
+    setTimeout(function(){L.remove()},650);
+  }
+  function ready(){
+    if(loaded)return;loaded=true;setP(100);
+    pct.textContent=zh?'准备好了！':'Ready!';
+    var quick=Date.now()-t0<700;
+    if(quick&&!played){finish();return}         /* cached / fast: skip straight to the site */
+    L.classList.add('ld-ready');
+    if(!played)setTimeout(function(){if(!played)finish()},900);
+    var idle=setInterval(function(){if(done)return clearInterval(idle);if(Date.now()-lastHit>5000)finish()},500);
+  }
+  go.addEventListener('click',finish);
+  if(document.readyState==='complete')ready();else addEventListener('load',ready);
+  setTimeout(ready,12000); /* never trap anyone: open after 12 s whatever happens */
+  if(!zh){document.getElementById('ldt').textContent='Tap the notes while we load!';go.textContent='Enter ▶'}
+  else go.textContent='进入网站 ▶';
+})();
+</script>
 
 <header class="bar" id="bar">
   <div class="wrap">
