@@ -37,7 +37,13 @@ export class View3D {
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = (this.scene = new THREE.Scene());
     const pm = new THREE.PMREMGenerator(r);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    // reflections: the room plus a few neon strips, so polished coins catch cyan, pink and gold highlights
+    const env = new RoomEnvironment();
+    for (const [col, x, y, z, w, h] of [[0x3fd0ff, -7, 6, -4, 6, 0.6], [0xff4fb0, 7, 6, -4, 6, 0.6], [0xffd75c, 0, 8, 3, 9, 0.5], [0xffffff, 0, 9, -6, 10, 1.2]]) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), new THREE.MeshBasicMaterial({ color: col }));
+      strip.material.color.multiplyScalar(3); strip.position.set(x, y, z); strip.lookAt(0, 0, 0); env.add(strip);
+    }
+    scene.environment = pm.fromScene(env, 0.02).texture;
     scene.environmentIntensity = 0.55;
     this.camera = new THREE.PerspectiveCamera(38, 1, 1, 400);
     // light: a soft key from the front left with shadows, a cool fill, neon rims at the back
@@ -170,8 +176,9 @@ export class View3D {
       let side, face;
       if (k === 'c' || k === 'g') {
         const f = k === 'c' ? silverFace : goldFace, e = k === 'c' ? reedS : reedG;
-        side = mat({ map: e, bumpMap: e, bumpScale: 0.6, color: k === 'c' ? 0xb4bac6 : 0xd9b35a, metalness: 1, roughness: 0.36 });
-        face = mat({ map: f, bumpMap: f, bumpScale: 1.6, color: k === 'c' ? 0xbfc5d0 : 0xe8c062, metalness: 1, roughness: 0.3 });
+        // polished metal: low roughness and strong reflections (the room and the cabinet neon show in every coin)
+        side = mat({ map: e, bumpMap: e, bumpScale: 0.5, color: k === 'c' ? 0xd0d5de : 0xf0c868, metalness: 1, roughness: 0.18, envMapIntensity: 2.0 });
+        face = mat({ map: f, bumpMap: f, bumpScale: 1.2, color: k === 'c' ? 0xd8dde6 : 0xf5cd6a, metalness: 1, roughness: 0.12, envMapIntensity: 2.2 });
       } else {
         const C = COLS[k];
         side = mat({ map: canvasTex(chipEdgeTex(C.main, C.dark)), metalness: 0, roughness: 0.6, envMapIntensity: 0.3 });
@@ -264,14 +271,21 @@ export class View3D {
       const tr = T.body.translation(), ro = T.body.rotation();
       this._tp.set(tr.x, tr.y, tr.z); this._tq.set(ro.x, ro.y, ro.z, ro.w);
       const k = T.gold ? 'g' : 'c', I = this.inst[k];
-      const nDraw = T.rise && T.state === 'build' ? T.want : T.n;   // a rising tower is whole, coming up through the floor
+      // a rising tower is whole (coming up through the floor); a crumbling one only has the layers not yet peeled off
+      const nDraw = T.state === 'crumble' ? Math.min(T.want, T.peel * RING_N) : T.rise && T.state === 'build' ? T.want : T.n;
       for (let i = 0; i < nDraw && counts[k] < MAX[k]; i++) {
         const [lx, ly, lz] = Machine.ringLocal(T, i);
-        this._lp.set(lx, ly, lz).applyQuaternion(this._tq).add(this._tp);
-        this._lq.setFromAxisAngle(this._ax, i * 1.7).premultiply(this._tq);
+        // hand-stacked, not machined: each coin sits a hair further out and a hair tilted (outward only, so neighbours never touch)
+        const h1 = Math.sin(i * 12.9898) * 43758.5453, h2 = Math.sin(i * 78.233) * 12543.123, j1 = h1 - Math.floor(h1), j2 = h2 - Math.floor(h2);
+        const out = 1 + (j1 * 0.07) / RING_R;
+        this._lp.set(lx * out, ly, lz * out).applyQuaternion(this._tq).add(this._tp);
+        this._lq.setFromAxisAngle(this._ax, i * 1.7);
+        this._jq = this._jq || new THREE.Quaternion(); this._jv = this._jv || new THREE.Vector3();
+        this._jq.setFromAxisAngle(this._jv.set(Math.cos(j2 * 6.28), 0, Math.sin(j2 * 6.28)), (j1 - 0.5) * 0.03);
+        this._lq.premultiply(this._jq).premultiply(this._tq);
         m.compose(this._lp, this._lq, s); I.setMatrixAt(counts[k]++, m);
       }
-      T.crown.forEach((ck, i) => {
+      if (T.state !== 'crumble') T.crown.forEach((ck, i) => {
         const [cx, cy, cz] = Machine.crownLocal(T, i);
         this._lp.set(cx, cy, cz).applyQuaternion(this._tq).add(this._tp);
         m.compose(this._lp, this._tq, s); if (counts[ck] < MAX[ck]) this.inst[ck].setMatrixAt(counts[ck]++, m);

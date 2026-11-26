@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE } from '../galaxy_pusher/machine.js';
 import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -149,7 +149,8 @@ function overlaps(m) {
   let smack = null, burst = null, paid0 = g.stats.paid;
   for (let i = 0; i < 60 * 15 && !burst; i++) { g.tick(1 / 60); for (const e of g.out) { if (e.t === 'smack') smack = e; if (e.t === 'burst') burst = e; } g.out.length = 0; }
   ok(smack && smack.z === GLASS_Z, 'a tower that reaches the edge falls over and smacks against the front glass');
-  ok(burst && !g.f.towers.includes(T), 'then it bursts into loose coins');
+  for (let i = 0; i < 60; i++) { g.tick(1 / 60); g.out.length = 0; }
+  ok(burst && !g.f.towers.includes(T), 'then it crumbles into loose coins');
   for (let i = 0; i < 60 * 6; i++) { g.tick(1 / 60); g.out.length = 0; }
   ok(g.stats.paid - paid0 > 120, 'most of its coins pour down between the edge and the glass and pay (' + (g.stats.paid - paid0) + ')');
   // every coin of the tower is accounted for: the loose coins it becomes carry its whole value
@@ -160,10 +161,14 @@ function overlaps(m) {
   ok(rose && T2.state === 'stand' && Math.abs(T2.body.translation().z - FACE_RET) < 0.3, 'it rises out of the floor in the pusher notch, then stands');
   ok(T2.body.translation().y > T2.H / 2 - 0.05, 'once risen it stands on the floor, not sunk or launched');
   m.events.length = 0;
-  const before = new Set(m.coins); m.burst(T2);
-  const spill = m.coins.filter((c) => !before.has(c) && c.k === 'c');
-  eq(spill.reduce((a, c) => a + c.mul, 0), 720, 'a toppled tower turns into loose coins worth all 720 of its coins');
-  ok(m.live() <= Math.max(FIELD_CAP, before.size + 40) + 2, 'a big spill never floods the field past its cap');
+  const before = new Set(m.coins); let spawned = 0; const add0 = m.add.bind(m);
+  m.add = (...a) => { const c = add0(...a); if (c.k === 'c') spawned += c.mul; return c; };
+  m.burst(T2);
+  ok(T2.state === 'crumble', 'a toppling tower crumbles: its layers peel off as real coins, top first');
+  for (let i = 0; i < HZ * 1.2 && T2.body; i++) m.stepOnce();
+  ok(!T2.body && !m.towers.includes(T2), 'within about half a second the whole tower has become loose coins');
+  eq(spawned, 720, 'a toppled tower turns into loose coins worth all 720 of its coins');
+  ok(m.live() <= CRUMBLE_LIVE + 2, 'a big crumble never floods the field past its cap (' + m.live() + ')');
 }
 {
   const counts = {}; WHEEL.forEach((P) => { counts[P.c] = (counts[P.c] || 0) + 1; });

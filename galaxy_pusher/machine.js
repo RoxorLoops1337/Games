@@ -34,6 +34,7 @@ export const TOWER_R = RING_R + COIN_R;
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = -9, NOTCH_W = NOTCH_R + 0.3, BACK_RECESS = FACE_RET - NOTCH_R - 0.4;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
 export const FIELD_CAP = 230;    // most loose coins simulated at once
+export const CRUMBLE_MAX = 320, CRUMBLE_LIVE = 440;   // a crumbling tower adds at most this many real coins (briefly)
 // the front window: a glass pane just past the drop edge, like the cabinet glass the player looks through
 export const GLASS_Z = EDGE + TOWER_R + 3.5;   // far enough that a tower falls a good way before its top smacks it
 // collision groups: (memberships << 16) | filter. Coins hanging past the edge filter the floor out.
@@ -241,6 +242,13 @@ export class Machine {
         }
         keep.push(T); continue;
       }
+      if (T.state === 'crumble') {
+        const v = T.body.linvel(); T.body.setLinvel({ x: v.x, y: v.y - GRAV * dt, z: v.z }, true);   // still falling
+        T.peelAcc += T.peelRate * dt;
+        while (T.peelAcc >= 1 && T.peel > 0) { T.peel--; T.peelAcc--; this.peelLayer(T, T.peel); }
+        if (T.peel <= 0) { this.world.removeRigidBody(T.body); T.body = null; continue; }
+        keep.push(T); continue;
+      }
       const p = T.body.translation(), up = rotY(T.body.rotation());
       T.x = p.x; T.z = p.z;
       if (T.state === 'stand') {
@@ -261,8 +269,8 @@ export class Machine {
         if (!T.smack && top.z + TOWER_R * Math.cos(T.tilt) > GLASS_Z - 0.25 && T.tilt > 0.05) {
           T.smack = this.t; this.events.push({ t: 'smack', T, x: top.x, y: top.y, z: GLASS_Z, n: T.want });
         }
-        if (T.smack && this.t - T.smack > 0.35) { this.burst(T); continue; }
-        if (T.tilt > 0.8 || p.y < T.H * 0.3) { this.burst(T); continue; }
+        if (T.smack && this.t - T.smack > 0.35) { this.burst(T); keep.push(T); continue; }
+        if (T.tilt > 0.8 || p.y < T.H * 0.3) { this.burst(T); keep.push(T); continue; }
       }
       keep.push(T);
     }
@@ -280,22 +288,34 @@ export class Machine {
   }
   // The tower turns into loose coins where its coins were, moving the way it was moving. Three coins per layer
   // (they do not overlap), up to FIELD_CAP loose coins on the field: the tower's full count is shared between them.
+  // The tower crumbles into real coins, top layer first, over about half a second: each peeled layer becomes loose
+  // coins carrying the tower's motion. Small towers become every one of their coins; big ones get fewer real coins per
+  // layer (each worth its share) so a phone stays smooth. The value of every coin is kept exactly.
   burst(T) {
-    const p = T.body.translation(), q = T.body.rotation(), lv = T.body.linvel(), av = T.body.angvel();
-    const r = this.rng, picks = [];
-    for (let k = 0; k < T.layers; k++) for (let j = 0; j < 3; j++) picks.push(k * RING_N + ((j * 3 + (k % 2) * 1) % RING_N));
-    const room = Math.max(40, FIELD_CAP - this.live());
-    const step = Math.max(1, Math.ceil(picks.length / room)), chosen = picks.filter((_, i) => i % step === 0);
-    const per = Math.floor(T.want / chosen.length), extra = T.want - per * chosen.length;
-    chosen.forEach((i, idx) => {
-      const [lx, ly, lz] = Machine.ringLocal(T, i), w = rotate(q, lx, ly, lz);
-      const pos = { x: p.x + w.x, y: Math.max(COIN_HH + 0.02, p.y + w.y), z: p.z + w.z };
-      const v = { x: lv.x + av.y * w.z - av.z * w.y + (r() - 0.5) * 6, y: lv.y + av.z * w.x - av.x * w.z + r() * 4, z: lv.z + av.x * w.y - av.y * w.x + (r() - 0.5) * 6 };
-      this.add(T.gold ? 'g' : 'c', Math.max(-W / 2 + 1.25, Math.min(W / 2 - 1.25, pos.x)), pos.y, pos.z, { rot: q, v, w: { x: (r() - 0.5) * 8, y: (r() - 0.5) * 8, z: (r() - 0.5) * 8 }, tw: true, mul: per + (idx < extra ? 1 : 0) });
-    });
+    const lv = T.body.linvel(), av = T.body.angvel(), p = T.body.translation(), q = T.body.rotation();
+    const budget = Math.max(80, Math.min(CRUMBLE_MAX, CRUMBLE_LIVE - this.live()));
+    T.per = Math.max(1, Math.min(RING_N, Math.floor(budget / Math.max(1, T.layers))));
+    T.state = 'crumble'; T.peel = T.layers; T.peelAcc = 0; T.peelRate = T.layers / 0.45;
+    // the rest of the stack keeps falling but no longer collides (the peeled coins take over)
+    T.body.setBodyType(R.RigidBodyType.KinematicVelocityBased, true);
+    T.body.setLinvel(lv, true); T.body.setAngvel(av, true);
+    for (let i = 0; i < T.body.numColliders(); i++) T.body.collider(i).setSensor(true);
     T.crown.forEach((k, i) => { const [cx, cy, cz] = Machine.crownLocal(T, i), w = rotate(q, cx, cy + 0.05, cz); this.add(k, p.x + w.x, Math.max(0.3, p.y + w.y), p.z + w.z, { v: { x: lv.x, y: lv.y + 3, z: lv.z }, tw: true }); });
-    this.world.removeRigidBody(T.body); T.body = null;
+    T.crown = [];
     this.events.push({ t: 'burst', T, n: T.want });
+  }
+  peelLayer(T, k) {
+    const p = T.body.translation(), q = T.body.rotation(), lv = T.body.linvel(), av = T.body.angvel(), r = this.rng;
+    const inLayer = Math.max(0, Math.min(RING_N, T.want - k * RING_N));
+    if (!inLayer) return;
+    const s = Math.min(inLayer, T.per), base = Math.floor(inLayer / s), extra = inLayer - base * s;
+    for (let j = 0; j < s; j++) {
+      const i = k * RING_N + Math.floor((j * inLayer) / s);
+      const [lx, ly, lz] = Machine.ringLocal(T, i), w = rotate(q, lx, ly, lz);
+      const v = { x: lv.x + av.y * w.z - av.z * w.y + (r() - 0.5) * 4, y: lv.y + av.z * w.x - av.x * w.z + r() * 2, z: lv.z + av.x * w.y - av.y * w.x + (r() - 0.5) * 4 };
+      this.add(T.gold ? 'g' : 'c', Math.max(-W / 2 + 1.25, Math.min(W / 2 - 1.25, p.x + w.x)), Math.max(COIN_HH + 0.02, p.y + w.y), p.z + w.z,
+        { rot: q, v, w: { x: av.x + (r() - 0.5) * 6, y: (r() - 0.5) * 6, z: av.z + (r() - 0.5) * 6 }, tw: true, mul: base + (j < extra ? 1 : 0) });
+    }
   }
 
   // ------------------------------------------------------------------ stepping
@@ -375,7 +395,7 @@ export class Machine {
       t: r2(this.t),
       coins: this.coins.filter((c) => c.body).map((c) => { const p = c.body.translation(), q = c.body.rotation(); const a = [c.k, r2(p.x), r2(p.y), r2(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w)]; if (c.mul > 1) a.push(c.mul); return a; }),
       // a standing tower keeps its place; one still waiting or rising comes up again after a reload
-      towers: this.towers.map((T) => { const up = T.state === 'stand' && T.body, p = up ? T.body.translation() : { x: 0, z: FACE_RET }; return [r2(p.x), r2(p.z), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0), up ? 's' : 'w']; }),
+      towers: this.towers.filter((T) => T.state !== 'crumble').map((T) => { const up = T.state === 'stand' && T.body, p = up ? T.body.translation() : { x: 0, z: FACE_RET }; return [r2(p.x), r2(p.z), T.want, T.gold ? 1 : 0, T.col, T.crown.join(''), r2(T.twist0), up ? 's' : 'w']; }),
     };
   }
   restore(s) {
