@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE } from '../galaxy_pusher/machine.js';
 import { Game, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -157,7 +157,16 @@ function overlaps(m) {
   const m = new Machine(mulberry(5)); m.seedCarpet();
   const T2 = m.placeTower(720, {});
   ok(T2.state === 'wait' && !T2.body, 'a won tower waits for the pusher to pull back');
-  let rose = false; for (let i = 0; i < HZ * 8 && T2.state !== 'stand'; i++) { m.stepOnce(); if (T2.state === 'build') { rose = true;  } }
+  let rose = false, pfMax = -Infinity, ang0 = null, angMax = 0;
+  for (let i = 0; i < HZ * 8 && T2.state !== 'stand'; i++) {
+    m.stepOnce();
+    if (T2.state === 'build') {
+      rose = true; pfMax = Math.max(pfMax, m.pf);
+      const q = T2.body.rotation(), a = 2 * Math.atan2(q.y, q.w); if (ang0 === null) ang0 = a; angMax = Math.max(angMax, Math.abs(Math.sin((a - ang0) / 2)));
+    }
+  }
+  ok(rose && pfMax < FACE_MIN - 1, 'the pusher stays pulled back past its normal stroke the whole time the tower rises');
+  ok(angMax > 0.7, 'the tower spirals up: it turns as it rises');
   ok(rose && T2.state === 'stand' && Math.abs(T2.body.translation().z - FACE_RET) < 0.3, 'it rises out of the floor in the pusher notch, then stands');
   ok(T2.body.translation().y > T2.H / 2 - 0.05, 'once risen it stands on the floor, not sunk or launched');
   m.events.length = 0;
