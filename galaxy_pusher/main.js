@@ -272,7 +272,7 @@ function handle(e) {
       break;
     }
     case 'lost': { const [x, y] = edgePoint(e.x); S.lost(); floatText('×', x, y, '#ff6b74', 14, 0.5, -20); break; }
-    case 'tokenDrop': break;
+    case 'portOut': S.port(e.k); if (view) view.portFlash(e.k); break;
     case 'attack': queueAttack(e.col, e.dmg, e.lv, false); break;
     case 'team': banner('TEAM STRIKE!', '#fff', 'row full: everyone attacks', 1.3); S.team(); break;
     case 'hit': if (e.src === 'team') { actions.push({ col: e.col, dmg: e.n, team: true, t: 0, hits: 0 }); } else if (e.src === 'carry') releaseDamage(e.n, null); break;

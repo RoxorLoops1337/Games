@@ -77,6 +77,11 @@ export const S = {
     [0, 4, 7, 12].forEach((s, i) => tone('triangle', base * Math.pow(2, s / 12), t + i * 0.045, 0.003, 0.09, 0.18));
     noise(t, 0.2, 0.04, 'highpass', 7000);
   },
+  // the back-wall port pops a token out: an air puff and a rising blip
+  port(col) {
+    if (!ok() || !allow('port', 8)) return; const t = now(), base = col === 'B' ? 330 : col === 'P' ? 392 : 294;
+    noise(t, 0.09, 0.12, 'bandpass', 1800, 1.5); tone('sine', base, t, 0.004, 0.06, 0.16, null, base * 2.2);
+  },
   slot(i) { if (!ok()) return; const t = now(); tone('square', 520 + i * 90, t, 0.002, 0.05, 0.08); tone('sine', 1040 + i * 180, t + 0.03, 0.002, 0.05, 0.12); },
   triple(col) {
     if (!ok()) return; const t = now(), root = col === 'B' ? 392 : col === 'P' ? 440 : 349;
