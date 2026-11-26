@@ -1,7 +1,7 @@
 // Galaxy Pusher: game loop, input, presentation (animations, effects) and saves.
 import { loadPhysics, Machine, EDGE, SHOOTER, LAYER_H } from './machine.js';
 import { View3D } from './view3d.js';
-import { Game, ITEMS, ITEM_ORDER, W, WHEEL, TOWER, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS, COMBO_FULL, comboMult, FEVER_TIME, AUTO_SHOTS } from './core.js';
+import { Game, ITEMS, ITEM_ORDER, W, WHEEL, TOWER, ROW, isToken, KIND, REGEN_BELOW, REGEN_EVERY, foeAt, SECTORS, COMBO_FULL, comboMult, FEVER_TIME, AUTO_SHOTS, JP_FULL } from './core.js';
 import { buildSprites, drawBattle, drawWheel, pocketAngle, sprite, txt, rr, COLS, FONT } from './render.js';
 import { A, S, Music } from './audio.js';
 
@@ -17,7 +17,7 @@ const g = cv.getContext('2d');
 let dpr = 1, VW = 0, VH = 0, L = null, view = null;
 const cv3 = document.getElementById('cv3');
 // world -> screen for the 2D effects drawn over the 3D machine
-const cam = { P: (x, y, z) => view.project(x, y, z, L.mach) };
+const cam = { P: (x, y, z) => view.project(x, y, z, L.scr) };
 
 // ------------------------------------------------------------------------------------------------ state
 let game = null;
@@ -84,12 +84,16 @@ function layout() {
   const barH = 66;
   const bar = { x: gx, y: VH - sb - barH, w: gw, h: barH };
   // a slim battle strip; the machine gets everything else
-  const bh = clamp(VH * 0.19, 126, 168);
+  // the machine takes the height it needs at full width; on tall screens the rest goes to a bigger battle panel
+  const need = view ? view.needHeight(VW, VH, gw) + 14 : VH * 0.6;
+  const bh = clamp(VH - sb - barH - (st + 42) - need, 126, Math.max(168, VH * 0.34));
   const battle = { x: gx + 6, y: hud.y + hud.h, w: gw - 12, h: bh };
   const mach = { x: gx, y: battle.y + battle.h + 2, w: gw, h: bar.y - (battle.y + battle.h + 2) };
-  L = { gw, gx, hud, battle, bar, mach, st, sb };
-  Object.assign(cv3.style, { left: mach.x + 'px', top: mach.y + 'px', width: mach.w + 'px', height: mach.h + 'px' });
-  if (view) view.resize(mach.w, mach.h);
+  // the 3D machine fills the whole screen (behind the battle panel and the buttons); `mach` is the open part of it
+  const scr = { x: 0, y: 0, w: VW, h: VH };
+  L = { gw, gx, hud, battle, bar, mach, scr, st, sb };
+  Object.assign(cv3.style, { left: '0px', top: '0px', width: VW + 'px', height: VH + 'px' });
+  if (view) view.resize(VW, VH, { left: gx, right: gx + gw, top: mach.y, bottom: bar.y });
   const bs = Math.min(60, barH - 8), fw = Math.min(gw * 0.3, bs * 2.1), sw = (gw - fw * 2 - 40) / 2;
   const put = (id, x, w, h) => Object.assign(document.getElementById(id).style, { left: x + 'px', top: (bar.y + (barH - h) / 2) + 'px', width: w + 'px', height: h + 'px' });
   put('fireL', gx + 10, fw, bs); put('fireR', gx + gw - 10 - fw, fw, bs);
@@ -284,6 +288,13 @@ function handle(e) {
     }
     case 'kill': killPending = true; killWait = 0; break;
     case 'foe': B.foe = mkFoeView(e.foe, true); B.stage = stageLabel(); if (e.foe.boss) banner('BOSS!', '#ff3b47', e.foe.name, 1.6, 1.1); else banner(e.foe.name.toUpperCase(), '#5cd0ff', 'incoming', 1.0, 0.7); break;
+    case 'jackpot': {
+      banner('JACKPOT!', '#ffd75c', `the ENERGY ring pays ${e.n} coins + ${e.tokens} tokens`, 2.2, 1.3);
+      if (view) view.badgeFlare(); S.fever(); addShake(12); flash = 0.25; buzz([30, 40, 30, 40, 80]);
+      const p = cam.P(0, 9, -10); burstParts(p.x, p.y, 40, ['#ffd75c', '#fff6c0', '#ff4fb0', '#2fb4ff'], 320, 1.0, 4, 400);
+      break;
+    }
+    case 'daily': break;
     case 'fever': banner('DOUBLE TIME!', '#fff', 'combo meter full · double damage and points', 1.8, 1.2); S.fever(); Music.fever(true); addShake(5); buzz([20, 30, 20]); break;
     case 'feverEnd': Music.fever(false); break;
     case 'bonus': break;
@@ -292,7 +303,7 @@ function handle(e) {
     case 'towerDone': { S.towerDone(); const p = cam.P(e.T.x, e.T.hgt, e.T.z); burstParts(p.x, p.y, 20, ['#ffd75c', '#fff', COLS[e.T.col].main], 200, 0.8, 3, 200); floatText('STAR TOWER x' + e.T.n, p.x, p.y - 20, '#ffd75c', 16, 1.4, -25); break; }
     case 'topple': S.creak(); S.creak(); { const p = cam.P(e.T.x, e.T.hgt, e.T.z); floatText('!!', p.x, p.y - 16, '#ff6b74', 22, 0.8, -20); } break;
     case 'fall': S.topple(); addShake(4); break;
-    case 'smack': { view.smack(e.x, e.y); S.smack(e.n); addShake(22); flash = 0.3; buzz([60, 40, 120]); const p = cam.P(e.x, e.y, e.z); floatText('SMACK!', p.x, p.y, '#ffffff', 34, 1.0, -30); break; }
+    case 'smack': { view.smack(e.x, e.y); S.smack(e.n); addShake(22); flash = 0.3; buzz([60, 40, 120]); const p = cam.P(e.x, e.y, e.z); floatText('SMACK!', p.x, Math.min(p.y, L.bar.y - 60), '#ffffff', 34, 1.0, -30); break; }
     case 'burst': S.burst(e.n); addShake(14); flash = 0.35; buzz([40, 30, 80]); banner('TOWER DOWN!', '#ffd75c', `${e.n} coins spill`, 1.2, 1); break;
     case 'regen': S.regen(); break;
     case 'sector': setTimeout(() => { banner(`SECTOR ${e.n} CLEAR!`, '#2bd67b', `+${e.prize} coins to shoot`, 2.0, 1.1); S.prize(true); bankPop = 1; }, 1400); break;
@@ -489,6 +500,12 @@ function drawHUD() {
   g.save(); g.translate(cx, cy); g.scale(pop, pop); g.drawImage(sprite('c'), -13, -13, 26, 26); g.restore();
   txt(g, String(Math.round(bankShown)), cx + 19, cy, 21, game.bank > 0 ? '#e8eef8' : '#ff6b74', { align: 'left' });
   if (game.bank < REGEN_BELOW) { const k = game.regen / REGEN_EVERY, bx = cx + 19; g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(bx, cy + 13, 44, 3); g.fillStyle = '#5cd0ff'; g.fillRect(bx, cy + 13, 44 * k, 3); }
+  // the jackpot ring: lost coins charge it, full pays a jackpot (the same meter as the ENERGY badge's arc)
+  { const jx = H.x + H.w * 0.335, jr = 12, f = game.jp / JP_FULL, hot = f > 0.85;
+    g.lineWidth = 4; g.strokeStyle = 'rgba(255,255,255,0.15)'; g.beginPath(); g.arc(jx, cy, jr, 0, TAU); g.stroke();
+    const gr = g.createLinearGradient(jx - jr, cy, jx + jr, cy); gr.addColorStop(0, '#ff4fb0'); gr.addColorStop(0.5, '#2fb4ff'); gr.addColorStop(1, '#ffc21f');
+    g.strokeStyle = gr; g.beginPath(); g.arc(jx, cy, jr, -Math.PI / 2, -Math.PI / 2 + TAU * f); g.stroke();
+    txt(g, 'JP', jx, cy, hot ? 9 + Math.sin(t * 12) : 8, hot ? '#fff6c0' : '#ffd75c', { lw: 2 }); }
   // points
   const sx = H.x + H.w * 0.5, sp = 1 + scorePop * 0.15;
   g.save(); g.translate(sx, cy - 3); g.scale(sp, sp);
@@ -585,6 +602,14 @@ $('playBtn').addEventListener('click', () => {
   A.unlock(); Music.start(); S.click();
   show('title', false); started = true;
   if (!seen) { show('how', true); paused = true; } else paused = false;
+  // a new day: the daily streak bonus (it grows each day in a row you come back)
+  const today = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
+  const d = game.daily(today);
+  if (d) {
+    const away = welcomeBack ? ` · +${welcomeBack} refilled` : '';
+    banner(d.streak > 1 ? `DAY ${d.streak} STREAK!` : 'DAILY BONUS!', '#ffd75c', `+${d.coins} coins${d.spin ? ' + free spin' : ''}${away}`, 2.4, 1.1);
+    S.triple('Y'); buzz([20, 40, 20]); welcomeBack = 0; save();
+  }
   if (welcomeBack) { banner('WELCOME BACK', '#5cd0ff', `+${welcomeBack} free coins`, 1.8, 0.9); welcomeBack = 0; }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); if (started && !$('menu').classList.contains('show') && !$('how').classList.contains('show')) toggleMenu(); } });

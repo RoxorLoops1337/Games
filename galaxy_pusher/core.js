@@ -43,7 +43,11 @@ export const COMBO_FULL = 6;                          // triples in a row to fil
 export const comboMult = (c) => Math.min(4, 1 + 0.25 * c);
 export const KILL_COINS = 40;
 export const PORT_DELAY = 2, PORT_GAP = 0.35;   // a token comes back out of the back wall 2 s after it drops, one at a time
-export const TOKEN_POP = 15, TOKEN_CAP = 24;      // tokens kept in play (at least / at most)
+export const TOKEN_POP = 15, TOKEN_CAP = 24;
+// the ENERGY ring's jackpot: coins lost in the gutters charge it (about 100 a minute in play: a jackpot every ~2 min)
+export const JP_FULL = 180, JP_COINS = 40, JP_TOKENS = 3;
+// coming back each day: a growing bonus (day 7 and on also gives a free wheel spin)
+export const DAILY_BASE = 50, DAILY_STEP = 20, DAILY_MAX_DAY = 7;      // tokens kept in play (at least / at most)
 // items (the cabinet's 道具 button): bought with coins
 export const ITEMS = {
   refill: { name: 'Coin Pack', cost: 2500, coins: 80, desc: '80 more coins to shoot.' },
@@ -86,8 +90,9 @@ export class Game {
     this.fireCd = 0;
     this.regen = 0;
     this.out = [];          // game events for the presentation layer
-    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0, bestCombo: 0 };
+    this.stats = { shots: 0, paid: 0, lost: 0, tokens: 0, attacks: 0, kills: 0, towers: 0, best: 0, jp: 0, items: 0, bestCombo: 0, jackpots: 0 };
     this.time = 0;
+    this.jp = 0; this.day = null; this.streak = 0;
     this.portQ = []; this.portCd = 0; this.popT = 0;   // tokens waiting to come back out of the port
     this.guardT = 0; this.turboT = 0;
   }
@@ -141,7 +146,10 @@ export class Game {
           this.out.push({ t: 'pay', k: e.k, x: e.x, v, tw: e.tw, mul: e.mul || 1 });
           if (!e.tw) this.damage(this.fever > 0 ? 2 : 1, 'chip', null);   // every won coin is a laser shot (tower spills only pay)
         }
-      } else if (e.t === 'lost') { this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); if (isToken(e.k)) this.recycle(e.k); }
+      } else if (e.t === 'lost') {
+        this.stats.lost++; this.out.push({ t: 'lost', k: e.k, x: e.x }); if (isToken(e.k)) this.recycle(e.k);
+        this.jp += e.mul || 1; if (this.jp >= JP_FULL) this.jackpot();
+      }
       else this.out.push(e);
     }
     ev.length = 0;
@@ -164,6 +172,26 @@ export class Game {
     if (this.portQ.length && this.portQ[0].at <= this.time && this.portCd <= 0 && this.f.portFree()) {
       this.f.launch(this.portQ.shift().k); this.portCd = PORT_GAP;
     }
+  }
+
+  // the jackpot: both shooters pour out free coins and the port fires tokens
+  jackpot() {
+    this.jp = 0; this.stats.jackpots = (this.stats.jackpots || 0) + 1;
+    this.autoQ.push({ side: 'L', n: JP_COINS / 2 }, { side: 'R', n: JP_COINS / 2 });
+    for (let i = 0; i < JP_TOKENS; i++) this.recycle(COL[Math.floor(this.rng() * 3)], 0.4 + i * PORT_GAP, true);
+    this.out.push({ t: 'jackpot', n: JP_COINS, tokens: JP_TOKENS });
+  }
+  // called once when the game opens, with today's local day number (passed in, so the rules stay testable):
+  // a new day pays a bonus that grows while you keep coming back on consecutive days
+  daily(day) {
+    if (!Number.isFinite(day) || this.day === day) return null;
+    this.streak = this.day === day - 1 ? this.streak + 1 : 1;
+    this.day = day;
+    const d = Math.min(DAILY_MAX_DAY, this.streak), coins = DAILY_BASE + DAILY_STEP * (d - 1), spin = this.streak >= DAILY_MAX_DAY;
+    this.bank += coins; if (spin) this.wheelQ++;
+    const e = { t: 'daily', streak: this.streak, coins, spin };
+    this.out.push(e);
+    return e;
   }
 
   pushToken(k) {
@@ -268,7 +296,7 @@ export class Game {
     return {
       v: 2, bank: this.bank, row: this.row.slice(), heroes: this.heroes.map((h) => ({ ...h })), foeIdx: this.foeIdx,
       foe: this.foe ? { hp: this.foe.hp } : null, score: this.score, combo: this.combo, meter: this.meter, autoQ: this.autoQ.map((A) => ({ ...A })), nextSide: this.nextSide, fever: r2(this.fever), wheelQ: this.wheelQ, pendingDmg: this.pendingDmg,
-      stats: { ...this.stats }, seed: this.rng.seed(), port: this.portQ.map((q) => q.k).join(''), guardT: r2(this.guardT), turboT: r2(this.turboT),
+      stats: { ...this.stats }, seed: this.rng.seed(), port: this.portQ.map((q) => q.k).join(''), jp: this.jp, day: this.day, streak: this.streak, guardT: r2(this.guardT), turboT: r2(this.turboT),
       machine: this.f.snapshot(),
     };
   }
@@ -295,6 +323,8 @@ export class Game {
     if (s.seed) g.rng.set(s.seed);
     if (s.v === 2 && s.machine && Array.isArray(s.machine.coins) && s.machine.coins.length > 20) g.f.restore(s.machine);
     else g.f.seedCarpet();
+    g.jp = Math.max(0, Math.min(JP_FULL - 1, Math.floor(num(s.jp, 0))));
+    g.day = Number.isFinite(s.day) ? s.day : null; g.streak = Math.max(0, Math.floor(num(s.streak, 0)));
     // tokens that were on their way back come out of the port soon after loading
     String(s.port || '').split('').filter(isToken).slice(0, TOKEN_CAP).forEach((k, i) => g.recycle(k, PORT_DELAY + i * PORT_GAP, true));
     g.f.events.length = 0;

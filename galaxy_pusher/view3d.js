@@ -5,8 +5,10 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, FACE_RET, TOWER_R, GLASS_Z, PORT, Machine } from './machine.js';
 import { sprite, COLS } from './render.js';
+import { JP_FULL } from './core.js';
 
 const MAX = { c: 2600, g: 1300, B: 60, P: 60, Y: 60 };
+const WHITE = new THREE.Color(1, 1, 1);
 const EASE_P = 0.02, EASE_Q = 0.035;   // deadband of the drawn coin pose: 0.2 mm and 2 degrees
 // debug switches (?gp=noshadow,nobump,noease,nointerp) to find what a phone's flicker comes from
 const DBG = Object.fromEntries((typeof location !== 'undefined' ? new URLSearchParams(location.search).get('gp') || '' : '').split(',').filter(Boolean).map((k) => [k, true]));
@@ -206,6 +208,7 @@ export class View3D {
       }
       const m = new THREE.InstancedMesh(geo, [side, face, face], MAX[k]);
       m.castShadow = true; m.receiveShadow = true; m.count = 0; m.frustumCulled = false;
+      m.setColorAt(0, WHITE);   // per-coin tint (teetering coins glow)
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       this.scene.add(m); this.inst[k] = m;
     }
@@ -221,35 +224,55 @@ export class View3D {
     const sy = (y) => (top - y) * px;                     // world y -> canvas y
     const mT = sy(PORT.y + PORT.h / 2), mB = sy(PORT.y - PORT.h / 2), mL = cx - (PORT.w / 2) * px, mR = cx + (PORT.w / 2) * px;
     const plate = (inset) => { const r = 46 - inset; g.beginPath(); g.moveTo(cx - 175 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 300 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 300 + inset, mT - 70 + inset); g.lineTo(cx - 230 + inset, mT - 120 + inset); g.arc(cx, 205, 190 - inset, Math.PI * 1.08, Math.PI * 1.92); g.lineTo(cx + 300 - inset, mT - 70 + inset); g.lineTo(cx + 300 - inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.lineTo(cx - 175 + inset, sy(PORT.y - PORT.h / 2 - 0.55) - inset); g.closePath(); return r; };
-    // holographic foil: a rainbow sheen over brushed silver
-    plate(0); const holo = g.createLinearGradient(0, 0, c.width, c.height);
-    ['#dfe6f0', '#b8f0ff', '#f4c8ff', '#fff4c0', '#c8ffe8', '#e0e4ee', '#ffd0e8', '#cfe0ff'].forEach((col, i, A) => holo.addColorStop(i / (A.length - 1), col));
-    g.fillStyle = holo; g.fill();
-    g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.stroke();
-    plate(16); g.fillStyle = '#0c0a1c'; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 3; g.stroke();
-    // orange accents beside the slot
-    g.fillStyle = '#ff9a1f'; for (const sx of [-1, 1]) g.fillRect(cx + sx * (PORT.w / 2 * px + 40) - 8, mT + 10, 16, mB - mT - 20);
-    // arc meter: pink, blue, yellow segments round the centre portrait
-    [['#ff4fb0', 1.12, 1.38], ['#2fb4ff', 1.4, 1.6], ['#ffc21f', 1.62, 1.88]].forEach(([col, a0, a1]) => { g.strokeStyle = col; g.lineWidth = 10; g.shadowColor = col; g.shadowBlur = 14; g.beginPath(); g.arc(cx, 205, 150, Math.PI * a0, Math.PI * a1); g.stroke(); });
-    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, 205, 170, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-    // three portraits: Jas (pink) left, Rox (blue) big in the middle, Mew (yellow) right
-    const face = (k, x, y, r) => { const sp = sprite(k), R = sp.width / 2; g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip(); g.drawImage(sp, R - R * 0.66, R - R * 0.66, R * 1.32, R * 1.32, x - r, y - r, r * 2, r * 2); g.restore(); g.lineWidth = 7; g.strokeStyle = COLS[k].main; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); };
-    face('P', cx - 128, 228, 50); face('Y', cx + 128, 228, 50); face('B', cx, 200, 72);
-    g.fillStyle = '#ffffff'; g.font = 'bold 30px "Russo One", sans-serif'; g.textAlign = 'center'; g.fillText('ENERGY', cx, 312);
-    // the slot: chrome frame, black mouth with depth shading
-    g.fillStyle = '#e6ebf3'; g.fillRect(mL - 16, mT - 16, mR - mL + 32, mB - mT + 32);
-    g.fillStyle = '#7f8798'; g.fillRect(mL - 6, mT - 6, mR - mL + 12, mB - mT + 12);
-    const mouth = g.createLinearGradient(0, mT, 0, mB); mouth.addColorStop(0, '#000'); mouth.addColorStop(0.75, '#07050f'); mouth.addColorStop(1, '#2a2440');
-    g.fillStyle = mouth; g.fillRect(mL, mT, mR - mL, mB - mT);
-    g.fillStyle = 'rgba(255,255,255,0.12)'; for (let i = 0; i < 5; i++) g.fillRect(mL + 30 + i * ((mR - mL - 60) / 4) - 3, mB - 10, 6, 6);
+    const draw = (frac, flare) => {
+      g.clearRect(0, 0, c.width, c.height);
+      // holographic foil: a rainbow sheen over brushed silver
+      plate(0); const holo = g.createLinearGradient(0, 0, c.width, c.height);
+      ['#dfe6f0', '#b8f0ff', '#f4c8ff', '#fff4c0', '#c8ffe8', '#e0e4ee', '#ffd0e8', '#cfe0ff'].forEach((col, i, A) => holo.addColorStop(i / (A.length - 1), col));
+      g.fillStyle = holo; g.fill();
+      g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.stroke();
+      plate(16); g.fillStyle = '#0c0a1c'; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 3; g.stroke();
+      // orange accents beside the slot
+      g.fillStyle = '#ff9a1f'; for (const sx of [-1, 1]) g.fillRect(cx + sx * (PORT.w / 2 * px + 40) - 8, mT + 10, 16, mB - mT - 20);
+      // arc meter: pink, blue, yellow segments round the centre portrait
+      // the jackpot meter: pink, blue, yellow segments light up as lost coins charge it (all flash gold on a jackpot)
+      const segs = [['#ff4fb0', 1.12, 1.38], ['#2fb4ff', 1.4, 1.6], ['#ffc21f', 1.62, 1.88]], span = segs.reduce((t, q) => t + q[2] - q[1], 0);
+      let left = frac * span;
+      for (const [col, a0, a1] of segs) {
+        g.shadowBlur = 0; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,0.13)'; g.beginPath(); g.arc(cx, 205, 150, Math.PI * a0, Math.PI * a1); g.stroke();
+        const lit = flare ? a1 - a0 : Math.max(0, Math.min(a1 - a0, left)); left -= a1 - a0;
+        if (lit > 0) { const cc = flare ? (flare > 0.5 ? '#fff6c0' : '#ffd75c') : col; g.strokeStyle = cc; g.lineWidth = flare ? 14 : 10; g.shadowColor = cc; g.shadowBlur = flare ? 26 : 14; g.beginPath(); g.arc(cx, 205, 150, Math.PI * a0, Math.PI * (a0 + lit)); g.stroke(); }
+      }
+      g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, 205, 170, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+      // three portraits: Jas (pink) left, Rox (blue) big in the middle, Mew (yellow) right
+      const face = (k, x, y, r) => { const sp = sprite(k), R = sp.width / 2; g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip(); g.drawImage(sp, R - R * 0.66, R - R * 0.66, R * 1.32, R * 1.32, x - r, y - r, r * 2, r * 2); g.restore(); g.lineWidth = 7; g.strokeStyle = COLS[k].main; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); };
+      face('P', cx - 128, 228, 50); face('Y', cx + 128, 228, 50); face('B', cx, 200, 72);
+      g.fillStyle = '#ffffff'; g.font = 'bold 30px "Russo One", sans-serif'; g.textAlign = 'center'; g.fillText(flare ? 'JACKPOT!' : 'JACKPOT ' + Math.floor(frac * 100) + '%', cx, 312);
+      // the slot: chrome frame, black mouth with depth shading
+      g.fillStyle = '#e6ebf3'; g.fillRect(mL - 16, mT - 16, mR - mL + 32, mB - mT + 32);
+      g.fillStyle = '#7f8798'; g.fillRect(mL - 6, mT - 6, mR - mL + 12, mB - mT + 12);
+      const mouth = g.createLinearGradient(0, mT, 0, mB); mouth.addColorStop(0, '#000'); mouth.addColorStop(0.75, '#07050f'); mouth.addColorStop(1, '#2a2440');
+      g.fillStyle = mouth; g.fillRect(mL, mT, mR - mL, mB - mT);
+      g.fillStyle = 'rgba(255,255,255,0.12)'; for (let i = 0; i < 5; i++) g.fillRect(mL + 30 + i * ((mR - mL - 60) / 4) - 3, mB - 10, 6, 6);
+    };
+    draw(0, 0);
     const tex = canvasTex(c);
     const badge = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, metalness: 0.35, roughness: 0.3, transparent: true, alphaTest: 0.5 }));
     badge.position.set(PORT.x, top - BH / 2, PORT.z + 0.03); this.scene.add(badge);
+    this.badge = { draw, tex, key: '' };
     // a light bar under the slot (the cabinet's upper tier glows white) and the glow inside the mouth
     const bar = new THREE.Mesh(new THREE.BoxGeometry(PORT.w + 1.2, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff })); bar.position.set(PORT.x, PORT.y - PORT.h / 2 - 0.28, PORT.z + 0.12); this.scene.add(bar);
     this.portGlow = new THREE.Mesh(new THREE.PlaneGeometry(PORT.w - 0.2, PORT.h - 0.2), new THREE.MeshBasicMaterial({ color: 0x5cd0ff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.portGlow.position.set(PORT.x, PORT.y, PORT.z + 0.06); this.scene.add(this.portGlow);
     this.portT = 0; this.portCol = new THREE.Color(0x5cd0ff);
+  }
+  badgeFlare() { this.flareT = 1.6; }
+  // redraw the badge only when the meter moves a step (or while it flares after a jackpot)
+  drawBadge(frac, dt) {
+    this.flareT = Math.max(0, (this.flareT || 0) - dt);
+    const fl = this.flareT > 0 ? (Math.floor(this.flareT * 8) % 2 ? 1 : 0.4) : 0, key = fl ? 'f' + fl : 'm' + Math.floor(frac * 50);
+    if (key === this.badge.key) return;
+    this.badge.key = key; this.badge.draw(fl ? 1 : frac, fl); this.badge.tex.needsUpdate = true;
   }
   portFlash(k) { this.portT = 1; this.portCol.set(COLS[k] ? COLS[k].main : '#5cd0ff'); }
 
@@ -275,28 +298,47 @@ export class View3D {
   }
 
   // ------------------------------------------------------------------ camera fit: the field fills the rect, the back wall shows
-  resize(w, h) {
+  // The canvas fills the whole screen. The field always spans the full width of the game column (`fit.left`..`fit.right`),
+  // its front lip sits just above the button bar (`fit.bottom`) and the ENERGY badge stays below the battle panel
+  // (`fit.top`). When the screen is short, the camera looks more from the front (less depth to show) instead of
+  // shrinking the machine; spare height shows more of the back wall behind the battle panel.
+  resize(w, h, fit) {
     this.renderer.setSize(w, h, false);
+    fit = fit || { left: 0, right: w, top: 0, bottom: h };
     const cam = this.camera; cam.aspect = w / h; cam.clearViewOffset();
     cam.fov = w / h < 0.75 ? 36 : 42;
-    const target = new THREE.Vector3(0, 0, 2.5);
-    const dir = new THREE.Vector3(0, Math.sin(1.12), Math.cos(1.12)).normalize();    // looking down ~64 degrees from the player side
-    const pts = [[-W / 2, 0, EDGE + 0.6], [W / 2, 0, EDGE + 0.6], [-W / 2, 0, BACK_WALL], [W / 2, 0, BACK_WALL], [-W / 2, PH + 9.5, BACK_WALL], [W / 2, PH + 9.5, BACK_WALL], [0, -2.6, EDGE + 1.4], [-W / 2, 0, GLASS_Z], [W / 2, 0, GLASS_Z]].map((p) => new THREE.Vector3(...p));   // the window zone in front, where towers smack
-    const span = (d) => {
-      cam.position.copy(target).addScaledVector(dir, d); cam.lookAt(target); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
-      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-      for (const p of pts) { const v = p.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
-      return { x0, x1, y0, y1 };
-    };
-    // the closest camera whose view holds the whole machine (width may crop the outer wall by a hair)
-    let lo = 8, hi = 300;
-    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2, S = span(mid); if (S.x1 - S.x0 <= 2.2 && S.y1 - S.y0 <= 1.98) hi = mid; else lo = mid; }
-    const S = span(hi);
-    // slide the view window so the front lip sits on the bottom edge: spare height goes to the back wall at the top
-    const xc = (S.x0 + S.x1) / 2;
-    cam.setViewOffset(w, h, xc * w / 2, (-1 - S.y0) * h / 2 - 2, w, h);
+    const target = new THREE.Vector3(0, 0, 2.5), v = new THREE.Vector3();
+    const wantW = ((fit.right - fit.left) / w) * 2, cx = ((fit.left + fit.right) / w - 1);
+    const row = (x, y, z) => { v.set(x, y, z).project(cam); return (1 - v.y) / 2 * h; };
+    const place = (pitch, d) => { cam.position.copy(target).addScaledVector(v.set(0, Math.sin(pitch), Math.cos(pitch)), d); cam.lookAt(target); cam.updateProjectionMatrix(); cam.updateMatrixWorld(); };
+    const spanAt = (pitch, d) => { place(pitch, d); const a = new THREE.Vector3(-W / 2, 0, EDGE).project(cam).x, b = new THREE.Vector3(W / 2, 0, EDGE).project(cam).x; return b - a; };
+    const badgeTop = PORT.y + PORT.h / 2 + 4.3, room = fit.bottom - fit.top - 10;
+    // the lowest thing that must show: the drop zone in front of the edge up to the glass, where towers smack
+    const bottomRow = () => Math.max(row(0, -0.4, EDGE + 0.4), row(0, -1.75, EDGE + 1.42));   // (a tower smacks the glass high up, so that stays in view above this)
+    let pick = null;
+    for (let pitch = 1.3; pitch >= 0.62; pitch -= 0.02) {   // the most top-down view that fits: tall screens fill with field
+      // the camera distance where the front edge spans exactly the column width
+      let lo = 8, hi = 400;
+      for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (spanAt(pitch, mid) > wantW) lo = mid; else hi = mid; }
+      place(pitch, hi);
+      const need = bottomRow() - row(0, badgeTop, BACK_WALL);
+      pick = { pitch, d: hi };
+      if (need <= room) break;
+    }
+    this._last = { place, row, badgeTop, bottomRow };
+    place(pick.pitch, pick.d);
+    // slide the picture: the lip just above the bar, and centred on the game column
+    const dy = bottomRow() - (fit.bottom - 4);
+    cam.setViewOffset(w, h, -cx * w / 2, dy, w, h);
     cam.updateProjectionMatrix();
-    this.w = w; this.h = h;
+    this.w = w; this.h = h; this.pitch = pick.pitch;
+  }
+  // how many pixels of height the machine needs (lip to badge top) at its most top-down view, for a game column
+  // `colW` wide on a w x h screen: the layout gives any height beyond that to the battle panel
+  needHeight(w, h, colW) {
+    this.resize(w, h, { left: (w - colW) / 2, right: (w + colW) / 2, top: -1e5, bottom: h });
+    const { row, badgeTop, bottomRow } = this._last;
+    return bottomRow() - row(0, badgeTop, BACK_WALL);
   }
   smack(x, y) {
     const flash = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }));
@@ -328,6 +370,7 @@ export class View3D {
     const counts = { c: 0, g: 0, B: 0, P: 0, Y: 0 };
     // physics runs at 40 Hz and the screen at 60: draw every body between its last two steps so nothing judders
     const al = Math.max(0, Math.min(1, (M.acc || 0) * (M.hz || 40)));
+    const tc = this._tc || (this._tc = new THREE.Color()), isTok = (k) => k === 'B' || k === 'P' || k === 'Y';
     for (const c of M.coins) {
       if (!c.body) continue;
       const I = this.inst[c.k]; if (counts[c.k] >= MAX[c.k]) continue;
@@ -343,7 +386,11 @@ export class View3D {
         if (dq > 0.6) sq.copy(q); else if (dq > EASE_Q) sq.slerp(q, 1 - EASE_Q / dq);
         p.copy(sp); q.copy(sq);
       }
-      m.compose(p, q, s); I.setMatrixAt(counts[c.k]++, m);
+      m.compose(p, q, s);
+      // a coin teetering on the edge glows and pulses gold (with hysteresis, so it never blinks on and off)
+      c._tt = c._tt ? p.z > EDGE - 1.0 && p.y > -1 : p.z > EDGE - 0.55 && p.y > -0.3;
+      if (c._tt) { const pu = 0.5 + 0.5 * Math.sin(t * 9 + c.id); tc.setRGB(1 + 0.8 * pu, 1 + 0.55 * pu, isTok(c.k) ? 1 + 0.5 * pu : 0.8); } else tc.setRGB(1, 1, 1);
+      I.setColorAt(counts[c.k], tc); I.setMatrixAt(counts[c.k]++, m);
     }
     // towers: every coin of the ring, placed by the tower body
     for (const T of M.towers) {
@@ -362,15 +409,15 @@ export class View3D {
         this._jq = this._jq || new THREE.Quaternion(); this._jv = this._jv || new THREE.Vector3();
         this._jq.setFromAxisAngle(this._jv.set(Math.cos(j2 * 6.28), 0, Math.sin(j2 * 6.28)), (j1 - 0.5) * 0.03);
         this._lq.premultiply(this._jq).premultiply(this._tq);
-        m.compose(this._lp, this._lq, s); I.setMatrixAt(counts[k]++, m);
+        m.compose(this._lp, this._lq, s); I.setColorAt(counts[k], WHITE); I.setMatrixAt(counts[k]++, m);
       }
       if (T.state !== 'crumble') T.crown.forEach((ck, i) => {
         const [cx, cy, cz] = Machine.crownLocal(T, i);
         this._lp.set(cx, cy, cz).applyQuaternion(this._tq).add(this._tp);
-        m.compose(this._lp, this._tq, s); if (counts[ck] < MAX[ck]) this.inst[ck].setMatrixAt(counts[ck]++, m);
+        m.compose(this._lp, this._tq, s); if (counts[ck] < MAX[ck]) { this.inst[ck].setColorAt(counts[ck], WHITE); this.inst[ck].setMatrixAt(counts[ck]++, m); }
       });
     }
-    for (const k in this.inst) { const I = this.inst[k]; I.count = counts[k]; I.instanceMatrix.needsUpdate = true; }
+    for (const k in this.inst) { const I = this.inst[k]; I.count = counts[k]; I.instanceMatrix.needsUpdate = true; if (I.instanceColor) I.instanceColor.needsUpdate = true; }
     // pusher, lights, neon
     this.pusher.position.set(0, PH / 2, (M.pfPrev ?? M.pf) + (M.pf - (M.pfPrev ?? M.pf)) * al - PUSH_HALF);
     const fev = game.fever > 0;
@@ -410,6 +457,7 @@ export class View3D {
     }
     this.bulbs.instanceColor.needsUpdate = true;
     this.drawRing(game, t);
+    this.drawBadge((game.jp || 0) / JP_FULL, 1 / 60);
     this.renderer.render(this.scene, this.camera);
   }
 }
