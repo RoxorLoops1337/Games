@@ -3,7 +3,7 @@
 // tower body's transform. The 2D overlay (battle, HUD, wheel) is drawn on a separate canvas above this one.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
-import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, NOTCH_W, BACK_RECESS, FACE_RET, TOWER_R, GLASS_Z, Machine } from './machine.js';
+import { W, EDGE, GUT, PH, PUSH_HALF, BACK_WALL, KINDS, SHOOTER, RING_N, RING_R, LAYER_H, TWIST, COIN_HH, NOTCH_R, FACE_RET, TOWER_R, GLASS_Z, Machine } from './machine.js';
 import { sprite, COLS } from './render.js';
 
 const MAX = { c: 1500, g: 1100, B: 60, P: 60, Y: 60 };
@@ -99,24 +99,17 @@ export class View3D {
     bg.strokeStyle = 'rgba(120,200,255,0.25)'; bg.lineWidth = 3;
     for (let i = 0; i < 26; i++) { const x = 20 + i * 40, y = 140 + ((i * 97) % 300); bg.beginPath(); bg.moveTo(x, 512); bg.lineTo(x, y); bg.lineTo(x + 30, y - 30); bg.stroke(); bg.fillStyle = 'rgba(120,200,255,0.5)'; bg.beginPath(); bg.arc(x + 30, y - 30, 5, 0, Math.PI * 2); bg.fill(); }
     const backMat = new THREE.MeshStandardMaterial({ map: canvasTex(bc), metalness: 0.3, roughness: 0.6, emissive: 0xffffff, emissiveIntensity: 0.18, emissiveMap: canvasTex(bc) });
-    // the back wall: two side panels and, between them, a recessed bay where towers rise
-    const sideW = W / 2 + 1 - NOTCH_W;
-    for (const sx of [-1, 1]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(sideW, 16), backMat); b.position.set(sx * (NOTCH_W + sideW / 2), PH + 8, BACK_WALL - 0.02); S.add(b); }
-    const bay = new THREE.Mesh(new THREE.PlaneGeometry(NOTCH_W * 2, 16), new THREE.MeshStandardMaterial({ color: 0x241a52, metalness: 0.5, roughness: 0.45 }));
-    bay.position.set(0, PH + 8, BACK_RECESS - 0.02); S.add(bay);
-    for (const sx of [-1, 1]) {
-      const side = new THREE.Mesh(new THREE.PlaneGeometry(BACK_WALL - BACK_RECESS, 16), new THREE.MeshStandardMaterial({ color: 0x3a2a7a, metalness: 0.4, roughness: 0.5, side: THREE.DoubleSide }));
-      side.rotation.y = Math.PI / 2; side.position.set(sx * NOTCH_W, PH + 8, (BACK_WALL + BACK_RECESS) / 2); S.add(side);
-      const neon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 16, 0.15), new THREE.MeshBasicMaterial({ color: 0xffd75c }));
-      neon.position.set(sx * NOTCH_W, PH + 8, BACK_WALL); S.add(neon);
-    }
+    // the back wall: one complete panel across the whole cabinet, tall enough to fill the view
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(W + 2.4, 30), backMat);
+    back.position.set(0, PH + 15, BACK_WALL - 0.02); S.add(back);
+    for (const sx of [-1, 1]) { const n = new THREE.Mesh(new THREE.BoxGeometry(0.18, 30, 0.18), new THREE.MeshBasicMaterial({ color: sx < 0 ? 0x3fd0ff : 0xff4fb0 })); n.position.set(sx * (W / 2 + 1.1), PH + 15, BACK_WALL); S.add(n); }
     // the lift: a glowing ring on the floor where a tower comes up (hidden under the pusher until it pulls back)
     this.lift = new THREE.Mesh(new THREE.RingGeometry(TOWER_R - 0.2, TOWER_R + 0.15, 48), new THREE.MeshBasicMaterial({ color: 0xffd75c, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
     this.lift.rotation.x = -Math.PI / 2; this.lift.position.set(0, 0.012, FACE_RET); S.add(this.lift);
     this.ringC = mk(256, 256);
     this.ringT = canvasTex(this.ringC);
-    const ring = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 5.6), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
-    ring.position.set(-(NOTCH_W + sideW / 2), PH + 7.4, BACK_WALL + 0.05); S.add(ring);
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 6.4), new THREE.MeshBasicMaterial({ map: this.ringT, transparent: true }));
+    ring.position.set(0, PH + 9.6, BACK_WALL + 0.05); S.add(ring);
     this.ringKey = '';
     // the front window the player looks through: faint diagonal reflections, and impact flashes when a tower smacks it
     const gc = mk(256, 256), gg = gc.getContext('2d');
@@ -177,8 +170,8 @@ export class View3D {
       if (k === 'c' || k === 'g') {
         const f = k === 'c' ? silverFace : goldFace, e = k === 'c' ? reedS : reedG;
         // polished metal: low roughness and strong reflections (the room and the cabinet neon show in every coin)
-        side = mat({ map: e, bumpMap: e, bumpScale: 0.5, color: k === 'c' ? 0xd0d5de : 0xf0c868, metalness: 1, roughness: 0.18, envMapIntensity: 2.0 });
-        face = mat({ map: f, bumpMap: f, bumpScale: 1.2, color: k === 'c' ? 0xd8dde6 : 0xf5cd6a, metalness: 1, roughness: 0.12, envMapIntensity: 2.2 });
+        side = mat({ map: e, bumpMap: e, bumpScale: 0.3, color: k === 'c' ? 0xd0d5de : 0xf0c868, metalness: 1, roughness: 0.22, envMapIntensity: 2.0 });
+        face = mat({ map: f, bumpMap: f, bumpScale: 0.55, color: k === 'c' ? 0xd8dde6 : 0xf5cd6a, metalness: 1, roughness: 0.17, envMapIntensity: 2.2 });
       } else {
         const C = COLS[k];
         side = mat({ map: canvasTex(chipEdgeTex(C.main, C.dark)), metalness: 0, roughness: 0.6, envMapIntensity: 0.3 });
@@ -255,21 +248,37 @@ export class View3D {
   }
 
   // ------------------------------------------------------------------ per frame
+  // where to draw a body this frame: between its pose at the previous physics step and the latest one
+  pose(o, body, M, al, p, q) {
+    const tr = body.translation(), ro = body.rotation();
+    if (!o._cp || o._st !== M.steps) {
+      if (!o._cp || o._st !== M.steps - 1) { o._pp = new THREE.Vector3(tr.x, tr.y, tr.z); o._pq = new THREE.Quaternion(ro.x, ro.y, ro.z, ro.w); o._cp = o._pp.clone(); o._cq = o._pq.clone(); }
+      else { o._pp.copy(o._cp); o._pq.copy(o._cq); o._cp.set(tr.x, tr.y, tr.z); o._cq.set(ro.x, ro.y, ro.z, ro.w); }
+      o._st = M.steps;
+    }
+    p.copy(o._pp).lerp(o._cp, al); q.copy(o._pq).slerp(o._cq, al);
+  }
+
   render(game, t, st) {
     const M = game.f, m = this._m, q = this._q, p = this._p, s = this._s;
     const counts = { c: 0, g: 0, B: 0, P: 0, Y: 0 };
+    // physics runs at 40 Hz and the screen at 60: draw every body between its last two steps so nothing judders
+    const al = Math.max(0, Math.min(1, (M.acc || 0) * (M.hz || 40)));
     for (const c of M.coins) {
       if (!c.body) continue;
-      const tr = c.body.translation(), ro = c.body.rotation();
       const I = this.inst[c.k]; if (counts[c.k] >= MAX[c.k]) continue;
-      p.set(tr.x, tr.y, tr.z); q.set(ro.x, ro.y, ro.z, ro.w);
+      this.pose(c, c.body, M, al, p, q);
+      // a coin leaning on others shivers a degree or two every physics step; on a mirror finish that reads as a blink.
+      // Small shivers are eased out on screen (real motion snaps straight through).
+      const sp = c._sp || (c._sp = p.clone()), sq = c._sq || (c._sq = q.clone());
+      const dq = 2 * Math.acos(Math.min(1, Math.abs(sq.dot(q)))), dp = sp.distanceTo(p);
+      if (dq < 0.07 && dp < 0.06) { sq.slerp(q, 0.2); sp.lerp(p, 0.35); p.copy(sp); q.copy(sq); } else { sp.copy(p); sq.copy(q); }
       m.compose(p, q, s); I.setMatrixAt(counts[c.k]++, m);
     }
     // towers: every coin of the ring, placed by the tower body
     for (const T of M.towers) {
       if (!T.body) continue;
-      const tr = T.body.translation(), ro = T.body.rotation();
-      this._tp.set(tr.x, tr.y, tr.z); this._tq.set(ro.x, ro.y, ro.z, ro.w);
+      this.pose(T, T.body, M, al, this._tp, this._tq);
       const k = T.gold ? 'g' : 'c', I = this.inst[k];
       // a rising tower is whole (coming up through the floor); a crumbling one only has the layers not yet peeled off
       const nDraw = T.state === 'crumble' ? Math.min(T.want, T.peel * RING_N) : T.rise && T.state === 'build' ? T.want : T.n;
@@ -293,7 +302,7 @@ export class View3D {
     }
     for (const k in this.inst) { const I = this.inst[k]; I.count = counts[k]; I.instanceMatrix.needsUpdate = true; }
     // pusher, lights, neon
-    this.pusher.position.set(0, PH / 2, M.pf - PUSH_HALF);
+    this.pusher.position.set(0, PH / 2, (M.pfPrev ?? M.pf) + (M.pf - (M.pfPrev ?? M.pf)) * al - PUSH_HALF);
     const fev = game.fever > 0;
     const hue = (t * 0.5) % 1;
     this.pusherNeon.material.color.setHSL(fev ? hue : 0.55, 1, game.turboT > 0 ? 0.5 + 0.3 * Math.sin(t * 20) : 0.62);
