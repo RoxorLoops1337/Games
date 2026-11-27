@@ -8,7 +8,7 @@ The owners asked that every chibi comes from their Drive files, not from the Hoc
 - `R&J Cartoon - RoxorLoops.png`, `R&J Cartoon - Jasmin.png`, `R&J Cartoon - Both.png` (Drive, the "R&J Cartoon" files)
 - Stickers in the same folder: `R&J Sticker - Mid Shot.png`, `R&J Sticker - Name.png`, `R&J Sticker - Card.png`, `R&J Sticker - Card Cute.png`, `R&J Sticker - Microphone.png`
 
-In this folder they are `img/d-roxor.webp`, `img/d-jasmin.webp`, `img/d-both.webp`, the heads `img/d-head-roxor.webp` and `img/d-head-jasmin.webp` (Jasmin mirrored so she faces into the page from the right), and `stage/art/d-roxor.webp`, `stage/art/d-jasmin.webp`.
+In this folder they are `img/d-roxor.webp`, `img/d-jasmin.webp`, `img/d-both.webp`, the chest-height busts `img/f-bust-roxor.webp` and `img/f-bust-jasmin.webp` (clean edges, no fade; Jasmin mirrored). They pop up from the bottom corners, Roxor left and Jasmin right, with the cut edge hidden below the screen, and `stage/art/d-roxor.webp`, `stage/art/d-jasmin.webp`.
 
 ## Logo
 The newest logo has a heart on Jasmin's i ("R&J text logo.png" in Drive). `stage/art/logo-sticker.webp` is that logo with its white sticker outline, cut out of the designer's "R&J - Stage Background" sheet.
