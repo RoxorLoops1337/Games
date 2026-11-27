@@ -9,6 +9,7 @@
 <meta property="og:description" content="Beatbox & singing duo · 人声 Beatbox 与歌唱二人组">
 <meta property="og:image" content="img/hero.webp">
 <meta name="google" content="notranslate">
+<meta http-equiv="Cache-Control" content="no-cache">
 <meta name="theme-color" content="#e74380">
 <link rel="icon" href="img/icon-180.png">
 <link rel="apple-touch-icon" href="img/icon-180.png">
@@ -27,7 +28,8 @@
   --body:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
   --ease:cubic-bezier(.2,.9,.25,1.25);
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+#duo,.mini,.peek img,#rider,.rain{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 html,body{overflow-x:hidden}
 @supports (overflow:clip){html,body{overflow-x:clip}}
@@ -84,9 +86,6 @@ button{font:inherit}
 .stage{position:relative;justify-self:center;width:min(460px,100%)}
 .stage .pic{position:relative;z-index:2;filter:drop-shadow(0 18px 30px rgba(0,0,0,.28));animation:float 5s ease-in-out infinite}
 @keyframes float{50%{transform:translateY(-14px) rotate(-1deg)}}
-.eq{position:absolute;inset:auto 0 12% 0;height:58%;display:flex;align-items:flex-end;justify-content:center;gap:7px;z-index:1;opacity:.5}
-.eq i{display:block;width:12px;border-radius:8px;background:#fff;height:30%;transform-origin:bottom;animation:eq 1s ease-in-out infinite alternate}
-@keyframes eq{0%{transform:scaleY(.25)}100%{transform:scaleY(1)}}
 .note{position:absolute;z-index:3;font-size:30px;animation:note 4s ease-in-out infinite;filter:drop-shadow(0 3px 4px rgba(0,0,0,.2))}
 .note.n1{left:-4%;top:14%}.note.n2{right:0;top:4%;animation-delay:-1.3s}.note.n3{right:-4%;bottom:30%;animation-delay:-2.6s}
 @keyframes note{0%,100%{transform:translateY(0) rotate(-10deg)}50%{transform:translateY(-18px) rotate(12deg)}}
@@ -168,13 +167,13 @@ h2 .p{color:var(--pink)}
 .tile .spark{position:absolute;right:18px;top:14px;font-size:34px;animation:note 4s ease-in-out infinite}
 
 /* moments strip */
-.strip{display:flex;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;padding:24px 16px 30px;margin:0 -16px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.strip{display:flex;align-items:center;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;padding:24px 16px 30px;margin:0 -16px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .strip::-webkit-scrollbar{display:none}
 .pol{flex:none;width:250px;scroll-snap-align:center;background:#fff;padding:10px 10px 34px;border-radius:8px;box-shadow:0 16px 36px rgba(0,0,0,.16);
   transition:transform .45s var(--ease);position:relative;margin:0}
 .pol:nth-child(odd){transform:rotate(-3deg)}.pol:nth-child(even){transform:rotate(2.5deg) translateY(12px)}
 .pol:hover{transform:rotate(0) scale(1.05);z-index:2}
-.pol img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:4px}
+.pol img{width:100%;height:auto;border-radius:4px}
 .pol::before{content:"";position:absolute;top:-11px;left:50%;width:80px;height:24px;transform:translateX(-50%) rotate(-3deg);background:rgba(120,188,59,.55)}
 .pol:nth-child(even)::before{background:rgba(231,67,128,.5)}
 .swipe{font-weight:700;color:var(--soft);font-size:14px;text-align:center;margin-top:-6px}
@@ -471,7 +470,6 @@ body.loading{overflow:hidden}
       </div>
     </div>
     <div class="stage fade" style="animation-delay:.3s">
-      <div class="eq" aria-hidden="true" id="eq"></div>
       <span class="note n1" aria-hidden="true">🎵</span><span class="note n2" aria-hidden="true">🎶</span><span class="note n3" aria-hidden="true">🎤</span>
       <img class="pic" src="img/hero.webp" alt="RoxorLoops & Jasmin" width="640" height="713" fetchpriority="high">
     </div>
@@ -651,8 +649,7 @@ body.loading{overflow:hidden}
   });
 
   /* equalizer bars */
-  var eq=document.getElementById('eq');
-  for(var i=0;i<14;i++){var b=document.createElement('i');b.style.animationDuration=(.45+Math.random()*.6)+'s';b.style.animationDelay=(-Math.random())+'s';b.style.height=(40+Math.random()*60)+'%';eq.appendChild(b)}
+
 
   /* ticker */
   var words=['BEATBOX','人声 Beatbox','SINGING','歌唱','WORKSHOPS','工作坊','WORLD CHOIR GAMES','国际评审','LIVE SHOWS','现场演出','DENMARK','丹麦'];
