@@ -504,16 +504,16 @@ body.loading{overflow:hidden}
       <p class="lead"><span lang="zh">清单比你想的还要长。</span><span lang="en">It's a surprisingly long list.</span></p>
     </div>
     <div class="cards">
-      <div class="card g rv"><img class="mini" src="img/c2-roxor-sing.webp" alt="" width="238" height="420" loading="lazy">
+      <div class="card g rv"><img class="mini" src="img/d-roxor.webp" alt="" width="180" height="420" loading="lazy">
         <h3><span lang="zh">现场演出</span><span lang="en">Live Performances</span></h3>
         <p><span lang="zh">音乐节、俱乐部和各种活动上的高能量演出。</span><span lang="en">High-energy sets for festivals, clubs, and events.</span></p><span class="ic">🎤</span></div>
-      <div class="card p rv d1"><img class="mini" src="img/c2-jasmin-sing.webp" alt="" width="273" height="420" loading="lazy">
+      <div class="card p rv d1"><img class="mini" src="img/d-jasmin.webp" alt="" width="222" height="420" loading="lazy">
         <h3><span lang="zh">工作坊和大师课</span><span lang="en">Workshops &amp; Masterclasses</span></h3>
         <p><span lang="zh">beatbox、人声打击乐、节奏、律动、合唱和阿卡贝拉的专门课程。</span><span lang="en">Specialized sessions in beatboxing, vocal percussion, rhythm, groove, choir and acapella singing.</span></p><span class="ic">🎶</span></div>
-      <div class="card g rv d2"><img class="mini" src="img/c2-roxor-cheer.webp" alt="" width="218" height="420" loading="lazy">
+      <div class="card g rv d2"><img class="mini" src="img/d-roxor.webp" alt="" width="180" height="420" loading="lazy">
         <h3><span lang="zh">评审</span><span lang="en">Judging</span></h3>
         <p><span lang="zh">beatbox 大赛和声乐比赛的专业评委。</span><span lang="en">Professional jury services for beatbox battles and vocal competitions.</span></p><span class="ic">⭐</span></div>
-      <div class="card p rv d3"><img class="mini" src="img/c2-jasmin-cheer.webp" alt="" width="291" height="420" loading="lazy">
+      <div class="card p rv d3"><img class="mini" src="img/d-jasmin.webp" alt="" width="222" height="420" loading="lazy">
         <h3><span lang="zh">企业和私人活动</span><span lang="en">Corporate &amp; Private Events</span></h3>
         <p><span lang="zh">为你的品牌专门设计的演出和团队建设。</span><span lang="en">Unique, brand-tailored entertainment and team-building.</span></p><span class="ic">🎉</span></div>
     </div>
@@ -595,7 +595,7 @@ body.loading{overflow:hidden}
       </div>
       <div class="duo">
         <div class="bubble"><span lang="zh">点我们！</span><span lang="en">Tap us!</span></div>
-        <img id="duo" src="img/c2-duo.webp" alt="RoxorLoops & Jasmin" width="560" height="506" loading="lazy">
+        <img id="duo" src="img/d-both.webp" alt="RoxorLoops & Jasmin" width="480" height="527" loading="lazy">
       </div>
     </div>
   </div>
@@ -617,9 +617,9 @@ body.loading{overflow:hidden}
 </footer>
 
 <a class="fab" id="fab" href="#book">🎤 <span lang="zh">预约我们</span><span lang="en">Book us</span></a>
-<div id="prog"></div><img id="rider" src="img/c3-head-roxor.webp" alt="" width="180" height="239">
-<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/c3-head-roxor.webp" alt="" width="180" height="239"></div>
-<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/c3-head-jasmin.webp" alt="" width="180" height="170"></div>
+<div id="prog"></div><img id="rider" src="img/d-head-roxor.webp" alt="" width="180" height="235">
+<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/d-head-roxor.webp" alt="" width="180" height="235"></div>
+<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/d-head-jasmin.webp" alt="" width="180" height="188"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -762,7 +762,7 @@ body.loading{overflow:hidden}
   /* secret: tap the logo 5 times for chibi rain */
   var taps=0,tt,wm=document.querySelector('.bar .wm');
   if(wm)wm.addEventListener("click",function(e){taps++;if(taps>1)e.preventDefault();clearTimeout(tt);tt=setTimeout(function(){taps=0},1200);
-    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/c3-head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
+    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/d-head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
       r.style.left=rnd(-5,95)+'vw';r.style.width=rnd(50,100)+'px';r.style.setProperty('--dx',rnd(-80,80)+'px');r.style.setProperty('--rot',rnd(-360,360)+'deg');
       r.style.animationDuration=rnd(2.2,4)+'s';r.style.animationDelay=rnd(0,1.2)+'s';document.body.appendChild(r);setTimeout(function(x){return function(){x.remove()}}(r),5600)}confetti(50)}});
 })();
