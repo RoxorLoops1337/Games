@@ -305,19 +305,22 @@ body.loading{overflow:hidden}
 @keyframes ride{to{margin-top:3px;rotate:6deg}}
 .burst{position:fixed;z-index:60;pointer-events:none;font-size:22px;animation:burst .9s cubic-bezier(.2,.8,.3,1) forwards}
 @keyframes burst{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}70%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1.1) rotate(var(--r));opacity:0}}
-.peek{position:fixed;z-index:14;bottom:-13px;width:120px;cursor:pointer;transition:transform .6s var(--ease);touch-action:manipulation;transform-origin:50% 100%}
-.peek.L{left:-8px;transform:translateY(110%) rotate(8deg)}
-.peek.R{right:-8px;transform:translateY(110%) rotate(-8deg)}
-.peek.L.on{transform:translateY(0) rotate(8deg)}
-.peek.R.on{transform:translateY(0) rotate(-8deg)}
-.peek.R.jump{animation:pjr .5s var(--ease)}.peek.L.jump{animation:pjl .5s var(--ease)}
-@keyframes pjr{50%{transform:translateY(-22px) rotate(-3deg)}}
-@keyframes pjl{50%{transform:translateY(-22px) rotate(3deg)}}
-.peek img{width:100%;filter:drop-shadow(-4px 6px 8px rgba(0,0,0,.2))}
-.peek .say{position:absolute;top:-30px;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;border-radius:16px 16px 4px 16px;
-  box-shadow:0 6px 16px rgba(0,0,0,.15);transform:rotate(12deg) scale(0);transform-origin:right bottom;transition:transform .35s var(--ease) .25s}
-.peek.R .say{right:46%}.peek.L .say{left:46%;border-radius:16px 16px 16px 4px;transform:rotate(-12deg) scale(0);transform-origin:left bottom}
-.peek.on .say{transform:rotate(12deg) scale(1)}.peek.L.on .say{transform:rotate(-12deg) scale(1)}
+.peek{position:fixed;z-index:14;bottom:24vh;height:260px;cursor:pointer;transition:transform .7s var(--ease);touch-action:manipulation;transform-origin:50% 100%}
+.peek img{height:100%;width:auto;display:block;filter:drop-shadow(0 6px 8px rgba(0,0,0,.2))}
+/* the feet (the pivot) stay just off the screen edge; the figure swings in and leans toward the page */
+.peek.L{left:0;transform:translateX(-100%) rotate(0deg)}
+.peek.R{right:0;transform:translateX(100%) rotate(0deg)}
+.peek.L.on{transform:translateX(-100%) rotate(34deg)}
+.peek.R.on{transform:translateX(100%) rotate(-34deg)}
+.peek.L.jump{animation:pjl .5s var(--ease)}.peek.R.jump{animation:pjr .5s var(--ease)}
+@keyframes pjl{50%{transform:translateX(-100%) rotate(42deg)}}
+@keyframes pjr{50%{transform:translateX(100%) rotate(-42deg)}}
+.peek .say{position:absolute;z-index:1;top:-6%;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;
+  box-shadow:0 6px 16px rgba(0,0,0,.15);transition:transform .35s var(--ease) .3s}
+.peek.L .say{left:92%;border-radius:16px 16px 16px 4px;transform-origin:left bottom;transform:rotate(-40deg) scale(0)}
+.peek.R .say{right:92%;border-radius:16px 16px 4px 16px;transform-origin:right bottom;transform:rotate(40deg) scale(0)}
+.peek.L.on .say{transform:rotate(-40deg) scale(1)}
+.peek.R.on .say{transform:rotate(40deg) scale(1)}
 .spark-h{position:relative;display:inline-block}
 .spark-h i{position:absolute;font-style:normal;font-size:.42em;pointer-events:none;animation:tw 2.2s ease-in-out infinite}
 .spark-h i:nth-child(1){right:-.7em;top:-.25em}.spark-h i:nth-child(2){left:-.6em;bottom:.05em;animation-delay:-.8s;font-size:.3em}.spark-h i:nth-child(3){right:-1.25em;bottom:.1em;animation-delay:-1.5s;font-size:.28em}
@@ -341,7 +344,7 @@ body.loading{overflow:hidden}
 .conf{position:fixed;top:-20px;z-index:70;width:10px;height:14px;border-radius:3px;pointer-events:none;animation:fall linear forwards}
 @keyframes fall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
 .rain{position:fixed;top:-120px;z-index:70;width:80px;pointer-events:none;animation:fall linear forwards}
-@media (max-width:860px){.peek{width:100px;bottom:-11px}}
+@media (max-width:860px){.peek{height:210px;bottom:22vh}}
 @media (prefers-reduced-motion:reduce){#rider,.peek,.burst,.conf,.rain{display:none!important}}
 </style>
 </head>
@@ -618,8 +621,8 @@ body.loading{overflow:hidden}
 
 <a class="fab" id="fab" href="#book">🎤 <span lang="zh">预约我们</span><span lang="en">Book us</span></a>
 <div id="prog"></div><img id="rider" src="img/f-bust-roxor.webp" alt="" width="200" height="327">
-<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/f-bust-roxor.webp" alt="" width="200" height="327"></div>
-<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/f-bust-jasmin.webp" alt="" width="200" height="265"></div>
+<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/g-roxor.webp" alt="" width="240" height="560"></div>
+<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/g-jasmin-m.webp" alt="" width="296" height="560"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -745,7 +748,7 @@ body.loading{overflow:hidden}
   var LINES=[['Hi!','你好!'],['Boom tss!','动次打次!'],['Book us!','约我们!'],['Scroll more!','继续看!'],['Yay!','耶!']];
   function doPeek(){if(document.getElementById('ld'))return;cur.classList.remove('on');cur=PK[ph++%2];
     var l=LINES[Math.random()*LINES.length|0];cur.querySelector('.say').textContent=zh()?l[1]:l[0];
-    cur.classList.add('on');clearTimeout(pt);var c=cur;pt=setTimeout(function(){c.classList.remove('on')},2800)}
+    cur.style.bottom=rnd(18,34)+'vh';cur.classList.add('on');clearTimeout(pt);var c=cur;pt=setTimeout(function(){c.classList.remove('on')},2800)}
   if('IntersectionObserver' in window){var seen=new WeakSet(),io=new IntersectionObserver(function(es){es.forEach(function(e){
     if(e.isIntersecting&&!seen.has(e.target)){seen.add(e.target);setTimeout(doPeek,500)}})},{threshold:.35});
     document.querySelectorAll('section').forEach(function(x){io.observe(x)})}
