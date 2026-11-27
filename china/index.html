@@ -305,18 +305,18 @@ body.loading{overflow:hidden}
 @keyframes ride{to{margin-top:3px;rotate:6deg}}
 .burst{position:fixed;z-index:60;pointer-events:none;font-size:22px;animation:burst .9s cubic-bezier(.2,.8,.3,1) forwards}
 @keyframes burst{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}70%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1.1) rotate(var(--r));opacity:0}}
-.peek{position:fixed;z-index:14;width:92px;cursor:pointer;transition:transform .55s var(--ease);touch-action:manipulation}
-.peek.R{right:-4px;transform:translateX(110%) rotate(-12deg)}
-.peek.L{left:-4px;transform:translateX(-110%) rotate(12deg)}
-.peek.R.on{transform:translateX(22%) rotate(-12deg)}
-.peek.L.on{transform:translateX(-22%) rotate(12deg)}
+.peek{position:fixed;z-index:14;bottom:-13px;width:120px;cursor:pointer;transition:transform .6s var(--ease);touch-action:manipulation;transform-origin:50% 100%}
+.peek.L{left:-8px;transform:translateY(110%) rotate(8deg)}
+.peek.R{right:-8px;transform:translateY(110%) rotate(-8deg)}
+.peek.L.on{transform:translateY(0) rotate(8deg)}
+.peek.R.on{transform:translateY(0) rotate(-8deg)}
 .peek.R.jump{animation:pjr .5s var(--ease)}.peek.L.jump{animation:pjl .5s var(--ease)}
-@keyframes pjr{50%{transform:translateX(14%) translateY(-24px) rotate(-22deg)}}
-@keyframes pjl{50%{transform:translateX(-14%) translateY(-24px) rotate(22deg)}}
+@keyframes pjr{50%{transform:translateY(-22px) rotate(-3deg)}}
+@keyframes pjl{50%{transform:translateY(-22px) rotate(3deg)}}
 .peek img{width:100%;filter:drop-shadow(-4px 6px 8px rgba(0,0,0,.2))}
-.peek .say{position:absolute;top:4px;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;border-radius:16px 16px 4px 16px;
+.peek .say{position:absolute;top:-30px;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;border-radius:16px 16px 4px 16px;
   box-shadow:0 6px 16px rgba(0,0,0,.15);transform:rotate(12deg) scale(0);transform-origin:right bottom;transition:transform .35s var(--ease) .25s}
-.peek.R .say{right:86%}.peek.L .say{left:86%;border-radius:16px 16px 16px 4px;transform:rotate(-12deg) scale(0);transform-origin:left bottom}
+.peek.R .say{right:46%}.peek.L .say{left:46%;border-radius:16px 16px 16px 4px;transform:rotate(-12deg) scale(0);transform-origin:left bottom}
 .peek.on .say{transform:rotate(12deg) scale(1)}.peek.L.on .say{transform:rotate(-12deg) scale(1)}
 .spark-h{position:relative;display:inline-block}
 .spark-h i{position:absolute;font-style:normal;font-size:.42em;pointer-events:none;animation:tw 2.2s ease-in-out infinite}
@@ -341,7 +341,7 @@ body.loading{overflow:hidden}
 .conf{position:fixed;top:-20px;z-index:70;width:10px;height:14px;border-radius:3px;pointer-events:none;animation:fall linear forwards}
 @keyframes fall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
 .rain{position:fixed;top:-120px;z-index:70;width:80px;pointer-events:none;animation:fall linear forwards}
-@media (max-width:860px){.peek{width:72px}}
+@media (max-width:860px){.peek{width:100px;bottom:-11px}}
 @media (prefers-reduced-motion:reduce){#rider,.peek,.burst,.conf,.rain{display:none!important}}
 </style>
 </head>
@@ -617,9 +617,9 @@ body.loading{overflow:hidden}
 </footer>
 
 <a class="fab" id="fab" href="#book">🎤 <span lang="zh">预约我们</span><span lang="en">Book us</span></a>
-<div id="prog"></div><img id="rider" src="img/d-head-roxor.webp" alt="" width="180" height="235">
-<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/d-head-roxor.webp" alt="" width="180" height="235"></div>
-<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/d-head-jasmin.webp" alt="" width="180" height="188"></div>
+<div id="prog"></div><img id="rider" src="img/f-bust-roxor.webp" alt="" width="200" height="327">
+<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/f-bust-roxor.webp" alt="" width="200" height="327"></div>
+<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/f-bust-jasmin.webp" alt="" width="200" height="265"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -745,7 +745,7 @@ body.loading{overflow:hidden}
   var LINES=[['Hi!','你好!'],['Boom tss!','动次打次!'],['Book us!','约我们!'],['Scroll more!','继续看!'],['Yay!','耶!']];
   function doPeek(){if(document.getElementById('ld'))return;cur.classList.remove('on');cur=PK[ph++%2];
     var l=LINES[Math.random()*LINES.length|0];cur.querySelector('.say').textContent=zh()?l[1]:l[0];
-    cur.style.top=rnd(30,55)+'%';cur.classList.add('on');clearTimeout(pt);var c=cur;pt=setTimeout(function(){c.classList.remove('on')},2800)}
+    cur.classList.add('on');clearTimeout(pt);var c=cur;pt=setTimeout(function(){c.classList.remove('on')},2800)}
   if('IntersectionObserver' in window){var seen=new WeakSet(),io=new IntersectionObserver(function(es){es.forEach(function(e){
     if(e.isIntersecting&&!seen.has(e.target)){seen.add(e.target);setTimeout(doPeek,500)}})},{threshold:.35});
     document.querySelectorAll('section').forEach(function(x){io.observe(x)})}
@@ -762,7 +762,7 @@ body.loading{overflow:hidden}
   /* secret: tap the logo 5 times for chibi rain */
   var taps=0,tt,wm=document.querySelector('.bar .wm');
   if(wm)wm.addEventListener("click",function(e){taps++;if(taps>1)e.preventDefault();clearTimeout(tt);tt=setTimeout(function(){taps=0},1200);
-    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/d-head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
+    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/f-bust-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
       r.style.left=rnd(-5,95)+'vw';r.style.width=rnd(50,100)+'px';r.style.setProperty('--dx',rnd(-80,80)+'px');r.style.setProperty('--rot',rnd(-360,360)+'deg');
       r.style.animationDuration=rnd(2.2,4)+'s';r.style.animationDelay=rnd(0,1.2)+'s';document.body.appendChild(r);setTimeout(function(x){return function(){x.remove()}}(r),5600)}confetti(50)}});
 })();
