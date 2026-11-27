@@ -18,3 +18,11 @@
 # that changed sizes or anchors can sit next to an older cached image for at most those 10 minutes after a deploy.
 /graftwork/assets/*
   Cache-Control: public, max-age=600, stale-while-revalidate=86400
+
+# China landing page: images and fonts are kept for a day and refreshed in the background for a week after that, so repeat
+# visits from China (slow route to the servers) skip every round trip. The page itself stays revalidated. When an image changes,
+# give it a new file name so phones pick it up at once.
+/china/img/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/china/fonts/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
