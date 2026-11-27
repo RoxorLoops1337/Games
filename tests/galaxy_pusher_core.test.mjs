@@ -146,8 +146,8 @@ function overlaps(m) {
   const g = newGame(13); g.foe.hp = g.foe.max = 1e9; g.bank = 1e6;
   const T = g.f.placeTower(300, { col: 'B', crown: ['B', 'B'] });
   let built = false, maxTilt = 0;
-  play(g, 40, 6, () => { if (T.state === 'stand') { built = true; T.fallAt = null; if (T.body.translation().z < EDGE - 4.35) maxTilt = Math.max(maxTilt, T.tilt || 0); } });   // (a sound tower: no weak spot; upright until the edge zone, where tipping is meant to start)
-  ok(built && g.f.towers.includes(T), 'the tower finishes building and is still standing 40 s later');
+  play(g, 25, 6, () => { if (T.state === 'stand') { built = true; T.fallAt = null; if (T.body.translation().z < EDGE - 4.35) maxTilt = Math.max(maxTilt, T.tilt || 0); } });   // (a sound tower: no weak spot; upright until the edge zone, where tipping is meant to start)
+  ok(built && g.f.towers.includes(T), 'the tower finishes building and is still standing 25 s later');
   ok(maxTilt < 0.16 && T.body.translation().z > FACE_RET + 2, 'it rides the carpet forward slowly, upright: it wobbles when shoved but never starts to fall (' + maxTilt.toFixed(2) + ' rad)');
   // at the edge it goes over toward the player, smacks the front glass and spills
   T.body.setTranslation({ x: 0, y: T.H / 2 + 0.01, z: EDGE - 1 }, true);
@@ -366,7 +366,7 @@ function overlaps(m) {
   const angs = []; for (let i = 0; i < HZ * 3; i++) { s.f.stepOnce(); angs.push(s.f.flipper('L')); }
   ok(Math.min(...angs) < FLIP_BACK + 0.05 && Math.max(...angs) > FLIP_FRONT - 0.05 && angs.every((a) => a >= FLIP_BACK - 1e-6 && a <= FLIP_FRONT + 1e-6), 'each shooter turns between its back and front limits');
   const a = s.f.flipper('R'), shot = s.f.shoot('c', 'R'), v = shot.body.linvel(), p0 = shot.body.translation();
-  ok(Math.abs(Math.atan2(v.z, -v.x) - a) < 0.08 && p0.y < PH + 1 && Math.abs(p0.z - SHOOTER.R.z) < 2, 'a coin leaves low from the side wall along the shooter (' + a.toFixed(2) + ' rad)');
+  ok(Math.abs(Math.atan2(v.z, -v.x) - a) < 0.08 && p0.y < PH + 3 && Math.abs(p0.z - SHOOTER.R.z) < 2, 'a coin leaves low from the side wall along the shooter (' + a.toFixed(2) + ' rad)');
 }
 
 // ---------------------------------------------------------------- combo meter

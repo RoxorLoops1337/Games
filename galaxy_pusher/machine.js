@@ -26,7 +26,7 @@ export const FACE_MIN = -4.5, FACE_MAX = 2.5, PERIOD = 3.4, PH = 2.4, PUSH_HALF 
 // wall and keeps turning between its two limits: a little toward the back wall (FLIP_BACK) and a little toward the
 // front (FLIP_FRONT), always across the machine. Every coin leaves along its current direction.
 export const SHOOTER = { L: { x: -W / 2 + 0.3, y: PH + 0.45, z: BACK_WALL + 2.6 }, R: { x: W / 2 - 0.3, y: PH + 0.45, z: BACK_WALL + 2.6 } };
-export const SHOT_MIN = 30, SHOT_MAX = 62;   // cm/s a coin leaves the shooter with
+export const SHOT_MIN = 50, SHOT_MAX = 90;   // cm/s a coin leaves the shooter with (hard enough to slide a good way)
 export const FLIP_BACK = -0.3, FLIP_FRONT = 0.38, FLIP_PERIOD = 2.6;   // radians from straight across (+ toward the player)
 // the shooter's angle at time t (the two sides turn in opposite phase)
 export function flipperAngle(side, t) {
@@ -183,7 +183,11 @@ export class Machine {
     side = side === 'R' ? 'R' : 'L';
     const S = SHOOTER[side], r = this.rng, dir = side === 'R' ? -1 : 1, a = this.flipper(side) + (r() - 0.5) * 0.08;
     const dx = dir * Math.cos(a), dz = Math.sin(a), sp = SHOT_MIN + r() * (SHOT_MAX - SHOT_MIN);
-    const c = this.add(k, S.x + dx * 1.6, S.y, S.z + dz * 1.6, {
+    // coins piled at the shooter's mouth: the new one comes out on top of them, never inside them (born inside a pile,
+    // the solver threw one 70 cm up and over the side wall)
+    const sx0 = S.x + dx * 1.6, sz0 = S.z + dz * 1.6; let sy = S.y;
+    for (const o of this.coins) if (o.body) { const q = o.body.translation(); if (Math.hypot(q.x - sx0, q.z - sz0) < KINDS[k].r + KINDS[o.k].r && q.y > sy - 0.5) sy = Math.max(sy, q.y + KINDS[o.k].hh + KINDS[k].hh + 0.05); }
+    const c = this.add(k, sx0, sy, sz0, {
       ccd: true,
       v: { x: dx * sp, y: 2 + r() * 4, z: dz * sp },
       w: { x: (r() - 0.5) * 6, y: (r() - 0.5) * 16, z: (r() - 0.5) * 6 },
@@ -447,6 +451,11 @@ export class Machine {
       // A resting coin squeezed in a pile against the back wall can be kicked out by the solver at over a metre a
       // second (measured: one cleared the side wall). Nothing in the machine moves a coin like that except a shot,
       // so a coin that is not flying is capped to a hop (Quake's jolt stays under the cap).
+      // a fired coin never goes faster than the shooter launches it (a solver kick from a crowded mouth)
+      if (c.shot && this.t - c.born < 0.5) {
+        const v = c.body.linvel(), sp = Math.hypot(v.x, v.y, v.z), cap = SHOT_MAX * 1.15;
+        if (sp > cap || v.y > 25) { const k = Math.min(1, cap / sp); c.body.setLinvel({ x: v.x * k, y: Math.min(v.y * k, 25), z: v.z * k }, true); }
+      }
       if (!c.shot && !c.tw && !c.hang) {
         const v = c.body.linvel(), hs = Math.hypot(v.x, v.z);
         if (v.y > POP_UP || hs > POP_SIDE) { const k = hs > POP_SIDE ? POP_SIDE / hs : 1; c.body.setLinvel({ x: v.x * k, y: Math.min(v.y, POP_UP), z: v.z * k }, true); }
