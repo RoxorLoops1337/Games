@@ -617,9 +617,9 @@ body.loading{overflow:hidden}
 </footer>
 
 <a class="fab" id="fab" href="#book">🎤 <span lang="zh">预约我们</span><span lang="en">Book us</span></a>
-<div id="prog"></div><img id="rider" src="img/c2-head-roxor.webp" alt="" width="170" height="216">
-<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/c2-head-roxor.webp" alt="" width="170" height="216"></div>
-<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/c2-head-jasmin.webp" alt="" width="170" height="204"></div>
+<div id="prog"></div><img id="rider" src="img/c3-head-roxor.webp" alt="" width="180" height="239">
+<div class="peek L" id="peekL" aria-hidden="true"><span class="say">Hi!</span><img src="img/c3-head-roxor.webp" alt="" width="180" height="239"></div>
+<div class="peek R" id="peekR" aria-hidden="true"><span class="say">Hi!</span><img src="img/c3-head-jasmin.webp" alt="" width="180" height="170"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -762,7 +762,7 @@ body.loading{overflow:hidden}
   /* secret: tap the logo 5 times for chibi rain */
   var taps=0,tt,wm=document.querySelector('.bar .wm');
   if(wm)wm.addEventListener("click",function(e){taps++;if(taps>1)e.preventDefault();clearTimeout(tt);tt=setTimeout(function(){taps=0},1200);
-    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/c2-head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
+    if(taps>=5){taps=0;for(var i=0;i<24;i++){var r=document.createElement('img');r.className='rain';r.src='img/c3-head-'+(i%2?'roxor':'jasmin')+'.webp';r.alt='';
       r.style.left=rnd(-5,95)+'vw';r.style.width=rnd(50,100)+'px';r.style.setProperty('--dx',rnd(-80,80)+'px');r.style.setProperty('--rot',rnd(-360,360)+'deg');
       r.style.animationDuration=rnd(2.2,4)+'s';r.style.animationDelay=rnd(0,1.2)+'s';document.body.appendChild(r);setTimeout(function(x){return function(){x.remove()}}(r),5600)}confetti(50)}});
 })();
