@@ -8,7 +8,7 @@ The owners asked that every chibi comes from their Drive files, not from the Hoc
 - `R&J Cartoon - RoxorLoops.png`, `R&J Cartoon - Jasmin.png`, `R&J Cartoon - Both.png` (Drive, the "R&J Cartoon" files)
 - Stickers in the same folder: `R&J Sticker - Mid Shot.png`, `R&J Sticker - Name.png`, `R&J Sticker - Card.png`, `R&J Sticker - Card Cute.png`, `R&J Sticker - Microphone.png`
 
-In this folder they are `img/d-roxor.webp`, `img/d-jasmin.webp`, `img/d-both.webp`, the peekers `img/g-roxor.webp` and `img/g-jasmin-m.webp` (full-body, Jasmin mirrored): they swing in from the side edges, Roxor left and Jasmin right, pivoting on their feet just off-screen and leaning about 34 degrees into the page, so no cut edge ever shows. The scroll rider and logo-tap rain use the chest busts `img/f-bust-*.webp`. Also `stage/art/d-roxor.webp`, `stage/art/d-jasmin.webp`.
+In this folder they are `img/d-roxor.webp`, `img/d-jasmin.webp`, `img/d-both.webp`, the peekers `img/g-roxor.webp` and `img/g-jasmin-m.webp` (full-body, Jasmin mirrored): they swing in from the side edges, Roxor left and Jasmin right, pivoting on their feet just off-screen and leaning about 25 degrees into the page (pivot on the feet, just past the edge) so the head, shoulders and mic come in and nothing is ever cut so only the head and shoulders come past the screen edge, so no cut edge ever shows. The scroll rider and logo-tap rain use the chest busts `img/f-bust-*.webp`. Also `stage/art/d-roxor.webp`, `stage/art/d-jasmin.webp`.
 
 ## Logo
 The newest logo has a heart on Jasmin's i ("R&J text logo.png" in Drive). `stage/art/logo-sticker.webp` is that logo with its white sticker outline, cut out of the designer's "R&J - Stage Background" sheet.

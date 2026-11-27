@@ -305,22 +305,22 @@ body.loading{overflow:hidden}
 @keyframes ride{to{margin-top:3px;rotate:6deg}}
 .burst{position:fixed;z-index:60;pointer-events:none;font-size:22px;animation:burst .9s cubic-bezier(.2,.8,.3,1) forwards}
 @keyframes burst{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}70%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1.1) rotate(var(--r));opacity:0}}
-.peek{position:fixed;z-index:14;bottom:24vh;height:260px;cursor:pointer;transition:transform .7s var(--ease);touch-action:manipulation;transform-origin:50% 100%}
+.peek{position:fixed;z-index:14;bottom:24vh;height:300px;cursor:pointer;transition:transform .7s var(--ease);touch-action:manipulation;transform-origin:50% 100%}
 .peek img{height:100%;width:auto;display:block;filter:drop-shadow(0 6px 8px rgba(0,0,0,.2))}
 /* the feet (the pivot) stay just off the screen edge; the figure swings in and leans toward the page */
 .peek.L{left:0;transform:translateX(-100%) rotate(0deg)}
 .peek.R{right:0;transform:translateX(100%) rotate(0deg)}
-.peek.L.on{transform:translateX(-100%) rotate(34deg)}
-.peek.R.on{transform:translateX(100%) rotate(-34deg)}
+.peek.L.on{transform:translateX(-100%) rotate(25deg)}
+.peek.R.on{transform:translateX(100%) rotate(-25deg)}
 .peek.L.jump{animation:pjl .5s var(--ease)}.peek.R.jump{animation:pjr .5s var(--ease)}
-@keyframes pjl{50%{transform:translateX(-100%) rotate(42deg)}}
-@keyframes pjr{50%{transform:translateX(100%) rotate(-42deg)}}
+@keyframes pjl{50%{transform:translateX(-100%) rotate(31deg)}}
+@keyframes pjr{50%{transform:translateX(100%) rotate(-31deg)}}
 .peek .say{position:absolute;z-index:1;top:-6%;background:#fff;color:var(--pink-d);font-weight:900;font-size:15px;white-space:nowrap;padding:7px 12px;
   box-shadow:0 6px 16px rgba(0,0,0,.15);transition:transform .35s var(--ease) .3s}
-.peek.L .say{left:92%;border-radius:16px 16px 16px 4px;transform-origin:left bottom;transform:rotate(-40deg) scale(0)}
-.peek.R .say{right:92%;border-radius:16px 16px 4px 16px;transform-origin:right bottom;transform:rotate(40deg) scale(0)}
-.peek.L.on .say{transform:rotate(-40deg) scale(1)}
-.peek.R.on .say{transform:rotate(40deg) scale(1)}
+.peek.L .say{left:92%;border-radius:16px 16px 16px 4px;transform-origin:left bottom;transform:rotate(-30deg) scale(0)}
+.peek.R .say{right:92%;border-radius:16px 16px 4px 16px;transform-origin:right bottom;transform:rotate(30deg) scale(0)}
+.peek.L.on .say{transform:rotate(-30deg) scale(1)}
+.peek.R.on .say{transform:rotate(30deg) scale(1)}
 .spark-h{position:relative;display:inline-block}
 .spark-h i{position:absolute;font-style:normal;font-size:.42em;pointer-events:none;animation:tw 2.2s ease-in-out infinite}
 .spark-h i:nth-child(1){right:-.7em;top:-.25em}.spark-h i:nth-child(2){left:-.6em;bottom:.05em;animation-delay:-.8s;font-size:.3em}.spark-h i:nth-child(3){right:-1.25em;bottom:.1em;animation-delay:-1.5s;font-size:.28em}
@@ -344,7 +344,7 @@ body.loading{overflow:hidden}
 .conf{position:fixed;top:-20px;z-index:70;width:10px;height:14px;border-radius:3px;pointer-events:none;animation:fall linear forwards}
 @keyframes fall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
 .rain{position:fixed;top:-120px;z-index:70;width:80px;pointer-events:none;animation:fall linear forwards}
-@media (max-width:860px){.peek{height:210px;bottom:22vh}}
+@media (max-width:860px){.peek{height:250px;bottom:22vh}}
 @media (prefers-reduced-motion:reduce){#rider,.peek,.burst,.conf,.rain{display:none!important}}
 </style>
 </head>
