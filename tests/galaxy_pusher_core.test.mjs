@@ -1,6 +1,6 @@
 // Galaxy Pusher: rules and the real-physics machine (Rapier), headless (no DOM, no audio).
 import assert from 'node:assert/strict';
-import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER, EARLY_FALL } from '../galaxy_pusher/machine.js';
+import { loadPhysics, Machine, mulberry, W, EDGE, PH, BACK_WALL, FACE_MAX, FACE_RET, FACE_MIN, GLASS_Z, COIN_HH, KINDS, FIELD_CAP, HZ, CRUMBLE_LIVE, PORT, isToken, FLIP_BACK, FLIP_FRONT, SHOOTER, EARLY_FALL, NOTCH_R, PUSH_HALF, REST_FREE_FRONT } from '../galaxy_pusher/machine.js';
 import { Game, JP_FULL, JP_COINS, DAILY_BASE, DAILY_STEP, PORT_DELAY, TOKEN_POP, TOKEN_CAP, WHEEL, TOWER, FEVER_TIME, ITEMS, ITEM_ORDER, START_COINS, AUTO_SHOTS, COMBO_FULL, COIN_PTS, KILL_COINS, comboMult, foeAt, heroAtk } from '../galaxy_pusher/core.js';
 
 await loadPhysics();
@@ -146,9 +146,9 @@ function overlaps(m) {
   const g = newGame(13); g.foe.hp = g.foe.max = 1e9; g.bank = 1e6;
   const T = g.f.placeTower(300, { col: 'B', crown: ['B', 'B'] });
   let built = false, maxTilt = 0;
-  play(g, 40, 6, () => { if (T.state === 'stand') { built = true; maxTilt = Math.max(maxTilt, T.tilt || 0); } });
+  play(g, 40, 6, () => { if (T.state === 'stand') { built = true; T.fallAt = null; if (T.body.translation().z < EDGE - 4.35) maxTilt = Math.max(maxTilt, T.tilt || 0); } });   // (a sound tower: no weak spot; upright until the edge zone, where tipping is meant to start)
   ok(built && g.f.towers.includes(T), 'the tower finishes building and is still standing 40 s later');
-  ok(maxTilt < 0.12 && T.body.translation().z > FACE_RET + 2, 'it rides the carpet forward slowly, upright (' + maxTilt.toFixed(2) + ' rad)');
+  ok(maxTilt < 0.16 && T.body.translation().z > FACE_RET + 2, 'it rides the carpet forward slowly, upright: it wobbles when shoved but never starts to fall (' + maxTilt.toFixed(2) + ' rad)');
   // at the edge it goes over toward the player, smacks the front glass and spills
   T.body.setTranslation({ x: 0, y: T.H / 2 + 0.01, z: EDGE - 1 }, true);
   let smack = null, burst = null, paid0 = g.stats.paid;
@@ -252,6 +252,40 @@ function overlaps(m) {
   ok(EARLY_FALL > 0.2 && EARLY_FALL < 0.5, 'some towers (not most) fall early');
 }
 
+// ---------------------------------------------------------------- the notch has no pockets, coins settle, tokens spread
+{
+  // every point of the pusher's solid corners behind the half-circle is inside a collider (a staircase of boxes used
+  // to leave pockets inside the drawn wall where coins got stuck on edge)
+  const wedges = Machine.notchWedges().map((f) => { const q = []; for (let i = 0; i < f.length; i += 6) q.push([f[i], f[i + 2]]); return q; });
+  const inPoly = (x, z, q) => { let inside = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) { const [xi, zi] = q[i], [xj, zj] = q[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside; } return inside; };
+  let holes = 0, samples = 0;
+  for (let x = -NOTCH_R + 0.05; x < NOTCH_R - 0.05; x += 0.1) {
+    const arc = PUSH_HALF - Math.sqrt(NOTCH_R * NOTCH_R - x * x);
+    for (let z = PUSH_HALF - NOTCH_R + 0.02; z < arc - 0.06; z += 0.1) { samples++; if (!wedges.some((q) => inPoly(x, z, q))) holes++; }
+  }
+  ok(samples > 100 && holes === 0, 'the solid corners behind the notch have no pockets (' + holes + ' of ' + samples + ' points open)');
+  // resting coins settle instead of rocking (rotation locked while settled, never in the front band)
+  const rocking = (lock) => {
+    const m = new Machine(mulberry(31)); if (!lock) Object.assign(m.rest, { lock: false, ang: 0.4, in: 1.2, out: 2.5 });
+    m.seedCarpet(); for (let i = 0; i < 60; i++) { m.shoot('c', i % 2 ? 'R' : 'L'); for (let k = 0; k < 4; k++) m.stepOnce(); }
+    for (let i = 0; i < HZ * 2; i++) m.stepOnce();
+    const H = new Map();
+    for (let s = 0; s < HZ * 3; s++) { m.stepOnce(); for (const c of m.coins) if (c.body) { const q = c.body.rotation(), p = c.body.translation(); if (!H.has(c)) H.set(c, []); H.get(c).push([Math.acos(Math.min(1, Math.abs(up(q)))) * 57.3, p.x, p.z]); } }
+    let still = 0, rock = 0;
+    for (const [, h] of H) { if (h.length < HZ * 3 || Math.hypot(h[h.length - 1][1] - h[0][1], h[h.length - 1][2] - h[0][2]) > 1) continue; still++;
+      let sw = 0; for (let i = 0; i + 20 < h.length; i++) { const tl = h.slice(i, i + 20).map((v) => v[0]), r = Math.max(...tl) - Math.min(...tl); if (Math.abs(tl[19] - tl[0]) < r * 0.5) sw = Math.max(sw, r); }
+      if (sw > 2) rock++; }
+    return rock / Math.max(1, still);
+  };
+  const rLock = rocking(true), rFree = rocking(false);
+  ok(rLock < rFree * 0.6 && rLock < 0.25, 'resting coins settle instead of rocking (' + Math.round(rLock * 100) + '% rock vs ' + Math.round(rFree * 100) + '% unsettled)');
+  ok(REST_FREE_FRONT >= 3, 'coins near the drop edge stay free to tip and cascade off');
+  // the port spreads tokens across the machine, not just the middle
+  const t = new Machine(mulberry(33)); t.seedCarpet(); const xs = [];
+  for (let i = 0; i < 32; i++) { const c = t.launch('BPY'[i % 3]); for (let k = 0; k < 8; k++) t.stepOnce(); xs.push(c.body ? c.body.translation().x : 0); }
+  ok(xs.filter((x) => Math.abs(x) > 4).length >= xs.length * 0.35 && xs.some((x) => x < -5) && xs.some((x) => x > 5), 'the port spreads tokens to the left and right, not only the middle');
+}
+
 // ---------------------------------------------------------------- a standing tower never deadlocks the next one
 {
   // The pusher pulls back for a waiting tower once the notch is clear. If a standing tower blocks the notch, the
@@ -298,9 +332,10 @@ function overlaps(m) {
     g.tick(1 / 60);
     for (const e of g.out) if (e.t === 'portOut') { outs.push([e.k, g.time]); tok = tok || g.f.coins.slice(n0).find((c) => c.k === e.k); }
     g.out.length = 0;
+    if (tok && tok.body && !tok.p05 && g.time - outs[0][1] > 0.5) tok.p05 = { ...tok.body.translation() };
   }
   ok(outs.length === 1 && outs[0][0] === 'P' && Math.abs(outs[0][1] - t0 - PORT_DELAY) < 0.1, 'a token that drops comes back out of the port ' + PORT_DELAY + ' s later (' + (outs[0] && (outs[0][1] - t0).toFixed(2)) + ' s)');
-  const tp = tok && tok.body && tok.body.translation();
+  const tp = tok && tok.p05;   // where it is half a second after leaving the port
   ok(tp && tp.z > PORT.z + 2 && Math.abs(tp.x) < W / 2, 'it flies out of the back wall onto the machine');
   // gutter tokens come back too, so the machine never runs dry; recycling never piles up past the cap
   g.portQ.length = 0; g.f.events.push({ t: 'lost', k: 'B', x: -11 }); g.consume();

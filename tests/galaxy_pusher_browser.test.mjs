@@ -64,10 +64,11 @@ try {
     const n0 = await page.evaluate(() => GP.game.stats.shots);
     await page.evaluate(() => { GP.game.bank = 100; GP.game.fireCd = 0; });
     await page.mouse.move(x, L.m.y + L.m.h * 0.6); await page.mouse.down(); await page.waitForTimeout(120); await page.mouse.up();
-    return page.evaluate((n0) => { const g = GP.game; if (g.stats.shots <= n0) return 0; const c = g.f.coins.filter((q) => q.k === 'c' && q.body && q.shot).slice(-1)[0]; return c ? c.body.linvel().x : 0; }, n0);
+    // (which shooter fired the newest coin: its speed alone can flip if it bounces off another coin within 120 ms)
+    return page.evaluate((n0) => { const g = GP.game; if (g.stats.shots <= n0) return null; const c = g.f.coins.filter((q) => q.k === 'c' && q.from).slice(-1)[0]; return c ? c.from : null; }, n0);
   };
-  ok(await fromSide(50) > 0, 'holding the left of the machine fires from the left shooter (coin flies right)');
-  ok(await fromSide(340) < 0, 'holding the right of the machine fires from the right shooter (coin flies left)');
+  ok(await fromSide(50) === 'L', 'holding the left of the machine fires from the left shooter');
+  ok(await fromSide(340) === 'R', 'holding the right of the machine fires from the right shooter');
   ok(await page.isVisible('#fireL') && await page.isVisible('#fireR'), 'there is a FIRE button for each shooter');
   const gap = await page.evaluate(() => GP.L.mach.y - (GP.L.battle.y + GP.L.battle.h));
   ok(gap < 12, 'no empty band between the battle screen and the machine (' + Math.round(gap) + ' px)');
