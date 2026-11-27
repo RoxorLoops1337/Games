@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>LoopDoku 口技数独</title>
+<meta name="description" content="LoopDoku 口技数独：RoxorLoops 与 Jasmin 的逻辑谜题。每行、每列、每个颜色区域各放一位表演者，而且互不相邻。没有广告。">
+<meta name="theme-color" content="#d93a3a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d93a3a'/%3E%3Ccircle cx='32' cy='26' r='11' fill='%23ffd166'/%3E%3Crect x='28' y='36' width='8' height='16' rx='3' fill='%23ffd166'/%3E%3C/svg%3E">
+<style>
+/* system fonts only: no web fonts, so nothing has to load from outside the page */
+:root{--bg:#fff6e6;--ink:#2b1d16;--muted:#7a6656;--panel:#fff;--red:#d93a3a;--red2:#b72b2b;--gold:#ffc94a;--line:#2b1d16;--blue:#2f6fde;--pink:#e2468f;
+  --font:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","WenQuanYi Micro Hei",sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:500 16px/1.45 var(--font);overflow:hidden}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;border:0;background:none}
+.scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;padding:max(10px,env(safe-area-inset-top)) 12px max(10px,env(safe-area-inset-bottom));overflow-y:auto}
+.scr.on{display:flex}
+.btn{display:block;width:100%;max-width:320px;padding:13px 16px;margin:6px auto;border-radius:14px;background:var(--red);color:#fff;font-weight:800;font-size:18px;
+  box-shadow:0 4px 0 var(--red2);transition:transform .08s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--red2)}
+.btn.alt{background:#fff;color:var(--ink);box-shadow:0 4px 0 #d8c7b4;border:2px solid #ead9c4}
+.btn.gold{background:var(--gold);color:var(--ink);box-shadow:0 4px 0 #d9a21f}
+.small{font-size:13px;color:var(--muted)}
+/* title */
+#title{justify-content:center;text-align:center}
+.logo{font-size:44px;font-weight:900;letter-spacing:1px;margin:0;color:var(--red);text-shadow:3px 3px 0 var(--gold)}
+.logo small{display:block;font-size:22px;color:var(--ink);text-shadow:none;letter-spacing:6px;margin-top:2px}
+.duo{margin:8px 0 14px;color:var(--muted);font-size:14px}
+.pts{display:inline-block;background:#fff;border:2px solid #ead9c4;border-radius:99px;padding:4px 14px;font-weight:800;margin-bottom:10px}
+.mini{display:flex;gap:6px;justify-content:center;margin:10px 0 18px}
+.mini i{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-weight:900;color:#fff}
+/* levels */
+.top{width:100%;max-width:520px;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.top h2{flex:1;margin:0;font-size:22px;text-align:center}
+.ib{width:44px;height:44px;border-radius:12px;background:#fff;border:2px solid #ead9c4;font-size:20px;font-weight:900;flex:none}
+.tabs{display:flex;gap:6px;overflow-x:auto;width:100%;max-width:520px;padding-bottom:6px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;padding:8px 12px;border-radius:99px;background:#fff;border:2px solid #ead9c4;font-weight:700;font-size:15px;white-space:nowrap}
+.tab[aria-selected=true]{background:var(--red);border-color:var(--red);color:#fff}
+.tab span{font-size:12px;opacity:.75;margin-left:4px}
+.note{width:100%;max-width:520px;margin:6px 0 10px;color:var(--muted);font-size:14px;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:100%;max-width:520px}
+.lv{aspect-ratio:1;border-radius:12px;background:#fff;border:2px solid #ead9c4;font-weight:800;font-size:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.lv small{font-size:11px;color:#e0a100;letter-spacing:-1px;min-height:12px}
+.lv.done{background:#fff3c9;border-color:var(--gold)}
+.lv.cur{border-color:var(--red);box-shadow:0 0 0 2px var(--red) inset}
+.lv[disabled]{opacity:.4}
+/* game */
+#game{padding-top:max(6px,env(safe-area-inset-top))}
+.hud{width:100%;max-width:520px;display:flex;align-items:center;gap:8px}
+.hud .t{flex:1;min-width:0;text-align:center}
+.hud b{display:block;font-size:18px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:center;margin:6px 0 4px;font-weight:700;font-size:15px}
+.mics{letter-spacing:2px;font-size:18px}
+.mics .gone{opacity:.2;filter:grayscale(1)}
+.loopbar{display:flex;gap:3px}
+.loopbar i{width:7px;height:14px;border-radius:2px;background:#e8d6c0}
+.loopbar i.on{background:var(--red)}
+.loopbar i.beat{transform:scaleY(1.35)}
+.play{position:relative;display:grid;margin:4px auto 0}
+.colarr,.rowarr{display:grid}
+.arr{display:grid;place-items:center;padding:0;color:var(--red);transition:transform .1s,opacity .2s}
+.arr svg{width:15px;height:15px;fill:currentColor}
+.arr.dim{opacity:.3}
+.arr:active,.arr.press{transform:scale(.78)}
+.board{position:relative;display:grid;border:3px solid var(--line);border-radius:8px;overflow:hidden;background:var(--line);-webkit-touch-callout:none;touch-action:none}
+.c{position:relative;display:grid;place-items:center;font-weight:900}
+.c .x{color:rgba(43,29,22,.55);font-size:.55em;line-height:1;animation:pop .18s ease-out}
+.c.w .x{color:#d11}
+.c .pc{width:78%;height:78%;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.5em;border:2px solid rgba(0,0,0,.25);animation:land .35s cubic-bezier(.3,1.6,.5,1)}
+.pc.roxor{background:var(--blue)}
+.pc.jasmin{background:var(--pink)}
+.c.hl::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.55);animation:fade 1.6s forwards;pointer-events:none}
+.c.cur{outline:3px solid var(--blue);outline-offset:-3px}
+.glow{animation:glow 1s ease-in-out infinite;position:relative;z-index:2}
+.c.glow::before{content:"";position:absolute;inset:2px;border:3px solid #fff;border-radius:6px;box-shadow:0 0 0 2px var(--red);pointer-events:none}
+.shake{animation:shake .35s}
+.wob{animation:wob .3s}
+@keyframes pop{from{transform:scale(1.8);opacity:0}to{transform:none;opacity:1}}
+@keyframes land{from{transform:scale(0) rotate(-40deg)}to{transform:none}}
+@keyframes fade{from{opacity:1}to{opacity:0}}
+@keyframes glow{50%{filter:brightness(1.18)}}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes wob{30%{transform:rotate(-8deg)}70%{transform:rotate(6deg)}}
+.tools{width:100%;max-width:520px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.tools button{padding:9px 2px;border-radius:12px;background:#fff;border:2px solid #ead9c4;font-weight:800;font-size:15px}
+.tools button:active{transform:translateY(2px)}
+.tools .hint{background:var(--gold);border-color:#e8b02c}
+.tools button.glow{box-shadow:0 0 0 3px var(--red)}
+.arr.glow{background:var(--gold);border-radius:8px;box-shadow:0 0 0 2px var(--red);opacity:1}
+.coach{width:100%;max-width:520px;margin-top:10px;background:#fff;border:2px solid var(--red);border-radius:14px;padding:10px 12px;display:none;gap:8px;align-items:flex-start}
+.coach.on{display:flex}
+.coach .face{flex:none;width:36px;height:36px;border-radius:50%;background:var(--pink);color:#fff;display:grid;place-items:center;font-weight:900}
+.coach p{margin:0;flex:1;font-size:15px}
+.coach .st{display:block;font-size:12px;color:var(--muted)}
+.coach button{flex:none;font-size:13px;color:var(--muted);text-decoration:underline;padding:4px}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(43,29,22,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal.on{display:flex}
+.card{width:100%;max-width:380px;max-height:100%;overflow-y:auto;background:var(--panel);border-radius:20px;padding:20px 18px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:up .25s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:0}}
+.card h3{margin:0 0 6px;font-size:24px;color:var(--red)}
+.card p{margin:6px 0}
+.stars{font-size:40px;color:var(--gold);letter-spacing:4px;text-shadow:0 2px 0 #c98f00}
+.stars .no{color:#e8d6c0;text-shadow:none}
+.big{font-size:30px;font-weight:900;color:var(--red)}
+.rules{text-align:left;margin:10px 0;padding:0;list-style:none}
+.rules li{display:flex;gap:10px;align-items:center;margin:8px 0;font-size:16px}
+.rules li i{flex:none;width:30px;height:30px;border-radius:9px;background:#fff3c9;display:grid;place-items:center;font-style:normal;font-weight:900;color:var(--red)}
+.row2{display:flex;gap:8px}
+.row2 .btn{margin:6px 0}
+.toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:12px;font-size:15px;max-width:92vw;text-align:center;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<noscript>LoopDoku 需要开启 JavaScript 才能玩。</noscript>
+
+<section id="title" class="scr">
+  <h1 class="logo">LoopDoku<small>口技数独</small></h1>
+  <div class="mini" aria-hidden="true"><i style="background:#ef8a8a">R</i><i style="background:#8fc7f0">✕</i><i style="background:#f6cf6a">J</i><i style="background:#9fd9a6">✕</i></div>
+  <p class="duo" id="tDuo"></p>
+  <div class="pts" id="tPts"></div>
+  <button class="btn" id="bPlay"></button>
+  <button class="btn alt" id="bLevels"></button>
+  <button class="btn alt" id="bTut"></button>
+  <div class="row2" style="max-width:320px;width:100%;margin:0 auto">
+    <button class="btn alt" id="bSound"></button>
+    <button class="btn alt" id="bMusic"></button>
+  </div>
+  <p class="small" id="tFoot"></p>
+</section>
+
+<section id="levels" class="scr">
+  <div class="top"><button class="ib" id="lvBack" aria-label="back">‹</button><h2 id="lvTitle"></h2><span class="ib" style="visibility:hidden"></span></div>
+  <div class="tabs" id="lvTabs" role="tablist"></div>
+  <p class="note" id="lvNote"></p>
+  <div class="grid" id="lvGrid"></div>
+</section>
+
+<section id="game" class="scr">
+  <div class="hud">
+    <button class="ib" id="gMenu" aria-label="menu">☰</button>
+    <div class="t"><b id="gName"></b><span id="gGig"></span></div>
+    <button class="ib" id="gHome" aria-label="home">⌂</button>
+  </div>
+  <div class="stat"><span class="mics" id="gMics"></span><span class="loopbar" id="gLoop"></span><span id="gTime">0:00</span></div>
+  <div class="play" id="play">
+    <span></span>
+    <div class="colarr" id="colArr"></div>
+    <div class="rowarr" id="rowArr"></div>
+    <div class="board" id="board"></div>
+  </div>
+  <div class="coach" id="coach"><div class="face">J</div><p id="coachTxt"></p><button id="coachSkip"></button></div>
+  <div class="tools">
+    <button id="tUndo"></button><button id="tClear"></button><button class="hint" id="tHint"></button><button id="tRestart"></button>
+  </div>
+</section>
+
+<div class="modal" id="modal"><div class="card" id="card"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  const LD = (window.LD = window.LD || {});
+  LD.VERSION = 1;
+  const RAW = [{"n":5,"rows":["AABBB","AABBC","ADBBC","ADBBC","ADECC"],"sol":[0,3,1,4,2],"hard":0},{"n":5,"rows":["ABBBB","BBBBB","CCCDD","ECCEE","EEEEE"],"sol":[0,2,4,1,3],"hard":2},{"n":6,"rows":["ABBBBC","ABBBBC","AADEEC","AAEEFF","EEEFFF","EEEEFF"],"sol":[3,5,2,0,4,1],"hard":4},{"n":6,"rows":["ABBBBB","AAABBB","AAACCB","DEEFCB","EEEFBB","EEFFBB"],"sol":[5,2,4,0,3,1],"hard":5},{"n":7,"rows":["AABBCCC","DACCCCC","DDCCCEE","DDDCCEE","DDDDFFE","GDDDEEE","GGGEEEE"],"sol":[3,1,4,2,5,0,6],"hard":4},{"n":7,"rows":["ABCCDDD","BBCCDDE","BBCCCDD","FFCCCCD","FFFCDDD","FFFGGDD","FFFFGGD"],"sol":[0,6,1,3,5,2,4],"hard":3},{"n":7,"rows":["ABBBBBC","BBBBBCC","DDDDDCC","EEDDDEF","EEEEEEF","EEEGFFF","EEEEFFF"],"sol":[0,2,6,4,1,3,5],"hard":6},{"n":8,"rows":["ABBBBBCC","ADDDBBEE","AADDDBEF","AADDDFFF","AAGDFFFF","HGGDDGFF","HHGGGGGG","HHGGGGGG"],"sol":[7,4,6,1,5,3,0,2],"hard":9},{"n":8,"rows":["AAAAABBB","AAAAABBB","ACCCCBBB","ACCCDDDB","ACEDDDDB","CCEDDDFB","CEEGGHFB","GGGGGHBB"],"sol":[0,7,1,4,2,6,3,5],"hard":15},{"n":9,"rows":["AAAAAABBB","CAAAABBBB","CCCCCBBBB","CCDCCBBBB","CCEEEBBBF","CCEEEBFFF","CCEEEGHHF","CCEEGGGFF","EEEIIGGFF"],"sol":[1,6,0,2,8,4,7,5,3],"hard":17}];
+  const GIGS = [
+    { city: 'Copenhagen', venue: 'Harbour Stage', country: 'DK' },
+    { city: 'Aarhus', venue: 'Confirmation Party', country: 'DK' },
+    { city: 'Odense', venue: 'Wedding Reception', country: 'DK' },
+    { city: 'Berlin', venue: 'Club Night', country: 'DE' },
+    { city: 'Brussels', venue: 'Street Festival', country: 'BE' },
+    { city: 'Amsterdam', venue: 'Canal Boat Gig', country: 'NL' },
+    { city: 'Paris', venue: 'Rooftop Session', country: 'FR' },
+    { city: 'Stockholm', venue: 'Corporate Gala', country: 'SE' },
+    { city: 'Athens', venue: 'Open-Air Theatre', country: 'GR' },
+    { city: 'Quito', venue: 'World Tour Finale', country: 'EC' },
+  ];
+  const DIFF = { 5: 'Easy', 6: 'Normal', 7: 'Normal', 8: 'Hard', 9: 'Extreme' };
+  LD.makePuzzle = function (p, extra) {
+    const region = [];
+    for (const row of p.rows) for (const ch of row) region.push(ch.charCodeAt(0) - 65);
+    return Object.assign({ n: p.n, rows: p.rows, sol: p.sol, region, diff: DIFF[p.n] || 'Hard' }, extra || {});
+  };
+  LD.GIGS = GIGS;
+  LD.PUZZLES = RAW.map((p, k) => LD.makePuzzle(p, Object.assign({ id: 'gig' + (k + 1), index: k }, GIGS[k] || { city: 'Encore', venue: 'Bonus', country: '' })));
+  LD.DEFAULT_PUZZLE = Math.max(0, LD.PUZZLES.findIndex((p) => p.n === 7));
+  const CELL = (LD.CELL = { EMPTY: 0, CROSS: 1, AUTO: 2, PIECE: 3 });
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  function Game(p, opts) {
+    if (typeof p === 'number') p = LD.PUZZLES[p];
+    else if (typeof p === 'string') p = LD.PUZZLES.find((q) => q.id === p);
+    if (!p) p = LD.PUZZLES[LD.DEFAULT_PUZZLE];
+    if (!p.region) p = LD.makePuzzle(p, p);
+    this.p = p; this.n = p.n; this.N = p.n * p.n; this.region = p.region;
+    this.opts = Object.assign({ autoCross: false, lives: 3, doubleTapMs: 320, longPressMs: 430 }, opts || {});
+    this.solSet = new Set(p.sol.map((c, r) => r * p.n + c));
+    this.handlers = {};
+    this.reset();
+  }
+  const G = Game.prototype;
+  G.on = function (type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); return this; };
+  G.off = function (type, fn) { const h = this.handlers[type]; if (h) this.handlers[type] = h.filter((f) => f !== fn); return this; };
+  G.emit = function (type, data) {
+    const d = data || {};
+    for (const f of this.handlers[type] || []) { try { f(d); } catch (e) { console.error('LD handler', type, e); } }
+    for (const f of this.handlers['*'] || []) { try { f(type, d); } catch (e) { console.error('LD handler *', e); } }
+  };
+  G.reset = function () {
+    this.cells = new Uint8Array(this.N); this.wrong = new Uint8Array(this.N);
+    this.lives = this.opts.lives; this.mistakes = 0; this.hints = 0; this.placed = 0;
+    this.over = false; this.won = false; this.t0 = null; this.tEnd = null;
+    this.undoStack = []; this.stroke = null; this.lastTap = null;
+    this.emit('reset', {});
+  };
+  G.rc = function (i) { return { r: (i / this.n) | 0, c: i % this.n }; };
+  G.idx = function (r, c) { return r * this.n + c; };
+  G.who = function (i) { return ((i / this.n) | 0) % 2 === 0 ? 'roxor' : 'jasmin'; };
+  G.isSolution = function (i) { return this.solSet.has(i); };
+  G.rowCells = function (r) { const a = []; for (let c = 0; c < this.n; c++) a.push(r * this.n + c); return a; };
+  G.colCells = function (c) { const a = []; for (let r = 0; r < this.n; r++) a.push(r * this.n + c); return a; };
+  G.regionCells = function (k) { const a = []; for (let i = 0; i < this.N; i++) if (this.region[i] === k) a.push(i); return a; };
+  G.units = function () {
+    if (this._units) return this._units;
+    const u = [];
+    for (let r = 0; r < this.n; r++) u.push({ kind: 'row', index: r, cells: this.rowCells(r) });
+    for (let c = 0; c < this.n; c++) u.push({ kind: 'col', index: c, cells: this.colCells(c) });
+    for (let k = 0; k < this.n; k++) u.push({ kind: 'region', index: k, cells: this.regionCells(k) });
+    return (this._units = u);
+  };
+  G.attacks = function (i, j) {
+    if (i === j) return false;
+    const n = this.n, ri = (i / n) | 0, ci = i % n, rj = (j / n) | 0, cj = j % n;
+    return ri === rj || ci === cj || this.region[i] === this.region[j] || (Math.abs(ri - rj) <= 1 && Math.abs(ci - cj) <= 1);
+  };
+  G.dist = function (i, j) { const a = this.rc(i), b = this.rc(j); return Math.max(Math.abs(a.r - b.r), Math.abs(a.c - b.c)); };
+  G.peers = function (i) {
+    const out = [];
+    for (let j = 0; j < this.N; j++) if (this.attacks(i, j)) out.push(j);
+    out.sort((a, b) => this.dist(i, a) - this.dist(i, b) || a - b);
+    return out;
+  };
+  G.pieceAttacking = function (i) {
+    for (let j = 0; j < this.N; j++) if (this.cells[j] === CELL.PIECE && this.attacks(j, i)) return j;
+    return -1;
+  };
+  G.elapsed = function () { if (this.t0 === null) return 0; return (this.tEnd !== null ? this.tEnd : now()) - this.t0; };
+  G._start = function () { if (this.t0 === null) { this.t0 = now(); this.emit('start', {}); } };
+  G._mark = function (i, value, extra) {
+    this.cells[i] = value;
+    const rc = this.rc(i);
+    this.emit('mark', Object.assign({ i, r: rc.r, c: rc.c, value, on: value === CELL.CROSS || value === CELL.AUTO, source: 'tap', k: 0, delay: 0, dist: 0, from: -1 }, extra || {}));
+  };
+  G.tap = function (i) {
+    if (this.over || i < 0 || i >= this.N) return false;
+    this._start();
+    const v = this.cells[i];
+    if (v === CELL.PIECE) { this.emit('locked', { i }); this.lastTap = null; return false; }
+    const to = v === CELL.EMPTY ? CELL.CROSS : CELL.EMPTY;
+    const wasWrong = this.wrong[i];
+    if (to === CELL.EMPTY) this.wrong[i] = 0;
+    this.undoStack.push([{ i, from: v, to, wrong: wasWrong }]);
+    this.lastTap = { i, prev: v, wrong: wasWrong, time: now() };
+    this._mark(i, to, { source: 'tap' });
+    return true;
+  };
+  G.revertLastTap = function (i) {
+    const t = this.lastTap;
+    if (!t || t.i !== i) return false;
+    this.lastTap = null;
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top && top.length === 1 && top[0].i === i) this.undoStack.pop();
+    this.wrong[i] = t.wrong;
+    this._mark(i, t.prev, { source: 'revert' });
+    return true;
+  };
+  G.doubleTap = function (i) {
+    const t = this.lastTap;
+    if (!t || t.i !== i || now() - t.time > this.opts.doubleTapMs) return false;
+    this.revertLastTap(i);
+    this.place(i);
+    return true;
+  };
+  G.place = function (i, byHint) {
+    if (this.over || i < 0 || i >= this.N || this.cells[i] === CELL.PIECE) return false;
+    this._start();
+    this.lastTap = null;
+    if (this.cells[i] === CELL.AUTO) { this.emit('blocked', { i, by: this.pieceAttacking(i) }); return false; }
+    const rc = this.rc(i);
+    if (!this.isSolution(i)) {
+      this.mistakes++;
+      if (this.opts.lives > 0) this.lives = Math.max(0, this.lives - 1);
+      this.wrong[i] = 1;
+      this._mark(i, CELL.CROSS, { source: 'mistake' });
+      this.emit('mistake', { i, r: rc.r, c: rc.c, lives: this.lives, mistakes: this.mistakes });
+      if (this.opts.lives > 0 && this.lives === 0) { this.over = true; this.tEnd = now(); this.emit('lose', { ms: this.elapsed() }); }
+      return false;
+    }
+    this.cells[i] = CELL.PIECE; this.wrong[i] = 0; this.placed++;
+    if (byHint) this.hints++;
+    this.emit('place', { i, r: rc.r, c: rc.c, who: this.who(i), count: this.placed, total: this.n, byHint: !!byHint });
+    if (this.opts.autoCross) {
+      let k = 0;
+      for (const j of this.peers(i)) {
+        if (this.cells[j] !== CELL.EMPTY) continue;
+        const d = this.dist(i, j);
+        this._mark(j, CELL.AUTO, { source: 'auto', k, dist: d, from: i, delay: 70 + d * 55 + (k % 4) * 8 });
+        k++;
+      }
+    }
+    for (const batch of this.undoStack) for (const e of batch) if (e.i === i) e.dead = true;
+    this.emit('layer', { count: this.placed, total: this.n });
+    if (this.placed === this.n) {
+      this.over = true; this.won = true; this.tEnd = now();
+      this.emit('win', { ms: this.elapsed(), mistakes: this.mistakes, hints: this.hints, stars: this.stars() });
+    }
+    return true;
+  };
+  G.stars = function () { let s = 3; if (this.mistakes > 0) s--; if (this.mistakes > 1) s--; if (this.hints > 0) s--; return Math.max(1, s); };
+  G.beginStroke = function (i) {
+    if (this.over) return;
+    const t = this.lastTap;
+    const mode = t && t.i === i ? (t.prev === CELL.EMPTY ? 'mark' : 'erase') : (this.cells[i] === CELL.EMPTY ? 'mark' : 'erase');
+    let batch = [];
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (t && t.i === i && top && top.length === 1 && top[0].i === i) batch = this.undoStack.pop();
+    this.stroke = { mode, k: 1, seen: new Set([i]), batch };
+    this.lastTap = null;
+  };
+  G.paintEnter = function (i) {
+    const s = this.stroke;
+    if (!s || this.over || i < 0 || i >= this.N || s.seen.has(i)) return;
+    s.seen.add(i);
+    const v = this.cells[i];
+    if (s.mode === 'mark' && v === CELL.EMPTY) {
+      s.batch.push({ i, from: v, to: CELL.CROSS, wrong: 0 });
+      this._mark(i, CELL.CROSS, { source: 'drag', k: s.k++ });
+    } else if (s.mode === 'erase' && (v === CELL.CROSS || v === CELL.AUTO)) {
+      s.batch.push({ i, from: v, to: CELL.EMPTY, wrong: this.wrong[i] });
+      this.wrong[i] = 0;
+      this._mark(i, CELL.EMPTY, { source: 'drag', k: s.k++ });
+    }
+  };
+  G.paintEnd = function () {
+    const s = this.stroke;
+    if (!s) return;
+    this.stroke = null;
+    if (s.batch.length) this.undoStack.push(s.batch);
+    this.emit('stroke', { mode: s.mode, count: s.batch.length });
+  };
+  G.undo = function () {
+    if (this.over) return 0;
+    const batch = this.undoStack.pop();
+    if (!batch) { this.emit('undo', { count: 0 }); return 0; }
+    let k = 0;
+    for (let n = batch.length - 1; n >= 0; n--) {
+      const e = batch[n];
+      if (e.dead || this.cells[e.i] !== e.to) continue;
+      this.wrong[e.i] = e.wrong || 0;
+      this._mark(e.i, e.from, { source: 'undo', k: k++, delay: k * 18 });
+    }
+    this.lastTap = null;
+    this.emit('undo', { count: k });
+    return k;
+  };
+  G.crossLine = function (kind, index) {
+    if (this.over) return 0;
+    this._start();
+    const cells = kind === 'col' ? this.colCells(index) : this.rowCells(index);
+    const empty = cells.filter((i) => this.cells[i] === CELL.EMPTY);
+    const batch = [];
+    let k = 0, mode = 'mark';
+    if (empty.length) {
+      for (const i of empty) { batch.push({ i, from: CELL.EMPTY, to: CELL.CROSS, wrong: 0 }); this._mark(i, CELL.CROSS, { source: 'line', k, delay: k * 35 }); k++; }
+    } else {
+      mode = 'erase';
+      for (const i of cells) {
+        if ((this.cells[i] !== CELL.CROSS && this.cells[i] !== CELL.AUTO) || this.wrong[i]) continue;
+        batch.push({ i, from: this.cells[i], to: CELL.EMPTY, wrong: 0 }); this._mark(i, CELL.EMPTY, { source: 'line', k, delay: k * 35 }); k++;
+      }
+    }
+    if (batch.length) this.undoStack.push(batch);
+    this.lastTap = null;
+    this.emit('line', { kind, index, mode, count: k, cells });
+    return k;
+  };
+  G.lineHasEmpty = function (kind, index) { return (kind === 'col' ? this.colCells(index) : this.rowCells(index)).some((i) => this.cells[i] === CELL.EMPTY); };
+  G.clearCrosses = function () {
+    if (this.over) return 0;
+    const batch = [];
+    let k = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (this.cells[i] !== CELL.CROSS || this.wrong[i]) continue;
+      batch.push({ i, from: CELL.CROSS, to: CELL.EMPTY, wrong: 0 });
+      this._mark(i, CELL.EMPTY, { source: 'clear', k, delay: k * 22 });
+      k++;
+    }
+    if (batch.length) this.undoStack.push(batch);
+    this.lastTap = null;
+    this.emit('clear', { count: k });
+    return k;
+  };
+  G._open = function () {
+    const open = new Uint8Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      if (this.cells[i] === CELL.PIECE) continue;
+      if (this.pieceAttacking(i) >= 0) continue;
+      if ((this.cells[i] === CELL.CROSS) && !this.isSolution(i)) continue;
+      open[i] = 1;
+    }
+    return open;
+  };
+  G.nextDeduction = function () {
+    const open = this._open();
+    const units = this.units().filter((u) => !u.cells.some((i) => this.cells[i] === CELL.PIECE));
+    for (const u of units) {
+      const o = u.cells.filter((i) => open[i]);
+      if (o.length === 1) return { kind: 'place', i: o[0], unit: u.cells, unitKind: u.kind };
+    }
+    for (let i = 0; i < this.N; i++) {
+      if (!open[i] || this.cells[i] !== CELL.EMPTY) continue;
+      for (const u of units) {
+        if (u.cells.includes(i)) continue;
+        if (u.cells.every((j) => !open[j] || this.attacks(i, j))) return { kind: 'cross', i, unit: u.cells, unitKind: u.kind };
+      }
+    }
+    for (let r = 0; r < this.n; r++) {
+      const i = r * this.n + this.p.sol[r];
+      if (this.cells[i] !== CELL.PIECE) return { kind: 'place', i, unit: this.rowCells(r), unitKind: 'row' };
+    }
+    return null;
+  };
+  G.hint = function () {
+    if (this.over) return null;
+    const d = this.nextDeduction();
+    if (!d) return null;
+    this.emit('hint', d);
+    if (d.kind === 'place') {
+      if (this.cells[d.i] !== CELL.EMPTY) { this.wrong[d.i] = 0; this._mark(d.i, CELL.EMPTY, { source: 'hint' }); }
+      this.place(d.i, true);
+    } else {
+      this.hints++;
+      this.undoStack.push([{ i: d.i, from: CELL.EMPTY, to: CELL.CROSS, wrong: 0 }]);
+      this._mark(d.i, CELL.CROSS, { source: 'hint' });
+    }
+    return d;
+  };
+  LD.Game = Game;
+  LD.bindInput = function (el, game, o) {
+    o = o || {};
+    const cellAt = o.cellAt;
+    let down = null, cursor = -1;
+    el.style.touchAction = 'none';
+    el.style.userSelect = 'none';
+    el.style.webkitUserSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
+    const g = () => (typeof game === 'function' ? game() : game);
+    function setCursor(i) {
+      cursor = i;
+      if (o.onCursor) o.onCursor(i);
+      g().emit('cursor', { i });
+    }
+    function onDown(e) {
+      LD.audio.unlock();
+      const gm = g();
+      const i = cellAt(e.clientX, e.clientY);
+      if (i < 0 || gm.over) return;
+      e.preventDefault();
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      if (e.button === 2) { gm.place(i); down = null; return; }
+      if (gm.doubleTap(i)) { down = { i, id: e.pointerId, consumed: true }; return; }
+      gm.tap(i);
+      down = { i, id: e.pointerId, last: i, drag: false, consumed: false, timer: 0 };
+      down.timer = setTimeout(() => {
+        if (down && !down.drag && !down.consumed && down.i === i) {
+          down.consumed = true;
+          gm.revertLastTap(i);
+          gm.place(i);
+        }
+      }, gm.opts.longPressMs);
+    }
+    function onMove(e) {
+      if (o.onHover && !down) o.onHover(cellAt(e.clientX, e.clientY));
+      if (!down || down.consumed || e.pointerId !== down.id) return;
+      const j = cellAt(e.clientX, e.clientY);
+      if (j < 0 || j === down.last) return;
+      const gm = g();
+      if (!down.drag) { down.drag = true; clearTimeout(down.timer); gm.beginStroke(down.i); }
+      down.last = j;
+      gm.paintEnter(j);
+    }
+    function onUp(e) {
+      if (!down || (down.id !== undefined && e.pointerId !== down.id)) return;
+      clearTimeout(down.timer);
+      if (down.drag) g().paintEnd();
+      down = null;
+    }
+    function onKey(e) {
+      const gm = g();
+      const n = gm.n;
+      if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+      let c = cursor < 0 ? Math.floor(n * n / 2) : cursor;
+      const k = e.key;
+      if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight') {
+        if (cursor >= 0) {
+          let r = (c / n) | 0, cc = c % n;
+          if (k === 'ArrowUp') r = (r + n - 1) % n;
+          if (k === 'ArrowDown') r = (r + 1) % n;
+          if (k === 'ArrowLeft') cc = (cc + n - 1) % n;
+          if (k === 'ArrowRight') cc = (cc + 1) % n;
+          c = r * n + cc;
+        }
+        setCursor(c); e.preventDefault(); return;
+      }
+      LD.audio.unlock();
+      if (k === ' ' || k === 'x' || k === 'X') { if (cursor < 0) setCursor(c); gm.tap(c); e.preventDefault(); }
+      else if (k === 'Enter' || k === 'p' || k === 'P') { if (cursor < 0) setCursor(c); gm.place(c); e.preventDefault(); }
+      else if (k === 'z' || k === 'Z' || k === 'Backspace') { gm.undo(); e.preventDefault(); }
+      else if (k === 'h' || k === 'H') { gm.hint(); e.preventDefault(); }
+    }
+    const ctx = (e) => { if (cellAt(e.clientX, e.clientY) >= 0) e.preventDefault(); };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    el.addEventListener('lostpointercapture', onUp);
+    el.addEventListener('contextmenu', ctx);
+    if (o.keyboard !== false) window.addEventListener('keydown', onKey);
+    return {
+      setCursor,
+      get cursor() { return cursor; },
+      destroy() {
+        el.removeEventListener('pointerdown', onDown); el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp);
+        el.removeEventListener('lostpointercapture', onUp); el.removeEventListener('contextmenu', ctx);
+        window.removeEventListener('keydown', onKey);
+      },
+    };
+  };
+  const A = (LD.audio = { ctx: null, master: null, muted: false, volume: 0.8 });
+  const PENTA = [0, 2, 4, 7, 9];
+  const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const pent = (base, k) => base + PENTA[((k % 5) + 5) % 5] + 12 * Math.floor(k / 5);
+  A.midiHz = midiHz; A.pent = pent;
+  A.unlock = function () {
+    if (!A.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try {
+        A.ctx = new AC();
+        A.comp = A.ctx.createDynamicsCompressor();
+        A.comp.threshold.value = -14; A.comp.ratio.value = 4; A.comp.attack.value = 0.003; A.comp.release.value = 0.15;
+        A.master = A.ctx.createGain();
+        A.master.gain.value = A.muted ? 0 : A.volume;
+        A.master.connect(A.comp); A.comp.connect(A.ctx.destination);
+        const len = A.ctx.sampleRate;
+        A.noiseBuf = A.ctx.createBuffer(1, len, A.ctx.sampleRate);
+        const d = A.noiseBuf.getChannelData(0);
+        let s = 12345;
+        for (let i = 0; i < len; i++) { s = (s * 1103515245 + 12345) & 0x7fffffff; d[i] = (s / 0x3fffffff) - 1; }
+      } catch (e) { A.ctx = null; return null; }
+    }
+    if (A.ctx.state === 'suspended') A.ctx.resume();
+    return A.ctx;
+  };
+  A.setMuted = function (b) { A.muted = !!b; if (A.master) A.master.gain.value = A.muted ? 0 : A.volume; };
+  A.setVolume = function (v) { A.volume = Math.max(0, Math.min(1, v)); if (A.master && !A.muted) A.master.gain.value = A.volume; };
+  const T = (at) => (at !== undefined ? at : A.ctx.currentTime + 0.005);
+  function env(g, t, a, peak, dur, curve) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + dur * (curve || 1));
+  }
+  function tone(type, f0, f1, t, dur, vol, dest) {
+    const o = A.ctx.createOscillator(), g = A.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    env(g, t, 0.003, vol, dur);
+    o.connect(g); g.connect(dest || A.master);
+    o.start(t); o.stop(t + dur + 0.05);
+    return o;
+  }
+  function noise(t, dur, vol, ftype, freq, q, dest) {
+    const s = A.ctx.createBufferSource(); s.buffer = A.noiseBuf;
+    s.playbackRate.value = 0.8 + ((t * 977) % 0.4);
+    const f = A.ctx.createBiquadFilter(); f.type = ftype || 'highpass'; f.frequency.value = freq || 6000; f.Q.value = q || 0.7;
+    const g = A.ctx.createGain(); env(g, t, 0.002, vol, dur);
+    s.connect(f); f.connect(g); g.connect(dest || A.master);
+    s.start(t, (t * 0.37) % 0.5); s.stop(t + dur + 0.05);
+  }
+  const ok = () => !!(A.ctx || A.unlock()) && !!A.master;
+  A.kick = function (v, at) { if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v; tone('sine', 150, 42, t, 0.32, 0.9 * v); tone('triangle', 420, 90, t, 0.03, 0.25 * v); noise(t, 0.012, 0.25 * v, 'lowpass', 2500); };
+  A.snare = function (v, at) { if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v; noise(t, 0.16, 0.55 * v, 'bandpass', 2200, 0.9); tone('triangle', 240, 150, t, 0.07, 0.3 * v); noise(t + 0.01, 0.08, 0.2 * v, 'highpass', 7000); };
+  A.hat = function (v, open, at) { if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v; noise(t, open ? 0.22 : 0.045, 0.32 * v, 'highpass', 8200, 1.2); };
+  A.clap = function (v, at) { if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v; for (let k = 0; k < 3; k++) noise(t + k * 0.012, 0.05, 0.3 * v, 'bandpass', 1500, 1.4); noise(t + 0.036, 0.18, 0.3 * v, 'bandpass', 1300, 1); };
+  A.rim = function (v, at) { if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v; tone('square', 1700, 1400, t, 0.025, 0.12 * v); noise(t, 0.02, 0.2 * v, 'bandpass', 4000, 3); };
+  A.scratch = function (v, at) {
+    if (!ok()) return; const t = T(at); v = v === undefined ? 1 : v;
+    const s = A.ctx.createBufferSource(); s.buffer = A.noiseBuf;
+    const f = A.ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 6;
+    f.frequency.setValueAtTime(600, t); f.frequency.exponentialRampToValueAtTime(3200, t + 0.09); f.frequency.exponentialRampToValueAtTime(400, t + 0.26);
+    const g = A.ctx.createGain(); env(g, t, 0.01, 0.6 * v, 0.28);
+    s.connect(f); f.connect(g); g.connect(A.master); s.start(t); s.stop(t + 0.32);
+  };
+  const VOWELS = { oo: [320, 800], oh: [450, 850], ah: [760, 1150], ee: [290, 2200], mm: [250, 600] };
+  A.vox = function (midi, dur, o) {
+    if (!ok()) return; o = o || {};
+    const t = T(o.at), f0 = midiHz(midi), d = dur || 0.4, vol = o.vol === undefined ? 0.5 : o.vol;
+    const src = A.ctx.createOscillator(); src.type = 'sawtooth'; src.frequency.setValueAtTime(f0 * 0.985, t); src.frequency.exponentialRampToValueAtTime(f0, t + 0.05);
+    const lfo = A.ctx.createOscillator(), lg = A.ctx.createGain(); lfo.frequency.value = 5.4; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f0 * (o.vib === undefined ? 0.012 : o.vib), t + d * 0.6);
+    lfo.connect(lg); lg.connect(src.frequency);
+    const fm = VOWELS[o.vowel || 'oo'] || VOWELS.oo, out = A.ctx.createGain();
+    env(out, t, 0.03, vol, d, 1);
+    for (let k = 0; k < 2; k++) { const bp = A.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fm[k]; bp.Q.value = k ? 9 : 5; const gg = A.ctx.createGain(); gg.gain.value = k ? 0.5 : 1; src.connect(bp); bp.connect(gg); gg.connect(out); }
+    const air = A.ctx.createOscillator(); air.type = 'sine'; air.frequency.value = f0; const ag = A.ctx.createGain(); ag.gain.value = 0.35; air.connect(ag); ag.connect(out);
+    out.connect(A.master);
+    [src, lfo, air].forEach((x) => { x.start(t); x.stop(t + d + 0.1); });
+  };
+  A.chord = function (midis, dur, vowel, at) { midis.forEach((m, k) => A.vox(m, dur, { vowel, vol: 0.28, at: at !== undefined ? at + k * 0.02 : undefined })); };
+  A.tick = function (k) { if (!ok()) return; const t = T(); k = k || 0; noise(t, 0.035, 0.32, 'highpass', 7000 + Math.min(k, 12) * 200); tone('sine', midiHz(pent(76, k)), midiHz(pent(76, k)) * 0.98, t, 0.07, 0.22); };
+  A.untick = function (k) { if (!ok()) return; const t = T(); k = k || 0; tone('triangle', midiHz(pent(67, -k)), midiHz(pent(64, -k)), t, 0.06, 0.16); noise(t, 0.02, 0.12, 'bandpass', 2500, 2); };
+  A.ripple = function (k, dist, at) { if (!ok()) return; const t = T(at); const m = pent(81, (dist || 0) + (k || 0) % 2); tone('sine', midiHz(m), midiHz(m), t, 0.05, 0.08); };
+  A.pop = function (k) { if (!ok()) return; const t = T(); const m = pent(72, k || 0); tone('sine', midiHz(m) * 0.6, midiHz(m), t, 0.09, 0.3); };
+  A.thud = function () { if (!ok()) return; const t = T(); tone('sine', 120, 70, t, 0.12, 0.4); noise(t, 0.03, 0.15, 'lowpass', 900); };
+  A.ui = function () { if (!ok()) return; const t = T(); tone('sine', 520, 880, t, 0.06, 0.25); A.hat(0.4); };
+  A.uiBack = function () { if (!ok()) return; const t = T(); tone('sine', 700, 380, t, 0.07, 0.22); };
+  A.whoosh = function () { if (!ok()) return; const t = T(); const s = A.ctx.createBufferSource(); s.buffer = A.noiseBuf; const f = A.ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(4000, t + 0.25); const g = A.ctx.createGain(); env(g, t, 0.08, 0.35, 0.22); s.connect(f); f.connect(g); g.connect(A.master); s.start(t); s.stop(t + 0.4); };
+  A.sparkle = function () { if (!ok()) return; const t = T(); [88, 91, 95, 100].forEach((m, k) => tone('sine', midiHz(m), midiHz(m), t + k * 0.045, 0.12, 0.1)); };
+  A.place = function (who, count) {
+    if (!ok()) return; const t = T(); count = count || 1;
+    if (who === 'roxor') { A.kick(1, t); A.hat(0.6, false, t + 0.09); A.snare(0.8, t + 0.15); A.vox(pent(52, count), 0.18, { vowel: 'mm', vol: 0.3, at: t + 0.02 }); }
+    else { A.vox(pent(69, count), 0.42, { vowel: 'oo', vol: 0.5, at: t }); A.vox(pent(69, count) + 7, 0.3, { vowel: 'ah', vol: 0.18, at: t + 0.08 }); A.hat(0.4, true, t); }
+  };
+  A.mistake = function () { if (!ok()) return; const t = T(); A.scratch(0.9, t); A.vox(50, 0.35, { vowel: 'oh', vol: 0.35, vib: 0.03, at: t + 0.12 }); A.vox(49, 0.35, { vowel: 'oh', vol: 0.25, at: t + 0.12 }); };
+  A.blocked = function () { if (!ok()) return; A.thud(); A.rim(0.5); };
+  A.hint = function () { A.sparkle(); if (ok()) A.vox(81, 0.3, { vowel: 'ee', vol: 0.2 }); };
+  A.win = function () {
+    if (!ok()) return; const t = T();
+    A.kick(1, t); A.clap(0.8, t + 0.25); A.kick(1, t + 0.375); A.snare(1, t + 0.5);
+    [[57, 60, 64], [60, 64, 67], [64, 67, 72, 76]].forEach((ch, k) => A.chord(ch, k === 2 ? 1.6 : 0.3, k === 2 ? 'ah' : 'oo', t + 0.12 + k * 0.25));
+    A.sparkle();
+  };
+  A.lose = function () { if (!ok()) return; const t = T(); A.scratch(1, t); [60, 58, 55, 50].forEach((m, k) => A.vox(m, 0.32, { vowel: 'oh', vol: 0.35, at: t + 0.2 + k * 0.22 })); };
+  A.attach = function (game, o) {
+    const skip = new Set((o && o.skip) || []);
+    const on = (type, fn) => { if (!skip.has(type)) game.on(type, fn); };
+    on('mark', (e) => {
+      if (e.source === 'tap' || e.source === 'drag') (e.on ? A.tick(e.k) : A.untick(e.k));
+      else if (e.source === 'line') { if (A.ctx) { const at = A.ctx.currentTime + e.delay / 1000; if (e.on) A.ripple(e.k, e.k % 3, at); else A.ripple(e.k, 0, at); } }
+      else if (e.source === 'auto') { if (A.ctx && e.k < 24) A.ripple(e.k, e.dist, A.ctx.currentTime + e.delay / 1000); }
+      else if (e.source === 'undo') A.untick(e.k);
+      else if (e.source === 'clear' && e.k % 2 === 0 && A.ctx) A.ripple(e.k, 0, A.ctx.currentTime + e.delay / 1000);
+    });
+    on('place', (e) => A.place(e.who, e.count));
+    on('mistake', () => A.mistake());
+    on('blocked', () => A.blocked());
+    on('locked', () => A.thud());
+    on('hint', () => A.hint());
+    on('win', () => A.win());
+    on('lose', () => A.lose());
+    on('undo', () => A.uiBack());
+    on('line', (e) => { if (e.count) A.whoosh(); });
+  };
+  const L = (LD.loop = { bpm: 96, layers: 0, playing: false, step: 0, fns: [], LAYER_NAMES: ['Kick', 'Hats', 'Snare', 'Bass', 'Pad', 'Shaker', 'Hook', 'Claps', 'Chops'] });
+  const PROG = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+  const BASS = [45, 41, 36, 43];
+  const HOOK = [76, null, 74, 72, null, 69, null, 72, 74, null, 76, null, 72, null, null, null];
+  let timer = 0, nextT = 0, clockAudio = false;
+  const clock = () => (A.ctx && A.ctx.state === 'running' ? A.ctx.currentTime : now() / 1000);
+  L.on = function (fn) { L.fns.push(fn); return () => { L.fns = L.fns.filter((f) => f !== fn); }; };
+  L.setLayers = function (n) { L.layers = Math.max(0, Math.min(9, n | 0)); };
+  function playStep(s, t) {
+    const bar = Math.floor(s / 16) % 4, q = s % 16, n = L.layers, audio = clockAudio && !A.muted && !L.silent;
+    if (audio) {
+      if (n >= 1 && (q === 0 || q === 8 || q === 10)) A.kick(q === 10 ? 0.7 : 1, t);
+      if (n >= 2 && q % 2 === 0) A.hat(q % 4 === 2 ? 0.55 : 0.3, q === 14, t);
+      if (n >= 3 && (q === 4 || q === 12)) A.snare(0.8, t);
+      if (n >= 4 && (q === 0 || q === 6 || q === 10)) tone('triangle', midiHz(BASS[bar]), midiHz(BASS[bar]), t, 0.22, 0.32);
+      if (n >= 5 && q === 0) A.chord(PROG[bar], 60 / L.bpm * 3.6, 'oo', t);
+      if (n >= 6 && q % 2 === 1) noise(t, 0.03, 0.12, 'highpass', 9500);
+      if (n >= 7 && HOOK[q] && (bar === 1 || bar === 3)) A.vox(HOOK[q] - (bar === 3 ? 2 : 0), 0.2, { vowel: 'oo', vol: 0.22, at: t });
+      if (n >= 8 && (q === 7 || q === 15)) A.clap(0.35, t);
+      if (n >= 9 && (q === 3 || q === 11) && bar % 2 === 0) A.vox(PROG[bar][2] + 12, 0.09, { vowel: 'ah', vol: 0.2, at: t });
+    }
+    const delay = Math.max(0, (t - clock()) * 1000);
+    const info = { step: s, q, beat: Math.floor(q / 4), bar, downbeat: q === 0, onBeat: q % 4 === 0, time: t };
+    setTimeout(() => { for (const f of L.fns) { try { f(info); } catch (e) { console.error(e); } } }, delay);
+  }
+  function pump() {
+    const ahead = clock() + 0.12, stepDur = 60 / L.bpm / 4;
+    const audioNow = !!(A.ctx && A.ctx.state === 'running');
+    if (audioNow !== clockAudio) { clockAudio = audioNow; nextT = clock() + 0.03; }
+    while (nextT < ahead) { playStep(L.step, nextT); L.step++; nextT += stepDur; }
+  }
+  L.start = function () {
+    if (L.playing) return;
+    L.playing = true; L.step = 0; clockAudio = !!(A.ctx && A.ctx.state === 'running'); nextT = clock() + 0.05;
+    timer = setInterval(pump, 25); pump();
+  };
+  L.stop = function () { L.playing = false; clearInterval(timer); timer = 0; };
+  L.attach = function (game) {
+    game.on('start', () => { L.setLayers(Math.max(L.layers, 1)); L.start(); });
+    game.on('layer', (e) => L.setLayers(Math.max(1, Math.round(1 + (e.count / e.total) * 8 - 0.0001))));
+    game.on('win', () => L.setLayers(9));
+    game.on('lose', () => { L.setLayers(0); L.stop(); });
+    game.on('reset', () => { L.setLayers(0); });
+  };
+  LD.demo = function (game, hooks) {
+    hooks = hooks || {};
+    const H = (k, ...a) => { try { if (hooks[k]) hooks[k](...a); } catch (e) { console.error(e); } };
+    const n = game.n;
+    let alive = true, tm = 0;
+    const steps = [];
+    const wait = (ms) => steps.push({ t: 'wait', ms });
+    const say = (s) => steps.push({ t: 'say', s });
+    const plan = { taps: [], drag: [], wrong: -1 };
+    const nonSol = [];
+    for (let i = 0; i < game.N; i++) if (!game.isSolution(i)) nonSol.push(i);
+    let best = [];
+    for (let r = 0; r < n; r++) { let run = []; for (let c = 0; c < n; c++) { const i = r * n + c; if (!game.isSolution(i)) { run.push(i); if (run.length > best.length) best = run.slice(); } else run = []; } }
+    plan.drag = best.slice(0, Math.min(best.length, Math.max(3, n - 2)));
+    plan.taps = nonSol.filter((i) => !plan.drag.includes(i) && game.rc(i).r !== game.rc(plan.drag[0]).r).filter((_, k) => k % 3 === 1).slice(0, 3);
+    say('Tap a square to cross it out'); wait(600);
+    for (const i of plan.taps) steps.push({ t: 'tap', i });
+    wait(500); say('Slide to paint crosses'); wait(500);
+    steps.push({ t: 'drag', cells: plan.drag }); wait(700);
+    steps.push({ t: 'solve' });
+    let si = 0, solved = 0, didWrong = false, didLong = false, didHint = false;
+    function finger(i, ms) { H('moveTo', i, ms); return ms; }
+    function run() {
+      if (!alive || game.won) { if (game.won) H('done'); return; }
+      if (game.over) { H('done'); return; }
+      const s = steps[si];
+      if (!s) return;
+      if (s.t === 'wait') { si++; tm = setTimeout(run, s.ms); return; }
+      if (s.t === 'say') { H('say', s.s); si++; tm = setTimeout(run, 0); return; }
+      if (s.t === 'tap') {
+        const d = finger(s.i, 380);
+        tm = setTimeout(() => { if (!alive) return; H('press', s.i); game.tap(s.i); tm = setTimeout(() => { H('release', s.i); si++; tm = setTimeout(run, 260); }, 120); }, d);
+        return;
+      }
+      if (s.t === 'drag') {
+        const cells = s.cells.filter((i) => game.cells[i] === CELL.EMPTY);
+        if (!cells.length) { si++; run(); return; }
+        const d = finger(cells[0], 420);
+        tm = setTimeout(() => {
+          if (!alive) return;
+          H('press', cells[0]); game.tap(cells[0]); game.beginStroke(cells[0]);
+          let k = 1;
+          const go = () => {
+            if (!alive) return;
+            if (k >= cells.length) { game.paintEnd(); H('release', cells[cells.length - 1]); si++; tm = setTimeout(run, 400); return; }
+            finger(cells[k], 130); tm = setTimeout(() => { game.paintEnter(cells[k]); k++; go(); }, 130);
+          };
+          tm = setTimeout(go, 120);
+        }, d);
+        return;
+      }
+      if (s.t === 'solve') {
+        if (game.over) { H('done'); return; }
+        if (solved === 1 && !didWrong) {
+          didWrong = true;
+          let w = -1;
+          for (let i = 0; i < game.N; i++) if (game.cells[i] === CELL.EMPTY && !game.isSolution(i) && game.pieceAttacking(i) < 0) { w = i; break; }
+          if (w >= 0) {
+            H('say', 'Oops! A wrong spot costs a life');
+            const d = finger(w, 500);
+            tm = setTimeout(() => { if (!alive) return; H('press', w); game.tap(w); tm = setTimeout(() => { game.doubleTap(w); H('release', w); tm = setTimeout(run, 1100); }, 110); }, d);
+            return;
+          }
+        }
+        if (solved === 3 && !didHint) {
+          didHint = true; H('say', 'Stuck? Ask for a hint'); H('hint');
+          tm = setTimeout(() => { if (!alive) return; const r = game.hint(); if (r && r.kind === 'place') solved++; tm = setTimeout(run, 1200); }, 700);
+          return;
+        }
+        const d0 = game.nextDeduction();
+        if (!d0) { H('done'); return; }
+        if (d0.kind === 'cross') {
+          const d = finger(d0.i, 300);
+          tm = setTimeout(() => { if (!alive) return; H('press', d0.i); game.tap(d0.i); tm = setTimeout(() => { H('release', d0.i); tm = setTimeout(run, 220); }, 100); }, d);
+          return;
+        }
+        const i = d0.i;
+        if (solved === 0) H('say', 'Double-tap to drop a performer');
+        else if (solved === 2 && !didLong) H('say', 'Or press and hold');
+        else if (solved === 4) H('say', 'Every performer adds a layer to the loop');
+        const longPress = solved === 2 && !didLong;
+        if (longPress) didLong = true;
+        const d = finger(i, 450);
+        tm = setTimeout(() => {
+          if (!alive) return;
+          H('press', i);
+          if (game.cells[i] !== CELL.EMPTY) { game.tap(i); if (game.cells[i] !== CELL.EMPTY) game.tap(i); }
+          game.tap(i);
+          tm = setTimeout(() => {
+            if (!alive) return;
+            if (longPress) { game.revertLastTap(i); game.place(i); } else game.doubleTap(i);
+            H('release', i); solved++;
+            if (!game.opts.autoCross && !game.won && solved <= 2) {
+              const rc = game.rc(i);
+              const arrow = (kind, idx, then) => {
+                if (!alive) return;
+                const d2 = hooks.moveToLine ? (hooks.moveToLine(kind, idx, 420), 420) : finger(kind === 'row' ? idx * n : idx, 420);
+                tm = setTimeout(() => { if (!alive) return; H('pressLine', kind, idx); game.crossLine(kind, idx); tm = setTimeout(() => { H('releaseLine', kind, idx); tm = setTimeout(then, 380); }, 110); }, d2);
+              };
+              tm = setTimeout(() => { H('say', 'Tap an arrow to cross out the whole line'); arrow('row', rc.r, () => arrow('col', rc.c, run)); }, 700);
+              return;
+            }
+            tm = setTimeout(run, game.won ? 200 : 900);
+          }, longPress ? game.opts.longPressMs : 110);
+        }, d);
+      }
+    }
+    tm = setTimeout(run, 300);
+    return { stop() { alive = false; clearTimeout(tm); } };
+  };
+  LD.ease = {
+    linear: (t) => t,
+    outQuad: (t) => 1 - (1 - t) * (1 - t),
+    outCubic: (t) => 1 - Math.pow(1 - t, 3),
+    outQuint: (t) => 1 - Math.pow(1 - t, 5),
+    inOutSine: (t) => -(Math.cos(Math.PI * t) - 1) / 2,
+    outBack: (t, s) => { s = s === undefined ? 1.70158 : s; const c3 = s + 1; return 1 + c3 * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); },
+    outElastic: (t) => (t === 0 || t === 1 ? t : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI) / 3) + 1),
+  };
+  LD.reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  LD.shaker = function (el, o) {
+    o = Object.assign({ px: 10, deg: 1.5, decay: 1.8 }, o || {});
+    let trauma = 0, raf = 0, last = 0, t = 0;
+    function frame(ts) {
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016; last = ts;
+      trauma = Math.max(0, trauma - o.decay * dt); t += dt * 30;
+      const s = trauma * trauma;
+      el.style.transform = s > 0.0005 ? 'translate(' + (o.px * s * Math.sin(t * 1.7)).toFixed(2) + 'px,' + (o.px * 0.8 * s * Math.sin(t * 2.3 + 1)).toFixed(2) + 'px) rotate(' + (o.deg * s * Math.sin(t * 1.1 + 2)).toFixed(3) + 'deg)' : '';
+      if (trauma > 0) raf = requestAnimationFrame(frame); else { raf = 0; last = 0; }
+    }
+    return {
+      add(a) { if (LD.reducedMotion) a *= 0.3; trauma = Math.min(1, trauma + a); if (!raf) raf = requestAnimationFrame(frame); },
+      get trauma() { return trauma; },
+    };
+  };
+})();
+</script>
+<script>window.LD_LEVELS = {"plan":[{"id":"easy","name":"Easy"},{"id":"normal","name":"Normal"},{"id":"chill","name":"Chill XL"},{"id":"hard","name":"Hard"},{"id":"expert","name":"Expert"},{"id":"terror","name":"Terror"},{"id":"extreme","name":"Extreme"},{"id":"melt","name":"Meltdown"},{"id":"nightmare","name":"Nightmare"}],"packs":{"easy":[{"n":5,"rows":["AAABC","AABBC","DAACC","AAACC","AAECC"],"sol":[1,3,0,4,2]},{"n":5,"rows":["AAAAA","BBCAA","BBDAA","BBDED","DDDDD"],"sol":[4,2,0,3,1]},{"n":5,"rows":["AABBC","BBBCC","BBCCC","BDEEE","BBEEE"],"sol":[0,2,4,1,3]},{"n":5,"rows":["AABBB","AAABB","CADDD","DDDDD","EEDDD"],"sol":[4,2,0,3,1]},{"n":5,"rows":["ABBBB","BBCBB","BBBBB","DDDBB","DEEEE"],"sol":[0,2,4,1,3]},{"n":5,"rows":["AABBB","AABCC","ABBDD","AADDE","AADDD"],"sol":[0,3,1,4,2]},{"n":5,"rows":["AAABB","AAAAA","AACCC","ACCCD","EEECC"],"sol":[3,0,2,4,1]},{"n":5,"rows":["AAAAA","AABCC","AACCC","DDEEC","EEEEC"],"sol":[0,2,4,1,3]},{"n":5,"rows":["ABBBC","AAACC","AADDC","AEDDD","DDDDD"],"sol":[2,0,4,1,3]},{"n":5,"rows":["ABBBB","AABBB","CADBE","CCCEE","CCCCE"],"sol":[3,0,2,4,1]},{"n":5,"rows":["AAABC","AACCC","ACCCC","AAADD","AEEED"],"sol":[3,0,2,4,1]},{"n":5,"rows":["AAABA","AAAAA","ACDDA","ACDEE","ACDDE"],"sol":[3,0,2,4,1]},{"n":5,"rows":["AABBB","CBBBB","CBBBD","CCBBE","CCEEE"],"sol":[0,2,4,1,3]},{"n":5,"rows":["AAABC","AAAAC","DDAAC","DEECC","DDCCC"],"sol":[3,1,4,2,0]},{"n":5,"rows":["AAAAA","BBAAC","DEECC","DDCCC","DDCCC"],"sol":[3,0,2,4,1]},{"n":5,"rows":["AABBC","ACCCC","ACCDE","CCCDD","CCDDD"],"sol":[2,0,4,1,3]},{"n":5,"rows":["ABBBB","AAACB","ADACC","ADAAC","ADDAE"],"sol":[2,0,3,1,4]},{"n":6,"rows":["ABBBBB","ACCBBD","AECFFF","AACFFF","AACAFF","AAAAFF"],"sol":[3,5,1,4,2,0]},{"n":6,"rows":["ABBBCC","BBBBCD","BBBBBD","BBBEDD","BBFDDD","BBFDDD"],"sol":[0,4,1,3,5,2]},{"n":6,"rows":["ABBBBB","CCDBBB","CCDEBB","CCDDDB","DCDFFB","DDDDBB"],"sol":[0,5,3,1,4,2]},{"n":6,"rows":["AAAAAB","CCCABB","CCCCBB","CCDBBB","ECDBBB","EEEFBB"],"sol":[4,1,5,2,0,3]},{"n":6,"rows":["ABBCCC","ABBCCD","BBBCCE","BBBEEE","BBFFEE","BBFFEE"],"sol":[0,5,3,1,4,2]},{"n":6,"rows":["AAAAAA","BBBBAA","BBBAAC","BBBDAC","EFFFAC","FFFFFF"],"sol":[4,1,5,3,0,2]},{"n":6,"rows":["AABBCC","DBBBCC","DEEEEC","DEEEEC","DFEDDD","DDDDDD"],"sol":[0,2,5,3,1,4]},{"n":6,"rows":["AAABBC","AAAACC","DEECCC","FEECCC","FEEFCC","FFFFFC"],"sol":[4,2,0,5,1,3]},{"n":5,"rows":["ABBBB","CBBBB","CCDEE","CCDDD","CCDDD"],"sol":[0,2,4,1,3]},{"n":6,"rows":["AAABCC","AAABBC","AAAABC","DAEACC","DDDCCC","DDFFCC"],"sol":[5,1,4,2,0,3]},{"n":5,"rows":["AABBB","ACCBB","ACBBB","ADBBB","AEEEB"],"sol":[0,2,4,1,3]},{"n":6,"rows":["AABBBC","DBBBBC","DEEEBB","DFFEBB","DFFFFF","DFFFFF"],"sol":[1,5,2,4,0,3]},{"n":5,"rows":["AAAAA","AAABB","ACCCC","ACDDE","ADDDD"],"sol":[0,3,1,4,2]},{"n":5,"rows":["AAABB","CCCBB","CCDBB","CCCBB","CCCEB"],"sol":[1,4,2,0,3]},{"n":6,"rows":["ABCCCD","ABCCCC","AAAACC","AAAAAC","EAAFAA","EFFFAA"],"sol":[5,1,4,2,0,3]},{"n":5,"rows":["AAAAA","BBCAA","DBBAA","EEBBB","EEBBB"],"sol":[4,2,0,3,1]},{"n":6,"rows":["AAABBC","AABBCC","AABBCC","AAADDE","AFADDD","ADDDDD"],"sol":[0,4,2,5,1,3]},{"n":5,"rows":["ABBBB","ABBBB","AABCC","ADBCC","ADBBE"],"sol":[2,0,3,1,4]},{"n":5,"rows":["ABBBB","ABCBB","BBBBD","BBEED","EEEEE"],"sol":[0,2,4,1,3]},{"n":5,"rows":["ABBCC","DDBCC","DDCCC","EDCCC","EEEEC"],"sol":[0,2,4,1,3]},{"n":6,"rows":["ABBBBB","ABBBBC","DBBECC","DDDDDC","DDDDFF","FFFFFF"],"sol":[2,0,3,5,1,4]},{"n":5,"rows":["ABBBB","CCCBB","CCBBB","CDBEE","CDDDE"],"sol":[0,3,1,4,2]},{"n":5,"rows":["AAAAA","BCADD","BCCDD","BBBED","BBBBB"],"sol":[2,4,1,3,0]}],"normal":[{"n":6,"rows":["AAAAAB","AAACDE","AADDDE","FDDDDE","FFDFEE","FFFFEE"],"sol":[5,3,0,2,4,1]},{"n":6,"rows":["AAAAAB","CAAAAA","CCCAAA","CCDDAA","CEEEEE","CFEEEE"],"sol":[5,3,0,2,4,1]},{"n":6,"rows":["ABBBBB","ACBBBB","ACBBBB","CCDEBB","DDDDDF","DDDDDF"],"sol":[0,4,1,3,5,2]},{"n":6,"rows":["AABCCD","AABCCD","AAACCD","EAACCD","AAAAFF","AAAAAA"],"sol":[2,5,3,0,4,1]},{"n":6,"rows":["AAAAAA","AAABBC","DEECCC","DEEEEE","EEEEEE","EEEFFF"],"sol":[1,3,5,0,2,4]},{"n":6,"rows":["AAABBB","ACCDDB","ACCEBB","AACEBB","AACBBB","AFFFBB"],"sol":[0,4,1,3,5,2]},{"n":6,"rows":["AAAAAA","AAAAAB","AACAAB","DACCCB","DECFFB","DECFBB"],"sol":[3,5,2,0,4,1]},{"n":6,"rows":["ABCCCC","ABDDCC","BBBCCC","EBBCCF","EEBFFF","EEBFFF"],"sol":[0,3,5,2,4,1]},{"n":6,"rows":["AAAAAA","AABBBA","CBBBBB","CBDEEB","BBDBEF","BBBBBF"],"sol":[1,3,0,4,2,5]},{"n":7,"rows":["AAAAABC","AAAADBB","AABDDBB","AEBBBBB","EEBBBFF","BBBFFFF","GBBBFFF"],"sol":[6,2,4,1,3,5,0]},{"n":7,"rows":["AAAAAAA","BBBAAAA","BBBCDCC","ECCCCCC","CCFCCCC","CCFFCCC","CCCCCCG"],"sol":[3,1,4,0,5,2,6]},{"n":7,"rows":["ABACCDD","ABAADDA","ABAAAAA","AAAEEEF","AAEEEEE","AAAAEEE","AAAAGGG"],"sol":[3,5,1,6,2,0,4]},{"n":7,"rows":["AAAABBC","DAAAAEC","DDAAAEC","DDDDDCC","DDDFFCC","DDDDFCC","GDDDDDD"],"sol":[4,2,5,1,3,6,0]},{"n":7,"rows":["AAAAAAA","AAABAAC","DDAAAEC","DAACCCC","DAAACCC","DDDFFCC","DGGGFCC"],"sol":[1,3,5,0,6,4,2]},{"n":7,"rows":["AAABCBB","AADBCBB","AADBBBB","ADDDBBB","DDDDDDE","DDFFGGG","DDFFGGG"],"sol":[4,0,3,1,6,2,5]},{"n":7,"rows":["ABCCCCC","AACCCCC","AAACCCD","AAAACCE","AAAFGEE","AFFFGEE","AFFFGGG"],"sol":[1,3,6,0,5,2,4]},{"n":7,"rows":["AABBBBB","AAABBBB","AAACCBB","AADDCEB","AAACCEE","AFFEEEE","AEEEEEG"],"sol":[3,0,4,2,5,1,6]},{"n":7,"rows":["AABBBBB","AABBBBB","CBBBBBB","DDDEFFF","DDDEEGG","DDDEEEG","DDDDDDD"],"sol":[1,4,0,5,3,6,2]},{"n":7,"rows":["ABBCCCC","ADDDCCE","ADDDCCC","ADDDCFC","AADDCFF","AADDDDF","GGDDDDF"],"sol":[2,6,4,0,5,3,1]},{"n":7,"rows":["AAAAAAA","BBABCAA","BBBBBDD","BBBDDDD","BBBDDEE","FBBBEEG","FFEEEEG"],"sol":[2,4,1,3,5,0,6]},{"n":7,"rows":["AABBBBB","AABBBBB","AABCDBB","EEEEDDB","EEEEEDB","EEEFFDB","EEEEFGG"],"sol":[2,0,3,5,1,4,6]},{"n":7,"rows":["AAAABBB","AAAACBB","DAAACBB","DDAEEEE","FDGEEEE","FFFEEEE","FFEEEEE"],"sol":[3,6,4,0,2,5,1]},{"n":7,"rows":["AAABCCC","AAABBCC","AAABBCD","AEEEBCC","FEEEEEC","FEEEEEE","FEGGGGE"],"sol":[5,1,6,4,2,0,3]},{"n":7,"rows":["AABBBBB","CADDEEB","CDDDDEB","DDDDDDB","DDDFFBB","DDGGFBB","DDDGBBB"],"sol":[1,5,0,2,4,6,3]},{"n":7,"rows":["AAAABBC","DEAAAAC","DEAAAAC","DEEAAAA","DEEAAAA","FFEAAGG","FFEEAGG"],"sol":[4,6,3,0,2,5,1]},{"n":7,"rows":["ABAAAAA","AAACAAA","AAADDDA","AAADEEA","AADDFGG","AAAGFFG","AAAGGGG"],"sol":[1,3,0,5,2,4,6]},{"n":6,"rows":["ABBBCB","ABDBCB","EEDBBB","EFDDBB","FFDDBB","FFFBBB"],"sol":[0,4,1,3,5,2]},{"n":6,"rows":["AAAABB","AACBBB","ADCBBB","ADCCBB","ADCEEB","AACCEF"],"sol":[0,2,4,1,3,5]},{"n":7,"rows":["AAAAAAA","AABBCAA","AADDCCC","AADDEEE","ADDDDDE","FDDDDDD","FDDDDGG"],"sol":[1,3,6,4,2,0,5]},{"n":7,"rows":["AAAABBB","AAABBBB","CADBBBB","CEDFGGG","EEFFGGG","EEEEEGG","EEEEEGG"],"sol":[1,5,2,0,3,6,4]},{"n":7,"rows":["ABBBBBB","AAABBBB","AACCBBB","DEEEEEF","EEEEEEF","EEEEEGF","EEEEEGG"],"sol":[4,1,3,0,6,2,5]},{"n":6,"rows":["ABBBCC","ABBBCC","DDBBEE","BDBFFE","BBBFFE","BBBBFF"],"sol":[0,4,1,3,5,2]},{"n":7,"rows":["AAAAAAA","BACCDAD","BDDDDDD","EEEDDDD","EEEFFDD","EEEGDDD","EEEGDDD"],"sol":[5,2,0,6,4,1,3]},{"n":6,"rows":["AAAAAA","BBBBBA","CCDBBA","EEDDDA","EFFDDA","EEEAAA"],"sol":[5,3,1,4,2,0]},{"n":7,"rows":["AABBBCC","AABBBBB","AAAABBB","DDEEBBB","DDDFFGB","DDDDDGG","DDDDDDD"],"sol":[5,3,0,2,4,6,1]},{"n":7,"rows":["ABBCDDE","ABBCBBE","AABBBEE","FAABBEE","AABBBBB","AAAAGGG","AAAAAAA"],"sol":[5,3,6,0,2,4,1]},{"n":7,"rows":["AABCCCC","ABBCCCC","AAACCCC","AADDDCC","EADDFFC","EADDCCC","EADDCCG"],"sol":[2,4,1,3,5,0,6]},{"n":6,"rows":["ABBBBB","ABBBBB","AABCBB","ADDCEE","ADDCCE","AAAFFF"],"sol":[2,0,3,5,1,4]},{"n":7,"rows":["AABBBBB","ACDBBBB","CCBBBBB","CCBBBEF","CCCBEEF","GGBBEEE","GGGGEEE"],"sol":[0,2,4,6,1,5,3]},{"n":6,"rows":["AABBBB","CBBBBB","CCCDEB","CCCFEE","CFFFEE","FFEEEE"],"sol":[1,5,3,0,2,4]}],"chill":[{"n":8,"rows":["AAABBBBB","AAAACDBB","AAAACDDB","AEEEFFFF","EEEEFFFF","GGEEEFFF","GEEEFFFF","EEHEEFFF"],"sol":[7,4,6,0,3,1,5,2]},{"n":9,"rows":["AAAAAABBB","AAACCCBBB","AAAAACCDD","AAAAAEEFD","FAFFEEEFF","FFFFEEFFG","FFFFFFFFF","HFFIFFFFF","HFFFFFFFF"],"sol":[6,4,7,2,5,8,1,3,0]},{"n":9,"rows":["AAAAAAAAA","AAAAABAAA","CAAAADDAA","EEFFFDDDD","EEEEFDDGG","EHEEFFFFF","HHEFFFFFF","HFFFFFFFF","FFIIFFFFF"],"sol":[7,5,0,6,8,3,1,4,2]},{"n":8,"rows":["ABBCCCCC","ABBBBCDC","AAAADDDC","EAAADDCC","AAAAFFFF","GGAAFFFF","GGGGGFFF","GGGHGGGG"],"sol":[7,4,6,0,2,5,1,3]},{"n":9,"rows":["ABBBBBBBB","ABBCBDDBB","AAAABDABB","AAAAAAAAA","AAAAEEFFF","AAAEEEGFF","AAEEEEGEE","AAEEEEGEH","AAIIIEEEE"],"sol":[1,3,5,0,7,4,6,8,2]},{"n":10,"rows":["AAAAAAABCC","AAAAAAAACC","AAAAAADCCC","AAAAACCCCC","AEFFACCGCC","AEFGGGGGHC","AEFGGGGGCC","AIFGGGGGCC","IIGGGGGGCC","IIJGGGGGGC"],"sol":[7,4,6,9,3,8,1,5,0,2]},{"n":8,"rows":["ABAACCCC","AAACCDCC","AAACCCCC","AAEFGCCC","AAFFGCCC","AFFFCCCH","FFFFFCCC","FFFFFCCC"],"sol":[1,5,0,2,4,7,3,6]},{"n":10,"rows":["ABBBBBBBBC","ABBBBBDDBC","ABBBBBBBBB","AEABFFGBBB","AAAAFFGBBB","HAAAAGGBBB","HAAAAGIIIB","HHHHHGIJII","HHHHHHIIII","HHHHHHIIII"],"sol":[9,6,3,1,4,2,5,7,0,8]},{"n":9,"rows":["AABBCCDDD","AABCCDDDD","AAACCDDDD","AAAAADDDD","AAAAADDED","FAAAAADDD","FAAGAADDD","AAAGAAHDD","AAAIIIIDD"],"sol":[5,2,8,1,7,0,3,6,4]},{"n":8,"rows":["AAAABCCC","AAADBCCC","EFABBCCC","EEAEBCCC","EEEEECCC","EEEEEGCC","EEEHHHHC","EEHHHHHH"],"sol":[0,3,1,4,7,5,2,6]},{"n":9,"rows":["AAABBBBBC","AAAABCCCC","AAAABDCCC","AAAABBCCC","AEAABECFG","AEEEEECGG","AAAHEGGGG","AAIIEGGGG","AAIIGGGGG"],"sol":[4,8,5,0,7,1,3,6,2]},{"n":10,"rows":["AAAAABBBBC","AAADDBBBCC","AAEBBBBFFC","AAABBBFFGC","AAABBBFFFC","BBBBBBBBBC","BBBBBBBCCC","BHHBBBBCCC","BHIIBCCCCC","BHIIBJJJJC"],"sol":[0,4,2,8,6,9,5,1,3,7]},{"n":8,"rows":["AAAAABBB","AAAABBBB","ACABBBBB","ACABDDDB","AEEFGDDD","AEEGGHHD","AEEGGEHH","AEEEEEEE"],"sol":[0,7,1,5,3,6,4,2]},{"n":9,"rows":["AAABAAAAA","AAAAAAAAA","AAAAAACAA","DDAEEECFF","DAAAAECFF","DGGGGGGGG","DDDGGGGGG","DDDDDDHIG","DDDDDHHGG"],"sol":[3,1,6,4,8,2,0,7,5]},{"n":10,"rows":["AAABBBCCCC","AADDBBBBEC","AFDABBBBEE","AAAAABBGEE","AAAHHHBGEE","AAHHHHIEEE","AAHAHHIEEE","AAAAHHIHEE","JAAHHHHHHH","AAHHHHHHHH"],"sol":[8,3,1,5,7,9,6,2,0,4]},{"n":8,"rows":["AABAAAAA","AAAAAAAA","ACAAADDA","ACCCAAAA","CCCCAEFA","CCGGFFFA","CCGGGFHH","GGGGFFFF"],"sol":[2,0,6,1,5,3,7,4]},{"n":10,"rows":["ABBBBBBCCC","AAABBBCCCC","AAABBBBCCC","DAABBBBBBB","DAAAEBBBBB","DFAAEEGGBH","DFAAEIGGGH","AAAAAJGGGH","AAAAAJJGGG","AAAAAJJGGG"],"sol":[3,7,2,0,4,1,5,9,6,8]},{"n":9,"rows":["AAAAABCCC","AAADABCCA","AAAAABAAA","AAAAAAAAA","AEAFAGGGA","EEEFFGGGA","HHEFFGGGG","HHHFFFFFG","HIHFFFFFG"],"sol":[7,3,5,8,6,2,0,4,1]},{"n":8,"rows":["ABBBBBBB","ABBBBCDB","EBBBCCFB","EBBBFFFB","EEBBFFFF","EEBBFFFF","EEEGGGHH","EEEGGGGG"],"sol":[0,6,4,2,5,1,7,3]},{"n":9,"rows":["ABCCDDDDD","ABCCCEDDD","BBBCCEDDD","FFGGCEDDD","FFFEEEDDD","FFFDDDDDD","FFFFFDHHI","FFFFFIIII","FFFFIIIII"],"sol":[0,4,1,3,5,8,6,2,7]},{"n":10,"rows":["AAABBBBCCC","AAAABDBCCC","AAAABBBBCC","EEEABBBBCC","EBBBBBBBBC","FFGFBBBBBB","FFFFFFBBBB","FFFFFFBBBH","FFFFFFBIBH","JFFFFFBIBB"],"sol":[8,5,3,1,6,2,4,9,7,0]},{"n":8,"rows":["AAAABCCC","AAAABBCC","ADAAABAC","DDDEAAAA","DFAEEAGG","FFAAHAAA","FFFAAAAA","FAAAAAAA"],"sol":[7,5,1,3,6,4,0,2]},{"n":9,"rows":["ABBCCCCDD","ABBCCCCDD","BBBBBEDDD","BBBBBDDDD","BBBBBDDDD","BFBBBDDDD","BDGGDDHDD","BDDDDHHII","BDDDDIIII"],"sol":[4,0,5,2,7,1,3,6,8]},{"n":10,"rows":["AAAAABBBBB","ACAAABBBBB","AAABBBBBBB","DDDDDBBBBB","DDEEDBBBBF","DEEEEGBBEF","DDEEEEEEEE","DDEEEEEHEI","DDJEEEEIII","DDDEEEEIII"],"sol":[4,1,6,0,9,5,3,7,2,8]},{"n":8,"rows":["AAABBBBC","DEEBBBBC","DEEEFBBB","DFFEFBBB","FFFFFFBB","GFFFFBBB","GGGHBBBG","GGGGGGGG"],"sol":[1,7,2,0,4,6,3,5]},{"n":9,"rows":["AAAABAACC","AADAAACCC","AADDDDCCC","EAADFDCCC","EAAAFFCGC","EAAACFCCC","CCCCCCCCC","HHCCCCIIC","HHHCCCIIC"],"sol":[4,1,3,0,7,5,8,6,2]},{"n":10,"rows":["AABBBBCBBB","AAAABBBBDB","AAAEFAAABB","AAAEFAABBB","AAGEAAHHHB","AGGEAAAIII","AGAAAIAIII","AAAAAIIIII","AAAAAIIIII","AAJJJJIIII"],"sol":[6,8,4,9,7,3,1,5,0,2]},{"n":8,"rows":["AAAAAAAA","AABBBACC","AABBDAAC","AAEBAAAC","AEEBAAAC","AEEEAFCC","EEEGGFCC","EEEEHHHC"],"sol":[0,2,4,7,1,5,3,6]},{"n":10,"rows":["AAAAABBBBB","CCBBABBBBB","DCBBBBBBBE","DDBEEBEBEE","EDFEEEEEEE","EEEEEEEEEE","EEEEGGEHHE","EEHHHHHHHE","EEHIHHHJHE","EHHHHHHJEE"],"sol":[4,1,6,0,2,9,5,8,3,7]},{"n":10,"rows":["AAAAAABBCC","AAAAAABBCC","AAAAADCCCC","AAAAADDCCC","AAAEADDDDC","FFEEGDCCCC","FFFEGDCCCC","HHHDDDCCCC","IHHDDDCCCC","IHHHDDCCCJ"],"sol":[7,5,8,6,3,1,4,2,0,9]}],"hard":[{"n":7,"rows":["AAAABBB","CCADDBB","CCADBBB","EEBBBBB","EEBBFBB","EEBBGGG","EEBBBGG"],"sol":[2,0,3,6,4,1,5]},{"n":7,"rows":["ABBBCCC","ABBBCCC","ADDBBBE","ADDBBBF","AAGGGFF","GGGFFFF","GGGFFFF"],"sol":[5,3,6,2,0,4,1]},{"n":7,"rows":["AABCCBB","AABBBBB","ABBBBBB","ABBBBDD","ABBBEDF","GGEEEFF","GGGEFFF"],"sol":[3,0,2,6,4,1,5]},{"n":7,"rows":["ABBCDDD","ABBCCDD","AABCEDD","BBBCCFF","BBCCCFF","BBGCCCF","BBGCCFF"],"sol":[5,0,4,1,3,6,2]},{"n":7,"rows":["ABBCCDD","BBBCCDE","BBBCDDE","FFGCGDD","GFGGGGD","GFGGDDD","GGGGDDD"],"sol":[0,2,6,3,5,1,4]},{"n":7,"rows":["AAABBBB","AAABBBB","CAAABBB","CADDDBB","AAEEFBB","AAEEFGG","AEEEEGG"],"sol":[1,5,0,2,4,6,3]},{"n":7,"rows":["AAAAABC","AAAABBB","DDAABBB","EEEEBBB","EEBBBFB","EEBBFFB","EEBGGFF"],"sol":[6,2,0,4,1,5,3]},{"n":7,"rows":["AABBBCC","DAABBCC","DDAACCC","DDDEFFC","DDDEEFG","DDEEEEG","DEEEEEE"],"sol":[3,5,2,4,0,6,1]},{"n":7,"rows":["AABCCDD","AABCCDD","AACCEEE","AAACCFE","AAEEEFE","AEEGGEE","AEEEEEE"],"sol":[2,6,3,5,0,4,1]},{"n":8,"rows":["AAAAAAAA","AABBAAAA","CCDDDEEE","DDDDDEEE","FFFFGGEE","GGFFGGEE","GGGGGEEE","GHEEEEEE"],"sol":[6,3,0,4,2,5,7,1]},{"n":8,"rows":["AAABBCCC","DAABBBCC","EEEBBBCC","EEBBEEFC","EEEEEFFC","EEEEEFFC","EEGEEEHH","GGGEEEEE"],"sol":[2,0,4,7,5,3,6,1]},{"n":8,"rows":["AABBBCDD","EABBFCDD","EAAACCDD","AAAGCCDD","AAGGACDD","AAAAADDH","AAAAAAHH","AAAAAAAH"],"sol":[2,4,0,5,3,6,1,7]},{"n":8,"rows":["AABCCCCC","AABBCCCD","AAABCCCD","AAEFCCGG","EAEFFCCC","EEEFFCCC","EEFFFFFC","EEHHFFFC"],"sol":[5,7,3,6,1,4,0,2]},{"n":8,"rows":["ABBBCDDD","ABBCCDDD","CCCCEDDD","FFEEEDDD","FFFEDDDD","FFFFDGGD","FFFFHGGG","FFFFHHGG"],"sol":[3,0,2,4,6,1,7,5]},{"n":8,"rows":["AABBBBCC","AAAABCCC","ADAACCCC","DDDDDDCC","DDDEEFFF","DDDDEFFG","DDDDEFFG","DDDDHHHG"],"sol":[2,0,6,1,3,5,7,4]},{"n":8,"rows":["AAAAAABB","CCCAAABB","CCCCCAAB","CCCDCAAB","ECCDAAFB","CCCDGAFF","CCCDGAFF","CCGGGHHH"],"sol":[2,6,1,3,0,4,7,5]},{"n":8,"rows":["AAAAAAAA","AABBACCC","ABBBACCD","AABBACCC","ABBECCCC","FGGECECC","FEEEEEHH","FEEEEEHH"],"sol":[4,2,7,5,3,1,6,0]},{"n":8,"rows":["AAAAAAAA","BCCAADDD","BBBAADDD","BBBEEFDD","EEEEEFDD","EEEEEDDD","GGEEEEED","GGEHEEEE"],"sol":[6,2,0,5,7,4,1,3]},{"n":8,"rows":["AAABCCDD","EBBBCCDD","EBBBCDDD","BBBCCDDD","BBFFDDDD","BFFFFFFD","GGGFHFHH","GGGFHHHH"],"sol":[1,3,0,4,7,5,2,6]},{"n":8,"rows":["AAAAAABB","AAAAABBB","CCAADDDB","CCAEEDBB","CCFFBBBB","CGFFBHHB","GGBBBBHB","GGGBBBHH"],"sol":[4,7,5,3,0,2,6,1]},{"n":8,"rows":["AAABCCCC","AABBCCDD","AECCCDDD","AEFCCDDD","FFFFCCCC","FFFFGCCC","FHHHGCCC","FHHHHHCC"],"sol":[0,3,1,6,2,4,7,5]},{"n":8,"rows":["AAAAAAAA","BBBBBBBA","CCCDDBBB","CCCDEBBB","CCCEEEFF","CCCCEGHH","CCCCEGGH","CCCEEGGH"],"sol":[2,0,3,1,6,4,7,5]},{"n":8,"rows":["ABBCCCDD","ABBCCDDD","ABCCCCDD","BBEDDDDD","BBEDDDDD","BBFFFGDH","GGGGGGHH","GGGGGHHH"],"sol":[1,4,0,2,6,3,5,7]},{"n":8,"rows":["AABBCCCC","AAADCCCC","AADDCCCC","EEDCCCCC","CCCCFCCC","CCCCFFGG","CCHCFFGH","CHHHHHHH"],"sol":[2,0,3,1,5,7,4,6]},{"n":8,"rows":["AAAABBBC","DDAABBBC","EDABBFFC","EEAGBBFC","GGGGBBCC","GHHGCCCC","HHHHHCCC","HHHHHHCC"],"sol":[2,0,6,1,5,3,7,4]},{"n":7,"rows":["AAAAABB","CDDDEEB","CCDEEEB","CCFEEEB","EEFEEGG","EEEEEGG","EEEEEGG"],"sol":[4,1,6,0,2,5,3]},{"n":8,"rows":["AAABBBCC","AAABBCCC","AAADDDCC","EEEEEECF","EEEEFFCF","EEEFFFFF","EEEFGFFF","HFFFFFFF"],"sol":[5,1,3,6,2,7,4,0]},{"n":8,"rows":["ABBACCDD","AAAAECDD","AACCCCDD","AFCFCCDD","FFFFDDDD","GGFDDDHD","GGGGGGHH","GGGGGGGH"],"sol":[1,4,0,5,7,2,6,3]},{"n":7,"rows":["AAABBCC","AAAAACC","AAAACCC","DDAACCC","DEEECCF","DDDEGFF","DDDEGGG"],"sol":[3,1,5,0,2,6,4]},{"n":8,"rows":["ABBCCDDE","AABCDDEE","AAFFDDDE","AAFFDEEE","GFFFDHEE","GGGGDDEE","GGGGDDDD","GGGGGGDD"],"sol":[4,2,0,3,5,7,1,6]},{"n":8,"rows":["AABCDDDD","AACCCCCD","AAECCCDD","EEEFECCC","GEEEECCC","GGEEEEHH","GHHEHHHH","GGHHHHHH"],"sol":[2,7,1,3,6,4,0,5]},{"n":7,"rows":["AAABCCC","AAABBCC","AAACCCC","ADCCCCC","EDCCCFF","EECGGGF","EECCGGG"],"sol":[2,4,6,1,5,3,0]},{"n":8,"rows":["AAABBCCC","AAADBCCC","AAADBBCC","AEAAAAFC","GEAAAHFF","GEEAAHHH","EEEEEHHH","EEEEHHHH"],"sol":[4,7,3,6,2,0,5,1]},{"n":8,"rows":["AAABBBBB","AAAABCCB","AAAACCCB","ADDEEECB","DDDFEECB","DDDFEEBB","DGDFBBBB","DGGHHBBB"],"sol":[7,0,6,2,5,3,1,4]},{"n":8,"rows":["AAABBBBB","AABBABCC","AAAAAAAC","DDAEAAAF","DDDEEEFF","DDDEGFFF","DDDHGGFF","DDDHHGGF"],"sol":[0,2,7,1,4,6,3,5]},{"n":7,"rows":["AAABBCC","AADEBBC","AADEBFC","GDDEBFB","GEEEBBB","GBBBBBB","GGGBBBB"],"sol":[1,6,2,5,3,0,4]},{"n":8,"rows":["AABBCCCC","AADDCCCC","AADDCCDC","AAADDDDD","AAAAAAEF","AAAAAEEF","AGAAEEHH","GGGGEHHH"],"sol":[2,4,0,3,7,5,1,6]},{"n":8,"rows":["AAABCCCD","AAABBCCD","AAABBEEE","AAEEEEEE","AAEFFFGF","AHFFFFFF","HHFFFFFF","HHFFFFFF"],"sol":[5,7,4,2,6,0,3,1]},{"n":7,"rows":["ABBBBCC","AAABDCC","EADDDFF","EADDDFD","AAADDDD","AAAAAGD","AAAAGGG"],"sol":[2,6,0,5,3,1,4]},{"n":8,"rows":["AAAAAABB","AAACAAAA","DAACAAAA","DDDDDDAA","DEEDFFAG","DDFFFHGG","DDDFFHHG","DDDDHHHG"],"sol":[6,1,3,0,2,4,7,5]}],"expert":[{"n":8,"rows":["AAAAAAAB","AAAAAAAB","AACDDABB","AAADDABB","EAAFDDBG","EEFFHHGG","EEFFFHGG","EEFFHHHG"],"sol":[1,7,2,4,0,6,3,5]},{"n":8,"rows":["AAAABBBB","ACAAABBB","CCAAAAAD","CCCCAAAD","CEFFAAAD","CCFFGAAD","HHFFGGAD","HHHHGGGG"],"sol":[6,4,0,7,1,3,5,2]},{"n":8,"rows":["AAAAAABB","AAAACABD","AEAACBBD","AAAFCCDD","AAGFCHHD","GGGCCHHH","GGHHHHHH","GHHHHHHH"],"sol":[2,6,1,3,7,4,0,5]},{"n":8,"rows":["AAAABBBB","AAACCDBB","EAADDDDB","EEEFFDDB","EEEDDDDD","EEDDDDDD","EGGDDDHD","EGDDDDDD"],"sol":[2,4,7,3,5,0,6,1]},{"n":8,"rows":["ABBBBBCC","AAABBBCD","AAAEBBDD","AAAABDDD","AAAADDDD","FFAADDDD","GFAAAAHH","GGAAAHHH"],"sol":[4,6,3,5,2,0,7,1]},{"n":8,"rows":["AAAAABCC","DDAAABCC","DDDABBCC","EEEEEBBC","EEEEFFCC","GGGGCCCH","GCCCCCCH","GCCCCCHH"],"sol":[3,1,5,2,4,6,0,7]},{"n":8,"rows":["AAAAAABB","AAAAAAAB","ACDDAAAA","ACDDAAAE","AFFAAAAE","AGFFFAAE","GGFFHAAE","GGFFHHEE"],"sol":[6,4,1,3,7,2,0,5]},{"n":8,"rows":["AAAAABBC","DAAABBBC","DDAAAABB","DDDEEFFB","DDGGEFFF","DDGGEFFF","DDHEEEEE","DDHEEEEE"],"sol":[7,1,6,0,3,5,2,4]},{"n":8,"rows":["AAAAAABB","AAAAAAAB","CCCDAAAA","EECDAAAA","ECCCAAAA","EFCGGGHH","FFCCGGGG","FCCCCGGG"],"sol":[4,7,3,0,2,6,1,5]},{"n":9,"rows":["AAABBBCCC","ADAEEBECF","DDAEEEEGF","DAAEEGGGF","AAAEEGFFF","AAAEEHIFF","HAHHHHHFF","HAHHHHHFF","HHHHHFFFF"],"sol":[4,7,0,5,3,6,1,8,2]},{"n":9,"rows":["AAAAABBBB","AACBBBBBD","AABBEFDDD","AABBEFDDG","HAEEEFDGG","HHEEEEEGG","HHHHHEEEG","HHHHHEIII","HHHHHIIII"],"sol":[0,2,5,3,6,4,8,1,7]},{"n":9,"rows":["AAAAAABBB","CCAAAABBB","BCAAAABBD","BBBBBBBBD","BBBBBEEDD","BFBGBEEDD","BFBBBBEDE","FFHHIBEDE","FHHHIIEEE"],"sol":[7,0,5,8,6,3,1,4,2]},{"n":9,"rows":["AAAAAAAAA","ABACCCADD","ABCCDDDDE","ABCCEDDEE","BBCCEEEEE","BBCCEEEFF","BBCCCEGHF","BIIIIEGHH","IIIIIEEHH"],"sol":[0,3,5,1,4,8,6,2,7]},{"n":9,"rows":["AAAAAABBB","AAAAABBBB","AAAACBBDD","AAAACDDDD","EAFFCCDDG","EEEFCCDDD","HHIFFCDDD","HHIFFCCCD","HHIFFFFFF"],"sol":[5,7,4,6,8,1,3,0,2]},{"n":9,"rows":["AAAABBBBB","AACCDDBBB","DACCDDEBB","DDFFDDEBB","DDDDDDEGB","DDDDDDEEB","DDHHEEEEE","IHHHHEEEE","IIHHHHEEE"],"sol":[1,3,8,2,7,4,6,0,5]},{"n":9,"rows":["AAAAAAAAA","ABBAACADA","ABBBCCDDD","AAAADDDEE","AAFFFGDEE","AAFFFGGEE","AAFHHIIIE","AAAHHIIEE","AHHHIIIII"],"sol":[0,5,1,4,2,6,8,3,7]},{"n":9,"rows":["AAAABBCCC","DDEEBBCCC","DDDEEEFCC","DDDDEEFCC","DDDDDEECC","DDDGGGHHH","DDDGIIIIH","DDIIIIIII","DDIIIIIII"],"sol":[1,4,6,8,5,7,3,0,2]},{"n":9,"rows":["AAAAAAABB","CAABBBABB","CAAABBBBD","CCAABEEDD","CCCAEEEFF","CCGEEFFFF","CCGEEFFHF","CGGEEFFHH","GGGEEEIIH"],"sol":[1,3,0,7,4,2,5,8,6]},{"n":9,"rows":["ABBCDDDDE","AACCDDDDE","AACCCDDDE","FAAGCDDDE","AAAGGDDDD","AAAGGGDDD","HAAAAGGDD","HIIAHHHHD","HHHHHHHHH"],"sol":[2,8,4,0,7,5,3,1,6]},{"n":9,"rows":["AABBCCDDD","EACBCDDDD","ECCCCDDDD","EECCCDFFF","GCCCGDHHF","GGGCGGHHF","GIIIGGHHF","GGGGGGFFF","GGGGGGGGF"],"sol":[3,1,4,0,5,7,2,8,6]},{"n":9,"rows":["AAAAAAAAA","BBCCAAAAA","BBCCCACAA","DDCCCCCCA","DDCCCEFGG","DDCCEEFGG","DDCCCFFGG","DDCHFFFIG","DDCHFFFII"],"sol":[2,0,4,1,5,8,6,3,7]},{"n":9,"rows":["ABBBBCCCC","AAADDDDCC","AADDDDDDC","AAADDDDDC","EEEDDDDDC","EEEDDDFDC","EEEDGFFFC","HGGGGIFCC","HGGGIICCC"],"sol":[3,8,1,7,2,6,4,0,5]},{"n":9,"rows":["AAABBBCCC","AAABCCCCC","DDBBECCCC","DDEEEFCCC","GDGGFFCCH","GGGGGGCCH","GGGIGGCHH","GGGIIGGGG","GGGGGGGGG"],"sol":[1,3,0,2,5,8,6,4,7]},{"n":9,"rows":["AAAAAAAAA","AAAAAABBA","AAAAACCDD","EAECCCCFD","EEEEEEFFF","EEEEGGGGF","EEHIGGGGH","EHHIHHHHH","EEHHHHHHH"],"sol":[1,6,8,4,7,5,3,0,2]},{"n":9,"rows":["ABCCCCCCC","ABBBBCDCC","BBBCCCDDC","EEEFCCCCC","EEEFFGHHC","HHEHGGHHC","HHHHHHHHC","HHHHCCCCC","HHHIIICCC"],"sol":[0,2,7,3,1,4,6,8,5]},{"n":9,"rows":["AAAAABBBB","AAAABBBBB","AAACCBBBB","ADDCEEEEB","ADCCEEEFB","ACCCCCCFF","ACCCCCGGF","HHCCCCGGI","HHHHCCIII"],"sol":[2,5,3,1,4,8,6,0,7]},{"n":8,"rows":["AABBCCCC","ADEBCCCC","DDEECCCC","FDEDDCCC","FDDDGGGC","FFFFGGGG","FFFGGGGG","FFFFGGHH"],"sol":[3,0,2,4,7,5,1,6]},{"n":9,"rows":["ABBBBCDDD","AABBCCCED","FFBBBBEED","FGBBBBBED","GGGBGGDDD","GGGGGGGDD","GHHGGGDDD","GGGGDGIDD","GGGGDDDDD"],"sol":[0,4,1,7,3,5,2,6,8]},{"n":8,"rows":["AABBBBCC","ADDDDBCC","DDDDEBCC","FFDDEEEC","FDDEEEEC","FDDEGGCC","DDEEHHCC","DDEEHHCC"],"sol":[2,0,3,1,6,4,7,5]},{"n":9,"rows":["AAAAAAAAB","AAAAAAAAB","AAAAAACAA","AAADAACCC","EAFDGGGGC","EFFDDGGGC","EEEEEGGCC","EHHIIGCCC","HHHHICCCC"],"sol":[5,8,6,3,7,2,0,4,1]},{"n":8,"rows":["AABBBCCC","AAABCCCD","ABBBCEDD","BBFFEEEG","BBFHHEGG","BBFGHEGG","BGGGGGGG","BGGGGGGG"],"sol":[6,1,7,5,2,4,0,3]},{"n":8,"rows":["AABBBBBB","AABBBCCC","AAABDCCC","EEFDDDCC","EEFFFDCC","EEEFFCCC","EGGHCCCC","EGHHHCCC"],"sol":[6,1,7,5,3,0,2,4]},{"n":9,"rows":["AAAABBBBB","AACABBBBB","AACABBDBB","ACCABDDDD","ACDDDDDEE","FCDDDDEEG","FCDEEEEGG","CCDEHEIGG","CHHHHHIIG"],"sol":[1,4,2,5,7,0,8,6,3]},{"n":9,"rows":["AAAABBBBC","AAAABBBCC","AAAAADDEE","AAAAADEEF","AAAEEEEFF","GAAAAEEEH","GGAAEEEHH","IIAAHHHHH","IIIIIIHHH"],"sol":[4,7,5,8,3,0,2,6,1]},{"n":8,"rows":["AABBCDDD","ABBBCDDD","BBCCCEDD","BFFFFEDD","GGHFEEDD","HGHDDDDD","HGHDDHDD","HHHHHHHH"],"sol":[3,0,4,2,5,7,1,6]},{"n":9,"rows":["ABBBBBCCC","AAABBBBBC","AAADDDDEE","ADDDDDDEE","AAAFFDEEE","AAAAFEEEE","AAGGGHHHE","AAAGGHHEE","AAGGGHIEE"],"sol":[1,8,0,2,4,7,5,3,6]},{"n":8,"rows":["AAABBBBB","AAABBBBB","AABBCBBB","AAACCCDD","EAACCFDD","EGACCFDD","EGACCDDH","GGGGGHHH"],"sol":[3,1,4,6,0,5,7,2]},{"n":9,"rows":["AAAAAAAAA","AABBAACDD","DDBDCCCDD","DDDDDDCDD","DDDEEDDDF","DDEEDDFFF","DDEEDDGHH","DDEEDGGHH","DEEEDIIIH"],"sol":[0,2,4,1,3,6,8,5,7]},{"n":8,"rows":["AAAABCCC","AADDBCBB","AADDBBBB","DDDEBBBB","DDDEEBBB","FDEEGBBB","FEEEGGBB","BBBBBBBH"],"sol":[1,5,2,6,3,0,4,7]},{"n":9,"rows":["AAABBBBBC","ABBBBBBCC","BBBBBBBCC","BBBBDDDCC","BEEEECCCC","FGGGECCCH","FGGHHHHHH","FFIIHHHHH","IIIHHHHHH"],"sol":[1,5,8,6,4,2,0,3,7]}],"terror":[{"n":8,"rows":["AAAABBCC","DAAABACC","DDAAAACC","EEAAACCA","EEEFACAA","EGGAAAAA","GGGAAAAA","GGGAAAAH"],"sol":[4,0,6,1,3,5,2,7]},{"n":8,"rows":["AAABBBBC","DAABBBCC","AAABBBBC","BABBBBEE","BBBBBFEE","BBBBFFEF","GGGBHFFF","GGGHHFFF"],"sol":[7,0,2,6,3,5,1,4]},{"n":7,"rows":["AAAABBB","CDDAABB","CCCCABB","CCCCBBE","CCCCFBB","CGFFFBB","CGGGBBB"],"sol":[5,2,4,6,0,3,1]},{"n":7,"rows":["ABBBBCB","ABBBBBB","ADBDBBB","EDDDFBB","EDDEFFB","EEEEGFF","EEEGGGF"],"sol":[5,0,6,2,4,1,3]},{"n":7,"rows":["AABBBCD","AAAABCD","AAAACCD","EAAAACD","EFGAADD","FFGDDDD","FFGGDDD"],"sol":[4,2,5,0,6,1,3]},{"n":8,"rows":["AAABBBBB","ACCBBBBB","CCCCBCBB","DDCCCCCC","DDDEFGGG","FDDDFGGG","FFDFFFGG","FFFFFHHG"],"sol":[1,5,2,0,3,7,4,6]},{"n":8,"rows":["AAABBBBB","AAAAABBC","DDAACCCC","DDEEEEEE","FDDEEEEE","FDDGGEEE","HHGGEEEE","HHHGGGEE"],"sol":[6,4,7,5,2,0,3,1]},{"n":7,"rows":["AAABBBB","AABBCDB","AAACCDD","AAEECDF","GGGEEEF","GGGFFFF","GFFFFFF"],"sol":[6,4,1,5,3,0,2]},{"n":8,"rows":["AAAAAAAA","AAAAABAA","CCDBBBEA","DDDDDDEA","DDDFFFEA","FFFFFFFF","GGHHFFFF","GGGFFFFF"],"sol":[7,5,1,3,6,4,2,0]},{"n":8,"rows":["AABBBCCC","AADBBCCC","ADDDBBEE","AFDDBBBB","AFDDBBBB","FFDDDDBG","FFHDDDDG","FHHDDGGG"],"sol":[5,0,6,4,1,3,7,2]},{"n":8,"rows":["AAABAAAA","AABBAAAA","CAAAAAAA","AADAAEEE","AADAAEFF","AADGGEFH","ADDGEEEH","DDDEEEEH"],"sol":[1,3,0,2,6,4,7,5]},{"n":8,"rows":["ABBCCDEE","ABBCDDEE","AABBDDEF","AABBEEEF","AAABEEGF","AAAAAEFF","AAHAAEFF","AHHAAEFF"],"sol":[3,5,2,4,6,0,7,1]},{"n":8,"rows":["ABBBBBBB","ABBBBBBB","ABBBBCCC","ABDCCCEE","FFDDDCEE","FFGGDCEE","GGGHHCCE","GGGGHHCE"],"sol":[6,0,5,7,3,1,4,2]},{"n":7,"rows":["AAAAAAA","BCAADDE","BCCADDD","BBCCCDD","BBBFFDD","BBGDDDD","BBGGDDD"],"sol":[4,6,1,5,3,0,2]},{"n":8,"rows":["AAAABBBB","ACBBBBBD","ACBBBBBE","AABBEEEE","AABBEEEE","FFFFFEEE","FGGGFEEE","HHHHHHHH"],"sol":[0,7,1,3,6,4,2,5]},{"n":7,"rows":["AAABBCC","AABBBBC","DEBBCCC","DEBBCCC","EEEFFGC","EEEFFEC","EEEEEEE"],"sol":[2,4,6,0,5,3,1]},{"n":7,"rows":["AAABBBB","AABBCDD","AAEBCDD","AFEBGDD","AAEEGDG","AEEGGGG","AGGGGGG"],"sol":[3,0,4,1,5,2,6]},{"n":8,"rows":["AAABBBBC","AAABBBCC","DAAAAACC","DDAAACCE","DDDDFCEE","DDDDFFFG","DDDDFGGG","DHDDDGGG"],"sol":[3,6,2,7,4,0,5,1]},{"n":8,"rows":["AAAAAAAA","AABACDDA","AABBBDDA","AAEBBFDA","EEEBBFDA","GEEBFFDD","GGEEFDDD","GHHDDDDD"],"sol":[7,4,6,3,1,5,0,2]},{"n":8,"rows":["AAAAABBA","AAAABBBA","ACCAAAAA","ACCDDAAA","CCCDEEEF","GCCDHEEF","GCEEEEEF","EEEEEFFF"],"sol":[2,5,1,3,6,4,0,7]},{"n":8,"rows":["AAAAAABB","CAAAABBB","CCADABBB","CEABBBBF","CEBBBBFF","EEGGHBFF","EEEGHBFF","EEEEHHFF"],"sol":[5,7,3,0,6,2,4,1]},{"n":8,"rows":["AAABBBBB","CABBBBBB","CABBBBBD","CCEEFBDD","CGEEBBBB","GGEEBBBH","GGGGBBBH","GGGGGGHH"],"sol":[2,5,7,4,0,3,1,6]},{"n":7,"rows":["AAAAABB","AAAAAAB","AACAABB","ADEEEEE","DDDFGEE","DFFFGFF","DFFFFFF"],"sol":[3,6,2,5,0,4,1]},{"n":7,"rows":["AAAABBC","DAEEBCC","DADDBCC","DDDDDCC","DDDDCCC","FFDDDGG","FFDDDDG"],"sol":[0,2,4,6,3,5,1]},{"n":8,"rows":["AAAABBBB","CDDAABBB","CCDDEEEB","CCDDEEBB","CCCFFFBB","GCCFBBBB","GCHHBBBB","GGGHHBBB"],"sol":[7,4,6,2,5,1,3,0]},{"n":7,"rows":["AAAAAAA","AAABCCD","ABBBEDD","ABFBEDD","BBFEEED","BFFEEEE","BGFEEEE"],"sol":[0,5,3,6,2,4,1]},{"n":8,"rows":["ABCCCDDE","ABBCCDDD","AAACDDDD","AAACDDFD","AAAADDFD","AADDDGGD","AHHDDGGD","HHDDDDDD"],"sol":[7,1,3,6,0,5,2,4]},{"n":7,"rows":["AAABBBC","DDABCCC","DDABCEE","DDBBFEE","DFFFFEE","DDFFEEE","DDDGEEE"],"sol":[1,5,0,2,4,6,3]},{"n":8,"rows":["AAAAABBB","ABBBBCBB","BBBBBBBB","DDEBFFBB","DDEFFFFF","DDDDDFFF","DDDDDFGF","HDDDDFGG"],"sol":[3,5,7,2,4,1,6,0]},{"n":8,"rows":["AAABBBBC","AAABBBBC","DDABBEEE","DAAEEEEE","DDDEEFFE","DDDEEFFF","GDDEEEFF","GDEEEEHF"],"sol":[3,7,2,4,1,5,0,6]}],"extreme":[{"n":9,"rows":["ABBBBCDDD","ABBBBDDDE","AAAFBBDDG","AAAFFBDDG","AAFFFBDGG","HAFFFFFGG","HHHFFFHHG","IHHFFHHGG","HHHHHHHGG"],"sol":[5,8,4,6,1,7,3,0,2]},{"n":9,"rows":["AAAAAAAAA","BBCAAAAAA","BBBADAAAE","BBBFDAAAE","GHFFFEEEE","GGGFFEEEE","GGGGFFEIE","GGGGGFIIE","GGGGGGGEE"],"sol":[6,2,0,4,1,8,5,7,3]},{"n":9,"rows":["AAAAABBBB","AAAAABBBB","AAAAAABCC","AAAAAADDC","EFAGGGGGG","FFAGHHHHG","FFHHHHHHH","HHHHIIHHI","HHHHHIIII"],"sol":[7,4,8,6,0,3,1,5,2]},{"n":9,"rows":["AABBBCCCC","AABCCCDDD","AAAECCDDD","FFAACCCDD","FAAGGGCCD","FGGGGGGCC","FHHGGHHCC","HHHHIHHCC","HHHHHHHCC"],"sol":[2,0,3,1,8,5,7,4,6]},{"n":9,"rows":["AABBBBCDD","AABBBECDD","AAAABEDDD","FFAABBDDD","FFFBBBBDD","GFFFBBBDD","GGHHBBBII","GHHHBBBIB","HHBBBBBBB"],"sol":[6,1,5,8,2,0,3,7,4]},{"n":9,"rows":["AABBBBBBB","AABBBBCBD","ABBEECCCC","AEEEECCCC","AAFCCCCCC","AAFFFCCCG","AAAFFCGGG","AAAAHHGII","AAAAAHHII"],"sol":[0,8,1,3,5,2,6,4,7]},{"n":9,"rows":["AAAAAABBC","AAADDDBCC","AAAEEBBEE","AFFFEEBBE","AFFEEEEEE","GEEEEEHEE","GGIEEEEEE","GGIGEGEEE","GGGGGGGGG"],"sol":[8,3,0,7,1,6,4,2,5]},{"n":9,"rows":["AAAAAABBB","AAAAAAAAB","AAAAACAAB","AAAAAAADD","EEEEAFFFD","EEFFFFFFF","EGGFFFFFF","HHHHFFFFF","IIIFFFFFF"],"sol":[4,8,5,7,2,6,1,3,0]},{"n":9,"rows":["AAAAAAAAA","AAAABAAAA","AAAACCDDA","EAAACCCCC","EFFACCCCC","EFGGCCCHH","EEGCCCCCH","EEGIIICCC","EEEIIICCC"],"sol":[6,4,7,5,1,8,2,0,3]},{"n":9,"rows":["AAAAABBBB","ACCABBBBB","ACDBBBBBB","ECDDBBBBB","EDDDFBFFF","EGEFFFFFF","EGEFFFFFH","EEEEFEFIH","EEEEEEEII"],"sol":[4,2,5,3,6,1,8,0,7]},{"n":9,"rows":["ABBBBBCCC","ABBBBDEEC","ABBBDDDEF","AABGDDDFF","GGGGGHDDF","GFFIHHDFF","FFFIFFDFF","FFFIFFFFF","FFFFFFFFF"],"sol":[8,1,7,0,2,4,6,3,5]},{"n":9,"rows":["AAAAAAAAA","BAAACDAAA","BDDDCDDAA","BBDDDDDAE","BBDDDAAAA","BBFDDGGGA","BBFHDDDGA","IIHHHHAAA","IHHHHHAAA"],"sol":[7,4,6,8,1,5,2,0,3]},{"n":9,"rows":["AAABBBCCD","AEBBBBBCD","AEBBBBBCC","AABBBBBCC","AABFFCCCC","AAFFFCCCC","AGGHCCCIC","GGGHCCCIC","GGGGCCIIC"],"sol":[8,1,5,0,4,6,3,7,2]},{"n":9,"rows":["AAAAAAAAB","AAAACAABB","AAACCDBBB","EEECDDBBB","EEFCFBBBG","FFFFFBBBG","HFFFFFBGG","HFFFFIBGG","HFFIIIGGG"],"sol":[6,4,7,5,1,8,2,0,3]},{"n":9,"rows":["AAAABCCCC","AAABBDDCC","AAABBDEEE","FAAADDEEE","FAAAAGEEE","FFAAAGHHE","IIAAHHHHE","IIHHHHHHH","IHHHHHHHH"],"sol":[8,6,4,7,5,1,3,0,2]},{"n":9,"rows":["ABBBCDDEE","ABCBCCDDE","ACCCCCCFE","AACCCCFFE","GGGCCHHEE","CGGGCCEEE","CGCICEEEE","CCCICCEEE","CCCCCCEEE"],"sol":[2,6,0,7,5,1,3,8,4]},{"n":9,"rows":["ABAAACCDD","ABAAAACDD","AAAAECCDF","AAAEEEEDF","AGGGEEDDF","AGGGGEFDF","HGFGGFFFF","HHFIFFFFF","FFFFFFFFF"],"sol":[1,6,2,5,7,4,0,3,8]},{"n":9,"rows":["AAAAAAABB","AAAACAABA","AAAAAAABA","AADDDAAAA","EEEEDAAAA","FEEDDGGAH","FEEDGGGAA","FEEGGIIIA","FFFGGGIAA"],"sol":[2,4,7,3,1,8,5,0,6]},{"n":10,"rows":["AABBBBBBBB","AAABBBBBBC","DAABBBEECC","DFAABBGGGC","DFAABBGGCC","DFFHBBBGCC","DDDHHHBGCC","DDIIHHHGCC","DDDDHHJCCC","DDDDHJJCCC"],"sol":[7,9,6,8,3,1,4,2,0,5]},{"n":10,"rows":["AAAAABCCCC","AAAAABCCCC","AAADDDCCCC","AAEEDDCCCC","FFEGGDCCCC","FFGGGCCCCC","GGGGGHHHCC","GHHHHHIHCC","GGHHIIIHCC","GGHHHHHHJC"],"sol":[5,1,4,2,0,3,7,9,6,8]},{"n":9,"rows":["AAAAAAAAA","BBAAAAAAA","BBCCCAAAA","DDCCCEAAF","DDCCGEEEF","CCCCGGGFF","CCCGGFFFF","CCGGHHFFF","CCGGHHHHI"],"sol":[2,0,3,1,6,4,7,5,8]},{"n":9,"rows":["AABCCCCCC","AACCCCCCC","AACDCCCCC","AEECCCCCC","EEEECFGGC","EEEFFFFGG","EFFFFFHHG","FFFFFFHGG","FFFFFIIGG"],"sol":[2,0,3,7,1,4,6,8,5]},{"n":9,"rows":["AABCCCCCC","AACCCCCCC","AACCCDDCC","AEEFCDFGC","AAEFFDFGC","FFFFFFFGG","FFFFFFFFF","FFHHFFFII","HHHHFFIII"],"sol":[2,0,4,1,5,8,6,3,7]},{"n":9,"rows":["AAABCDDDD","AAABCCCDD","AABBBCDDE","ABBAAEEEE","AAAAAFEEE","GFFFFFEEE","FFFFEEEHE","FFFEEHHHE","FFIEHHHHE"],"sol":[7,5,8,1,4,0,3,6,2]},{"n":9,"rows":["ABBBBBBBB","ABBBCCCBB","AABDCEBBB","AAADCEEBB","AAAAAAEEB","AAAAAAFFG","AHHHAAFFG","HHHHHHFFF","HHIHHHHHF"],"sol":[4,6,3,5,0,8,1,7,2]},{"n":9,"rows":["ABBBBBCCC","AAABAACCC","AAAAAAADC","EEEAAACCC","FEEEAAACG","FFEEEEACC","EEEEEHCCC","EIIEEHCCC","EEEEEECCC"],"sol":[6,3,7,4,8,1,5,2,0]},{"n":10,"rows":["AAAAAAAAAB","AAAAACAAAB","DDAAAEAABB","FDEEEEBBBB","FFEEEEGBBB","FHHEEEGBBB","EEEEEGGIIB","EEEEGGGBBB","EGGGGGGGJB","EGGGGGGGJJ"],"sol":[3,5,1,4,0,2,7,9,6,8]},{"n":10,"rows":["ABCCCDDDDD","ABBBCDDEFF","AGBBEEDEEF","AGBBEEEEFF","AGGGEEEEFH","AAGGGEEEEH","AGGGGGEEEE","AIGGGGEEEE","AAAAAAJEEE","AAAAAAJEEE"],"sol":[7,4,2,8,5,9,3,1,6,0]},{"n":9,"rows":["AABBCCCCD","AAACCCCCD","AAACCCCDD","EAAFGGCDD","EAFFGGCCD","AAFFHGCCC","AAFFFFFCC","AAFAAAIII","AAAAAAAAI"],"sol":[3,6,8,5,0,4,2,7,1]},{"n":9,"rows":["AAAABBBCC","AAAABBBBC","AAAABBBBB","ADEEBBBFF","DDEEEEGFF","HHEEEGGFF","GHEEEGFFF","GEEEGGFFF","GGGGGGFFI"],"sol":[7,2,5,1,3,0,6,4,8]}],"melt":[{"n":8,"rows":["AAABBBBC","BBBBBCCC","BBDEBBCC","DDDBBBCC","DDDCCCCF","DDDDCCFF","DDDDGHFH","DGGGGHHH"],"sol":[2,0,3,1,5,7,4,6]},{"n":8,"rows":["AAAAAAAA","BBCCAAAA","BBBCCCCC","BBDDCEFC","BBBEEEFF","BBBEEGGH","BBEEEGHH","EEEEGGHH"],"sol":[1,3,0,2,6,4,7,5]},{"n":8,"rows":["AAAAAABB","AAAACCCB","ADDCCCCC","CCCCCCCC","ECCCCFCC","ECCCGGGG","EECCGGHG","EEEHHHHH"],"sol":[2,7,1,3,5,0,4,6]},{"n":8,"rows":["AABBBBBB","CADDEBBB","CADEEBBB","AADEEEEE","AFEEEGGH","FFFFGGHH","FFFFGGFH","FFFFFFFH"],"sol":[1,6,0,2,4,7,5,3]},{"n":8,"rows":["AAABBBCD","AAABBCCD","AAABBCBB","EAABBBBB","EEFFGBBB","EEFFEEEE","EEEEEEEE","EHHHEEEE"],"sol":[7,5,1,6,4,2,0,3]},{"n":8,"rows":["ABBBCCDD","ABCCCCDE","BBCBCCDE","BBBBBDDF","BBBGBFFF","GHHGFFFF","GGHGGGFF","GGGGGGFF"],"sol":[0,3,7,5,1,6,2,4]},{"n":8,"rows":["AAABBBBB","AAABBBBB","CDDDBBBB","CCCCEBBB","CFFFEEGB","CCGFGGGB","CGGGGGHB","CCGGGGHB"],"sol":[1,7,2,0,5,3,6,4]},{"n":8,"rows":["AAABCCDD","AAABCCDD","AABBBCDE","AAABFDDD","AAFFFFFD","AFFFFGGD","AHHFFGDD","HHHFGGDD"],"sol":[6,4,7,3,0,2,5,1]},{"n":8,"rows":["AAABBBBB","CCABBBBB","DDAABBBB","ADABBEBB","AAAEEEEE","AEEEFFFE","AGGHHFFF","GGGGGGFF"],"sol":[2,0,7,1,4,6,3,5]},{"n":8,"rows":["ABBCCCCC","ABBCDDCC","ABBCDCEC","ABBCDCCC","AAFGGGGC","AHFFFGGG","AAFFFGGG","AAAAFFFF"],"sol":[7,4,6,2,5,1,3,0]},{"n":8,"rows":["ABBBBCCC","ABBBBCCC","ACCCCCCD","AACCCEDD","AAAFFEDD","FFFFFFFD","GGGHFGFD","GGGGGGFD"],"sol":[6,4,7,5,2,0,3,1]},{"n":9,"rows":["ABBBBBBCC","AAABBDDCC","AAAEBBECE","AAEEEEEEE","AAAAEEEEE","AAAAEEEFF","GAAAEEEEF","GGAHHHEFF","GIIIHHHFF"],"sol":[3,5,7,1,6,8,0,4,2]},{"n":8,"rows":["AAAAAAAB","CCCAADBB","DDCADDBB","DDCCCDDB","DDDDDDDE","FFFDDDDE","GHHHDDDD","GHHHDDDD"],"sol":[4,6,2,5,7,1,3,0]},{"n":8,"rows":["AAAAAABB","AAAAACCB","AADDCCCC","EADDDDDD","EAAADDDD","EAAADFFG","EAHAAFGG","EHHFFFGG"],"sol":[6,1,5,3,0,7,2,4]},{"n":8,"rows":["AABBCCCC","AAAACCCC","DAAACEFF","DDAAGEFF","DDGGGEFF","DGGGGGFF","GGGGGGFF","GGGGGGGH"],"sol":[2,4,1,5,0,6,3,7]},{"n":8,"rows":["AABBBBBB","BABBBBBB","BABBBCCB","BBBBDDDD","BBBEDFFD","BBEEFFFF","GEEFFFFF","HHHFFFFF"],"sol":[4,1,5,7,3,6,0,2]},{"n":8,"rows":["AAABBBCC","AAABBBCC","AAAABBCC","ADAAECCC","ADAAEFCC","GDDDEFCC","GGHHEHHC","GGGHHHHC"],"sol":[3,7,2,4,1,5,0,6]},{"n":8,"rows":["AAABBBBB","AAABBBBC","DDABBEFC","EDBBBEFC","EDEEBEFE","EDEEEEEE","EGGEEEEE","EEEEHEEE"],"sol":[0,7,3,6,1,5,2,4]},{"n":8,"rows":["AAAABBBB","CAAABBBB","CAAADEEB","CFDDDEBB","CFFGDEBC","CFCGGCCC","CCCCHHCC","CCCCCCCC"],"sol":[7,2,6,4,1,3,5,0]},{"n":8,"rows":["AAABBCCC","ADAABECC","DDABBEFF","DDAAAEEF","DDAAAGEE","DDGGGGGE","GGGGGGGG","GHHGGGGG"],"sol":[6,4,7,5,2,0,3,1]}],"nightmare":[{"n":10,"rows":["AAAABBBBBB","AABBBBBBBC","AABBDEEEEC","AAAEEEEECC","AAFFEEEECC","AGGEECCCCC","GGGEEECCCC","EEEEHHCCIC","EEEEHHCJCC","EEEEHHHJJC"],"sol":[0,2,4,6,3,9,1,8,5,7]},{"n":10,"rows":["AAAAAAAAAB","AACAAAAAAB","AAAAAADBBB","AAEFFAABBB","EEEEFABBBB","EEGGFABBBH","EEGGFGIIII","JEGGGGGGII","EEGGGGGGGI","EEEEGGGGII"],"sol":[5,2,6,8,4,9,7,0,3,1]},{"n":10,"rows":["AAAAABCCCC","AAAAABBBCC","AAAAADDEEE","AAAADDDDEE","AAAAFGDHHE","AAAFFGHHHH","AAAHFFHHHH","AIJHFFHHHH","IIJHHHHHHH","IHHHHHHHHH"],"sol":[8,6,9,7,5,1,4,2,0,3]},{"n":10,"rows":["ABBCCCDDEE","ABBDDDDDEE","BBBDBDEEEE","BBBBBEEEEE","BBBBBEEEFF","BBGGBEEEFF","BBBBBHEEFF","BBHHHHHIHF","BBHHHJHHHH","BBJJJJHHHH"],"sol":[4,0,3,1,6,2,9,7,5,8]},{"n":10,"rows":["ABBCCCDDEE","ABBCCDDDFE","AABBBDDFFF","AABBBBBFFF","AAGBGBBBBB","HHGGGBBBBB","HHGIGGGBBB","GHGIGGGBBB","GGGGJGGBBB","GGGGJJGGBB"],"sol":[5,9,6,8,0,7,3,1,4,2]},{"n":10,"rows":["AAAAAAAAAA","AABBBAAAAA","ABBBCCCAAA","BBBBCCCAAD","EEBBBFCAAD","EGGBBFFFHI","GGGBFFFHHI","GGGFFFIIJI","GGGFFFIIJI","GGFFFFIIII"],"sol":[1,3,5,9,0,2,7,4,8,6]},{"n":10,"rows":["AAAAAAAAAA","AAAABCDDAA","AAACCCCDAA","EEEEECCCCC","EEEEECECCF","GHHEEEECCC","GGHIIEEEEE","GGHIIIEEEE","JGHHIIIIEE","JGHHIIIIEE"],"sol":[8,4,7,5,9,6,1,3,0,2]},{"n":10,"rows":["ABBAACCCCD","ABBBACCCCC","AAAAACCCCC","AAAAAAAAEC","AAAAAFFEEE","GGHAFFFEEE","GGHHEEEEEE","HHHHHEEEEE","HHHHIEEEEE","JJJJIIEEEE"],"sol":[9,3,7,5,8,6,0,2,4,1]},{"n":10,"rows":["AABBBCCDDD","AAABBCCDDD","AABBBECDDD","AABBBECFFG","AAABBBBBFG","AAABBBHBFF","AAABBIHBBF","HJHHIIHBBF","HJHHIIHHBF","HHHHHHHHHH"],"sol":[6,8,5,7,9,0,3,1,4,2]},{"n":10,"rows":["AAAAAAABBB","CAAAAAABBB","CDAAAAAEEE","CDDFAAAAEE","CCFFAGAEEE","CCCCHGEEEI","CCCCGGEEEI","CCCCCGEEII","CCCIGGIIII","CCCIIIIIIJ"],"sol":[2,7,1,3,0,4,6,8,5,9]}]}};</script>
+<script>
+(function () {
+  'use strict';
+  // ===================================================================================================================
+  // TEXT. Every word the player reads is here, Simplified Chinese with the English meaning next to it,
+  // so a native speaker can check it in one place.
+  // ===================================================================================================================
+  const T = {
+    duo: 'RoxorLoops 与 Jasmin · 来自丹麦的口技与歌唱二人组',   // RoxorLoops & Jasmin, the beatbox and singing duo from Denmark
+    foot: '没有广告，永远免费。纯人声音乐。',                     // No ads, free forever. Music made with the human voice only.
+    pts: (n) => n + ' 分',                                       // N points
+    play: '开始演出',                                            // Start playing
+    cont: (name) => '继续 · ' + name,                            // Continue · Easy 3
+    levels: '演出列表',                                          // Gig list (level select)
+    tut: '玩法教学',                                             // How to play (tutorial)
+    soundOn: '音效 开', soundOff: '音效 关',                     // Sound on / off
+    musicOn: '音乐 开', musicOff: '音乐 关',                     // Music on / off
+    lvNote: (sizes, a, b) => sizes + ' 棋盘 · 已完成 ' + a + ' / ' + b,          // 5x5 6x6 boards · solved a of b
+    lvLocked: (k, name) => '未解锁：先完成 ' + k + ' 场「' + name + '」演出。',   // Locked: clear k "Easy" gigs first
+    lvName: (pack, num) => pack + ' ' + num,                    // Easy 3
+    undo: '撤销', clear: '清除叉', hint: '提示', restart: '重来', // Undo, Clear X's, Hint, Restart
+    menu: '菜单', home: '返回首页', resume: '继续游戏',           // Menu, Back to title, Resume
+    rConfirm: '确定要重新开始这一场吗？', yes: '确定', no: '取消',  // Restart this gig? Yes / Cancel
+    winT: '演出成功！',                                          // Gig complete!
+    winTime: (t, m) => '用时 ' + t + ' · 失误 ' + m + ' 次',       // Time t · m mistakes
+    winPts: (p) => '+' + p + ' 分',                              // +p points
+    first: '首次通关', replay: '重玩（20%）', starB: (s) => s + ' 星奖励', // first clear, replay (20%), star bonus
+    total: (n) => '总分：' + n,                                  // Total: n
+    next: '下一场 ▶', toList: '演出列表',                        // Next gig, Gig list
+    newPack: (name) => '新关卡包解锁：' + name + '！',             // New pack unlocked: name!
+    loseT: '麦克风用完了！',                                     // Out of mics!
+    loseP: '别灰心，Jasmin 说再试一次一定行。',                    // Don't give up, Jasmin says the next try will do it.
+    retry: '再试一次',                                           // Try again
+    blocked: '这一格已经被别的表演者排除了。',                       // Another performer already rules this square out.
+    hintRow: '这一行只剩这一个位置可以放表演者。',                   // Only one spot left in this row.
+    hintCol: '这一列只剩这一个位置可以放表演者。',                   // Only one spot left in this column.
+    hintReg: '这个颜色区域只剩这一个位置可以放表演者。',              // Only one spot left in this colour zone.
+    hintX: (u) => '如果在这里放表演者，高亮的' + u + '就没有位置了，所以这里打叉。', // If a performer stood here, the lit unit would have no spot left, so cross it.
+    uRow: '这一行', uCol: '这一列', uReg: '颜色区域',               // this row, this column, colour zone
+    noHint: '这一场已经结束了。',                                  // This gig is already over.
+    // tutorial
+    tutT: '怎么玩',                                              // How to play
+    rules: [                                                     // the rules
+      ['行', '每一行放一位表演者'],                                // one performer in every row
+      ['列', '每一列放一位表演者'],                                // one performer in every column
+      ['色', '每个颜色区域放一位表演者'],                          // one performer in every colour zone
+      ['邻', '表演者互不相邻，斜角也不行'],                        // performers never touch, not even at a corner
+    ],
+    rulesP: '每一关只有一个答案，只靠逻辑就能解开，不用猜。',          // Every board has one answer, solvable by logic alone.
+    tutGo: '开始教学', tutSkip: '跳过',                           // Start tutorial, Skip
+    tutStep: (a, b) => '第 ' + a + ' 步 / 共 ' + b + ' 步',         // Step a of b
+    tut1: '点一下高亮的格子，打一个叉 ✕。叉的意思是：这里不会有表演者。',  // Tap the lit square to put an X: no performer here.
+    tut2: '按住并在高亮的这一行上滑动，可以一口气打好几个叉。',        // Hold and slide along the lit row to paint several X's.
+    tut3: '黄色区域只有一个格子，表演者一定在这里！快速点两下放置表演者。', // The yellow zone has one square, so the performer must be here. Double-tap to place.
+    tut3bad: '放错了！正式演出里，放错会失去一个麦克风 🎤，一共只有 3 个。再找找黄色格子。', // Wrong! In a real gig that costs a mic (you have 3). Find the yellow square.
+    tut4: '表演者会排除同一行、同一列、同一颜色区域和周围八格。点一下这一行前面的箭头 ▶，把整行剩下的格子都打叉。', // A performer rules out its row, column, zone and the 8 squares around it. Tap the arrow to cross the whole row.
+    tut5: '不知道下一步？点「提示」，Jasmin 会帮你。',                 // Stuck? Tap Hint and Jasmin helps.
+    tut6: '现在靠自己完成这一关吧！小技巧：也可以按住格子不放来放置表演者。', // Now finish the board yourself! Tip: press and hold also places a performer.
+    tutDoneT: '教学完成！',                                      // Tutorial done!
+    tutDoneP: '你已经会玩了。每放一位表演者，背景音乐就会多一层口技节奏。', // You know how to play. Each performer adds a beatbox layer to the music.
+    tutDoneB: '开始第一场演出',                                   // Start the first gig
+    tutName: '教学',                                             // Tutorial
+    tutGig: '排练室',                                            // Rehearsal room
+  };
+  const PACK_ZH = { easy: '简单', normal: '普通', chill: '休闲大盘', hard: '困难', expert: '专家', terror: '恐怖', extreme: '极限', melt: '崩溃', nightmare: '噩梦' };
+  // the duo's tour cities and gig types (same order and formula as the English game, so gig N is the same gig)
+  const CITIES = ['哥本哈根', '奥胡斯', '欧登塞', '奥尔堡', '埃斯比约', '罗斯基勒', '瓦埃勒', '柏林', '汉堡', '科隆', '布鲁塞尔', '安特卫普', '根特', '巴黎',
+    '里昂', '斯德哥尔摩', '马尔默', '哥德堡', '阿姆斯特丹', '鹿特丹', '乌得勒支', '雅典', '塞萨洛尼基', '基多', '瓜亚基尔'];
+  const VENUES = ['港口舞台', '坚信礼派对', '婚礼', '俱乐部之夜', '街头音乐节', '运河游船', '屋顶专场', '公司年会', '露天剧场', '校园工作坊', '城市广场',
+    '海滩派对', '夏日音乐节', '圣诞派对', '生日派对', '爵士咖啡馆', '图书馆夜场', '花园派对', '口技对战', '剧院午场'];
+
+  // ===================================================================================================================
+  // LEVELS AND SAVE  (own key, so it never touches the English game's save on the same site)
+  // ===================================================================================================================
+  const RAW = window.LD_LEVELS;
+  const POINTS = { easy: 15, normal: 30, chill: 40, hard: 60, expert: 100, terror: 150, extreme: 200, melt: 300, nightmare: 350 };
+  const NEEDS = { normal: ['easy', 3], chill: ['normal', 3], hard: ['normal', 5], expert: ['hard', 5], terror: ['hard', 8], extreme: ['expert', 5], melt: ['terror', 5], nightmare: ['extreme', 5] };
+  const AHEAD = 3;
+  const PACKS = RAW.plan.map((p, pk) => ({ id: p.id, name: PACK_ZH[p.id] || p.name, levels: (RAW.packs[p.id] || []).map((q, k) => ({ q, id: p.id + '-' + (k + 1), num: k + 1, pk })) }));
+  const BY = new Map();
+  let gn = 0;
+  for (const pack of PACKS) for (const L of pack.levels) {
+    L.city = CITIES[(gn * 7) % CITIES.length]; L.venue = VENUES[(gn * 3 + L.pk) % VENUES.length]; gn++;
+    L.pack = pack.id; L.packName = pack.name; BY.set(L.id, L);
+  }
+  const KEY = 'loopdoku_cn_v1';
+  let S = { points: 0, solved: {}, current: null, tut: false, sound: true, music: true };
+  try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private mode */ }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
+  const solvedIn = (pack) => pack.levels.filter((L) => S.solved[L.id]).length;
+  function packInfo(pack) {
+    const need = NEEDS[pack.id];
+    const unlocked = !need || solvedIn(PACKS.find((p) => p.id === need[0])) >= need[1];
+    let left = AHEAD;
+    const levels = pack.levels.map((L) => {
+      const s = S.solved[L.id];
+      const open = unlocked && (!!s || left > 0);
+      if (unlocked && !s && left > 0) left--;
+      return { L, open, s };
+    });
+    return { pack, unlocked, need, levels, solved: solvedIn(pack) };
+  }
+  function currentId() {
+    if (S.current && BY.has(S.current) && !S.solved[S.current]) return S.current;
+    for (const p of PACKS) { const pi = packInfo(p); for (const x of pi.levels) if (x.open && !x.s) return x.L.id; }
+    return PACKS[0].levels[0].id;
+  }
+  function nextId(id) {
+    const L = BY.get(id), pack = PACKS[L.pk];
+    const pi = packInfo(pack);
+    const nx = pi.levels.find((x) => x.open && !x.s && x.L.id !== id);
+    if (nx) return nx.L.id;
+    for (const p of PACKS) { const q = packInfo(p); for (const x of q.levels) if (x.open && !x.s && x.L.id !== id) return x.L.id; }
+    return null;
+  }
+  function puzzle(L) { return LD.makePuzzle(L.q, { id: L.id, pack: L.pack, packName: L.packName, num: L.num, city: L.city, venue: L.venue }); }
+
+  // ===================================================================================================================
+  // HELPERS
+  // ===================================================================================================================
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = (ms) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  let toastT = 0;
+  function toast(t, ms) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), ms || 2400); }
+  function show(id) { for (const s of document.querySelectorAll('.scr')) s.classList.toggle('on', s.id === id); screen = id; }
+  function modal(html, wire) { $('card').innerHTML = html; $('modal').classList.add('on'); if (wire) wire($('card')); }
+  function closeModal() { $('modal').classList.remove('on'); }
+  function tapSound() { LD.audio.unlock(); if (LD.audio.uiTap) LD.audio.uiTap(); }
+  const ARROW_R = '<svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg>';
+  const ARROW_D = '<svg viewBox="0 0 10 10"><path d="M1 2l4 7 4-7z"/></svg>';
+  // colour zones: zone 4 is yellow (the tutorial points at it)
+  const ZONE = ['#f4a3a3', '#9ccdf2', '#a8dcae', '#d6b7ef', '#ffd95e', '#ffbf8a', '#9fe0dc', '#f3b6d8', '#c9d38d', '#c5c0f7'];
+
+  // ===================================================================================================================
+  // GAME SCREEN
+  // ===================================================================================================================
+  let screen = 'title', game = null, cs = 40, cellEls = [], rowEls = [], colEls = [], tut = null, cur = null, timerT = 0, recorded = false;
+  const board = $('board');
+  LD.bindInput(board, () => game, {
+    cellAt(x, y) {
+      if (!game) return -1;
+      const r = board.getBoundingClientRect(), b = 3;
+      const c = Math.floor((x - r.left - b) / cs), rr = Math.floor((y - r.top - b) / cs);
+      if (c < 0 || rr < 0 || c >= game.n || rr >= game.n) return -1;
+      return rr * game.n + c;
+    },
+    onCursor(i) { for (const el of cellEls) el.classList.remove('cur'); if (cellEls[i]) cellEls[i].classList.add('cur'); },
+  });
+
+  function layout() {
+    if (!game) return;
+    const n = game.n, gut = 30;
+    const w = Math.min(window.innerWidth, 520) - 24 - gut - 6;
+    const used = 150 + ($('coach').classList.contains('on') ? 90 : 0);
+    const h = window.innerHeight - used - gut - 6;
+    cs = Math.max(24, Math.min(64, Math.floor(Math.min(w, h) / n)));
+    const play = $('play');
+    play.style.gridTemplateColumns = gut + 'px ' + (n * cs + 6) + 'px';
+    play.style.gridTemplateRows = gut + 'px ' + (n * cs + 6) + 'px';
+    board.style.gridTemplateColumns = 'repeat(' + n + ',' + cs + 'px)';
+    board.style.gridTemplateRows = 'repeat(' + n + ',' + cs + 'px)';
+    board.style.fontSize = cs + 'px';
+    $('colArr').style.cssText = 'grid-template-columns:repeat(' + n + ',' + cs + 'px);padding:0 3px';
+    $('rowArr').style.cssText = 'grid-template-rows:repeat(' + n + ',' + cs + 'px);padding:3px 0';
+  }
+
+  function buildBoard() {
+    const n = game.n, reg = game.region;
+    board.innerHTML = ''; $('rowArr').innerHTML = ''; $('colArr').innerHTML = '';
+    cellEls = []; rowEls = []; colEls = [];
+    for (let i = 0; i < n * n; i++) {
+      const r = (i / n) | 0, c = i % n, el = document.createElement('div');
+      el.className = 'c';
+      // thick ink line where the zone changes, a thin one inside a zone
+      const right = c < n - 1 ? (reg[i + 1] !== reg[i] ? 3 : 1) : 0, down = r < n - 1 ? (reg[i + n] !== reg[i] ? 3 : 1) : 0;
+      el.style.background = ZONE[reg[i] % ZONE.length];
+      el.style.boxShadow = (right ? 'inset -' + right + 'px 0 0 rgba(43,29,22,' + (right > 1 ? 1 : .18) + ')' : '') + (right && down ? ',' : '') + (down ? 'inset 0 -' + down + 'px 0 rgba(43,29,22,' + (down > 1 ? 1 : .18) + ')' : '');
+      board.appendChild(el); cellEls.push(el);
+    }
+    for (let k = 0; k < n; k++) {
+      const a = document.createElement('button'); a.className = 'arr'; a.innerHTML = ARROW_R; a.setAttribute('aria-label', 'row ' + (k + 1));
+      a.onclick = () => { LD.audio.unlock(); game.crossLine('row', k); };
+      $('rowArr').appendChild(a); rowEls.push(a);
+      const b = document.createElement('button'); b.className = 'arr'; b.innerHTML = ARROW_D; b.setAttribute('aria-label', 'column ' + (k + 1));
+      b.onclick = () => { LD.audio.unlock(); game.crossLine('col', k); };
+      $('colArr').appendChild(b); colEls.push(b);
+    }
+    layout();
+    for (let i = 0; i < n * n; i++) drawCell(i);
+    refreshArrows(); drawMics();
+  }
+  function drawCell(i) {
+    const v = game.cells[i], el = cellEls[i];
+    if (!el) return;
+    el.classList.toggle('w', !!game.wrong[i]);
+    if (v === LD.CELL.PIECE) { const who = game.who(i); el.innerHTML = '<span class="pc ' + who + '">' + (who === 'roxor' ? 'R' : 'J') + '</span>'; }
+    else if (v === LD.CELL.CROSS || v === LD.CELL.AUTO) el.innerHTML = '<span class="x">✕</span>';
+    else el.innerHTML = '';
+  }
+  let arrowRaf = 0;
+  function refreshArrows() {
+    if (arrowRaf) return;
+    arrowRaf = requestAnimationFrame(() => {
+      arrowRaf = 0; if (!game) return;
+      rowEls.forEach((a, k) => a.classList.toggle('dim', !game.lineHasEmpty('row', k)));
+      colEls.forEach((a, k) => a.classList.toggle('dim', !game.lineHasEmpty('col', k)));
+    });
+  }
+  function drawMics() {
+    const el = $('gMics');
+    if (!game.opts.lives) { el.textContent = ''; return; }
+    let h = ''; for (let k = 0; k < game.opts.lives; k++) h += '<span class="' + (k < game.lives ? '' : 'gone') + '">🎤</span>';
+    el.innerHTML = h;
+  }
+  function flash(cells) { for (const j of cells) { const el = cellEls[j]; if (!el) continue; el.classList.remove('hl'); void el.offsetWidth; el.classList.add('hl'); } }
+  function bump(el, cls) { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  // the loop station: one bar per layer, lit as performers land
+  const loopEl = $('gLoop');
+  for (let k = 0; k < 9; k++) loopEl.appendChild(document.createElement('i'));
+  LD.loop.on((b) => {
+    if (!b.onBeat || screen !== 'game') return;
+    const bars = loopEl.children;
+    for (let k = 0; k < 9; k++) { bars[k].classList.toggle('on', k < LD.loop.layers); bars[k].classList.toggle('beat', k < LD.loop.layers && b.beat % 2 === 0 && k % 2 === b.beat / 2 % 2); }
+  });
+
+  function startGame(g, info) {
+    if (game) { game.handlers = {}; }
+    game = g; recorded = false; cur = info;
+    LD.audio.attach(game); LD.loop.attach(game);
+    game.on('mark', (e) => {
+      if (e.delay) setTimeout(() => drawCell(e.i), e.delay); else drawCell(e.i);
+      refreshArrows();
+    });
+    game.on('place', (e) => { drawCell(e.i); refreshArrows(); flash(game.peers(e.i).filter((j) => game.cells[j] === LD.CELL.EMPTY)); });
+    game.on('mistake', (e) => { drawCell(e.i); drawMics(); bump(board, 'shake'); if (navigator.vibrate) try { navigator.vibrate(60); } catch (x) { /* ignore */ } });
+    game.on('blocked', (e) => { bump(cellEls[e.i], 'wob'); if (!tut) toast(T.blocked); });
+    game.on('locked', (e) => bump(cellEls[e.i], 'wob'));
+    game.on('line', (e) => { const a = (e.kind === 'row' ? rowEls : colEls)[e.index]; bump(a, 'press'); setTimeout(() => a && a.classList.remove('press'), 160); });
+    game.on('hint', (e) => {
+      flash(e.unit);
+      if (tut) return;
+      if (e.kind === 'place') toast(e.unitKind === 'col' ? T.hintCol : e.unitKind === 'region' ? T.hintReg : T.hintRow, 3200);
+      else toast(T.hintX(e.unitKind === 'col' ? T.uCol : e.unitKind === 'region' ? T.uReg : T.uRow), 3800);
+    });
+    game.on('undo', redraw); game.on('clear', () => setTimeout(redraw, 0)); game.on('reset', () => { if (cellEls.length) redraw(); });
+    game.on('win', (e) => setTimeout(() => onWin(e), 1100));
+    game.on('lose', () => setTimeout(onLose, 900));
+    $('gName').textContent = info.name; $('gGig').textContent = info.gig;
+    show('game'); buildBoard();
+    clearInterval(timerT);
+    timerT = setInterval(() => { if (game && screen === 'game') $('gTime').textContent = fmt(game.elapsed()); }, 500);
+    $('gTime').textContent = '0:00';
+  }
+  function redraw() { for (let i = 0; i < game.N; i++) drawCell(i); refreshArrows(); drawMics(); }
+
+  function startGig(id) {
+    const L = BY.get(id) || BY.get(currentId());
+    S.current = L.id; save();
+    endTutorial(false);
+    startGame(new LD.Game(puzzle(L)), { id: L.id, name: T.lvName(L.packName, L.num), gig: L.city + ' · ' + L.venue + ' · ' + L.q.n + '×' + L.q.n });
+  }
+
+  function onWin(e) {
+    if (tut) { const done = () => { S.tut = true; save(); endTutorial(false); startGig(PACKS[0].levels[0].id); };
+      modal('<h3>' + T.tutDoneT + '</h3><div class="stars">★★★</div><p>' + T.tutDoneP + '</p><button class="btn" data-go>' + T.tutDoneB + '</button>', (c) => { c.querySelector('[data-go]').onclick = () => { closeModal(); done(); }; });
+      return; }
+    if (recorded) return; recorded = true;
+    const L = BY.get(cur.id), first = !S.solved[L.id];
+    const unlockedBefore = PACKS.filter((p) => packInfo(p).unlocked).map((p) => p.id);
+    const base = POINTS[L.pack] || 15, mult = e.stars >= 3 ? 1.5 : e.stars === 2 ? 1.2 : 1;
+    const pts = Math.round(base * mult * (first ? 1 : 0.2));
+    const prev = S.solved[L.id];
+    S.solved[L.id] = { stars: Math.max(e.stars, prev ? prev.stars : 0), ms: prev ? Math.min(prev.ms, e.ms) : e.ms };
+    S.points += pts; S.current = null; save();
+    const newPack = PACKS.find((p) => packInfo(p).unlocked && !unlockedBefore.includes(p.id));
+    const nx = nextId(L.id);
+    let stars = ''; for (let k = 1; k <= 3; k++) stars += k <= e.stars ? '★' : '<span class="no">★</span>';
+    const notes = [first ? T.first : T.replay]; if (e.stars >= 2 && first) notes.push(T.starB(e.stars));
+    modal('<h3>' + T.winT + '</h3><div class="stars">' + stars + '</div><p class="small">' + T.winTime(fmt(e.ms), e.mistakes) + '</p>'
+      + '<div class="big" id="wPts">+0</div><p class="small">' + esc(notes.join(' · ')) + '</p><p><b>' + T.total(S.points) + '</b></p>'
+      + (newPack ? '<p style="color:var(--red);font-weight:800">' + esc(T.newPack(newPack.name)) + '</p>' : '')
+      + (nx ? '<button class="btn" data-n>' + T.next + '</button>' : '') + '<button class="btn alt" data-l>' + T.toList + '</button>', (c) => {
+      if (nx) c.querySelector('[data-n]').onclick = () => { tapSound(); closeModal(); startGig(nx); };
+      c.querySelector('[data-l]').onclick = () => { tapSound(); closeModal(); openLevels(L.pack); };
+      const el = c.querySelector('#wPts'), t0 = performance.now();
+      const step = () => { const k = Math.min(1, (performance.now() - t0) / 700); el.textContent = T.winPts(Math.round(pts * k)); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+  }
+  function onLose() {
+    if (tut) return;
+    const id = cur.id;
+    modal('<h3>' + T.loseT + '</h3><p style="font-size:44px;margin:4px">🎤💤</p><p>' + T.loseP + '</p><button class="btn" data-r>' + T.retry + '</button><button class="btn alt" data-l>' + T.toList + '</button>', (c) => {
+      c.querySelector('[data-r]').onclick = () => { tapSound(); closeModal(); startGig(id); };
+      c.querySelector('[data-l]').onclick = () => { tapSound(); closeModal(); openLevels(); };
+    });
+  }
+
+  // ===================================================================================================================
+  // TUTORIAL: a real game on the first Easy board, guided step by step. It never touches the save.
+  // ===================================================================================================================
+  const TUT = [
+    { txt: 'tut1', at: (g) => [g.idx(0, 0)], done: (ev, d) => ev === 'mark' && d.on && (d.source === 'tap' || d.source === 'drag') },
+    { txt: 'tut2', at: (g) => [0, 1, 2, 3].map((c) => g.idx(3, c)), done: (ev, d) => ev === 'stroke' && d.count >= 2 },
+    { txt: 'tut3', at: (g) => [g.idx(4, 2)], done: (ev) => ev === 'place' },
+    { txt: 'tut4', arrow: ['row', 4], done: (ev) => ev === 'line' },
+    { txt: 'tut5', btn: 'tHint', done: (ev) => ev === 'hint' },
+    { txt: 'tut6', done: () => false },
+  ];
+  function intro(onGo) {
+    const li = T.rules.map((r) => '<li><i>' + r[0] + '</i>' + esc(r[1]) + '</li>').join('');
+    modal('<h3>' + T.tutT + '</h3><ul class="rules">' + li + '</ul><p class="small">' + T.rulesP + '</p><button class="btn" data-go>' + T.tutGo + '</button><button class="btn alt" data-sk>' + T.tutSkip + '</button>', (c) => {
+      c.querySelector('[data-go]').onclick = () => { tapSound(); closeModal(); onGo(); };
+      c.querySelector('[data-sk]').onclick = () => { tapSound(); closeModal(); S.tut = true; save(); startGig(currentId()); };
+    });
+  }
+  function startTutorial() {
+    const L = PACKS[0].levels[0];
+    tut = { step: 0 };
+    $('coach').classList.add('on');
+    startGame(new LD.Game(puzzle(L), { lives: 0 }), { id: null, name: T.tutName, gig: T.tutGig + ' · 5×5' });
+    game.on('*', (ev, d) => {
+      if (!tut) return;
+      if (ev === 'mistake' && tut.step === 2) { coach(T.tut3bad); return; }
+      const st = TUT[tut.step];
+      if (st && st.done(ev, d)) setTimeout(() => tutStep(tut ? tut.step + 1 : 0), ev === 'place' || ev === 'line' ? 650 : 250);
+    });
+    tutStep(0);
+  }
+  function coach(txt) { $('coachTxt').innerHTML = '<span class="st">' + T.tutStep(Math.min(tut.step + 1, TUT.length), TUT.length) + '</span>' + esc(txt); }
+  function clearGlow() { for (const el of document.querySelectorAll('.glow')) el.classList.remove('glow'); }
+  function tutStep(k) {
+    if (!tut || !game) return;
+    tut.step = k; clearGlow();
+    const st = TUT[k]; if (!st) return;
+    coach(T[st.txt]);
+    if (st.at) for (const i of st.at(game)) cellEls[i] && cellEls[i].classList.add('glow');
+    if (st.arrow) { const a = (st.arrow[0] === 'row' ? rowEls : colEls)[st.arrow[1]]; a && a.classList.add('glow'); }
+    if (st.btn) $(st.btn).classList.add('glow');
+  }
+  function endTutorial(toTitle) {
+    if (!tut) return;
+    tut = null; clearGlow(); $('coach').classList.remove('on');
+    if (toTitle) openTitle();
+  }
+  $('coachSkip').onclick = () => { tapSound(); S.tut = true; save(); endTutorial(false); startGig(currentId()); };
+
+  // ===================================================================================================================
+  // TITLE, LEVELS, MENU
+  // ===================================================================================================================
+  function applySound() {
+    LD.audio.setMuted ? LD.audio.setMuted(!S.sound) : (LD.audio.muted = !S.sound);
+    LD.loop.silent = !S.music;
+    $('bSound').textContent = S.sound ? T.soundOn : T.soundOff;
+    $('bMusic').textContent = S.music ? T.musicOn : T.musicOff;
+  }
+  function openTitle() {
+    endTutorial(false); LD.loop.stop();
+    if (game) { game.handlers = {}; game = null; }
+    const L = BY.get(currentId());
+    $('bPlay').textContent = Object.keys(S.solved).length ? T.cont(T.lvName(L.packName, L.num)) : T.play;
+    $('tPts').textContent = T.pts(S.points);
+    show('title');
+  }
+  let lvSel = 'easy';
+  function openLevels(sel) {
+    endTutorial(false);
+    if (game && (game.over || game.won)) { game.handlers = {}; game = null; LD.loop.stop(); }
+    if (sel) lvSel = sel; else lvSel = BY.get(currentId()).pack;
+    renderLevels(); show('levels');
+    const t = $('lvTabs').querySelector('[aria-selected=true]'); if (t) t.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+  function renderLevels() {
+    const infos = PACKS.map(packInfo), pi = infos.find((x) => x.pack.id === lvSel) || infos[0];
+    $('lvTabs').innerHTML = infos.map((x) => '<button class="tab" role="tab" data-p="' + x.pack.id + '" aria-selected="' + (x.pack.id === pi.pack.id) + '">' + esc(x.pack.name) + '<span>' + (x.unlocked ? x.solved + '/' + x.levels.length : '🔒') + '</span></button>').join('');
+    const sizes = [...new Set(pi.pack.levels.map((x) => x.q.n))].sort((a, b) => a - b).map((n) => n + '×' + n).join(' ');
+    $('lvNote').textContent = pi.unlocked ? T.lvNote(sizes, pi.solved, pi.levels.length) : T.lvLocked(pi.need[1], PACK_ZH[pi.need[0]]);
+    const curId = currentId();
+    $('lvGrid').innerHTML = pi.levels.map((x) => '<button class="lv' + (x.s ? ' done' : '') + (x.L.id === curId ? ' cur' : '') + '" data-id="' + x.L.id + '"' + (x.open ? '' : ' disabled') + '>'
+      + (x.open ? x.L.num : '🔒') + '<small>' + (x.s ? '★'.repeat(x.s.stars) : '') + '</small></button>').join('');
+  }
+  $('lvTabs').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) { tapSound(); lvSel = b.dataset.p; renderLevels(); } };
+  $('lvGrid').onclick = (e) => { const b = e.target.closest('[data-id]'); if (b && !b.disabled) { tapSound(); startGig(b.dataset.id); } };
+  $('lvBack').onclick = () => { tapSound(); openTitle(); };
+
+  $('bPlay').onclick = () => { tapSound(); if (!S.tut) intro(startTutorial); else startGig(currentId()); };
+  $('bLevels').onclick = () => { tapSound(); openLevels(); };
+  $('bTut').onclick = () => { tapSound(); intro(startTutorial); };
+  $('bSound').onclick = () => { S.sound = !S.sound; save(); applySound(); tapSound(); };
+  $('bMusic').onclick = () => { S.music = !S.music; save(); applySound(); tapSound(); };
+  $('gHome').onclick = () => { tapSound(); openTitle(); };
+  $('gMenu').onclick = () => {
+    tapSound();
+    modal('<h3>' + T.menu + '</h3><button class="btn" data-c>' + T.resume + '</button><button class="btn alt" data-l>' + T.levels + '</button><button class="btn alt" data-t>' + T.tut + '</button><button class="btn alt" data-h>' + T.home + '</button>', (c) => {
+      c.querySelector('[data-c]').onclick = () => { tapSound(); closeModal(); };
+      c.querySelector('[data-l]').onclick = () => { tapSound(); closeModal(); openLevels(); };
+      c.querySelector('[data-t]').onclick = () => { tapSound(); closeModal(); intro(startTutorial); };
+      c.querySelector('[data-h]').onclick = () => { tapSound(); closeModal(); openTitle(); };
+    });
+  };
+  $('tUndo').onclick = () => { if (game) game.undo(); };
+  $('tClear').onclick = () => { if (game) game.clearCrosses(); };
+  $('tHint').onclick = () => { LD.audio.unlock(); if (!game) return; if (game.over || game.won) { toast(T.noHint); return; } game.hint(); };
+  $('tRestart').onclick = () => {
+    if (!game) return; tapSound();
+    if (tut) { startTutorial(); return; }
+    modal('<h3>' + T.restart + '</h3><p>' + T.rConfirm + '</p><div class="row2"><button class="btn alt" data-n>' + T.no + '</button><button class="btn" data-y>' + T.yes + '</button></div>', (c) => {
+      c.querySelector('[data-n]').onclick = () => closeModal();
+      c.querySelector('[data-y]').onclick = () => { closeModal(); startGig(cur.id); };
+    });
+  };
+
+  $('tDuo').textContent = T.duo; $('tFoot').textContent = T.foot;
+  $('bLevels').textContent = T.levels; $('bTut').textContent = T.tut; $('coachSkip').textContent = T.tutSkip;
+  $('lvTitle').textContent = T.levels;
+  $('tUndo').textContent = T.undo; $('tClear').textContent = T.clear; $('tHint').textContent = T.hint; $('tRestart').textContent = T.restart;
+  applySound();
+  window.addEventListener('resize', () => { if (game && screen === 'game') layout(); });
+  // pause the groove when the app goes to the background (WeChat, switching apps)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) LD.loop.stop();
+    else if (game && screen === 'game' && game.t0 !== null && !game.over && !game.won) LD.loop.start();
+  });
+  // test hook
+  window.LDCN = { game: () => game, screen: () => screen, start: startGig, tutorial: () => tut && tut.step, state: () => S };
+
+  openTitle();
+  // first visit: go straight to the tutorial intro
+  if (!S.tut) intro(startTutorial);
+})();
+</script>
+</body>
+</html>
