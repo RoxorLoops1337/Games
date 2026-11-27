@@ -208,7 +208,24 @@ export function drawMew(g, x, y, s, t, pose = 'idle') {
 }
 
 // enemies: drawn facing left, centre at (x, y), size ~ s*120 px
+// The hit flash whitens only the enemy: it is drawn on its own scratch canvas, tinted there and pasted in. (Tinting
+// with 'source-atop' on the shared canvas whitened a whole square of the battle panel behind it.)
+let foeScratch = null;
 export function drawFoe(g, kind, x, y, s, t, flash = 0) {
+  if (!(flash > 0)) { drawFoeRaw(g, kind, x, y, s, t); return; }
+  const m = g.getTransform(), k = Math.hypot(m.a, m.b), half = Math.ceil(150 * s * k) + 2, size = half * 2;
+  if (!foeScratch) foeScratch = document.createElement('canvas');
+  if (foeScratch.width < size || foeScratch.height < size) { foeScratch.width = size; foeScratch.height = size; }
+  const sg = foeScratch.getContext('2d');
+  sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, size, size);
+  sg.setTransform(k, 0, 0, k, half, half);
+  drawFoeRaw(sg, kind, 0, 0, s, t);
+  sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-atop'; sg.fillStyle = `rgba(255,255,255,${Math.min(1, flash)})`; sg.fillRect(0, 0, size, size);
+  sg.globalCompositeOperation = 'source-over';
+  const p = m.transformPoint(new DOMPoint(x, y));
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(foeScratch, 0, 0, size, size, p.x - half, p.y - half, size, size); g.restore();
+}
+function drawFoeRaw(g, kind, x, y, s, t) {
   g.save(); g.translate(x, y); g.scale(s, s);
   g.lineJoin = 'round'; g.lineCap = 'round';
   const ink = '#14081f', L = 2.4;
@@ -281,7 +298,6 @@ export function drawFoe(g, kind, x, y, s, t, flash = 0) {
     eye(-22, -18, 14, '#7d3cff'); eye(18, -18, 14, '#7d3cff');
     g.strokeStyle = ink; g.lineWidth = 4; g.beginPath(); g.arc(-2, 6, 10, 0.2, Math.PI - 0.2); g.stroke();
   }
-  if (flash > 0) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = `rgba(255,255,255,${flash})`; g.fillRect(-150, -150, 300, 300); }
   g.restore();
 }
 

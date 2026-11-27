@@ -58,6 +58,10 @@ export class View3D {
     const pm = new THREE.PMREMGenerator(r);
     // reflections: the room plus a few neon strips, so polished coins catch cyan, pink and gold highlights
     const env = new RoomEnvironment();
+    // A flat coin mirrors the room up and behind it at the camera's own angle (the view looks down 35 to 75 degrees
+    // depending on the phone): one big soft panel covers that whole band, so no coin turns black at some angle.
+    const soft = new THREE.Mesh(new THREE.PlaneGeometry(22, 11), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    soft.material.color.setRGB(1.3, 1.25, 1.4); soft.position.set(0, 6, -7); soft.lookAt(0, 0, 0); env.add(soft);
     for (const [col, x, y, z, w, h] of [[0x3fd0ff, -7, 6, -4, 6, 0.6], [0xff4fb0, 7, 6, -4, 6, 0.6], [0xffd75c, 0, 8, 3, 9, 0.5], [0xffffff, 0, 9, -6, 10, 1.2]]) {
       const strip = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), new THREE.MeshBasicMaterial({ color: col }));
       strip.material.color.multiplyScalar(3); strip.position.set(x, y, z); strip.lookAt(0, 0, 0); env.add(strip);
@@ -200,7 +204,7 @@ export class View3D {
         const f = k === 'c' ? silverFace : goldFace, e = k === 'c' ? reedS : reedG;
         // polished metal: low roughness and strong reflections (the room and the cabinet neon show in every coin)
         side = mat({ map: e, color: k === 'c' ? 0xd0d5de : 0xf0c868, metalness: 1, roughness: 0.26, envMapIntensity: 2.0 });
-        face = mat({ map: f, normalMap: DBG.nobump ? null : (k === 'c' ? silverN : goldN), normalScale: new THREE.Vector2(0.9, 0.9), color: k === 'c' ? 0xd8dde6 : 0xf5cd6a, metalness: 1, roughness: 0.17, envMapIntensity: 2.2 });
+        face = mat({ map: f, normalMap: DBG.nobump ? null : (k === 'c' ? silverN : goldN), normalScale: new THREE.Vector2(0.9, 0.9), color: k === 'c' ? 0xd8dde6 : 0xf5cd6a, metalness: 0.85, roughness: 0.24, envMapIntensity: 2.0 });
       } else {
         const C = COLS[k];
         side = mat({ map: canvasTex(chipEdgeTex(C.main, C.dark)), metalness: 0, roughness: 0.6, envMapIntensity: 0.3 });
@@ -389,7 +393,7 @@ export class View3D {
       m.compose(p, q, s);
       // a coin teetering on the edge glows and pulses gold (with hysteresis, so it never blinks on and off)
       c._tt = c._tt ? p.z > EDGE - 1.0 && p.y > -1 : p.z > EDGE - 0.55 && p.y > -0.3;
-      if (c._tt) { const pu = 0.5 + 0.5 * Math.sin(t * 9 + c.id); tc.setRGB(1 + 0.8 * pu, 1 + 0.55 * pu, isTok(c.k) ? 1 + 0.5 * pu : 0.8); } else tc.setRGB(1, 1, 1);
+      if (c._tt) { const pu = 0.5 + 0.5 * Math.sin(t * 9 + c.id); tc.setRGB(1 + 0.9 * pu, 1 + 0.72 * pu, 1 + 0.3 * pu); } else tc.setRGB(1, 1, 1);
       I.setColorAt(counts[c.k], tc); I.setMatrixAt(counts[c.k]++, m);
     }
     // towers: every coin of the ring, placed by the tower body

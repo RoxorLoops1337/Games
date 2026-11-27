@@ -35,7 +35,7 @@ export const SECTORS = [
 ];
 export const FOE_NAME = { drone: 'Buzz Drone', drone2: 'Twin Drones', crab: 'Scrap Crab', saucer: 'Hoverdisc', eel: 'Volt Eel', boss_mech: 'Titan Mech', boss_squid: 'Nebula Squid' };
 export const FEVER_TIME = 20;
-export const START_COINS = 150, REGEN_BELOW = 150, REGEN_EVERY = 1;   // a free coin every second while you hold fewer than 150
+export const START_COINS = 150, REGEN_BELOW = 150, REGEN_EVERY = 0.7;   // a free coin every 0.7 s while you hold fewer than 150
 export const FIRE_GAP = 0.24, AUTO_GAP = 0.085;
 export const COIN_PTS = 10;
 export const AUTO_SHOTS = { B: 10, Y: 15, P: 25 };   // free coins a three-of-a-kind fires

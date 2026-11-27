@@ -21,7 +21,7 @@ export const KINDS = {
 };
 export const isToken = (k) => k === 'B' || k === 'P' || k === 'Y';
 // pusher: its front face sweeps between FACE_MIN and FACE_MAX; PH is the shelf height; BACK_WALL scrapes the shelf
-export const FACE_MIN = -4.5, FACE_MAX = 0.5, PERIOD = 4.2, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -10.8;   // one solid back wall; the shooters hang on it
+export const FACE_MIN = -4.5, FACE_MAX = 2.5, PERIOD = 3.4, PH = 2.4, PUSH_HALF = 9, BACK_WALL = -10.8;   // one solid back wall; the shooters hang on it
 // Coins shoot in from the two SIDE walls, low at shelf height near the back. Each shooter (the flipper) sits in its side
 // wall and keeps turning between its two limits: a little toward the back wall (FLIP_BACK) and a little toward the
 // front (FLIP_FRONT), always across the machine. Every coin leaves along its current direction.
@@ -45,9 +45,12 @@ export const TOWER_R = RING_R + COIN_R;
 // like the cabinet); tokens slide out of it flat toward the player. The wall collider stays solid: tokens appear just
 // in front of it.
 export const PORT = { x: 0, y: PH + 3.9, z: BACK_WALL, w: 4.4, h: 2.0 };
+export const TOKEN_LANES = [-9, -6.5, -4, -1.5, 1.5, 4, 6.5, 9];   // cm: where the port aims its tokens (shuffled)
 export const SPIRAL_TURNS = 1.5;   // turns a tower makes while it rises out of the notch
 export const NOTCH_R = TOWER_R + 0.35, FACE_RET = BACK_WALL + TOWER_R + 0.5;
 export const towerLayers = (n) => Math.ceil(n / RING_N);
+export const REST_FREE_FRONT = 5;   // cm before the edge where coins are never locked
+export const REST = { in: 1.5, out: 5, ang: 15, lin: 0.05, lock: true };   // cm/s: a coin settles below `in`, is free above `out`; its damping and rotation lock while settled
 export const EARLY_FALL = 0.35;   // share of towers with a weak spot: they fall over on the field before the edge
 export const POP_UP = 30, POP_SIDE = 45;   // cm/s: the most a coin that is not flying can be kicked by the solver
 export const FIELD_CAP = 230;    // most loose coins simulated at once
@@ -87,6 +90,7 @@ export class Machine {
     this.t = 0; this.acc = 0;
     this.speed = 1; this.guard = false;
     this.coins = []; this.towers = []; this.events = [];
+    this.rest = { ...REST };
     this.pf = pusherFace(0);
     // Tuned on measured fixtures (a 6-coin stack, a 30-coin rain onto a carpet, a shoved 150-coin carpet):
     // gravity at half of real (coins land a touch softer and do not punch through each other at 40 Hz), stiff contacts
@@ -97,6 +101,9 @@ export class Machine {
     w.timestep = 1 / HZ; this.hz = HZ;
     const ip = w.integrationParameters;
     ip.normalizedPredictionDistance = 0.1 / w.lengthUnit; ip.contact_natural_frequency = 100; ip.numInternalPgsIterations = 4;
+    // a hair of allowed contact slack (0.4 mm): the solver stops fighting tiny overlaps on resting coins, which made
+    // them rock back and forth (measured with the rest damping below: rocking coins 12% -> 1%)
+    ip.normalizedAllowedLinearError = 0.004;
     w.integrationParameters = ip;
     const fixed = w.createRigidBody(R.RigidBodyDesc.fixed());
     const box = (hx, hy, hz, x, y, z, fr = 0.32) => w.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setFriction(fr), fixed);
@@ -108,24 +115,32 @@ export class Machine {
     box(W / 2, 15, 1, 0, PH + 0.06 + 15, BACK_WALL - 1, 0.1);
     this.pusher = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PH / 2, this.pf - PUSH_HALF));
     for (const [hx, hz, x, z] of Machine.pusherBoxes()) w.createCollider(R.ColliderDesc.cuboid(hx, PH / 2, hz).setTranslation(x, 0, z).setFriction(0.45), this.pusher);
+    for (const pts of Machine.notchWedges()) w.createCollider(R.ColliderDesc.convexHull(pts).setFriction(0.45), this.pusher);
     this.hold = false; this.tq = [];
     this.hulls = {};
   }
 
   // The pusher as boxes in its own frame (front face at z = +PUSH_HALF): two side blocks, a back block behind the notch,
   // and thin slices that follow the half-circle so nothing pokes into the notch. [halfX, halfZ, x, z]
+  // The solid corners behind the half-circle: thin wedges whose front edge follows the curve (12 per side, 0.1 mm off
+  // the true circle). A staircase of boxes used to leave pockets inside the drawn wall where coins got stuck on edge.
+  static notchWedges() {
+    const out = [], NR = NOTCH_R, N = 12, z0 = PUSH_HALF - NR, y = PH / 2;
+    for (let i = 0; i < N; i++) {
+      const a0 = (i / N) * Math.PI / 2, a1 = ((i + 1) / N) * Math.PI / 2;
+      const x0 = NR * Math.sin(a0), x1 = NR * Math.sin(a1), f0 = PUSH_HALF - NR * Math.cos(a0), f1 = PUSH_HALF - NR * Math.cos(a1);
+      for (const sx of [-1, 1]) {
+        const q = [[x0, z0], [x1, z0], [x1, f1], [x0, f0]], pts = [];
+        for (const [x, z] of q) pts.push(sx * x, -y, z, sx * x, y, z);
+        out.push(new Float32Array(pts));
+      }
+    }
+    return out;
+  }
   static pusherBoxes() {
     const out = [], NR = NOTCH_R, side = (W / 2 - NR) / 2;
     out.push([side, PUSH_HALF, -(W / 2 + NR) / 2, 0], [side, PUSH_HALF, (W / 2 + NR) / 2, 0]);
     out.push([NR, PUSH_HALF - NR / 2, 0, -NR / 2]);
-    const S = 6;
-    // the solid corners behind the curve: each slice runs from the back block forward to where the circle starts
-    // (measured at the slice's inner side, so no slice pokes into the notch)
-    for (let i = 0; i < S; i++) {
-      const x0 = (i / S) * NR, x1 = ((i + 1) / S) * NR, z0 = PUSH_HALF - NR, z1 = PUSH_HALF - Math.sqrt(Math.max(0, NR * NR - x0 * x0));
-      const hz = (z1 - z0) / 2; if (hz < 0.02) continue;
-      for (const sx of [-1, 1]) out.push([(x1 - x0) / 2, hz, sx * (x0 + x1) / 2, z0 + hz]);
-    }
     return out;
   }
 
@@ -173,7 +188,7 @@ export class Machine {
       v: { x: dx * sp, y: 2 + r() * 4, z: dz * sp },
       w: { x: (r() - 0.5) * 6, y: (r() - 0.5) * 16, z: (r() - 0.5) * 6 },
     });
-    c.shot = true;
+    c.shot = true; c.from = side;   // which shooter fired it
     return c;
   }
   // fire a token out of the port in the back wall: it leaves standing up, facing the player, and tumbles onto the machine
@@ -182,10 +197,14 @@ export class Machine {
   fieldTokens() { let n = 0; for (const c of this.coins) if (c.body && isToken(c.k)) n++; return n; }
   launch(k) {
     const r = this.rng, R0 = KINDS[k].r;
-    const c = this.add(k, PORT.x + (r() - 0.5) * (PORT.w - 2 * R0 - 0.3), PORT.y, PORT.z + R0 + 0.1, {
+    // spread across the machine: each token gets a landing lane from a shuffled bag (so they reach the sides, not
+    // just the middle), with a bit of randomness in speed, height and width on top
+    if (!this.lanes || !this.lanes.length) { this.lanes = TOKEN_LANES.slice(); for (let i = this.lanes.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [this.lanes[i], this.lanes[j]] = [this.lanes[j], this.lanes[i]]; } }
+    const lane = this.lanes.pop() + (r() - 0.5) * 1.6, x0 = PORT.x + (r() - 0.5) * (PORT.w - 2 * R0 - 0.3);
+    const vy = r() * 6, drop = PORT.y - PH, tf = (vy + Math.sqrt(vy * vy + 2 * GRAV * drop)) / GRAV;   // time to the shelf
+    const c = this.add(k, x0, PORT.y, PORT.z + R0 + 0.1, {
       ccd: true,
-      // spat out with a bit of randomness in speed, height and width
-      v: { x: (r() - 0.5) * 14, y: r() * 6, z: 11 + r() * 17 },
+      v: { x: (lane - x0) / tf, y: vy, z: 11 + r() * 17 },
       w: { x: (r() - 0.5) * 4, y: (r() - 0.5) * 14, z: (r() - 0.5) * 4 },
     });
     c.shot = true;
@@ -271,7 +290,10 @@ export class Machine {
             // never shove a coin back through the wall: keep it in front and move it round the side instead (onto the
             // pusher's top if that is where it lands)
             const zMin = BACK_WALL + KINDS[c.k].r + 0.05;
-            if (nz < zMin) { nz = zMin; nx = T.x + Math.sign(dx || 1) * Math.sqrt(Math.max(0, need * need - (nz - T.z) ** 2)); if (Math.abs(nx) > NOTCH_R - 0.2) ny = PH + KINDS[c.k].hh + 0.02; }
+            if (nz < zMin) { nz = zMin; nx = T.x + Math.sign(dx || 1) * Math.sqrt(Math.max(0, need * need - (nz - T.z) ** 2)); }
+            // never into the pusher itself: a coin shoved where the pusher is solid goes onto its top
+            const lz = nz - (this.pf - PUSH_HALF);
+            if (lz < PUSH_HALF + KINDS[c.k].r * 0.5 && lz > -PUSH_HALF && (Math.abs(nx) > NOTCH_R - KINDS[c.k].r || Math.hypot(nx, lz - PUSH_HALF) > NOTCH_R - KINDS[c.k].r)) ny = Math.max(ny, PH + KINDS[c.k].hh + 0.02);
             c.body.setTranslation({ x: Math.max(-W / 2 + 1.3, Math.min(W / 2 - 1.3, nx)), y: ny, z: nz }, true);
           }
         }
@@ -406,6 +428,21 @@ export class Machine {
       else if (c.hang && p.z < EDGE + KINDS[c.k].r * 0.3) {
         c.hang = false; c.body.collider(0).setCollisionGroups(GROUP_ALL);
         if (p.y < KINDS[c.k].hh && p.z < EDGE - 0.1) { c.body.setTranslation({ x: p.x, y: KINDS[c.k].hh + 0.02, z: p.z }, true); const v = c.body.linvel(); c.body.setLinvel({ x: v.x, y: 0, z: v.z }, true); }
+      }
+      // A coin that is barely moving gets heavy damping (it settles instead of rocking on the coins under it); as soon
+      // as it is shoved or flies it moves freely again. Shot coins are left alone.
+      {
+        // (with hysteresis: settle below REST_IN, free again above REST_OUT, so a pushed coin does not flip every stroke)
+        const v = c.body.linvel(), v2 = v.x * v.x + v.y * v.y + v.z * v.z, Rs = this.rest;
+        // (never in the front band before the drop edge: coins there must tip and ride over each other to cascade off;
+        // locked there, they jammed the front and the machine stopped paying)
+        const slow = !c.shot && !c.tw && !c.hang && p.z < EDGE - REST_FREE_FRONT && (c.rest ? v2 < Rs.out * Rs.out : v2 < Rs.in * Rs.in);
+        if (slow !== c.rest) {
+          c.rest = slow; c.body.setAngularDamping(slow ? Rs.ang : 0.4); c.body.setLinearDamping(slow ? Rs.lin : 0.05);
+          // a settled coin keeps its tilt: thin coins in a deep pile otherwise rock on each other (the solver never
+          // quite settles them). It still slides when shoved, and tips freely again once it moves.
+          if (Rs.lock) { if (slow) c.body.setAngvel({ x: 0, y: 0, z: 0 }, true); c.body.lockRotations(slow, true); }
+        }
       }
       // A resting coin squeezed in a pile against the back wall can be kicked out by the solver at over a metre a
       // second (measured: one cleared the side wall). Nothing in the machine moves a coin like that except a shot,
